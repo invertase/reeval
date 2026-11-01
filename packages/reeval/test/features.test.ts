@@ -3437,7 +3437,11 @@ export const features: Feature[] = [
     record: ({ stdout }) => {
       assert.match(
         entryOf(stdout, 'lands'),
-        /✓ lands {2}1 of 1 run passed\n +Baseline plain passed 0 of 1\.\n +Variants, by pass rate:\n +marked {2}1 of 1 {2}helped\n +Every failure was the same check:\n +"has the marker" failed once, on the baseline\n/,
+        /✓ lands {2}1 of 1 variant run passed\n +Baseline plain passed 0 of 1\.\n +Variants, by pass rate:\n +marked {2}1 of 1 {2}helped\n +Every failure was the same check:\n +"has the marker" failed once, on the baseline\n/,
+      )
+      assert.match(
+        entryOf(stdout, 'lands'),
+        /\n +Worth knowing:\n +The marked variant passed 1 of 1 run and the baseline 0 of 1: .+ Fix at evals\/lands\.eval\.ts:5: set runs: 4/,
       )
       assert.match(entryOf(stdout, 'canary'), /^ +marked {2}0 of 1 {2}same$/m)
       assert.doesNotMatch(stdout, /%|pass@1/)
@@ -3461,7 +3465,7 @@ export const features: Feature[] = [
       assert.equal(entryOf(stdout, 'lands').trim(), '✓ lands  2 of 2 runs passed')
       assert.match(
         entryOf(stdout, 'canary'),
-        /✗ canary {2}1 of 2 runs passed\n +writer passed 1 of 1, idler 0 of 1\.\n +Every failure was the same check:\n +"writes out\.txt" failed once, on idler\n +expected file out\.txt to exist\n +at evals\/canary\.eval\.ts:7$/,
+        /✗ canary {2}1 of 2 runs passed\n +writer passed 1 of 1, idler 0 of 1\.\n +Every failure was the same check:\n +"writes out\.txt" failed once, on idler\n +expected file out\.txt to exist\n +at evals\/canary\.eval\.ts:7\n +Snapshot: \S+\/snapshots\/final$/,
       )
     },
   },
@@ -3497,9 +3501,13 @@ export const features: Feature[] = [
       const lands = entryOf(stdout, 'lands')
       assert.match(
         lands,
-        /✓ lands {2}2 of 2 runs passed\n +Baseline plain passed 0 of 2\.\n +Variants, by pass rate:\n +marked {2}2 of 2 {2}helped\n/,
+        /✓ lands {2}2 of 2 variant runs passed\n +Baseline plain passed 0 of 2\.\n +Variants, by pass rate:\n +marked {2}2 of 2 {2}helped\n/,
       )
       assert.match(lands, /"has the marker" failed 2 times, all on the baseline$/m)
+      assert.match(
+        lands,
+        /\n +Worth knowing:\n +The marked variant on writer passed 1 of 1 run .+ 1 more variant is too\. Fix at evals\/lands\.eval\.ts:7: set runs: 4/,
+      )
     },
   },
   {

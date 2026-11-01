@@ -198,7 +198,7 @@ for (const version of versions) {
     `Python ${version}: greet and judged pass, the canary fails`,
     run.status === 1 &&
       outcome(run) === '1 failed · 2 passed' &&
-      /fail\s+canary/.test(run.out) &&
+      /(?:^|[├└]─ )✗ canary {2}/m.test(run.out) &&
       /missing\.py|never written/.test(run.out),
   )
 }
@@ -305,8 +305,8 @@ const stopped = sh(
   stop,
   { ...pureEnv, SMOKE_PYTHON: last },
 )
-// `results <run dir>/summary.md`, with the record at `<run dir>.json`.
-const summary = stopped.out.match(/results (\S+)summary\.md/)?.[1]
+// `summary <run dir>/summary.md`, with the record at `<run dir>.json`.
+const summary = stopped.out.match(/summary (\S+)summary\.md/)?.[1]
 let status
 try {
   const record = `${resolve(stop, summary).replace(/[\\/]$/, '')}.json`
