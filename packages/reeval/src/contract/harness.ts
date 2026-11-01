@@ -334,17 +334,64 @@ const CLAUDE_CODE_NO_EFFORT = new Set([
   'claude-haiku-4-5',
 ])
 
-/** `claude-haiku-4-5` from `claude-haiku-4-5@20251001` or `claude-haiku-4-5-20251001`. */
-const claudeBase = (model: string) =>
-  model
+/**
+ * The model each alias names in claude-code 2.1.290's catalog: its default, and on Vertex AI its
+ * Vertex one where that differs.
+ */
+const CLAUDE_CODE_ALIASES: Record<string, { default: string; vertex?: string }> = {
+  opus: { default: 'claude-opus-5-5' },
+  sonnet: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5' },
+  haiku: { default: 'claude-haiku-4-5' },
+  fable: { default: 'claude-fable-5-1' },
+}
+
+/**
+ * `claude-haiku-4-5` from `claude-haiku-4-5@20251001`, `claude-haiku-4-5-20251001` or
+ * `anthropic/claude-haiku-4-5`, `claude-sonnet-5-5` from `claude-sonnet-5-5[1m]`, and an alias as
+ * the model Claude Code resolves it to through `gateway`.
+ */
+const claudeBase = (model: string, gateway?: string) => {
+  const base = model
     .toLowerCase()
+    .replace(/^anthropic\//, '')
+    .replace(/\[1m\]$/, '')
     .replace(/@.*$/, '')
     .replace(/-\d{8}$/, '')
+  const alias = CLAUDE_CODE_ALIASES[base]
+  return alias ? (gateway === 'vertex' && alias.vertex) || alias.default : base
+}
 
-/** Whether Claude Code sends an effort to `model`. */
-export const claudeCodeTakesEffort = (model: string): boolean => {
-  const base = claudeBase(model)
-  return !base.includes('claude-3-') && !CLAUDE_CODE_NO_EFFORT.has(base)
+/**
+ * The models Claude Code's own catalog says take effort (claude-code 2.1.290). On Vertex AI it
+ * sends an effort only to these: a model its catalog doesn't list, such as `claude-haiku-5-5`,
+ * gets none there, though it gets one on Anthropic's API and through a base URL.
+ */
+const CLAUDE_CODE_CATALOG_EFFORT = new Set([
+  'claude-sonnet-4-6',
+  'claude-sonnet-5',
+  'claude-sonnet-5-5',
+  'claude-opus-4-6',
+  'claude-opus-4-7',
+  'claude-opus-4-8',
+  'claude-opus-5',
+  'claude-opus-5-5',
+  'claude-fable-5',
+  'claude-fable-5-1',
+  'claude-mythos-5',
+  'claude-mythos-5-1',
+])
+
+/** `model` as the messages name it: an alias with the model it resolves to through `gateway`. */
+export const claudeCodeModelName = (model: string, gateway?: string): string => {
+  const alias = CLAUDE_CODE_ALIASES[model.toLowerCase().replace(/\[1m\]$/, '')]
+  return alias ? `${model} (${claudeBase(model, gateway)})` : model
+}
+
+/** Whether Claude Code sends an effort to `model`, through `gateway` when it's known. */
+export const claudeCodeTakesEffort = (model: string, gateway?: string): boolean => {
+  const base = claudeBase(model, gateway)
+  if (base.includes('claude-3-') || CLAUDE_CODE_NO_EFFORT.has(base)) return false
+  return gateway !== 'vertex' || CLAUDE_CODE_CATALOG_EFFORT.has(base)
 }
 
 /** Antigravity model ids that name their effort, e.g. `gemini-3.8-flash-low`. */
@@ -357,7 +404,7 @@ export const antigravityIdEffort = (model: string): string | undefined =>
 /** Why `value` sets an effort its model can't take, in its factory's words, or undefined. */
 function effortProblem(value: HarnessDescriptor): string | undefined {
   if (value.kind === 'claude-code' && value.effort && !claudeCodeTakesEffort(value.model)) {
-    return `claudeCode({ effort }): Claude Code sends no effort to ${value.model}, so drop effort or run a model that takes one, e.g. claude-sonnet-5-5`
+    return `claudeCode({ effort }): Claude Code sends no effort to ${claudeCodeModelName(value.model)}, so drop effort or run a model that takes one, e.g. claude-sonnet-5-5`
   }
   if (value.kind === 'antigravity' && value.effort) {
     const named = antigravityIdEffort(value.model)

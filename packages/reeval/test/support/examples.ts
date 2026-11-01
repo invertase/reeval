@@ -133,7 +133,7 @@ export const EXAMPLES: Record<string, Example> = {
   },
   'with-vertex-gateway': {
     run: { 'fake/math/fake': pass(1) },
-    profiles: { vertex: inDocker('claude-code:claude-haiku-4-5-20251001') },
+    profiles: { vertex: inDocker('claude-code:claude-sonnet-5-5') },
     env: { GOOGLE_CLOUD_PROJECT: 'reeval-example' },
   },
   'with-fake-harness': { run: { 'fake/math/fake': pass(1) } },

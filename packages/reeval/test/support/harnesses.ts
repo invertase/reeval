@@ -205,7 +205,7 @@ export const harnesses: HarnessRow[] = [
   },
   {
     id: 'claude-code',
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
@@ -213,8 +213,9 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['api.anthropic.com', '*.anthropic.com'],
     apiHost: 'api.anthropic.com',
     tokens: true,
-    servedModel: /^claude-haiku-4-5/,
+    servedModel: /^claude-haiku-5-5/,
     wireModel: null,
+    effort: { value: 'low', asked: /^output_config\.effort=low thinking\.type=adaptive$/ },
   },
   {
     id: 'opencode',
@@ -426,25 +427,27 @@ export const harnesses: HarnessRow[] = [
     id: 'claude-code-gateway',
     harness: 'claude-code',
     gateway: 'vercel',
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: true,
-    servedModel: /claude-haiku-4-5/,
+    servedModel: /claude-haiku-5-5/,
     wireModel: null,
+    effort: { value: 'low', asked: /^output_config\.effort=low thinking\.type=adaptive$/ },
   },
   {
     // Claude Code on Vertex AI through `gateway: [vertex()]`, the project from GOOGLE_CLOUD_PROJECT:
     // no key at all, a token minted from the host's Application Default Credentials that the
     // gateway adds to its model calls. The row's "key" is the credentials file, which must stay
-    // out of the container like any key.
+    // out of the container like any key. Sonnet, not Haiku 5.5: Claude Code sends effort and
+    // adaptive thinking on Vertex AI only to the models its catalog lists, and it lists no Haiku 5.5.
     id: 'claude-code-vertex',
     harness: 'claude-code',
     gateway: 'vertex',
-    model: 'claude-haiku-4-5@20251001',
+    model: 'claude-sonnet-5-5',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'claude-code',
@@ -452,8 +455,9 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['aiplatform.googleapis.com'],
     apiHost: 'aiplatform.googleapis.com',
     tokens: true,
-    servedModel: /claude-haiku-4-5/,
-    wireModel: /claude-haiku-4-5/,
+    servedModel: /claude-sonnet-5-5/,
+    wireModel: /claude-sonnet-5-5/,
+    effort: { value: 'low', asked: /^output_config\.effort=low thinking\.type=adaptive$/ },
   },
   {
     // The Gemini CLIs on Vertex AI through `gateway: [vertex()]`: each reads a service account
@@ -637,15 +641,15 @@ export const harnesses: HarnessRow[] = [
     id: 'claude-code-openrouter',
     harness: 'claude-code',
     gateway: 'openrouter',
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['openrouter.ai'],
     apiHost: 'openrouter.ai',
     tokens: true,
-    servedModel: /claude-haiku-4[.-]5/,
-    wireModel: /claude-haiku-4[.-]5/,
+    servedModel: /claude-haiku-5[.-]5/,
+    wireModel: /claude-haiku-5[.-]5/,
     upstream: true,
   },
   {
@@ -767,7 +771,7 @@ export const keyOf = (row: HarnessRow) =>
 export const harnessOf = (row: HarnessRow) => row.harness ?? row.id
 
 /**
- * The cell's harness id in attempt ids: `cursor:composer-2.5`, `opencode:claude-haiku-4-5` (the
+ * The cell's harness id in attempt ids: `cursor:composer-2.5`, `opencode:claude-haiku-5-5` (the
  * model's last segment), or `fake`.
  */
 export const cellOf = (row: HarnessRow) =>

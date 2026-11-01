@@ -14,7 +14,7 @@ import {
 
 export default defineConfig({
   harness: [
-    claudeCode({ model: 'claude-haiku-4-5' }),
+    claudeCode({ model: 'claude-haiku-5-5' }),
     codex({ model: 'gpt-5.4-mini' }),
     goose({ model: 'gemini-3.8-flash' }),
     opencode({ model: 'google/gemini-3.8-flash' }),

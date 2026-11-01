@@ -390,6 +390,10 @@ export const CASES: Record<string, Case[]> = {
       'claudeCode effort on a model that takes none',
       any(claudeCode, { model: 'claude-haiku-4-5', effort: 'high' }),
     ],
+    [
+      'claudeCode effort on an alias for a model that takes none',
+      any(claudeCode, { model: 'haiku', effort: 'high' }),
+    ],
     ['antigravity without a model', any(antigravity, {})],
     ['antigravity effort a number', any(antigravity, { model: 'g', effort: 1 })],
     [
@@ -2030,6 +2034,22 @@ environment:
     [
       'route: claude code on vertex then direct',
       route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
+    ],
+    [
+      "route: claude code with effort on a model its catalog doesn't list, on vertex, direct off",
+      route([VERTEX, OFF], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+    ],
+    [
+      "route: claude code with effort on a model its catalog doesn't list falls through vertex",
+      route([VERTEX, DIRECT], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+    ],
+    [
+      'route: claude code with effort on a model its catalog lists, on vertex',
+      route([VERTEX, OFF], claudeCode({ model: 'claude-sonnet-5-5', effort: 'low' })),
+    ],
+    [
+      'route: claude code with effort on an alias its catalog resolves to one it lists, on vertex',
+      route([VERTEX, OFF], claudeCode({ model: 'opus', effort: 'low' })),
     ],
     ['model: anthropic on vertex, direct off', model('anthropic/m', undefined, [VERTEX, OFF])],
     ['model: google on vertex, direct off', model('google/m', undefined, [VERTEX, OFF])],

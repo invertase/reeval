@@ -91,8 +91,10 @@ everything else on its own key; the plan's hint says which cells fell back. Pin 
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
 (else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi, Grok Build and fx (Gemini only) on Vertex AI
 with no key: reeval mints a token from Application Default Credentials on the host and the egress
-gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`, Grok Build's xAI model as `xai/<id>` on Vertex's Chat Completions API). Claude ids work in
-either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
+gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`, Grok Build's xAI model as `xai/<id>` on Vertex's Chat Completions API).
+There Claude Code sends `effort` only to the models its own catalog lists, so `effort` on one it
+doesn't, such as `claude-haiku-5-5`, falls through, and with none set that model runs with no effort. Claude ids work in
+either form (`claude-opus-4-5-20251101` is sent as Vertex's `claude-opus-4-5@20251101`), so one
 string works through `[vertex()]` and its `direct()` fallback; `google/*` and `anthropic/*` judge and analysis models run there
 too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.

@@ -7,7 +7,7 @@ host, and none enters the sandbox. The task: add `multiply(a, b)`, with a test.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. The `vertex` profile needs a Google Cloud project with the Vertex AI API enabled and Claude
-Haiku 4.5 enabled in Model Garden, `GOOGLE_CLOUD_PROJECT` in `.env.local`, Application Default
+Sonnet 5.5 and Haiku 5.5 enabled in Model Garden, `GOOGLE_CLOUD_PROJECT` in `.env.local`, Application Default
 Credentials, Docker, and `pnpm reeval image build --profile vertex` once:
 
 ```bash
@@ -37,8 +37,8 @@ one profile you need.
 names the project and where tokens come from:
 
 ```text
-✓ judge      anthropic/claude-haiku-4-5-20251001 in profile vertex: on vertex(), with a token from Application Default Credentials (the vertex check)
-✓ gateway    gateway vertex in profile vertex: claude-code:claude-haiku-4-5-20251001 → vertex
+✓ judge      anthropic/claude-haiku-5-5 in profile vertex: on vertex(), with a token from Application Default Credentials (the vertex check)
+✓ gateway    gateway vertex, direct in profile vertex: claude-code:claude-sonnet-5-5 → vertex
 ✓ vertex     vertex() in profile vertex: project my-project (from GOOGLE_CLOUD_PROJECT), global
 ! vertex     no Application Default Credentials found (fine on a Google Cloud VM, whose metadata server serves them)
              fix: run gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS
@@ -51,11 +51,13 @@ another region with `vertex({ regions: { anthropic: '<region>' } })`.
 
 ```text
 eval                                                           harnesses  variants  runs  attempts  notes
-with-vertex-gateway.eval.ts › adds a tested multiply function  1          —         1     1         gateway: claude-code:claude-haiku-4-5-20251001 → vertex
+with-vertex-gateway.eval.ts › adds a tested multiply function  1          —         1     1         gateway: claude-code:claude-sonnet-5-5 → vertex
 ```
 
-The model is the Anthropic API's dated id, which reeval sends to Vertex as
-`claude-haiku-4-5@20251001`, so the same string works with `direct()` on `ANTHROPIC_API_KEY`.
+Claude ids are the same on Vertex as on Anthropic's API, so the same string works with `direct()`
+on `ANTHROPIC_API_KEY`; reeval sends an older dated id such as `claude-opus-4-5-20251101` to Vertex
+as `claude-opus-4-5@20251101`. The harness is Sonnet 5.5, not Haiku 5.5: on Vertex AI, Claude Code
+sends an effort only to the models its own catalog lists, and its catalog has no Haiku 5.5.
 Without a project in `GOOGLE_CLOUD_PROJECT` or `vertex({ project })`, the plan stops with exit 2.
 
 | File | What it is |

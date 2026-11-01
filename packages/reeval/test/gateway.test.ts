@@ -49,7 +49,7 @@ import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../
 const WHERE = 'evaluate("e")'
 const cursor = { kind: 'cursor', model: 'composer-2.5' } as HarnessDescriptor
 const codex = { kind: 'codex', model: 'gpt-5.4-mini' } as HarnessDescriptor
-const claude = { kind: 'claude-code', model: 'claude-sonnet-4-5' } as HarnessDescriptor
+const claude = { kind: 'claude-code', model: 'claude-sonnet-5-5' } as HarnessDescriptor
 const pinned = (h: HarnessDescriptor, gateway: string) => ({ ...h, gateway }) as HarnessDescriptor
 const list = (...kinds: string[]) => kinds.map((kind) => ({ kind }))
 const resolve = (gateways: { kind: string }[], h: HarnessDescriptor) =>
