@@ -125,9 +125,13 @@ describe('one comparison over every measure', () => {
   test('a difference the test does not hold leans, with the runs a side that would hold it', () => {
     const spread = (lo: number, hi: number) =>
       Array.from({ length: 16 }, (_, i) => ({ ms: Math.round(lo + ((hi - lo) * i) / 15) }))
-    const ms = cellMeasures(entry(spread(600, 1200), spread(750, 1250)), 'marked', 'plain')
+    const ms = cellMeasures(entry(spread(700, 1100), spread(800, 1200)), 'marked', 'plain')
     const time = of(ms, 'agentMs')
-    assert.equal(time.verdict, 'leans', 'medians 900 against 1000 at p 0.15: short of 0.05')
+    assert.equal(
+      time.verdict,
+      'leans',
+      'medians 900 against 1000 at p 0.06: under 0.1, short of 0.05',
+    )
     assert.equal(time.leaning, 'better')
     assert.equal(time.text, '10% faster')
     assert.ok((time.needed ?? 0) > 16)
@@ -139,7 +143,7 @@ describe('one comparison over every measure', () => {
       'marked',
       'plain',
     )
-    assert.equal(of(wide, 'agentMs').verdict, 'same', '12% at p 0.49 is noise: p is 0.2 or more')
+    assert.equal(of(wide, 'agentMs').verdict, 'same', '12% at p 0.49 is noise: p is 0.1 or more')
     const reading = tieOf('pass', ms)
     assert.ok(reading && reading !== 'tie' && reading.told === 'leans')
     assert.equal(reading.needed, time.needed)
@@ -175,14 +179,15 @@ describe('one comparison over every measure', () => {
     const faint = asked([...times(5, 'marked'), ...times(4, 'plain')])
     assert.equal(faint.verdict, 'same', '5 of 9 decisive is under 60/40')
     assert.equal(faint.text, '"Which is clearer?" picked the variant 5 of 9')
-    assert.equal(asked(times(5, 'marked')).verdict, 'leans', '5 of 5: enough pairs, p 0.0625')
+    assert.equal(asked(times(4, 'marked')).verdict, 'leans', '4 of 4: enough pairs, p 0.125')
+    assert.equal(asked(times(3, 'marked')).verdict, 'same', '3 decisive pairs are fewer than 4')
     assert.equal(
       asked([...times(6, 'marked'), ...times(3, 'plain')]).verdict,
       'same',
       '6 of 9 is 60/40, but p 0.51 is 0.2 or more',
     )
     const single = asked(['marked'])
-    assert.equal(single.verdict, 'same', 'one decisive pair is fewer than 5')
+    assert.equal(single.verdict, 'same', 'one decisive pair is fewer than 4')
     assert.equal(single.text, '"Which is clearer?" picked the variant 1 of 1')
     const checked = (pass: number) =>
       of(
@@ -195,7 +200,8 @@ describe('one comparison over every measure', () => {
       )
     assert.equal(checked(19).verdict, 'same', '19 of 20 against 20 of 20 is 5 points')
     assert.equal(checked(19).text, '"compiles" −5 pts', 'a faint difference keeps its points')
-    assert.equal(checked(18).verdict, 'leans', '18 of 20 is 10 points')
+    assert.equal(checked(18).verdict, 'same', '18 of 20 is 10 points, but p 0.15 is 0.1 or more')
+    assert.equal(checked(17).verdict, 'leans', '17 of 20 is 15 points at p 0.07')
   })
 
   test('a significant effect is better or worse at any size', () => {
@@ -215,10 +221,10 @@ describe('one comparison over every measure', () => {
     const held = asked(times(8, 'marked'))
     assert.equal(held.verdict, 'better')
     assert.equal(held.text, '"Which is clearer?" picked the variant 8 of 8')
-    assert.equal(asked(times(4, 'marked')).verdict, 'same', '4 decisive pairs are fewer than 5')
-    const five = asked(times(5, 'marked'))
-    assert.equal(five.verdict, 'leans', '5 of 5 is p 0.0625')
-    assert.equal(five.needed, 6, 'the fewest runs at which 6 of 6 decisive pairs hold (p 0.031)')
+    assert.equal(asked(times(3, 'marked')).verdict, 'same', '3 decisive pairs are fewer than 4')
+    const four = asked(times(4, 'marked'))
+    assert.equal(four.verdict, 'leans', '4 of 4 is p 0.125, under 0.2')
+    assert.equal(four.needed, 6, 'the fewest runs at which 6 of 6 decisive pairs hold (p 0.031)')
     assert.equal(
       asked(['plain', 'plain', 'plain']).text,
       '"Which is clearer?" picked the baseline 3 of 3',
@@ -234,16 +240,16 @@ describe('one comparison over every measure', () => {
       'marked',
       'plain',
     )
-    assert.equal(of(lone, 'judge').verdict, 'same', 'one higher score of four: p 0.2 or more')
+    assert.equal(of(lone, 'judge').verdict, 'same', 'one higher score of four: p 0.1 or more')
     const judged = cellMeasures(
-      entry(spread([0.9, 0.8, 0.7, 0.6, 0.5, 0.5]), spread([0.7, 0.6, 0.5, 0.5, 0.4, 0.4])),
+      entry(spread([0.9, 0.8, 0.7, 0.6, 0.6, 0.5]), spread([0.7, 0.6, 0.5, 0.5, 0.4, 0.4])),
       'marked',
       'plain',
     )
     const judge = of(judged, 'judge')
     assert.equal(judge.label, 'Is it tidy')
-    assert.equal(judge.verdict, 'leans', 'p 0.14: under 0.2, short of the rank test')
-    assert.equal(judge.text, 'judge "Is it tidy" +0.15')
+    assert.equal(judge.verdict, 'leans', 'p 0.09: under 0.1, short of the rank test')
+    assert.equal(judge.text, 'judge "Is it tidy" +0.17')
     const more = cellMeasures(
       entry(spread([0.9, 0.85, 0.95, 0.8, 0.9, 0.85]), spread([0.4, 0.5, 0.45, 0.3, 0.5, 0.4])),
       'marked',
@@ -351,6 +357,7 @@ describe('one comparison over every measure', () => {
       tokens: Math.round(200_000 * Math.exp(0.2 * normal())),
     })
     for (const n of [4, 8]) {
+      seed = 764
       const read = { tie: 0, leans: 0, apart: 0 }
       const draws = 1000
       for (let i = 0; i < draws; i++) {
@@ -359,8 +366,8 @@ describe('one comparison over every measure', () => {
         read[t === 'tie' ? 'tie' : t === null ? 'apart' : 'leans']++
       }
       const share = (k: keyof typeof read) => read[k] / draws
-      assert.ok(share('tie') > 0.5, `${n} a side: a tie is the usual reading, ${share('tie')}`)
-      assert.ok(share('leans') < 0.33, `${n} a side: noise seldom leans, ${share('leans')}`)
+      assert.ok(share('tie') > 0.7, `${n} a side: a tie is the usual reading, ${share('tie')}`)
+      assert.ok(share('leans') < 0.12, `${n} a side: noise seldom leans, ${share('leans')}`)
       assert.ok(
         share('apart') < (n === 4 ? 0.1 : 0.18),
         `${n} a side: a chance better or worse stays near 5% a measure, ${share('apart')}`,

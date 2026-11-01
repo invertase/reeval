@@ -60,14 +60,16 @@ reeval compares each variant with its baseline on every measure the run has, eac
 | Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant 6 of 6` |
 | Tool calls, agent time, tokens | the effort verdict above (paired by case in a family) | the medians' ratio, `5× faster`, `10× fewer tokens` |
 
-Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` only when it reaches the measure's minimum effect and its test's p is below 0.2; anything weaker is `same`, so run-to-run noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
+Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` only when it reaches the measure's minimum effect and its test's p is below 0.1, or 0.2 for a compare question; anything weaker is `same`, so run-to-run noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
 
-| Measure | Minimum effect to lean |
-|---|---|
-| Pass rate, and each check's pass rate | 10 points (p from a two-proportion z test) |
-| A judge's score (0–1) | 0.05 between the mean scores |
-| A compare question | 5 decisive pairs, 60% of them for one side |
-| Tool calls, agent time, tokens | 10% between the medians; agent times that both print `<0.1s` are the same |
+| Measure | Minimum effect to lean | p below |
+|---|---|---|
+| Pass rate, and each check's pass rate | 10 points | 0.1, from a two-proportion z test |
+| A judge's score (0–1) | 0.05 between the mean scores | 0.1 |
+| A compare question | 4 decisive pairs, 60% of them for one side | 0.2 |
+| Tool calls, agent time, tokens | 10% between the medians; agent times that both print `<0.1s` are the same | 0.1 |
+
+A compare question is asked deliberately, so a run has few pairs: its looser p lets a unanimous 4 of 4 (p 0.125) lean, while 3 of 3 or a single pair doesn't. With identical arms and no compare question, about 1 run in 10 still shows some measure leaning.
 
 Each measure's test stands alone at p below 0.05, with no correction across measures, so a 10× speedup on four runs a side still reads `better`. The cost is chance results.
 

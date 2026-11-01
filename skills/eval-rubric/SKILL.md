@@ -31,8 +31,8 @@ rests on a small sample, in any direction: a side has fewer than 4 counted tries
 interval still reaches past 20 points (2 of 4 against 2 of 4), so the effect is only a direction;
 a family's is its pooled lift's, insufficient below 6 cases. It also prints when both arms pass
 every run and no other measure (effort, a judge, a check, a compare question) is better or worse,
-but some lean: a difference its own test doesn't hold yet, at p below 0.2 and at least 10
-points, 0.05 of a judge's score, 60/40 of 5 or more decisive pairs for a question, or 10% of an
+but some lean: a difference its own test doesn't hold yet, at p below 0.1 and at least 10
+points, 0.05 of a judge's score, 60/40 of 4 or more decisive pairs for a question (p below 0.2), or 10% of an
 effort median ("the variant looks different: 10% faster; about 30 runs a side would confirm
 it"); weaker ones are the same. **Fix:** raise `runs` to the number the remark
 names, or add cases to a family.

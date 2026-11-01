@@ -493,10 +493,10 @@
                     "lo": -0.122,
                     "hi": 1,
                     "p": null,
-                    "verdict": "leans",
-                    "leaning": "better",
+                    "verdict": "same",
+                    "leaning": null,
                     "text": "pass rate +100 pts",
-                    "needed": 4,
+                    "needed": null,
                     "unit": "runs"
                   },
                   {

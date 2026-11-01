@@ -83,24 +83,27 @@ const LABEL_CHARS = 60
  * What a difference its test doesn't hold needs to lean, else it reads `same`, so run-to-run noise
  * doesn't stand in for a difference: at least the measure's smallest effect (pass-rate points; a
  * judge's 0–1 score; a question's decisive win share; effort's relative difference in medians),
- * and its test's p below `LEAN_P`. A question also needs `QUESTION_PAIRS_MIN` decisive pairs. A
- * difference its test holds is better or worse at any size.
+ * and its test's p below `LEAN_P`. A question needs `QUESTION_PAIRS_MIN` decisive pairs and a p
+ * below `QUESTION_LEAN_P` instead: questions are few by design, so a unanimous 4 of 4 (p 0.125)
+ * leans. A difference its test holds is better or worse at any size.
  */
 export const RATE_MIN = 0.1
 export const JUDGE_MIN = 0.05
 export const QUESTION_MIN = 0.6
 export const EFFORT_MIN = 0.1
-export const LEAN_P = 0.2
-export const QUESTION_PAIRS_MIN = 5
+export const LEAN_P = 0.1
+export const QUESTION_LEAN_P = 0.2
+export const QUESTION_PAIRS_MIN = 4
 
-/** A lean below its measure's smallest effect, or at a p of `LEAN_P` or more, is `same`. */
+/** A lean below its measure's smallest effect, or at a p of `leanP` or more, is `same`. */
 const screened = (
   verdict: MeasureVerdict,
   size: number,
   min: number,
   p: number | null,
+  leanP = LEAN_P,
 ): MeasureVerdict =>
-  verdict === 'leans' && (size < min - 1e-9 || p === null || p >= LEAN_P) ? 'same' : verdict
+  verdict === 'leans' && (size < min - 1e-9 || p === null || p >= leanP) ? 'same' : verdict
 
 /** Two-sided p of a pooled two-proportion z test: it screens a rate's lean, never its verdict. */
 function proportionP(v: Side, c: Side): number {
@@ -435,6 +438,7 @@ function questionMeasures(input: Input, cases: number): Measure[] {
       decisive >= QUESTION_PAIRS_MIN ? Math.max(wins.variant, wins.control) / decisive : 0,
       QUESTION_MIN,
       p,
+      QUESTION_LEAN_P,
     )
     const name = `"${clip(question, LABEL_CHARS)}"`
     const lead = s > 0 ? 'the variant' : 'the baseline'

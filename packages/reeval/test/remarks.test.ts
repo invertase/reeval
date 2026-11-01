@@ -326,21 +326,21 @@ describe('remark thresholds', () => {
       [],
       'a ceiling a question tells apart (8 of 8, p 0.008) needs no remark: the comparison is the result',
     )
-    const [looks] = raise(asked(Array(5).fill('marked')), NO_HISTORY)
+    const [looks] = raise(asked(Array(4).fill('marked')), NO_HISTORY)
     assert.equal(
       looks?.kind,
       'too-few-tries',
-      '5 of 5 leans (p 0.0625): the sign test needs 6 to hold',
+      '4 of 4 leans (p 0.125): the sign test needs 6 to hold',
     )
     assert.equal(
       looks?.text,
-      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 5 of 5; about 6 runs a side would confirm it.',
+      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 4 of 4; about 6 runs a side would confirm it.',
     )
     assert.equal(looks?.fix?.edit, 'set runs: 6, where the soonest of these would hold')
     assert.deepEqual(
-      kinds(asked(Array(4).fill('marked')), NO_HISTORY),
+      kinds(asked(Array(3).fill('marked')), NO_HISTORY),
       ['cant-tell-apart'],
-      '4 of 4 is fewer than 5 decisive pairs: the same',
+      '3 of 3 is fewer than 4 decisive pairs: the same',
     )
     assert.deepEqual(
       kinds(asked(['plain', 'plain', 'marked', 'marked']), NO_HISTORY),
@@ -376,7 +376,7 @@ describe('remark thresholds', () => {
       return r
     }
     const spread = (lo: number, hi: number) => (i: number) => Math.round(lo + ((hi - lo) * i) / 15)
-    const [nudge] = raise(timed(spread(600, 1200), spread(750, 1250)), NO_HISTORY)
+    const [nudge] = raise(timed(spread(700, 1100), spread(800, 1200)), NO_HISTORY)
     assert.equal(nudge?.kind, 'too-few-tries', 'medians 900 against 1000 lean, short of holding')
     assert.match(nudge?.text ?? '', /looks different: 10% faster; about \d+ runs a side/)
     assert.deepEqual(

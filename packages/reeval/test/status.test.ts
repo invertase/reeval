@@ -166,14 +166,13 @@ test('arms that differ only by agent-time noise are a tie: make the task harder'
   )
 })
 
-test('with-compare-questions, whose question picked the variant on all 4 of its decisive pairs, is a tie', async () => {
+test('with-compare-questions, whose question picked the variant 4 of 4, names the runs that would confirm it', async () => {
   const dir = await copyOut('with-compare-questions')
   const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     run.stdout,
-    /the task can't tell them apart, since both always pass\. Fix at with-compare-questions\.eval\.ts:\d+: make the task harder, so the baseline can fail\./,
-    'a lean needs 5 decisive pairs, and the fake agent times both print <0.1s',
+    /but the variant looks different: (.+ and )?"Which divide\(\) says more clearly what went wrong when b is…" picked the variant 4 of 4; about \d+ runs a side would confirm it\./,
   )
-  assert.doesNotMatch(run.stdout, /looks different/)
+  assert.doesNotMatch(run.stdout, /make the task harder/)
 })
