@@ -27,6 +27,7 @@
             "across": "both",
             "family": true,
             "todo": false,
+            "notRun": false,
             "outcome": "fail",
             "cells": null,
             "cases": [
@@ -353,6 +354,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "infra_error",
             "cells": [
               {
@@ -435,6 +437,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "infra_error",
             "cells": [
               {
@@ -522,6 +525,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "infra_error",
             "cells": [
               {
@@ -604,6 +608,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "fail",
             "cells": [
               {
@@ -692,6 +697,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "fail",
             "cells": [
               {
@@ -780,6 +786,7 @@
             "across": "harness",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "skipped",
             "cells": [
               {
@@ -856,6 +863,7 @@
             "across": "none",
             "family": false,
             "todo": true,
+            "notRun": false,
             "outcome": "skipped",
             "cells": [
               {
@@ -908,6 +916,7 @@
             "across": "both",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "infra_error",
             "cells": [
               {
@@ -1078,6 +1087,7 @@
             "across": "both",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "infra_error",
             "cells": [
               {
@@ -1277,6 +1287,7 @@
             "across": "none",
             "family": false,
             "todo": false,
+            "notRun": false,
             "outcome": "pass",
             "cells": [
               {

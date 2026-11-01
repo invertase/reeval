@@ -538,6 +538,7 @@ class Seen {
         ...(from.revision !== undefined ? { revision: from.revision } : {}),
         outcome: 'skipped',
         todo: e.todo === true,
+        ...(e.skip ? { skip: true as const } : {}),
         passRate: null,
         cells: [],
         attempts: [],
@@ -678,6 +679,7 @@ async function addPreviousAttempt(
     formattedErrors: [],
     meta: undefined,
     ...(before?.todo ? { todo: true as const } : {}),
+    ...(before?.skip ? { skip: true as const } : {}),
   }
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)

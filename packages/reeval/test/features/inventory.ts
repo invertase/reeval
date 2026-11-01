@@ -394,6 +394,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/engine.test.ts'],
   },
   {
+    id: 'selection.declared-skip',
+    area: 'Config and selection',
+    name: "A declared skip marked in the record (`evals[].skip`), told apart from an attempt that hasn't run yet by resume, show, query and the studio",
+    fixtures: ['python-sdk/declared-skip'],
+    unit: [
+      'reeval/test/engine-node.test.ts',
+      'reeval/test/resume.test.ts',
+      'reeval/test/query.test.ts',
+    ],
+  },
+  {
     id: 'selection.tags',
     area: 'Config and selection',
     name: 'Tags: `--tag`, `!tag` and profile tags',

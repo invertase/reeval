@@ -3657,6 +3657,36 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'python-sdk/declared-skip',
+    tiers: ['fake'],
+    env: '-',
+    canary: /ran: expected 'ran' to be 'skipped'/,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /ran: expected 'ran' to be 'skipped'/ },
+      },
+      parked: { outcome: 'skipped', attempts: ['fake/-/fake#1'] },
+      shelved: { outcome: 'skipped', attempts: ['fake/-/fake#1'] },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run, stdout }) => {
+      assert.deepEqual(
+        run.evals.map((e) => [e.name, e.skip ?? false, e.todo]).sort(),
+        [
+          ['canary', false, false],
+          ['lands', false, false],
+          ['parked', true, false],
+          ['shelved', true, false],
+        ],
+        'an eval declared skipped, or in a skipped group, is marked skip; one that ran is not',
+      )
+      assert.match(stdout, /^skipped +parked$/m, 'a complete run shows a declared skip as skipped')
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',

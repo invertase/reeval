@@ -170,8 +170,8 @@ export type LeftOut = Pick<LiveAttempt, 'key' | 'evalId' | 'name' | 'file' | 'ce
 /**
  * The attempts the run planned, from the previous record and the progress file a quit left,
  * that this resume's plan leaves out. The record keeps them, so the run stays incomplete until
- * a resume runs the ones that aren't done. A todo, or an eval `declared` (the ids this resume
- * collected as `.skip` or `.todo`), never runs, so it's done.
+ * a resume runs the ones that aren't done. A todo or a declared skip, in the previous record or
+ * `declared` (the ids this resume collected as `.skip` or `.todo`), never runs, so it's done.
  */
 export function leftOutAttempts(
   planned: readonly { key: string }[],
@@ -190,7 +190,7 @@ export function leftOutAttempts(
   for (const e of previous?.evals ?? []) {
     for (const a of e.attempts) {
       const at = { key: a.key, evalId: e.id, name: e.name, file: e.file, cell: a.cell, n: a.n }
-      add(at, e.todo || isCompletedAttempt(a.outcome, a.error))
+      add(at, e.todo || e.skip === true || isCompletedAttempt(a.outcome, a.error))
     }
   }
   for (const a of live) add(a, false)

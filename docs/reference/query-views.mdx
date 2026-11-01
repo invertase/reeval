@@ -231,6 +231,8 @@ These tables store the projected rows. `reeval query --schema` lists these colum
 
 In `tool_calls`, `ok` is 1 or 0, or null for a call whose result the harness never reported. Count failures with `ok = 0`.
 
+In `evals`, `declared` is `todo` for an `evaluate.todo`, `skip` for an eval declared skipped (`.skip`, or left out by an `.only`), and null otherwise. In a run whose `status` isn't `complete`, a `skipped` eval with a null `declared` hasn't run yet.
+
 [//]: # (generated:query-tables)
 
 | Name | Columns |
@@ -246,7 +248,7 @@ In `tool_calls`, `ok` is 1 or 0, or null for a call whose result the harness nev
 | `context_reads` | `run_id`, `attempt_key`, `line`, `path` |
 | `env_skills` | `run_id`, `environment`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
-| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
+| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index`, `declared` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |

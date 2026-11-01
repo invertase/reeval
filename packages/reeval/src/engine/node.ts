@@ -246,18 +246,26 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     for (const worker of live) worker.send({ t: 'cancel' })
   })
 
-  const toEval = (rel: string, test: WireTest, result: WireResult): EngineEval => ({
-    ...identify(rel, test),
-    state: result.state,
-    durationMs: Math.round(result.durationMs),
-    errors: result.errors.map((e) => capMiddle(redactSecrets(String(e.message)))),
-    ...(result.errors[0]?.name ? { errorName: result.errors[0].name } : {}),
-    formattedErrors: result.errors.map((e) =>
-      capMiddle(redactSecrets(formatError(e, { root, hide, columns: process.stdout.columns }))),
-    ),
-    meta: result.meta,
-    ...(test.mode === 'todo' ? { todo: true as const } : {}),
-  })
+  // A resume skips the attempts that already completed, which weren't declared skipped.
+  const declaredSkip = (test: WireTest, key: string) =>
+    test.mode === 'skip' && !test.attempt?.plan.skip && !completed.has(key)
+
+  const toEval = (rel: string, test: WireTest, result: WireResult): EngineEval => {
+    const e = identify(rel, test)
+    return {
+      ...e,
+      state: result.state,
+      durationMs: Math.round(result.durationMs),
+      errors: result.errors.map((e) => capMiddle(redactSecrets(String(e.message)))),
+      ...(result.errors[0]?.name ? { errorName: result.errors[0].name } : {}),
+      formattedErrors: result.errors.map((e) =>
+        capMiddle(redactSecrets(formatError(e, { root, hide, columns: process.stdout.columns }))),
+      ),
+      meta: result.meta,
+      ...(test.mode === 'todo' ? { todo: true as const } : {}),
+      ...(declaredSkip(test, e.key) ? { skip: true as const } : {}),
+    }
+  }
 
   input.onRunStart?.(specs.length)
   let owner = 0

@@ -131,8 +131,9 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
         ? c.yellow
         : c.dim
 
-function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): Text {
+function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'notRun' | 'cells'>): Text {
   if (e.todo) return t('todo', c.dim)
+  if (e.notRun) return t('not run', c.dim)
   if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('not gated', c.dim)
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
@@ -583,7 +584,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   const pooled = e.pooled ?? []
   const pooledOutcome: ResultOutcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
   const caseWord = (k: CaseResult) =>
-    verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
+    verdict(c, { outcome: k.outcome, todo: false, notRun: false, cells: k.cells })
   const pooledWord = isNotGatedResult(e)
     ? t('not gated', c.dim)
     : t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))

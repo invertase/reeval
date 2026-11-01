@@ -337,12 +337,12 @@ describe('runEngine: running', () => {
       'b.eval.ts:collect',
     ])
     assert.deepEqual(
-      r.evals.map((e) => [e.id, e.state, e.durationMs, e.todo ?? false]),
+      r.evals.map((e) => [e.id, e.state, e.durationMs, e.todo ?? false, e.skip ?? false]),
       [
-        ['evals/a.eval.ts › one', 'passed', 1, false],
-        ['evals/a.eval.ts › skipped', 'skipped', 0, false],
-        ['evals/a.eval.ts › placeholder', 'skipped', 0, true],
-        ['evals/b.eval.ts › g › two', 'passed', 1, false],
+        ['evals/a.eval.ts › one', 'passed', 1, false, false],
+        ['evals/a.eval.ts › skipped', 'skipped', 0, false, true],
+        ['evals/a.eval.ts › placeholder', 'skipped', 0, true, false],
+        ['evals/b.eval.ts › g › two', 'passed', 1, false, false],
       ],
     )
     assert.deepEqual(r.unhandledErrors.sort(), ['[object Object]', 'stray'])
@@ -366,6 +366,39 @@ describe('runEngine: running', () => {
     assert.deepEqual(
       collected.evals.map((e) => e.skipped),
       collected.file === 'evals/a.eval.ts' ? [false, true, true] : [false],
+    )
+  })
+
+  test('a declared skip is flagged, and an attempt a resume skips because it completed is not', async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const tests = {
+      'a.eval.ts': [
+        test0(0, 'parked [fake/-/fake#1]', { mode: 'skip', attempt: attempt('parked') }),
+        test0(1, 'done [fake/-/fake#1]', {
+          mode: 'skip',
+          attempt: attempt('done', { plan: { skip: 'already completed in this run' } } as never),
+        }),
+      ],
+      'b.eval.ts': [
+        test0(0, 'kept [fake/-/fake#1]', { attempt: attempt('kept') }),
+        test0(1, 'lost [fake/-/fake#1]', { attempt: attempt('lost') }),
+      ],
+    }
+    // b's worker dies before it collects, so its tests are the plan's, with the completed one skipped.
+    const { spawn } = fakeSpawn((ctl) => {
+      if (ctl.init.select && ctl.init.file.endsWith('b.eval.ts')) return ctl.exit({ code: 1 })
+      return passing(tests)(ctl)
+    })
+    run.completed = ['evals/b.eval.ts › kept # fake/-/fake#1']
+    const r = await engine({ run }, spawn)
+    assert.deepEqual(
+      r.evals.map((e) => [e.name, e.state, e.skip ?? false]),
+      [
+        ['parked', 'skipped', true],
+        ['done', 'skipped', false],
+        ['kept', 'skipped', false],
+        ['lost', 'failed', false],
+      ],
     )
   })
 

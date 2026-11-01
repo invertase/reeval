@@ -1579,6 +1579,10 @@
             }
           ]
         },
+        "skip": {
+          "description": "Declared not to run: `evaluate.skip`, inside a `group.skip`, or left out by an `.only` in its file. Its outcome is `skipped`. Unset otherwise, so in a run that isn't `complete` a skipped eval with neither `todo` nor `skip` hasn't run yet. Unset on records from before it.",
+          "const": false
+        },
         "slug": {
           "description": "Directory name inside the artifact directory, from `key`.",
           "type": "string"

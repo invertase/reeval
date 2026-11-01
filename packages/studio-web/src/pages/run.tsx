@@ -44,6 +44,7 @@ import {
   isMatrix,
   isUngatedMiss,
   type JudgeKeyRate,
+  notRunYet,
   type ObservedTally,
   observedLine,
   observedTallies,
@@ -210,11 +211,13 @@ function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: st
 function TreeRow({
   node,
   depth,
+  status,
   selected,
   onSelect,
 }: {
   node: TreeNode
   depth: number
+  status: RunRecord['status']
   selected?: string
   onSelect: (slug: string) => void
 }) {
@@ -236,6 +239,8 @@ function TreeRow({
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
         {node.eval.todo ? (
           <span className="shrink-0 text-xs text-muted-foreground">todo</span>
+        ) : notRunYet({ status }, node.eval) ? (
+          <span className="shrink-0 text-xs text-muted-foreground">not run</span>
         ) : isMatrix(node.eval) ? (
           <span className="tabular shrink-0 text-xs text-muted-foreground">
             {node.tally.pass}/
@@ -270,6 +275,7 @@ function TreeRow({
               key={child.key}
               node={child}
               depth={depth + 1}
+              status={status}
               selected={selected}
               onSelect={onSelect}
             />
@@ -700,7 +706,10 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
           <h2 className="text-lg font-semibold tracking-tight">{entry.name}</h2>
-          <OutcomeBadge outcome={entry.outcome} label={entry.todo ? 'Todo' : undefined} />
+          <OutcomeBadge
+            outcome={entry.outcome}
+            label={entry.todo ? 'Todo' : notRunYet(record, entry) ? 'Not run' : undefined}
+          />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
@@ -998,6 +1007,7 @@ export function RunPage() {
                           key={node.key}
                           node={node}
                           depth={0}
+                          status={record.status}
                           selected={selected?.slug}
                           onSelect={(slug) =>
                             navigate({ search: (s) => ({ ...s, eval: slug }), replace: true })
