@@ -372,6 +372,16 @@ evaluate.each(${cases}${options})(
       verdict: 'lift',
       outcome: 'pass',
     })
+    const paired = await runCli(p.dir, [
+      'query',
+      "select distinct pass_verdict, small_sample from factor_effects where tier = 'paired'",
+      '--json',
+    ])
+    assert.deepEqual(
+      JSON.parse(paired.stdout),
+      [{ pass_verdict: 'effect', small_sample: 0 }],
+      'six cases whose interval excludes 0 are no small sample',
+    )
     const rates = await runCli(p.dir, [
       'query',
       'select cell_key, pass, counted, pass_at_1 from families where run_id = (select max(run_id) from runs) order by cell_key',
@@ -435,6 +445,12 @@ evaluate.each(${cases}${options})(
       [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
       [3, 1, 't-cases', 'insufficient', 'pass'],
     )
+    const paired = await runCli(p.dir, [
+      'query',
+      "select distinct small_sample from factor_effects where tier = 'paired'",
+      '--json',
+    ])
+    assert.deepEqual(JSON.parse(paired.stdout), [{ small_sample: 1 }], 'three cases are too few')
     // Three pairs are too few for the lift to hold, however one-sided they are: it shows the direction.
     assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}helped$/m)
   })

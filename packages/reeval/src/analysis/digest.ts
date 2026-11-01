@@ -11,7 +11,13 @@ import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
 import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
-import { COMPARE_RUNS, SMALL_SAMPLE_MARGIN, smallSample, widerThanMargin } from '../stats.ts'
+import {
+  COMPARE_RUNS,
+  familySmallSample,
+  PAIRED_MIN,
+  SMALL_SAMPLE_MARGIN,
+  smallSample,
+} from '../stats.ts'
 import { clip } from '../text.ts'
 import type { AttemptAnswer } from '../types.ts'
 import { formatTokens } from '../usage.ts'
@@ -118,7 +124,7 @@ export type DigestInput = {
 
 export const RULES = [
   'Lift (variant pass@1 minus control pass@1) is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate or the number of attempts.',
-  `smallSample: true beside a lift's verdict means it rests on few attempts (fewer than ${COMPARE_RUNS} counted a side, or an interval that still reaches past ${Math.round(SMALL_SAMPLE_MARGIN * 100)} points either way): don't over-trust it. Report its direction with the n as directional; never as an established effect, or as showing no difference when the rates are equal.`,
+  `smallSample: true beside a lift's verdict means it rests on few attempts (fewer than ${COMPARE_RUNS} counted a side, fewer than ${PAIRED_MIN} cases for a family, or an interval that still reaches past ${Math.round(SMALL_SAMPLE_MARGIN * 100)} points either way): don't over-trust it. Report its direction with the n as directional; never as an established effect, or as showing no difference when the rates are equal.`,
   `When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match.`,
   `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when no split of the attempts' values can reach it (2 vs 2 cannot, and ties raise the floor) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
   "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
@@ -422,7 +428,7 @@ export async function buildDigestKeepingDropped(
           cell: cellTag(r.record.runId, member.key, l.variant),
           lift: familyLiftLabel(l),
           verdict: l.verdict === 'lift' || l.verdict === 'drop' ? 'effect' : l.verdict,
-          ...(l.verdict === 'insufficient' || widerThanMargin(l.interval.lo, l.interval.hi)
+          ...(familySmallSample(l.pairs, l.interval.lo, l.interval.hi)
             ? { smallSample: true }
             : {}),
           ...(l.minLift !== undefined ? { minLift: l.minLift, gate: l.outcome } : {}),

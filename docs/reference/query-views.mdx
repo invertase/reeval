@@ -123,7 +123,7 @@ reeval query "SELECT factor, level, tier, points FROM factor_effects"
 
 `tier` is `controlled`, `pooled`, `paired`, `observed`, or `not_measured`. `run_id` is null for `pooled` and `not_measured`.
 
-`pass_verdict` is `effect`, `noise`, `insufficient` (a family below six pairs or cases), or `not_comparable` (the eval changed). `small_sample` is 1 beside an `effect` or `noise` that rests on a small sample, and null when the eval changed.
+`pass_verdict` is `effect`, `noise`, `insufficient` (a family below six pairs or cases), or `not_comparable` (the eval changed). `small_sample` is 1 when the row rests on a small sample, and null when the eval changed. A `paired` row's sample is its cases, so it is small below six of them.
 
 ## `skill_reads`
 

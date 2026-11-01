@@ -32,7 +32,7 @@ A small sample is a side with fewer than four counted attempts, or an interval t
 | 0 of 4 against 0 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
 | 4 of 4 against 0 of 4 | none: the difference holds |
 
-The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family raises it when its pooled lift is insufficient, within noise with different rates, or `same` with an interval past 20 points.
+The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family's sample is its cases: it is small below six cases, or when its pooled interval spans zero and reaches past 20 points. A family raises the remark when its pooled lift doesn't hold, insufficient or within noise, and its rates differ or its sample is small. Many cases that all agree are insufficient but raise nothing.
 
 `reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule.
 

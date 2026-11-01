@@ -6,11 +6,11 @@ import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
 import {
   containsZero,
+  familySmallSample,
   liftInterval,
   median,
   round3,
   smallSample,
-  widerThanMargin,
   wilson,
 } from '../stats.ts'
 import { totalTokens } from '../usage.ts'
@@ -684,8 +684,7 @@ export function deriveFacts(db: DatabaseSync): void {
       within_noise: f.within_noise,
       pass_verdict:
         f.verdict === 'insufficient' ? 'insufficient' : f.within_noise ? 'noise' : 'effect',
-      small_sample:
-        f.verdict === 'insufficient' || widerThanMargin(Number(f.lo), Number(f.hi)) ? 1 : 0,
+      small_sample: familySmallSample(Number(f.pairs), Number(f.lo), Number(f.hi)) ? 1 : 0,
       tools_ratio: f.tools_ratio,
       agent_s_ratio: f.agent_s_ratio,
       tools_p: f.tools_p,

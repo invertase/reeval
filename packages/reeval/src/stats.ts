@@ -198,16 +198,24 @@ export function smallSample(variant: { pass: number; n: number }, control: typeo
 }
 
 /**
- * The fewest runs a side, from `from`, at which these observed rates would stop being a small
- * sample (`smallSample`); null when even `RUNS_TO_HOLD_MAX` doesn't.
+ * `smallSample` for a family's pooled lift, whose sample is its cases: fewer than `PAIRED_MIN`
+ * paired cases, or an interval that spans 0 and still reaches past `SMALL_SAMPLE_MARGIN`. Many
+ * cases that all agree are `insufficient` for McNemar but not a small sample.
  */
-export function runsToSettle(variantRate: number, controlRate: number, from = 1): number | null {
-  for (let n = Math.max(1, from); n <= RUNS_TO_HOLD_MAX; n++) {
+export const familySmallSample = (pairs: number, low: number, high: number) =>
+  pairs < PAIRED_MIN || widerThanMargin(low, high)
+
+/**
+ * The fewest runs a side, from `from`, at which these observed rates would stop being a small
+ * sample (`smallSample`). Equal or near rates always do, since the interval narrows toward 0: the
+ * widest, two rates at 50%, settles at about 48.
+ */
+export function runsToSettle(variantRate: number, controlRate: number, from = 1): number {
+  for (let n = Math.max(1, from); ; n++) {
     const a = { pass: Math.round(variantRate * n), n }
     const b = { pass: Math.round(controlRate * n), n }
     if (!smallSample(a, b)) return n
   }
-  return null
 }
 
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */

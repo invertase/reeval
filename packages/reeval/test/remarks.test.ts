@@ -55,6 +55,10 @@ evaluate.each(${JSON.stringify(Array.from({ length: cases }, (_, i) => ({ id: `c
 )
 `
 
+/** A pooled family of `cases` cases at one run each, where both sides pass every case. */
+const agreeingFamilyEval = (cases: number, name: string) =>
+  familyEval(cases, name).replace("c.attempt.cell.role === 'variant'", 'true')
+
 /** Evals whose check fails on every try but the first. */
 const coinEvals = (names: string[], runs = 3) =>
   `import { evaluate, expect } from 'reeval'
@@ -166,6 +170,8 @@ const rules = () => {
       'evals/tft-two.eval.ts': compareEval(2, 2, 0, 'tft two'),
       'evals/tft-family.eval.ts': familyEval(6, 'tft family'),
       'evals/tft-few-cases.eval.ts': familyEval(2, 'tft few cases'),
+      'evals/tft-agree.eval.ts': agreeingFamilyEval(30, 'tft agree'),
+      'evals/tft-agree-few.eval.ts': agreeingFamilyEval(2, 'tft agree few'),
       'evals/clean.eval.ts': CLEAN_EVAL,
       'evals/coin.eval.ts': coinEvals(['coin'], 2),
       'evals/db.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -268,6 +274,16 @@ describe('remark thresholds', () => {
       "The marked variant, pooled over 2 cases: better, but a family's lift needs 6 to hold.",
     )
     assert.equal(few?.fix?.edit, 'add cases, so the pooled lift has 6 to hold on')
+    assert.deepEqual(
+      kinds(family('tft agree $id'), NO_HISTORY),
+      [],
+      '30 cases that all agree are insufficient for McNemar but not a small sample',
+    )
+    const [agreeFew] = raise(family('tft agree few $id'), NO_HISTORY)
+    assert.equal(
+      agreeFew?.text,
+      "The marked variant, pooled over 2 cases: the same, but a family's lift needs 6 to hold.",
+    )
   })
 
   test('check-never-fails: 5 clean recorded runs and 20 tries, not 4 runs or 19 tries', async () => {

@@ -51,12 +51,15 @@ import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import {
   containsZero,
+  familySmallSample,
   liftInterval,
   mcnemar,
   meanInterval,
   PAIRED_MIN,
   pairedLiftInterval,
+  runsToSettle,
   signedRank,
+  smallSample,
   t975,
   wilson,
 } from '../src/stats.ts'
@@ -296,6 +299,36 @@ describe("paired lift over a pooled family's cases", () => {
     const tools = familiesOf(evals, () => undefined)[0]?.lifts[0]?.effort.tools
     assert.equal(tools?.p, 0.031)
     assert.equal(tools?.verdict, 'fewer')
+  })
+})
+
+describe('a small sample, and the runs that settle one', () => {
+  const side = (pass: number, n: number) => ({ pass, n })
+  test('below 4 counted a side, or an interval past 20 points that still holds 0', () => {
+    assert.equal(smallSample(side(3, 3), side(0, 3)), true, 'fewer than 4 a side')
+    assert.equal(
+      smallSample(side(4, 4), side(0, 4)),
+      false,
+      'exactly 4, and the interval excludes 0',
+    )
+    assert.equal(smallSample(side(0, 4), side(0, 4)), true, 'a tie at 4 reaches 49 points')
+    assert.equal(smallSample(side(8, 16), side(8, 16)), true)
+    assert.equal(smallSample(side(16, 16), side(16, 16)), false)
+    assert.equal(smallSample(side(25, 50), side(25, 50)), false)
+    assert.equal(smallSample(side(12, 12), side(11, 12)), true, 'a near tie still reaches past 20')
+  })
+  test("a family's is its cases: fewer than PAIRED_MIN, or a wide interval", () => {
+    assert.equal(familySmallSample(PAIRED_MIN - 1, -0.05, 0.05), true)
+    assert.equal(familySmallSample(40, -0.088, 0.088), false, 'agreeing cases settle it')
+    assert.equal(familySmallSample(12, -0.25, 0.25), true)
+    assert.equal(familySmallSample(12, 0.3, 0.9), false, 'a wide interval that excludes 0')
+  })
+  test('runsToSettle finds the first n a side where the same rates stop being small', () => {
+    assert.equal(runsToSettle(0, 0, 4), 16)
+    assert.equal(runsToSettle(1, 1, 4), 16)
+    const half = runsToSettle(0.5, 0.5, 4)
+    assert.ok(half > 40 && half < 50, `50% settles in the 40s, got ${half}`)
+    assert.equal(runsToSettle(0, 0, 30), 30, 'never below from')
   })
 })
 

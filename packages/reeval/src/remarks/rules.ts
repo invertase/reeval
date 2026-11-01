@@ -7,6 +7,7 @@ import { sha256 } from '../ids.ts'
 import {
   COMPARE_RUNS,
   containsZero,
+  familySmallSample,
   liftInterval,
   PAIRED_MIN,
   RUNS_TO_HOLD_MAX,
@@ -14,7 +15,6 @@ import {
   runsToSettle,
   SMALL_SAMPLE_MARGIN,
   smallSample,
-  widerThanMargin,
 } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { Remark } from '../view/remarks.ts'
@@ -167,9 +167,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const edit = held
     ? `set runs: ${COMPARE_RUNS} or more, so a split this wide is less likely by chance`
     : !gap
-      ? needed
-        ? `set runs: ${needed}, where the same rates would rule out ${margin} points either way`
-        : `the same rates don't rule out ${margin} points either way even at runs: ${RUNS_TO_HOLD_MAX}`
+      ? `set runs: ${needed}, where the same rates would rule out ${margin} points either way`
       : needed
         ? `set runs: ${needed}, where a difference this size would hold`
         : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
@@ -188,15 +186,15 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
 
 /**
  * too-few-tries on a family: its pooled lift is the result for its cases, so it's raised when
- * that lift is `insufficient` (below `PAIRED_MIN` discordant pairs or cases), differs and is
- * within noise, or is the same with an interval that still reaches past `SMALL_SAMPLE_MARGIN`.
+ * that lift doesn't hold (`insufficient` below `PAIRED_MIN` discordant pairs or cases, or within
+ * noise) and either differs or rests on a small sample (`familySmallSample`). Many cases that all
+ * agree are `insufficient` but settled, and raise nothing.
  */
 function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
-  const wide = (p: NonNullable<EvalResult['pooled']>[number]) =>
-    widerThanMargin(p.interval.low, p.interval.high)
   const weak = (e.pooled ?? []).filter(
     (p) =>
-      p.verdict === 'insufficient' || (p.verdict === 'noise' && (p.effect !== 'same' || wide(p))),
+      (p.verdict === 'insufficient' || p.verdict === 'noise') &&
+      (p.effect !== 'same' || familySmallSample(p.pairs, p.interval.low, p.interval.high)),
   )
   const [arm] = weak
   if (!arm) return []
@@ -227,7 +225,9 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
         at: ctx.locate(entry, null),
         edit: few
           ? `add cases, so the pooled lift has ${PAIRED_MIN} to hold on`
-          : `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the difference can hold`,
+          : arm.effect === 'same'
+            ? `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the pooled interval narrows`
+            : `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the difference can hold`,
       },
     },
   ]

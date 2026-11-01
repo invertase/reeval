@@ -1277,11 +1277,14 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     assert.equal((await runCli(p.dir)).code, 0)
     const observed = await query(
       p.dir,
-      "SELECT factor, pass_verdict, note, variant_counted, control_counted FROM factor_effects WHERE tier = 'observed'",
+      "SELECT factor, pass_verdict, small_sample, note, variant_counted, control_counted FROM factor_effects WHERE tier = 'observed'",
     )
     assert.ok(observed.length > 0, 'sources drift is an observed factor')
     assert.ok(
-      observed.every((r) => r.factor === 'sources' && r.pass_verdict === 'not_comparable'),
+      observed.every(
+        (r) =>
+          r.factor === 'sources' && r.pass_verdict === 'not_comparable' && r.small_sample === null,
+      ),
       JSON.stringify(observed),
     )
     assert.ok(observed.every((r) => String(r.note).includes('the eval changed')))
