@@ -343,7 +343,7 @@ evaluate('shot', { environment: site }, async (c) => {
     assert.equal(existsSync(join(p.dir, '.reeval', 'runs', `${runId}.json`)), true)
   })
 
-  test('a new run prints its id on the plan line and writes .reeval/current', async () => {
+  test('a new run prints its id in the run header and writes .reeval/current', async () => {
     const p = await project('resume-mint', {
       'reeval.config.ts': fakeConfig(),
       'evals/one.eval.ts': `import { evaluate } from 'reeval'\nevaluate('one', async () => {})\n`,
@@ -351,7 +351,7 @@ evaluate('shot', { environment: site }, async (c) => {
     const r = await runCli(p.dir, ['run', '--ui', 'plain'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run } = readRun(p.dir)
-    assert.match(r.stdout, new RegExp(`run ${run.runId}`))
+    assert.match(r.stdout, new RegExp(`^ +➜ +Run: +${run.runId}$`, 'm'))
     assert.equal(readCurrent(p.dir), run.runId)
   })
 
@@ -368,7 +368,7 @@ evaluate('shot', { environment: site }, async (c) => {
       env: { GITHUB_OUTPUT: out, GITHUB_STEP_SUMMARY: summary },
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const id = /run (\S+)/.exec(r.stdout)?.[1]
+    const id = /^ +➜ +Run: +(\S+)$/m.exec(r.stdout)?.[1]
     assert.ok(id)
     assert.match(readFileSync(out, 'utf8'), new RegExp(`run-id=${id}`))
     assert.match(readFileSync(summary, 'utf8'), new RegExp(`run ${id}`))
