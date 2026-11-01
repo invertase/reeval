@@ -913,7 +913,7 @@ evaluate('coin', { cases: ['heads', 'tails'], runs: 3 }, async (c, side) => {
     assert.deepEqual(blocks.map(namedIn), [[], [], ['coin']], blocks.join('\n'))
     assert.match(
       blocks[2] ?? '',
-      /^ {2}coin: "lands" passed 2 of 6 tries over 2 runs with nothing changed/m,
+      /^coin: "lands" passed 2 of 6 tries over 2 runs with nothing changed/m,
     )
   })
 

@@ -75,7 +75,7 @@ const PLAIN = `evals/s.eval.ts
      ✗ is green  failed 2 of 3 runs
        expected 'red' to be 'green' // Object.is equality · evals/s.eval.ts:28
 
-Done in <time> · 4 failed · 3 passed`
+Done in <time> · 3 failed · 2 passed`
 
 test('the status list: one line a pass, and a sentence for each way an eval went', async () => {
   const p = await project('status-list', {
