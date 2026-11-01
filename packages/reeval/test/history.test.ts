@@ -944,6 +944,26 @@ evaluate.each([{ user: '${user}', password: process.env.DB_PASSWORD }])('logs in
     assert.deepEqual(await row(secret.env), ['drift', ['case data changed']])
   })
 
+  test("a case's hash masks the value of its environment's secret(), whatever the variable is called", async () => {
+    const p = await gitProject('case-declared-secret', {
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const db = defineEnvironment('db', ({ secret }) => ({ env: { DB_CONN: secret.fromEnv('DB_CONN') } }))
+evaluate.each([{ conn: process.env.DB_CONN }])('connects %#', { environment: db }, async (c) => {
+  await c.send('write hello.txt')
+})
+`,
+    })
+    const run = await runCli(p.dir, ['run', '--record'], { env: { DB_CONN: 'pgpass1' } })
+    assert.equal(run.code, 0, run.stderr)
+    const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
+    assert.equal(entry?.source?.case, sha256('{"conn":"[REDACTED]"}'))
+    assert.notEqual(
+      entry?.source?.case,
+      sha256('{"conn":"pgpass1"}'),
+      'canary: DB_CONN is no secret name, so only its secret() masks it',
+    )
+  })
+
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
     const flip = `import { evaluate, expect } from 'reeval'
 evaluate('flips', async (c) => {

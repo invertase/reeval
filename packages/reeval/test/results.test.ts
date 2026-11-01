@@ -565,6 +565,9 @@ describe("an eval's source", () => {
     assert.equal(caseHash(JSON.stringify({ k: token }), {}), sha256('{"k":"[REDACTED]"}'))
     const plain = caseJson({ s: 'café', n: [1, 2] }, 'e')
     assert.equal(caseHash(plain, env), sha256(plain), 'a case without secrets keeps its hash')
+    const declared = caseJson({ conn: 'pgpass1' }, 'e')
+    assert.equal(caseHash(declared, {}, ['pgpass1']), sha256('{"conn":"[REDACTED]"}'))
+    assert.equal(caseHash(declared, {}), sha256(declared), 'twin: only its secret() masks it')
   })
 })
 

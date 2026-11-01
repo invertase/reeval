@@ -69,11 +69,15 @@ export function caseJson(item: unknown, where: string, file?: string): string {
 
 /**
  * sha256 of a case's canonical JSON text with secrets in its strings masked as `redactJsonText`
- * masks them. The record is committed beside the eval file, so an unmasked hash would let its
- * reader confirm a guessed secret; a case without one hashes its text byte for byte.
+ * masks them, `declared` (the values of the eval's `secret()` variables) among them. The record
+ * is committed beside the eval file, so an unmasked hash would let its reader confirm a guessed
+ * secret; a case without one hashes its text byte for byte.
  */
-export const caseHash = (json: string, env: NodeJS.ProcessEnv = process.env): string =>
-  sha256(redactJsonText(json, env))
+export const caseHash = (
+  json: string,
+  env: NodeJS.ProcessEnv = process.env,
+  declared: readonly string[] = [],
+): string => sha256(redactJsonText(json, env, declared))
 
 /** sha256 of the eval's options and its enclosing groups', outermost first, in canonical form. */
 export function optionsHash(levels: readonly EvalOptions[]): string {

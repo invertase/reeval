@@ -26,7 +26,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { bodyHash, caseHash, caseJson } from './eval-source.ts'
+import { bodyHash, caseJson } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
@@ -311,10 +311,7 @@ function register(
       mode,
       groups: groupStack.map(({ name, options }) => ({ name, options })),
       options: own,
-      source: {
-        body: source.body,
-        ...(source.caseJson === undefined ? {} : { case: caseHash(source.caseJson) }),
-      },
+      source,
       ...(family ? { family } : {}),
     },
     { ...getRunContext(), file: collectingFile(), order: registered },

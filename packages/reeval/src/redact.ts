@@ -99,10 +99,10 @@ export const hasTokenShape = (value: string) =>
   TOKEN_PATTERNS.some(({ pattern }) => value.search(pattern) !== -1)
 
 /** Values declared with `secret()`, masked whatever their variable is called. */
-const declared = new Set<string>()
+const declaredSecrets = new Set<string>()
 
 export function registerSecret(value: string | undefined): void {
-  if (value && value.length >= 4) declared.add(value)
+  if (value && value.length >= 4) declaredSecrets.add(value)
 }
 
 /** What a found secret is: the variable it's the value of, or the credential shape it has. */
@@ -207,13 +207,16 @@ const pairHash = (text: string, i: number) =>
 
 let cached: { key: string; secrets: Secrets } | undefined
 
-function envSecrets(env: NodeJS.ProcessEnv): Secrets {
+function envSecrets(env: NodeJS.ProcessEnv, also: readonly string[] = []): Secrets {
   const rules = new Map<string, string>()
   for (const [name, value] of Object.entries(env)) {
     if (SECRET_NAME.test(name) && value && value.length >= 8 && !rules.has(value)) {
       rules.set(value, valueRule(name))
     }
   }
+  const declared = also.length
+    ? new Set([...declaredSecrets, ...also.filter((v) => v.length >= 4)])
+    : declaredSecrets
   for (const value of declared) if (!rules.has(value)) rules.set(value, DECLARED_RULE)
   const values = [...rules.keys()]
   const key = values.map((v) => `${declared.has(v) ? 'd' : 'n'}${rules.get(v)}\0${v}`).join('\0')
@@ -455,10 +458,14 @@ export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): 
 
 /**
  * Serialized JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
- * for byte outside the strings it masks. A line that isn't JSON is masked as plain text.
+ * for byte outside the strings it masks. A line that isn't JSON is masked as plain text. `also`
+ * are masked as declared secrets are, without declaring them for the rest of the process.
  */
-export const redactJsonText = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
-  mapJsonStrings(text, redactLiteral(envSecrets(env)))
+export const redactJsonText = (
+  text: string,
+  env: NodeJS.ProcessEnv = process.env,
+  also: readonly string[] = [],
+): string => mapJsonStrings(text, redactLiteral(envSecrets(env, also)))
 
 /** A JSON object key masked as `redactJson` masks one. */
 export const redactKey = (key: string, env: NodeJS.ProcessEnv = process.env): string =>
