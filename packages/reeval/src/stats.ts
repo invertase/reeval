@@ -149,13 +149,74 @@ export const minimumP = (n1: number, n2: number) =>
 export const PAIRED_MIN = 6
 
 /**
- * Counted attempts a side before a pass-rate lift can be called: below it, every view says
- * `insufficient` (`can't tell yet`, `unclear`), whatever the interval. A product floor that keeps
- * `reeval run`, `reeval query`, the judge-key lift and `reeval analyze` agreeing, not one that
- * makes the stated 95% exact: at 4 a side, a 4/4 against 0/4 split happens by chance about 7% of
- * the time when nothing changed.
+ * The runs a side a compare defaults to and the plan suggests. It doesn't gate the effect: a lift
+ * always reads as its observed direction, and whether its interval excludes 0 decides whether it
+ * holds. At 4 a side, a 4/4 against 0/4 split happens by chance about 7% of the time when nothing
+ * changed.
  */
-export const EFFECT_MIN_COUNTED = 4
+export const COMPARE_RUNS = 4
+
+/** The most runs a side `runsToHold` searches before it calls a difference too small to settle. */
+export const RUNS_TO_HOLD_MAX = 200
+
+/**
+ * The fewest runs a side at which a difference at these observed rates would hold: the
+ * Newcombe interval excludes 0. Null when the rates are equal (no run count separates them) or
+ * when even `RUNS_TO_HOLD_MAX` doesn't.
+ */
+export function runsToHold(variantRate: number, controlRate: number, from = 1): number | null {
+  if (variantRate === controlRate) return null
+  for (let n = Math.max(1, from); n <= RUNS_TO_HOLD_MAX; n++) {
+    const { low, high } = liftInterval(
+      { pass: Math.round(variantRate * n), n },
+      { pass: Math.round(controlRate * n), n },
+    )
+    if (!containsZero(low, high)) return n
+  }
+  return null
+}
+
+/**
+ * How far either way an interval that spans 0 may reach before its sample stops being small:
+ * within ±20 points, a `same` or a difference within noise rules out any lift worth acting on.
+ */
+export const SMALL_SAMPLE_MARGIN = 0.2
+
+/** An interval that spans 0 and still reaches past `SMALL_SAMPLE_MARGIN` either way. */
+export const widerThanMargin = (low: number, high: number) =>
+  containsZero(low, high) && Math.max(-low, high) > SMALL_SAMPLE_MARGIN
+
+/**
+ * Whether a pass-rate contrast rests on a small sample: either side counted fewer than
+ * `COMPARE_RUNS`, or the interval on the difference spans 0 and still reaches past
+ * `SMALL_SAMPLE_MARGIN`. The observed direction shows either way; this says not to trust it far.
+ */
+export function smallSample(variant: { pass: number; n: number }, control: typeof variant) {
+  if (Math.min(variant.n, control.n) < COMPARE_RUNS) return true
+  const { low, high } = liftInterval(variant, control)
+  return widerThanMargin(low, high)
+}
+
+/**
+ * `smallSample` for a family's pooled lift, whose sample is its cases: fewer than `PAIRED_MIN`
+ * paired cases, or an interval that spans 0 and still reaches past `SMALL_SAMPLE_MARGIN`. Many
+ * cases that all agree are `insufficient` for McNemar but not a small sample.
+ */
+export const familySmallSample = (pairs: number, low: number, high: number) =>
+  pairs < PAIRED_MIN || widerThanMargin(low, high)
+
+/**
+ * The fewest runs a side, from `from`, at which these observed rates would stop being a small
+ * sample (`smallSample`). Equal or near rates always do, since the interval narrows toward 0: the
+ * widest, two rates near 50%, settles at 45.
+ */
+export function runsToSettle(variantRate: number, controlRate: number, from = 1): number {
+  for (let n = Math.max(1, from); ; n++) {
+    const a = { pass: Math.round(variantRate * n), n }
+    const b = { pass: Math.round(controlRate * n), n }
+    if (!smallSample(a, b)) return n
+  }
+}
 
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */
 export type PairCounts = { both: number; variantOnly: number; controlOnly: number; neither: number }

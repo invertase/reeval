@@ -287,13 +287,13 @@ group(
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
   (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts:
-  without `runs`, a compare runs 4 a cell, the fewest for a lift verdict. A `runs` below 4 reads
-  `can't tell yet`; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
+  without `runs`, a compare runs 4 a cell, the fewest whose lift often holds. A `runs` below 4 shows
+  only the direction, with a `too-few-tries` remark; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.
 - Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
-  side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
+  side each variant's effect is only a direction; from four, the block adds an effort table
   (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
   keep independent requirements as labeled `expect`s, not `expect.require`, so each gets a verdict.
 - `questions: [{ question: 'How did the agent pick its greeting?', transcript: true }]` beside
@@ -324,7 +324,7 @@ reeval analyze           reeval studio          reeval image build      reeval d
 
 `reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
 arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
-or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
+or `same`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run; a study, every cell `gate: 'none'`, is `1 not gated`, never a pass,
 so read its arm rows for what passed). `Remarks:` after the tally names evals that need work

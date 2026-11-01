@@ -3,7 +3,7 @@ fail             greets in the house style
   plain            0 of 4
   with-skill       4 of 4  helped
     difference +100 points, 95% interval +31…+100
-  with-doc         0 of 4
+  with-doc         0 of 4  same
     difference +0 points, 95% interval −49…+49
   check            plain    with-skill  with-doc
   house greeting   0 of 4   4 of 4      0 of 4
@@ -30,7 +30,7 @@ fail             keeps the plain greeting
 pass             greets once
   arm              pass
   plain            0 of 1
-  with-skill       1 of 1  can't tell yet
+  with-skill       1 of 1  helped
     difference +100 points, 95% interval −12…+100
   check            plain   with-skill
   house greeting   0 of 1  1 of 1

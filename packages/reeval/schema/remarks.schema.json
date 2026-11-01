@@ -41,6 +41,7 @@
         },
         "kind": {
           "enum": [
+            "cant-tell-apart",
             "check-never-fails",
             "flaky-check",
             "proxy-only-egress",

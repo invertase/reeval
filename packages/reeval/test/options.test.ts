@@ -372,6 +372,16 @@ evaluate.each(${cases}${options})(
       verdict: 'lift',
       outcome: 'pass',
     })
+    const paired = await runCli(p.dir, [
+      'query',
+      "select distinct pass_verdict, small_sample from factor_effects where tier = 'paired'",
+      '--json',
+    ])
+    assert.deepEqual(
+      JSON.parse(paired.stdout),
+      [{ pass_verdict: 'effect', small_sample: 0 }],
+      'six cases whose interval excludes 0 are no small sample',
+    )
     const rates = await runCli(p.dir, [
       'query',
       'select cell_key, pass, counted, pass_at_1 from families where run_id = (select max(run_id) from runs) order by cell_key',
@@ -435,8 +445,14 @@ evaluate.each(${cases}${options})(
       [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
       [3, 1, 't-cases', 'insufficient', 'pass'],
     )
-    // Three pairs are too few to tell, however one-sided they are.
-    assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}can't tell yet$/m)
+    const paired = await runCli(p.dir, [
+      'query',
+      "select distinct small_sample from factor_effects where tier = 'paired'",
+      '--json',
+    ])
+    assert.deepEqual(JSON.parse(paired.stdout), [{ small_sample: 1 }], 'three cases are too few')
+    // Three pairs are too few for the lift to hold, however one-sided they are: it shows the direction.
+    assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}helped$/m)
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
@@ -461,7 +477,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
     // A successful compare reads as one: the control's expected misses aren't failures.
     const block =
-      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}can't tell yet\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m
+      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m
     assert.match(r.stdout, block)
     assert.match(r.stdout, /^1 pass$/m)
 
@@ -542,11 +558,11 @@ evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], 
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
     assert.match(
       r.stdout,
-      /^fail {13}all gated\n {2}arm {16}pass\n {2}base {15}0 of 1\n {2}skilled {12}1 of 1 {2}can't tell yet\n {2}check {14}base {4}skilled\n {2}toHaveFile ok\.txt {2}0 of 1 {2}1 of 1\n/m,
+      /^fail {13}all gated\n {2}arm {16}pass\n {2}base {15}0 of 1\n {2}skilled {12}1 of 1 {2}helped\n {2}check {14}base {4}skilled\n {2}toHaveFile ok\.txt {2}0 of 1 {2}1 of 1\n/m,
     )
     assert.match(
       r.stdout,
-      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
+      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}made it worse, not by minLift 50\n {4}error {2}the variant is worse$/m,
     )
     assert.match(r.stdout, /^1 fail · 1 not gated$/m)
   })
@@ -1845,7 +1861,7 @@ evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] 
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}can't tell yet$/m)
+    assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}helped$/m)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])

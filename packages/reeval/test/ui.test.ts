@@ -645,7 +645,7 @@ const planEvent = (over: Partial<Extract<ReevalEvent, { type: 'plan' }>> = {}): 
   details: [],
   warnings: [unpinned('agent-skills'), unpinned('firebaseui-web')],
   hints: [
-    "1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)",
+    "1 compare runs once per cell; below 4 runs a side its lift shows only a direction and its effort can't be tested (profile smoke's limit.runs caps it; --runs 4 replaces it)",
   ],
   ...over,
 })
@@ -804,7 +804,7 @@ describe('run header', () => {
         PLAN_LINE,
         `warning: ${unpinned('agent-skills')}`,
         `warning: ${unpinned('firebaseui-web')}`,
-        "hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)",
+        "hint: 1 compare runs once per cell; below 4 runs a side its lift shows only a direction and its effort can't be tested (profile smoke's limit.runs caps it; --runs 4 replaces it)",
         'preparing 1 sandbox: docker',
         '✓ docker ready 12s',
         `reeval 0.16.1 · run ${header.runId} · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 8 · stream logs`,

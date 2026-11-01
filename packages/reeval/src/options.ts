@@ -44,7 +44,7 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
-import { EFFECT_MIN_COUNTED } from './stats.ts'
+import { COMPARE_RUNS } from './stats.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -659,11 +659,10 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
 export type Cascading = Omit<Resolved, 'runs'> & { runs: number | undefined }
 
 /**
- * Runs per cell when no level sets `runs`: a compare with variants runs `EFFECT_MIN_COUNTED` a
- * side, the fewest whose lift can reach a verdict; anything else, a pooled family's cases
- * included, runs once.
+ * Runs per cell when no level sets `runs`: a compare with variants runs `COMPARE_RUNS` a side;
+ * anything else, a pooled family's cases included, runs once.
  */
-export const COMPARE_DEFAULT_RUNS = EFFECT_MIN_COUNTED
+export const COMPARE_DEFAULT_RUNS = COMPARE_RUNS
 
 function applyLevel(
   out: Cascading,

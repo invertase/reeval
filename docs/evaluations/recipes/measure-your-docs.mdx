@@ -57,7 +57,7 @@ evaluate(
 
 The rules text names `streamText` from the Vercel AI SDK. The prompt does not name `streamText`, so the assertion passes only when the docs lead the harness to call it.
 
-`runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+`runs: 4` gives each cell four attempts. Below four counted attempts a side, the `too-few-tries` remark often says the effect doesn't hold yet.
 
 </Step>
 <Step title="Run the comparison">
@@ -83,7 +83,7 @@ pass             streams the chat reply
     expected src/chat.ts to match /streamText/
 ```
 
-The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `same`.
 
 If the `plain` baseline and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A baseline that already includes the docs measures nothing.
 

@@ -7,7 +7,7 @@ import type {
   JudgmentRecord,
   Lift,
 } from '../history/types.ts'
-import { containsZero, EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { TokenUsage } from '../types.ts'
 import { sumUsage } from '../usage.ts'
@@ -105,7 +105,7 @@ export type JudgeKeyRate = {
   question: string
   pass: number
   counted: number
-  /** Compact lift vs the paired control, only when both sides have enough counted. */
+  /** Compact lift vs the paired control, when both sides counted an attempt. */
   lift: Pick<Lift, 'points' | 'control' | 'variant' | 'withinNoise'> | null
 }
 
@@ -159,9 +159,7 @@ function liftForKey(
   variant: { pass: number; counted: number },
   control: { pass: number; counted: number } | undefined,
 ): JudgeKeyRate['lift'] {
-  if (!control || variant.counted < EFFECT_MIN_COUNTED || control.counted < EFFECT_MIN_COUNTED) {
-    return null
-  }
+  if (!control || variant.counted === 0 || control.counted === 0) return null
   const { points, low, high } = liftInterval(
     { pass: variant.pass, n: variant.counted },
     { pass: control.pass, n: control.counted },
@@ -174,7 +172,7 @@ function liftForKey(
   }
 }
 
-/** Per-key pass/counted for one cell's counted attempts, with lift on a variant when both sides qualify. */
+/** Per-key pass/counted for one cell's counted attempts, with lift on a variant when both sides counted an attempt. */
 export function cellJudgeRates(
   e: Pick<EvalEntry, 'attempts' | 'cells'>,
   cellKey: string,

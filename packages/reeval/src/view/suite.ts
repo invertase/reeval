@@ -9,10 +9,11 @@ import type {
   EvalEntry,
   FamilyLift,
   FamilyRecord,
+  FamilyVerdict,
   RunRecord,
   UpstreamCount,
 } from '../history/types.ts'
-import { EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
+import { COMPARE_RUNS } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
@@ -21,11 +22,11 @@ import { attemptAnswerRows, isNotGatedPass, notRunYet, runOutcome } from './mode
 import { type ObservedTally, observedTallies } from './observations.ts'
 
 /**
- * A variant against its baseline: `better` or `worse` when the stored 95% interval on the
- * difference excludes 0, `same` when both pass at the same rate, and `unclear` otherwise,
- * including whenever either side has fewer than `EFFECT_MIN_COUNTED` counted attempts.
+ * A variant against its baseline: the direction of their observed pass rates, at any number of
+ * runs. Whether it holds is the interval's to say (`CellResult.interval`), and the
+ * `too-few-tries` remark says how many runs would settle it.
  */
-export type Effect = 'better' | 'worse' | 'same' | 'unclear'
+export type Effect = 'better' | 'worse' | 'same'
 
 /**
  * What an eval's cells compare: `change` when it has variants (or several environments),
@@ -33,7 +34,7 @@ export type Effect = 'better' | 'worse' | 'same' | 'unclear'
  */
 export type Across = 'none' | 'change' | 'harness' | 'both'
 
-export { EFFECT_MIN_COUNTED }
+export { COMPARE_RUNS }
 
 /**
  * One finished run's facts. Every node has a `path`, a stable id that remarks cite it by.
@@ -213,13 +214,13 @@ export type CellResult = {
    * attempt (every one an infra error or skipped) lists each as `not run`.
    */
   checks: CheckResult[]
-  /** On a variant, against its baseline; null on a control. */
+  /** On a variant, the direction of its pass rate against its baseline's; null on a control or with nothing counted on a side. */
   effect: Effect | null
   /** The stored 95% interval on the variant's difference from its baseline. Not for display. */
   interval: Interval | null
   /** On a variant, the compare's `minLift`, a fraction like the interval; null without one. */
   minLift: number | null
-  /** Medians over the counted attempts; null below `EFFECT_MIN_COUNTED` of them. */
+  /** Medians over the counted attempts; null below `COMPARE_RUNS` of them. */
   effort: EffortCounters | null
   /** On a variant, its tool calls, agent time or tokens differ from its baseline's by the rank test. */
   effortDiffers: boolean
@@ -269,7 +270,7 @@ export type CheckResult = {
   order: number
   outcome: CheckOutcome
   /**
-   * On a variant, this check against the baseline's (`unclear` when the baseline never ran it);
+   * On a variant, this check against the baseline's (null when either side never answered it);
    * null on a control or without one.
    */
   effect: Effect | null
@@ -336,6 +337,8 @@ export type PooledArm = {
   /** Cases with counted attempts on both sides. */
   pairs: number
   interval: Interval
+  /** The pooled lift's verdict: `insufficient` below `PAIRED_MIN` discordant pairs or cases. */
+  verdict: FamilyVerdict
   /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
   minLift: number | null
   outcome: 'pass' | 'fail'
@@ -343,32 +346,20 @@ export type PooledArm = {
 
 type Side = { pass: number; counted: number }
 
-/**
- * The effect of `variant` against `control`, from the interval on their difference. A side
- * with fewer than `EFFECT_MIN_COUNTED` counted attempts is `unclear`, whatever the interval.
- */
-export function effectOf(variant: Side, control: Side, interval: Interval | null): Effect {
-  if (variant.counted < EFFECT_MIN_COUNTED || control.counted < EFFECT_MIN_COUNTED) {
-    return 'unclear'
-  }
-  if (variant.pass * control.counted === control.pass * variant.counted) return 'same'
-  if (!interval) return 'unclear'
-  if (interval.low > 0) return 'better'
-  if (interval.high < 0) return 'worse'
-  return 'unclear'
+/** The direction of `variant`'s pass rate against `control`'s; null when a side counted none. */
+export function effectOf(variant: Side, control: Side): Effect | null {
+  if (variant.counted === 0 || control.counted === 0) return null
+  const v = variant.pass * control.counted
+  const c = control.pass * variant.counted
+  return v > c ? 'better' : v < c ? 'worse' : 'same'
 }
 
 /** A check's passes over the attempts that answered it; `notRun` and `error` aren't counted. */
 const checkSide = (t: CheckTally): Side => ({ pass: t.pass, counted: t.pass + t.fail })
 
-/** The check's effect, on the same Newcombe interval the record stores for a cell's lift. */
-export function checkEffect(variant: CheckTally, control: CheckTally): Effect {
-  const v = checkSide(variant)
-  const c = checkSide(control)
-  if (v.counted === 0 || c.counted === 0) return 'unclear'
-  const { low, high } = liftInterval({ pass: v.pass, n: v.counted }, { pass: c.pass, n: c.counted })
-  return effectOf(v, c, { low: round3(low), high: round3(high) })
-}
+/** The check's direction on the variant against the baseline; null when a side never answered it. */
+export const checkEffect = (variant: CheckTally, control: CheckTally): Effect | null =>
+  effectOf(checkSide(variant), checkSide(control))
 
 /** One path segment: `%`, `/` and `+` percent-encoded, so segments split back unambiguously. */
 export const factSegment = (s: string) =>
@@ -569,7 +560,7 @@ function questionsOf(e: EvalEntry): Array<QuestionResult | AttemptQuestionResult
 
 function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
   const effort = cellEffort(e, cell.key)
-  if (!effort || effort.n < EFFECT_MIN_COUNTED) return null
+  if (!effort || effort.n < COMPARE_RUNS) return null
   return {
     tools: effort.tools.median,
     agentMs: effort.agentMs.median,
@@ -577,18 +568,13 @@ function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
   }
 }
 
-/** A variant's effect from its stored lift; with none (nothing counted on a side), `unclear`. */
-function cellEffect(
-  cell: CellRecord,
-  baseline: CellRecord | undefined,
-  interval: Interval | null,
-): Effect {
-  if (cell.lift) return effectOf(cell.lift.variant, cell.lift.control, interval)
-  if (!baseline) return 'unclear'
+/** A variant's direction against its baseline; null without one, or with nothing counted on a side. */
+function cellEffect(cell: CellRecord, baseline: CellRecord | undefined): Effect | null {
+  if (cell.lift) return effectOf(cell.lift.variant, cell.lift.control)
+  if (!baseline) return null
   return effectOf(
     { pass: cell.pass, counted: cell.pass + cell.fail },
     { pass: baseline.pass, counted: baseline.pass + baseline.fail },
-    null,
   )
 }
 
@@ -656,7 +642,7 @@ function cellsOf(
       fingerprint: cell.fingerprint,
       context: contextOf(record, cell),
       checks: checksOf(e, cell, baseline, path, declared),
-      effect: cell.role === 'variant' ? cellEffect(cell, baseline, interval) : null,
+      effect: cell.role === 'variant' ? cellEffect(cell, baseline) : null,
       interval,
       minLift: lift?.minLift ?? null,
       effort: effortOf(e, cell),
@@ -673,11 +659,8 @@ function cellsOf(
 }
 
 function pooledEffect(lift: FamilyLift): Effect {
-  if (lift.verdict === 'insufficient' || lift.pairs < EFFECT_MIN_COUNTED) return 'unclear'
   if (lift.variantRate === lift.controlRate) return 'same'
-  if (lift.interval.lo > 0) return 'better'
-  if (lift.interval.hi < 0) return 'worse'
-  return 'unclear'
+  return lift.variantRate > lift.controlRate ? 'better' : 'worse'
 }
 
 /** Fail beats infra error, which beats canceled, which beats pass; skipped only when every one was. */
@@ -811,6 +794,7 @@ function familyResult(
         effect: pooledEffect(lift),
         pairs: lift.pairs,
         interval: { low: lift.interval.lo, high: lift.interval.hi },
+        verdict: lift.verdict,
         minLift: lift.minLift ?? null,
         outcome: lift.outcome,
       }

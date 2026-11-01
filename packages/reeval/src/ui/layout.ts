@@ -75,8 +75,7 @@ const VERDICT: Record<ResultOutcome, string> = {
 const EFFECT: Record<Effect, string> = {
   better: 'helped',
   worse: 'made it worse',
-  unclear: "can't tell yet",
-  same: '',
+  same: 'same',
 }
 
 export type Text = { text: string; paint?: Paint }
@@ -279,7 +278,7 @@ export function labeler(cells: CellResult[], parts: Array<'harness' | 'arm' | 's
 
 const effectText = (c: Colors, effect: Effect | null): Text => {
   if (!effect) return t('')
-  const paint = effect === 'better' ? c.green : effect === 'worse' ? c.red : c.yellow
+  const paint = effect === 'better' ? c.green : effect === 'worse' ? c.red : c.dim
   return t(EFFECT[effect], paint)
 }
 

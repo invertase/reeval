@@ -3388,9 +3388,9 @@ export const features: Feature[] = [
     record: ({ stdout }) => {
       assert.match(
         blockOf(stdout, 'lands'),
-        /^pass {13}lands\n {2}arm {14}pass\n {2}plain {12}0 of 1\n {2}marked {11}1 of 1 {2}can't tell yet\n {2}check {12}plain {3}marked\n {2}has the marker {3}0 of 1 {2}1 of 1\n/,
+        /^pass {13}lands\n {2}arm {14}pass\n {2}plain {12}0 of 1\n {2}marked {11}1 of 1 {2}helped\n {2}check {12}plain {3}marked\n {2}has the marker {3}0 of 1 {2}1 of 1\n/,
       )
-      assert.match(blockOf(stdout, 'canary'), /^ {2}marked {11}0 of 1 {2}can't tell yet$/m)
+      assert.match(blockOf(stdout, 'canary'), /^ {2}marked {11}0 of 1 {2}same$/m)
       assert.doesNotMatch(stdout, /%|pass@1/)
     },
   },
@@ -3449,7 +3449,7 @@ export const features: Feature[] = [
     },
     record: ({ stdout }) => {
       const arms = (harness: string) =>
-        `  ${harness}\n    arm             pass\n    plain           0 of 1\n    marked          1 of 1  can't tell yet\n`
+        `  ${harness}\n    arm             pass\n    plain           0 of 1\n    marked          1 of 1  helped\n`
       const lands = blockOf(stdout, 'lands')
       assert.ok(lands.startsWith(`pass             lands\n${arms('writer')}`), lands)
       assert.ok(lands.includes(`\n${arms('copier')}`), lands)

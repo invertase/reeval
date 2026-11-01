@@ -51,7 +51,7 @@ A cell is one agent, one environment, and one `sandbox` option of an evaluation,
 
 ## Comparison
 
-A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
+A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `same`. For more information about a comparison, see [Compare setups](/results/compare/lift).
 
 ## digest
 
@@ -59,7 +59,7 @@ The **digest** is what `reeval analyze` hands the model. The **environment diges
 
 ## effect
 
-See [Comparison](#comparison) for `helped` / `made it worse` / `can't tell yet`. `EffortVerdict` is `fewer`, `more`, `noise`, or `insufficient` (printed as “within noise” and “too few attempts to test”). A **family verdict** is `FamilyVerdict` on the family's paired lift.
+See [Comparison](#comparison) for `helped` / `made it worse` / `same`. `EffortVerdict` is `fewer`, `more`, `noise`, or `insufficient` (printed as “within noise” and “too few attempts to test”). A **family verdict** is `FamilyVerdict` on the family's paired lift.
 
 ## effort
 

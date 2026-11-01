@@ -476,7 +476,7 @@
                 "fingerprint": "af57c2bf94a643778f5d50598a0875d1d0bde4de5b3396be67e86244b7c53643",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": "better",
                 "interval": {
                   "low": -0.122,
                   "high": 1
@@ -543,7 +543,7 @@
                 "fingerprint": "cf76c01bc8ee3b364f1cf727342851e5a1348942fa915408dabe6df1c2dd0d5c",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": null,
                 "interval": null,
                 "minLift": null,
                 "effort": null,

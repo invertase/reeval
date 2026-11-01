@@ -95,7 +95,7 @@
                     "fingerprint": "5c1492c194efeae0714779c31a316892b44fb47f319975197c316f11b51d3eee",
                     "context": ["skills/house-greeting"],
                     "checks": [],
-                    "effect": "unclear",
+                    "effect": "better",
                     "interval": {
                       "low": -0.122,
                       "high": 1
@@ -162,7 +162,7 @@
                     "fingerprint": "f60292cdaac7c815347dab4b6b6eb158536d3d571188a28fedd015529c501dc0",
                     "context": ["skills/house-greeting"],
                     "checks": [],
-                    "effect": "unclear",
+                    "effect": null,
                     "interval": null,
                     "minLift": null,
                     "effort": null,
@@ -243,7 +243,7 @@
                     "fingerprint": "5c1492c194efeae0714779c31a316892b44fb47f319975197c316f11b51d3eee",
                     "context": ["skills/house-greeting"],
                     "checks": [],
-                    "effect": "unclear",
+                    "effect": "better",
                     "interval": {
                       "low": -0.122,
                       "high": 1
@@ -310,7 +310,7 @@
                     "fingerprint": "f60292cdaac7c815347dab4b6b6eb158536d3d571188a28fedd015529c501dc0",
                     "context": ["skills/house-greeting"],
                     "checks": [],
-                    "effect": "unclear",
+                    "effect": null,
                     "interval": null,
                     "minLift": null,
                     "effort": null,
@@ -333,12 +333,13 @@
                 "path": "evals%2Fcases.eval.ts › greets %25s/fake+with-house-greeting+docker",
                 "key": "fake/with-house-greeting/docker",
                 "vs": "fake/plain/docker",
-                "effect": "unclear",
+                "effect": "better",
                 "pairs": 2,
                 "interval": {
                   "low": 0.07,
                   "high": 1
                 },
+                "verdict": "insufficient",
                 "minLift": 0.2,
                 "outcome": "fail"
               }
@@ -976,7 +977,7 @@
                 "fingerprint": "ecca272d669f623fe7b49c1f303755920c582e4a1ce0772c5dc370ab3c56b4ec",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": "better",
                 "interval": {
                   "low": -0.122,
                   "high": 1
@@ -1043,7 +1044,7 @@
                 "fingerprint": "97cc034171e296e16848b74f87424e48c8fdd8291a0fa3c13a5ecb9deb14e64e",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": null,
                 "interval": null,
                 "minLift": null,
                 "effort": null,
@@ -1141,7 +1142,7 @@
                 "fingerprint": "ecca272d669f623fe7b49c1f303755920c582e4a1ce0772c5dc370ab3c56b4ec",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": "same",
                 "interval": {
                   "low": -0.793,
                   "high": 0.793
@@ -1208,7 +1209,7 @@
                 "fingerprint": "97cc034171e296e16848b74f87424e48c8fdd8291a0fa3c13a5ecb9deb14e64e",
                 "context": ["skills/house-greeting"],
                 "checks": [],
-                "effect": "unclear",
+                "effect": null,
                 "interval": null,
                 "minLift": null,
                 "effort": null,

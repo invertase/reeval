@@ -33,7 +33,7 @@ one profile you need.
 pass             adds a tested multiply function
   arm              pass
   math             4 of 4
-  project-layout   4 of 4
+  project-layout   4 of 4  same
   effort           tools  time
   math             1      1.0s
   project-layout   1      <0.1s

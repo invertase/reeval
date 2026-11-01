@@ -22,7 +22,7 @@ import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
-import { EFFECT_MIN_COUNTED, mannWhitney, minimumP } from '../src/stats.ts'
+import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
 import { analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
@@ -115,7 +115,7 @@ const FACT_QUERIES = {
   effort:
     'SELECT run_id, eval_key, cell_key, n, tools_median, agent_s_median, tools_ratio, tools_p, separated, verdict, time_verdict, tokens_median, tokens_verdict, tokens_note FROM effort ORDER BY run_id, eval_key, cell_key',
   factor_effects:
-    'SELECT factor, level, baseline, context, tier, run_id, eval_key, strata, runs, variant_pass, variant_counted, control_pass, control_counted, points, lo, hi, pass_verdict, tools_ratios, tools_p, consistent, separated, effort_verdict FROM factor_effects ORDER BY tier, factor, level, context, eval_key, run_id',
+    'SELECT factor, level, baseline, context, tier, run_id, eval_key, strata, runs, variant_pass, variant_counted, control_pass, control_counted, points, lo, hi, pass_verdict, small_sample, tools_ratios, tools_p, consistent, separated, effort_verdict FROM factor_effects ORDER BY tier, factor, level, context, eval_key, run_id',
   flaky_cells:
     'SELECT eval_key, cell_key, runs, pass, counted, lo, hi, verdict, cause FROM flaky_cells',
   drift:
@@ -149,8 +149,9 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
       [12, 12, 11, 12],
     )
     assert.deepEqual(
-      [good?.points, good?.lo, good?.hi, good?.pass_verdict],
-      [0.083, -0.169, 0.354, 'noise'],
+      [good?.points, good?.lo, good?.hi, good?.pass_verdict, good?.small_sample],
+      [0.083, -0.169, 0.354, 'noise', 1],
+      'its interval still reaches 35 points: a small sample at 12 a side',
     )
     const weak = pooledAcrossEvals(all.factor_effects as Row[], 'es-weak')
     assert.deepEqual([weak?.effort_verdict, weak?.pass_verdict], ['noise', 'noise'])
@@ -226,7 +227,7 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
 })
 
 describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)', () => {
-  test('harness contrasts are controlled within a run; a clean sweep of 2 a side is too few to call', async () => {
+  test('harness contrasts are controlled within a run; a clean sweep of 2 a side holds', async () => {
     const p = await historyProject('facts-harness', 'harness-compare')
     const all = await facts(p.dir)
     golden('harness-compare-facts', all)
@@ -246,8 +247,8 @@ describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)'
         compareControl?.control_pass,
         compareControl?.pass_verdict,
       ],
-      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'insufficient'],
-      'antigravity failed both control attempts that cursor passed: 2 a side is below the minimum',
+      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'effect'],
+      'antigravity failed both control attempts that cursor passed: 0 of 2 against 2 of 2 excludes 0',
     )
     assert.deepEqual(
       rows.filter((r) => r.tier === 'not_measured').map((r) => r.factor),
@@ -673,10 +674,10 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     const first = await runCli(p.dir)
     assert.equal(first.code, 0, first.stdout)
     // Two tries a side is below the effort table's four, so only the arms print.
-    assert.match(first.stdout, /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
+    assert.match(first.stdout, /^ {2}skilled {12}2 of 2 {2}helped$/m)
     assert.doesNotMatch(first.stdout, /^ {2}effort /m)
     const { read } = readRun(p.dir)
-    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
+    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}helped$/m)
     assert.equal((await runCli(p.dir)).code, 0)
     const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest', '-v'])
     assert.equal(compare.code, 0, compare.stderr)
@@ -931,24 +932,31 @@ const HEAD = '20260926T104633Z_041aef3_ci_jzvq'
 const BASE = '20260926T104130Z_60f3dc9_cursor-agent_92gs'
 
 describe('reeval analyze', () => {
-  test('the prompt and rules say insufficient lift is not measured', () => {
+  test('the prompt says insufficient is not measured, and the lift rule has no floor', () => {
     assert.match(SYSTEM_PROMPT, /insufficient is not measured: never put it on a results line/)
-    assert.match(RULES[0] ?? '', new RegExp(`fewer than ${EFFECT_MIN_COUNTED} counted attempts`))
+    assert.match(RULES[0] ?? '', /whatever the point estimate or the number of attempts/)
+  })
+
+  test('the rules say a small sample is directional, not to be over-trusted', () => {
+    assert.match(RULES[1] ?? '', /^smallSample: true beside a lift's verdict/)
+    assert.match(RULES[1] ?? '', /fewer than 4 counted a side/)
+    assert.match(RULES[1] ?? '', /don't over-trust it/)
+    assert.match(RULES[1] ?? '', /never as an established effect/)
   })
 
   test('the prompt and rules say missing usage omits tokens, not insufficient', () => {
     assert.match(SYSTEM_PROMPT, /a missing token metric is omitted, not insufficient/)
     assert.match(SYSTEM_PROMPT, /do not treat unreportedUsage as a result/)
-    assert.match(RULES[2] ?? '', /never because a harness dropped usage/)
-    assert.match(RULES[2] ?? '', /omitted \(no line, not insufficient\)/)
+    assert.match(RULES[3] ?? '', /never because a harness dropped usage/)
+    assert.match(RULES[3] ?? '', /omitted \(no line, not insufficient\)/)
   })
 
   test('the prompt and rules say a changed eval is not an effect', () => {
     assert.match(SYSTEM_PROMPT, /first line says the eval changed/)
     assert.match(SYSTEM_PROMPT, /A lift is an effect only when sources match/)
     assert.match(SYSTEM_PROMPT, /mixed counts such as 6\/10 vs 8\/9 are not a results line/)
-    assert.match(RULES[1] ?? '', /not comparable: the eval changed/)
-    assert.match(RULES[1] ?? '', /Do not put those mixed counts on a results line/)
+    assert.match(RULES[2] ?? '', /not comparable: the eval changed/)
+    assert.match(RULES[2] ?? '', /Do not put those mixed counts on a results line/)
   })
 
   test('the prompt and rules say compare-question rates annotate only', () => {
@@ -1199,34 +1207,58 @@ evaluate('hello', async (c) => {
     )
   })
 
-  test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
+  test('a tie at a ceiling is tagged from 4 attempts a side, not on fewer', async () => {
+    const tieOf = async (name: string, runs: number) => {
+      const p = await compareProject(name, runs)
+      const config = join(p.dir, 'reeval.config.ts')
+      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' } }" }))
+      const run = await runCli(p.dir, ['run'])
+      assert.equal(run.code, 0, run.stdout)
+      const { digest } = await digestOf(p.dir)
+      const cells = digest.facts.find((f) => f.kind === 'pass@1')?.cells as
+        | Array<{ lift?: string; smallSample?: boolean; tie?: string }>
+        | undefined
+      const variant = cells?.find((c) => c.lift)
+      return { smallSample: variant?.smallSample, tie: variant?.tie }
+    }
+    assert.deepEqual(await tieOf('analyze-tie-four', 4), {
+      smallSample: true,
+      tie: 'both always pass',
+    })
+    assert.deepEqual(
+      await tieOf('analyze-tie-one', 1),
+      { smallSample: true, tie: undefined },
+      'one pass a side is too few to say both always pass',
+    )
+  })
+
+  test('one counted attempt a side is a direction within noise, flagged as a small sample', async () => {
     const p = await compareProject('analyze-sparse-lift', 1)
     const run = await runCli(p.dir, ['run', '-v'])
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /^ {2}\S+ +1 of 1 {2}can't tell yet\n {4}difference \+100 points, 95% interval −12…\+100$/m,
+      /^ {2}\S+ +1 of 1 {2}helped\n {4}difference \+100 points, 95% interval −12…\+100$/m,
       '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)
     const pass = digest.facts.find((f) => f.kind === 'pass@1')
     const variant = (
-      pass?.cells as Array<{ lift?: string; verdict?: string; cell: string }> | undefined
+      pass?.cells as
+        | Array<{ lift?: string; verdict?: string; smallSample?: boolean; cell: string }>
+        | undefined
     )?.find((c) => c.lift)
     assert.deepEqual(
-      { lift: variant?.lift, verdict: variant?.verdict },
-      { lift: 'not enough attempts for lift (1 vs 1)', verdict: 'insufficient' },
-    )
-    assert.ok(
-      digest.rules.some((r) => r.includes('not measured') && r.includes('never a results line')),
+      { lift: variant?.lift, verdict: variant?.verdict, smallSample: variant?.smallSample },
+      { lift: '+100 pts (95% −12…+100)', verdict: 'within noise', smallSample: true },
     )
     const controlled = await query(
       p.dir,
-      "SELECT pass_verdict, variant_counted, control_counted FROM factor_effects WHERE tier = 'controlled'",
+      "SELECT pass_verdict, small_sample, variant_counted, control_counted FROM factor_effects WHERE tier = 'controlled'",
     )
     assert.deepEqual(
-      controlled.map((r) => [r.pass_verdict, r.variant_counted, r.control_counted]),
-      [['insufficient', 1, 1]],
+      controlled.map((r) => [r.pass_verdict, r.small_sample, r.variant_counted, r.control_counted]),
+      [['noise', 1, 1, 1]],
     )
   })
 
@@ -1270,11 +1302,14 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     assert.equal((await runCli(p.dir)).code, 0)
     const observed = await query(
       p.dir,
-      "SELECT factor, pass_verdict, note, variant_counted, control_counted FROM factor_effects WHERE tier = 'observed'",
+      "SELECT factor, pass_verdict, small_sample, note, variant_counted, control_counted FROM factor_effects WHERE tier = 'observed'",
     )
     assert.ok(observed.length > 0, 'sources drift is an observed factor')
     assert.ok(
-      observed.every((r) => r.factor === 'sources' && r.pass_verdict === 'not_comparable'),
+      observed.every(
+        (r) =>
+          r.factor === 'sources' && r.pass_verdict === 'not_comparable' && r.small_sample === null,
+      ),
       JSON.stringify(observed),
     )
     assert.ok(observed.every((r) => String(r.note).includes('the eval changed')))
@@ -1416,16 +1451,16 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.doesNotMatch(dry.stdout.split('\n')[0] ?? '', / vs /)
   })
 
-  for (const [runs, effect, lift, verdict] of [
-    [2, "can't tell yet", 'not enough attempts for lift (2 vs 2)', 'insufficient'],
-    [3, "can't tell yet", 'not enough attempts for lift (3 vs 3)', 'insufficient'],
-    [4, 'helped', '+100 pts (95% +31…+100)', 'effect'],
+  for (const [runs, lift, verdict, passVerdict] of [
+    [2, '+100 pts (95% +7…+100)', 'effect', 'effect'],
+    [3, '+100 pts (95% +21…+100)', 'effect', 'effect'],
+    [4, '+100 pts (95% +31…+100)', 'effect', 'effect'],
   ] as const) {
     test(`${runs} against ${runs}: every view gives the same verdict`, async () => {
       const p = await compareProject(`analyze-lift-${runs}`, runs)
       const run = await runCli(p.dir)
       assert.equal(run.code, 0, run.stdout)
-      assert.match(run.stdout, new RegExp(`^ {2}\\S+ +${runs} of ${runs} {2}${effect}$`, 'm'))
+      assert.match(run.stdout, new RegExp(`^ {2}\\S+ +${runs} of ${runs} {2}helped$`, 'm'))
       const { digest } = await digestOf(p.dir)
       const pass = digest.facts.find((f) => f.kind === 'pass@1')
       const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
@@ -1445,21 +1480,21 @@ evaluate('greets', { runs: 1 }, async (c) => {
         p.dir,
         "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",
       )
-      assert.equal(row?.pass_verdict, verdict)
+      assert.equal(row?.pass_verdict, passVerdict)
     })
   }
 
-  test('every view reads one minimum of counted attempts', async () => {
+  test('every view reads one number of compare runs', async () => {
     const stats = await import('../src/stats.ts')
     const suite = await import('../src/view/suite.ts')
     const view = await import('../src/view/index.ts')
-    assert.equal(stats.EFFECT_MIN_COUNTED, 4)
-    assert.equal(suite.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
-    assert.equal(view.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
+    assert.equal(stats.COMPARE_RUNS, 4)
+    assert.equal(suite.COMPARE_RUNS, stats.COMPARE_RUNS)
+    assert.equal(view.COMPARE_RUNS, stats.COMPARE_RUNS)
     const src = join(import.meta.dirname, '../src')
     const defines = readdirSync(src, { recursive: true, encoding: 'utf8' })
       .filter((f) => f.endsWith('.ts'))
-      .filter((f) => /\bconst \w*MIN_COUNTED\b/.test(readFileSync(join(src, f), 'utf8')))
+      .filter((f) => /\bconst COMPARE_RUNS\b/.test(readFileSync(join(src, f), 'utf8')))
     assert.deepEqual(defines, ['stats.ts'], 'one definition, which every view imports')
   })
 
@@ -1969,9 +2004,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         r.checks,
       ]),
       [
-        ['current-skill', 'no-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
-        ['new-skill', 'no-skill', 0, 0, 'insufficient', null, 5],
-        ['new-skill', 'current-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
+        ['current-skill', 'no-skill', 0, 0, 'noise', 'Social OAuth', 5],
+        ['new-skill', 'no-skill', 0, 0, 'noise', null, 5],
+        ['new-skill', 'current-skill', 0, 0, 'noise', 'Social OAuth', 5],
       ],
     )
     const { digest } = await digestOf(p.dir, ['--vs', 'none'])
@@ -1985,9 +2020,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         (f.checks as Row[]).map((k) => k.label),
       ]),
       [
-        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
-        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', []],
-        ['new-skill', 'current-skill', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
+        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', []],
+        ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
       ],
     )
     assert.equal(

@@ -14,15 +14,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -41,15 +43,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -68,15 +72,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -95,15 +101,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -122,15 +130,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+50 pts (95% −27…+91)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+50 pts (95% −27…+91)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -149,15 +159,17 @@
         "cell": "es-weak",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       },
       {
         "cell": "es-good",
         "pass": "2/2",
         "gated": true,
-        "lift": "not enough attempts for lift (2 vs 2)",
-        "verdict": "insufficient"
+        "lift": "+0 pts (95% −66…+66)",
+        "verdict": "within noise",
+        "smallSample": true
       }
     ]
   },
@@ -506,6 +518,7 @@
     "passRate": "12/12 vs 11/12",
     "lift": "+8 pts (95% −17…+35)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×0.20 / ×0.51 / ×0.11",
     "toolsP": 0.0286,
     "effortVerdict": "fewer",
@@ -526,6 +539,7 @@
     "passRate": "4/4 vs 4/4",
     "lift": "+0 pts (95% −49…+49)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×0.20",
     "toolsP": 0.0286,
     "effortVerdict": "fewer",
@@ -544,6 +558,7 @@
     "passRate": "4/4 vs 3/4",
     "lift": "+25 pts (95% −28…+70)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×0.51",
     "toolsP": 0.0286,
     "effortVerdict": "fewer",
@@ -562,6 +577,7 @@
     "passRate": "4/4 vs 4/4",
     "lift": "+0 pts (95% −49…+49)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×0.11",
     "toolsP": 0.0286,
     "effortVerdict": "fewer",
@@ -580,6 +596,7 @@
     "passRate": "12/12 vs 11/12",
     "lift": "+8 pts (95% −17…+35)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×1.01 / ×0.96 / ×1.04",
     "toolsP": 1,
     "effortVerdict": "noise",
@@ -600,6 +617,7 @@
     "passRate": "4/4 vs 4/4",
     "lift": "+0 pts (95% −49…+49)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×1.01",
     "toolsP": 1,
     "effortVerdict": "insufficient",
@@ -618,6 +636,7 @@
     "passRate": "4/4 vs 3/4",
     "lift": "+25 pts (95% −28…+70)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×0.96",
     "toolsP": 0.7429,
     "effortVerdict": "noise",
@@ -636,6 +655,7 @@
     "passRate": "4/4 vs 4/4",
     "lift": "+0 pts (95% −49…+49)",
     "passVerdict": "noise",
+    "smallSample": true,
     "toolCalls": "×1.04",
     "toolsP": 0.6286,
     "effortVerdict": "noise",
@@ -1017,8 +1037,9 @@
     "a": "es-weak",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1037,8 +1058,9 @@
     "a": "es-good",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1057,8 +1079,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1077,8 +1100,9 @@
     "a": "es-weak",
     "b": "broken-project (control)",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1097,8 +1121,9 @@
     "a": "es-good",
     "b": "broken-project (control)",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1117,8 +1142,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1137,8 +1163,9 @@
     "a": "es-weak",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1157,8 +1184,9 @@
     "a": "es-good",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1177,8 +1205,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1197,8 +1226,9 @@
     "a": "es-weak",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1217,8 +1247,9 @@
     "a": "es-good",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1237,8 +1268,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1257,8 +1289,9 @@
     "a": "es-weak",
     "b": "broken-project (control)",
     "passRate": "2/2 vs 1/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1277,8 +1310,9 @@
     "a": "es-good",
     "b": "broken-project (control)",
     "passRate": "2/2 vs 1/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1297,8 +1331,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1317,8 +1352,9 @@
     "a": "es-weak",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1337,8 +1373,9 @@
     "a": "es-good",
     "b": "control",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1357,8 +1394,9 @@
     "a": "es-good",
     "b": "es-weak",
     "passRate": "2/2 vs 2/2",
-    "lift": "not enough attempts for lift (2 vs 2)",
-    "liftVerdict": "insufficient",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "smallSample": true,
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
