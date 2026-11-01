@@ -523,9 +523,9 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "leans",
-                    "leaning": "better",
-                    "text": "5.5× faster",
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same agent time",
                     "needed": null,
                     "unit": "runs"
                   }

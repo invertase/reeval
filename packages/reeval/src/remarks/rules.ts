@@ -17,7 +17,7 @@ import {
   smallSample,
 } from '../stats.ts'
 import { clip } from '../text.ts'
-import { type Reading, tieOf } from '../view/measures.ts'
+import { boundOf, type Reading, tieOf } from '../view/measures.ts'
 import type { Remark } from '../view/remarks.ts'
 import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
@@ -115,12 +115,8 @@ function holds(variant: CellResult, base: CellResult): boolean {
 type Bound = 'pass' | 'fail'
 
 /** `pass` when every side passed every counted run, `fail` when every side failed every one. */
-function boundOf(cells: CellResult[]): Bound | null {
-  if (!cells.length || cells.some((c) => !counted(c))) return null
-  if (cells.every((c) => c.failed === 0)) return 'pass'
-  if (cells.every((c) => c.passed === 0)) return 'fail'
-  return null
-}
+const bounded = (cells: CellResult[]): Bound | null =>
+  boundOf(cells.map((c) => ({ pass: c.passed, fail: c.failed })))
 
 type Tie = { variant: CellResult; base: CellResult; bound: Bound }
 
@@ -247,7 +243,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       const base = unit.cells.find((c) => c.key === variant.vs)
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
       const bound =
-        Math.min(counted(variant), counted(base)) >= COMPARE_RUNS ? boundOf([variant, base]) : null
+        Math.min(counted(variant), counted(base)) >= COMPARE_RUNS ? bounded([variant, base]) : null
       if (bound) {
         const tie = tieOf(bound, variant.measures)
         if (tie === 'tie') ties.push({ variant, base, bound })
@@ -326,7 +322,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
   const weak = (e.pooled ?? []).filter((p) => {
     const own = cells.filter((c) => c.key === p.key)
     const bases = cells.filter((c) => own.some((v) => v.vs === c.key))
-    const bound = p.effect === 'same' && p.pairs >= PAIRED_MIN ? boundOf([...own, ...bases]) : null
+    const bound = p.effect === 'same' && p.pairs >= PAIRED_MIN ? bounded([...own, ...bases]) : null
     const [variant] = own
     const [base] = bases
     if (bound && variant && base) {

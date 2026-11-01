@@ -188,7 +188,10 @@ function measureLines(e: EvalResult, own: CellResult[], verbose: boolean): Detai
   const keys = new Set(own.map((c) => c.key))
   const pooled = (e.pooled ?? []).filter((p) => keys.has(p.key))
   const sets = pooled.length
-    ? pooled.map((p) => ({ harness: '', measures: p.measures }))
+    ? pooled.map((p) => ({
+        harness: own.find((c) => c.key === p.key)?.harness ?? p.key,
+        measures: p.measures,
+      }))
     : own.flatMap((c) => (c.measures ? [{ harness: c.harness, measures: c.measures }] : []))
   const several = new Set(sets.map((x) => x.harness)).size > 1
   return sets.flatMap(({ harness, measures }) => {

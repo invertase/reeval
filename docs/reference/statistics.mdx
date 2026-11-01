@@ -60,16 +60,18 @@ reeval compares each variant with its baseline on every measure the run has, eac
 | Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant 6 of 6` |
 | Tool calls, agent time, tokens | the effort verdict above (paired by case in a family) | the medians' ratio, `5× faster`, `10× fewer tokens` |
 
-Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` when it reaches the measure's minimum effect, and is `same` below it, so timing noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
+Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` only when it reaches the measure's minimum effect and its test's p is below 0.2; anything weaker is `same`, so run-to-run noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
 
 | Measure | Minimum effect to lean |
 |---|---|
-| Pass rate, and each check's pass rate | 10 points |
+| Pass rate, and each check's pass rate | 10 points (p from a two-proportion z test) |
 | A judge's score (0–1) | 0.05 between the mean scores |
-| A compare question | 60% of the decisive pairs for one side |
-| Tool calls, agent time, tokens | 10% between the medians |
+| A compare question | 5 decisive pairs, 60% of them for one side |
+| Tool calls, agent time, tokens | 10% between the medians; agent times that both print `<0.1s` are the same |
 
-Each measure's test stands alone: no correction across measures, since the comparison makes no single combined claim.
+Each measure's test stands alone at p below 0.05, with no correction across measures, so a 10× speedup on four runs a side still reads `better`. The cost is chance results.
+
+<Warning>With identical arms and three effort measures, about 1 run in 14 at four runs a side shows some measure as better or worse by chance, and about 1 in 7 at eight runs a side or more. Each check, judge and question measured adds to that. More runs don't lower it, since each test keeps its 0.05; a difference that shows again on a second run is far less likely to be chance.</Warning>
 
 ## Cases as pairs
 

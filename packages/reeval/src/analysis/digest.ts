@@ -34,7 +34,7 @@ import { bothUnderATenth, DIRECTIONAL_MIN, filesChanged } from '../view/effort.t
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labeledJudgments } from '../view/judgments.ts'
-import { cellMeasures, familyMeasures, type Measure, tieOf } from '../view/measures.ts'
+import { boundOf, cellMeasures, familyMeasures, type Measure, tieOf } from '../view/measures.ts'
 import { observedTallies } from '../view/observations.ts'
 
 /**
@@ -149,7 +149,7 @@ export const RULES = [
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favor the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
   "An observed fact is a value the eval's own code recorded with c.observe (what the agent installed, a count): counts tallies strings and each item of an array once per attempt, numbers summarizes number values. Observations never change pass, fail or the exit code: cite them as what happened, not as a check.",
-  `tie beside a lift's verdict means both sides passed every attempt (both always pass: pass@1 can't tell them apart) or failed every attempt (both always fail: the task may be too hard, or the eval broken), on at least ${COMPARE_RUNS} a side. More runs won't separate them, smallSample or not: never say it needs more runs. Both always fail: say the eval needs checking (an oracle agent should pass it). Both always pass: say the task needs to be harder. measures beside a lift is its comparison on every other measure (each check's pass rate, judge scores, compare-question votes, tool calls, agent time, tokens), each with its own test: better and worse hold, leans is a difference that doesn't. A ceiling with a better or worse measure has no tie: that measure is the result, so never call the arms the same. A ceiling with only leans has looks instead of tie: say it looks different and needs that many runs (or cases) to confirm, never that the task needs to be harder.`,
+  `tie beside a lift's verdict means both sides passed every attempt (both always pass: pass@1 can't tell them apart) or failed every attempt (both always fail: the task may be too hard, or the eval broken), on at least ${COMPARE_RUNS} a side. More runs won't separate them, smallSample or not: never say it needs more runs. Both always fail: say the eval needs checking (an oracle agent should pass it). Both always pass: say the task needs to be harder. measures beside a lift is its comparison on every other measure (each check's pass rate, judge scores, compare-question votes, tool calls, agent time, tokens), each with its own test: better and worse hold, leans is a difference that doesn't. A ceiling with a better or worse measure has no tie: that measure is the result, so never call the arms the same. A ceiling with only leans has looks instead of tie: say it looks different and needs that many runs (or cases) to confirm, not that the task needs to be harder. looks "too faint to confirm" means no affordable number of runs would confirm it: say so, and that if a difference that faint doesn't matter, the task needs to be harder so the baseline can fail.`,
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -164,9 +164,6 @@ const digestLiftVerdict = (withinNoise: boolean): 'within noise' | 'effect' =>
   withinNoise ? 'within noise' : 'effect'
 
 type Counts = { pass: number; counted: number }
-
-const bound = (c: Counts) =>
-  c.counted === 0 ? null : c.pass === c.counted ? 'pass' : c.pass === 0 ? 'fail' : null
 
 /**
  * A comparison beside a lift: `measures`, each measure besides pass rate that isn't the same, as
@@ -195,9 +192,10 @@ const sampleFlags = (variant: Counts, control: Counts, measures: Measure[] | nul
     { pass: variant.pass, n: variant.counted },
     { pass: control.pass, n: control.counted },
   )
+  const side = (c: Counts) => ({ pass: c.pass, fail: c.counted - c.pass })
   const both =
-    Math.min(variant.counted, control.counted) >= COMPARE_RUNS && bound(variant) === bound(control)
-      ? bound(variant)
+    Math.min(variant.counted, control.counted) >= COMPARE_RUNS
+      ? boundOf([side(variant), side(control)])
       : null
   return {
     ...(small ? { smallSample: true } : {}),
@@ -206,14 +204,12 @@ const sampleFlags = (variant: Counts, control: Counts, measures: Measure[] | nul
 }
 
 /** Every case of a family on both sides passed (`pass`), or every one failed, over `PAIRED_MIN` cases or more. */
-function familyBound(cases: readonly EvalEntry[], lift: FamilyLift): 'pass' | 'fail' | null {
-  const sides = cases.flatMap((e) =>
-    e.cells.filter((c) => (c.key === lift.variant || c.key === lift.vs) && c.pass + c.fail > 0),
-  )
-  if (lift.pairs < PAIRED_MIN || !sides.length) return null
-  if (sides.every((c) => c.fail === 0)) return 'pass'
-  return sides.every((c) => c.pass === 0) ? 'fail' : null
-}
+const familyBound = (cases: readonly EvalEntry[], lift: FamilyLift) =>
+  lift.pairs < PAIRED_MIN
+    ? null
+    : boundOf(
+        cases.flatMap((e) => e.cells.filter((c) => c.key === lift.variant || c.key === lift.vs)),
+      )
 
 /** Observed sources (or eval fingerprint) drift is not an effect of the thing under test. */
 function evalChangedLift(): string {

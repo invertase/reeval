@@ -326,13 +326,22 @@ describe('remark thresholds', () => {
       [],
       'a ceiling a question tells apart (8 of 8, p 0.008) needs no remark: the comparison is the result',
     )
-    const [looks] = raise(asked(Array(4).fill('marked')), NO_HISTORY)
-    assert.equal(looks?.kind, 'too-few-tries', '4 of 4 leans: the sign test needs 6 to hold')
+    const [looks] = raise(asked(Array(5).fill('marked')), NO_HISTORY)
+    assert.equal(
+      looks?.kind,
+      'too-few-tries',
+      '5 of 5 leans (p 0.0625): the sign test needs 6 to hold',
+    )
     assert.equal(
       looks?.text,
-      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 4 of 4; about 6 runs a side would confirm it.',
+      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 5 of 5; about 6 runs a side would confirm it.',
     )
     assert.equal(looks?.fix?.edit, 'set runs: 6, where the soonest of these would hold')
+    assert.deepEqual(
+      kinds(asked(Array(4).fill('marked')), NO_HISTORY),
+      ['cant-tell-apart'],
+      '4 of 4 is fewer than 5 decisive pairs: the same',
+    )
     assert.deepEqual(
       kinds(asked(['plain', 'plain', 'marked', 'marked']), NO_HISTORY),
       ['cant-tell-apart'],

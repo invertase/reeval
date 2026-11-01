@@ -22,15 +22,21 @@ import {
   signedRank,
 } from '../stats.ts'
 import { clip } from '../text.ts'
-import { EFFORT_ALPHA, type EffortSample, effortSample, effortVerdict } from './effort.ts'
+import {
+  bothUnderATenth,
+  EFFORT_ALPHA,
+  type EffortSample,
+  effortSample,
+  effortVerdict,
+} from './effort.ts'
 import { labeledJudgments } from './judgments.ts'
 
 export type MeasureName = 'pass' | 'check' | 'judge' | 'question' | 'tools' | 'agentMs' | 'tokens'
 
 /**
  * `better` and `worse` are the measure's own test holding in that direction (for tool calls,
- * agent time and tokens, fewer is better); `same` is no observed difference at all; `leans` is a
- * difference the test doesn't hold.
+ * agent time and tokens, fewer is better); `leans` is a difference the test doesn't hold that
+ * passes the lean screen (`screened`); `same` is every other difference, or none.
  */
 export type MeasureVerdict = 'better' | 'worse' | 'same' | 'leans'
 
@@ -74,19 +80,36 @@ type Wins = { variant: number; control: number; voted: number }
 const LABEL_CHARS = 60
 
 /**
- * The smallest difference that leans: below it a measure whose test doesn't hold reads `same`, so
- * timing noise doesn't stand in for a difference. A difference its test holds is better or worse
- * at any size. Pass-rate points; a judge's 0–1 score; a question's decisive win share; effort's
- * relative difference in medians.
+ * What a difference its test doesn't hold needs to lean, else it reads `same`, so run-to-run noise
+ * doesn't stand in for a difference: at least the measure's smallest effect (pass-rate points; a
+ * judge's 0–1 score; a question's decisive win share; effort's relative difference in medians),
+ * and its test's p below `LEAN_P`. A question also needs `QUESTION_PAIRS_MIN` decisive pairs. A
+ * difference its test holds is better or worse at any size.
  */
 export const RATE_MIN = 0.1
 export const JUDGE_MIN = 0.05
 export const QUESTION_MIN = 0.6
 export const EFFORT_MIN = 0.1
+export const LEAN_P = 0.2
+export const QUESTION_PAIRS_MIN = 5
 
-/** A lean below its measure's minimum effect is `same`. */
-const atLeast = (verdict: MeasureVerdict, size: number, min: number): MeasureVerdict =>
-  verdict === 'leans' && size < min - 1e-9 ? 'same' : verdict
+/** A lean below its measure's smallest effect, or at a p of `LEAN_P` or more, is `same`. */
+const screened = (
+  verdict: MeasureVerdict,
+  size: number,
+  min: number,
+  p: number | null,
+): MeasureVerdict =>
+  verdict === 'leans' && (size < min - 1e-9 || p === null || p >= LEAN_P) ? 'same' : verdict
+
+/** Two-sided p of a pooled two-proportion z test: it screens a rate's lean, never its verdict. */
+function proportionP(v: Side, c: Side): number {
+  const pooled = (v.pass + c.pass) / (v.counted + c.counted)
+  const se = Math.sqrt(pooled * (1 - pooled) * (1 / v.counted + 1 / c.counted))
+  if (se === 0) return 1
+  const z = Math.abs(v.pass / v.counted - c.pass / c.counted) / se
+  return 2 * (1 - normalCdf(z))
+}
 const isCounted = (a: Pick<AttemptRecord, 'outcome'>) =>
   a.outcome === 'pass' || a.outcome === 'fail'
 const sign = (x: number) => (x > 0 ? '+' : x < 0 ? '−' : '±')
@@ -172,7 +195,13 @@ function rateMeasure(
   const hi = stored?.hi ?? computed.high
   const holds = !containsZero(lo, hi) && Math.min(v.counted, c.counted) >= COMPARE_RUNS
   const way = vr > cr ? 'better' : 'worse'
-  const verdict = atLeast(vr === cr ? 'same' : holds ? way : 'leans', Math.abs(vr - cr), RATE_MIN)
+  const p = proportionP(v, c)
+  const verdict = screened(
+    vr === cr ? 'same' : holds ? way : 'leans',
+    Math.abs(vr - cr),
+    RATE_MIN,
+    p,
+  )
   const name = measure === 'pass' ? 'pass rate' : `"${clip(label ?? '', LABEL_CHARS)}"`
   const from = Math.max(v.counted, c.counted, COMPARE_RUNS - 1) + 1
   return {
@@ -297,11 +326,15 @@ function effortMeasures(input: Input, runs: number): Measure[] {
         printed === 'fewer' ? 'better' : printed === 'more' ? 'worse' : s === 0 ? 'same' : 'leans'
       if (verdict === 'leans') needed = scaled(p, runs, RANK_FLOOR)
     }
-    verdict = atLeast(
-      verdict,
-      ratio === null ? (vm === 0 ? 0 : Number.POSITIVE_INFINITY) : Math.abs(ratio - 1),
-      EFFORT_MIN,
-    )
+    verdict =
+      m.measure === 'agentMs' && bothUnderATenth(vm, cm)
+        ? 'same'
+        : screened(
+            verdict,
+            ratio === null ? (vm === 0 ? 0 : Number.POSITIVE_INFINITY) : Math.abs(ratio - 1),
+            EFFORT_MIN,
+            p,
+          )
     if (verdict !== 'leans') needed = null
     const fewer = s < 0
     const agrees = (r: number | null): r is number => r !== null && r < 1 === fewer && r !== 1
@@ -368,7 +401,7 @@ function judgeMeasures(input: Input, runs: number): Measure[] {
     const test = ys && mannWhitney(xs, ys)
     if (!ys || !test) return []
     const diff = mean(xs) - mean(ys)
-    const verdict = atLeast(tested(test.p, test.sign, true), Math.abs(diff), JUDGE_MIN)
+    const verdict = screened(tested(test.p, test.sign, true), Math.abs(diff), JUDGE_MIN, test.p)
     const name = `judge "${clip(label, LABEL_CHARS)}"`
     return [
       {
@@ -397,10 +430,11 @@ function questionMeasures(input: Input, cases: number): Measure[] {
     const decisive = wins.variant + wins.control
     const p = mcnemar(wins.variant, wins.control)
     const s = wins.variant - wins.control
-    const verdict = atLeast(
+    const verdict = screened(
       tested(p, s, true),
-      decisive ? Math.max(wins.variant, wins.control) / decisive : 0,
+      decisive >= QUESTION_PAIRS_MIN ? Math.max(wins.variant, wins.control) / decisive : 0,
       QUESTION_MIN,
+      p,
     )
     const name = `"${clip(question, LABEL_CHARS)}"`
     const lead = s > 0 ? 'the variant' : 'the baseline'
@@ -417,8 +451,8 @@ function questionMeasures(input: Input, cases: number): Measure[] {
         verdict,
         leaning: leaningOf(verdict, s, true),
         text:
-          verdict === 'same'
-            ? `${name} picked ${decisive ? 'each side about as often' : 'neither'}`
+          s === 0
+            ? `${name} picked ${decisive ? 'each side as often' : 'neither'}`
             : `${name} picked ${lead} ${Math.max(wins.variant, wins.control)} of ${decisive}`,
         needed: verdict === 'leans' ? signRuns(wins, cases) : null,
         unit: 'runs',
@@ -514,13 +548,18 @@ export function familyMeasures(cases: readonly EvalEntry[], lift: FamilyLift): M
   )
   const same = lift.variantRate === lift.controlRate
   const way = lift.variantRate > lift.controlRate ? 'better' : 'worse'
-  const verdict: MeasureVerdict = same
-    ? 'same'
-    : lift.verdict === 'lift'
-      ? 'better'
-      : lift.verdict === 'drop'
-        ? 'worse'
-        : 'leans'
+  const verdict = screened(
+    same
+      ? 'same'
+      : lift.verdict === 'lift'
+        ? 'better'
+        : lift.verdict === 'drop'
+          ? 'worse'
+          : 'leans',
+    Math.abs(lift.points),
+    RATE_MIN,
+    lift.p,
+  )
   return measuresOf({
     variant: paired.map((e) => armOf(e, lift.variant)),
     control: paired.map((e) => armOf(e, lift.vs)),
@@ -548,8 +587,9 @@ export function familyMeasures(cases: readonly EvalEntry[], lift: FamilyLift): M
 
 /**
  * What a comparison says beyond pass rate. `apart`: some measure is better or worse, so the
- * comparison is the result. `leans`: none is, but some measure leans, with the soonest runs (or
- * cases) at which one would hold. `same`: every measure is level, or nothing else was measured.
+ * comparison is the result. `leans`: none is, but some measure leans, with the soonest runs at
+ * which one would hold (cases only when no lean is counted in runs, since the two don't compare).
+ * `same`: every measure is level, or nothing else was measured.
  */
 export type Reading =
   | { told: 'apart'; measures: Measure[] }
@@ -562,8 +602,10 @@ export function readMeasures(measures: readonly Measure[]): Reading {
   if (apart.length) return { told: 'apart', measures: apart }
   const leans = rest.filter((m) => m.verdict === 'leans')
   if (!leans.length) return { told: 'same' }
-  const soonest = leans
-    .filter((m) => m.needed !== null)
+  const confirmable = leans.filter((m) => m.needed !== null)
+  const unit = confirmable.some((m) => m.unit === 'runs') ? 'runs' : 'cases'
+  const soonest = confirmable
+    .filter((m) => m.unit === unit)
     .sort((a, b) => (a.needed ?? 0) - (b.needed ?? 0))[0]
   return {
     told: 'leans',
@@ -585,6 +627,18 @@ export const measuresLine = (measures: readonly Measure[], leans = false): strin
     )
     .map((m) => (m.verdict === 'leans' && m.measure !== 'pass' ? `looks ${m.text}` : m.text))
     .join(' · ')
+
+/**
+ * Every side passed every counted run (`pass`), or failed every one (`fail`): a cell, or each of a
+ * family's case cells. Null when they're mixed, or when any side counted nothing.
+ */
+export function boundOf(
+  sides: ReadonlyArray<{ pass: number; fail: number }>,
+): 'pass' | 'fail' | null {
+  if (!sides.length || sides.some((s) => s.pass + s.fail === 0)) return null
+  if (sides.every((s) => s.fail === 0)) return 'pass'
+  return sides.every((s) => s.pass === 0) ? 'fail' : null
+}
 
 /**
  * How arms that both passed, or both failed, every run read: a floor is always a `tie` (a timeout

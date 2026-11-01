@@ -142,9 +142,9 @@
                         "lo": null,
                         "hi": null,
                         "p": 1,
-                        "verdict": "leans",
-                        "leaning": "better",
-                        "text": "2× faster",
+                        "verdict": "same",
+                        "leaning": null,
+                        "text": "same agent time",
                         "needed": null,
                         "unit": "runs"
                       }
@@ -336,9 +336,9 @@
                         "lo": null,
                         "hi": null,
                         "p": 1,
-                        "verdict": "leans",
-                        "leaning": "better",
-                        "text": "27% faster",
+                        "verdict": "same",
+                        "leaning": null,
+                        "text": "same agent time",
                         "needed": null,
                         "unit": "runs"
                       }
@@ -444,8 +444,8 @@
                     "lo": 0.07,
                     "hi": 1,
                     "p": 0.5,
-                    "verdict": "leans",
-                    "leaning": "better",
+                    "verdict": "same",
+                    "leaning": null,
                     "text": "pass rate +100 pts",
                     "needed": null,
                     "unit": "cases"
@@ -474,10 +474,10 @@
                     "lo": null,
                     "hi": null,
                     "p": 0.5,
-                    "verdict": "leans",
-                    "leaning": "better",
-                    "text": "1.6× faster",
-                    "needed": 17,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same agent time",
+                    "needed": null,
                     "unit": "cases"
                   }
                 ]
@@ -1163,9 +1163,9 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "leans",
-                    "leaning": "better",
-                    "text": "2.1× faster",
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same agent time",
                     "needed": null,
                     "unit": "runs"
                   }
@@ -1374,9 +1374,9 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "leans",
-                    "leaning": "better",
-                    "text": "2.2× faster",
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same agent time",
                     "needed": null,
                     "unit": "runs"
                   },
@@ -1389,10 +1389,10 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "leans",
-                    "leaning": "better",
+                    "verdict": "same",
+                    "leaning": null,
                     "text": "\"Which greeting reads more like our house style?\" picked the variant 1 of 1",
-                    "needed": 6,
+                    "needed": null,
                     "unit": "runs"
                   }
                 ],

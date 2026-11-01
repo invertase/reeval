@@ -67,8 +67,10 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 - **One comparison per variant** against its baseline covers every measure: pass rate, each
   check's pass rate, each judge's scores, each compare question's votes, tool calls, agent time
   and tokens. Each is `better`, `worse`, `same` or `leans` (a difference its own test doesn't hold
-  yet, of at least 10 points, 0.05 of a judge's score, 60/40 of a question's decisive pairs or 10%
-  of an effort median, with the runs that would hold it; smaller is `same`). The status list prints the ones that hold under the
+  yet, at p below 0.2 and of at least 10 points, 0.05 of a judge's score, 60/40 of 5 or more
+  decisive pairs for a question, or 10% of an effort median, with the runs that would hold it;
+  weaker is `same`). Each measure keeps its own 0.05, so with identical arms some measure reads
+  better or worse by chance in about 1 run in 14 at 4 a side, and 1 in 7 at 8 or more. The status list prints the ones that hold under the
   variant (`Same pass rate · 5× faster.`), `reeval compare -v` the leans too, and
   `reeval query measure_effects` has a row per measure. When both arms pass every run, a measure
   that holds is the result (no remark), one that leans raises `too-few-tries` with the runs, and
