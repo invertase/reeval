@@ -126,7 +126,7 @@ class Generator {
     if (f & (TypeFlags.Any | TypeFlags.Unknown)) return {}
     if (f & TypeFlags.StringLiteral) return { const: type.value }
     if (f & TypeFlags.NumberLiteral) return { const: type.value }
-    if (f & TypeFlags.BooleanLiteral) return { const: type.intrinsicName === 'true' }
+    if (f & TypeFlags.BooleanLiteral) return { const: type.value === true }
     if (f & TypeFlags.String || f & TypeFlags.TemplateLiteral) return { type: 'string' }
     if (f & TypeFlags.Number) return { type: 'number' }
     if (f & TypeFlags.Boolean) return { type: 'boolean' }

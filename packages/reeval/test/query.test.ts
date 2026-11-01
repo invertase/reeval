@@ -89,6 +89,28 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
+  test('evals.declared names a todo and a declared skip, apart from an eval that ran', async () => {
+    const p = await project('query-declared', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { evaluate, group } from 'reeval'
+evaluate('ran', async () => {})
+evaluate.skip('parked', async () => {})
+group.skip('shelf', () => {
+  evaluate('shelved', async () => {})
+})
+evaluate.todo('later')
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const rows = await query(p.dir, 'SELECT name, outcome, declared FROM evals ORDER BY name')
+    assert.deepEqual(rows, [
+      { name: 'later', outcome: 'skipped', declared: 'todo' },
+      { name: 'parked', outcome: 'skipped', declared: 'skip' },
+      { name: 'ran', outcome: 'pass', declared: null },
+      { name: 'shelved', outcome: 'skipped', declared: 'skip' },
+    ])
+  })
+
   test('check_rates gives each labeled check’s pass rate per cell, on both arms of a compare', async () => {
     const p = await project('query-check-rates', {
       'reeval.config.ts': fakeConfig({

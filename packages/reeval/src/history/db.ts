@@ -21,7 +21,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 19
+const DB_VERSION = 20
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -71,7 +71,7 @@ CREATE TABLE runs (
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
   tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, family_id TEXT,
-  case_index INTEGER,
+  case_index INTEGER, declared TEXT,
   PRIMARY KEY (run_id, key)
 );
 -- Each pooled evaluate.each per run: its cases, and each cell's pass@1 over them (the mean of the
@@ -533,7 +533,7 @@ function insertRun(
   for (const e of record.evals) {
     const cellEnv = new Map(e.cells.map((c) => [c.key, c.environmentDigest ?? '']))
     run(
-      `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
+      `INSERT INTO evals VALUES (${Array(15).fill('?').join(', ')})`,
       record.runId,
       e.key,
       e.id,
@@ -548,6 +548,7 @@ function insertRun(
       json(e.sources),
       e.family?.id ?? null,
       e.family?.case ?? null,
+      e.todo ? 'todo' : e.skip ? 'skip' : null,
     )
     for (const c of e.cells) {
       const p = c.fingerprintParts

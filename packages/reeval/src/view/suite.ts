@@ -17,7 +17,7 @@ import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
 import { checksByLabel, checkTries, labeledJudgments } from './judgments.ts'
-import { attemptAnswerRows, isNotGatedPass, runOutcome } from './model.ts'
+import { attemptAnswerRows, isNotGatedPass, notRunYet, runOutcome } from './model.ts'
 import { type ObservedTally, observedTallies } from './observations.ts'
 
 /**
@@ -115,6 +115,11 @@ export type EvalResult = {
   family: boolean
   /** A placeholder (`evaluate.todo`) that never ran. */
   todo: boolean
+  /**
+   * Hasn't run yet: skipped, but not a todo or declared skipped, in a run that isn't complete. On
+   * a family, every case.
+   */
+  notRun: boolean
   /** On a family: `fail` when a case failed or its pooled gate did. */
   outcome: ResultOutcome
   cells: CellResult[] | null
@@ -166,6 +171,8 @@ export type CaseResult = {
   /** Its place in the case list. */
   order: number
   outcome: ResultOutcome
+  /** Hasn't run yet, as `EvalResult.notRun`. */
+  notRun: boolean
   cells: CellResult[]
 }
 
@@ -774,6 +781,7 @@ function familyResult(
       name: c.name,
       order: c.family?.case ?? 0,
       outcome: outcomeOf(c),
+      notRun: notRunYet(record, c),
       cells: cellsOf(record, c, casePath, declared),
     }
   })
@@ -787,6 +795,7 @@ function familyResult(
     across: evalAcross(cases.flatMap((c) => c.cells)),
     family: true,
     todo: false,
+    notRun: results.every((c) => c.notRun),
     outcome: worst([
       ...(family.outcome === 'fail' ? ['fail' as const] : []),
       ...results.map((c) => c.outcome),
@@ -823,6 +832,7 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     across: evalAcross(e.cells),
     family: false,
     todo: e.todo,
+    notRun: notRunYet(record, e),
     outcome: outcomeOf(e),
     cells: cellsOf(record, e, path, declaredChecks([e])),
     cases: null,

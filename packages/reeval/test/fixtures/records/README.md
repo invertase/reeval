@@ -46,6 +46,7 @@ config API like any other project.
 | `with-capture-page` | The same captures recorded with `capture.page`: each capture's `artifacts/<name>.capture.json` (status, final URL, console, page errors and failed requests), and `capture.status` and `capture.pageErrors` on the record |
 | `with-unfinished-tools` | The fake harness reporting a tool call whose result never came, `ok: null` on its transcript line (and a null `tool_calls.ok`), beside an ok call and a failed one |
 | `before-reasoning-unknown` | Two runs on all nine real harnesses in Docker (a two-file edit, and the same edit handed to a subagent or the shell on Cursor, Claude Code and Codex), from before `turns[].reasoningMs`, a null `activity.reasoningMs` (reasoning a harness can't time) and a transcript call's `subagent`: Codex, Antigravity, OpenCode and fx record a reasoning time of 0 |
+| `before-eval-skip` | The corpus project's fake-harness runs from before `evals[].skip` (an eval declared with `evaluate.skip`, told apart from one that hasn't run yet) and the `evals.declared` query column |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

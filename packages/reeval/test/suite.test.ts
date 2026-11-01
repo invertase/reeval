@@ -370,6 +370,21 @@ describe('outcomes the record alone has', () => {
     }
   })
 
+  test("a family's case that hasn't run in a stopped run says not run; a declared skip doesn't", () => {
+    const record = read(raw)
+    record.status = 'budget'
+    const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
+    assert.ok(first)
+    first.outcome = 'skipped'
+    for (const a of first.attempts) Object.assign(a, { outcome: 'skipped', error: null })
+    const [k, other] = evalOf(suiteResult(record), family)?.cases ?? []
+    assert.deepEqual([k?.notRun, other?.notRun], [true, false])
+    assert.match(text(suiteResult(record)), /^ {2}not run +Ada$/m)
+    first.skip = true
+    assert.equal(evalOf(suiteResult(record), family)?.cases?.[0]?.notRun, false)
+    assert.doesNotMatch(text(suiteResult(record)), /not run +Ada/)
+  })
+
   test("a family's pooled arm and columns come from any case, not only the first", () => {
     const record = read(raw)
     const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)

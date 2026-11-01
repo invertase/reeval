@@ -26,6 +26,11 @@ export type EvalResult = {
   meta: EvalMeta | undefined
   /** A placeholder (`evaluate.todo` or `group.todo`): no body; it's skipped and shown as todo. */
   todo?: true
+  /**
+   * Declared not to run: `.skip`, inside a `group.skip`, or left out by an `.only` in its file.
+   * Unset on an attempt a resume skips because it already completed.
+   */
+  skip?: true
 }
 
 /** What the worker reports while an eval runs. */

@@ -1698,7 +1698,7 @@
         "artifacts": {
           "anyOf": [
             {
-              "const": false
+              "const": true
             },
             {
               "type": "array",

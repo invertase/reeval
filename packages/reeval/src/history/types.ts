@@ -387,6 +387,12 @@ export type EvalEntry = {
   outcome: Outcome
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
   todo: boolean
+  /**
+   * Declared not to run: `evaluate.skip`, inside a `group.skip`, or left out by an `.only` in its
+   * file. Its outcome is `skipped`. Unset otherwise, so in a run that isn't `complete` a skipped
+   * eval with neither `todo` nor `skip` hasn't run yet. Unset on records from before it.
+   */
+  skip?: true
   /** pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded. */
   passRate: number | null
   cells: CellRecord[]

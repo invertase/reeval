@@ -198,6 +198,15 @@ export function runOutcome(run: {
   return 'pass'
 }
 
+/**
+ * The eval hasn't run yet: its run stopped (interrupted, or out of budget) or a filtered resume
+ * left it out, and it's `skipped` without being a todo or declared skipped. A resume runs it.
+ */
+export const notRunYet = (
+  run: Pick<RunRecord, 'status'>,
+  e: Pick<EvalEntry, 'outcome' | 'todo' | 'skip'>,
+): boolean => run.status !== 'complete' && e.outcome === 'skipped' && !e.todo && !e.skip
+
 function andList(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? ''
   if (items.length === 2) return `${items[0]} and ${items[1]}`
