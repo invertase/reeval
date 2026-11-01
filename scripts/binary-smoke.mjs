@@ -125,7 +125,10 @@ if (values.docker) {
   const image = reeval(fixture, ['image', 'build'], env)
   check('reeval image build', image.status === 0)
   const r = reeval(fixture, ['run'], env)
-  check('a Docker attempt behind the gateway', r.status === 1 && outcome(r) === '1 failed · 1 passed')
+  check(
+    'a Docker attempt behind the gateway',
+    r.status === 1 && outcome(r) === '1 failed · 1 passed',
+  )
 }
 
 rmSync(alone, { recursive: true, force: true, maxRetries: 5 })

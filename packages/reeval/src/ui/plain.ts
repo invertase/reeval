@@ -22,7 +22,6 @@ import {
   offset,
   outcomeOf,
   phaseOf,
-  prepareLines,
   progressLine,
 } from './format.ts'
 import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'

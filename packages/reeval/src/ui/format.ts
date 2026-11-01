@@ -229,27 +229,3 @@ function failureBody(
     c.enabled && body === message ? c.red(l) : l,
   )
 }
-
-/** Preflight's lines: which sandboxes it prepares, the slow ones when ready, and each failure. */
-export function prepareLines(
-  c: Colors,
-  e: Extract<ReevalEvent, { type: 'prepare' }>,
-  max: number,
-): string[] {
-  if (e.state === 'start') {
-    const n = e.targets.length
-    const names = e.targets.map((t) => t.label).join(', ')
-    return [c.dim(`preparing ${n} sandbox${n === 1 ? '' : 'es'}: ${names}`)]
-  }
-  const { outcome } = e
-  if (outcome.ok) {
-    return outcome.ms >= 1000
-      ? [c.dim(`${c.green('✓')} ${outcome.target.label} ready ${formatDuration(outcome.ms)}`)]
-      : []
-  }
-  const who = outcome.target.setBy.join(', ')
-  return [
-    `${c.red('✗')} ${outcome.target.label} failed to prepare ${c.dim(`(set by ${who}; only its attempts fail)`)}`,
-    ...tailLines(outcome.failure.message, max).map((l) => `  ${c.yellow(l)}`),
-  ]
-}

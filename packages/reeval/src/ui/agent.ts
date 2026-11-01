@@ -5,10 +5,10 @@
 import { suiteResult } from '../view/suite.ts'
 import { colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
-import type { OutputOptions } from './mode.ts'
 import { attemptAxes, debugLines, progressLine } from './format.ts'
 import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
 import { listLines } from './list.ts'
+import type { OutputOptions } from './mode.ts'
 import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 

@@ -10,8 +10,8 @@ import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/eve
 import { phaseOf, progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
-import { InteractiveRenderer } from '../src/ui/tty.ts'
 import { Tagger } from '../src/ui/tags.ts'
+import { InteractiveRenderer } from '../src/ui/tty.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { pkgRoot } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
@@ -879,7 +879,13 @@ describe('agent renderer', () => {
 describe('interactive renderer', () => {
   const interactive = (load: () => Promise<never>) => {
     let text = ''
-    const out = { isTTY: true, write: (chunk: string) => ((text += chunk), true) }
+    const out = {
+      isTTY: true,
+      write: (chunk: string) => {
+        text += chunk
+        return true
+      },
+    }
     const renderer = new InteractiveRenderer({
       out,
       stdout: out as never,

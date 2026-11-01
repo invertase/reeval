@@ -343,7 +343,10 @@ if (values['platform-wheel']) {
   const pr = sh(pip.reeval, ['run'], pipProject, { ...ownEnv, SMOKE_PYTHON: last })
   check(
     `pip install ${basename(own)}: its own binary runs the evals on the venv's Python, offline`,
-    pip.ok && pv.stdout.trim() === version && pr.status === 1 && outcome(pr) === '1 failed · 2 passed',
+    pip.ok &&
+      pv.stdout.trim() === version &&
+      pr.status === 1 &&
+      outcome(pr) === '1 failed · 2 passed',
   )
 
   const links = pipVenv(

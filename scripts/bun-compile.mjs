@@ -80,7 +80,16 @@ writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)
 // DEV-only devtools module imports react-devtools-core, an optional peer that isn't installed,
 // and an --external of it would be hoisted into an import every command fails on. Ink loads
 // that module only when the package resolves, which the empty stand-in never lets it reach.
-const assets = ['package.json', 'docker', 'bin', 'assets', 'skills', 'dist', 'vendor', 'versions.json']
+const assets = [
+  'package.json',
+  'docker',
+  'bin',
+  'assets',
+  'skills',
+  'dist',
+  'vendor',
+  'versions.json',
+]
 const script = join(stage, 'build.mjs')
 writeFileSync(
   script,
