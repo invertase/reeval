@@ -38,6 +38,7 @@
                 "name": "greets Ada",
                 "order": 0,
                 "outcome": "infra_error",
+                "notRun": false,
                 "cells": [
                   {
                     "path": "evals%2Fcases.eval.ts › greets %25s/Ada/fake+plain+docker",
@@ -185,6 +186,7 @@
                 "name": "greets Grace",
                 "order": 1,
                 "outcome": "infra_error",
+                "notRun": false,
                 "cells": [
                   {
                     "path": "evals%2Fcases.eval.ts › greets %25s/Grace/fake+plain+docker",

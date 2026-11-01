@@ -141,7 +141,7 @@
           "description": "The captures it sent, as asked: `true` for all, or their names.",
           "anyOf": [
             {
-              "const": false
+              "const": true
             },
             {
               "type": "array",
@@ -1004,7 +1004,7 @@
           "description": "The captures it sent of each side, as asked: `true` for all, or their names.",
           "anyOf": [
             {
-              "const": false
+              "const": true
             },
             {
               "type": "array",
@@ -1232,7 +1232,7 @@
         },
         "partial": {
           "description": "True when traffic could leave around the gateway (`allow-all` in a container that kept its network): `contacted` lists only what went through the gateway, and anything that ignored the proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.",
-          "const": false
+          "const": true
         },
         "policy": {
           "$ref": "#/$defs/EgressPolicy"
@@ -1581,7 +1581,7 @@
         },
         "skip": {
           "description": "Declared not to run: `evaluate.skip`, inside a `group.skip`, or left out by an `.only` in its file. Its outcome is `skipped`. Unset otherwise, so in a run that isn't `complete` a skipped eval with neither `todo` nor `skip` hasn't run yet. Unset on records from before it.",
-          "const": false
+          "const": true
         },
         "slug": {
           "description": "Directory name inside the artifact directory, from `key`.",

@@ -171,6 +171,8 @@ export type CaseResult = {
   /** Its place in the case list. */
   order: number
   outcome: ResultOutcome
+  /** Hasn't run yet, as `EvalResult.notRun`. */
+  notRun: boolean
   cells: CellResult[]
 }
 
@@ -779,6 +781,7 @@ function familyResult(
       name: c.name,
       order: c.family?.case ?? 0,
       outcome: outcomeOf(c),
+      notRun: notRunYet(record, c),
       cells: cellsOf(record, c, casePath, declared),
     }
   })
@@ -792,7 +795,7 @@ function familyResult(
     across: evalAcross(cases.flatMap((c) => c.cells)),
     family: true,
     todo: false,
-    notRun: sorted.every((c) => notRunYet(record, c)),
+    notRun: results.every((c) => c.notRun),
     outcome: worst([
       ...(family.outcome === 'fail' ? ['fail' as const] : []),
       ...results.map((c) => c.outcome),

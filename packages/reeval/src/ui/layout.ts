@@ -584,7 +584,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   const pooled = e.pooled ?? []
   const pooledOutcome: ResultOutcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
   const caseWord = (k: CaseResult) =>
-    verdict(c, { outcome: k.outcome, todo: false, notRun: false, cells: k.cells })
+    verdict(c, { outcome: k.outcome, todo: false, notRun: k.notRun, cells: k.cells })
   const pooledWord = isNotGatedResult(e)
     ? t('not gated', c.dim)
     : t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))

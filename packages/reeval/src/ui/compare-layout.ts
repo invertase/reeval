@@ -159,6 +159,7 @@ const caseAsEval = (family: EvalResult, k: CaseResult): EvalResult => ({
   template: null,
   order: k.order,
   family: false,
+  notRun: k.notRun,
   outcome: k.outcome,
   cells: k.cells,
   cases: null,

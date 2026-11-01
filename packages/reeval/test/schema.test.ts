@@ -202,6 +202,12 @@ describe('persisted shapes', () => {
     assert.match(explain([report]), /the field is optional, so readers already handle it missing/)
   })
 
+  test('a `true` literal, such as `skip?: true`, is `const: true`', () => {
+    const now = snapshot('run-record')
+    assert.equal(def(now, 'EvalEntry').properties?.skip?.const, true)
+    assert.equal(def(now, 'EgressRecord').properties?.partial?.const, true)
+  })
+
   test('descriptions come from TSDoc, and changing them is documentation only', () => {
     const now = snapshot('run-record')
     assert.match(def(now, 'Cost').description ?? '', /\w/)
