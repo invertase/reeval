@@ -11,6 +11,10 @@ import {
   PAIRED_MIN,
   RUNS_TO_HOLD_MAX,
   runsToHold,
+  runsToSettle,
+  SMALL_SAMPLE_MARGIN,
+  smallSample,
+  widerThanMargin,
 } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { Remark } from '../view/remarks.ts'
@@ -108,12 +112,14 @@ function holds(variant: CellResult, base: CellResult): boolean {
 
 /**
  * too-few-tries (concern): a variant's direction against its baseline doesn't hold yet. Their
- * pass rates differ but the interval on the difference spans 0, or either side has fewer than
- * `COMPARE_RUNS` runs, where a difference whose interval excludes 0 can still be chance: when
- * nothing changed, 2 of 2 against 0 of 2 one way or the other comes up about 1 run in 8. It names
- * the variant with the widest gap, and the fix the runs a side at which a difference at the
- * observed rates would hold (`runsToHold`), never fewer than `COMPARE_RUNS`. A family is judged
- * by its pooled lift (`pooledTooFewTries`), not each case's.
+ * pass rates differ but the interval on the difference spans 0, or the contrast is a small sample
+ * (`smallSample`), whatever its direction: either side has fewer than `COMPARE_RUNS` runs, where
+ * a difference whose interval excludes 0 can still be chance (when nothing changed, 2 of 2 against
+ * 0 of 2 one way or the other comes up about 1 run in 8), or a `same` whose interval still reaches
+ * past `SMALL_SAMPLE_MARGIN`. It names the variant with the widest gap, and the fix the runs a side
+ * at which the observed rates would hold (`runsToHold`) or, for a `same`, settle (`runsToSettle`),
+ * never fewer than `COMPARE_RUNS`. A family is judged by its pooled lift (`pooledTooFewTries`),
+ * not each case's.
  */
 function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
   if (e.pooled) return pooledTooFewTries(e, entry, ctx)
@@ -124,8 +130,11 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
       const gap = Math.abs(rate(variant) - rate(base))
       const held = gap > 0 && holds(variant, base)
-      const few = Math.min(counted(variant), counted(base)) < COMPARE_RUNS
-      if (!few && (gap === 0 || held)) continue
+      const small = smallSample(
+        { pass: variant.passed, n: counted(variant) },
+        { pass: base.passed, n: counted(base) },
+      )
+      if (!small && (gap === 0 || held)) continue
       weak.push({ variant, base, gap, held })
     }
   }
@@ -138,20 +147,29 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const others = weak.length - 1
   const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
   const side = Math.max(counted(variant), counted(base))
+  const from = Math.max(side + 1, COMPARE_RUNS)
   const needed = gap
-    ? runsToHold(rate(variant), rate(base), Math.max(side + 1, COMPARE_RUNS))
-    : null
+    ? runsToHold(rate(variant), rate(base), from)
+    : runsToSettle(rate(variant), rate(base), from)
+  const { low, high } = liftInterval(
+    { pass: variant.passed, n: counted(variant) },
+    { pass: base.passed, n: counted(base) },
+  )
+  const reach = Math.round(Math.max(-low, high) * 100)
+  const margin = Math.round(SMALL_SAMPLE_MARGIN * 100)
   const direction = rate(variant) > rate(base) ? 'better' : 'worse'
   const fewest = runs(Math.min(counted(variant), counted(base)))
   const text = held
     ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${more}`
     : gap
       ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${more}`
-      : `${counts}: the same, but ${fewest} a side can't show a difference.${more}`
+      : `${counts}: the same, but ${fewest} a side can't rule out a difference of up to ${reach} points.${more}`
   const edit = held
     ? `set runs: ${COMPARE_RUNS} or more, so a split this wide is less likely by chance`
     : !gap
-      ? `set runs: ${COMPARE_RUNS} or more, so a difference can show`
+      ? needed
+        ? `set runs: ${needed}, where the same rates would rule out ${margin} points either way`
+        : `the same rates don't rule out ${margin} points either way even at runs: ${RUNS_TO_HOLD_MAX}`
       : needed
         ? `set runs: ${needed}, where a difference this size would hold`
         : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
@@ -170,12 +188,15 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
 
 /**
  * too-few-tries on a family: its pooled lift is the result for its cases, so it's raised when
- * that lift is `insufficient` (below `PAIRED_MIN` discordant pairs or cases), or differs and is
- * within noise.
+ * that lift is `insufficient` (below `PAIRED_MIN` discordant pairs or cases), differs and is
+ * within noise, or is the same with an interval that still reaches past `SMALL_SAMPLE_MARGIN`.
  */
 function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
+  const wide = (p: NonNullable<EvalResult['pooled']>[number]) =>
+    widerThanMargin(p.interval.low, p.interval.high)
   const weak = (e.pooled ?? []).filter(
-    (p) => p.verdict === 'insufficient' || (p.verdict === 'noise' && p.effect !== 'same'),
+    (p) =>
+      p.verdict === 'insufficient' || (p.verdict === 'noise' && (p.effect !== 'same' || wide(p))),
   )
   const [arm] = weak
   if (!arm) return []
@@ -187,7 +208,13 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
   const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
   const direction = arm.effect === 'same' ? 'the same' : arm.effect
   const few = arm.verdict === 'insufficient'
-  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${few ? `a family's lift needs ${PAIRED_MIN} to hold` : "the difference doesn't hold"}.${more}`
+  const reach = Math.round(Math.max(-arm.interval.low, arm.interval.high) * 100)
+  const why = few
+    ? `a family's lift needs ${PAIRED_MIN} to hold`
+    : arm.effect === 'same'
+      ? `it can't rule out a difference of up to ${reach} points`
+      : "the difference doesn't hold"
+  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${more}`
   return [
     {
       id: remarkId('too-few-tries', e.path, entry),

@@ -4,7 +4,15 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { containsZero, liftInterval, median, round3, wilson } from '../stats.ts'
+import {
+  containsZero,
+  liftInterval,
+  median,
+  round3,
+  smallSample,
+  widerThanMargin,
+  wilson,
+} from '../stats.ts'
 import { totalTokens } from '../usage.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
@@ -46,7 +54,7 @@ CREATE TABLE effort_m (
 CREATE TABLE contrasts_m (
   run_id TEXT, eval_key TEXT, harness TEXT, sandbox TEXT, a_key TEXT, b_key TEXT,
   a_environment TEXT, b_environment TEXT, a_pass INTEGER, a_counted INTEGER, b_pass INTEGER,
-  b_counted INTEGER, points REAL, lo REAL, hi REAL, pass_verdict TEXT,
+  b_counted INTEGER, points REAL, lo REAL, hi REAL, pass_verdict TEXT, small_sample INTEGER,
   a_tools_median REAL, b_tools_median REAL, tools_ratio REAL, tools_p REAL, separated INTEGER,
   verdict TEXT, agent_s_ratio REAL, time_separated INTEGER, time_verdict TEXT,
   tokens_ratio REAL, tokens_separated INTEGER, tokens_verdict TEXT,
@@ -56,7 +64,7 @@ CREATE TABLE factor_effects_m (
   factor TEXT, level TEXT, baseline TEXT, context TEXT, tier TEXT, run_id TEXT, eval_key TEXT,
   strata INTEGER, runs INTEGER, variant_pass INTEGER, variant_counted INTEGER,
   control_pass INTEGER, control_counted INTEGER, points REAL, lo REAL, hi REAL,
-  within_noise INTEGER, pass_verdict TEXT, tools_ratio REAL, tools_ratios TEXT,
+  within_noise INTEGER, pass_verdict TEXT, small_sample INTEGER, tools_ratio REAL, tools_ratios TEXT,
   agent_s_ratio REAL, tools_p REAL, consistent INTEGER, separated INTEGER, effort_verdict TEXT,
   tokens_ratio REAL, tokens_p REAL, tokens_verdict TEXT, tokens_note TEXT,
   note TEXT
@@ -198,6 +206,9 @@ function passCols(v: Side, c: Side): Row {
     hi: round3(lift.high),
     within_noise: noise ? 1 : 0,
     pass_verdict: noise ? 'noise' : 'effect',
+    small_sample: smallSample({ pass: v.pass, n: v.counted }, { pass: c.pass, n: c.counted })
+      ? 1
+      : 0,
   }
 }
 
@@ -508,6 +519,7 @@ export function deriveFacts(db: DatabaseSync): void {
         lo: pass.lo ?? null,
         hi: pass.hi ?? null,
         pass_verdict: pass.pass_verdict ?? null,
+        small_sample: pass.small_sample ?? null,
         a_tools_median: e?.variant.tools.median ?? null,
         b_tools_median: e?.control.tools.median ?? null,
         tools_ratio: r4(e?.toolsRatio ?? null),
@@ -672,6 +684,8 @@ export function deriveFacts(db: DatabaseSync): void {
       within_noise: f.within_noise,
       pass_verdict:
         f.verdict === 'insufficient' ? 'insufficient' : f.within_noise ? 'noise' : 'effect',
+      small_sample:
+        f.verdict === 'insufficient' || widerThanMargin(Number(f.lo), Number(f.hi)) ? 1 : 0,
       tools_ratio: f.tools_ratio,
       agent_s_ratio: f.agent_s_ratio,
       tools_p: f.tools_p,
@@ -738,7 +752,10 @@ export function deriveFacts(db: DatabaseSync): void {
       const judgeOnly = effects.length === 1 && effects[0] === 'judge'
       const sourcesChanged = effects.includes('sources')
       const cols = passCols(side(cur), side(prev))
-      if (sourcesChanged) cols.pass_verdict = 'not_comparable'
+      if (sourcesChanged) {
+        cols.pass_verdict = 'not_comparable'
+        cols.small_sample = null
+      }
       factorRows.push({
         factor: effects.length === 1 ? (effects[0] as string) : 'confounded',
         level: cur.run_id,

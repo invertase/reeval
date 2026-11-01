@@ -17,13 +17,24 @@ Lift is the variant's pass rate minus the baseline's, between -1 and 1. Newcombe
 
 ## Variant outcomes
 
-`helped` means the variant's pass rate is above the baseline's, `made it worse` below it, and `same` equal to it, at any number of counted attempts. The interval says whether the difference holds: zero inside it raises the `too-few-tries` remark. An assertion uses the same rule.
+`helped` means the variant's pass rate is above the baseline's, `made it worse` below it, and `same` equal to it, at any number of counted attempts. The interval says whether the difference holds: zero inside it, or a small sample, raises the `too-few-tries` remark. An assertion uses the same rule.
 
 For more information about the printed effect words, see [Read the result](/results/compare/lift#read-the-result). For more information about the printed outcomes, see [Read a run's output](/results/output).
 
 ## Too few runs
 
-When zero is inside the interval, or a side has fewer than four counted attempts, the `too-few-tries` remark prints with the result and names the `runs` at which a difference that size would hold. Two of two against zero of two still raises it: its interval excludes zero, but when nothing changed that split comes up about one run in eight. A family raises it when its pooled lift is insufficient or within noise.
+A small sample is a side with fewer than four counted attempts, or an interval that spans zero and still reaches past 20 points either way. The effect word always prints. On a small sample, whatever the direction, the `too-few-tries` remark prints beside it, and so does a difference whose interval spans zero.
+
+| Result | Remark |
+|---|---|
+| 1 of 1 against 0 of 1 | better by 100 points, but on too few runs for the difference to hold |
+| 2 of 2 against 0 of 2 | better by 100 points, on only 2 runs a side |
+| 0 of 4 against 0 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
+| 4 of 4 against 0 of 4 | none: the difference holds |
+
+The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family raises it when its pooled lift is insufficient, within noise with different rates, or `same` with an interval past 20 points.
+
+`reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule.
 
 ## Cases as pairs
 

@@ -199,8 +199,8 @@ pass             stores invoice totals in cents with the billing skill
 ```
 
 - Each arm's `N of M` is passing attempts. The variant's word is its effect against the control:
-  `helped`, `made it worse`, or `same`; below 4 runs a side a `too-few-tries` remark says when
-  it doesn't hold yet (`--runs 4` to find out). The check table shows which check told the arms apart.
+  `helped`, `made it worse`, or `same`; on a small sample (below 4 runs a side, or a `same` at
+  0 of 4 against 0 of 4) a `too-few-tries` remark says it doesn't hold yet and names the `runs`. The check table shows which check told the arms apart.
 - `Remarks:` after the tally names an eval that needs work, with the line to fix. Remarks never
   change a verdict.
 - Both arms passing is a result, not a broken eval: the agent already does this without the

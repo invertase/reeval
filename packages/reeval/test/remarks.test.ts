@@ -160,6 +160,8 @@ const rules = () => {
       'evals/tft-gap.eval.ts': compareEval(3, 2, 1, 'tft gap'),
       'evals/tft-enough.eval.ts': compareEval(4, 4, 0, 'tft enough'),
       'evals/tft-same.eval.ts': compareEval(1, 1, 1, 'tft same'),
+      'evals/tft-none.eval.ts': compareEval(4, 0, 0, 'tft none'),
+      'evals/tft-settled.eval.ts': compareEval(16, 16, 16, 'tft settled'),
       'evals/tft-one.eval.ts': compareEval(1, 1, 0, 'tft one'),
       'evals/tft-two.eval.ts': compareEval(2, 2, 0, 'tft two'),
       'evals/tft-family.eval.ts': familyEval(6, 'tft family'),
@@ -190,7 +192,7 @@ evaluate('serves', { runs: 2, environment: server }, async (c) => {
 }
 
 describe('remark thresholds', () => {
-  test('too-few-tries: a difference whose interval spans 0, or equal rates under 4 runs a side', async () => {
+  test('too-few-tries: a difference whose interval spans 0, or a small sample in any direction', async () => {
     const record = await rules()
     const [remark] = raise(only(record, 'tft at'), NO_HISTORY)
     assert.equal(remark?.kind, 'too-few-tries')
@@ -209,9 +211,27 @@ describe('remark thresholds', () => {
     const [same] = raise(only(record, 'tft same'), NO_HISTORY)
     assert.equal(
       same?.text,
-      "The marked variant passed 1 of 1 run and the baseline 1 of 1: the same, but 1 run a side can't show a difference.",
+      "The marked variant passed 1 of 1 run and the baseline 1 of 1: the same, but 1 run a side can't rule out a difference of up to 79 points.",
     )
-    assert.equal(same?.fix?.edit, 'set runs: 4 or more, so a difference can show')
+    assert.equal(
+      same?.fix?.edit,
+      'set runs: 16, where the same rates would rule out 20 points either way',
+    )
+    const [none] = raise(only(record, 'tft none'), NO_HISTORY)
+    assert.equal(
+      none?.text,
+      "The marked variant passed 0 of 4 runs and the baseline 0 of 4: the same, but 4 runs a side can't rule out a difference of up to 49 points.",
+      'a same at the default 4 runs a side is still a small sample',
+    )
+    assert.equal(
+      none?.fix?.edit,
+      'set runs: 16, where the same rates would rule out 20 points either way',
+    )
+    assert.deepEqual(
+      kinds(only(record, 'tft settled'), NO_HISTORY),
+      [],
+      '16 of 16 against 16 of 16 rules out 20 points either way',
+    )
     assert.deepEqual(
       kinds(only(record, 'tft enough'), NO_HISTORY),
       [],

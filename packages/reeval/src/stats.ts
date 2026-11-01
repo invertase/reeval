@@ -176,6 +176,40 @@ export function runsToHold(variantRate: number, controlRate: number, from = 1): 
   return null
 }
 
+/**
+ * How far either way an interval that spans 0 may reach before its sample stops being small:
+ * within ±20 points, a `same` or a difference within noise rules out any lift worth acting on.
+ */
+export const SMALL_SAMPLE_MARGIN = 0.2
+
+/** An interval that spans 0 and still reaches past `SMALL_SAMPLE_MARGIN` either way. */
+export const widerThanMargin = (low: number, high: number) =>
+  containsZero(low, high) && Math.max(-low, high) > SMALL_SAMPLE_MARGIN
+
+/**
+ * Whether a pass-rate contrast rests on a small sample: either side counted fewer than
+ * `COMPARE_RUNS`, or the interval on the difference spans 0 and still reaches past
+ * `SMALL_SAMPLE_MARGIN`. The observed direction shows either way; this says not to trust it far.
+ */
+export function smallSample(variant: { pass: number; n: number }, control: typeof variant) {
+  if (Math.min(variant.n, control.n) < COMPARE_RUNS) return true
+  const { low, high } = liftInterval(variant, control)
+  return widerThanMargin(low, high)
+}
+
+/**
+ * The fewest runs a side, from `from`, at which these observed rates would stop being a small
+ * sample (`smallSample`); null when even `RUNS_TO_HOLD_MAX` doesn't.
+ */
+export function runsToSettle(variantRate: number, controlRate: number, from = 1): number | null {
+  for (let n = Math.max(1, from); n <= RUNS_TO_HOLD_MAX; n++) {
+    const a = { pass: Math.round(variantRate * n), n }
+    const b = { pass: Math.round(controlRate * n), n }
+    if (!smallSample(a, b)) return n
+  }
+  return null
+}
+
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */
 export type PairCounts = { both: number; variantOnly: number; controlOnly: number; neither: number }
 
