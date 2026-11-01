@@ -2,7 +2,11 @@
 // CLI's own setting so no CLI's default (Codex's `low` on gpt-5.6-sol, Grok Build's `high`)
 // decides it, and left off where the harness, its gateway or its model takes no effort.
 import { openCodeEffortBody, openCodeEffortRefusal } from '@reeval/harness-opencode/providers'
-import { antigravityIdEffort, claudeCodeTakesEffort } from '../contract/harness.ts'
+import {
+  antigravityIdEffort,
+  claudeCodeModelName,
+  claudeCodeTakesEffort,
+} from '../contract/harness.ts'
 import { effortRefusedOn, openCodeModelOn } from '../gateway/resolve.ts'
 import { harnessId } from '../options.ts'
 import type { CursorEfforts, HarnessDescriptor } from '../types.ts'
@@ -33,9 +37,11 @@ export function noDefaultEffort(
       return undefined
     }
     case 'claude-code':
-      if (!claudeCodeTakesEffort(h.model)) return `Claude Code sends no effort to ${h.model}`
+      if (!claudeCodeTakesEffort(h.model)) {
+        return `Claude Code sends no effort to ${claudeCodeModelName(h.model)}`
+      }
       if (!claudeCodeTakesEffort(h.model, h.gateway)) {
-        return `Claude Code sends no effort to ${h.model} on Vertex AI`
+        return `Claude Code sends no effort to ${claudeCodeModelName(h.model, h.gateway)} on Vertex AI`
       }
       return effortRefusedOn(h, h.gateway ?? 'direct')
     case 'antigravity': {

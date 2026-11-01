@@ -115,6 +115,22 @@ describe('the shared default effort', () => {
     )
   })
 
+  test('reads an alias, a 1M suffix or an anthropic/ prefix as the model Claude Code runs', () => {
+    const onVertex = (model: string) => ({ ...claudeCode({ model }), gateway: 'vertex' as const })
+    for (const model of ['opus', 'claude-sonnet-5-5[1m]', 'anthropic/claude-sonnet-5-5']) {
+      assert.equal(withDefaultEffort(onVertex(model)).effort, 'medium', model)
+    }
+    assert.equal(
+      noDefaultEffort(onVertex('sonnet')),
+      'Claude Code sends no effort to sonnet (claude-sonnet-4-5) on Vertex AI',
+    )
+    assert.equal(withDefaultEffort(claudeCode({ model: 'sonnet' })).effort, 'medium')
+    assert.equal(
+      noDefaultEffort(claudeCode({ model: 'haiku' })),
+      'Claude Code sends no effort to haiku (claude-haiku-4-5)',
+    )
+  })
+
   test("is left off where OpenCode's model answers an effort with a 400", () => {
     const haiku = opencode({ model: 'anthropic/claude-haiku-4-5' })
     assert.equal(noDefaultEffort(haiku), "Anthropic's API takes no effort on claude-haiku-4-5")

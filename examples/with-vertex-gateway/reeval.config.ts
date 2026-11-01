@@ -28,9 +28,9 @@ export default defineConfig({
     // profiles go beside them.
     ...profiles,
     // Claude Code and its judge on Vertex AI, billed to GOOGLE_CLOUD_PROJECT, with a token from
-    // the host's Application Default Credentials and no key at all. With vertex() alone in the
-    // list, a harness or model Vertex can't serve stops the plan instead of falling back to its
-    // own key. Claude ids are the same on Vertex as on Anthropic's API.
+    // the host's Application Default Credentials and no key at all. A harness or model Vertex
+    // can't serve falls back to direct() and its own key; direct({ enabled: false }) in the list
+    // stops the plan instead. Claude ids are the same on Vertex as on Anthropic's API.
     vertex: {
       defaults: {
         harness: claudeCode({ model: 'claude-sonnet-5-5' }),

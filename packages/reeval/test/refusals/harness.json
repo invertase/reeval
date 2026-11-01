@@ -13,6 +13,7 @@
   "claudeCode with an empty effort": "UsageError: claudeCode({ effort }) is the value that CLI takes, e.g. claudeCode({ effort: 'high' }) (got \"\")",
   "claudeCode with a typo": "UsageError: Unknown claudeCode() option \"efort\". Did you mean \"effort\"?",
   "claudeCode effort on a model that takes none": "UsageError: claudeCode({ effort }): Claude Code sends no effort to claude-haiku-4-5, so drop effort or run a model that takes one, e.g. claude-sonnet-5-5",
+  "claudeCode effort on an alias for a model that takes none": "UsageError: claudeCode({ effort }): Claude Code sends no effort to haiku (claude-haiku-4-5), so drop effort or run a model that takes one, e.g. claude-sonnet-5-5",
   "antigravity without a model": "UsageError: antigravity() needs a model, e.g. antigravity({ model: 'gemini-3.8-flash-medium' })",
   "antigravity effort a number": "UsageError: antigravity({ effort }) is the value that CLI takes, e.g. antigravity({ effort: 'high' }) (got 1)",
   "antigravity effort beside an id that names one": "UsageError: antigravity({ effort }): the model id gemini-3.8-flash-low names its effort (low), which the CLI refuses beside --effort; drop effort, or name the model without its -low",

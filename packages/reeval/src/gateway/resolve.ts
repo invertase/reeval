@@ -5,7 +5,7 @@ import {
   openCodeEffortRefusal,
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
-import { claudeCodeTakesEffort } from '../contract/harness.ts'
+import { claudeCodeModelName, claudeCodeTakesEffort } from '../contract/harness.ts'
 import { UsageError } from '../errors.ts'
 import { AGENTS, isAgentKind } from '../harness/agents.ts'
 import { harnessEffort } from '../harness/effort.ts'
@@ -63,15 +63,14 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
         return VERTEX_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vertex AI yet`
       }
       const effort = harnessEffort(h)
+      const refused = vertexModelRefusalFor(h)
+      if (refused) return refused
       if (h.kind === 'claude-code' && effort !== undefined) {
         return claudeCodeTakesEffort(h.model, 'vertex')
           ? undefined
-          : `Claude Code sends no effort to ${h.model} on Vertex AI, where it sends one only to the models its catalog lists: drop effort, or run one of them, e.g. claude-sonnet-5-5`
+          : `Claude Code sends no effort to ${claudeCodeModelName(h.model, 'vertex')} on Vertex AI, where it sends one only to the models its catalog lists: drop effort, or run one of them, e.g. claude-sonnet-5-5`
       }
-      return (
-        vertexModelRefusalFor(h) ??
-        (h.kind === 'opencode' ? openCodeEffortOn(h.model, 'vertex', effort) : undefined)
-      )
+      return h.kind === 'opencode' ? openCodeEffortOn(h.model, 'vertex', effort) : undefined
     },
   },
 }
