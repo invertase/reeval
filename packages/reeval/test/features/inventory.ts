@@ -1456,6 +1456,7 @@ export const inventory: InventoryFeature[] = [
       'assert/edited-shell',
       'assert/edited-read-only',
       'assert/edited-per-turn',
+      'assert/edited-eval-writes',
     ],
     unit: ['reeval/test/assert.test.ts', 'reeval/test/query.test.ts'],
   },

@@ -61,8 +61,9 @@ export async function acceptIntoSnapshot(
 }
 
 /**
- * Each file that differs from the snapshot, by path, and the object id of its content now (all
- * zeros once deleted). A path not in it is as the snapshot has it.
+ * Each file that differs from the snapshot, by path, and its mode and the object id of its
+ * content now (all zeros once deleted). A path not in it is as the snapshot has it. The mode is
+ * in it so a `chmod` counts whether or not the file's content already differed.
  */
 export type Blobs = ReadonlyMap<string, string>
 
@@ -79,11 +80,11 @@ async function rawChanges(sandbox: Sandbox, signal?: AbortSignal): Promise<RawCh
   const fields = r.stdout.split('\0')
   const changes: RawChange[] = []
   for (let i = 0; i + 1 < fields.length; i += 2) {
-    const [, , , blob = '', code = ''] = (fields[i] as string).split(' ')
+    const [, mode = '', , id = '', code = ''] = (fields[i] as string).split(' ')
     changes.push({
       path: fields[i + 1] as string,
       status: status[code[0] as keyof typeof status] ?? 'modified',
-      blob,
+      blob: `${mode} ${id}`,
     })
   }
   return changes
@@ -110,7 +111,10 @@ export async function workspaceBlobs(sandbox: Sandbox, signal?: AbortSignal): Pr
   return blobsOf(await rawChanges(sandbox, signal))
 }
 
-/** Paths whose content differs between two `Blobs`: a file changed, created or deleted between them. */
+/**
+ * Paths whose content or mode differs between two `Blobs`: a file changed, created or deleted
+ * between them.
+ */
 export function changedBetween(before: Blobs, after: Blobs): string[] {
   const paths = new Set([...after.keys(), ...before.keys()])
   return [...paths].filter((p) => before.get(p) !== after.get(p))

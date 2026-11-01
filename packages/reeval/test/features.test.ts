@@ -2684,6 +2684,12 @@ export const features: Feature[] = [
     canary: /expected file edits matching notes\.txt, got none/,
   },
   {
+    dir: 'assert/edited-eval-writes',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected file edits matching notes\.txt, got none/,
+  },
+  {
     dir: 'assert/changed',
     tiers: ['fake', 'docker'],
     env: 'seeded',

@@ -325,6 +325,15 @@ test("a turn's changed files are those whose content moved between two reads", a
       ['gone.txt', quoted].sort(),
       'edited.txt back as it was when the turn started',
     )
+    if (process.platform !== 'win32') {
+      const mode = await workspaceBlobs(box)
+      await box.exec('chmod +x early.txt')
+      assert.deepEqual(
+        changedBetween(mode, await workspaceBlobs(box)),
+        ['early.txt'],
+        'a chmod counts on a file whose content already differed',
+      )
+    }
   } finally {
     await box.destroy()
   }

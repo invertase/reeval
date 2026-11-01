@@ -174,7 +174,7 @@
 | Each of reeval's matchers typechecks only on the subjects it takes (`toPass` on a verdict, `toSucceed` on an exec, the transcript matchers on `c` or a turn) | ✓ 1 | — | — | — | — | — |
 | Named check results: `expect(value, 'label')`, every `expect` and `expect.require` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare | ✓ 2 | — | ● 2 | ● 1 | — | — |
 | Checks don't stop the eval: a failed `expect` is recorded and the body carries on, a failed `expect.require` ends it, and the result lists every failed check with its label and line | ✓ 3 | — | ● 2 | ● 1 | — | — |
-| `expect(c | turn)` transcript matchers: `toHaveCalledSkill`, `toHaveCalledMcp`, `toHaveCalledTool`, `toHaveRun`, `toHaveEdited`, `toHaveSearched`, `toHaveFetched` | ✓ 2 | — | ● 9 | ● 3 | — | — |
+| `expect(c | turn)` transcript matchers: `toHaveCalledSkill`, `toHaveCalledMcp`, `toHaveCalledTool`, `toHaveRun`, `toHaveEdited`, `toHaveSearched`, `toHaveFetched` | ✓ 2 | — | ● 10 | ● 4 | — | — |
 | `toHaveChanged(paths?)`: files in the workspace diff, matched with globs | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions` | ✓ 3 | — | — | — | — | — |
 
