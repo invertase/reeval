@@ -16,7 +16,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       },
       {
         "cell": "es-good",
@@ -24,7 +25,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       }
     ]
   },
@@ -45,7 +47,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       },
       {
         "cell": "es-good",
@@ -53,7 +56,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       }
     ]
   },
@@ -74,7 +78,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       },
       {
         "cell": "es-good",
@@ -82,7 +87,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       }
     ]
   },
@@ -103,7 +109,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       },
       {
         "cell": "es-good",
@@ -111,7 +118,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       }
     ]
   },
@@ -161,7 +169,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       },
       {
         "cell": "es-good",
@@ -169,7 +178,8 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "tie": "both always pass"
       }
     ]
   },
@@ -1040,6 +1050,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1061,6 +1072,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1082,6 +1094,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1103,6 +1116,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1124,6 +1138,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1145,6 +1160,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1166,6 +1182,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1187,6 +1204,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1208,6 +1226,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1229,6 +1248,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1250,6 +1270,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1271,6 +1292,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1334,6 +1356,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1355,6 +1378,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1376,6 +1400,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1397,6 +1422,7 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "tie": "both always pass",
     "checks": [],
     "sameOnBoth": 0,
     "effort": {

@@ -59,6 +59,12 @@ evaluate.each(${JSON.stringify(Array.from({ length: cases }, (_, i) => ({ id: `c
 const agreeingFamilyEval = (cases: number, name: string) =>
   familyEval(cases, name).replace("c.attempt.cell.role === 'variant'", 'true')
 
+/** A pooled family where both sides pass the even cases and fail the odd ones. */
+const splitFamilyEval = (cases: number, name: string) =>
+  familyEval(cases, name)
+    .replace('async (c) =>', 'async (c, { id }) =>')
+    .replace("c.attempt.cell.role === 'variant'", 'Number(id.slice(1)) % 2 === 0')
+
 /** Evals whose check fails on every try but the first. */
 const coinEvals = (names: string[], runs = 3) =>
   `import { evaluate, expect } from 'reeval'
@@ -164,6 +170,7 @@ const rules = () => {
       'evals/tft-gap.eval.ts': compareEval(3, 2, 1, 'tft gap'),
       'evals/tft-enough.eval.ts': compareEval(4, 4, 0, 'tft enough'),
       'evals/tft-same.eval.ts': compareEval(1, 1, 1, 'tft same'),
+      'evals/tft-middle.eval.ts': compareEval(4, 2, 2, 'tft middle'),
       'evals/tft-none.eval.ts': compareEval(4, 0, 0, 'tft none'),
       'evals/tft-settled.eval.ts': compareEval(16, 16, 16, 'tft settled'),
       'evals/tft-one.eval.ts': compareEval(1, 1, 0, 'tft one'),
@@ -172,6 +179,7 @@ const rules = () => {
       'evals/tft-few-cases.eval.ts': familyEval(2, 'tft few cases'),
       'evals/tft-agree.eval.ts': agreeingFamilyEval(30, 'tft agree'),
       'evals/tft-agree-few.eval.ts': agreeingFamilyEval(2, 'tft agree few'),
+      'evals/tft-split.eval.ts': splitFamilyEval(30, 'tft split'),
       'evals/clean.eval.ts': CLEAN_EVAL,
       'evals/coin.eval.ts': coinEvals(['coin'], 2),
       'evals/db.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -214,29 +222,50 @@ describe('remark thresholds', () => {
       'The marked variant passed 2 of 3 runs and the baseline 1 of 3: better by 33 points, but on too few runs for the difference to hold.',
     )
     assert.equal(gap?.fix?.edit, 'set runs: 13, where a difference this size would hold')
+    const [middle] = raise(only(record, 'tft middle'), NO_HISTORY)
+    assert.equal(middle?.kind, 'too-few-tries')
+    assert.equal(
+      middle?.text,
+      "The marked variant passed 2 of 4 runs and the baseline 2 of 4: the same, but 4 runs a side can't rule out a difference of up to 49 points.",
+      'a tie between the bounds at the default 4 runs a side is a small sample',
+    )
+    assert.match(
+      middle?.fix?.edit ?? '',
+      /^set runs: \d+, where the same rates would rule out 20 points either way$/,
+    )
     const [same] = raise(only(record, 'tft same'), NO_HISTORY)
+    assert.equal(same?.kind, 'cant-tell-apart', 'a ceiling tie is not a small sample')
+    assert.equal(same?.severity, 'concern')
     assert.equal(
       same?.text,
-      "The marked variant passed 1 of 1 run and the baseline 1 of 1: the same, but 1 run a side can't rule out a difference of up to 79 points.",
+      "The marked variant and the baseline passed every run (1 of 1 and 1 of 1): the task can't tell them apart, since both always pass.",
     )
-    assert.equal(
-      same?.fix?.edit,
-      'set runs: 16, where the same rates would rule out 20 points either way',
-    )
+    assert.equal(same?.fix?.edit, 'make the task harder, so the baseline can fail')
     const [none] = raise(only(record, 'tft none'), NO_HISTORY)
+    assert.equal(none?.kind, 'cant-tell-apart', 'a floor tie is not a small sample')
     assert.equal(
       none?.text,
-      "The marked variant passed 0 of 4 runs and the baseline 0 of 4: the same, but 4 runs a side can't rule out a difference of up to 49 points.",
-      'a same at the default 4 runs a side is still a small sample',
+      'The marked variant and the baseline failed every run (0 of 4 and 0 of 4): the task may be too hard, or the eval broken.',
     )
     assert.equal(
       none?.fix?.edit,
-      'set runs: 16, where the same rates would rule out 20 points either way',
+      'check the eval with an oracle (a fake agent that writes the solution); if it passes, make the task easier',
     )
     assert.deepEqual(
       kinds(only(record, 'tft settled'), NO_HISTORY),
+      ['cant-tell-apart'],
+      'more runs never split 16 of 16 against 16 of 16',
+    )
+    const faster = only(record, 'tft settled')
+    for (const e of faster.evals)
+      for (const a of e.attempts) {
+        const variant = e.cells.find((c) => c.key === a.cell)?.lift
+        a.timings.agentMs = variant ? 10 : 1000
+      }
+    assert.deepEqual(
+      kinds(faster, NO_HISTORY),
       [],
-      '16 of 16 against 16 of 16 rules out 20 points either way',
+      'a ceiling whose effort differs is told apart by its effort',
     )
     assert.deepEqual(
       kinds(only(record, 'tft enough'), NO_HISTORY),
@@ -276,13 +305,18 @@ describe('remark thresholds', () => {
     assert.equal(few?.fix?.edit, 'add cases, so the pooled lift has 6 to hold on')
     assert.deepEqual(
       kinds(family('tft agree $id'), NO_HISTORY),
+      ['cant-tell-apart'],
+      '30 cases that all pass on both sides are a ceiling, not a small sample',
+    )
+    assert.deepEqual(
+      kinds(family('tft split $id'), NO_HISTORY),
       [],
-      '30 cases that all agree are insufficient for McNemar but not a small sample',
+      '30 cases that agree, half passing and half failing, are insufficient for McNemar but settled',
     )
     const [agreeFew] = raise(family('tft agree few $id'), NO_HISTORY)
     assert.equal(
       agreeFew?.text,
-      "The marked variant, pooled over 2 cases: the same, but a family's lift needs 6 to hold.",
+      "The marked variant and the baseline passed every run (over 2 cases): the task can't tell them apart, since both always pass.",
     )
   })
 

@@ -23,18 +23,20 @@ For more information about the printed effect words, see [Read the result](/resu
 
 ## Too few runs
 
-A small sample is a side with fewer than four counted attempts, or an interval that spans zero and still reaches past 20 points either way. The effect word always prints. On a small sample, whatever the direction, the `too-few-tries` remark prints beside it, and so does a difference whose interval spans zero.
+A small sample is a side with fewer than four counted attempts, or an interval that spans zero and still reaches past 20 points either way. The effect word always prints. On a small sample, whatever the direction, the `too-few-tries` remark prints beside it, and so does a difference whose interval spans zero. When both sides pass every attempt, or both fail every attempt, the `cant-tell-apart` remark prints instead, at any number of runs: more runs can't separate them. Two sides that always pass but differ in effort raise nothing, since effort tells them apart.
 
 | Result | Remark |
 |---|---|
 | 1 of 1 against 0 of 1 | better by 100 points, but on too few runs for the difference to hold |
 | 2 of 2 against 0 of 2 | better by 100 points, on only 2 runs a side |
-| 0 of 4 against 0 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
+| 2 of 4 against 2 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
+| 4 of 4 against 4 of 4 | `cant-tell-apart`: both always pass, so make the task harder |
+| 0 of 4 against 0 of 4 | `cant-tell-apart`: the task may be too hard, or the eval broken |
 | 4 of 4 against 0 of 4 | none: the difference holds |
 
-The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family's sample is its cases: it is small below six cases, or when its pooled interval spans zero and reaches past 20 points. A family raises the remark when its pooled lift doesn't hold, insufficient or within noise, and its rates differ or its sample is small. Many cases that all agree are insufficient but raise nothing.
+The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family's sample is its cases: it is small below six cases, or when its pooled interval spans zero and reaches past 20 points. A family raises the remark when its pooled lift doesn't hold, insufficient or within noise, and its rates differ or its sample is small. Many cases that agree, some passing and some failing on both sides, are insufficient but raise nothing; cases that all pass, or all fail, on both sides raise `cant-tell-apart`.
 
-`reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule.
+`reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule. Beside a cell's lift, the digest adds `tie: 'both always pass'` or `'both always fail'` when the small sample is such a tie.
 
 ## Cases as pairs
 

@@ -54,6 +54,7 @@ export type RemarkContext = {
 /** `KIND_ORDER` ranks remarks of one severity: the ones most worth acting on first. */
 const KIND_ORDER: Remark['kind'][] = [
   'too-few-tries',
+  'cant-tell-apart',
   'flaky-check',
   'slow-mcp-start',
   'proxy-only-egress',
@@ -110,6 +111,62 @@ function holds(variant: CellResult, base: CellResult): boolean {
   return !containsZero(low, high)
 }
 
+type Bound = 'pass' | 'fail'
+
+/** `pass` when every side passed every counted run, `fail` when every side failed every one. */
+function boundOf(cells: CellResult[]): Bound | null {
+  if (!cells.length || cells.some((c) => !counted(c))) return null
+  if (cells.every((c) => c.failed === 0)) return 'pass'
+  if (cells.every((c) => c.passed === 0)) return 'fail'
+  return null
+}
+
+type Tie = { variant: CellResult; base: CellResult; bound: Bound }
+
+/**
+ * cant-tell-apart (concern): a variant and its baseline both passed every run, or both failed
+ * every one, so no number of runs can tell them apart. Both passing means the task is too easy to
+ * show the change; both failing means it may be too hard, or the eval broken. Callers leave out a
+ * ceiling whose effort differs (`effortDiffers`): effort tells those arms apart. It names the
+ * first such variant, counting the others.
+ */
+function cantTellApart(
+  e: EvalResult,
+  entry: EvalEntry,
+  ctx: RemarkContext,
+  ties: Array<Tie & { cases?: number }>,
+): Candidate[] {
+  const [tie] = ties
+  if (!tie) return []
+  const { variant, base, bound, cases } = tie
+  const harnesses = new Set(units(e).flatMap((u) => u.cells.map((c) => c.harness))).size > 1
+  const on = harnesses ? ` on ${variant.harness}` : ''
+  const others = ties.length - 1
+  const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
+  const counts = cases
+    ? `over ${cases} ${cases === 1 ? 'case' : 'cases'}`
+    : `${variant.passed} of ${counted(variant)} and ${base.passed} of ${counted(base)}`
+  const text =
+    bound === 'pass'
+      ? `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}): the task can't tell them apart, since both always pass.${more}`
+      : `The ${armOf(variant)} variant${on} and the baseline failed every run (${counts}): the task may be too hard, or the eval broken.${more}`
+  const edit =
+    bound === 'pass'
+      ? 'make the task harder, so the baseline can fail'
+      : 'check the eval with an oracle (a fake agent that writes the solution); if it passes, make the task easier'
+  return [
+    {
+      id: remarkId('cant-tell-apart', e.path, entry),
+      evalId: e.path,
+      kind: 'cant-tell-apart',
+      severity: 'concern',
+      text,
+      evidence: [variant.path, base.path],
+      fix: { at: ctx.locate(entry, null), edit },
+    },
+  ]
+}
+
 /**
  * too-few-tries (concern): a variant's direction against its baseline doesn't hold yet. Their
  * pass rates differ but the interval on the difference spans 0, or the contrast is a small sample
@@ -118,16 +175,23 @@ function holds(variant: CellResult, base: CellResult): boolean {
  * 0 of 2 one way or the other comes up about 1 run in 8), or a `same` whose interval still reaches
  * past `SMALL_SAMPLE_MARGIN`. It names the variant with the widest gap, and the fix the runs a side
  * at which the observed rates would hold (`runsToHold`) or, for a `same`, settle (`runsToSettle`),
- * never fewer than `COMPARE_RUNS`. A family is judged by its pooled lift (`pooledTooFewTries`),
- * not each case's.
+ * never fewer than `COMPARE_RUNS`. A tie where both sides always pass or always fail is
+ * `cantTellApart` instead, since runs can't break it. A family is judged by its pooled lift
+ * (`pooledTooFewTries`), not each case's.
  */
 function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
   if (e.pooled) return pooledTooFewTries(e, entry, ctx)
   const weak: Array<{ variant: CellResult; base: CellResult; gap: number; held: boolean }> = []
+  const ties: Tie[] = []
   for (const unit of units(e)) {
     for (const variant of unit.cells) {
       const base = unit.cells.find((c) => c.key === variant.vs)
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
+      const bound = boundOf([variant, base])
+      if (bound) {
+        if (bound === 'fail' || !variant.effortDiffers) ties.push({ variant, base, bound })
+        continue
+      }
       const gap = Math.abs(rate(variant) - rate(base))
       const held = gap > 0 && holds(variant, base)
       const small = smallSample(
@@ -138,8 +202,9 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       weak.push({ variant, base, gap, held })
     }
   }
+  const apart = cantTellApart(e, entry, ctx, ties)
   const worst = [...weak].sort((a, b) => b.gap - a.gap)[0]
-  if (!worst) return []
+  if (!worst) return apart
   const { variant, base, gap, held } = worst
   const harnesses = new Set(units(e).flatMap((u) => u.cells.map((c) => c.harness))).size > 1
   const on = harnesses ? ` on ${variant.harness}` : ''
@@ -172,6 +237,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
         ? `set runs: ${needed}, where a difference this size would hold`
         : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
   return [
+    ...apart,
     {
       id: remarkId('too-few-tries', e.path, entry),
       evalId: e.path,
@@ -188,17 +254,31 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
  * too-few-tries on a family: its pooled lift is the result for its cases, so it's raised when
  * that lift doesn't hold (`insufficient` below `PAIRED_MIN` discordant pairs or cases, or within
  * noise) and either differs or rests on a small sample (`familySmallSample`). Many cases that all
- * agree are `insufficient` but settled, and raise nothing.
+ * agree are `insufficient` but settled, and raise nothing. A tie where every case on both sides
+ * passed, or every one failed, is `cantTellApart` instead.
  */
 function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
-  const weak = (e.pooled ?? []).filter(
-    (p) =>
-      (p.verdict === 'insufficient' || p.verdict === 'noise') &&
-      (p.effect !== 'same' || familySmallSample(p.pairs, p.interval.low, p.interval.high)),
-  )
-  const [arm] = weak
-  if (!arm) return []
   const cells = (e.cases ?? []).flatMap((k) => k.cells)
+  const ties: Array<Tie & { cases: number }> = []
+  const weak = (e.pooled ?? []).filter((p) => {
+    const own = cells.filter((c) => c.key === p.key)
+    const bases = cells.filter((c) => own.some((v) => v.vs === c.key))
+    const bound = p.effect === 'same' ? boundOf([...own, ...bases]) : null
+    const [variant] = own
+    const [base] = bases
+    if (bound && variant && base) {
+      if (bound === 'fail' || !own.some((c) => c.effortDiffers))
+        ties.push({ variant, base, bound, cases: p.pairs })
+      return false
+    }
+    return (
+      (p.verdict === 'insufficient' || p.verdict === 'noise') &&
+      (p.effect !== 'same' || familySmallSample(p.pairs, p.interval.low, p.interval.high))
+    )
+  })
+  const apart = cantTellApart(e, entry, ctx, ties)
+  const [arm] = weak
+  if (!arm) return apart
   const variant = cells.find((c) => c.key === arm.key)
   const harnesses = new Set(cells.map((c) => c.harness)).size > 1
   const on = harnesses && variant ? ` on ${variant.harness}` : ''
@@ -214,6 +294,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
       : "the difference doesn't hold"
   const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${more}`
   return [
+    ...apart,
     {
       id: remarkId('too-few-tries', e.path, entry),
       evalId: e.path,

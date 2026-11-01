@@ -1685,7 +1685,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'remarks.too-few-tries',
     area: 'CLI and runner',
-    name: "Remark `too-few-tries`: a variant whose difference from its baseline doesn't hold (its interval spans 0), or that matches it on fewer than 4 runs a side, with the runs that would make it hold",
+    name: "Remark `too-few-tries`: a variant whose difference from its baseline doesn't hold (its interval spans 0), or that rests on a small sample, with the runs that would make it hold",
+    unit: ['reeval/test/remarks.test.ts'],
+  },
+  {
+    id: 'remarks.cant-tell-apart',
+    area: 'CLI and runner',
+    name: 'Remark `cant-tell-apart`: a variant and its baseline both passed every run (make the task harder) or both failed every run (check the eval), which no number of runs separates',
     unit: ['reeval/test/remarks.test.ts'],
   },
   {

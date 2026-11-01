@@ -142,6 +142,7 @@ export const RULES = [
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favor the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
   "An observed fact is a value the eval's own code recorded with c.observe (what the agent installed, a count): counts tallies strings and each item of an array once per attempt, numbers summarizes number values. Observations never change pass, fail or the exit code: cite them as what happened, not as a check.",
+  "tie beside smallSample means both sides passed every attempt (both always pass: the task is too easy to tell them apart) or failed every attempt (both always fail: the task may be too hard, or the eval broken). More runs won't separate them: say the task needs to be harder, or the eval checked (an oracle agent should pass it), not that it needs more runs.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -157,14 +158,27 @@ const digestLiftVerdict = (withinNoise: boolean): 'within noise' | 'effect' =>
 
 type Counts = { pass: number; counted: number }
 
-/** `{ smallSample: true }` beside a lift's verdict when it rests on few attempts; else nothing. */
-const smallSampleFlag = (variant: Counts, control: Counts) =>
-  smallSample(
-    { pass: variant.pass, n: variant.counted },
-    { pass: control.pass, n: control.counted },
+const bound = (c: Counts) =>
+  c.counted === 0 ? null : c.pass === c.counted ? 'pass' : c.pass === 0 ? 'fail' : null
+
+/**
+ * `{ smallSample: true }` beside a lift's verdict when it rests on few attempts, with `tie` when
+ * both sides passed, or both failed, every attempt; else nothing.
+ */
+const smallSampleFlag = (variant: Counts, control: Counts) => {
+  if (
+    !smallSample(
+      { pass: variant.pass, n: variant.counted },
+      { pass: control.pass, n: control.counted },
+    )
   )
-    ? { smallSample: true }
-    : {}
+    return {}
+  const both = bound(variant) === bound(control) ? bound(variant) : null
+  return {
+    smallSample: true,
+    ...(both ? { tie: both === 'pass' ? 'both always pass' : 'both always fail' } : {}),
+  }
+}
 
 /** Observed sources (or eval fingerprint) drift is not an effect of the thing under test. */
 function evalChangedLift(): string {
