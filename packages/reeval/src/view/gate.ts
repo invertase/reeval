@@ -1,10 +1,10 @@
 // A cell's gate as compare and the history read it: its label, its fingerprint part, and the
 // outcome its attempts give under it. Browser-safe, so the studio re-scores a run as the CLI does.
 import type { FingerprintParts, HistoryCell } from '../history/types.ts'
-import type { CellGate, Outcome } from '../types.ts'
+import type { CellGate, GatePolicy, Outcome } from '../types.ts'
 
-/** `all`, `none` or `passRate 0.5`; `{ passRate: 1 }` is `all`, which scores the same. */
-export const gateLabel = (gate: CellGate) =>
+/** `all`, `none`, `observe` or `passRate 0.5`; `{ passRate: 1 }` is `all`, which scores the same. */
+export const gateLabel = (gate: CellGate | GatePolicy) =>
   typeof gate === 'string' ? gate : gate.passRate === 1 ? 'all' : `passRate ${gate.passRate}`
 
 /** The gate's part of a fingerprint: none on `'all'`, so such a cell keeps its fingerprint. */

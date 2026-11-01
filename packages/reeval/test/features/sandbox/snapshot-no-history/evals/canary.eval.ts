@@ -1,7 +1,7 @@
 import { evaluate, expect } from 'reeval'
 import { agentSaw, seeded } from './env.ts'
 
-evaluate('canary', { environment: seeded }, async (c) => {
+evaluate('canary', { environments: seeded }, async (c) => {
   await c.send('Make a change.')
   await c.writeFile('src/sum.js', 'export const sum = (a, b) => a - b\n')
   const t2 = await c.send('Report.')

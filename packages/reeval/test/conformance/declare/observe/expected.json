@@ -1,0 +1,159 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "which database",
+      "mode": "run",
+      "options": {
+        "gate": "observe",
+        "runs": 3
+      },
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which database with the skill",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gate": "observe",
+        "runs": 4
+      },
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which framework [chat]",
+      "mode": "run",
+      "options": {
+        "gate": "observe"
+      },
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"chat\""
+      },
+      "family": {
+        "name": "which framework",
+        "case": 0,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which framework [rag]",
+      "mode": "run",
+      "options": {
+        "gate": "observe"
+      },
+      "body": "b4",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"rag\""
+      },
+      "family": {
+        "name": "which framework",
+        "case": 1,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "the compare observes",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "gate": "observe"
+        },
+        "runs": 2
+      },
+      "body": "b5",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    }
+  ]
+}

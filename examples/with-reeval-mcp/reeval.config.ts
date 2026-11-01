@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace. Its multiply adds, so
   // the run fails and your agent has a failure to explain.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),

@@ -1,7 +1,7 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 
-/** No default environment: an omitted baseline is the empty control. */
+/** No default environments, so nothing but the eval names one. */
 export default defineConfig({
-  harness: fakeHarness(),
+  harnesses: fakeHarness(),
 })

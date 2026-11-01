@@ -8,12 +8,21 @@ const advisor = fakeHarness({
 
 // Choose a tool: the agent is asked which framework to use, and the eval wants Genkit. Every case
 // names Genkit, and the Python case also wants it to be the only framework named, which it isn't.
-evaluate.each([
-  { task: 'a chat app', only: false },
-  { task: 'a RAG pipeline', only: false },
-  { task: 'a Python agent', only: true },
-])('recommends Genkit for $task', { harness: advisor, runs: 2 }, async (c, { task, only }) => {
-  const turn = await c.send(`Which framework should I use to build ${task}? Pick one.`)
-  expect(turn.text, 'names Genkit').toContain('Genkit')
-  if (only) expect(turn.text, 'names no other framework').not.toContain('LangChain')
-})
+evaluate(
+  'recommends Genkit',
+  {
+    cases: [
+      { task: 'a chat app', only: false },
+      { task: 'a RAG pipeline', only: false },
+      { task: 'a Python agent', only: true },
+    ],
+    caseKey: (item) => item.task,
+    harnesses: advisor,
+    runs: 2,
+  },
+  async (c, { task, only }) => {
+    const turn = await c.send(`Which framework should I use to build ${task}? Pick one.`)
+    expect(turn.text, 'names Genkit').toContain('Genkit')
+    if (only) expect(turn.text, 'names no other framework').not.toContain('LangChain')
+  },
+)

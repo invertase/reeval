@@ -10,7 +10,7 @@ evaluate(
   {
     // minLift: 0.2 fails the variant unless its lift's 95% interval starts above +20 points.
     // Four tries a side is the fewest that can show that.
-    compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 },
+    compare: { control: math, variants: [withJsdoc], minLift: 0.2 },
     runs: 4,
     gate: { passRate: 0.75 },
   },

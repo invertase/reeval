@@ -28,8 +28,8 @@ def remote_plugins():
     @evaluate("git and npm read at the attempt")
     def git_and_npm(c): ...
 
-    @evaluate("a child adds another", {"environment": pinned})
+    @evaluate("a child adds another", {"environments": pinned})
     def child(c): ...
 
 
-group("remote plugins", {"environment": fetched}, remote_plugins)
+group("remote plugins", {"environments": fetched}, remote_plugins)

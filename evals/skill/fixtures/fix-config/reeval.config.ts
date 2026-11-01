@@ -5,7 +5,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 import { withDocs } from './evals/environments.ts'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'answer.md': 'Page with the `limit` query parameter, at most 100.\n' },
     text: 'I answered in answer.md.',
   }),

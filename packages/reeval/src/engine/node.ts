@@ -49,7 +49,13 @@ export const engineVersions: Record<string, string> = {
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
 
-type Collected = { file: string; rel: string; tests: WireTest[]; harnesses: string[] }
+type Collected = {
+  file: string
+  rel: string
+  tests: WireTest[]
+  harnesses: string[]
+  traits: string[]
+}
 
 export async function runEngine(
   options: EngineOptions,
@@ -98,15 +104,16 @@ export async function runEngine(
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
     let harnesses: string[] = []
+    let traits: string[] = []
     let error: SerializedError | undefined
     worker.onMessage((m) => {
-      if (m.t === 'collected') ({ tests, harnesses } = m)
+      if (m.t === 'collected') ({ tests, harnesses, traits } = m)
       else if (m.t === 'load-error') error = m.error
     })
     await handshake(worker, entry)
     worker.send({ t: 'init', run, file, select: null })
     const exit = await worker.exited
-    if (tests) collected.push({ file, rel, tests, harnesses })
+    if (tests) collected.push({ file, rel, tests, harnesses, traits })
     else if (error?.name === 'OnlyInCiError') usage = onlyInCi(rel)
     else if (error?.name === 'UsageError' || error?.name === 'DefinitionError')
       usage = `${rel}: ${error.message}`
@@ -196,6 +203,7 @@ function collectPlan(
     matched,
     unmatched: [...unmatched],
     harnesses: [...new Set(collected.flatMap((c) => c.harnesses))],
+    traits: [...new Set(collected.flatMap((c) => c.traits))],
     partial,
   }
 }

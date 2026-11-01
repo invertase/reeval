@@ -11,7 +11,7 @@ import itertools
 import os
 import re
 import sys
-from collections.abc import Callable, Coroutine, Sequence
+from collections.abc import Callable, Coroutine, Mapping, Sequence
 from contextvars import ContextVar
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
@@ -223,6 +223,28 @@ class _Matchers(Generic[R]):
 
     def to_have_changed(self, paths: Pattern | Sequence[Pattern] = _UNSET) -> R:
         return self._match("toHaveChanged", _given(paths))
+
+    def to_stay_within(
+        self,
+        *,
+        tokens: int | None = None,
+        tool_calls: int | Mapping[str, int] | None = None,
+        duration: int | str | None = None,
+    ) -> R:
+        """The turn, or every turn of `c`, stayed within each limit given: `tokens` (input and
+        output, subagents included), `tool_calls` (a count, or a count per tool) and `duration`
+        (`"5m"`, or milliseconds). A turn with no reported usage can't be checked against
+        `tokens`, which is an error, not a failure."""
+        limits: dict[str, Any] = {}
+        if tokens is not None:
+            limits["tokens"] = tokens
+        if tool_calls is not None:
+            limits["toolCalls"] = (
+                dict(tool_calls) if isinstance(tool_calls, Mapping) else tool_calls
+            )
+        if duration is not None:
+            limits["duration"] = duration
+        return self._match("toStayWithin", [limits])
 
     def to_pass(self) -> R:
         """The judge's verdict passed."""

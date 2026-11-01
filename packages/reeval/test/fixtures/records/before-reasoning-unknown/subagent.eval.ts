@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const env = defineEnvironment('puzzle', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('edits through a subagent', { environment: env }, async (c) => {
+evaluate('edits through a subagent', { environments: env }, async (c) => {
   await c.send(
     'Delegate this whole task to one subagent with your Agent (Task) tool, in the foreground (not in the background), and wait for it; do not edit files yourself. ' +
       'The subagent should implement maxMeetings in src/schedule.js (the most [start, end) meetings ' +
@@ -12,7 +12,7 @@ evaluate('edits through a subagent', { environment: env }, async (c) => {
   await expect(c.exec('node --test')).toSucceed()
 })
 
-evaluate('edits through the shell', { environment: env }, async (c) => {
+evaluate('edits through the shell', { environments: env }, async (c) => {
   await c.send(
     'Without using any file-editing tool, only shell commands (for example a heredoc with cat), ' +
       'rewrite src/schedule.js so maxMeetings returns the most [start, end) meetings attendable without overlap ' +

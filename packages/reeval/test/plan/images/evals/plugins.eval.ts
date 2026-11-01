@@ -17,5 +17,5 @@ const built = defineEnvironment('built', ({ plugin }) => ({
   ],
 }))
 
-evaluate('built plugins', { environment: built }, async () => {})
-evaluate('same plugins again', { environment: built }, async () => {})
+evaluate('built plugins', { environments: built }, async () => {})
+evaluate('same plugins again', { environments: built }, async () => {})

@@ -2,7 +2,7 @@ import { defineConfig } from 'reeval'
 import { fx, opencode, pi } from 'reeval/harness'
 
 export default defineConfig({
-  harness: [
+  harnesses: [
     opencode({ model: 'google/gemini-3.8-flash' }),
     pi({ model: 'gemini-3.8-flash' }),
     fx({ model: 'gpt-5.5' }),

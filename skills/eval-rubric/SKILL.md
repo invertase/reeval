@@ -22,30 +22,30 @@ reeval doesn't check these, so read the eval for them yourself:
 - **One judge question asks one thing.** Split "uses Zod and adds tests" in two.
 - **A prompt doesn't name the tool** an eval asks the agent to choose.
 - **An eval about a change compares it:** a skill, doc or MCP server gets `compare` with a
-  baseline without it.
+  control without it.
 
 ## `too-few-tries`
 
-Concern. A variant's difference from its baseline doesn't hold (its 95% interval spans 0), or it
+Concern. A variant's difference from its control doesn't hold (its 95% interval spans 0), or it
 rests on a small sample, in any direction: a side has fewer than 4 counted tries, or a `same`'s
 interval still reaches past 20 points (2 of 4 against 2 of 4), so the effect is only a direction;
-a family's is its pooled lift's, insufficient below 6 cases. It also prints when both arms pass
+for an eval with cases, the pooled lift's, insufficient below 6 cases. It also prints when both arms pass
 every run and no other measure (effort, a judge, a check, a compare question) is better or worse,
 but some lean: a difference its own test doesn't hold yet, at p below 0.1 and at least 10
 points, 0.05 of a judge's score, 60/40 of 4 or more decisive pairs for a question (p below 0.2), or 10% of an
 effort median ("the variant looks different: 10% faster; about 30 runs a side would confirm
 it"); weaker ones are the same, except on a sample too small for the test to show anything ("12×
 faster, but 3 runs a side can't confirm it; 4 is the least that can"). **Fix:** raise `runs` to the number the remark
-names, or add cases to a family.
+names, or add cases.
 
 ## `cant-tell-apart`
 
-Concern. A variant and its baseline both passed every run, or both failed every run, on 4 runs a
-side or more (for a family, every case on both sides, over 6 cases or more), so no number of runs
+Concern. A variant and its control both passed every run, or both failed every run, on 4 runs a
+side or more (for an eval with cases, every case on both sides, over 6 cases or more), so no number of runs
 can tell them apart. On a pass ceiling it prints only when every other measure of the comparison
 is the same too; one that is better or worse is the result and raises nothing, and one that only
 leans raises `too-few-tries`. Both failing always raises it. **Fix:** when both
-always pass, make the task harder, so the baseline can fail; when both always fail, check the eval
+always pass, make the task harder, so the control can fail; when both always fail, check the eval
 with an agent that does the task (an oracle, such as a fake agent writing the solution), and make
 the task easier if its checks pass.
 
@@ -98,3 +98,11 @@ directories left out. It's about what happened in the run, so it prints in every
 **Fix:** have the task write generated files (build output, downloads, datasets) into a directory
 reeval leaves out, compress the snapshots for the larger cap, or set `snapshot: false` on the eval
 when nobody reads its workspace.
+
+## `observe-throws`
+
+Concern. The body of an eval with `gate: 'observe'` threw outside an `expect` in more than half its
+counted tries. Such an eval fails only on run and infra errors, so those tries read `ran`, but what they recorded is the
+eval's own error, not what the agent did. The remark quotes the first error and lists each try.
+**Fix:** fix what the body throws (a missing file it reads, a bad selector), or check what can
+fail with `expect`, which `gate: 'observe'` records as a check without failing.

@@ -6,7 +6,7 @@ const math = defineEnvironment('math', ({ directory, skill }) => ({
   skills: [skill.local('./skills/jsdoc')],
 }))
 
-evaluate('documents a new function the way the skill says', { environment: math }, async (c) => {
+evaluate('documents a new function the way the skill says', { environments: math }, async (c) => {
   const turn = await c.send('Add a multiply(a, b) function to src/math.js.')
 
   expect(turn).toHaveCalledSkill('jsdoc')

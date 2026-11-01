@@ -24,7 +24,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | [`with-transcript-matchers`](./with-transcript-matchers) | Checking what the agent did, not only what it left |
 | [`with-web-matchers`](./with-web-matchers) | Checking the agent searched the web and read the docs |
 | [`with-multi-turn`](./with-multi-turn) | A session with a follow-up turn |
-| [`with-each`](./with-each) | One task over a list of cases |
+| [`with-cases`](./with-cases) | One task over a list of cases |
 | [`with-groups`](./with-groups) | Options cascading from a group to its evals |
 | [`with-pass-rate`](./with-pass-rate) | A cell that passes on most tries, not all |
 | [`with-background-process`](./with-background-process) | A server started in the attempt and checked over HTTP |
@@ -93,13 +93,13 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | Example | Shows |
 |---|---|
 | [`with-skill-lift`](./with-skill-lift) | Whether a skill helps |
-| [`with-compare-control`](./with-compare-control) | A compare without a baseline |
+| [`with-compare-control`](./with-compare-control) | A compare that names its control |
 | [`with-min-lift`](./with-min-lift) | Failing a run when a variant doesn't clearly help |
 | [`with-two-variants`](./with-two-variants) | One convention handed over two ways |
 | [`with-rules-ab`](./with-rules-ab) | Which of two rules files works better |
 | [`with-compare-questions`](./with-compare-questions) | Asking a model which arm did better |
 | [`with-compare-harness`](./with-compare-harness) | A compare on one agent, a control on another |
-| [`with-family-lift`](./with-family-lift) | A lift pooled over a family of tasks |
+| [`with-case-lift`](./with-case-lift) | A lift pooled over an eval's cases |
 | [`with-effort`](./with-effort) | A skill's effect on effort |
 | [`with-skill-reads`](./with-skill-reads) | Whether the agent opened the skill's files |
 

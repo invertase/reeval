@@ -16,7 +16,7 @@ evaluate('fails its check and its judge', async (c) => {
 
 evaluate(
   'never starts',
-  { harness: fakeHarness({ id: 'broken', failWith: 'the fake sandbox fell over' }) },
+  { harnesses: fakeHarness({ id: 'broken', failWith: 'the fake sandbox fell over' }) },
   async (c) => {
     await c.send('Write greet.js.')
   },

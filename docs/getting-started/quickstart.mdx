@@ -3,7 +3,7 @@ title: "Quick start"
 description: "reeval shows you whether a change helped a coding agent."
 ---
 
-reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a baseline without the skill and a variant with the skill, then see whether the skill helped.
+reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a control without the skill and a variant with the skill, then see whether the skill helped.
 
 To have a coding agent follow these steps, use the [setup skill](https://github.com/invertase/reeval/tree/main/skills/setup).
 
@@ -71,7 +71,7 @@ No problems, 1 warning.
 
 ## 2. Write the evaluation
 
-The baseline is an unstyled page. Create the `evals/project/index.html` file:
+The control is an unstyled page. Create the `evals/project/index.html` file:
 
 ```html title="evals/project/index.html"
 <!doctype html>
@@ -87,7 +87,7 @@ The baseline is an unstyled page. Create the `evals/project/index.html` file:
 </html>
 ```
 
-The variant adds Anthropic's `brand-guidelines` skill. Add the baseline and the variant to the end of the `evals/environments.ts` file:
+The variant adds Anthropic's `brand-guidelines` skill. Add the control and the variant to the end of the `evals/environments.ts` file:
 
 ```ts title="evals/environments.ts"
 export const page = defineEnvironment('page', ({ directory }) => ({
@@ -117,8 +117,7 @@ import { page, withSkill } from './environments.ts'
 evaluate(
   "styles the page in Anthropic's brand",
   {
-    environment: page,
-    compare: { variants: [withSkill] },
+    compare: { control: page, variants: [withSkill] },
     runs: 4,
     gate: { passRate: 0.75 },
   },
@@ -164,8 +163,8 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed both brand assertions in 4 of 4 attempts and the baseline in 0 of 4, so the effect reads `helped`. The counts can differ.
+The variant passed both brand assertions in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. The counts can differ.
 
 ## Next steps
 
-For more information about adding variants or gates, see [Measure lift against a baseline](/results/compare/lift).
+For more information about adding variants or gates, see [Measure lift against a control](/results/compare/lift).

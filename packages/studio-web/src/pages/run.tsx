@@ -149,7 +149,7 @@ function SandboxWarnings({ warnings }: { warnings: SandboxWarning[] }) {
 }
 
 /**
- * Each pooled `evaluate.each`: its template, a mark per case (click to open that case), and its
+ * Each eval with `cases`: its name, a mark per case (click to open that case), and its
  * pooled pass rate or paired lift, the suite's one verdict.
  */
 function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: string) => void }) {
@@ -157,7 +157,7 @@ function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: st
   if (families.length === 0) return null
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4" data-testid="families">
-      <h2 className="text-sm font-medium">Families</h2>
+      <h2 className="text-sm font-medium">Evals with cases</h2>
       {families.map((f) => {
         const cases = familyCases(f, record.evals)
         return (
@@ -266,7 +266,7 @@ function TreeRow({
         {node.tally.fail ? (
           <span className="tabular text-fail">{node.tally.fail} failed</span>
         ) : node.tally.missed ? (
-          <span className="tabular">{node.tally.missed} missed, not gated</span>
+          <span className="tabular">{node.tally.missed} ran with a failed check</span>
         ) : null}
       </button>
       {open
@@ -347,7 +347,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                     {row.role}
                     {row.gated ? null : (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                        not gated
+                        ran
                       </Badge>
                     )}
                   </div>
@@ -800,7 +800,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                     ) : null}
                     {missed ? (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                        missed, not gated
+                        check failed
                       </Badge>
                     ) : null}
                   </div>
@@ -910,7 +910,7 @@ export function RunPage() {
             {notGated ? (
               <>
                 {' · '}
-                <span className="font-semibold">{notGated}</span> missed, not gated
+                <span className="font-semibold">{notGated}</span> ran with a failed check
               </>
             ) : null}
             {infraError ? (

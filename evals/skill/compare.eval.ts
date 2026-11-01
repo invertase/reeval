@@ -13,7 +13,7 @@ const task =
 
 group(
   'add a compare with a question',
-  { compare: { ...channels(project('landing', 'compare')), gate: 'none' } },
+  { compare: { ...channels(project('landing', 'compare')), gate: 'observe' } },
   () => {
     evaluate('adds a compare with a screenshot question', async (c) => {
       await c.send(task)

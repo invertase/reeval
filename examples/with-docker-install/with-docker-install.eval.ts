@@ -11,7 +11,7 @@ const withJq = defineEnvironment('jq', ({ directory }) => ({
   }),
 }))
 
-evaluate('counts the large orders with jq', { environment: withJq }, async (c) => {
+evaluate('counts the large orders with jq', { environments: withJq }, async (c) => {
   await c.send(
     'Write count.sh, a bash script that prints how many orders in orders.json have a total over 100, using jq.',
   )

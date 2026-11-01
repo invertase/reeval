@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace: both arms throw for a
   // zero divisor, and only the one with the skill names the argument.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/math.js': fakeAgent('without-skill/src/math.js') },
     text: 'I added divide(a, b) to src/math.js.',
     withSkill: {

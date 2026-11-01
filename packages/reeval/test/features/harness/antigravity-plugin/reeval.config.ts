@@ -10,7 +10,7 @@ const agy = '~/.ai-sdk-harness/.harness-bootstrap/antigravity/bin/agy'
 const docker = process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'antigravity',
     script: [
       [

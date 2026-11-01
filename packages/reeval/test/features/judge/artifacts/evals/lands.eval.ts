@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { ui } from './env.ts'
 
 // The judge's decide state is a JSON part plus the capture as a file part.
-evaluate('lands', { environment: ui }, async (c) => {
+evaluate('lands', { environments: ui }, async (c) => {
   await c.send('write the form')
   const server = await c.serve('node server.mjs')
   const image = await c.capture(server, { name: 'form' })

@@ -31,6 +31,8 @@ export type CollectedPlan = {
   unmatched: string[]
   /** The harness ids the collected files' evals run on before a profile's limit, whatever the filters pick. */
   harnesses: string[]
+  /** The trait keys the control environments of the evals the tags select define, for `--trait`. */
+  traits: string[]
   /** A path filter left some eval files uncollected. */
   partial: boolean
 }

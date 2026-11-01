@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { snapshots } from './env.ts'
 
 // Must fail: the agent built the app, not something else. It takes no snapshot.
-evaluate('canary', { environment: snapshots, snapshot: false }, async (c) => {
+evaluate('canary', { environments: snapshots, snapshot: false }, async (c) => {
   await c.send('build the app')
   expect(await c.readFile('app/built.js')).toBe('something else')
 })

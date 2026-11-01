@@ -1,4 +1,4 @@
-from reeval_python import evaluate, evaluate_each, group
+from reeval_python import evaluate, group
 
 
 def slow_things():
@@ -16,5 +16,5 @@ group("slow things", {"tags": ["slow"]}, slow_things)
 def quick(c): ...
 
 
-@evaluate_each([{"n": 1}, {"n": 2}], "case $n", {"tags": ["slow"]})
+@evaluate("case", {"cases": [1, 2], "tags": ["slow"]})
 def case(c, case): ...

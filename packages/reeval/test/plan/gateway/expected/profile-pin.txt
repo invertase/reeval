@@ -1,4 +1,4 @@
 profile pinned (--profile) · 2 evals · 2 cells · 2 attempts
 evals/g.eval.ts › greets  p/-/fake  control  gated  ×1  gateway: p → direct
-evals/g.eval.ts › pinned  b/-/fake  control  gated  ×1  harness set by the eval · gateway: b → direct
+evals/g.eval.ts › pinned  b/-/fake  control  gated  ×1  harnesses set by the eval · gateway: b → direct
 excluded: —

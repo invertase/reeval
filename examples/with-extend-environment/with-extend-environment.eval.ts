@@ -15,7 +15,7 @@ const withDocs = math.extendEnvironment('math-with-docs', ({ file }) => ({
 
 const hiddenTest = readFileSync(new URL('./hidden/multiply.test.js', import.meta.url), 'utf8')
 
-evaluate('follows the API conventions', { environment: withDocs }, async (c) => {
+evaluate('follows the API conventions', { environments: withDocs }, async (c) => {
   await c.send('Add a multiply(a, b) function to src/math.js. Follow docs/api.md.')
 
   await c.writeFile('test/multiply.test.js', hiddenTest)

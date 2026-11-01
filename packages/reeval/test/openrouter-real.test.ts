@@ -31,8 +31,8 @@ import { openrouter } from 'reeval/gateway'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: fakeHarness({ files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' } }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness({ files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' } }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   gateway: [openrouter()],
   judge: { model: '${OPENROUTER_JUDGE_MODEL}' },
   analysis: { model: '${ANALYSIS_MODEL}' },

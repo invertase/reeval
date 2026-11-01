@@ -8,7 +8,7 @@ const withBrand = site.extendEnvironment('brand', ({ skill }) => ({
 evaluate(
   'adds a sign-up button',
   {
-    compare: { baseline: site, variants: [withBrand] },
+    compare: { control: site, variants: [withBrand] },
     // Each side's own `home` capture goes beside its diff; asked of pairs that passed.
     questions: [
       {

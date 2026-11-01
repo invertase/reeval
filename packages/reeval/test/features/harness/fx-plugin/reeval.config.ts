@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // agent takes fx's layout (and image), so no key is needed. As the agent: follow the plugin's skill
 // among fx's own skills, in its private home, where the session placed it.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'fx',
     script: [
       [

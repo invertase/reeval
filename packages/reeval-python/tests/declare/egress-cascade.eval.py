@@ -12,28 +12,28 @@ async def body(c): ...
 
 
 evaluate("the config policy", body)
-evaluate("an environment replaces it", {"environment": closed}, body)
-evaluate("an extend child replaces its parent", {"environment": reopened}, body)
-evaluate("the default list spreads", {"environment": installs}, body)
+evaluate("an environment replaces it", {"environments": closed}, body)
+evaluate("an extend child replaces its parent", {"environments": reopened}, body)
+evaluate("the default list spreads", {"environments": installs}, body)
 evaluate(
     "the eval replaces the environment",
-    {"environment": closed, "egress": {"allow": ["eval.example.com"]}},
+    {"environments": closed, "egress": {"allow": ["eval.example.com"]}},
     body,
 )
 
 
 def a_group():
-    evaluate("replaces the environment too", {"environment": closed}, body)
+    evaluate("replaces the environment too", {"environments": closed}, body)
 
 
 group("a group", {"egress": {"allow": ["group.example.com"]}}, a_group)
 evaluate(
     "a variant runs under its own policy",
-    {"compare": {"baseline": plain, "variants": [closed]}},
+    {"compare": {"control": plain, "variants": [closed]}},
     body,
 )
 evaluate(
     "a fake agent with a layout gets that agent's hosts",
-    {"environment": closed, "harness": fake_harness(layout="claude-code")},
+    {"environments": closed, "harnesses": fake_harness(layout="claude-code")},
     body,
 )

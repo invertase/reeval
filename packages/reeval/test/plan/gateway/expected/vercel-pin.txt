@@ -1,6 +1,6 @@
 profile codex-pin (--profile) · 2 evals · 2 cells · 2 attempts
 evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker  control  gated  ×1  effort medium · gateway: codex:gpt-5.4-mini → vercel
-evals/g.eval.ts › pinned  b/-/docker                   control  gated  ×1  harness set by the eval · gateway: b → direct
+evals/g.eval.ts › pinned  b/-/docker                   control  gated  ×1  harnesses set by the eval · gateway: b → direct
 excluded: —
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.10  (reeval's image: built when missing or when its base changed)

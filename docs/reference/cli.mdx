@@ -86,6 +86,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                               most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
   --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
+  --trait <key=value>         Only cells whose environment's trait is value, or lists it (with
+                              compare, the control's); repeat to combine (AND)
   --record                    Also record the run into the history folder (see config.record)
   --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
                               an eval list you browse with the arrow keys on a terminal outside CI)
@@ -109,15 +111,28 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 
 [//]: # (/generated:cli-help:run)
 
+### Filtering cells by trait
+
+```bash
+reeval run --trait stack=next
+reeval run --trait auth=clerk --trait stack=next
+```
+
+`--trait key=value` runs only the cells whose environment's [trait](/reference/environment-helpers#environmentspec) `key` is `value`, or lists it. Repeated flags must all hold. With `compare`, a cell goes by its control's traits, so every variant runs with its control or not at all.
+
+The filter applies after `where` and the cascade, together with a profile's [`limit.traits`](/reference/profiles#traits). `where` decides which pairs fit, whatever the run; `--trait` picks the ones to run now. The plan notes what it leaves out, as in `--trait stack=next leaves out vite-app`, and `--dry-run --json` lists those environments in each evaluation's `traitExcluded`, apart from `whereExcluded`. An evaluation, or a case, left with no cell is skipped: `no cell left: --trait stack=next matches none of vite-app`.
+
+reeval exits with code 2 for a flag that isn't `key=value`, and for a key that no control environment of the selected evaluations defines, with the closest key it does define.
+
 A resume plans with the settings the run started with, which its record and progress file keep as `invocation`:
 
 | Setting | Left out | Given again |
 |---|---|---|
 | `--runs`, the profile (`--profile` or `REEVAL_PROFILE`) | The run's | Exits 2 unless it's the run's |
-| filters, `--tag` | The run's | Replaces the run's for this resume, so it can leave evals out or add ones the run didn't plan |
+| filters, `--tag`, `--trait` | The run's | Replaces the run's for this resume, so it can leave evals out or add ones the run didn't plan |
 | `--concurrency` (or `REEVAL_CONCURRENCY`) | The run's | Wins, with a note in the plan |
 
-Attempts the run planned that a resume's filters or `--tag` leave out stay in the record, as they finished or as `skipped`, with a warning in the plan. While any hasn't run, the run stays `interrupted` and exits on the attempts it ran, which is the outcome `--json` gives, without being recorded (`--record` prints `Not recorded`), or stays `budget` and exits 1. A `.todo` or `.skip` counts as done, whatever the resume's filters pick: the record marks it (`todo`, `skip`). A later `reeval run --resume` runs the rest.
+Attempts the run planned that a resume's filters, `--tag` or `--trait` leave out stay in the record, as they finished or as `skipped`, with a warning in the plan. While any hasn't run, the run stays `interrupted` and exits on the attempts it ran, which is the outcome `--json` gives, without being recorded (`--record` prints `Not recorded`), or stays `budget` and exits 1. A `.todo` or `.skip` counts as done, whatever the resume's filters pick: the record marks it (`todo`, `skip`). A later `reeval run --resume` runs the rest.
 
 `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` count from a `.env` file too. A run with no profile resumes with none, whatever `defaultProfile` picks now. A run an older reeval started saved no `invocation`: its resume plans with the flags given, with a note.
 
@@ -367,7 +382,7 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 `reeval doctor` exits 1 when a check fails. A warning alone exits 0.
 
-`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled.
+`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled. A case that its family's `passRate` gates is left to the family's `(all cases)` row.
 
 `reeval image build` exits 2 when every failed image is a usage error, else 3.
 

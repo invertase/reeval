@@ -472,11 +472,15 @@ describe('gate policies', () => {
     }
   })
 
-  test('the option takes all or { passRate } in (0, 1]', () => {
+  test("the option takes all, { passRate } in (0, 1] or 'observe'", () => {
     checkGate('all', 'e')
     checkGate({ passRate: 1 }, 'e')
-    for (const bad of ['any', { passRate: 0 }, { passRate: 1.2 }, { rate: 0.8 }, {}, 0.8]) {
-      assert.throws(() => checkGate(bad, 'e'), /gate in e is 'all' .* or \{ passRate \}/)
+    checkGate('observe', 'e')
+    for (const bad of ['any', 'none', { passRate: 0 }, { passRate: 1.2 }, { rate: 0.8 }, {}, 0.8]) {
+      assert.throws(
+        () => checkGate(bad, 'e'),
+        /gate in e is 'all' .*, \{ passRate \} .*, or 'observe' \(nothing gates\)/,
+      )
     }
   })
 })
@@ -516,14 +520,18 @@ describe("an eval's source", () => {
   })
 
   test('the options hash leaves out tags, runs, timeout, revision and gate, and reads harnesses and sandboxes by id', () => {
-    const base = optionsHash([{ pin: ['harness'] }])
+    const base = optionsHash([{ pin: ['harnesses'] }])
     const unhashed = { tags: ['slow'], runs: 5, timeout: '2m', revision: 3, gate: 'all' } as const
-    assert.equal(optionsHash([{ pin: ['harness'], ...unhashed }]), base)
-    assert.equal(optionsHash([{}, { pin: ['harness'] }]), base, 'an option-less group adds nothing')
-    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harness'] }]), base, "a group's runs too")
+    assert.equal(optionsHash([{ pin: ['harnesses'], ...unhashed }]), base)
+    assert.equal(
+      optionsHash([{}, { pin: ['harnesses'] }]),
+      base,
+      'an option-less group adds nothing',
+    )
+    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harnesses'] }]), base, "a group's runs too")
     assert.notEqual(optionsHash([{ pin: ['runs'] }]), base, 'twin: another option changes it')
     assert.notEqual(
-      optionsHash([{ pin: ['harness'] }, { pin: ['harness'] }]),
+      optionsHash([{ pin: ['harnesses'] }, { pin: ['harnesses'] }]),
       base,
       'a group level is its own',
     )
@@ -562,7 +570,7 @@ describe("an eval's source", () => {
   })
 
   test("a case hashes as JSON data, and data JSON can't see is refused", () => {
-    const at = 'evaluate.each("e") case 0'
+    const at = 'evaluate("e") case "a"'
     const hash = (item: unknown) => caseHash(caseJson(item, at), {})
     assert.equal(hash({ n: 1, s: 'x' }), hash({ s: 'x', n: 1 }))
     assert.notEqual(hash({ n: 1 }), hash({ n: 2 }), 'twin: another value')
@@ -577,14 +585,14 @@ describe("an eval's source", () => {
     ] as const) {
       assert.throws(
         () => caseJson({ want: value }, at),
-        new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
+        new RegExp(`^UsageError: evaluate\\("e"\\) case "a": .* \\(it holds ${what}\\)`),
       )
     }
   })
 
   test('a case hashes with its secrets masked, and as its text when it holds none', () => {
     const env = { DB_PASSWORD: 'hunter2hunter2' }
-    const text = caseJson({ password: 'hunter2hunter2', n: 1 }, 'evaluate.each("e") case 0')
+    const text = caseJson({ password: 'hunter2hunter2', n: 1 }, 'evaluate("e") case "a"')
     assert.notEqual(caseHash(text, env), sha256(text), 'the raw case would confirm a guess')
     assert.equal(caseHash(text, env), sha256('{"n":1,"password":"[REDACTED]"}'))
     assert.equal(

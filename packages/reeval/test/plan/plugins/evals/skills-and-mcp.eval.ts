@@ -5,4 +5,4 @@ const review = defineEnvironment('review', ({ plugin }) => ({
   plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] })],
 }))
 
-evaluate('loads the plugin', { environment: review }, async () => {})
+evaluate('loads the plugin', { environments: review }, async () => {})

@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // Must fail: files isn't listed, so the judge doesn't see it.
-evaluate('canary', { environment: app }, async (c) => {
+evaluate('canary', { environments: app }, async (c) => {
   await c.send('write the app')
   c.observe('orm', 'drizzle')
   c.observe('files', 1)

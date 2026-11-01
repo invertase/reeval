@@ -11,7 +11,7 @@
 ## Commands
 
 ```text
-reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p>
+reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --trait <k=v> --profile <p>
                          --record --ui plain -v
 reeval record            reeval history         reeval show [run]
 reeval compare [base] [head] [--md] [--fail-on-regression] [-v]
@@ -66,7 +66,7 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
 command checks: not high if any check failed, low if a claim was dropped or a command rejected.
 Anomalies are number-checked, and a cited judge score that disagrees is dropped.
 
-When every cell is `gate: 'none'`, it reads the run as a study: how the arms differ, check by
+When every cell is ungated (`gate: 'observe'`), it reads the run as a study: how the arms differ, check by
 check, so label your expects. `analysis.instructions` is the question it answers.
 
 `analysis.model` is the model `reeval analyze` uses (else the judge's, when it's a language
@@ -74,8 +74,8 @@ model), and the one questions without their own model use. `reeval init` sets it
 `AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` lists remarks under `Worth knowing:` beneath an eval that itself needs work, with no model: `flaky-check`,
-`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `snapshot-too-large`, `too-few-tries` and `cant-tell-apart` (concerns,
-at most three), and
+`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `snapshot-too-large`, `too-few-tries`,
+`cant-tell-apart` and `observe-throws` (concerns, at most three), and
 with `-v` `check-never-fails` (a suggestion). They go in `remarks.json` beside
 the run, which `reeval record` copies into the history folder. Each names the source line to change (`Fix at <file:line>: …`).
 Act on them: raise `runs`, make a task both arms always pass harder, tighten or remove the check, bake the MCP server's dependencies into
@@ -109,11 +109,11 @@ record: `reeval run --resume <id>` keeps the finished attempts and writes it. pn
 as a SIGTERM, which counts as the same press, and gives the terminal back: the run prints the
 `kill <pid>` that quits it.
 
-`--resume` plans with the run's own `--runs`, profile, filters, `--tag` and `--concurrency`, so
-leave them out. Another `--runs` or profile exits 2; other filters or tags replace the run's for
-that resume. Attempts the run planned that they leave out stay in the record as not run (or as
-they finished), the run stays `interrupted` (or `budget`), and a later `--resume` runs them. A
-`.skip` or `.todo` never runs, so it counts as done.
+`--resume` plans with the run's own `--runs`, profile, filters, `--tag`, `--trait` and
+`--concurrency`, so leave them out. Another `--runs` or profile exits 2; other filters, tags or
+traits replace the run's for that resume. Attempts the run planned that they leave out stay in
+the record as not run (or as they finished), the run stays `interrupted` (or `budget`), and a
+later `--resume` runs them. A `.skip` or `.todo` never runs, so it counts as done.
 
 ## Recording runs
 

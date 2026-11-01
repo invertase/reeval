@@ -163,26 +163,27 @@ def test_case_data_is_canonical_json_and_non_json_is_refused(tmp_path: Path) -> 
         tmp_path,
         """
         from dataclasses import dataclass
-        from reeval_python import evaluate_each
+        from reeval_python import evaluate
 
         @dataclass
         class Case:
+            id: str
             n: int
 
-        @evaluate_each([{"b": 1, "a": "é"}, Case(2)], "case %#")
+        @evaluate("case", {"cases": [{"id": "0", "b": 1, "a": "é"}, Case("1", 2)]})
         def case(c, item): ...
         """,
     )
-    assert found["case 0"]["caseJson"] == '{"a":"é","b":1}'
-    assert found["case 1"]["caseJson"] == '{"n":2}'
-    assert found["case 0"]["body"] == found["case 1"]["body"]
+    assert found["case [0]"]["caseJson"] == '{"a":"é","b":1,"id":"0"}'
+    assert found["case [1]"]["caseJson"] == '{"id":"1","n":2}'
+    assert found["case [0]"]["body"] == found["case [1]"]["body"]
 
     path = tmp_path / "c.eval.py"
     path.write_text(
-        "from reeval_python import evaluate_each\n"
-        "@evaluate_each([object()], 'case %#')\n"
+        "from reeval_python import evaluate\n"
+        "@evaluate('case', {'cases': [object()], 'case_key': lambda c: '0'})\n"
         "def case(c, item): ...\n",
         encoding="utf-8",
     )
-    with pytest.raises(TypeError, match=r"evaluate_each\('case %#'\) case 0: reeval fingerprints"):
+    with pytest.raises(TypeError, match=r"evaluate\('case'\) case '0': reeval fingerprints"):
         collect_eval_file(path)

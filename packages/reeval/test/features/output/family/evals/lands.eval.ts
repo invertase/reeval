@@ -1,6 +1,6 @@
 import { evaluate, expect } from 'reeval'
 
-// A family: the template heading, then a row per case.
-evaluate.each(['red', 'blue'])('lands %s', async (_c, color) => {
+// An eval with cases: its name heading, then a row per case.
+evaluate('lands', { cases: ['red', 'blue'] }, async (_c, color) => {
   expect(color.length, 'named').toBeGreaterThan(0)
 })

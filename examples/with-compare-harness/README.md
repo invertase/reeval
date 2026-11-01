@@ -1,7 +1,7 @@
 # with-compare-harness
 
 **Shows:** a compare on one agent while another runs only the control. The eval runs on Claude
-Code and Codex, and `compare.harness` runs the `jsdoc` skill's variant on Claude Code alone. A
+Code and Codex, and `compare.harnesses` runs the `jsdoc` skill's variant on Claude Code alone. A
 question with `across: 'harness'`, in `questions` beside `compare`, pairs Claude Code's attempts
 with Codex's in the same environment, so you read the two agents side by side.
 
@@ -15,7 +15,7 @@ with Codex's in the same environment, so you read the two agents side by side.
 pnpm eval
 ```
 
-**Real or fake agent:** there's no fake agent here. `compare.harness` names harness ids the eval
+**Real or fake agent:** there's no fake agent here. `compare.harnesses` names harness ids the eval
 must run, so the eval names its own two agents, and that list wins over the config's and every
 profile's: `--profile <name>` changes the judge, not the agents.
 
@@ -45,5 +45,5 @@ with-compare-harness.eval.ts › documents the new function  2          1       
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`reeval.config.ts`](./reeval.config.ts) | The question's model, and the profiles from `../profiles.ts` |
 
-The [Options](../../docs/reference/options.mdx) reference page covers `compare.harness` and
+The [Options](../../docs/reference/options.mdx) reference page covers `compare.harnesses` and
 `questions`' `across`, and the [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) page covers pairing.

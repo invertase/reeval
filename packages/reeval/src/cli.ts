@@ -58,6 +58,7 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
+import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
 import type { CursorEfforts, RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -365,6 +366,7 @@ async function runCommand(
         ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
         filters: savedFilters(setup.config.root, filters),
         tags: runFlags.tag ?? [],
+        ...(runFlags.trait?.length ? { traits: runFlags.trait } : {}),
       }
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
@@ -390,7 +392,7 @@ async function runCommand(
     executed = await executeRun(ctx, setup, filters, renderer, {
       startedWith,
       notes: resumed?.notes ?? [],
-      narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length),
+      narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length || !!flags.trait?.length),
     })
   } catch (error) {
     renderer.close()
@@ -536,6 +538,7 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
     profile: flags.profile,
     concurrency: flags.concurrency,
     tag: flags.tag,
+    trait: flags.trait,
     filters,
   }
   const resumed = resumeSettings(target.runId, saved, given, { root })
@@ -585,7 +588,9 @@ async function prepareRun(
     }
   }
   const sandboxes = [
-    environmentSandbox(config.environment, config.sandbox),
+    ...(config.environments.length ? config.environments : [undefined]).map((e) =>
+      environmentSandbox(e, config.sandbox),
+    ),
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
@@ -602,6 +607,7 @@ async function prepareRun(
     profile,
     runs,
     tags: [...(flags.tag ?? []), ...(profile?.tags ?? [])],
+    traits: traitFlags(flags.trait),
     concurrency,
     budget: profile?.budget ?? config.budget,
     record: profile?.record ?? config.record,
@@ -636,6 +642,7 @@ async function startRun({
   profile,
   runs,
   tags,
+  traits,
   concurrency,
   verbosity,
   configFile,
@@ -669,6 +676,7 @@ async function startRun({
       config,
       runs,
       tags,
+      traits,
       concurrency,
       profile,
       verbosity,
@@ -701,6 +709,7 @@ async function startRun({
     config,
     runs,
     tags,
+    traits,
     concurrency,
     profile,
     verbosity,
@@ -813,7 +822,8 @@ async function executeRun(
     narrowed: boolean
   },
 ) {
-  const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
+  const { runId, stagingDir, config, runs, tags, traits, concurrency, profile, verbosity } = ctx
+  const { configFile } = ctx
   const run = JSON.parse(
     JSON.stringify({
       runId,
@@ -821,6 +831,7 @@ async function executeRun(
       config,
       runs,
       tags,
+      traits,
       concurrency,
       profile,
       verbosity,
@@ -846,6 +857,7 @@ async function executeRun(
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
     checkLimitHarness(profile, config.file, collected)
+    checkTraitKeys(traitFilters(traits, profile), collected.traits)
     const completed = completedKeysFor(planned, stagingDir, ctx.previous)
     const skipped = planned.map((p) =>
       completed.has(p.key)

@@ -110,7 +110,7 @@ CI writes the same matrix to the job summary.
   actions, then assert on its transcript:
 
   ```ts
-  harness: fakeHarness({ script: [[{ exec: 'printenv CHECK_TOKEN || echo unset' }]] })
+  harnesses: fakeHarness({ script: [[{ exec: 'printenv CHECK_TOKEN || echo unset' }]] })
   // in the eval: the shell call's stdout
   turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : []))
   ```

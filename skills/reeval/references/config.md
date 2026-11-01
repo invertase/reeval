@@ -13,11 +13,11 @@
 A project without TypeScript can write `reeval.yaml` (or `.yml`) instead, with no callbacks:
 
 ```yaml
-harness: { kind: cursor, model: composer-2.5 }
+harnesses: { kind: cursor, model: composer-2.5 }
 judge: { model: typesafe-ai/jev-1.14.0 }   # or { kind: fake-judge, score: 0.9 }
 env:
   NPM_TOKEN: { kind: secret, hosts: [registry.npmjs.org] }
-environment:
+environments:
   kind: environment
   name: base
   layers: [{ name: base, spec: { setup: [npm ci] } }]

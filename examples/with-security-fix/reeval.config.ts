@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's fix into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/users.js': fakeAgent('src/users.js') },
     text: 'findUser() binds the name as a parameter now instead of building the SQL from it.',
   }),

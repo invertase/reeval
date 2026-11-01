@@ -4,7 +4,7 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'answer.md': 'Page with the `limit` query parameter, at most 100.\n' },
     text: 'I answered in answer.md.',
   }),

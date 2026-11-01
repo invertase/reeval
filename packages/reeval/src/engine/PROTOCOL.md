@@ -45,7 +45,7 @@ run.
 ## Collecting and running
 
 ```jsonc
-{"t":"collected","tests":[{"index":0,"name":"greets [cursor/-/docker#1]","groups":[],"mode":"run","attempt":{…}}],"harnesses":["cursor:composer-2.5"]}
+{"t":"collected","tests":[{"index":0,"name":"greets [cursor/-/docker#1]","groups":[],"mode":"run","attempt":{…}}],"harnesses":["cursor:composer-2.5"],"traits":[]}
 {"t":"request","id":"l1","limits":{"attempts":4},"rank":{"eval":"…","file":"…","order":0,"n":1,"cell":0}}
 {"t":"grant","id":"l1"}
 {"t":"start","index":0,"at":1790000000000}
@@ -58,7 +58,9 @@ run.
 - Collecting, the worker loads the file and sends `collected` (or `load-error`) and `done`.
   `collected.harnesses` lists the ids of the harnesses the file's evals run on before a
   profile's limit narrows them, those the run's tags leave out included, so the main process can
-  refuse a `limit.harness` id no eval runs on.
+  refuse a `limit.harness` id no eval runs on. `collected.traits` lists the trait keys the
+  control environments of the evals the run's tags select define, so it can refuse a `--trait`
+  or `limit.traits` key none defines.
   Running, it collects again, asks for each selected attempt's lease with `request`, sends
   `ready` once every one has asked (or finished without one), and runs each when it gets its
   `grant`.
@@ -87,7 +89,7 @@ A tree's relative host paths resolve against the directory of the eval file bein
 rule TypeScript and `reeval.yaml` follow: a fake sandbox's `dir`, a `dockerfile` (which must be a
 file), and, in each environment layer's spec, host files in `files` and `rules`, a local skill's
 `path`, a local npm skill's `spec` and a local git workspace's `url`. That covers an eval's or
-group's `sandbox`, `environment`, `compare.baseline` and `compare.variants`. Absolute paths stay
+group's `sandbox`, `environments`, `compare.control` and `compare.variants`. Absolute paths stay
 as written, so a tree a TypeScript file declared, whose helpers already resolved its paths,
 declares the same again.
 
@@ -130,3 +132,4 @@ to a message shows up in review with its snapshot.
 | 2 | JSON serialization; every message JSON-clean |
 | 3 | The main process closes the channel after `done`, and the worker exits when it closes |
 | 4 | `collected` carries `harnesses` |
+| 5 | `collected` carries `traits` |

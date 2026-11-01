@@ -19,7 +19,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace and follows its rules
   // file, so the arms differ without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: changelog }]],
     files: { 'src/math.js': fakeAgent('src/math.js') },
     text: 'I added multiply(a, b) to src/math.js and recorded it in CHANGELOG.md.',

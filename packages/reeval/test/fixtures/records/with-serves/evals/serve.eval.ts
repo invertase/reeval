@@ -11,12 +11,12 @@ http.createServer((_, res) => res.end('own')).listen(0, '::1')
   },
 })
 
-evaluate('serves on PORT', { environment: servers }, async (c) => {
+evaluate('serves on PORT', { environments: servers }, async (c) => {
   const app = await c.serve('node reads-port.mjs')
   expect((await c.exec(`curl -s 127.0.0.1:${app.port}`)).stdout).toBe('port')
 })
 
-evaluate('serves on its own port', { environment: servers }, async (c) => {
+evaluate('serves on its own port', { environments: servers }, async (c) => {
   const app = await c.serve('node own-port.mjs')
   expect((await c.exec(`curl -s -g '[::1]:${app.port}'`)).stdout).toBe('own')
 })

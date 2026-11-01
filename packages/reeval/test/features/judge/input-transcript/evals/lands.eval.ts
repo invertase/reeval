@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // transcript: 'tools' shows the tool calls as text lines, with their output.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   let state: Record<string, unknown> = {}
   const look = fakeJudge({

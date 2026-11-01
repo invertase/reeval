@@ -14,7 +14,7 @@ const handover =
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [{ reply: 'This repo has skills. Shall I set up evals for this project?' }],
       [{ exec: solve }, { reply: handover }],
@@ -26,7 +26,7 @@ export default defineConfig({
   profiles: {
     canary: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           script: [
             [
               {

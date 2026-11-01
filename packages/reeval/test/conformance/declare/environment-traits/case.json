@@ -1,0 +1,5 @@
+{
+  "eval": "plan/environments/evals/traits.eval.ts",
+  "plan": "plan/environments/expected/traits.txt",
+  "args": ["evals/traits.eval.ts"]
+}

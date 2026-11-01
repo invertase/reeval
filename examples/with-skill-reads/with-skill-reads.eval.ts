@@ -5,7 +5,7 @@ const withJsdoc = defineEnvironment('jsdoc', ({ directory, skill }) => ({
   skills: [skill.local('./skills/jsdoc')],
 }))
 
-evaluate('documents the new function', { environment: withJsdoc }, async (c) => {
+evaluate('documents the new function', { environments: withJsdoc }, async (c) => {
   await c.send('Add a multiply(a, b) function to src/math.js.')
 
   await expect(c, 'JSDoc block').toHaveFile('src/math.js', /\*\/\s*export function multiply/)

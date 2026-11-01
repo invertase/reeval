@@ -1,0 +1,303 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "pooled [ada]",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"ada\""
+      },
+      "family": {
+        "name": "pooled",
+        "case": 0,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "pooled [grace]",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"grace\""
+      },
+      "family": {
+        "name": "pooled",
+        "case": 1,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "pooled [linus]",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"linus\""
+      },
+      "family": {
+        "name": "pooled",
+        "case": 2,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "keyed [ada]",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b4",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "{\"who\":\"ada\"}"
+      },
+      "family": {
+        "name": "keyed",
+        "case": 0,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "keyed [grace]",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b5",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "{\"who\":\"grace\"}"
+      },
+      "family": {
+        "name": "keyed",
+        "case": 1,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "one case is not pooled [only]",
+      "mode": "run",
+      "options": {},
+      "body": "b6",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "caseJson": "\"only\""
+      }
+    }
+  ]
+}

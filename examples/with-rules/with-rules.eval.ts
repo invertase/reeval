@@ -7,7 +7,7 @@ const math = defineEnvironment('math', ({ directory, file }) => ({
   rules: file('./rules.md'),
 }))
 
-evaluate('follows the project rules', { environment: math }, async (c) => {
+evaluate('follows the project rules', { environments: math }, async (c) => {
   const turn = await c.send('Add a multiply(a, b) function to src/math.js.')
 
   expect(turn, 'runs the tests').toHaveRun(/npm test/)

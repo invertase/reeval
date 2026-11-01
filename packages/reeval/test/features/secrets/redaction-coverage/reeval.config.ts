@@ -13,6 +13,6 @@ console.log(forms.join("\\n"))
 
 // REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
 export default defineConfig({
-  harness: fakeHarness({ script: [[{ exec: leak }]] }),
+  harnesses: fakeHarness({ script: [[{ exec: leak }]] }),
   judge: { model: fakeJudge({ score: 0.9 }) },
 })

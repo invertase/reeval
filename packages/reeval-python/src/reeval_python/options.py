@@ -6,13 +6,14 @@ data reeval documents for it, in snake_case too, and reeval checks them when it 
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
-from typing import Any, Literal, TypedDict
+from typing import Any, Generic, Literal, Required, TypedDict, TypeVar
 
 from reeval_python.environment import DockerSandbox, Environment, FakeHarness, FakeJudge
 
 Harness = str | FakeHarness | Mapping[str, Any]
+T = TypeVar("T")
 
 
 class JudgeDefaults(TypedDict, total=False):
@@ -72,18 +73,19 @@ class EvalOptions(TypedDict, total=False):
     compare: Mapping[str, Any]
     egress: Literal["allow-all", "deny-all", "proxy"] | Mapping[str, Sequence[str]]
     env: Mapping[str, Any]
-    environment: Environment | Mapping[str, Any]
-    gate: Literal["all"] | Mapping[str, float]
-    harness: Harness | Sequence[Harness] | Mapping[str, Any]
+    environments: Environment | Sequence[Environment] | Mapping[str, Any]
+    """One environment, or a list, each its own cell beside each harness; `{"add": …}` and
+    `{"only": [names]}` edit the inherited list."""
+    gate: Literal["all", "observe"] | Mapping[str, float]
+    """`"all"` (every attempt passes), `{"pass_rate": 0.8}`, or `"observe"` (nothing gates: the
+    attempts run and are recorded, and only run and infra errors fail the eval)."""
+    harnesses: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults
     pin: Sequence[str]
     question: Mapping[str, Any]
     questions: Sequence[Mapping[str, Any]]
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's. Each
     names what it's shown: `{"question": …, "diff": True}`, at least one input."""
-    runs: int | BestOf
-    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
-    compared eval."""
     sandbox: DockerSandbox | Mapping[str, Any]
     snapshot: bool | Literal["turns"] | Mapping[str, Any]
     """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after
@@ -92,6 +94,21 @@ class EvalOptions(TypedDict, total=False):
     revision: int | str
     """The eval's version, in its fingerprint: bump it when a helper, a constant outside the body
     or a fixture changes what it measures. A group's applies to evals inside that set none."""
+    runs: int | BestOf
+    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
+    compared eval."""
     tags: Sequence[str]
     timeout: timedelta | float
     """Per attempt, in seconds or as a timedelta."""
+
+
+class CaseOptions(EvalOptions, Generic[T], total=False):
+    """An eval's options with `cases`: each case runs the body, `(c, case)`, with every cell and
+    run, and the cases pool into one pass rate (and, with `compare`, one lift paired by case).
+    Per eval only."""
+
+    cases: Required[Sequence[T]]
+    """The inputs, each JSON data."""
+    case_key: Callable[[T], str]
+    """Each case's key, which names it in the output and the record. Without it, a string or a
+    finite number is its own key, and a dict uses its `id`, else its `name`."""

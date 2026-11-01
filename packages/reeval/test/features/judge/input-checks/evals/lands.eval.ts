@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // checks: [command] shows only that command's results, as c.exec ran it.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   await c.exec('echo first')
   await c.exec('echo second')

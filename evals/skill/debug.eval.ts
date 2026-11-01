@@ -11,7 +11,7 @@ const task =
 
 const failing = project('slug', 'debug', ['./node_modules/.bin/reeval run --ui plain || true'])
 
-group('debug a failing check', { compare: { ...channels(failing), gate: 'none' } }, () => {
+group('debug a failing check', { compare: { ...channels(failing), gate: 'observe' } }, () => {
   evaluate('finds and fixes the failing check', async (c) => {
     const turn = await c.send(task)
     await expect(c.exec(runsOnFake), 'passes on the fake config').toSucceed()

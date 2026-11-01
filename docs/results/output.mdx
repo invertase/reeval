@@ -21,7 +21,7 @@ Done in 1s · 1 failed
 Browse it: reeval studio · summary .reeval/runs/…/summary.md
 ```
 
-Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` passed, `✗` failed or hit an infra error, `●` not gated (no cell is gated), `–` skipped or todo, and `○` canceled. A passing evaluation is one line. A failed one, a comparison, and one with remarks add sentences under it: how each harness did, the baseline and each variant with its effect, the cases of a family that failed, each failed assertion with its first message and file location, a failed evaluation's workspace snapshot, its observations, and each question's answers. For more information about what an assertion decides, see [Assertion](/reference/glossary#assertion). To print the sentences under every evaluation, pass `-v`.
+Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` passed, `✗` failed or hit an infra error, `●` ran (no cell is gated, as under [`gate: 'observe'`](/reference/options#gate)), `–` skipped or todo, and `○` canceled. A passing evaluation is one line. A failed one, a comparison, and one with remarks add sentences under it: how each harness did, the control and each variant with its effect, an evaluation's rate over its cases under `gate: { passRate }` and the cases that failed, each failed assertion with its first message and file location, a failed evaluation's workspace snapshot, its observations, and each question's answers. For more information about what an assertion decides, see [Assertion](/reference/glossary#assertion). To print the sentences under every evaluation, pass `-v`.
 
 `Done in` gives the run's time, then the tally, which omits zeros, as in `2 failed · 1 passed · 1 infra error`. A failure outside any evaluation prints first, as `error:`, and counts as a `run error`. `Browse it:` names the studio and the run's `summary.md` file. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
 
@@ -35,12 +35,12 @@ A remark looks like this:
 
 ```text
 └─ ✓ records the change in the changelog  1 of 1 run passed
-     Baseline short-rules passed 0 of 1.
+     Control short-rules passed 0 of 1.
      Variants, by pass rate:
        detailed-rules  1 of 1  helped
      …
      Worth knowing:
-       The detailed-rules variant passed 1 of 1 run and the baseline 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at with-rules-ab.eval.ts:14: set runs: 4, where a difference this size would hold.
+       The detailed-rules variant passed 1 of 1 run and the control 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at with-rules-ab.eval.ts:14: set runs: 4, where a difference this size would hold.
 ```
 
 ## Show one run

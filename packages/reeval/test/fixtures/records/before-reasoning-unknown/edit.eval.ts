@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const env = defineEnvironment('puzzle', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('edits and reasons', { environment: env }, async (c) => {
+evaluate('edits and reasons', { environments: env }, async (c) => {
   await c.send(
     'Think carefully about the algorithm first. Then implement maxMeetings in src/schedule.js ' +
       '(the most meetings, as [start, end) pairs, attendable without overlap; a meeting may start when the last ends). ' +

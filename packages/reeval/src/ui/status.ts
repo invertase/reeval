@@ -6,20 +6,22 @@
 //   one harness reads `Passed on H every time.`, `Failed on H every time.` or `Passed N of M on H.`;
 //   several read `Passed on A and B every time.` when every run passed, `Failed on A and B every
 //   time.` when none did, else `A passed N of M, B N of M.`
-// - A compare reads `Baseline <arm> passed N of M.`, then `Variants, by pass rate:` with one line per
+// - A compare reads `Control <arm> passed N of M.`, then `Variants, by pass rate:` with one line per
 //   variant, highest pass rate first, naming the harnesses only where their pass rates differ, and
 //   `, not by minLift N` after the effect when the variant's lift (a family's pooled one) missed it.
 //   With `-v`, each of its cells' difference and 95% interval follows, as the result blocks print it.
-//   Under a variant, its comparison with the baseline when some other measure holds:
+//   Under a variant, its comparison with the control when some other measure holds:
 //   `Same pass rate · 5× faster · judge "tidy" +0.12.` (with `-v`, `looks …` for the leans too),
 //   prefixed `H: ` on several harnesses.
+// - An eval with `cases` under `gate: { passRate }` gives each gated cell's rate over the cases:
+//   `Pass rate over the cases: 67%, below passRate 0.7.` (`on <cell>` when several are gated).
 // - A family whose cases didn't all pass names them: `Failed cases: green, blue.` (the first eight,
 //   then `and N more`).
 // - Failed checks: `Every failure was the same check:` for one, `N checks failed:` for several,
 //   each `"label" failed N times`, then its first message and `at file:line`. With one harness
 //   nothing more; else `, all on H` when every failure was on H, `, M of them on H` when H had
 //   more than half of them, and nothing when no harness did. A compare counts every arm's runs
-//   and tells them apart by arm (`the baseline` or the variant) instead of by harness.
+//   and tells them apart by arm (`the control` or the variant) instead of by harness.
 // - `Worth knowing:` the eval's remarks, one line each, then each check that needed its retries
 //   (`"label" passed on try 2 of 3.`) and the first capture whose page had errors
 //   (`2 page errors in capture "home" → <file>`, with `(+N more captures)`).
@@ -61,12 +63,12 @@ export type StatusRow = {
   id: string
   name: string
   icon: StatusIcon
-  /** `3 of 4 runs passed`, `8 of 8 variant runs passed` (a gated compare's baseline doesn't count), `2 of 4 runs done`, `skipped`. */
+  /** `3 of 4 runs passed`, `8 of 8 variant runs passed` (a gated compare's control doesn't count), `2 of 4 runs done`, `skipped`. */
   summary: string
   detail: DetailLine[]
   /** It has remarks, under `Worth knowing:`, which a list printed once shows even on a pass. */
   remarks: number
-  /** A compare, whose detail (the baseline and its variants) a list printed once always shows. */
+  /** A compare, whose detail (the control and its variants) a list printed once always shows. */
   compare: boolean
 }
 
@@ -180,7 +182,7 @@ function minLiftShort(e: EvalResult, own: CellResult[]): string {
 }
 
 /**
- * Under a variant, its comparison with the baseline (`measuresLine`): `Same pass rate · 5× faster ·
+ * Under a variant, its comparison with the control (`measuresLine`): `Same pass rate · 5× faster ·
  * judge "tidy" +0.12.`, one line, or one per harness (`cursor: …`) when it ran on several. Only
  * when some measure besides pass rate holds; `verbose` adds the ones that only lean.
  */
@@ -220,7 +222,7 @@ function compareLines(
   const lines: DetailLine[] = [
     {
       depth: 0,
-      text: `Baseline ${baseName} passed ${of(baseTally)}${disagreement(record, base)}.`,
+      text: `Control ${baseName} passed ${of(baseTally)}${disagreement(record, base)}.`,
     },
   ]
   const variants = [...new Set(cells.filter((c) => c.variant !== null).map((c) => c.variant))]
@@ -304,7 +306,7 @@ function messageLines(text: string, label = '', max = LINE_MAX): string[] {
     .map((l) => clip(l, max))
 }
 
-/** A failure's message is red only on a failed eval: a passing compare's baseline misses are expected. */
+/** A failure's message is red only on a failed eval: a passing compare's control misses are expected. */
 function checkLines(
   cells: CellResult[],
   groupOf: (c: CellResult) => string,
@@ -344,12 +346,22 @@ function checkLines(
 
 const CASES_NAMED = 8
 
-function failedCaseLines(e: EvalResult): DetailLine[] {
+function caseLines(e: EvalResult): DetailLine[] {
+  const rates = e.rates ?? []
+  const rateLines = rates.map((r): DetailLine => {
+    const on = rates.length > 1 ? ` on ${r.key}` : ''
+    const short = r.outcome === 'fail' ? 'below' : 'clearing'
+    return {
+      depth: 0,
+      text: `Pass rate over the cases${on}: ${Math.round(r.rate * 100)}%, ${short} passRate ${r.passRate}.`,
+      ...(r.outcome === 'fail' ? { tone: 'red' as const } : {}),
+    }
+  })
   const failed = (e.cases ?? []).filter((k) => k.outcome !== 'pass' && k.outcome !== 'skipped')
-  if (!failed.length) return []
+  if (!failed.length) return rateLines
   const named = failed.slice(0, CASES_NAMED).map((k) => k.label)
   const more = failed.length > CASES_NAMED ? ` and ${failed.length - CASES_NAMED} more` : ''
-  return [{ depth: 0, text: `Failed cases: ${named.join(', ')}${more}.` }]
+  return [...rateLines, { depth: 0, text: `Failed cases: ${named.join(', ')}${more}.` }]
 }
 
 /** Errors no failed check explains: timeouts, infrastructure errors, throws. Never clipped: their remedy is often last. */
@@ -409,8 +421,8 @@ function remarkLines(remarks: Remark[], notes: string[]): DetailLine[] {
   ]
 }
 
-/** A compare's failures are told apart by arm: `the baseline`, or the variant's name. */
-const armOf = (c: CellResult) => (c.baseline ? 'the baseline' : (c.variant ?? c.environment))
+/** A compare's failures are told apart by arm: `the control`, or the variant's name. */
+const armOf = (c: CellResult) => (c.baseline ? 'the control' : (c.variant ?? c.environment))
 
 const nameOf = (e: Pick<EvalResult, 'group' | 'name' | 'template'>) =>
   [...e.group, e.template ?? e.name].join(' › ')
@@ -456,7 +468,7 @@ export function evalRow(
                 text: outcomeSentence(tallyBy(decide, labeler(record, decide))),
               } as const,
             ]),
-        ...failedCaseLines(e),
+        ...caseLines(e),
         ...(compare
           ? checkLines(cells, armOf, tone)
           : checkLines(decide, (c) => harnessLabel(record, c), tone)),
@@ -599,7 +611,7 @@ function observedLines(
   return lines
 }
 
-/** `3 passed · 1 failed · 1 not gated`, from the suite's tally. */
+/** `3 passed · 1 failed · 1 ran`, from the suite's tally. */
 export function tallyText(suite: SuiteResult): string {
   const t = suite.tally
   return [
@@ -608,7 +620,7 @@ export function tallyText(suite: SuiteResult): string {
     t.infraError ? plural(t.infraError, 'infra error') : '',
     t.canceled ? `${t.canceled} canceled` : '',
     t.pass ? `${t.pass} passed` : '',
-    t.notGated ? `${t.notGated} not gated` : '',
+    t.notGated ? `${t.notGated} ran` : '',
     t.skipped ? `${t.skipped} skipped` : '',
   ]
     .filter(Boolean)

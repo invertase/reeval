@@ -181,6 +181,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "traits": {
+          "description": "`--trait`, as given (`key=value`); unset without any.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": ["filters", "tags"]

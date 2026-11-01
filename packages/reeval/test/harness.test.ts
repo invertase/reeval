@@ -239,7 +239,7 @@ describe('the Claude Code harness', () => {
 
   test('is accepted by the config and tells the CLI which key it needs', () => {
     const config = resolveConfig(
-      { harness: [cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-opus-5-5' })] },
+      { harnesses: [cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-opus-5-5' })] },
       '/p',
     )
     assert.deepEqual(
@@ -264,7 +264,10 @@ describe('the Claude Code harness', () => {
 
   test('names agent and judge keys with a line break in them, never other variables', () => {
     const config = resolveConfig(
-      { harness: [cursor({ model: 'composer-2.5' })], judge: { model: 'google/gemini-3.8-flash' } },
+      {
+        harnesses: [cursor({ model: 'composer-2.5' })],
+        judge: { model: 'google/gemini-3.8-flash' },
+      },
       '/p',
     )
     const wrapped = 'AQ.abc\n   │ def'
@@ -394,7 +397,7 @@ describe('the Antigravity harness', () => {
   })
 
   test('is accepted by the config and needs GEMINI_API_KEY', () => {
-    const config = resolveConfig({ harness: [antigravity({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [antigravity({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [
       'GEMINI_API_KEY',
     ])
@@ -472,7 +475,7 @@ describe('the OpenCode harness', () => {
   test("needs only the model's provider's key", () => {
     const config = resolveConfig(
       {
-        harness: [
+        harnesses: [
           opencode({ model: 'google/m' }),
           opencode({ model: 'anthropic/claude-haiku-4-5' }),
           opencode({ model: 'cerebras/gpt-oss-120b', id: 'cb' }),
@@ -503,7 +506,7 @@ describe('the OpenCode harness', () => {
 
   test("on Bedrock, it needs AWS_BEARER_TOKEN_BEDROCK, and AWS_REGION's hosts are its egress hosts", () => {
     const bedrock = opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' })
-    const config = resolveConfig({ harness: [bedrock] }, '/p')
+    const config = resolveConfig({ harnesses: [bedrock] }, '/p')
     assert.deepEqual(missingCredentials(config, { AWS_ACCESS_KEY_ID: 'x' }), [
       'AWS_BEARER_TOKEN_BEDROCK',
     ])
@@ -694,7 +697,7 @@ describe('the Goose harness', () => {
   })
 
   test('is accepted by the config and needs GOOGLE_GENERATIVE_AI_API_KEY', () => {
-    const config = resolveConfig({ harness: [goose({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [goose({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GOOGLE_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
     ])
@@ -742,10 +745,10 @@ describe('the fx harness', () => {
   })
 
   test('needs AI_GATEWAY_API_KEY for a gateway id, and OPENAI_API_KEY for a bare OpenAI id', () => {
-    const gateway = resolveConfig({ harness: [fx({ model: 'anthropic/claude-sonnet-5' })] }, '/p')
+    const gateway = resolveConfig({ harnesses: [fx({ model: 'anthropic/claude-sonnet-5' })] }, '/p')
     assert.deepEqual(missingCredentials(gateway, { OPENAI_API_KEY: 'x' }), ['AI_GATEWAY_API_KEY'])
     assert.deepEqual(missingCredentials(gateway, { AI_GATEWAY_API_KEY: 'x' }), [])
-    const openai = resolveConfig({ harness: [fx({ model: 'gpt-4.1-mini' })] }, '/p')
+    const openai = resolveConfig({ harnesses: [fx({ model: 'gpt-4.1-mini' })] }, '/p')
     assert.deepEqual(missingCredentials(openai, { AI_GATEWAY_API_KEY: 'x' }), ['OPENAI_API_KEY'])
     assert.deepEqual(missingCredentials(openai, { OPENAI_API_KEY: 'x' }), [])
   })
@@ -793,7 +796,7 @@ describe('the Grok Build harness', () => {
   })
 
   test('is accepted by the config and needs XAI_API_KEY', () => {
-    const config = resolveConfig({ harness: [grokBuild({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [grokBuild({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, {}), ['XAI_API_KEY'])
     assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
   })
@@ -875,7 +878,7 @@ describe('the pi harness', () => {
   })
 
   test('needs GOOGLE_GENERATIVE_AI_API_KEY, not GEMINI_API_KEY', () => {
-    const config = resolveConfig({ harness: [pi({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [pi({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
     ])
@@ -981,7 +984,7 @@ describe('the Codex harness', () => {
   })
 
   test('needs OPENAI_API_KEY', () => {
-    const config = resolveConfig({ harness: [codex({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [codex({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, {}), ['OPENAI_API_KEY'])
     assert.deepEqual(missingCredentials(config, { OPENAI_API_KEY: 'x' }), [])
   })
@@ -1146,7 +1149,7 @@ describe('the Cursor harness', () => {
   })
 
   test('is accepted by the config and needs CURSOR_API_KEY', () => {
-    const config = resolveConfig({ harness: [cursor({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [cursor({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, {}), ['CURSOR_API_KEY'])
     assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'x' }), [])
   })

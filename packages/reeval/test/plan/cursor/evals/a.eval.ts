@@ -7,9 +7,9 @@ const python = defineEnvironment('python', {
 })
 
 evaluate('standard and fast', async () => {})
-evaluate('another model', { harness: cursor({ model: 'gpt-5.2' }) }, async () => {})
+evaluate('another model', { harnesses: cursor({ model: 'gpt-5.2' }) }, async () => {})
 evaluate(
   'on a toolchain base',
-  { harness: cursor({ model: 'composer-2.5' }), environment: python },
+  { harnesses: cursor({ model: 'composer-2.5' }), environments: python },
   async () => {},
 )

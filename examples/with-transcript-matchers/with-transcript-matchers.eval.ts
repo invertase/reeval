@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('runs the tests before it finishes', { environment: math }, async (c) => {
+evaluate('runs the tests before it finishes', { environments: math }, async (c) => {
   const turn = await c.send(
     'Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js. ' +
       'Run the tests before you finish. Add no dependencies.',

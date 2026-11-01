@@ -15,7 +15,7 @@ const own = defineEnvironment('own', {
   sandbox: docker({ dockerfile: '../docker/Dockerfile' }),
 })
 
-evaluate('config sandbox with install', { environment: withInstall }, async () => {})
-evaluate('same sandbox again', { environment: withInstall }, async () => {})
-evaluate('toolchain base', { environment: python }, async () => {})
-evaluate('own dockerfile', { environment: own }, async () => {})
+evaluate('config sandbox with install', { environments: withInstall }, async () => {})
+evaluate('same sandbox again', { environments: withInstall }, async () => {})
+evaluate('toolchain base', { environments: python }, async () => {})
+evaluate('own dockerfile', { environments: own }, async () => {})

@@ -4,6 +4,6 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.eval.py'],
-  harness: fakeHarness({}),
+  harnesses: fakeHarness({}),
   sandbox: fakeSandbox(),
 })

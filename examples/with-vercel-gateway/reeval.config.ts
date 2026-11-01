@@ -13,7 +13,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),
@@ -32,7 +32,7 @@ export default defineConfig({
     // Vercel, Jev is the judge that answers: its other models are language models, not
     // decision models.
     vercel: {
-      defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }), sandbox: docker() },
+      defaults: { harnesses: claudeCode({ model: 'claude-sonnet-5' }), sandbox: docker() },
       judge: { model: 'typesafe-ai/jev-1.14.0' },
       gateway: [vercel()],
     },

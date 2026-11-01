@@ -1,7 +1,7 @@
 import { evaluate, expect } from 'reeval'
 import { greeting, hidden } from './env.ts'
 
-evaluate('canary', { environment: greeting }, async (c) => {
+evaluate('canary', { environments: greeting }, async (c) => {
   await c.send('Create greet.js.')
   // Placed with c.exec, so the next turn's diff has it.
   await c.exec(`mkdir -p test && printf %s ${JSON.stringify(hidden)} > test/hidden.test.js`)

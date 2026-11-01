@@ -5,7 +5,7 @@ import { app } from './env.ts'
 
 // A call that turns no input on, as JavaScript or a cast lets through, fails before any model
 // call, naming the inputs.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   let asked = false
   const look = fakeJudge({

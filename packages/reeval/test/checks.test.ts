@@ -28,7 +28,7 @@ const styled = defineEnvironment('styled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/house')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [styled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c, 'writes ok.txt').toHaveFile('ok.txt')
   await expect.require(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
@@ -45,7 +45,7 @@ describe('named check results', () => {
     // The eval list names the failed check and the arm it failed on; a passing compare stays open.
     assert.match(
       r.stdout,
-      /^ {5}Every failure was the same check:\n {7}"house style" failed 2 times, all on the baseline\n {9}expected file styled\.txt to exist\n {9}at evals\/s\.eval\.ts:12$/m,
+      /^ {5}Every failure was the same check:\n {7}"house style" failed 2 times, all on the control\n {9}expected file styled\.txt to exist\n {9}at evals\/s\.eval\.ts:12$/m,
     )
     assert.doesNotMatch(r.stdout, /toSucceed/, 'a check that never ran did not fail')
     // The summary's matrix has the checks that failed or didn't run on some arm; the rest pass on both.
@@ -126,7 +126,7 @@ describe('named check results', () => {
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
     assert.match(
       agent.stdout,
-      /^ {4}Every failure was the same check:\n {6}"house style" failed 2 times, all on the baseline$/m,
+      /^ {4}Every failure was the same check:\n {6}"house style" failed 2 times, all on the control$/m,
     )
   })
 

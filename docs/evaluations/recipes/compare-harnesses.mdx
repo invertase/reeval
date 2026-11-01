@@ -5,7 +5,7 @@ description: "Run one task on each agent and compare pass rate, tokens, tool cal
 
 You compare agents by running one task on each agent in one run, then reading each agent's pass rate, tokens, tool calls, and time side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses).
 
-To measure a change on each agent instead, add `compare` ([the `compare.harness` key](/reference/options#compare)).
+To measure a change on each agent instead, add `compare` ([the `compare.harnesses` key](/reference/options#compare)).
 
 ## Run one task on each agent
 
@@ -21,7 +21,7 @@ import { claudeCode, codex, cursor } from '{{ pkg }}/harness'
 evaluate(
   'streams with Vercel AI SDK',
   {
-    harness: [
+    harnesses: [
       cursor({ model: 'composer-2.5' }),
       claudeCode({ model: 'claude-sonnet-5' }),
       codex({ model: 'gpt-5.6-luna' }),
@@ -83,7 +83,7 @@ npx reeval query "SELECT harness, tools_median, agent_s_median,
 
 The query returns one row per agent: `harness`, `tools_median`, `agent_s_median`, and `tokens_median`. `tokens_median` is empty for an agent that reports no usage.
 
-The medians describe each agent's attempts. reeval calls a difference `fewer` or `more` only when a Mann-Whitney test gives p below 0.05 between a variant and its baseline. These cells have no baseline, so the `verdict` columns are empty. For more information about the test, see [Statistics](/reference/statistics). For more information about the `reeval query` command, see [Query past runs](/results/inspection/queries).
+The medians describe each agent's attempts. reeval calls a difference `fewer` or `more` only when a Mann-Whitney test gives p below 0.05 between a variant and its control. These cells have no control, so the `verdict` columns are empty. For more information about the test, see [Statistics](/reference/statistics). For more information about the `reeval query` command, see [Query past runs](/results/inspection/queries).
 
 </Step>
 </Steps>

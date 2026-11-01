@@ -13,7 +13,7 @@ const oracle = fakeHarness({
 
 evaluate(
   'adds multiply, with an oracle beside the agents',
-  { environment: math, harness: { add: oracle } },
+  { environments: math, harnesses: { add: oracle } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js.')
 
@@ -24,7 +24,10 @@ evaluate(
 
 evaluate(
   'adds subtract, without the careful agent',
-  { environment: math, harness: (inherited) => inherited.filter((h) => h.id !== 'fake-careful') },
+  {
+    environments: math,
+    harnesses: (inherited) => inherited.filter((h) => h.id !== 'fake-careful'),
+  },
   async (c) => {
     await c.send('Add a subtract(a, b) function to src/math.js.')
 

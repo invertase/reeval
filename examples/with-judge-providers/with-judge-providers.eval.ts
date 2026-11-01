@@ -7,7 +7,7 @@ const math = defineEnvironment('math', ({ directory }) => ({ files: directory('.
 // any profile's judge.
 const question = 'Would a new reader follow average, with the empty list handled on purpose?'
 
-evaluate('adds a readable average function', { environment: math }, async (c) => {
+evaluate('adds a readable average function', { environments: math }, async (c) => {
   await c.send('Add an average(xs) function to src/math.js. It returns 0 for an empty list.')
 
   await expect(c).toHaveFile('src/math.js', /export function average/)
