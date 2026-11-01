@@ -10,6 +10,7 @@ import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/eve
 import { phaseOf, progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
+import { InteractiveRenderer } from '../src/ui/tty.ts'
 import { Tagger } from '../src/ui/tags.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { pkgRoot } from './helpers.ts'
@@ -216,7 +217,6 @@ const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
   logPrefix: 'task',
   outputLogs: 'full',
   color: false,
-  rich: false,
   githubActions: false,
   heartbeatMs: 60_000,
   interactive: false,
@@ -303,7 +303,8 @@ describe('plain renderer', () => {
     assert.equal(
       render(interleaved, options()),
       lines(
-        'reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
+        "  ◆  Running; each attempt's logs print as it ends...",
+        '',
         '… 2 running after 1m 00s: [creates#1 cursor] turn 1 1m 00s, [adds#1 cursor] turn 1 59s',
         '… 2 running after 2m 00s: [creates#1 cursor] turn 1 2m 00s, [adds#1 cursor] turn 1 1m 59s',
         '… 2 running after 3m 00s: [creates#1 cursor] cleanup 3m 00s, [adds#1 cursor] turn 1 2m 59s',
@@ -336,7 +337,7 @@ describe('plain renderer', () => {
 
   test('stream: every prefixed line prints as it happens, interleaved', () => {
     const out = render(interleaved, options({ logOrder: 'stream' })).split('\n')
-    assert.deepEqual(out.slice(1, 16), [
+    assert.deepEqual(out.slice(2, 17), [
       '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
       '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
       '[creates#1 cursor]  +0:01 sandbox starting',
@@ -491,10 +492,7 @@ describe('plain renderer', () => {
       const out = render(interleaved, options({ logOrder, outputLogs: 'none', heartbeatMs: 0 }))
       assert.equal(
         out,
-        lines(
-          'reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2',
-          ...RESULT,
-        ),
+        lines('  ◆  Running...', '', ...RESULT),
       )
     }
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
@@ -579,6 +577,7 @@ test('browser-download names the binary, version, size and cache', () => {
   let agent = ''
   const renderer = new AgentRenderer({
     out: { write: (chunk: string) => (agent += chunk) },
+    output: options({ mode: 'agent' }),
   })
   for (const e of events) renderer.onEvent(e)
   assert.match(
@@ -627,7 +626,10 @@ test("a gateway warning prints as it happens, in the plain and agent output, on 
   assert.match(grouped, warned)
   assert.doesNotMatch(grouped, /turn 1 started/, 'the rest of the block is held')
   let agent = ''
-  const renderer = new AgentRenderer({ out: { write: (chunk: string) => (agent += chunk) } })
+  const renderer = new AgentRenderer({
+    out: { write: (chunk: string) => (agent += chunk) },
+    output: options({ mode: 'agent' }),
+  })
   for (const e of events) renderer.onEvent(e)
   assert.ok(
     agent.split('\n').some((l) => /^\[\w+#1 \S+\] warning: /.test(l) && l.endsWith(text)),
@@ -711,28 +713,29 @@ const prepared: ReevalEvent[] = [
   },
 ]
 
+const draw = (
+  events: ReevalEvent[],
+  output: OutputOptions,
+  columns: number,
+  depth: ColorDepth = 4,
+) => {
+  let text = ''
+  const renderer = new PlainRenderer({
+    out: { write: (chunk: string) => (text += chunk) },
+    colors: colors(output.color, depth),
+    output,
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    columns,
+  })
+  for (const e of events) renderer.onEvent(e)
+  renderer.close()
+  return text
+}
+const rich = options({ statusLine: true, color: true, logOrder: 'stream' })
+
 describe('run header', () => {
-  const draw = (
-    events: ReevalEvent[],
-    output: OutputOptions,
-    columns: number,
-    depth: ColorDepth = 4,
-  ) => {
-    let text = ''
-    const renderer = new PlainRenderer({
-      out: { write: (chunk: string) => (text += chunk) },
-      colors: colors(output.color, depth),
-      output,
-      harness: 'cursor',
-      now: () => T0,
-      timers: false,
-      columns,
-    })
-    for (const e of events) renderer.onEvent(e)
-    renderer.close()
-    return text
-  }
-  const rich = options({ statusLine: true, color: true, rich: true, logOrder: 'stream' })
   // test/fixtures/ui/<name>.txt, without color, or with its codes and ESC as ␛;
   // REEVAL_UPDATE_SNAPSHOTS=1 rewrites them.
   const golden = (name: string, text: string, keepColor = false) => {
@@ -838,40 +841,88 @@ describe('run header', () => {
     assert.equal(last({ ...rich, outputLogs: 'none' }), '  ◆  Running...')
   })
 
-  test('off a terminal: the plan line, warning: and hint: lines, and the run line, as before', () => {
-    assert.equal(
-      draw([planEvent(), ...prepared], options({ logOrder: 'stream' }), 100),
-      lines(
-        PLAN_LINE,
-        `warning: ${unpinned('agent-skills')}`,
-        `warning: ${unpinned('firebaseui-web')}`,
-        "hint: 1 compare runs once per cell; below 4 runs a side its lift shows only a direction and its effort can't be tested (profile smoke's limit.runs caps it; --runs 4 replaces it)",
-        'preparing 1 sandbox: docker',
-        '✓ docker ready 12s',
-        `reeval 0.16.1 · run ${header.runId} · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 8 · stream logs`,
-      ),
-    )
+  test('off a terminal (a pipe, CI, --ui plain): the same header block, without color', () => {
+    const events = [planEvent(), ...prepared]
+    const piped = draw(events, options({ logOrder: 'stream' }), 100)
+    assert.equal(piped, stripAnsi(draw(events, rich, 100)))
+    assert.ok(!piped.includes('\x1b['))
+    assert.match(piped, /^REEVAL v0\.16\.1\n/)
+    assert.match(piped, /\n {2}◆ {2}Streaming logs\.\.\.\n/)
   })
 })
 
 describe('agent renderer', () => {
-  test('prints the plan as plain lines', () => {
+  test('prints the header block a terminal does, without color', () => {
     let text = ''
-    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
+    const renderer = new AgentRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      output: options({ mode: 'agent' }),
+    })
     renderer.onEvent(planEvent())
-    assert.match(text, /^plan {2}run .*\nwarning: skill\.git.*\nwarning: .*\nhint: 1 compare/)
+    assert.equal(text, stripAnsi(draw([planEvent()], rich, 100)))
     assert.ok(!text.includes('\x1b['))
   })
 
   test('prints nothing per attempt, then the result without color', () => {
     let text = ''
-    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
+    const renderer = new AgentRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      output: options({ mode: 'agent' }),
+    })
     for (const e of interleaved) renderer.onEvent(e)
     assert.equal(
       text,
-      lines('reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file', ...result(false)),
+      lines('  ◆  Running...', ...result(false)),
     )
     assert.ok(!text.includes('\x1b['))
+  })
+})
+
+describe('interactive renderer', () => {
+  const interactive = (load: () => Promise<never>) => {
+    let text = ''
+    const out = { isTTY: true, write: (chunk: string) => ((text += chunk), true) }
+    const renderer = new InteractiveRenderer({
+      out,
+      stdout: out as never,
+      stdin: {} as never,
+      colors: colors(false),
+      output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+      harness: 'cursor',
+      now: () => T0,
+      timers: false,
+      load,
+    })
+    return { renderer, text: () => text }
+  }
+
+  test('quitting the list leaves the whole list in the scrollback, as a pipe prints it', async () => {
+    const { renderer, text } = interactive(
+      async () =>
+        ({
+          mountList: () => ({ waitUntilExit: async () => {}, unmount: () => {} }),
+        }) as never,
+    )
+    for (const e of interleaved) renderer.onEvent(e)
+    renderer.close()
+    await renderer.wait()
+    assert.equal(text(), lines('  ◆  Finished.', ...RESULT))
+  })
+
+  test("if Ink can't load, the run prints as a pipe's does, and wait resolves", async () => {
+    const { renderer, text } = interactive(() => Promise.reject(new Error("Cannot find package 'ink'")))
+    for (const e of interleaved) renderer.onEvent(e)
+    await renderer.wait()
+    renderer.close()
+    assert.equal(
+      text(),
+      lines(
+        'stdout | seeding greet.js',
+        "Couldn't draw the interactive list (Cannot find package 'ink').",
+        '  ◆  Finished.',
+        ...RESULT,
+      ),
+    )
   })
 })
 
@@ -962,17 +1013,6 @@ describe('output mode', () => {
       () => resolve({}, true, undefined, { outputLogs: 'some' }),
       /--output-logs is one of full, errors-only, none, auto \(got some\)/,
     )
-  })
-
-  test('rich: the header block and glyphs only on a color terminal outside CI, unless --ui names the mode', () => {
-    assert.equal(resolve({}).rich, true)
-    assert.equal(resolve({ NO_COLOR: '1' }).rich, false)
-    assert.equal(resolve({ FORCE_COLOR: '0' }).rich, false)
-    assert.equal(resolve({ FORCE_COLOR: '1' }, false).rich, false, 'a pipe stays plain')
-    assert.equal(resolve({ CI: '1' }).rich, false)
-    assert.equal(resolve({ GITHUB_ACTIONS: 'true' }, false).rich, false)
-    assert.equal(resolve({}, true, 'cursor').rich, false)
-    assert.equal(resolve({}, true, undefined, { ui: 'plain' }).rich, false)
   })
 
   test('heartbeat: 60s by default, configurable, off for agents', () => {

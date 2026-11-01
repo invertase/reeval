@@ -9,6 +9,7 @@
 // - A compare reads `Baseline <arm> passed N of M.`, then `Variants, by pass rate:` with one line per
 //   variant, highest pass rate first, naming the harnesses only where their pass rates differ, and
 //   `, not by minLift N` after the effect when the variant's lift (a family's pooled one) missed it.
+//   With `-v`, each of its cells' difference and 95% interval follows, as the result blocks print it.
 // - A family whose cases didn't all pass names them: `Failed cases: green, blue.` (the first eight,
 //   then `and N more`).
 // - Failed checks: `Every failure was the same check:` for one, `N checks failed:` for several,
@@ -36,7 +37,7 @@ import {
   isNotGatedResult,
   type SuiteResult,
 } from '../view/suite.ts'
-import { checkLabel } from './layout.ts'
+import { checkLabel, statsLine } from './layout.ts'
 import { shownRemarks } from './remarks.ts'
 
 export type StatusIcon = 'queued' | 'running' | 'pass' | 'fail' | 'observe' | 'skipped' | 'canceled'
@@ -171,7 +172,12 @@ function minLiftShort(e: EvalResult, own: CellResult[]): string {
   return missed == null ? '' : `, not by minLift ${Math.round(missed * 100)}`
 }
 
-function compareLines(record: RunRecord, e: EvalResult, cells: CellResult[]): DetailLine[] {
+function compareLines(
+  record: RunRecord,
+  e: EvalResult,
+  cells: CellResult[],
+  verbose: boolean,
+): DetailLine[] {
   const base = cells.filter((c) => c.baseline)
   const name = (c: CellResult) => (c.environment === '-' ? 'no environment' : c.environment)
   const baseTally = tallyBy(base, () => 'baseline')[0] ?? { passed: 0, counted: 0 }
@@ -207,6 +213,12 @@ function compareLines(record: RunRecord, e: EvalResult, cells: CellResult[]): De
       depth: 1,
       text: `${r.v.padEnd(width)}  ${of(r.t)}${word}${disagreement(record, r.own)}`,
     })
+    if (!verbose) continue
+    for (const cell of r.own) {
+      const stats = statsLine(cell, cells)
+      const who = r.own.length > 1 ? `${harnessLabel(record, cell)}: ` : ''
+      if (stats) lines.push({ depth: 2, text: `${who}${stats}`, tone: 'dim' })
+    }
   }
   return lines
 }
@@ -375,7 +387,12 @@ function iconOf(e: EvalResult): StatusIcon {
   return 'fail'
 }
 
-export function evalRow(record: RunRecord, e: EvalResult, remarks: Remark[]): StatusRow {
+export function evalRow(
+  record: RunRecord,
+  e: EvalResult,
+  remarks: Remark[],
+  verbose = false,
+): StatusRow {
   const cells = cellsOf(e)
   const decide = deciding(cells)
   const passed = decide.reduce((n, c) => n + c.passed, 0)
@@ -395,7 +412,7 @@ export function evalRow(record: RunRecord, e: EvalResult, remarks: Remark[]): St
   const detail = ran
     ? [
         ...(compare
-          ? compareLines(record, e, cells)
+          ? compareLines(record, e, cells, verbose)
           : [
               {
                 depth: 0,
@@ -456,6 +473,7 @@ export function statusList(input: ListInput): StatusList {
         record,
         e,
         shown.filter((r) => r.evalId === e.path),
+        input.verbose,
       ),
     ),
   }))

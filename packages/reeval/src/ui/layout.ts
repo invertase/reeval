@@ -285,7 +285,7 @@ const effectText = (c: Colors, effect: Effect | null): Text => {
 const signedPoints = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
 
 /** `-v`: a variant's difference from its baseline and the interval its effect comes from. */
-function statsLine(cell: CellResult, cells: CellResult[]): string | null {
+export function statsLine(cell: CellResult, cells: CellResult[]): string | null {
   const base = cells.find((x) => x.key === cell.vs)
   if (!base || !cell.interval) return null
   const rate = (x: CellResult) => (x.passed + x.failed ? x.passed / (x.passed + x.failed) : 0)

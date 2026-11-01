@@ -208,7 +208,10 @@ export class LiveList {
       rows.push(this.#row(e))
       by.set(e.file, rows)
     }
-    return [...by].map(([path, rows]) => ({ path, rows }))
+    // In path order, as the finished list has them, whichever file's worker collected first.
+    return [...by]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([path, rows]) => ({ path, rows }))
   }
 
   #row(e: LiveEval): StatusRow {

@@ -1,19 +1,23 @@
-// For coding agents running `reeval run`: they read every line back into context, so nothing
-// prints while attempts run but what needs attention now (a sandbox that failed to prepare, a
-// warning), and the run ends with the same status list as CI, without color or tree glyphs.
-import { sandboxWarningLine } from '../text.ts'
+// For coding agents running `reeval run`: they read every line back into context, so after the
+// run header (the one every mode prints, without color) nothing prints while attempts run but
+// what needs attention now (a sandbox that failed to prepare, a warning), and the run ends with
+// the same status list as CI, without color or tree glyphs.
 import { suiteResult } from '../view/suite.ts'
 import { colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
-import { attemptAxes, debugLines, prepareLines, progressLine } from './format.ts'
+import type { OutputOptions } from './mode.ts'
+import { attemptAxes, debugLines, progressLine } from './format.ts'
+import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
 import { listLines } from './list.ts'
 import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 
 const MAX_LINES = 12
+const WIDTH = 100
 
 export type AgentRendererOptions = {
   out: OutputStream
+  output: OutputOptions
   verbosity?: 0 | 1 | 2
 }
 
@@ -35,14 +39,11 @@ export class AgentRenderer implements Renderer {
   onEvent(e: ReevalEvent): void {
     switch (e.type) {
       case 'plan':
-        this.#write(e.line)
-        for (const line of e.details) this.#write(line)
-        for (const w of e.warnings) this.#write(`warning: ${w}`)
-        for (const h of e.hints) this.#write(`hint: ${h}`)
-        for (const w of e.sandboxWarnings ?? []) this.#write(sandboxWarningLine(w))
+        for (const line of planLines(this.#c, e, WIDTH)) this.#write(line)
         return
       case 'run-start':
-        this.#write(`reeval run: ${e.runId} · ${e.files} eval file${e.files === 1 ? '' : 's'}`)
+        // No attempt's logs print here, whatever --output-logs says.
+        this.#write(startLine(this.#c, { ...this.#o.output, outputLogs: 'none' }))
         return
       case 'collected':
         this.#tags.addFile(e.evals)
@@ -66,10 +67,10 @@ export class AgentRenderer implements Renderer {
         return
       }
       case 'prepare':
-        for (const line of prepareLines(this.#c, e, MAX_LINES)) this.#write(line)
+        for (const line of prepareStepLines(this.#c, e, WIDTH, MAX_LINES)) this.#write(line)
         return
       case 'notice':
-        if (e.level !== 'info') this.#write(e.text)
+        for (const line of noticeLines(this.#c, e, WIDTH)) this.#write(line)
         return
       case 'run-end': {
         this.#write('')

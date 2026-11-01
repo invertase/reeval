@@ -1,8 +1,7 @@
-// The terminal's output while a run goes, append-only for CI, pipes and `| tee`: the run header,
-// a progress line on a timer, then the status list once the run ends, failures expanded. With
-// `--output-logs`, each attempt's logs in Turborepo's stream and grouped log orders too, and on a
-// TTY (`live`) one status line under them that's rewritten in place.
-import { sandboxWarningLine } from '../text.ts'
+// The terminal's output while a run goes, append-only for CI, pipes and `| tee`: the run header
+// as the interactive list prints it, a progress line on a timer, then the status list once the
+// run ends, failures expanded. With `--output-logs`, each attempt's logs in Turborepo's stream and
+// grouped log orders too, and on a TTY one status line under them that's rewritten in place.
 import type { SandboxWarning } from '../types.ts'
 import { suiteResult } from '../view/suite.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
@@ -26,7 +25,7 @@ import {
   prepareLines,
   progressLine,
 } from './format.ts'
-import { headerLines, noteLines, noticeLines, prepareStepLines, startLine } from './header.ts'
+import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
 import { LiveList, listLines, progressText } from './list.ts'
 import type { OutputOptions } from './mode.ts'
 import { pointerLine, statusList } from './status.ts'
@@ -187,28 +186,13 @@ export class PlainRenderer implements Renderer {
     switch (e.type) {
       case 'run-start': {
         this.#runStartedAt = e.at
-        if (this.#o.output.rich) {
-          this.#write(startLine(c, this.#o.output))
-          this.#write('')
-          return
-        }
-        const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
-        const order =
-          this.#o.output.outputLogs === 'none' ? '' : ` · ${this.#o.output.logOrder} logs`
-        const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
-        this.#write(c.dim(`reeval ${e.version} · run ${e.runId} · ${files} · ${setup}${order}`))
+        this.#write(startLine(c, this.#o.output))
+        this.#write('')
         return
       }
       case 'plan':
-        if (this.#o.output.rich) {
-          this.#richPlan(e)
-          return
-        }
-        this.#write(e.line)
-        for (const line of e.details) this.#write(c.dim(line))
-        for (const w of e.warnings) this.#write(c.yellow(`warning: ${w}`))
-        for (const h of e.hints) this.#write(c.dim(`hint: ${h}`))
-        for (const w of e.sandboxWarnings ?? []) this.#sandboxWarning(w)
+        for (const line of planLines(c, e, this.#columns)) this.#write(line)
+        if (this.#o.output.githubActions) for (const w of e.sandboxWarnings ?? []) this.#annotate(w)
         return
       case 'collected':
         this.#list.collected(e.file, e.evals)
@@ -275,10 +259,7 @@ export class PlainRenderer implements Renderer {
         this.#drawStatus()
         return
       case 'prepare': {
-        const lines = this.#o.output.rich
-          ? prepareStepLines(c, e, this.#columns, ERROR_LINES)
-          : prepareLines(c, e, ERROR_LINES)
-        for (const line of lines) this.#write(line)
+        for (const line of prepareStepLines(c, e, this.#columns, ERROR_LINES)) this.#write(line)
         if (e.state === 'failed' && this.#o.output.githubActions) {
           const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
           const what = target.kind === 'workspace' ? 'The' : 'Sandbox'
@@ -288,12 +269,7 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'notice': {
-        if (this.#o.output.rich) {
-          for (const line of noticeLines(c, e, this.#columns)) this.#write(line)
-          return
-        }
-        const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
-        this.#write(paint(e.text))
+        for (const line of noticeLines(c, e, this.#columns)) this.#write(line)
         return
       }
       case 'run-end': {
@@ -319,35 +295,8 @@ export class PlainRenderer implements Renderer {
     return this.#o.columns || 80
   }
 
-  /** The plan as the rich header: its facts, `--dry-run`'s table, then each kind of note. */
-  #richPlan(e: Extract<ReevalEvent, { type: 'plan' }>) {
-    const c = this.#c
-    const width = this.#columns
-    for (const line of headerLines(c, e.header, width)) this.#write(line)
-    const sections = [
-      // Flush left: the table is about as wide as a terminal already.
-      e.details,
-      [
-        ...e.warnings.flatMap((w) => noteLines(c, 'warning', w, width)),
-        ...(e.sandboxWarnings ?? []).flatMap((w) =>
-          noteLines(c, w.kind === 'root' ? 'root' : 'warning', w.message, width),
-        ),
-      ],
-      e.hints.flatMap((h) => noteLines(c, 'hint', h, width)),
-    ]
-    for (const lines of sections) {
-      if (!lines.length) continue
-      this.#write('')
-      for (const line of lines) this.#write(line)
-    }
-    this.#write('')
-  }
-
-  #sandboxWarning(w: SandboxWarning) {
-    const c = this.#c
-    const line = sandboxWarningLine(w)
-    this.#write(w.kind === 'root' ? c.bold(c.red(line)) : c.yellow(line))
-    if (!this.#o.output.githubActions) return
+  /** The header block names a sandbox warning; GitHub Actions also annotates it. */
+  #annotate(w: SandboxWarning) {
     const file = w.file ? `file=${ghEscape(w.file, true)},` : ''
     const title = w.kind === 'root' ? 'Sandbox runs as root' : 'Sandbox has extra capabilities'
     this.#write(`::warning ${file}title=${ghEscape(title, true)}::${ghEscape(w.message)}`)
