@@ -34,18 +34,43 @@ pnpm reeval run --dry-run --profile nightly
 ```
 
 ```text
-plan  run … · 1 eval · 1 cell · 2 attempts · ~2s serial (~1s at concurrency 4)
+REEVAL v0.17.2  dry run
+
+  ➜  Run:       20261101T222107Z_…
+  ➜  Harness:   fake
+  ➜  Sandbox:   fake
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 2 attempts
+  ➜  Est. Time: ~1s (concurrency: 4) · ~2s (serial)
+
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         2     2
-plan  run … · profile pr (auto: CI is set) · 1 eval · 1 cell · 1 attempt · ~1s serial · budget 10 attempts ✓
+
+REEVAL v0.17.2  dry run
+
+  ➜  Run:       20261101T222108Z_…
+  ➜  Profile:   pr (auto: CI is set)
+  ➜  Harness:   fake
+  ➜  Sandbox:   fake
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt (budget: 10 ✓)
+  ➜  Est. Time: ~1s (serial)
+
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         1     1         runs 2 → 1 (profile pr)
-plan  run … · profile nightly (--profile) · 1 eval · 1 cell · 4 attempts · ~4s serial (~1s at concurrency 4) · budget 2h
+
+REEVAL v0.17.2  dry run
+
+  ➜  Run:       20261101T222108Z_…
+  ➜  Profile:   nightly
+  ➜  Harness:   fake
+  ➜  Sandbox:   fake
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 4 attempts (budget: 2h)
+  ➜  Est. Time: ~1s (concurrency: 4) · ~4s (serial)
+
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         4     4
 ```
 
-The plan line says which profile applied and why, and the notes say what its `limit` changed.
+The `Profile:` line says which profile applied and why, and the notes say what its `limit` changed.
 
 | File | What it is |
 |---|---|

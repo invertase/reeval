@@ -29,11 +29,15 @@ one profile you need.
 named after the sandbox's `id`:
 
 ```text
-preparing 1 sandbox: python
-✓ python ready 23s
-reeval 0.13.0 · run … · 1 eval file · harness fake · sandbox python · concurrency 4 · stream logs
+…
+  ➜  Sandbox:   python
+…
+  ◆  Preparing 1 sandbox (python)...
+  ✓  python ready 20s
+  ◆  Running...
 
-pass             writes and tests fizzbuzz in Python
+with-python-image.eval.ts
+└─ ✓ writes and tests fizzbuzz in Python  1 of 1 run passed
 ```
 
 `pnpm reeval image build --dry-run` then shows the image reeval built on the tag's digest:
