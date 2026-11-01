@@ -37,9 +37,9 @@ change, here the one-line fix, with `test/` untouched:
    const middle = Math.floor(sorted.length / 2)
 ```
 
-The guard is `toHaveChanged`, not `toHaveEdited`: `toHaveEdited` reads the transcript, so a test
-rewritten by a shell command or a script slips past it, while `toHaveChanged` reads the workspace's
-diff. [`with-oracle-canary`](../with-oracle-canary) proves a guard like this one fails a cheat.
+The guard is `toHaveChanged`, which reads the workspace's diff, so a test rewritten by a shell
+command or a script counts, and its globs match exact paths.
+[`with-oracle-canary`](../with-oracle-canary) proves a guard like this one fails a cheat.
 
 | File | What it is |
 |---|---|

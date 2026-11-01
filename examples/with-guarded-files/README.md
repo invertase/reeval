@@ -36,7 +36,8 @@ fail             adds clamp without new dependencies
 ```
 
 `not.toHaveChanged` reads the workspace diff, so a write from a shell command such as
-`npm install` counts too. `toHaveEdited` reads the transcript instead, and isn't a guard.
+`npm install` counts too. Its globs match exact paths, while `toHaveEdited`'s string matches any
+path containing it, so guard with `toHaveChanged`.
 
 | File | What it is |
 |---|---|

@@ -136,14 +136,16 @@ The assertion passes when at least one changed file matches one of the patterns.
 
 ## `toHaveEdited()`
 
-`toHaveEdited(path?)` reads the transcript's `file-edit` events. With a `path`, a tool call whose target or output mentions the path counts too. The subject is a turn from `c.send()` or `c`.
+`toHaveEdited(path?)` reads the transcript's `file-edit` events and the workspace files that changed while the agent ran the turn. A file written from the shell (a heredoc, `sed -i`) or by a script counts, and a command that only reads a file doesn't. The subject is a turn from `c.send()`, which counts only its own changes, unlike its cumulative `diff`, or `c`, which counts every turn's. Changes the eval makes between turns, with `c.exec` or `c.writeFile`, aren't the agent's and don't count.
 
 ```ts
     expect(turn, 'edited the test').toHaveEdited('src/user.test.ts')
 ```
 
+`toHaveEdited()` counts files that appear in the workspace diff. Gitignored files don't appear there, so use `toHaveFile()` to check them. A rename counts both paths, and a deletion or `chmod` counts. A file changed back within the turn doesn't, and a `c.exec` running alongside `c.send` counts as the turn's.
+
 <Property name="path" type="string | RegExp" optional>
-  Text the edited path contains, or a regular expression it matches. Without a path, any `file-edit` event passes.
+  Text the edited path contains, or a regular expression it matches. Without a path, any `file-edit` event or changed file passes.
 </Property>
 
 ## `toHaveRun()`

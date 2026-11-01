@@ -104,14 +104,6 @@ const commandOf = (event: ToolEvent): string => {
   return typeof command === 'string' ? command : ''
 }
 
-const outputText = (output: unknown): string =>
-  typeof output === 'string' ? output : JSON.stringify(output ?? '')
-
-const mentionsPath = (event: ToolEvent, path: RegExp | string): boolean => {
-  const target = toolTarget(event.input, event.tool)
-  return matches(target, path) || matches(outputText(event.output), path)
-}
-
 function webEvent(
   matcher: string,
   actual: unknown,
@@ -220,19 +212,28 @@ export function ran(actual: unknown, command?: RegExp | string): Result {
   }
 }
 
+/**
+ * The workspace files that changed while the agent ran a turn, set on each turn `c.send` returns.
+ * Not the turn's `diff`, which also has earlier turns' changes and the eval's own writes.
+ */
+export const TURN_EDITED: unique symbol = Symbol('reeval.turnEdited')
+
+const editedIn = (turn: unknown): string[] => {
+  if (!isObjectLike(turn)) return []
+  const own = (turn as { [TURN_EDITED]?: unknown })[TURN_EDITED]
+  if (Array.isArray(own)) return own
+  return hasDiff(turn) ? turn.diff.files.map((f) => f.path) : []
+}
+
+/**
+ * Edit tools' `file-edit` events and the files the turn changed in the workspace, so a file
+ * written from the shell or by a script counts, and one only read doesn't.
+ */
 export function edited(actual: unknown, path?: RegExp | string): Result {
   const { transcript } = transcriptSubject(actual, 'toHaveEdited')
-  const edits = editsOf(transcript)
-  const calls = toolsOf(transcript)
-  const fileHit = edits.some((e) => matches(e.path, path))
-  const toolHit = path !== undefined && calls.some((e) => mentionsPath(e, path))
-  const pass = fileHit || toolHit
-  const seen = [
-    ...edits.map((e) => e.path),
-    ...calls
-      .filter((e) => path !== undefined && mentionsPath(e, path))
-      .map((e) => `${e.tool} ${toolTarget(e.input, e.tool)}`),
-  ]
+  const changed = isContext(actual) ? actual.turns.flatMap(editedIn) : editedIn(actual)
+  const seen = [...new Set([...editsOf(transcript).map((e) => e.path), ...changed])]
+  const pass = seen.some((p) => matches(p, path))
   return {
     pass,
     message: () =>

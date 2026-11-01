@@ -13,6 +13,7 @@ import {
   fetched,
   ran,
   searched,
+  TURN_EDITED,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
@@ -185,13 +186,49 @@ describe('ran', () => {
 })
 
 describe('edited', () => {
-  test('matches a file-edit, or a tool that names the path', () => {
+  const withDiff = (transcript: TranscriptEvent[], ...paths: string[]) => ({
+    ...turnOf(transcript),
+    diff: { patch: '', files: paths.map((path) => ({ path, status: 'added' as const })) },
+  })
+  const heredoc = tool('bash', { command: "cat <<'EOF' > notes.txt\nhello\nEOF" }, '')
+
+  test('matches a file-edit, or a file in the workspace diff', () => {
     const file = turnOf([edit('notes.txt')])
-    const shell = turnOf([tool('bash', { command: 'echo x > notes.txt' }, 'wrote notes.txt')])
+    const shell = withDiff([heredoc], 'notes.txt')
     assert.equal(edited(file, 'notes.txt').pass, true)
     assert.equal(edited(file).pass, true)
     assert.equal(edited(shell, 'notes.txt').pass, true)
+    assert.equal(edited(shell).pass, true)
     assert.equal(edited(file, 'other.txt').pass, false)
+    assert.equal(edited(shell, /^other/).pass, false)
+  })
+
+  test("doesn't count a tool that only names the path", () => {
+    const read = withDiff([tool('bash', { command: 'cat notes.txt' }, 'hello')])
+    assert.equal(edited(read, 'notes.txt').pass, false)
+    assert.equal(edited(read).pass, false)
+    assert.equal(edited(turnOf([heredoc]), 'notes.txt').pass, false)
+    expect(read).not.toHaveEdited('notes.txt')
+  })
+
+  test('reads the files the turn changed, not its cumulative diff', () => {
+    const first = { ...withDiff([heredoc], 'notes.txt'), [TURN_EDITED]: ['notes.txt'] }
+    const second = { ...withDiff([], 'notes.txt'), [TURN_EDITED]: [] }
+    expect(first).toHaveEdited('notes.txt')
+    expect(second).not.toHaveEdited('notes.txt')
+    expect({ turns: [first, second] }).toHaveEdited('notes.txt')
+    assert.equal(edited({ turns: [] }).pass, false)
+  })
+
+  test('names the files it saw, once', () => {
+    throws(
+      () => expect(withDiff([edit('notes.txt')], 'notes.txt', 'a.txt')).toHaveEdited('b.txt'),
+      'expected file edits matching b.txt, got ["notes.txt","a.txt"]',
+    )
+    throws(
+      () => expect(withDiff([heredoc], 'notes.txt')).not.toHaveEdited('notes.txt'),
+      'expected no file edits matching notes.txt, got ["notes.txt"]',
+    )
   })
 })
 

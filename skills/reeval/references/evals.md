@@ -146,8 +146,8 @@ npx reeval run --profile canary           # the checks you meant fail, exit 1
 Keep grading out of the
 agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees
 them, seed tests in `files` only when the agent should see them, and guard seeded files
-with `expect(await c.readFile(path)).toBe(original)`. `not.toHaveEdited(path)` is not a guard:
-a read of the file trips it and a script's write slips past. When the behavior is the
+with `expect(await c.readFile(path)).toBe(original)` or `expect(c).not.toHaveChanged(path)`.
+When the behavior is the
 outcome, judge the program's output, not the diff:
 `c.judge(q, { on: (await c.exec('node app.js')).stdout, output: true })`. Checks run in the agent's
 container as the same user, which suits AX evals but isn't a sealed verifier.
@@ -174,7 +174,10 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
 - Guard files the agent must leave alone with `expect(c).not.toHaveChanged(['test/**',
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
-  and a turn means up to that turn. `toHaveEdited` reads the transcript; don't use it as a guard.
+  and a turn means up to that turn. `toHaveEdited` counts the files that changed while the agent
+  ran the turn (a turn only its own), so a shell write counts, but its string matches any path
+  containing it; guard with `toHaveChanged`'s globs. `toHaveEdited()` counts files that appear
+  in the workspace diff. Gitignored files don't appear there, so use `toHaveFile()` to check them.
 - Checks don't stop the eval: a failed `expect` is recorded and the body carries on, so every
   later check and judge still runs; the attempt fails at its end. Use `expect.require` for gates:
   its failure ends the body there (`await expect.require(c.exec('npm run build'), 'builds')
