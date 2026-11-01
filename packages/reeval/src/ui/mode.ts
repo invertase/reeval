@@ -14,15 +14,15 @@ export type OutputOptions = {
   mode: UiMode
   /** A status line under the output: on a TTY outside CI, unless `--ui` named the mode. */
   statusLine: boolean
+  /**
+   * The status list you can browse with the arrow keys, during the run and after it: where the
+   * status line would be, with a TTY to read keys from and no attempt logs asked for.
+   */
+  interactive: boolean
   logOrder: LogOrder
   logPrefix: LogPrefix
   outputLogs: OutputLogs
   color: boolean
-  /**
-   * The run header as a block, with glyphs: on a color TTY outside CI, unless `--ui` named the
-   * mode. Otherwise every line stays plain and greppable.
-   */
-  rich: boolean
   /** `::group::` blocks and `::error::` annotations. */
   githubActions: boolean
   /** A "still running" line after this much silence; 0 turns it off. */
@@ -87,6 +87,8 @@ export function resolveOutput(input: {
   isTTY: boolean
   /** The coding agent running us, from std-env's `detectAgent()`. */
   agent: string | undefined
+  /** Whether stdin is a TTY, which the interactive list reads keys from. */
+  stdinTTY?: boolean
 }): OutputOptions {
   const { flags, env } = input
   const ci = isCI(env)
@@ -116,9 +118,8 @@ export function resolveOutput(input: {
     'errors-only',
     'none',
   ] as const)
-  // A passing attempt's detail would sit above the summary that matters, so only failures show it.
-  const outputLogs: OutputLogs =
-    logs && logs !== 'auto' ? logs : flags.verbose ? 'full' : 'errors-only'
+  // The status list at the end says how each eval went, so attempt logs print only when asked for.
+  const outputLogs: OutputLogs = logs && logs !== 'auto' ? logs : flags.verbose ? 'full' : 'none'
 
   // GitHub Actions renders ANSI color even though stdout isn't a TTY.
   const color = env.NO_COLOR
@@ -132,11 +133,11 @@ export function resolveOutput(input: {
   return {
     mode,
     statusLine,
+    interactive: statusLine && !!input.stdinTTY && outputLogs === 'none',
     logOrder,
     logPrefix,
     outputLogs,
     color,
-    rich: statusLine && color,
     githubActions,
     heartbeatMs: mode === 'agent' ? 0 : parseHeartbeat(env.REEVAL_HEARTBEAT),
   }

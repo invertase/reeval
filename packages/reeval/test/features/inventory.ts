@@ -1621,6 +1621,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/replay-telemetry.test.ts'],
   },
   {
+    id: 'effort.files-changed',
+    area: 'Records and studio',
+    name: "Each turn's files changed from the workspace diff, a file the shell wrote included, on its turn line, in `debug.log` and beside the edit tool calls in summary.md and the studio",
+    fixtures: ['run/files-changed'],
+    unit: ['reeval/test/unit.test.ts', 'reeval/test/studio.test.ts'],
+  },
+  {
     id: 'effort.separation',
     area: 'Records and studio',
     name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`)',
@@ -1890,6 +1897,12 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: "The run header: on a color terminal outside CI, one block of the plan's facts with its warnings and hints wrapped to the width; elsewhere the plain plan line",
     unit: ['reeval/test/ui.test.ts'],
+  },
+  {
+    id: 'output.status-list',
+    area: 'CLI and runner',
+    name: "`reeval run`'s per-eval status list: one line a passing eval, a sentence for each way one failed (harnesses, checks, errors, a family's cases), `Worth knowing:` for its remarks, and on an interactive terminal an Ink list you browse with the arrow keys",
+    unit: ['reeval/test/status.test.ts', 'reeval/test/ink-list.test.ts', 'reeval/test/ui.test.ts'],
   },
   {
     id: 'output.flags',

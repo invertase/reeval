@@ -27,12 +27,12 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
 
 ## From a failure to what the agent did
 
-- The result blocks name each failed check with its message. Then `.reeval/runs/<run>/summary.md` and each attempt's
+- `reeval run`'s status list names each failed check with its message and line, and `reeval show` prints the result blocks. Then `.reeval/runs/<run>/summary.md` and each attempt's
   directory (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`,
   `setup.log`). `reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
 - Each attempt's directory in `.reeval/runs/<run>/` has `snapshots/final/`: its whole final
   workspace after the checks (the app the agent built, not only its diff), to read or run. A failed
-  attempt's result block prints its path. `snapshot: 'turns'` on an eval also keeps
+  attempt's result block in `reeval show` prints its path. `snapshot: 'turns'` on an eval also keeps
   `snapshots/turn-<n>/` after each `c.send`; `snapshot: { compress: true }` writes
   `<name>.tar.gz` instead; `snapshot: false` turns it off. Snapshots leave out `node_modules/`,
   `.git/` and caches, are capped (50 MB as a directory, 10 MB compressed), never go into the
@@ -73,11 +73,11 @@ check, so label your expects. `analysis.instructions` is the question it answers
 model), and the one questions without their own model use. `reeval init` sets it to `google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`;
 `AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
-`reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
+`reeval run` lists remarks under `Worth knowing:` beneath an eval that itself needs work, with no model: `flaky-check`,
 `slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `snapshot-too-large`, `too-few-tries` and `cant-tell-apart` (concerns,
 at most three), and
 with `-v` `check-never-fails` (a suggestion). They go in `remarks.json` beside
-the run, which `reeval record` copies into the history folder. Each names the source line to change (`fix  <file:line>`).
+the run, which `reeval record` copies into the history folder. Each names the source line to change (`Fix at <file:line>: …`).
 Act on them: raise `runs`, make a task both arms always pass harder, tighten or remove the check, bake the MCP server's dependencies into
 the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
 version (`too-few-tries`, `slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `snapshot-too-large`

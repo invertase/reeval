@@ -30,10 +30,15 @@ one profile you need.
 **What to look at:** the run names the sandbox `podman`:
 
 ```text
-preparing 1 sandbox: podman
-reeval 0.13.0 · run … · 1 eval file · harness fake · sandbox podman · concurrency 4 · stream logs
+…
+  ➜  Sandbox:   podman
+…
+  ◆  Preparing 1 sandbox (podman)...
+  ✓  podman ready 18s
+  ◆  Running...
 
-pass             adds a tested multiply function
+with-podman.eval.ts
+└─ ✓ adds a tested multiply function  1 of 1 run passed
 ```
 
 Rootless Podman without those cgroup controllers stops the run before it starts, rather than run

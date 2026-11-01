@@ -135,7 +135,7 @@ describe('verbosity', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.match(r.stdout, phaseLine(phase), phase)
     // Twin: agent mode's own output is still there, and nothing else of plain mode's.
-    assert.match(r.stdout, /^1 pass$/m)
+    assert.match(r.stdout, /^Done in \S+ · 1 passed$/m)
     assert.doesNotMatch(r.stdout, /▶ evals\/a\.eval\.ts/)
   })
 
@@ -306,7 +306,9 @@ evaluate('prints the dsn', { environment: env }, async (c) => {
 `,
     })
     for (const ui of ['plain', 'agent']) {
-      const r = await runCli(p.dir, ['run', '--ui', ui], { env: { REEVAL_DEBUG_DSN: DSN } })
+      const r = await runCli(p.dir, ['run', '--ui', ui, '--output-logs', 'errors-only'], {
+        env: { REEVAL_DEBUG_DSN: DSN },
+      })
       assert.equal(r.code, 1, r.stdout + r.stderr)
       const screen = r.stdout + r.stderr
       for (const n of [DSN.length, 12, 8]) {

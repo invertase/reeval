@@ -32,7 +32,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
-| [../eval-rubric/SKILL.md](../eval-rubric/SKILL.md) | A `Remarks:` block after a run, or reviewing an eval's name, prompts and judge questions: one section per remark kind, with its fix |
+| [../eval-rubric/SKILL.md](../eval-rubric/SKILL.md) | A `Worth knowing:` list after a run, or reviewing an eval's name, prompts and judge questions: one section per remark kind, with its fix |
 
 Use reeval's terms in code and messages: eval (`evaluate`), attempt (one run of a cell;
 `runs: n`), harness (`cursor()`, …), cell (harness × environment × sandbox), control and variant,
@@ -322,16 +322,17 @@ reeval analyze           reeval studio          reeval image build      reeval d
 | 2 | A usage or config error, including a filter that matches nothing |
 | 3 | An infra error, such as a sandbox that failed to start or a harness key the API rejected |
 
-`reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
-arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
-or `same`, and failed checks with their messages; `-v` adds intervals. Then the tally
-(`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
+`reeval run` ends with a status list: each eval file, a line per eval under it with its icon and
+`N of M runs passed`, and for a failure, a compare or an eval with remarks, a sentence for each
+way it went (the harnesses, a variant's effect as `helped`, `made it worse` or `same`, the failed
+checks with their messages and lines); `-v` expands every eval. Then the tally
+(`Done in 12s · 1 failed · 2 passed`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run; a study, every cell `gate: 'none'`, is `1 not gated`, never a pass,
-so read its arm rows for what passed). `Remarks:` after the tally names evals that need work
+so read its arm rows for what passed). `Worth knowing:` under an eval names what about it needs work
 (a flaky check, too few tries, a slow MCP server), with the line to fix, from fixed rules with no
 model; they never change a verdict or the exit code, and go in `remarks.json` beside the run. The
 eval rubric ([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind. `summary.md`
-and `reeval show` print the same blocks.
+and `reeval show` print the full result blocks, a table per arm and check.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

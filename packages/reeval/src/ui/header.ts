@@ -1,7 +1,7 @@
-// What `reeval run` prints before its logs on a color terminal (`OutputOptions.rich`): the plan as
-// a block of facts under a title, its warnings and hints wrapped to the terminal's width with a
-// hanging indent, and one line per step until the attempts start. Anywhere else the plan is one
-// greppable line, and these never print.
+// What `reeval run` prints before its logs, in every mode: the plan as a block of facts under a
+// title, its warnings and hints wrapped to the terminal's width with a hanging indent, and one
+// line per step until the attempts start. Off a color terminal the same lines print without
+// color, and off any terminal without wrapping, since whatever shows them wraps.
 import { formatDuration, plural } from '../text.ts'
 import { type Colors, type Paint, stripAnsi } from './colors.ts'
 import type { ReevalEvent, RunHeader } from './events.ts'
@@ -193,4 +193,38 @@ export function startLine(c: Colors, output: OutputOptions): string {
           ? 'Streaming logs...'
           : "Running; each attempt's logs print as it ends..."
   return `  ${c.teal('◆')}  ${text}`
+}
+
+/** What the start line becomes once the run ends, on a terminal that redraws it. */
+export function endLine(c: Colors, status: 'complete' | 'interrupted' | 'budget'): string {
+  const text =
+    status === 'interrupted'
+      ? 'Canceled.'
+      : status === 'budget'
+        ? 'Stopped at the budget.'
+        : 'Finished.'
+  return `  ${c.teal('◆')}  ${text}`
+}
+
+/** The plan as the header block: its facts, `--dry-run`'s table, then each kind of note. */
+export function planLines(
+  c: Colors,
+  e: Extract<ReevalEvent, { type: 'plan' }>,
+  width: number,
+): string[] {
+  const sections = [
+    // Flush left: the table is about as wide as a terminal already.
+    e.details,
+    [
+      ...e.warnings.flatMap((w) => noteLines(c, 'warning', w, width)),
+      ...(e.sandboxWarnings ?? []).flatMap((w) =>
+        noteLines(c, w.kind === 'root' ? 'root' : 'warning', w.message, width),
+      ),
+    ],
+    e.hints.flatMap((h) => noteLines(c, 'hint', h, width)),
+  ]
+  const out = headerLines(c, e.header, width)
+  for (const lines of sections) if (lines.length) out.push('', ...lines)
+  out.push('')
+  return out
 }

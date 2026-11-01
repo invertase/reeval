@@ -29,17 +29,26 @@ one profile you need.
 **What to look at:** with the token set, the plan says where it goes:
 
 ```text
-warning: E2E_TOKEN reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('E2E_TOKEN', { hosts: ['api.example.com'] }).
 …
-pass             keeps the test token from the agent
+  ➜  Record:    .reeval/runs/20261101T222122Z_….json
+
+  ⚠  Warning: E2E_TOKEN reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('E2E_TOKEN', { hosts: ['api.example.com'] }).
+…
+with-secret-for-checks.eval.ts
+└─ ✓ keeps the test token from the agent  1 of 1 run passed
 ```
 
 Change `to: 'checks'` to `to: 'agent'` and the first check fails:
 
 ```text
-fail             keeps the test token from the agent
-  the agent's env  failed
-    expected 'CURL_CA_BUNDLE=/etc/ssl/certs/ca-cert…' not to match /^E2E_TOKEN=/m
+with-secret-for-checks.eval.ts
+└─ ✗ keeps the test token from the agent  0 of 1 run passed
+     Failed on fake.
+     Every failure was the same check:
+       "the agent's env" failed once
+         expected 'CURL_CA_BUNDLE=/etc/ssl/certs/ca-cert…' not to match /^E2E_TOKEN=/m
+         at with-secret-for-checks.eval.ts:12
+     Snapshot: .reeval/runs/20261101T222130Z_…/snapshots/final
 ```
 
 | File | What it is |

@@ -61,7 +61,10 @@ export function progressLine(c: Colors, p: Progress): string {
       return `turn ${p.turn} started`
     case 'turn-end': {
       const status = p.status === 'completed' ? 'done' : c.red(p.status)
-      const activity = [plural(p.tools, 'tool call'), plural(p.fileEdits, 'file edit')].join(', ')
+      const activity = [
+        plural(p.tools, 'tool call'),
+        ...(p.filesChanged === undefined ? [] : [`${plural(p.filesChanged, 'file')} changed`]),
+      ].join(', ')
       const error = p.error ? `: ${c.red(oneLine(p.error, 160))}` : ''
       return `turn ${p.turn} ${status}${error} ${c.dim(`${formatDuration(p.ms)} · ${activity}`)}`
     }
@@ -225,28 +228,4 @@ function failureBody(
   return capLines(text.replace(/^\n+/, ''), options.max).map((l) =>
     c.enabled && body === message ? c.red(l) : l,
   )
-}
-
-/** Preflight's lines: which sandboxes it prepares, the slow ones when ready, and each failure. */
-export function prepareLines(
-  c: Colors,
-  e: Extract<ReevalEvent, { type: 'prepare' }>,
-  max: number,
-): string[] {
-  if (e.state === 'start') {
-    const n = e.targets.length
-    const names = e.targets.map((t) => t.label).join(', ')
-    return [c.dim(`preparing ${n} sandbox${n === 1 ? '' : 'es'}: ${names}`)]
-  }
-  const { outcome } = e
-  if (outcome.ok) {
-    return outcome.ms >= 1000
-      ? [c.dim(`${c.green('✓')} ${outcome.target.label} ready ${formatDuration(outcome.ms)}`)]
-      : []
-  }
-  const who = outcome.target.setBy.join(', ')
-  return [
-    `${c.red('✗')} ${outcome.target.label} failed to prepare ${c.dim(`(set by ${who}; only its attempts fail)`)}`,
-    ...tailLines(outcome.failure.message, max).map((l) => `  ${c.yellow(l)}`),
-  ]
 }

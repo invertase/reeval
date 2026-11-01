@@ -133,13 +133,26 @@ type Feature = {
   args?: string[]
 }
 
-/** The result block `reeval run` printed for one eval, from its verdict line to the blank line. */
+/** An eval's block in summary.md's results. */
 function blockOf(stdout: string, name: string): string {
   const lines = stdout.split('\n')
   const start = lines.findIndex((l) => new RegExp(`^\\S.* {2,}${name}$`).test(l))
   assert.ok(start >= 0, `no block for ${name}\n${stdout}`)
   const end = lines.indexOf('', start)
   return lines.slice(start, end < 0 ? undefined : end).join('\n')
+}
+
+/** An eval's entry in `reeval run`'s status list, its row and detail lines, without the tree. */
+function entryOf(stdout: string, name: string): string {
+  const lines = stdout.split('\n')
+  const row = new RegExp(`^\\s*(?:[├└]─ )?\\S+ ${name}  `)
+  const start = lines.findIndex((l) => row.test(l))
+  assert.ok(start >= 0, `no entry for ${name}\n${stdout}`)
+  const end = lines.findIndex((l, i) => i > start && (!l.trim() || /^\s*[├└]─ /.test(l)))
+  return lines
+    .slice(start, end < 0 ? undefined : end)
+    .map((l, i) => (i === 0 ? l.replace(/^\s*[├└]─ /, '') : l.replace(/^(?:│ {2}| {3})/, '')))
+    .join('\n')
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
@@ -2538,7 +2551,10 @@ export const features: Feature[] = [
       ]
       assert.deepEqual(observed('lands'), want, 'the last value per name, in first-call order')
       assert.deepEqual(observed('canary'), want, 'a failed attempt keeps what it observed')
-      assert.match(stdout, /observed\s+orm\s+drizzle 1\n\s+deps\s+drizzle-orm 1 · pg 1 · 1 attempt/)
+      assert.match(
+        stdout,
+        /Observed:\n[│ ]+orm +drizzle 1\n[│ ]+deps +drizzle-orm 1 · pg 1 · 1 attempt$/m,
+      )
     },
   },
   {
@@ -2562,15 +2578,19 @@ export const features: Feature[] = [
         ],
         'every failed expect is recorded, and nothing runs after the failed expect.require',
       )
-      const block = blockOf(stdout, 'lands')
+      const entry = entryOf(stdout, 'lands')
+      assert.match(entry, /^ +3 checks failed:$/m)
       for (const [label, line] of [
         ['says nope', 8],
         ['is the second', 9],
         ['gate', 11],
       ])
         assert.match(
-          block,
-          new RegExp(`^ {2}${label} +failed {2}evals/lands\\.eval\\.ts:${line}$`, 'm'),
+          entry,
+          new RegExp(
+            `^ +"${label}" failed once\\n(?: +.+\\n)*? +at evals/lands\\.eval\\.ts:${line}$`,
+            'm',
+          ),
         )
     },
   },
@@ -2596,7 +2616,7 @@ export const features: Feature[] = [
       assert.equal(canary?.exitCode, 1)
       assert.equal(canary?.retries, undefined, 'a check without retries records no tries')
       assert.equal(canary?.tries, undefined)
-      assert.match(blockOf(stdout, 'lands'), /^ {2}flaky passes +passed on try 2 of 3$/m)
+      assert.match(entryOf(stdout, 'lands'), /^ +"flaky passes" passed on try 2 of 3\.$/m)
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
       assert.match(summary, /- Check flaky passes exit 0 \(passed on try 2 of 3\): `test -f/)
     },
@@ -2790,9 +2810,9 @@ export const features: Feature[] = [
       assert.equal(page.errors.length, 2)
       assert.deepEqual(page.failedRequests, [{ method: 'GET', url: '/missing.js', status: 404 }])
       assert.match(
-        blockOf(stdout, 'lands'),
+        entryOf(stdout, 'lands'),
         new RegExp(
-          `^ {2}2 page errors in capture "home" → \\.reeval/runs/${run.runId}/.+/artifacts/home\\.capture\\.json$`,
+          `^ +2 page errors in capture "home" → \\.reeval/runs/${run.runId}/.+/artifacts/home\\.capture\\.json$`,
           'm',
         ),
       )
@@ -2831,7 +2851,7 @@ export const features: Feature[] = [
       const page = JSON.parse(readFileSync(join(runDir, art?.capture?.page?.path ?? ''), 'utf8'))
       assert.equal(page.status, 404)
       assert.equal(page.finalUrl, '/login')
-      assert.doesNotMatch(blockOf(stdout, 'lands'), /page error/)
+      assert.doesNotMatch(entryOf(stdout, 'lands'), /page error/)
     },
   },
   {
@@ -3295,6 +3315,27 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/files-changed',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    args: ['-v'],
+    canary: /to deeply equal \[\]/,
+    record: ({ run, stdout }) => {
+      const attempt = landed(run)
+      assert.equal(attempt?.activity.fileEdits, 0, 'the shell write is no edit tool call')
+      assert.deepEqual(
+        attempt?.changedFiles.map((f) => f.path),
+        ['note.txt', 'setup.txt'],
+      )
+      const turn = stdout.split('\n').find((l) => l.includes('lands') && /turn 1 done/.test(l))
+      assert.match(
+        turn ?? '',
+        /· 1 tool call, 1 file changed$/,
+        "the eval's own write isn't the turn's",
+      )
+    },
+  },
+  {
     dir: 'run/best-of',
     tiers: ['fake'],
     env: 'best-of',
@@ -3332,7 +3373,8 @@ export const features: Feature[] = [
         assert.equal(cell.bestOf, 3)
         assert.deepEqual(cell.gate, { passRate: 0.5 })
       }
-      assert.match(blockOf(stdout, 'canary'), /1 not needed \(best of 3\)/)
+      assert.match(entryOf(stdout, 'canary'), /✗ canary {2}0 of 2 runs passed$/m)
+      assert.match(entryOf(stdout, 'lands'), /✓ lands {2}2 of 3 runs passed$/)
     },
   },
   {
@@ -3341,12 +3383,19 @@ export const features: Feature[] = [
     env: '-',
     canary: /second try: expected 1 to be 2/,
     record: ({ stdout }) => {
-      assert.equal(blockOf(stdout, 'lands'), 'pass             lands')
+      assert.equal(entryOf(stdout, 'lands').trim(), '✓ lands  1 of 1 run passed')
       assert.equal(
-        blockOf(stdout, 'canary'),
-        'fail             canary\n  second try       failed  evals/canary.eval.ts:5\n    expected 1 to be 2 // Object.is equality',
+        entryOf(stdout, 'canary'),
+        [
+          '✗ canary  0 of 1 run passed',
+          '  Failed on fake.',
+          '  Every failure was the same check:',
+          '    "second try" failed once',
+          '      expected 1 to be 2 // Object.is equality',
+          '      at evals/canary.eval.ts:5',
+        ].join('\n'),
       )
-      assert.ok(stdout.endsWith('\n1 fail · 1 pass\n'), stdout)
+      assert.match(stdout, /\nDone in \S+ · 1 failed · 1 passed\n/)
     },
   },
   {
@@ -3387,10 +3436,14 @@ export const features: Feature[] = [
     canary: /has the marker: expected (file )?marker\.txt/,
     record: ({ stdout }) => {
       assert.match(
-        blockOf(stdout, 'lands'),
-        /^pass {13}lands\n {2}arm {14}pass\n {2}plain {12}0 of 1\n {2}marked {11}1 of 1 {2}helped\n {2}check {12}plain {3}marked\n {2}has the marker {3}0 of 1 {2}1 of 1\n/,
+        entryOf(stdout, 'lands'),
+        /✓ lands {2}1 of 1 variant run passed\n +Baseline plain passed 0 of 1\.\n +Variants, by pass rate:\n +marked {2}1 of 1 {2}helped\n +Every failure was the same check:\n +"has the marker" failed once, on the baseline\n/,
       )
-      assert.match(blockOf(stdout, 'canary'), /^ {2}marked {11}0 of 1 {2}same$/m)
+      assert.match(
+        entryOf(stdout, 'lands'),
+        /\n +Worth knowing:\n +The marked variant passed 1 of 1 run and the baseline 0 of 1: .+ Fix at evals\/lands\.eval\.ts:5: set runs: 4/,
+      )
+      assert.match(entryOf(stdout, 'canary'), /^ +marked {2}0 of 1 {2}same$/m)
       assert.doesNotMatch(stdout, /%|pass@1/)
     },
   },
@@ -3409,13 +3462,10 @@ export const features: Feature[] = [
       },
     },
     record: ({ stdout }) => {
-      assert.equal(
-        blockOf(stdout, 'lands'),
-        'pass             lands\n  harness          pass\n  writer           1 of 1\n  copier           1 of 1',
-      )
+      assert.equal(entryOf(stdout, 'lands').trim(), '✓ lands  2 of 2 runs passed')
       assert.match(
-        blockOf(stdout, 'canary'),
-        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist\n {4}snapshot {8}\.reeval\/runs\/\S+\/snapshots\/final$/,
+        entryOf(stdout, 'canary'),
+        /✗ canary {2}1 of 2 runs passed\n +writer passed 1 of 1, idler 0 of 1\.\n +Every failure was the same check:\n +"writes out\.txt" failed once, on idler\n +expected file out\.txt to exist\n +at evals\/canary\.eval\.ts:7\n +Snapshot: \S+\/snapshots\/final$/,
       )
     },
   },
@@ -3448,12 +3498,16 @@ export const features: Feature[] = [
       },
     },
     record: ({ stdout }) => {
-      const arms = (harness: string) =>
-        `  ${harness}\n    arm             pass\n    plain           0 of 1\n    marked          1 of 1  helped\n`
-      const lands = blockOf(stdout, 'lands')
-      assert.ok(lands.startsWith(`pass             lands\n${arms('writer')}`), lands)
-      assert.ok(lands.includes(`\n${arms('copier')}`), lands)
-      assert.equal(lands.match(/^ {4}check {11}plain {3}marked$/gm)?.length, 2, lands)
+      const lands = entryOf(stdout, 'lands')
+      assert.match(
+        lands,
+        /✓ lands {2}2 of 2 variant runs passed\n +Baseline plain passed 0 of 2\.\n +Variants, by pass rate:\n +marked {2}2 of 2 {2}helped\n/,
+      )
+      assert.match(lands, /"has the marker" failed 2 times, all on the baseline$/m)
+      assert.match(
+        lands,
+        /\n +Worth knowing:\n +The marked variant on writer passed 1 of 1 run .+ 1 more variant is too\. Fix at evals\/lands\.eval\.ts:7: set runs: 4/,
+      )
     },
   },
   {
@@ -3472,15 +3526,12 @@ export const features: Feature[] = [
       },
     },
     record: ({ stdout }) => {
+      assert.match(stdout, /✓ lands %s {2}2 of 2 runs passed\n\n/)
       assert.match(
         stdout,
-        /\n {17}lands %s\n {2}pass {2}red {8}1 of 1\n {2}pass {2}blue {7}1 of 1\n\n/,
+        /✗ canary %s {2}1 of 2 runs passed\n +Passed 1 of 2 on fake\.\n +Failed cases: green\.\n +Every failure was the same check:\n +"is red" failed once\n +expected 'green' to be 'red'/,
       )
-      assert.match(
-        stdout,
-        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed {2}evals\/canary\.eval\.ts:5\n {6}expected 'green' to be 'red'/,
-      )
-      assert.match(stdout, /\n1 fail · 3 pass\n/)
+      assert.match(stdout, /\nDone in \S+ · 1 failed · 3 passed\n/)
     },
   },
   {
@@ -3493,10 +3544,12 @@ export const features: Feature[] = [
     canary: /reached: expected 'control' to be 'variant'/,
     canaryPass: ['marked'],
     record: ({ stdout }) => {
-      const lands = blockOf(stdout, 'lands')
-      assert.match(lands, /^ {2}reached {10}not run {2}1 of 1$/m)
-      assert.doesNotMatch(lands, /reached +0 of/)
-      assert.match(blockOf(stdout, 'canary'), /^ {2}reached {10}0 of 1 {2}1 of 1$/m)
+      assert.doesNotMatch(
+        entryOf(stdout, 'lands'),
+        /"reached"/,
+        "a check the baseline never reached didn't fail",
+      )
+      assert.match(entryOf(stdout, 'canary'), /^ +"reached" failed once, on the baseline$/m)
     },
   },
   {
@@ -3511,10 +3564,10 @@ export const features: Feature[] = [
     canary: /second try: expected 1 to be 2/,
     record: ({ stdout }) => {
       assert.match(
-        blockOf(stdout, 'lands'),
-        /^infra error {6}lands\n {2}infra error {6}setup step 1\/1 "touch ran"/,
+        entryOf(stdout, 'lands'),
+        /✗ lands {2}0 of 1 run passed\n +No run finished\.\n +1 run hit an infrastructure error:\n +setup step 1\/1 "touch ran"/,
       )
-      assert.match(stdout, /\n1 fail · 1 infra error\n/)
+      assert.match(stdout, /\nDone in \S+ · 1 failed · 1 infra error\n/)
     },
   },
   {
@@ -3579,6 +3632,7 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker', 'real'],
     env: '-',
     canary: /expected.*to succeed/i,
+    args: ['--output-logs', 'errors-only'],
     prepare: (dir) => syncPythonFixtureProject(dir),
     record: ({ run, stdout }) => {
       const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
@@ -3707,7 +3761,7 @@ export const features: Feature[] = [
         ],
         'an eval declared skipped, or in a skipped group, is marked skip; one that ran is not',
       )
-      assert.match(stdout, /^skipped +parked$/m, 'a complete run shows a declared skip as skipped')
+      assert.match(stdout, /– parked +skipped$/m, 'a complete run shows a declared skip as skipped')
     },
   },
   {

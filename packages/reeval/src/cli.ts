@@ -383,6 +383,7 @@ async function runCommand(
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
+    tty: { stdout: process.stdout, stdin: process.stdin },
   })
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
@@ -511,7 +512,7 @@ async function runCommand(
     const { suiteResult } = await import('./view/suite.ts')
     process.stdout.write(`${JSON.stringify({ ...suiteResult(record), outcome: ran }, null, 2)}\n`)
   }
-
+  await renderer.wait?.()
   return code
 }
 
@@ -564,6 +565,7 @@ async function prepareRun(
     // A run's `--json` progress goes to stderr, so that's the stream whose terminal it draws on.
     isTTY: !!(flags.json && !flags['dry-run'] ? process.stderr : process.stdout).isTTY,
     agent: detectAgent().name,
+    stdinTTY: !!process.stdin.isTTY && !flags.json && !flags['dry-run'],
   })
   const path = requireConfig(configPath)
   loadEnvFiles(path)

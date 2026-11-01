@@ -3228,7 +3228,7 @@
           "enum": ["config", "eval", "group", "profile"]
         },
         "message": {
-          "description": "The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities).",
+          "description": "The line reeval prints after `⚠  Warning:`, in red for root and orange for capabilities.",
           "type": "string"
         },
         "where": {

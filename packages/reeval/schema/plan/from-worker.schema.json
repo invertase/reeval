@@ -2203,6 +2203,10 @@
             "fileEdits": {
               "type": "number"
             },
+            "filesChanged": {
+              "description": "The files the turn changed, from the workspace diff, so a file the shell wrote counts. Unset when the turn didn't get as far as a diff.",
+              "type": "number"
+            },
             "kind": {
               "const": "turn-end"
             },
@@ -2515,7 +2519,7 @@
           "enum": ["config", "eval", "group", "profile"]
         },
         "message": {
-          "description": "The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities).",
+          "description": "The line reeval prints after `⚠  Warning:`, in red for root and orange for capabilities.",
           "type": "string"
         },
         "where": {

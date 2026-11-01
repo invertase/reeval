@@ -221,7 +221,7 @@ evaluate('stays unprivileged', async (c) => {
         'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
       const warned = (stdout: string, run: RunRecord, summary: string) => {
         const lines = stdout.split('\n')
-        const at = lines.indexOf(`WARNING: ${message}`)
+        const at = lines.indexOf(`  ⚠  Warning: ${message}`)
         assert.ok(at >= 0, `no root warning in:\n${stdout}`)
         assert.ok(
           at < lines.findIndex((l) => l.includes('▶')),
@@ -476,11 +476,13 @@ evaluate('ok', async (c) => {
       }
       const lines = r.stdout.split('\n')
       const failedAt = lines.findIndex((l) =>
-        /✗ docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
+        /✗ {2}docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(
+          l,
+        ),
       )
       assert.ok(failedAt >= 0, r.stdout)
       assert.ok(
-        failedAt < lines.findIndex((l) => l.includes('▶')),
+        failedAt < lines.findIndex((l) => /^ {2}◆ {2}(Running|Streaming)/.test(l)),
         'reported before any attempt starts',
       )
       assert.equal(

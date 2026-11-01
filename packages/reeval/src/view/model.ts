@@ -163,17 +163,14 @@ export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 
 export const reasoningLabel = (ms: number | null) => (ms === null ? 'n/a' : formatDuration(ms))
 
 /**
- * An attempt's effort, counted as the CLI's turn lines count it: tool calls, then file edits.
- * Edit calls become one file edit per file they change, so they're counted apart, never summed.
- * With the workspace diff's count, `files changed` follows: an edit made from the shell is in it,
- * never in the file edits.
+ * An attempt's effort: tool calls, then the files the workspace diff changed, which counts a file
+ * the shell wrote, then the calls to the agent's edit tools, which doesn't.
  */
 export function activityLabel(
   a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>,
-  changed?: number,
+  changed: number,
 ): string {
-  const files = changed === undefined ? '' : ` · ${plural(changed, 'file')} changed`
-  return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}${files}`
+  return `${plural(a.tools, 'tool call')} · ${plural(changed, 'file')} changed · ${plural(a.fileEdits, 'edit tool call')}`
 }
 
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────

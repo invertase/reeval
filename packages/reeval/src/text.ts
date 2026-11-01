@@ -1,5 +1,3 @@
-import type { SandboxWarning } from './types.ts'
-
 /** `850ms`, `42s`, `3m 05s`: the CLI's and summary.md's durations. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
@@ -44,7 +42,3 @@ export function fenced(lines: string[], lang = ''): string[] {
   const fence = '`'.repeat(Math.max(3, longest + 1))
   return [`${fence}${lang}`, ...lines, fence]
 }
-
-/** How a sandbox warning prints: root in capitals, added capabilities softer. */
-export const sandboxWarningLine = (w: SandboxWarning) =>
-  `${w.kind === 'root' ? 'WARNING' : 'warning'}: ${w.message}`

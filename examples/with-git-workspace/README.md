@@ -26,14 +26,18 @@ Claude Code, and `--profile <name>` on any other agent in [`examples/profiles.ts
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the line under the plan. reeval fetches the repository once per run, on the
+**What to look at:** the line under the run header. reeval fetches the repository once per run, on the
 host, before any attempt, and names the commit every attempt starts from:
 
 ```text
-plan  run 20261024T150112Z_… · 1 eval · 1 cell · 1 attempt · ~1s serial
-workspace github:invertase/reeval#f60f255edb8a110d42d2ae4e483bd8555168b854:examples/with-checks/project at f60f255edb8a
 …
-pass             adds subtract to a pinned repository
+  ➜  Record:    .reeval/runs/20261101T222141Z_….json
+
+  ℹ  workspace github:invertase/reeval#f60f255edb8a110d42d2ae4e483bd8555168b854:examples/with-checks/project at f60f255edb8a
+  ◆  Running...
+
+with-git-workspace.eval.ts
+└─ ✓ adds subtract to a pinned repository  1 of 1 run passed
 ```
 
 A branch or no `ref` warns in the plan, since the code under the eval could change between runs.

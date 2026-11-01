@@ -30,15 +30,25 @@ one profile you need.
 the run exits 1:
 
 ```text
-plan  run … · 1 eval · 1 cell · 3 attempts · ~3s serial · budget 10 attempts ✓, 2s
-…
-Budget: 2s reached; running attempts finish, queued ones are skipped
+REEVAL v0.17.2
 
-pass             adds a tested multiply function
+  ➜  Run:       20261101T221802Z_…
+  ➜  Harness:   fake
+  ➜  Sandbox:   fake
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 3 attempts (budget: 10 ✓, 2s)
+  ➜  Est. Time: ~19s (serial)
+  ➜  Record:    .reeval/runs/20261101T221802Z_….json
+
+  ◆  Running...
+
+  ⚠  Budget: 2s reached; running attempts finish, queued ones are skipped
+
+with-budget.eval.ts
+└─ ✓ adds a tested multiply function  1 of 1 run passed
 
 Budget reached: attempts that hadn’t started were skipped
-7s · results .reeval/runs/…/summary.md
-1 pass
+Done in 7s · 1 passed
+Browse it: reeval studio · summary .reeval/runs/…/summary.md
 ```
 
 Ask for more attempts than the budget allows and the run stops before it starts, with exit 2;
@@ -46,7 +56,9 @@ Ask for more attempts than the budget allows and the run stops before it starts,
 
 ```text
 $ pnpm reeval run --runs 20
-plan  run … · 1 eval · 1 cell · 20 attempts · ~2m 03s serial · budget 10 attempts ✗, 2s
+…
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 20 attempts (budget: 10 ✗, 2s)
+  ➜  Est. Time: ~2m 03s (serial)
 …
 reeval: this run plans 20 attempts, over budget.attempts 10 (reeval.config.ts). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```

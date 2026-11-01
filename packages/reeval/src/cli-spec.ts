@@ -153,13 +153,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                    Also record the run into the history folder (see config.record)
     --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
-                                with a status line on a terminal outside CI)
+                                an eval list you browse with the arrow keys on a terminal outside CI)
     --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
                                 (default task, none inside GitHub Actions groups)
-    --output-logs <level>       full, errors-only or none: whose detail lines print (default
-                                errors-only, failing attempts only; full with -v)
+    --output-logs <level>       full, errors-only or none: whose detail lines print as attempts
+                                end (default none, the eval list says how each went; full with -v)
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown

@@ -1,4 +1,4 @@
-import { clip, fenced, formatDuration } from '../text.ts'
+import { clip, fenced, formatDuration, plural } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
@@ -195,7 +195,7 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   const web = (n: number | null, what: string) =>
     n === null ? `${what} not reported` : `${n} ${what}`
   lines.push(
-    `- Agent: ${act.fileEdits} file edits (edit tool calls) · ${filesChanged(a.changedFiles)} files changed (workspace diff) · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${act.reasoningMs === null ? 'reasoning time not reported' : `${formatDuration(act.reasoningMs)} reasoning`}${act.stalledTools ? ` · ${act.stalledTools} stalled tool${act.stalledTools === 1 ? '' : 's'} (≥2m)${act.maxToolMs ? `, longest ${formatDuration(act.maxToolMs)}` : ''}` : ''}`,
+    `- Agent: ${plural(filesChanged(a.changedFiles), 'file')} changed (workspace diff) · ${plural(act.fileEdits, 'edit tool call')} · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${act.reasoningMs === null ? 'reasoning time not reported' : `${formatDuration(act.reasoningMs)} reasoning`}${act.stalledTools ? ` · ${act.stalledTools} stalled tool${act.stalledTools === 1 ? '' : 's'} (≥2m)${act.maxToolMs ? `, longest ${formatDuration(act.maxToolMs)}` : ''}` : ''}`,
   )
   for (const { judgment: j, label, labelled: labeled } of labeledJudgments(a)) {
     const retried = j.retries?.length

@@ -47,6 +47,8 @@ on:
       - packages/reeval/src/studio/app.ts
       - packages/reeval/src/studio/app-files.ts
       - packages/reeval/tsdown.config.mjs
+      - packages/reeval/package.json
+      - packages/reeval/src/ui/**
       - packages/reeval/src/language-runner/**
       - packages/reeval-python/src/**
       - packages/reeval-python/pyproject.toml

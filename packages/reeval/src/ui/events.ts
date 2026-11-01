@@ -45,6 +45,11 @@ export type ProgressUpdate =
       ms: number
       tools: number
       fileEdits: number
+      /**
+       * The files the turn changed, from the workspace diff, so a file the shell wrote counts.
+       * Unset when the turn didn't get as far as a diff.
+       */
+      filesChanged?: number
       /** The turn's first error event, e.g. the provider's billing or auth error. */
       error?: string
     }
@@ -185,6 +190,8 @@ export type ReevalEvent =
 export interface Renderer {
   onEvent(event: ReevalEvent): void
   close(): void
+  /** Resolves when the output is done with the terminal: the interactive list, once it's quit. */
+  wait?(): Promise<void>
 }
 
 /** Where output goes; `process.stdout` in the CLI, a capture in tests. */

@@ -324,7 +324,13 @@ export function AttemptPage() {
         <div className="mt-4">
           <TabsContent value="transcript">
             <Artifact record={record} file={attempt.files.transcript} what="transcript">
-              {(text) => <Transcript key={attempt.id} text={text} />}
+              {(text) => (
+                <Transcript
+                  key={attempt.id}
+                  text={text}
+                  filesChanged={filesChanged(attempt.changedFiles)}
+                />
+              )}
             </Artifact>
           </TabsContent>
           <TabsContent value="diff">

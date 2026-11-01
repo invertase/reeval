@@ -38,13 +38,16 @@ with-groups.eval.ts › math › adds power     —          —         0     0
 `gate: { passRate: 0.5 }` passes a cell when one of its two runs does; without it, the default
 gate needs both, and the plan prints a hint saying so. Tags are the union of every level, so
 `pnpm reeval run --tag smoke --dry-run` plans only `adds subtract`, and `--tag math` plans both.
-The run's result block ends:
+The run's status list ends:
 
 ```text
-pass             math › adds multiply
-pass             math › adds subtract
-skipped          math › adds divide
-todo             math › adds power
+with-groups.eval.ts
+├─ ✓ math › adds multiply  2 of 2 runs passed
+├─ ✓ math › adds subtract  1 of 1 run passed
+├─ – math › adds divide    skipped
+└─ – math › adds power     todo
+
+Done in 1s · 2 passed · 2 skipped
 ```
 
 | File | What it is |

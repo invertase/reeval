@@ -151,14 +151,32 @@ const remarksOf = (dir: string, back = 0): RunRemarks | null => {
   return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null
 }
 
+/**
+ * The remarks `reeval run`'s status list printed, one `<eval>: <remark>` line each from under the
+ * eval's `Worth knowing:`, then the cap's `+N more remark (-v)`; null when it printed none.
+ */
 const remarksBlock = (stdout: string) => {
-  const at = stdout.indexOf('\nRemarks:')
-  return at < 0 ? null : stdout.slice(at + 1)
+  const lines: string[] = []
+  let name = ''
+  let heading = -1
+  for (const raw of stdout.split('\n')) {
+    const line = raw.replace(/^[│├└─ ]*/, (m) => ' '.repeat(m.length))
+    const indent = line.length - line.trimStart().length
+    const row = /^ *[✓✗●–○] (.+?) {2}/.exec(line)
+    if (row) {
+      name = row[1] as string
+      heading = -1
+    } else if (line.trim() === 'Worth knowing:') heading = indent
+    else if (heading >= 0 && indent > heading && line.trim()) lines.push(`${name}: ${line.trim()}`)
+    else heading = -1
+    if (/^\+\d+ more remarks? \(-v\)$/.test(raw)) lines.push(raw)
+  }
+  return lines.length ? lines.join('\n') : null
 }
 
 /** The evals a remarks block names, in order. */
 const namedIn = (block: string | null) =>
-  [...(block ?? '').matchAll(/^ {2}(\S[^:]*):/gm)].map((m) => m[1])
+  [...(block ?? '').matchAll(/^([^+\n][^:\n]*): /gm)].map((m) => m[1])
 
 /** One fake run of an eval per rule, for the rules to read with a stubbed history. */
 let rulesRecord: Promise<RunRecord> | undefined
@@ -531,7 +549,7 @@ describe('remarks in reeval run', () => {
     assert.equal(await run('-v'), null)
 
     const capped = (await run()) ?? ''
-    assert.match(capped, /\+1 more \(-v\)/)
+    assert.match(capped, /^\+1 more remark \(-v\)$/m)
     assert.equal(namedIn(capped).length, 3)
     assert.ok(namedIn(capped).every((n) => coins.includes(n as string)))
     const marks = remarksOf(p.dir)
@@ -568,19 +586,13 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
     const first = remarksBlock((await runCli(p.dir, ['run', '-v'])).stdout) ?? ''
     assert.ok(
       first.includes(
-        [
-          '  skill helps: The marked variant passed 2 of 2 runs and the baseline 1 of 2: better by 50 points, but on too few runs for the difference to hold.',
-          '    fix  evals/skill.eval.ts:5  set runs: 6, where a difference this size would hold',
-        ].join('\n'),
+        'skill helps: The marked variant passed 2 of 2 runs and the baseline 1 of 2: better by 50 points, but on too few runs for the difference to hold. Fix at evals/skill.eval.ts:5: set runs: 6, where a difference this size would hold.',
       ),
       first,
     )
     assert.ok(
       first.includes(
-        [
-          "  fixes $id: The marked variant, pooled over 2 cases: better, but a family's lift needs 6 to hold.",
-          '    fix  evals/fam.eval.ts:5  add cases, so the pooled lift has 6 to hold on',
-        ].join('\n'),
+        "fixes $id: The marked variant, pooled over 2 cases: better, but a family's lift needs 6 to hold. Fix at evals/fam.eval.ts:5: add cases, so the pooled lift has 6 to hold on.",
       ),
       first,
     )
@@ -638,11 +650,11 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       assert.deepEqual(namedIn(block).sort(), ['dead', 'slow'], 'a fast server raises none')
       assert.match(
         block,
-        /^ {2}slow: MCP server docs took 2(\.\d)?s to start on each of 2 turns\.\n {4}fix {2}evals\/slow\.eval\.ts:5 {2}install what docs needs in the image/m,
+        /^slow: MCP server docs took 2(\.\d)?s to start on each of 2 turns\. Fix at evals\/slow\.eval\.ts:5: install what docs needs in the image/m,
       )
       assert.match(
         block,
-        /^ {2}dead: MCP server docs never answered within the start-up timeout on each of 2 turns\.\n {4}fix {2}\S+ {2}run docs's command in the sandbox with c\.exec/m,
+        /^dead: MCP server docs never answered within the start-up timeout on each of 2 turns\. Fix at \S+: run docs's command in the sandbox with c\.exec/m,
       )
     }
     const shown = await runCli(p.dir, ['show'])
@@ -717,12 +729,8 @@ evaluate('coin', { runs: 3 }, async (c) => {
       }
       if (i === 2) {
         assert.equal(
-          blocks[2]?.split('\n').slice(0, 3).join('\n'),
-          [
-            'Remarks:',
-            '  coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it.',
-            '    fix  evals/coin.eval.ts:8  make "lands heads" check something every good try does, or raise runs so one try doesn\'t decide it',
-          ].join('\n'),
+          blocks[2]?.split('\n')[0],
+          'coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it. Fix at evals/coin.eval.ts:8: make "lands heads" check something every good try does, or raise runs so one try doesn\'t decide it.',
         )
         const summary = readFileSync(history(recordedRuns(p.dir).at(-1) as string, 'summary.md'))
         assert.match(summary.toString(), /Remarks:\n {2}coin: "lands heads"/)
@@ -734,12 +742,8 @@ evaluate('coin', { runs: 3 }, async (c) => {
       `run k has k-1 runs before it; each prints once\n${blocks.join('\n')}`,
     )
     assert.equal(
-      blocks[5]?.split('\n').slice(0, 3).join('\n'),
-      [
-        'Remarks:',
-        '  clean: "always one" passed every try in the last 5 recorded runs (20 tries), so it never tells a good result from a bad one.',
-        '    fix  evals/clean.eval.ts:4  make "always one" strict enough to fail on a wrong result, or remove it',
-      ].join('\n'),
+      blocks[5]?.split('\n')[0],
+      'clean: "always one" passed every try in the last 5 recorded runs (20 tries), so it never tells a good result from a bad one. Fix at evals/clean.eval.ts:4: make "always one" strict enough to fail on a wrong result, or remove it.',
     )
     const recorded = recordedRuns(p.dir).at(-1) as string
     const doc = JSON.parse(readFileSync(history(recorded, 'remarks.json'), 'utf8')) as RunRemarks

@@ -64,14 +64,14 @@ group('g', { runs: 2 }, () => {
     })
     const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
+    assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     assert.match(r.stdout, /^\[writes#1 good\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
       r.stdout,
-      /^fail {13}g › writes ok\.txt\n {2}harness {14}pass\n {2}good {17}2 of 2\n {2}bad {18}0 of 2\n {4}toHaveFile ok\.txt {2}0 of 2 {2}evals\/m\.eval\.ts:6\n/m,
+      /✗ g › writes ok\.txt {2}2 of 4 runs passed\n[│ ]+good passed 2 of 2, bad 0 of 2\.\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on bad\n[│ ]+expected file ok\.txt to exist\n[│ ]+at evals\/m\.eval\.ts:6\n/,
     )
-    assert.match(r.stdout, /^1 fail$/m)
+    assert.match(r.stdout, /^Done in \S+ · 1 failed$/m)
     const thirds = await project('matrix-thirds', {
       'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
       'evals/t.eval.ts': `import { evaluate } from 'reeval'
@@ -85,7 +85,7 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
     assert.match(
       rounded.stdout,
-      /^pass {13}two of three\n {2}3 tries {10}2 of 3$/m,
+      /✓ two of three {2}2 of 3 runs passed$/m,
       'counts read N of M, never a percentage',
     )
     assert.doesNotMatch(rounded.stdout, /\d%/)
@@ -302,20 +302,12 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    // The case is outer and its arms inner; the pooled effect is on `all cases`.
-    assert.match(
-      r.stdout,
-      /^ {17}writes ok\.txt for %s\n {2}pass {2}ada\n {4}arm {12}pass\n {4}base {11}0 of 1\n {4}skilled {8}1 of 1\n/m,
-    )
-    for (const name of ['grace', 'linus', 'margaret', 'dennis', 'barbara'])
-      assert.match(r.stdout, new RegExp(`^ {2}pass {2}${name}$`, 'm'), name)
+    // The family is one row, its arms pooled over the cases.
     const pooled =
-      /^ {2}pass {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped$/m
+      /✓ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped\n/
     assert.match(r.stdout, pooled)
-    assert.match(r.stdout, /^6 pass$/m)
-    const verbose = await runCli(p.dir, ['run', '-v'])
-    assert.match(verbose.stdout, /^ {6}skilled: 6 paired cases, 95% interval \+45…\+100$/m)
-    assert.doesNotMatch(r.stdout, /95% interval/, 'statistics only with -v')
+    assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
+    assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
 
     const { run, evals, read } = readRun(p.dir)
     assert.deepEqual(
@@ -351,7 +343,10 @@ evaluate.each(${cases}${options})(
       ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
     )
     assert.equal(family?.outcome, 'pass')
-    assert.match(read('summary.md'), pooled)
+    assert.match(
+      read('summary.md'),
+      /^ {2}pass {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped$/m,
+    )
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
@@ -404,10 +399,14 @@ evaluate.each(${cases}${options})(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^ {2}fail {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped, not by minLift 60$/m,
+      /✗ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped, not by minLift 60\n/,
     )
-    assert.match(r.stdout, /^ {2}pass {2}ada$/m, 'the case passed on its own')
-    assert.match(r.stdout, /^1 fail · 6 pass$/m, 'the pooled gate is a fail of its own')
+    assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
+    assert.match(
+      r.stdout,
+      /^Done in \S+ · 1 failed · 6 passed$/m,
+      'the pooled gate is a fail of its own',
+    )
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families?.[0]?.outcome, 'fail')
     assert.ok(
@@ -424,8 +423,8 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.doesNotMatch(r.stdout, /all cases|writes ok\.txt for %s/)
-    assert.match(r.stdout, /^pass {13}writes ok\.txt for ada$/m)
+    assert.doesNotMatch(r.stdout, /writes ok\.txt for %s/)
+    assert.match(r.stdout, /✓ writes ok\.txt for ada {7}1 of 1 variant run passed$/m)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families, undefined)
     assert.equal(evals.length, 6)
@@ -452,7 +451,7 @@ evaluate.each(${cases}${options})(
     ])
     assert.deepEqual(JSON.parse(paired.stdout), [{ small_sample: 1 }], 'three cases are too few')
     // Three pairs are too few for the lift to hold, however one-sided they are: it shows the direction.
-    assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}helped$/m)
+    assert.match(r.stdout, /^[│ ]+skilled {2}6 of 6 {2}helped$/m)
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
@@ -474,12 +473,12 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
+    assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     // A successful compare reads as one: the control's expected misses aren't failures.
     const block =
-      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m
+      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+Baseline base passed 0 of 2\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}2 of 2 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on the baseline\n/
     assert.match(r.stdout, block)
-    assert.match(r.stdout, /^1 pass$/m)
+    assert.match(r.stdout, /^Done in \S+ · 1 passed · 2 not gated$|^Done in \S+ · 1 passed$/m)
 
     const color = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
     assert.equal(color.code, 0, color.stdout + color.stderr)
@@ -497,7 +496,10 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.equal(gha.stdout.match(/^::group::/gm)?.length, 4, 'expected misses collapse too')
 
     const md = readRun(p.dir).read('summary.md')
-    assert.match(md, block)
+    assert.match(
+      md,
+      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m,
+    )
     assert.match(md, /^#### ○ fake\/base\/fake#1 · missed, not gated$/m)
     assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
     const { run, evals } = readRun(p.dir)
@@ -527,7 +529,6 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       envRecords.skilled?.skills.map((s) => [s.name, s.source, s.placement]),
       [['house-greeting', 'local:skills', 'harness']],
     )
-    assert.match(readRun(p.dir).read('summary.md'), block)
   })
 
   test("gate 'all' gates the control, and minLift fails a variant cell below it", async () => {
@@ -558,13 +559,13 @@ evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], 
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
     assert.match(
       r.stdout,
-      /^fail {13}all gated\n {2}arm {16}pass\n {2}base {15}0 of 1\n {2}skilled {12}1 of 1 {2}helped\n {2}check {14}base {4}skilled\n {2}toHaveFile ok\.txt {2}0 of 1 {2}1 of 1\n/m,
+      /✗ all gated {2}1 of 2 runs passed\n[│ ]+Baseline base passed 0 of 1\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}1 of 1 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed once, on the baseline\n/,
     )
     assert.match(
       r.stdout,
-      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}made it worse, not by minLift 50\n {4}error {2}the variant is worse$/m,
+      /● no worse +1 of 2 runs passed\n[│ ]+Baseline base passed 1 of 1\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}0 of 1 {2}made it worse, not by minLift 50\n(?:[│ ]+.+\n)*?[│ ]+the variant is worse\n/,
     )
-    assert.match(r.stdout, /^1 fail · 1 not gated$/m)
+    assert.match(r.stdout, /^Done in \S+ · 1 failed · 1 not gated$/m)
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {
@@ -612,7 +613,7 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^hint: 1 eval runs more than once with the default gate, so every attempt must pass \(pass\^k\); set gate: \{ passRate: 0\.8 \} to gate on pass@1 instead$/m,
+      /^ {2}ℹ {2}Hint: {4}1 eval runs more than once with the default gate, so every attempt must pass \(pass\^k\); set gate: \{ passRate: 0\.8 \} to gate on pass@1 instead$/m,
     )
     const cells = readRun(p.dir).evals.map((e) => [
       e.name,
@@ -630,10 +631,10 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
     ])
     assert.match(
       r.stdout,
-      /^fail {13}default\n {2}5 tries {10}4 of 5\n {2}error {12}the third attempt fails$/m,
+      /✗ default +4 of 5 runs passed\n[│ ]+Passed 4 of 5 on fake\.\n(?:[│ ]+.+\n)*?[│ ]+the third attempt fails\n/,
     )
-    assert.match(r.stdout, /^pass {13}at 0\.8\n {2}5 tries {10}4 of 5$/m)
-    assert.match(r.stdout, /^3 fail · 2 pass$/m)
+    assert.match(r.stdout, /✓ at 0\.8 +4 of 5 runs passed$/m)
+    assert.match(r.stdout, /^Done in \S+ · 3 failed · 2 passed$/m)
 
     const quiet = await runCli(p.dir, ['run', 'at 0.8'])
     assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
@@ -658,7 +659,7 @@ describe('profiles', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^plan {2}(?:run \S+ · )?profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
+      /^ {2}➜ {2}Profile: +pr \(auto: CI is set\)\n(.*\n)* {2}➜ {2}Scope: +1 eval file · 3 evals \(1 skipped\) · 4 cells · 6 attempts \(budget: 5 ✗\)$/m,
     )
     assert.match(r.stdout, /^eval +harnesses +variants +runs +attempts +notes$/m)
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
@@ -1727,7 +1728,7 @@ evaluate('one', { environment: maybe }, async () => {})
     const r = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const warning =
-      /^warning: AWS_SECRET_ACCESS_KEY is in the sandbox as its real value\. To give the agent only a placeholder, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\.$/gm
+      /^ {2}⚠ {2}Warning: AWS_SECRET_ACCESS_KEY is in the sandbox as its real value\. To give the agent only a placeholder, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\.$/gm
     assert.equal(r.stdout.match(warning)?.length, 1, r.stdout)
     assert.doesNotMatch(r.stdout, /GEMINI_API_KEY is in the sandbox/)
   })
@@ -1790,7 +1791,7 @@ evaluate('e', { environment: main }, async () => {})
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^warning: skill\.git\(github:invertase\/genkit-skills\) uses moving ref "main": results aren't comparable over time\. Pin a tag or SHA \(the resolved commit is recorded either way\)\.$/m,
+      /^ {2}⚠ {2}Warning: skill\.git\(github:invertase\/genkit-skills\) uses moving ref "main": results aren't comparable over time\. Pin a tag or SHA \(the resolved commit is recorded either way\)\.$/m,
     )
   })
 })
@@ -1861,7 +1862,7 @@ evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] 
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}helped$/m)
+    assert.match(r.stdout, /^[│ ]+with-skill {2}1 of 1 {2}helped$/m)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])
@@ -1927,7 +1928,7 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (c) => { await c.sen
     assert.equal(f.code, 3, f.stdout + f.stderr)
     assert.match(
       f.stdout,
-      /setup step 2\/2 "echo nope >&2; exit 4" in environment broken exited 4 after \d+m?s \(see setup\.log\):\n.*nope/,
+      /setup step 2\/2 "echo nope >&2; exit 4" in environment broken exited 4 after \d+m?s \(see setup\.log\):\s.*nope/,
     )
   })
 

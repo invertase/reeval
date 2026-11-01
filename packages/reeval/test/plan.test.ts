@@ -453,7 +453,7 @@ evaluate('routed', async () => {})
       assert.equal(planned.code, 0, planned.stdout + planned.stderr)
       assert.match(
         planned.stdout,
-        /hint: gateway: cursor:composer-2\.5 falls back to direct \(vercel can't serve it: Cursor's agent only calls Cursor's own API\)/,
+        /^ {2}ℹ {2}Hint: {4}gateway: cursor:composer-2\.5 falls back to direct \(vercel can't serve it: Cursor's agent only calls Cursor's own API\)/m,
       )
       const strict = await project(`gateway-strict-${format}`, files(off))
       for (const args of [['run', '--dry-run'], ['run']]) {
@@ -1145,7 +1145,7 @@ evaluate('runs', async (c) => { await c.send('hi') })
 
 /** The root warning `reeval run` prints for the privileges fixture's eval-level sandbox. */
 const ROOT_LINE =
-  'WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
+  '  ⚠  Warning: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
 
 function assertRootWarning(output: string): void {
   assert.ok(output.split('\n').includes(ROOT_LINE), `no root warning in:\n${output}`)
@@ -1199,7 +1199,7 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
     assertRootWarning(plain.stdout)
     assert.match(
       plain.stdout,
-      /^warning: extra capabilities in the sandbox: reeval\.config\.ts \(docker\(\{ capabilities: \['NET_RAW'\] \}\)\)$/m,
+      /^ {2}⚠ {2}Warning: extra capabilities in the sandbox: reeval\.config\.ts \(docker\(\{ capabilities: \['NET_RAW'\] \}\)\)$/m,
     )
     assert.doesNotMatch(plain.stdout, /^::warning/m, 'no annotations outside GitHub Actions')
     const agent = await runCli(p.dir, ['run', '--dry-run', '--ui', 'agent'])
@@ -1223,7 +1223,7 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
     const r = await runCli(p.dir, ['run', '--dry-run', '--ui', 'plain', 'stays unprivileged'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.throws(() => assertRootWarning(r.stdout), /no root warning/)
-    assert.doesNotMatch(r.stdout, /WARNING|warning:/)
+    assert.doesNotMatch(r.stdout, /Warning:/)
     const plan = await planJson({ dir: 'privileges', args: ['stays unprivileged'] })
     assert.deepEqual(plan.sandboxWarnings, [])
   })

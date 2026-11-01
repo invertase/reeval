@@ -42,11 +42,15 @@ describe('named check results', () => {
     const p = await compareProject('checks-compare')
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    // The matrix has the checks that failed or didn't run on some arm; the rest pass on both.
+    // The eval list names the failed check and the arm it failed on; a passing compare stays open.
+    assert.match(
+      r.stdout,
+      /^ {5}Every failure was the same check:\n {7}"house style" failed 2 times, all on the baseline\n {9}expected file styled\.txt to exist\n {9}at evals\/s\.eval\.ts:12$/m,
+    )
+    assert.doesNotMatch(r.stdout, /toSucceed/, 'a check that never ran did not fail')
+    // The summary's matrix has the checks that failed or didn't run on some arm; the rest pass on both.
     const matrix =
       /^ {2}check {21}plain {4}styled\n {2}house style {15}0 of 2 {3}2 of 2\n {4}expected file styled\.txt to exist\n {2}toSucceed test -f ok\.txt {2}not run {2}2 of 2\n {2}\+1 more passed$/m
-    assert.match(r.stdout, matrix)
-    assert.doesNotMatch(r.stdout, /toSucceed test -f ok\.txt +0 of/, 'not run, never 0 of N')
 
     const { run, read } = readRun(p.dir)
     const entry = run.evals[0]
@@ -79,6 +83,11 @@ describe('named check results', () => {
       'the control has tallies, not verdicts',
     )
     assert.match(read('summary.md'), matrix)
+    assert.doesNotMatch(
+      read('summary.md'),
+      /toSucceed test -f ok\.txt +0 of/,
+      'not run, never 0 of N',
+    )
 
     assert.deepEqual(
       await query(
@@ -115,7 +124,10 @@ describe('named check results', () => {
     ])
 
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
-    assert.match(agent.stdout, matrix)
+    assert.match(
+      agent.stdout,
+      /^ {4}Every failure was the same check:\n {6}"house style" failed 2 times, all on the baseline$/m,
+    )
   })
 
   test('without a compare the attempts record their assertions and the result has no check matrix', async () => {

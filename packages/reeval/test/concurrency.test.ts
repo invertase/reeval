@@ -205,7 +205,7 @@ describe('concurrency', () => {
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '4'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /· concurrency 4 ·/)
+    assert.match(r.stdout, /^ {2}➜ {2}Est\. Time: .*\(concurrency: 4\)/m)
     const trace = readTrace(p.dir)
     assert.equal(trace.length, 12)
     assert.equal(maxOverlap(trace), 4)

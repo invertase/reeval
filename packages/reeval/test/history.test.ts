@@ -658,7 +658,7 @@ evaluate(
     })
     const r = await runCli(p.dir, ['run', '--profile', 'fake', '--ui', 'plain'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, / · harness fake · sandbox fake · /)
+    assert.match(r.stdout, /^ {2}➜ {2}Harness: +fake\n {2}➜ {2}Sandbox: +fake$/m)
     const { run } = readRun(p.dir)
     assert.equal(run.evals[0]?.cells[0]?.sandbox, 'fake', 'the cell ran on the fake sandbox')
     assert.equal(run.config.sandbox, 'fake')
@@ -737,7 +737,7 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
     symlinkSync(p.dir, link, 'junction')
     const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'reeval.config.ts')])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, / · results \.reeval\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, / · summary \.reeval\/runs\/\S+\/summary\.md$/m)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
@@ -1442,17 +1442,11 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     }
 
     const plan = await ok(['run', '--dry-run'])
-    assert.match(
-      plan.stdout,
-      /^plan {2}(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · 1 eval · /m,
-    )
+    assert.match(plan.stdout, /^ {2}➜ {2}Config: +\.\.\/\.\.\/\.\.\/reeval\.config\.ts$/m)
     assert.doesNotMatch(plan.stdout, /decoy/)
 
     const run = await ok(['run', '-v'])
-    assert.match(
-      run.stdout,
-      /plan +(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · no profile · /,
-    )
+    assert.match(run.stdout, /^ {2}➜ {2}Config: +\.\.\/\.\.\/\.\.\/reeval\.config\.ts$/m)
     const first = readRun(p.dir).run
     assert.deepEqual(
       first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),
@@ -1511,7 +1505,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
     const parent = await runCli(join(p.dir, 'evals'))
     assert.equal(parent.code, 1, parent.stdout + parent.stderr)
-    assert.match(parent.stdout, /^fail {13}parent$/m)
+    assert.match(parent.stdout, /^└─ ✗ parent {2}0 of 1 run passed$/m)
     const named = await runCli(lib, ['run', '--config', '../../../../reeval.config.ts'])
     assert.equal(named.code, 1, named.stdout + named.stderr)
     assert.deepEqual(

@@ -1,9 +1,9 @@
-// The terminal's output while a run goes: attempt logs in Turborepo's stream and grouped log
-// orders, and on a TTY (`live`) one status line under them that's rewritten in place. No line
-// says how an attempt ended; the result blocks at the end do. Elsewhere it's append-only, for CI,
-// pipes and `| tee`.
-import { sandboxWarningLine } from '../text.ts'
+// The terminal's output while a run goes, append-only for CI, pipes and `| tee`: the run header
+// as the interactive list prints it, a progress line on a timer, then the status list once the
+// run ends, failures expanded. With `--output-logs`, each attempt's logs in Turborepo's stream and
+// grouped log orders too, and on a TTY one status line under them that's rewritten in place.
 import type { SandboxWarning } from '../types.ts'
+import { suiteResult } from '../view/suite.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
 import type {
   AttemptRef,
@@ -22,12 +22,12 @@ import {
   offset,
   outcomeOf,
   phaseOf,
-  prepareLines,
   progressLine,
 } from './format.ts'
-import { headerLines, noteLines, noticeLines, prepareStepLines, startLine } from './header.ts'
+import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
+import { LiveList, listLines, progressText } from './list.ts'
 import type { OutputOptions } from './mode.ts'
-import { resultLines } from './result.ts'
+import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 
 export type RendererOptions = {
@@ -41,7 +41,7 @@ export type RendererOptions = {
   timers?: boolean
   /** `-v` (1) or `-vv` (2); `-vv` shows debug lines' times to the millisecond. */
   verbosity?: 0 | 1 | 2
-  /** The terminal's width, which a rich header's warnings and hints wrap to. */
+  /** The terminal's width, which the header's notes wrap to; off a terminal, lines don't wrap. */
   columns?: number
 }
 
@@ -102,6 +102,8 @@ export class PlainRenderer implements Renderer {
   #queued = new Set<string>()
   #runStartedAt = 0
   #lastWrite = 0
+  /** The last line written was blank, so the list needs no gap above it. */
+  #blank = false
   #timer: NodeJS.Timeout | undefined
   /** On a TTY: the status line is drawn under everything else, and redrawn after each write. */
   readonly #live: boolean
@@ -110,9 +112,12 @@ export class PlainRenderer implements Renderer {
   readonly #evals = new Set<string>()
   readonly #tries = new Set<string>()
   readonly #ended = new Set<string>()
+  readonly #list: LiveList
+  #lastProgress = 0
 
   constructor(options: RendererOptions) {
     this.#o = options
+    this.#list = new LiveList(options.harness)
     this.#c = options.colors
     this.#now = options.now ?? Date.now
     this.#live = options.output.statusLine
@@ -127,6 +132,7 @@ export class PlainRenderer implements Renderer {
     const line = `${text.trimEnd()}\n`
     this.#o.out.write(this.#status ? `${CLEAR}${line}${this.#status}` : line)
     this.#lastWrite = this.#now()
+    this.#blank = line === '\n'
   }
 
   /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended. */
@@ -182,29 +188,16 @@ export class PlainRenderer implements Renderer {
     switch (e.type) {
       case 'run-start': {
         this.#runStartedAt = e.at
-        if (this.#o.output.rich) {
-          this.#write(startLine(c, this.#o.output))
-          this.#write('')
-          return
-        }
-        const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
-        const order = `${this.#o.output.logOrder} logs`
-        const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
-        this.#write(c.dim(`reeval ${e.version} · run ${e.runId} · ${files} · ${setup} · ${order}`))
+        this.#write(startLine(c, this.#o.output))
+        this.#write('')
         return
       }
       case 'plan':
-        if (this.#o.output.rich) {
-          this.#richPlan(e)
-          return
-        }
-        this.#write(e.line)
-        for (const line of e.details) this.#write(c.dim(line))
-        for (const w of e.warnings) this.#write(c.yellow(`warning: ${w}`))
-        for (const h of e.hints) this.#write(c.dim(`hint: ${h}`))
-        for (const w of e.sandboxWarnings ?? []) this.#sandboxWarning(w)
+        for (const line of planLines(c, e, this.#columns)) this.#write(line)
+        if (this.#o.output.githubActions) for (const w of e.sandboxWarnings ?? []) this.#annotate(w)
         return
       case 'collected':
+        this.#list.collected(e.file, e.evals)
         this.#tags.addFile(e.evals)
         for (const x of e.evals) {
           if (x.skipped) continue
@@ -216,6 +209,7 @@ export class PlainRenderer implements Renderer {
         return
       case 'eval-start': {
         const a = this.#attempt(e, e.at)
+        this.#list.start(e)
         a.last = e
         this.#queued.delete(e.key)
         this.#running.set(e.key, a)
@@ -225,6 +219,7 @@ export class PlainRenderer implements Renderer {
       case 'eval-progress': {
         const a = this.#running.get(e.key)
         if (!a) return
+        this.#list.progress(e.key, e.progress)
         if (e.progress.kind !== 'warning') a.last = e
         const { progress } = e
         const paint = a.ungated ? { ...c, red: c.dim } : c
@@ -260,15 +255,13 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'eval-end':
+        this.#list.end(e.result)
         this.#end(e.result, e.at)
         if (this.#tries.has(e.result.key)) this.#ended.add(e.result.key)
         this.#drawStatus()
         return
       case 'prepare': {
-        const lines = this.#o.output.rich
-          ? prepareStepLines(c, e, this.#columns, ERROR_LINES)
-          : prepareLines(c, e, ERROR_LINES)
-        for (const line of lines) this.#write(line)
+        for (const line of prepareStepLines(c, e, this.#columns, ERROR_LINES)) this.#write(line)
         if (e.state === 'failed' && this.#o.output.githubActions) {
           const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
           const what = target.kind === 'workspace' ? 'The' : 'Sandbox'
@@ -278,55 +271,34 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'notice': {
-        if (this.#o.output.rich) {
-          for (const line of noticeLines(c, e, this.#columns)) this.#write(line)
-          return
-        }
-        const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
-        this.#write(paint(e.text))
+        for (const line of noticeLines(c, e, this.#columns)) this.#write(line)
         return
       }
-      case 'run-end':
+      case 'run-end': {
         this.#clearStatus()
-        this.#write('')
-        for (const line of resultLines(c, e, (this.#o.verbosity ?? 0) > 0)) this.#write(line)
+        if (!this.#blank) this.#write('')
+        const verbose = (this.#o.verbosity ?? 0) > 0
+        const list = statusList({
+          record: e.record,
+          suite: suiteResult(e.record),
+          remarks: e.remarks ?? null,
+          verbose,
+          ...(e.notRun ? { notRun: e.notRun } : {}),
+        })
+        for (const line of listLines(list, c, true, pointerLine(e.summaryPath), verbose)) {
+          this.#write(line)
+        }
         return
+      }
     }
   }
 
   get #columns() {
-    return this.#o.columns || 80
+    return this.#o.columns || Number.POSITIVE_INFINITY
   }
 
-  /** The plan as the rich header: its facts, `--dry-run`'s table, then each kind of note. */
-  #richPlan(e: Extract<ReevalEvent, { type: 'plan' }>) {
-    const c = this.#c
-    const width = this.#columns
-    for (const line of headerLines(c, e.header, width)) this.#write(line)
-    const sections = [
-      // Flush left: the table is about as wide as a terminal already.
-      e.details,
-      [
-        ...e.warnings.flatMap((w) => noteLines(c, 'warning', w, width)),
-        ...(e.sandboxWarnings ?? []).flatMap((w) =>
-          noteLines(c, w.kind === 'root' ? 'root' : 'warning', w.message, width),
-        ),
-      ],
-      e.hints.flatMap((h) => noteLines(c, 'hint', h, width)),
-    ]
-    for (const lines of sections) {
-      if (!lines.length) continue
-      this.#write('')
-      for (const line of lines) this.#write(line)
-    }
-    this.#write('')
-  }
-
-  #sandboxWarning(w: SandboxWarning) {
-    const c = this.#c
-    const line = sandboxWarningLine(w)
-    this.#write(w.kind === 'root' ? c.bold(c.red(line)) : c.yellow(line))
-    if (!this.#o.output.githubActions) return
+  /** The header block names a sandbox warning; GitHub Actions also annotates it. */
+  #annotate(w: SandboxWarning) {
     const file = w.file ? `file=${ghEscape(w.file, true)},` : ''
     const title = w.kind === 'root' ? 'Sandbox runs as root' : 'Sandbox has extra capabilities'
     this.#write(`::warning ${file}title=${ghEscape(title, true)}::${ghEscape(w.message)}`)
@@ -403,14 +375,24 @@ export class PlainRenderer implements Renderer {
     }
   }
 
-  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals are running. */
+  /**
+   * Every `heartbeatMs` while attempts run. Without attempt logs, how many evals are done; with
+   * them, each running attempt's phase, when nothing printed for that long.
+   */
   tick(now = this.#now()): void {
-    const { heartbeatMs } = this.#o.output
+    const { heartbeatMs, outputLogs } = this.#o.output
     // On a TTY the status line already says the run is alive.
     if (this.#live || heartbeatMs <= 0) return
-    if (now - this.#lastWrite < heartbeatMs) return
-    const c = this.#c
     if (this.#running.size === 0) return
+    const c = this.#c
+    if (outputLogs === 'none') {
+      if (now - Math.max(this.#lastProgress, this.#runStartedAt) < heartbeatMs) return
+      const { done, total } = this.#list.counts()
+      this.#write(c.dim(progressText(done, total, now - this.#runStartedAt)))
+      this.#lastProgress = now
+      return
+    }
+    if (now - this.#lastWrite < heartbeatMs) return
     const running = [...this.#running.values()].map((a) => {
       const progress = a.last?.type === 'eval-progress' ? a.last.progress : undefined
       return `${this.#prefix(a)} ${phaseOf(progress)} ${c.dim(formatDuration(now - a.startedAt))}`

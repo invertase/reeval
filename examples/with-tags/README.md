@@ -28,12 +28,13 @@ one profile you need.
 **What to look at:** only the tagged eval runs:
 
 ```text
-plan  run … · 1 eval · 1 cell · 1 attempt · ~61ms serial
 …
-pass             adds multiply
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt
+…
+with-tags.eval.ts
+└─ ✓ adds multiply  1 of 1 run passed
 
-812ms · results .reeval/runs/…/summary.md
-1 pass
+Done in 1s · 1 passed
 ```
 
 `pnpm reeval run --tag '!slow' --dry-run` and `pnpm reeval run --profile smoke --dry-run` plan the

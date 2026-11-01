@@ -428,7 +428,7 @@ describe('snapshots through the CLI', () => {
     const { run: record } = readRun(p.dir)
     assert.match(
       run.stdout,
-      new RegExp(`snapshot +\\.reeval/runs/${record.runId}/\\S+/1/snapshots/final`),
+      new RegExp(`Snapshot: \\.reeval/runs/${record.runId}/\\S+/1/snapshots/final`),
     )
   })
 

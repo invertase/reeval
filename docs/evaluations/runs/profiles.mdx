@@ -55,7 +55,7 @@ The `defaultProfile` option chooses a profile when neither `--profile` nor `REEV
   defaultProfile: { ci: 'pr' },
 ```
 
-reeval picks `defaultProfile.ci` when the `CI` variable is set and `defaultProfile.local` when it is not. Without a match, the run has no profile. The plan line reports the choice as `profile pr (auto: CI is set)`. reeval exits with code 2 and lists the profiles in the `reeval.config.ts` file when no profile defines the requested name.
+reeval picks `defaultProfile.ci` when the `CI` variable is set and `defaultProfile.local` when it is not. Without a match, the run has no profile. The header's `Profile:` line reports the choice as `pr (auto: CI is set)`. reeval exits with code 2 and lists the profiles in the `reeval.config.ts` file when no profile defines the requested name.
 
 ## Limit a profile
 
