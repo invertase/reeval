@@ -1,11 +1,13 @@
 // For coding agents running `reeval run`: they read every line back into context, so nothing
 // prints while attempts run but what needs attention now (a sandbox that failed to prepare, a
-// warning), and the run ends with the same result blocks as the terminal, without color.
+// warning), and the run ends with the same status list as CI, without color or tree glyphs.
 import { sandboxWarningLine } from '../text.ts'
+import { suiteResult } from '../view/suite.ts'
 import { colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
 import { attemptAxes, debugLines, prepareLines, progressLine } from './format.ts'
-import { resultLines } from './result.ts'
+import { listLines } from './list.ts'
+import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 
 const MAX_LINES = 12
@@ -69,12 +71,21 @@ export class AgentRenderer implements Renderer {
       case 'notice':
         if (e.level !== 'info') this.#write(e.text)
         return
-      case 'run-end':
+      case 'run-end': {
         this.#write('')
-        for (const line of resultLines(this.#c, e, (this.#o.verbosity ?? 0) > 0)) {
+        const verbose = (this.#o.verbosity ?? 0) > 0
+        const list = statusList({
+          record: e.record,
+          suite: suiteResult(e.record),
+          remarks: e.remarks ?? null,
+          verbose,
+          ...(e.notRun ? { notRun: e.notRun } : {}),
+        })
+        for (const line of listLines(list, this.#c, false, pointerLine(e.summaryPath), verbose)) {
           this.#write(line)
         }
         return
+      }
       default:
         return
     }

@@ -1892,6 +1892,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/ui.test.ts'],
   },
   {
+    id: 'output.status-list',
+    area: 'CLI and runner',
+    name: "`reeval run`'s per-eval status list: one line a passing eval, a sentence for each way one failed (harnesses, checks, errors, a family's cases), `Worth knowing:` for its remarks, and on an interactive terminal an Ink list you browse with the arrow keys",
+    unit: ['reeval/test/status.test.ts', 'reeval/test/ink-list.test.ts', 'reeval/test/ui.test.ts'],
+  },
+  {
     id: 'output.flags',
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',

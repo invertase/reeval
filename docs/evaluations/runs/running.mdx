@@ -94,9 +94,9 @@ The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concur
 
 ## Choose the output
 
-reeval adapts the output to where you run the command: a live status line in a terminal, plain log lines in CI or a pipe, and result blocks without color for a coding agent. For the values and defaults of `--ui`, `--log-order`, `--log-prefix`, and `--output-logs`, see [the `reeval run` command](/reference/cli#reeval-run).
+reeval adapts the output to where you run the command: a status list you browse with the arrow keys in a terminal, and plain lines in CI, a pipe, or a coding agent. For the values and defaults of `--ui`, `--log-order`, `--log-prefix`, and `--output-logs`, see [the `reeval run` command](/reference/cli#reeval-run).
 
-Pick plain output for a log without the status line:
+Pick plain output for a log without the interactive list:
 
 ```bash
 npx reeval run --ui plain

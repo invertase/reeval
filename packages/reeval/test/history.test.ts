@@ -737,7 +737,7 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
     symlinkSync(p.dir, link, 'junction')
     const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'reeval.config.ts')])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, / · results \.reeval\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, / · summary \.reeval\/runs\/\S+\/summary\.md$/m)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
@@ -1511,7 +1511,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
     const parent = await runCli(join(p.dir, 'evals'))
     assert.equal(parent.code, 1, parent.stdout + parent.stderr)
-    assert.match(parent.stdout, /^fail {13}parent$/m)
+    assert.match(parent.stdout, /^└─ ✗ parent {2}0 of 1 run passed$/m)
     const named = await runCli(lib, ['run', '--config', '../../../../reeval.config.ts'])
     assert.equal(named.code, 1, named.stdout + named.stderr)
     assert.deepEqual(

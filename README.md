@@ -106,6 +106,8 @@ evaluate(
 ```text
 $ npx reeval run evals/ai-sdk.eval.ts
 …
+$ npx reeval show
+…
 pass             triages a GitHub issue with the AI SDK
   arm                 pass
   plain               0 of 4

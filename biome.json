@@ -12,6 +12,10 @@
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "overrides": [
     {
+      "includes": ["packages/reeval/**", "!packages/reeval/src/ui/ink-list.ts"],
+      "linter": { "domains": { "react": "none" } }
+    },
+    {
       "includes": [
         "packages/harness-opencode/src/opencode-provider-table.ts",
         "packages/sandbox-docker/docker/seccomp-default.json"

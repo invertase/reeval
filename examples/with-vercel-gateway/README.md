@@ -30,10 +30,6 @@ one profile you need.
 ```text
 eval                                                           harnesses  variants  runs  attempts  notes
 with-vercel-gateway.eval.ts › adds a tested multiply function  1          —         1     1         gateway: claude-code:claude-sonnet-5 → vercel
-…
-pass             adds a tested multiply function
-
-19s · 232k in (192k cached) · 875 out · results .reeval/runs/20261024T154024Z_…/summary.md
 ```
 
 ```text

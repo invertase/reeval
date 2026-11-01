@@ -30,19 +30,19 @@ one profile you need.
 ```text
 plan  run … · 1 eval · 1 cell · 8 attempts · ~8s serial (~2s at concurrency 4)
 …
-reeval 0.13.0 · run … · 1 eval file · harness fake · sandbox fake · concurrency 4 · stream logs
+with-concurrency.eval.ts
+  ✓ adds a tested multiply function  8 of 8 runs passed
 
-pass             adds a tested multiply function
-
-5s · results .reeval/runs/…/summary.md
+Done in 6s · 1 passed
 ```
 
 ```text
 $ pnpm reeval run --concurrency 1
 …
-pass             adds a tested multiply function
+with-concurrency.eval.ts
+  ✓ adds a tested multiply function  8 of 8 runs passed
 
-18s · results .reeval/runs/…/summary.md
+Done in 18s · 1 passed
 ```
 
 | File | What it is |

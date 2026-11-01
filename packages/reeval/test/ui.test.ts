@@ -158,6 +158,7 @@ const interleaved: ReevalEvent[] = [
     ms: 165_000,
     tools: 6,
     fileEdits: 2,
+    filesChanged: 2,
   }),
   progress(GREET, s(170), { kind: 'check-start', command: 'node --test' }),
   progress(GREET, s(172), { kind: 'check-end', command: 'node --test', exitCode: 0, ms: 1200 }),
@@ -179,6 +180,7 @@ const interleaved: ReevalEvent[] = [
     ms: 194_000,
     tools: 3,
     fileEdits: 1,
+    filesChanged: 1,
   }),
   progress(DEFAULT, s(200), { kind: 'turn-start', turn: 2 }),
   progress(DEFAULT, s(330), {
@@ -188,6 +190,7 @@ const interleaved: ReevalEvent[] = [
     ms: 130_000,
     tools: 2,
     fileEdits: 1,
+    filesChanged: 1,
   }),
   progress(DEFAULT, s(330), { kind: 'check-start', command: 'node -e "…"\nprocess.exit(1)' }),
   progress(DEFAULT, s(331), {
@@ -216,6 +219,7 @@ const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
   rich: false,
   githubActions: false,
   heartbeatMs: 60_000,
+  interactive: false,
   ...overrides,
 })
 
@@ -245,33 +249,54 @@ function render(events: ReevalEvent[], output: OutputOptions, color = false): st
 
 const lines = (...l: string[]) => `${l.join('\n')}\n`
 
-const RESULT = [
-  '',
-  'pass             writes greet.js',
-  '',
-  'fail             greets in French',
-  '  french greeting  failed',
-  '    expected command to succeed, exit code 1',
-  '  +1 more passed',
-  '',
-  'fail             explains why greet.js fails',
-  '  2 tries               1 of 2',
-  '  names the root cause  1 of 2',
-  "    expected 'Docker is down' to contain 'null'",
-  '  +1 more passed',
-  '',
-  'fail             reads the fixture repo',
-  '  error            the fixture repo is missing',
-  '',
-  'infra error      starts its sandbox',
-  '  infra error      the fake sandbox fell over',
-  '',
-  'skipped          greets in Welsh',
-  'todo             greets in Klingon',
-  '',
-  '6m 05s · results .reeval/runs/run-1/summary.md',
-  '3 fail · 1 pass · 1 infra error · 2 skipped',
+const LIST = [
+  ['✓ writes greet.js              1 of 1 run passed'],
+  [
+    '✗ greets in French             0 of 1 run passed',
+    'Failed on fake.',
+    'Every failure was the same check:',
+    '  "french greeting" failed once',
+    '    expected command to succeed, exit code 1',
+  ],
+  [
+    '✗ explains why greet.js fails  1 of 2 runs passed',
+    'Passed 1 of 2 on fake.',
+    'Every failure was the same check:',
+    '  "names the root cause" failed once',
+    "    expected 'Docker is down' to contain 'null'",
+  ],
+  [
+    '✗ reads the fixture repo       0 of 1 run passed',
+    'Failed on fake.',
+    '1 run failed:',
+    '  the fixture repo is missing',
+  ],
+  [
+    '✗ starts its sandbox           0 of 1 run passed',
+    'No run finished.',
+    '1 run hit an infrastructure error:',
+    '  the fake sandbox fell over',
+  ],
+  ['– greets in Welsh              skipped'],
+  ['– greets in Klingon            todo'],
 ]
+
+/** The status list `run-end` prints, with the tree's glyphs (pipe and CI) or without (agent mode). */
+const result = (glyphs: boolean) => [
+  '',
+  'evals/results.eval.ts',
+  ...LIST.flatMap(([row = '', ...detail], i) => {
+    const last = i === LIST.length - 1
+    const branch = glyphs ? (last ? '└─ ' : '├─ ') : '  '
+    const indent = glyphs ? (last ? '     ' : '│    ') : '    '
+    return [`${branch}${row}`, ...detail.map((line) => `${indent}${line}`)]
+  }),
+  '',
+  'Done in 6m 05s · 3 failed · 1 infra error · 1 passed · 2 skipped',
+  'Browse it: reeval studio · summary .reeval/runs/run-1/summary.md',
+]
+
+const RESULT = result(true)
 
 describe('plain renderer', () => {
   test('grouped: start lines stream, each attempt prints as one block when it ends', () => {
@@ -284,16 +309,16 @@ describe('plain renderer', () => {
         '… 2 running after 3m 00s: [creates#1 cursor] cleanup 3m 00s, [adds#1 cursor] turn 1 2m 59s',
         '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
         '[creates#1 cursor]  +0:01 sandbox ready 4s',
-        '[creates#1 cursor]  +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
+        '[creates#1 cursor]  +0:05 turn 1 done 2m 45s · 6 tool calls, 2 files changed',
         '[creates#1 cursor]  +2:50 $ node --test  exit 0 1s',
         '[creates#1 cursor]  +2:52 judge  pass 0.92 (≥ 0.8)  Accurate summary?',
         '… 1 running after 4m 12s: [adds#1 cursor] turn 2 4m 11s',
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
         '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         '[adds#1 cursor]  +0:01 sandbox ready 4s',
-        '[adds#1 cursor]  +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
+        '[adds#1 cursor]  +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file changed',
         '[adds#1 cursor]  +1:09 stdout | seeding greet.js',
-        '[adds#1 cursor]  +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file edit',
+        '[adds#1 cursor]  +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file changed',
         '[adds#1 cursor]  +5:29 $ node -e "…"…  exit 1 900ms',
         '[adds#1 cursor]  AssertionError: expected 1 to be 2 // Object.is equality',
         '[adds#1 cursor]',
@@ -323,7 +348,7 @@ describe('plain renderer', () => {
       '… 2 running after 1m 06s: [creates#1 cursor] turn 1 1m 06s, [adds#1 cursor] turn 1 1m 05s',
       '[adds#1 cursor]  +1:09 stdout | seeding greet.js',
       '… 2 running after 2m 10s: [creates#1 cursor] turn 1 2m 10s, [adds#1 cursor] turn 1 2m 09s',
-      '[creates#1 cursor]  +2:50 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
+      '[creates#1 cursor]  +2:50 turn 1 done 2m 45s · 6 tool calls, 2 files changed',
       '[creates#1 cursor]  +2:50 $ node --test',
       '[creates#1 cursor]  +2:52 $ node --test  exit 0 1s',
       '[creates#1 cursor]  +2:52 judging: Accurate summary?',
@@ -338,7 +363,7 @@ describe('plain renderer', () => {
       lines(
         '::group::[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
         ' +0:01 sandbox ready 4s',
-        ' +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
+        ' +0:05 turn 1 done 2m 45s · 6 tool calls, 2 files changed',
         ' +2:50 $ node --test  exit 0 1s',
         ' +2:52 judge  pass 0.92 (≥ 0.8)  Accurate summary?',
         '::endgroup::',
@@ -346,9 +371,9 @@ describe('plain renderer', () => {
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
         '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         ' +0:01 sandbox ready 4s',
-        ' +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
+        ' +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file changed',
         ' +1:09 stdout | seeding greet.js',
-        ' +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file edit',
+        ' +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file changed',
         ' +5:29 $ node -e "…"…  exit 1 900ms',
         ' AssertionError: expected 1 to be 2 // Object.is equality',
         '',
@@ -467,12 +492,28 @@ describe('plain renderer', () => {
       assert.equal(
         out,
         lines(
-          `reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · ${logOrder} logs`,
+          'reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2',
           ...RESULT,
         ),
       )
     }
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
+  })
+
+  test('with no attempt logs, a pipe gets a progress line on the heartbeat and the list at the end', () => {
+    const out = render(interleaved, options({ outputLogs: 'none' })).split('\n')
+    assert.deepEqual(
+      out.filter((line) => line.startsWith('…')),
+      [
+        '… 0 of 2 evals done (1m 00s)',
+        '… 0 of 2 evals done (2m 00s)',
+        '… 0 of 2 evals done (3m 00s)',
+        '… 1 of 2 evals done (4m 00s)',
+        '… 1 of 2 evals done (5m 00s)',
+        '… 1 of 2 evals done (6m 00s)',
+      ],
+    )
+    assert.ok(out.join('\n').endsWith(lines(...RESULT)))
   })
 
   test('on a terminal: one status line under the logs, rewritten in place, cleared before the result', () => {
@@ -828,7 +869,7 @@ describe('agent renderer', () => {
     for (const e of interleaved) renderer.onEvent(e)
     assert.equal(
       text,
-      lines('reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file', ...RESULT),
+      lines('reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file', ...result(false)),
     )
     assert.ok(!text.includes('\x1b['))
   })
@@ -855,6 +896,22 @@ describe('output mode', () => {
     assert.throws(
       () => resolve({}, true, undefined, { ui: 'fancy' }),
       /--ui is one of .* \(got fancy\)/,
+    )
+  })
+
+  test('interactive: the browsable list only with a status line, a terminal on stdin and no attempt logs', () => {
+    const interactive = (env: NodeJS.ProcessEnv, stdinTTY: boolean, flags = {}) =>
+      resolveOutput({ flags, env, isTTY: true, stdinTTY }).interactive
+    assert.equal(interactive({}, true), true)
+    assert.equal(interactive({}, false), false, 'stdin piped')
+    assert.equal(interactive({ CI: '1' }, true), false)
+    assert.equal(interactive({}, true, { verbose: true }), false, '-v streams the logs instead')
+    assert.equal(interactive({}, true, { ui: 'plain' }), false)
+    assert.equal(resolveOutput({ flags: {}, env: {}, isTTY: true }).interactive, false)
+    assert.equal(
+      resolveOutput({ flags: {}, env: {}, isTTY: true, stdinTTY: true, agent: 'cursor' })
+        .interactive,
+      false,
     )
   })
 
@@ -886,10 +943,10 @@ describe('output mode', () => {
     assert.equal(resolve({}).color, true)
   })
 
-  test('output logs: errors-only by default, so a pass prints no detail; full on request', () => {
-    assert.equal(resolve({}).outputLogs, 'errors-only')
-    assert.equal(resolve({ CI: '1' }, false).outputLogs, 'errors-only')
-    assert.equal(resolve({ REEVAL_OUTPUT_LOGS: 'auto' }).outputLogs, 'errors-only')
+  test('output logs: none by default, since the eval list says how each went; full on request', () => {
+    assert.equal(resolve({}).outputLogs, 'none')
+    assert.equal(resolve({ CI: '1' }, false).outputLogs, 'none')
+    assert.equal(resolve({ REEVAL_OUTPUT_LOGS: 'auto' }).outputLogs, 'none')
     assert.equal(resolve({ REEVAL_OUTPUT_LOGS: 'full' }).outputLogs, 'full')
     assert.equal(resolve({}, true, undefined, { outputLogs: 'full' }).outputLogs, 'full')
     assert.equal(resolve({}, true, undefined, { verbose: true }).outputLogs, 'full', '-v')

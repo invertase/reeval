@@ -183,7 +183,9 @@ End with a short message, not a report:
    found it; then what's missing, as commands: the `.env.local` lines, `npx reeval image
    build`, Docker.
 3. The command to run: `npx reeval run` (or `npx reeval run <eval-name>` for one).
-4. How to read the output, in a few lines. A real Cursor run of Template A:
+4. How to read the output, in a few lines. `npx reeval run` prints a line per eval and a sentence
+   for each way one failed; `npx reeval show` prints its arms and checks. A real Cursor run of
+   Template A, from `npx reeval show`:
 
 ```text
 pass             stores invoice totals in cents with the billing skill
@@ -194,7 +196,7 @@ pass             stores invoice totals in cents with the billing skill
   total in integer cents  0 of 2  2 of 2
   a currency column       0 of 2  2 of 2
   +1 more passed
-13s · 232k in (108k cached) · 3,026 out · results .reeval/runs/…/summary.md
+
 1 pass
 ```
 
@@ -203,7 +205,7 @@ pass             stores invoice totals in cents with the billing skill
   2 of 4 against 2 of 4) a `too-few-tries` remark says it doesn't hold yet and names the `runs`. When
   both arms pass every run, or both fail every run, at 4 runs a side or more, a `cant-tell-apart`
   remark says more runs won't help: make the task harder, or check the eval. The check table shows which check told the arms apart.
-- `Remarks:` after the tally names an eval that needs work, with the line to fix. Remarks never
+- `Worth knowing:` under an eval in `reeval run`'s list names what about it needs work, with the line to fix. Remarks never
   change a verdict.
 - Both arms passing is a result, not a broken eval: the agent already does this without the
   skill. Say so, and suggest a harder task or a more specific rule from the skill next.

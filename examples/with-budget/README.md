@@ -34,11 +34,12 @@ plan  run … · 1 eval · 1 cell · 3 attempts · ~3s serial · budget 10 attem
 …
 Budget: 2s reached; running attempts finish, queued ones are skipped
 
-pass             adds a tested multiply function
+with-budget.eval.ts
+  ✓ adds a tested multiply function  1 of 1 run passed
 
 Budget reached: attempts that hadn’t started were skipped
-7s · results .reeval/runs/…/summary.md
-1 pass
+Done in 7s · 1 passed
+Browse it: reeval studio · summary .reeval/runs/…/summary.md
 ```
 
 Ask for more attempts than the budget allows and the run stops before it starts, with exit 2;

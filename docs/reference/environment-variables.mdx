@@ -5,7 +5,7 @@ description: "Every public REEVAL_* variable, provider key, and CI variable reev
 
 Where a flag and a variable set the same thing, the flag takes precedence. `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` then take precedence over the matching config key. A variable already in the environment takes precedence over the `.env.local` file, which takes precedence over the `.env` file, from the config file's directory.
 
-`reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For each of those four, `auto` or no value uses the default, and a value outside its own list stops the command: `live`, `plain`, or `agent` for `REEVAL_UI`; `stream` or `grouped` for `REEVAL_LOG_ORDER`; `task` or `none` for `REEVAL_LOG_PREFIX`; `full`, `errors-only`, or `none` for `REEVAL_OUTPUT_LOGS`.
+`reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For each of those four, `auto` or no value uses the default, and a value outside its own list stops the command: `plain` or `agent` for `REEVAL_UI`; `stream` or `grouped` for `REEVAL_LOG_ORDER`; `task` or `none` for `REEVAL_LOG_PREFIX`; `full`, `errors-only`, or `none` for `REEVAL_OUTPUT_LOGS`.
 
 Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential stops `reeval analyze`, and a run only when a question falls back to `analysis.model`.
 
@@ -33,7 +33,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_UI`
 
-`REEVAL_UI` is `live`, `plain`, or `agent` (`--ui`). With no value, a detected coding agent selects `agent`, an output CI variable or a pipe selects `plain`, and a terminal selects `live`. `live` prints as plain, and `agent` turns the heartbeat off.
+`REEVAL_UI` is `plain` or `agent` (`--ui`). With no value, a detected coding agent selects `agent`, and otherwise the mode is `plain`. On a terminal outside CI with no value and no `--output-logs`, the status list is interactive. `agent` turns the heartbeat off.
 
 ## `REEVAL_LOG_ORDER`
 
@@ -45,7 +45,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_OUTPUT_LOGS`
 
-`REEVAL_OUTPUT_LOGS` is `full`, `errors-only`, or `none` (`--output-logs`). With no value, `--verbose` selects `full`, and otherwise the level is `errors-only`.
+`REEVAL_OUTPUT_LOGS` is `full`, `errors-only`, or `none` (`--output-logs`). With no value, `--verbose` selects `full`, and otherwise the level is `none`: the status list says how each evaluation went.
 
 ## `REEVAL_HEARTBEAT`
 

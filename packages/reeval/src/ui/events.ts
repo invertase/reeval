@@ -185,6 +185,8 @@ export type ReevalEvent =
 export interface Renderer {
   onEvent(event: ReevalEvent): void
   close(): void
+  /** Resolves when the output is done with the terminal: the interactive list, once it's quit. */
+  wait?(): Promise<void>
 }
 
 /** Where output goes; `process.stdout` in the CLI, a capture in tests. */

@@ -1,9 +1,10 @@
-// The terminal's output while a run goes: attempt logs in Turborepo's stream and grouped log
-// orders, and on a TTY (`live`) one status line under them that's rewritten in place. No line
-// says how an attempt ended; the result blocks at the end do. Elsewhere it's append-only, for CI,
-// pipes and `| tee`.
+// The terminal's output while a run goes, append-only for CI, pipes and `| tee`: the run header,
+// a progress line on a timer, then the status list once the run ends, failures expanded. With
+// `--output-logs`, each attempt's logs in Turborepo's stream and grouped log orders too, and on a
+// TTY (`live`) one status line under them that's rewritten in place.
 import { sandboxWarningLine } from '../text.ts'
 import type { SandboxWarning } from '../types.ts'
+import { suiteResult } from '../view/suite.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
 import type {
   AttemptRef,
@@ -26,8 +27,9 @@ import {
   progressLine,
 } from './format.ts'
 import { headerLines, noteLines, noticeLines, prepareStepLines, startLine } from './header.ts'
+import { LiveList, listLines, progressText } from './list.ts'
 import type { OutputOptions } from './mode.ts'
-import { resultLines } from './result.ts'
+import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 
 export type RendererOptions = {
@@ -110,9 +112,12 @@ export class PlainRenderer implements Renderer {
   readonly #evals = new Set<string>()
   readonly #tries = new Set<string>()
   readonly #ended = new Set<string>()
+  readonly #list: LiveList
+  #lastProgress = 0
 
   constructor(options: RendererOptions) {
     this.#o = options
+    this.#list = new LiveList(options.harness)
     this.#c = options.colors
     this.#now = options.now ?? Date.now
     this.#live = options.output.statusLine
@@ -188,9 +193,10 @@ export class PlainRenderer implements Renderer {
           return
         }
         const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
-        const order = `${this.#o.output.logOrder} logs`
+        const order =
+          this.#o.output.outputLogs === 'none' ? '' : ` · ${this.#o.output.logOrder} logs`
         const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
-        this.#write(c.dim(`reeval ${e.version} · run ${e.runId} · ${files} · ${setup} · ${order}`))
+        this.#write(c.dim(`reeval ${e.version} · run ${e.runId} · ${files} · ${setup}${order}`))
         return
       }
       case 'plan':
@@ -205,6 +211,7 @@ export class PlainRenderer implements Renderer {
         for (const w of e.sandboxWarnings ?? []) this.#sandboxWarning(w)
         return
       case 'collected':
+        this.#list.collected(e.file, e.evals)
         this.#tags.addFile(e.evals)
         for (const x of e.evals) {
           if (x.skipped) continue
@@ -216,6 +223,7 @@ export class PlainRenderer implements Renderer {
         return
       case 'eval-start': {
         const a = this.#attempt(e, e.at)
+        this.#list.start(e)
         a.last = e
         this.#queued.delete(e.key)
         this.#running.set(e.key, a)
@@ -225,6 +233,7 @@ export class PlainRenderer implements Renderer {
       case 'eval-progress': {
         const a = this.#running.get(e.key)
         if (!a) return
+        this.#list.progress(e.key, e.progress)
         if (e.progress.kind !== 'warning') a.last = e
         const { progress } = e
         const paint = a.ungated ? { ...c, red: c.dim } : c
@@ -260,6 +269,7 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'eval-end':
+        this.#list.end(e.result)
         this.#end(e.result, e.at)
         if (this.#tries.has(e.result.key)) this.#ended.add(e.result.key)
         this.#drawStatus()
@@ -286,11 +296,22 @@ export class PlainRenderer implements Renderer {
         this.#write(paint(e.text))
         return
       }
-      case 'run-end':
+      case 'run-end': {
         this.#clearStatus()
         this.#write('')
-        for (const line of resultLines(c, e, (this.#o.verbosity ?? 0) > 0)) this.#write(line)
+        const verbose = (this.#o.verbosity ?? 0) > 0
+        const list = statusList({
+          record: e.record,
+          suite: suiteResult(e.record),
+          remarks: e.remarks ?? null,
+          verbose,
+          ...(e.notRun ? { notRun: e.notRun } : {}),
+        })
+        for (const line of listLines(list, c, true, pointerLine(e.summaryPath), verbose)) {
+          this.#write(line)
+        }
         return
+      }
     }
   }
 
@@ -403,14 +424,24 @@ export class PlainRenderer implements Renderer {
     }
   }
 
-  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals are running. */
+  /**
+   * Every `heartbeatMs` while attempts run. Without attempt logs, how many evals are done; with
+   * them, each running attempt's phase, when nothing printed for that long.
+   */
   tick(now = this.#now()): void {
-    const { heartbeatMs } = this.#o.output
+    const { heartbeatMs, outputLogs } = this.#o.output
     // On a TTY the status line already says the run is alive.
     if (this.#live || heartbeatMs <= 0) return
-    if (now - this.#lastWrite < heartbeatMs) return
-    const c = this.#c
     if (this.#running.size === 0) return
+    const c = this.#c
+    if (outputLogs === 'none') {
+      if (now - Math.max(this.#lastProgress, this.#runStartedAt) < heartbeatMs) return
+      const { done, total } = this.#list.counts()
+      this.#write(c.dim(progressText(done, total, now - this.#runStartedAt)))
+      this.#lastProgress = now
+      return
+    }
+    if (now - this.#lastWrite < heartbeatMs) return
     const running = [...this.#running.values()].map((a) => {
       const progress = a.last?.type === 'eval-progress' ? a.last.progress : undefined
       return `${this.#prefix(a)} ${phaseOf(progress)} ${c.dim(formatDuration(now - a.startedAt))}`
