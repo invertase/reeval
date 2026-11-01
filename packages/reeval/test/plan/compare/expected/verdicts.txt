@@ -1,7 +1,7 @@
 no profile · 5 evals · 20 cells · 104 attempts
 hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
-hint: 2 compares run 1 or 3 times per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
-hint: evals/verdicts.eval.ts › three cases can never get a verdict has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+hint: 2 compares run 1 or 3 times per cell; below 4 runs a side their lift shows only a direction and their effort can't be tested (runs: 4)
+hint: evals/verdicts.eval.ts › three cases can never get a verdict has 3 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 evals/verdicts.eval.ts › one run a cell can never get a verdict     a/base/docker     control          ungated  ×1
                                                                     a/skilled/docker  variant skilled  gated    ×1
                                                                     b/base/docker     control          ungated  ×1

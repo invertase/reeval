@@ -934,9 +934,9 @@ evaluate('logs in', { cases: [{ id: '0', user: '${user}', password: process.env.
     const secret = { env: { DB_PASSWORD: 'postgres-dev-pass' } }
     assert.equal((await runCli(p.dir, ['run', '--record'], secret)).code, 0)
     const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
-    assert.equal(entry?.source?.case, sha256('{"id":"0","password":"[REDACTED]","user":"ada"}'))
+    assert.equal(entry?.cases?.[0]?.hash, sha256('{"id":"0","password":"[REDACTED]","user":"ada"}'))
     assert.notEqual(
-      entry?.source?.case,
+      entry?.cases?.[0]?.hash,
       sha256('{"id":"0","password":"postgres-dev-pass","user":"ada"}'),
       'canary: the raw case would confirm a guessed password',
     )
@@ -962,9 +962,9 @@ evaluate('connects', { cases: [{ id: '0', conn: process.env.DB_CONN }], environm
     const run = await runCli(p.dir, ['run', '--record'], { env: { DB_CONN: 'pgpass1' } })
     assert.equal(run.code, 0, run.stderr)
     const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
-    assert.equal(entry?.source?.case, sha256('{"conn":"[REDACTED]","id":"0"}'))
+    assert.equal(entry?.cases?.[0]?.hash, sha256('{"conn":"[REDACTED]","id":"0"}'))
     assert.notEqual(
-      entry?.source?.case,
+      entry?.cases?.[0]?.hash,
       sha256('{"conn":"pgpass1","id":"0"}'),
       'canary: DB_CONN is no secret name, so only its secret() masks it',
     )

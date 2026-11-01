@@ -1,5 +1,5 @@
 no profile · 3 evals · 12 cells · 22 attempts
-hint: evals/where.eval.ts › with the skill runs 2 of its 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+hint: evals/where.eval.ts › with the skill runs 2 of its 3 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 evals/where.eval.ts › stack questions  a/next-app/docker      control               gated    ×2  3 cases · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"next","auth":["clerk","none"]}
                                        a/vite-app/docker      control               gated    ×2  traits {"stack":"vite"}
                                        b/next-app/docker      control               gated    ×2  traits {"stack":"next","auth":["clerk","none"]}

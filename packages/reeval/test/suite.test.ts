@@ -368,7 +368,7 @@ describe('outcomes the record alone has', () => {
   })
 
   test("a family's case that hasn't run in a stopped run says not run; a declared skip doesn't", () => {
-    const record = read(raw)
+    const record = unfoldCases(read(raw))
     record.status = 'budget'
     const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
     assert.ok(first)

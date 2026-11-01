@@ -1,6 +1,6 @@
 no profile · 3 evals · 10 cells · 22 attempts
-hint: evals/cases.eval.ts › pooled has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
-hint: evals/cases.eval.ts › keyed has 2 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+hint: evals/cases.eval.ts › pooled has 3 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
+hint: evals/cases.eval.ts › keyed has 2 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 evals/cases.eval.ts › pooled                  a/base/docker     control          ungated  ×3  3 cases
                                               a/skilled/docker  variant skilled  gated    ×3  minLift 0.2
                                               b/base/docker     control          ungated  ×3

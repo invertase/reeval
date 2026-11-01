@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { unfoldCases } from '../src/history/cases.ts'
 import { familiesOf } from '../src/history/families.ts'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
 import { readRemarks } from '../src/remarks/files.ts'
@@ -140,7 +141,7 @@ const withHistory = (h: {
 })
 
 const raise = (record: RunRecord, ctx: RemarkContext) =>
-  deterministicRemarks(suiteResult(record), record, ctx)
+  deterministicRemarks(suiteResult(record), unfoldCases(record), ctx)
 const kinds = (record: RunRecord, ctx: RemarkContext) => raise(record, ctx).map((r) => r.kind)
 
 /** The record cut to the eval named `name`. */
@@ -440,10 +441,7 @@ describe('remark thresholds', () => {
       two?.fix?.edit,
       'set runs: 4 or more, so a split this wide is less likely by chance',
     )
-    const family = (template: string): RunRecord => ({
-      ...structuredClone(record),
-      evals: structuredClone(record.evals.filter((e) => e.family?.name === template)),
-    })
+    const family = (name: string): RunRecord => only(record, name)
     assert.deepEqual(
       kinds(family('tft family'), NO_HISTORY),
       [],
@@ -460,7 +458,7 @@ describe('remark thresholds', () => {
       ['cant-tell-apart'],
       '30 cases that all pass on both sides are a ceiling, not a small sample',
     )
-    const quicker = family('tft agree')
+    const quicker = unfoldCases(family('tft agree'))
     for (const e of quicker.evals)
       for (const a of e.attempts)
         a.timings.agentMs = e.cells.find((c) => c.key === a.cell)?.lift ? 10 : 1000
