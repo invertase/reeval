@@ -1242,7 +1242,7 @@ evaluate('hello', async (c) => {
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /^ +\S+ {2}1 of 1 {2}helped\n +difference \+100 points, 95% interval −12…\+100$/m,
+      /^ +\S+ {2}1 of 1 {2}helped\n +Pass rate \+100 pts[^\n]*\n +difference \+100 points, 95% interval −12…\+100$/m,
       '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)

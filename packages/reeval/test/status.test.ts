@@ -134,7 +134,7 @@ test('a compare whose effort holds prints its comparison, which every reader sha
   )
   const again = await runCli(p.dir, ['run', '--ui', 'plain'])
   assert.equal(again.code, 0, again.stdout + again.stderr)
-  const idOf = (stdout: string) => /· run (\S+)/.exec(stdout)?.[1] ?? ''
+  const idOf = (stdout: string) => /Run: +(\S+)/.exec(stdout)?.[1] ?? ''
   const compare = await runCli(p.dir, ['compare', idOf(run.stdout), idOf(again.stdout), '-v'])
   assert.equal(compare.code, 0, compare.stdout + compare.stderr)
   assert.match(
