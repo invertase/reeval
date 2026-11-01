@@ -1,0 +1,25 @@
+{
+  "kind": "reeval-remarks",
+  "schemaVersion": 1,
+  "runId": "20261101T084157Z_0ce3c84_cursor-agent_zzcn",
+  "createdAt": "2026-11-01T08:41:58.476Z",
+  "remarks": [
+    {
+      "id": "be203540a2702e4a2b7f2cfb97d8544eee0f3b118d384cb39bf4322766586e5f",
+      "evalId": "evals%2Fcases.eval.ts › lifted",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "With-skill passed 1 of 1 try and plain 0 of 1: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fcases.eval.ts › lifted/Ada/fake+with-skill+fake",
+        "evals%2Fcases.eval.ts › lifted/Ada/fake+plain+fake"
+      ],
+      "fix": {
+        "at": "source:evals/cases.eval.ts#L38",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "firstSeenRun": "20261101T084157Z_0ce3c84_cursor-agent_zzcn",
+      "printed": false
+    }
+  ]
+}
