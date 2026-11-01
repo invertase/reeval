@@ -178,6 +178,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts',
       'reeval/test/cases.test.ts',
       'reeval/test/query.test.ts',
+      'reeval/test/history.test.ts',
+      'reeval/test/remarks.test.ts',
     ],
   },
   {

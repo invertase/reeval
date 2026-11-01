@@ -149,12 +149,14 @@ function historyOf(
         [at(evalKey).evalKey, cellKey, at(evalKey).caseKey, fingerprint],
       ),
     window: (evalKey, cellKey, label, fingerprint) => {
+      const { evalKey: key, caseKey } = at(evalKey)
       const rows = db.query(
-        `SELECT k.pass, k.fail FROM cell_checks k
+        `SELECT k.pass, k.fail FROM ${caseKey === null ? 'cell_checks' : 'case_checks'} k
          JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
          WHERE k.eval_key = ? AND k.cell_key = ? AND k.label = ? AND c.comparable = ?
+           ${caseKey === null ? '' : 'AND k.case_key = ?'}
          ORDER BY k.run_id DESC LIMIT ${FLAKY_WINDOW}`,
-        [at(evalKey).evalKey, cellKey, label, fingerprint],
+        [key, cellKey, label, fingerprint, ...(caseKey === null ? [] : [caseKey])],
       ).rows as Array<{ pass: number; fail: number }>
       return rows.reduce<CheckWindow>(
         (w, r) => ({
@@ -257,12 +259,16 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
         }),
       ),
     )
+    const evalOf = new Map(record.evals.map((e) => [e.key, e]))
     for (const entry of cases.evals) await loc.prepare(entry, needlesOf(entry))
     const ctx: RemarkContext = {
       history: db ? historyOf(db, await defaultBranch(config.root), caseOf) : null,
+      // The history keys a case's cell by its eval's cell, over every case.
       comparable: (entry, cellKey) => {
-        const cell = entry.cells.find((c) => c.key === cellKey)
-        return cell ? comparableFingerprint(cell, entry.attempts) : ''
+        const into = caseOf.get(entry.id)
+        const e = (into && evalOf.get(into.evalKey)) ?? entry
+        const cell = e.cells.find((c) => c.key === cellKey)
+        return cell ? comparableFingerprint(cell, e.attempts) : ''
       },
       locate: loc.locate,
     }

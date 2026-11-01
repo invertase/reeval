@@ -193,7 +193,7 @@ export async function buildPlan(options: {
     }
     attempts++
     if (attempt.bestOf === undefined || attempt.n <= majorityOf(attempt.bestOf)) fewest++
-    cells.add(`${id}\0${attempt.cell.key}`)
+    cells.add(`${attempt.family?.id ?? id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
     costed.push({ id, cell: attempt.cell, harness: attempt.harness })
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)

@@ -1,4 +1,4 @@
-no profile · 5 evals · 12 cells · 26 attempts
+no profile · 5 evals · 5 cells · 26 attempts
 hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/verdicts.eval.ts › one run a cell can never get a verdict     b/skilled/docker  variant skilled  gated  ×1
 evals/verdicts.eval.ts › three runs a cell can never get a verdict  b/skilled/docker  variant skilled  gated  ×3

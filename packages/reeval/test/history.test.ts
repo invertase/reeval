@@ -70,6 +70,12 @@ async function gitProject(name: string, files: Record<string, string>, extra = '
   return p
 }
 
+const query = async (dir: string, sql: string) => {
+  const r = await runCli(dir, ['query', sql, '--json'])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  return JSON.parse(r.stdout) as Array<Record<string, unknown>>
+}
+
 const historyJson = async (dir: string, args: string[] = []) => {
   const r = await runCli(dir, ['history', '--json', ...args])
   assert.equal(r.code, 0, r.stderr)
@@ -1293,6 +1299,98 @@ evaluate('greets', { cases: ['ada', 'grace'] }, async (c) => {
           ],
         ],
       ],
+    )
+  })
+
+  test('runs of different cases compare over the cases both ran; a failing case only head ran fails --fail-on-regression', async () => {
+    const p = await gitProject('compare-case-scope', {
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+const fail = (process.env.REEVAL_TEST_FAIL ?? '').split(',')
+evaluate('greets', { cases: (process.env.REEVAL_TEST_SET ?? 'a,b,c').split(',') }, async (c, k) => {
+  await c.send('go')
+  expect(fail.includes(k), 'passes ' + k).toBe(false)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const head = async (env: Record<string, string>) => {
+      await runCli(p.dir, ['run'], { env })
+      const json = await runCli(p.dir, ['compare', '--json'])
+      const [row] = JSON.parse(json.stdout).rows as Array<{
+        status: string
+        head: string
+        changes?: string[]
+        caseScope?: { added: string[]; removed: string[] }
+      }>
+      const gate = await runCli(p.dir, ['compare', '--fail-on-regression'])
+      return { row, code: gate.code, out: gate.stdout }
+    }
+
+    const swapped = await head({ REEVAL_TEST_SET: 'a,b,d' })
+    assert.deepEqual(
+      [swapped.row?.status, swapped.row?.caseScope, swapped.code],
+      ['same', { added: ['d'], removed: ['c'] }, 0],
+      swapped.out,
+    )
+    const added = await head({ REEVAL_TEST_SET: 'a,b,d', REEVAL_TEST_FAIL: 'd' })
+    assert.deepEqual(
+      [added.row?.status, added.row?.head, added.row?.changes, added.code],
+      ['drift', 'fail', ['case d added'], 1],
+      added.out,
+    )
+    const shared = await head({ REEVAL_TEST_SET: 'a,b,d', REEVAL_TEST_FAIL: 'b' })
+    assert.deepEqual(
+      [shared.row?.status, shared.row?.caseScope, shared.code],
+      ['regressed', { added: ['d'], removed: ['c'] }, 1],
+      shared.out,
+    )
+    const removed = await head({ REEVAL_TEST_SET: 'a,b' })
+    assert.deepEqual(
+      [removed.row?.status, removed.row?.caseScope, removed.code],
+      ['same', { added: [], removed: ['c'] }, 0],
+      removed.out,
+    )
+  })
+
+  test("a change to one case's data is drift on that case and its eval's cells, not flakiness", async () => {
+    const p = await gitProject('compare-case-drift', {
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+const bv = Number(process.env.REEVAL_TEST_BV ?? 1)
+evaluate('fp', { cases: [{ id: 'a', v: 1 }, { id: 'b', v: bv }] }, async (c, k) => {
+  await c.send('go')
+  expect(k.v, 'small').toBeLessThan(3)
+})
+`,
+    })
+    for (const bv of ['1', '2', '3']) {
+      await runCli(p.dir, ['run', '--record'], { env: { REEVAL_TEST_BV: bv } })
+    }
+    const r = await runCli(p.dir, ['compare', '--json'])
+    const [row] = JSON.parse(r.stdout).rows as Array<{
+      status: string
+      cases: Array<{ id: string; status: string }>
+    }>
+    assert.deepEqual(
+      [row?.status, row?.cases.map((k) => [k.id, k.status])],
+      [
+        'drift',
+        [
+          ['a', 'same'],
+          ['b', 'drift'],
+        ],
+      ],
+      'a case whose data changed is drift, never regressed',
+    )
+    const drift = await query(
+      p.dir,
+      "SELECT changed FROM drift WHERE eval_key = 'evals/e.eval.ts › fp' ORDER BY run_id",
+    )
+    assert.equal(drift.length, 2, 'each change to b moves the eval cell')
+    for (const d of drift) assert.match(String(d.changed), /sources/)
+    const flaky = await query(p.dir, "SELECT case_key, runs FROM flaky_cells WHERE case_key = 'b'")
+    assert.ok(
+      flaky.every((f) => Number(f.runs) === 1),
+      `b is never pooled over runs whose data differ: ${JSON.stringify(flaky)}`,
     )
   })
 

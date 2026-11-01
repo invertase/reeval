@@ -47,7 +47,7 @@ regressed        adds a LangGraph node
   +1 more passed
 ```
 
-The `can't compare` block comes from [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history), whose scripted agent changed between the runs. A harness that fails with nothing changed reads `regressed`.
+The `can't compare` block comes from [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history), whose scripted agent changed between the runs.
 
 Each block and the tally use these words:
 
@@ -62,7 +62,29 @@ Each block and the tally use these words:
 | `removed` | Only the base has the evaluation. |
 | `now fails`, `now passes` | A case of an evaluation whose `passRate` gates its rate over the cases flipped. The evaluation's own row is the verdict. |
 
-When two runs differ only in which cells ran, `reeval compare` compares the cells both have and names the cells only one has. When the runs share no cell, or a shared cell changed, the evaluation reads `can't compare`. It also prints `can't compare` for an outcome change when one side's only failures are attempts an interrupt canceled, or when the served judge model changed. To print every evaluation with each cell's lift, tokens, tool calls, and time from base to head, and the associated stack changes, add `-v`.
+When two runs differ only in which cells ran, `reeval compare` compares the cells both have and names the cells only one has. When the runs share no cell, or a shared cell changed, the evaluation reads `can't compare`. It also prints `can't compare` for an outcome change when one side's only failures are attempts an interrupt canceled, or when the served judge model changed. Add `-v` to print every evaluation with each cell's lift, effort and stack changes.
+
+## Compare runs of different cases
+
+When two runs ran different [`cases`](/evaluations/task/cases) of an evaluation, `reeval compare` compares the cases both ran and lists the rest as `new` and `removed`:
+
+```text
+can't compare    answers a stack question
+  changed          case q4 added
+  base             20261101T103232Z_5f71290_cursor-agent_mrtz  pass
+  head             20261101T103234Z_5f71290_cursor-agent_s7w4  fail
+  cases added      q4
+  cases removed    q3
+  removed          q3
+    base             20261101T103232Z_5f71290_cursor-agent_mrtz  pass
+  new              q4
+    head             20261101T103234Z_5f71290_cursor-agent_s7w4  fail
+    answers it       failed  evals/questions.eval.ts:8
+      expected true to be false // Object.is equality
+  +2 same
+```
+
+`--json` lists them in the row's `caseScope`. A failing case only the head ran makes the evaluation `can't compare`, as above. Under a `passRate` gate or a `minLift`, runs of different cases always read `can't compare`.
 
 ## Fail on a regression
 
@@ -72,7 +94,7 @@ To make the diff a gate, add `--fail-on-regression`:
 npx reeval compare --fail-on-regression
 ```
 
-`reeval compare` exits with code 1 when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, since no earlier run provides a passing result for comparison. Otherwise it exits with code 0, whatever else changed. Add `--md` to write the diff into a job summary. For more information about the GitHub Actions job, see [CI](/evaluations/runs/ci).
+`reeval compare` exits with code 1 when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, since no earlier run provides a passing result for comparison. Otherwise it exits with code 0, whatever else changed. Add `--md` to write the diff into a [CI](/evaluations/runs/ci) job summary.
 
 ## Reference
 

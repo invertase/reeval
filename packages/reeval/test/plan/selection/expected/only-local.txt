@@ -1,4 +1,4 @@
-no profile · 5 evals · 6 cells · 6 attempts
+no profile · 5 evals · 5 cells · 6 attempts
 evals/only.eval.ts › focused                             fake/-/docker  control  gated  ×1
 evals/tags.eval.ts › slow things › big [slow]            fake/-/docker  control  gated  ×1
 evals/tags.eval.ts › slow things › bigger [slow, flaky]  fake/-/docker  control  gated  ×1

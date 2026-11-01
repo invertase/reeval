@@ -3,6 +3,7 @@
 // (`family` set, named `<eval> [<key>]`), so attempts, resume and artifacts keep their keys;
 // `foldCases` turns those entries, and the `families` beside them, into the eval, and
 // `unfoldCases` turns it back. Browser-safe: reading a record from before this shape folds it too.
+import { sha256Hex } from '../sha256.ts'
 import { evalSlug } from '../slug.ts'
 import type { Outcome } from '../types.ts'
 import { checkVerdict } from '../view/contrasts.ts'
@@ -14,6 +15,7 @@ import type {
   EvalEntry,
   FamilyRate,
   FamilyRecord,
+  FingerprintParts,
   RunRecord,
 } from './types.ts'
 
@@ -73,11 +75,16 @@ export const caseKeyOf = caseLabel
 function mergeCell(
   key: string,
   members: readonly EvalEntry[],
+  caseKeys: readonly string[],
   rate: FamilyRate | undefined,
   liftFailed: boolean,
 ): CellRecord {
-  const cells = members.flatMap((m) => m.cells.filter((c) => c.key === key))
+  const pairs = members.flatMap((m, i) =>
+    m.cells.filter((c) => c.key === key).map((c) => [caseKeys[i] as string, c] as const),
+  )
+  const cells = pairs.map(([, c]) => c)
   const { lift: _lift, checks: _checks, ...first } = cells[0] as CellRecord
+  const parts = mergedParts(pairs)
   const sum = (pick: (c: CellRecord) => number) => cells.reduce((s, c) => s + pick(c), 0)
   const pass = sum((c) => c.pass)
   const fail = sum((c) => c.fail)
@@ -87,6 +94,9 @@ function mergeCell(
   const { cell: _cell, ...cellRate } = rate ?? ({} as FamilyRate)
   return {
     ...first,
+    fingerprint:
+      parts === first.fingerprintParts ? first.fingerprint : sha256Hex(JSON.stringify(parts)),
+    fingerprintParts: parts,
     runs: sum((c) => c.runs),
     pass,
     fail,
@@ -96,6 +106,25 @@ function mergeCell(
     outcome,
     ...(rate ? { rate: cellRate } : {}),
   }
+}
+
+/**
+ * A cell's fingerprint parts over its cases: a part every case shares as it is, one that differs
+ * (each case's data is in `sources`) hashed over every case's, so a change to any case changes it.
+ */
+function mergedParts(pairs: ReadonlyArray<readonly [string, CellRecord]>): FingerprintParts {
+  const first = (pairs[0] as readonly [string, CellRecord])[1].fingerprintParts
+  const keys = [...new Set(pairs.flatMap(([, c]) => Object.keys(c.fingerprintParts)))] as Array<
+    keyof FingerprintParts
+  >
+  const differs = keys.filter((k) => pairs.some(([, c]) => c.fingerprintParts[k] !== first[k]))
+  if (!differs.length) return first
+  const parts = { ...first }
+  for (const k of differs) {
+    const over = pairs.map(([key, c]) => [key, c.fingerprintParts[k] ?? null])
+    ;(parts as Record<string, string | null>)[k] = sha256Hex(JSON.stringify(over))
+  }
+  return parts
 }
 
 function caseOf(member: EvalEntry, template: string): CaseRecord {
@@ -137,6 +166,7 @@ function foldOne(members: EvalEntry[], family: FamilyRecord | undefined): EvalEn
         mergeCell(
           key,
           sorted,
+          cases.map((c) => c.key),
           family?.rates.find((r) => r.cell === key),
           lifts.some((l) => l.variant === key && l.outcome === 'fail'),
         ),
@@ -166,6 +196,11 @@ function foldOne(members: EvalEntry[], family: FamilyRecord | undefined): EvalEn
     key: id,
     slug: evalSlug(id),
     name,
+    ...(several
+      ? {
+          fingerprint: sha256Hex(JSON.stringify(cells.map((c) => [c.key, c.fingerprint]).sort())),
+        }
+      : {}),
     ...(first.source ? { source: source as EvalEntry['source'] } : {}),
     outcome: worstOutcome(
       cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
@@ -199,7 +234,15 @@ function loneCase(e: EvalEntry): EvalEntry {
  * as it is.
  */
 export function foldCases(record: RunRecord): RunRecord {
-  const all = record.evals.map(loneCase)
+  // Entries of `evaluate.each(cases, { pool: false })` share a name like this too; only one alone
+  // is a lone case.
+  const lone = record.evals.map(loneCase)
+  const ids = lone.map((e, i) => (e !== record.evals[i] ? e.family?.id : undefined))
+  const all = lone.map((e, i) =>
+    ids[i] !== undefined && ids.filter((id) => id === ids[i]).length > 1
+      ? (record.evals[i] as EvalEntry)
+      : e,
+  )
   if (!all.some((e) => e.family) && !record.families) return record
   const families = new Map((record.families ?? []).map((f) => [f.id, f]))
   const members = new Map<string, EvalEntry[]>()

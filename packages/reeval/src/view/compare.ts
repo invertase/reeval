@@ -527,6 +527,12 @@ function casesRow(
       ...caseRows.flatMap((r) => (r.status === 'drift' ? (r.changes ?? []) : [])),
     ]),
   ]
+  // Nothing earlier vouches for a case only head ran, so one that fails counts on head's side.
+  const failing = caseRows.filter(
+    (r) =>
+      r.base === null && caseOutcome(r.head, r.verdict) === 'fail' && !r.canceled?.includes('head'),
+  )
+  const over = (side: 'base' | 'head') => (side === 'head' ? [...shared, ...failing] : shared)
   if (added.length || removed.length) {
     if (pooledGate(b) || pooledGate(h) || !shared.length) {
       changes.push(
@@ -536,7 +542,7 @@ function casesRow(
     } else {
       const worst = (side: 'base' | 'head') =>
         outcomeOf(
-          shared.map((r) => ({
+          over(side).map((r) => ({
             gate: 'all' as const,
             outcome: caseOutcome(r[side], r.verdict) ?? 'skipped',
           })),
@@ -544,6 +550,7 @@ function casesRow(
       out.base = worst('base')
       out.head = worst('head')
       out.caseScope = { added, removed }
+      changes.push(...failing.map((r) => `case ${r.id} added`))
     }
   }
   const variants = liftScope(b, h)
@@ -551,17 +558,18 @@ function casesRow(
     out.cells = { added: variants.added, removed: variants.removed }
     if (!variants.shared.length)
       return { ...out, ...(changes.length ? { changes } : {}), status: 'drift' }
-    const over = shared.length ? shared : caseRows
     const worst = (side: 'base' | 'head', e: ComparableEval) =>
       outcomeOf([
-        ...over.map((r) => ({
+        ...(shared.length ? over(side) : caseRows).map((r) => ({
           gate: 'all' as const,
           outcome: caseOutcome(r[side], r.verdict) ?? 'skipped',
         })),
         ...(e.lifts ?? [])
           .filter((l) => variants.shared.includes(l.variant))
           .map((l) => ({ gate: 'all' as const, outcome: l.outcome })),
-        ...(e.rates ?? []).map((r) => ({ gate: 'all' as const, outcome: r.outcome })),
+        ...(e.rates ?? [])
+          .filter((r) => !variants.added.includes(r.cell) && !variants.removed.includes(r.cell))
+          .map((r) => ({ gate: 'all' as const, outcome: r.outcome })),
       ])
     out.base = worst('base', b)
     out.head = worst('head', h)

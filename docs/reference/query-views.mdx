@@ -258,6 +258,7 @@ In `evals`, `declared` is `todo` for an `evaluate.todo`, `skip` for an eval decl
 | `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime`, `declared` |
 | `attempt_values_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `name`, `value`, `kind`, `num`, `text`, `turn`, `case_key` |
 | `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort`, `files_changed`, `reasoning_ms`, `case_key` |
+| `case_checks` | `run_id`, `eval_key`, `cell_key`, `case_key`, `label`, `pass`, `fail`, `error`, `not_run` |
 | `case_rates` | `run_id`, `eval_key`, `cell_key`, `case_key`, `case_index`, `pass`, `counted`, `pass_at_1`, `outcome` |
 | `cases` | `run_id`, `eval_key`, `case_key`, `case_index`, `name`, `outcome`, `verdict`, `pass_at_1`, `fingerprint`, `excluded` |
 | `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |

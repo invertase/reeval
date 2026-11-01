@@ -1668,6 +1668,32 @@ test('compare reads an eval with cases by its pooled gate, comparable when its c
   // Its cases decide whether it's comparable.
   const fewer = row(run([lift('a', 'pass')]), run([lift('a', 'fail')], { cases: ['ada'] }))
   assert.deepEqual([fewer?.status, fewer?.changes], ['drift', ['case grace removed']])
+  // Without a pooled gate, over the cases both ran, but a failing case only head ran counts.
+  const ungated = run([lift('a', 'pass', null)])
+  const withCase = (outcome: Outcome): HistoryEntry => {
+    const r = run([lift('a', 'pass', null)], { cases: ['ada', 'grace', 'linus'] })
+    return {
+      ...r,
+      evals: r.evals.map((e) => ({
+        ...e,
+        outcome,
+        cases: e.cases?.map((k) =>
+          k.key === 'linus' ? { ...k, outcome, cells: [cell(outcome, {})] } : k,
+        ),
+      })),
+    }
+  }
+  const passing = row(ungated, withCase('pass'))
+  assert.deepEqual(
+    [passing?.status, passing?.caseScope],
+    ['same', { added: ['linus'], removed: [] }],
+  )
+  const failing = row(ungated, withCase('fail'))
+  assert.deepEqual(
+    [failing?.status, failing?.head, failing?.changes],
+    ['drift', 'fail', ['case linus added']],
+  )
+  assert.equal(regressions(compare(ungated, withCase('fail'))).length, 1)
   assert.equal(
     status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { fp: 'changed' }))?.[0],
     'drift',

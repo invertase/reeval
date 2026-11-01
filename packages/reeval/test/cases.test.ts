@@ -114,6 +114,47 @@ describe('an eval with cases in a record from before it was one entry', () => {
     })
   })
 
+  test("a cell's fingerprint is over every case, so a change to any case changes it", () => {
+    const r = read()
+    const strict = evalNamed(r, 'strict')
+    const [x, y] = strict?.cases ?? []
+    assert.notEqual(
+      x?.cells[0]?.fingerprintParts.sources,
+      y?.cells[0]?.fingerprintParts.sources,
+      'canary: each case has its own data',
+    )
+    const changed = structuredClone(raw)
+    const member = changed.evals.find((e) => e.name === 'strict [y]')
+    for (const c of member?.cells ?? []) {
+      c.fingerprintParts.sources = 'changed'
+      c.fingerprint = 'changed'
+    }
+    const after = evalNamed(readableRecord(changed as never), 'strict')
+    assert.notEqual(after?.cells[0]?.fingerprint, strict?.cells[0]?.fingerprint)
+    assert.notEqual(after?.fingerprint, strict?.fingerprint)
+    assert.deepEqual(
+      unfoldCases(r).evals.map((e) => e.fingerprint),
+      raw.evals.map((e) => e.fingerprint),
+    )
+  })
+
+  test('entries of an unpooled evaluate.each that share a bracketed name stay apart', () => {
+    const old = structuredClone(raw)
+    const lone = old.evals.find((e) => e.name === 'alone [only]') as RunRecord['evals'][number]
+    const twin = { ...structuredClone(lone), name: 'alone [other]' }
+    twin.id = twin.key = 'evals/cases.eval.ts › alone [other]'
+    old.evals = [lone, twin]
+    delete old.families
+    const r = readableRecord(old as never)
+    assert.deepEqual(
+      r.evals.map((e) => [e.name, e.cases]),
+      [
+        ['alone [only]', undefined],
+        ['alone [other]', undefined],
+      ],
+    )
+  })
+
   test('an eval without cases is left as it is', () => {
     const r = read()
     const plain = { ...r, evals: r.evals.filter((e) => !e.cases) }

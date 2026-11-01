@@ -892,6 +892,33 @@ evaluate('coin', { runs: 3 }, async (c) => {
     assert.equal(remarksBlock(seventh.stdout), null)
   })
 
+  test('flaky-check on a case after the first: its cell is looked up by the eval cell over every case', async () => {
+    const p = await project('remarks-cases', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig(),
+      'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('coin', { cases: ['heads', 'tails'], runs: 3 }, async (c, side) => {
+  await c.send('go')
+  expect(side === 'heads' || c.attempt.n === 1, 'lands').toBe(true)
+})
+`,
+    })
+    sh(p.dir, 'init', '-q', '-b', 'main')
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'init')
+    const blocks: Array<string | null> = []
+    for (let i = 0; i < 3; i++) {
+      const r = await runCli(p.dir, ['run', '--record', '-v'])
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      blocks.push(remarksBlock(r.stdout))
+    }
+    assert.deepEqual(blocks.map(namedIn), [[], [], ['coin']], blocks.join('\n'))
+    assert.match(
+      blocks[2] ?? '',
+      /^ {2}coin: "lands" passed 2 of 6 tries over 2 runs with nothing changed/m,
+    )
+  })
+
   test("the default branch: origin's HEAD, a local main, then in CI a pull request's base", async () => {
     const p = await project('remarks-default-branch', { 'README.md': 'hi\n' })
     sh(p.dir, 'init', '-q', '-b', 'feature')

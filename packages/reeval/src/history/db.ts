@@ -89,6 +89,11 @@ CREATE TABLE case_rates (
   case_index INTEGER, pass INTEGER, counted INTEGER, pass_at_1 REAL, outcome TEXT,
   PRIMARY KEY (run_id, eval_key, cell_key, case_key)
 );
+-- Each check (assertion label) per cell of each case, over that case's counted attempts.
+CREATE TABLE case_checks (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, case_key TEXT NOT NULL,
+  label TEXT NOT NULL, pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER
+);
 -- Every answer to a question asked of one attempt on its own (one without across): the choice it
 -- picked when the question has choices, its text, or the error when the call failed.
 CREATE TABLE attempt_answers_m (
@@ -613,6 +618,20 @@ function insertRun(
           c.passRate,
           c.outcome,
         )
+        for (const check of c.checks ?? []) {
+          run(
+            `INSERT INTO case_checks VALUES (${Array(9).fill('?').join(', ')})`,
+            record.runId,
+            e.key,
+            c.key,
+            k.key,
+            check.label,
+            check.pass,
+            check.fail,
+            check.error,
+            check.notRun,
+          )
+        }
       }
     }
     for (const c of e.cells) {
@@ -1010,6 +1029,7 @@ const DATA_TABLES = [
   'mcp_startup',
   'assertions',
   'cell_checks',
+  'case_checks',
 ]
 
 function removeRun(db: DatabaseSync, runId: string): void {
