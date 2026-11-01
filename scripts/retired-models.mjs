@@ -1,7 +1,8 @@
-// Fails `pnpm docs:check` on a Claude model id Anthropic has retired on the Claude API, in any
-// tracked file: a workflow, test row, example or default naming one sends a request that only
-// answers 404 not_found_error. The list follows Anthropic's model deprecations page
-// (https://docs.anthropic.com/en/docs/about-claude/model-deprecations); add an id once it retires.
+// Fails `pnpm docs:check` on a Claude model id Anthropic has retired, or announced the retirement
+// of, on the Claude API, in any tracked file: a workflow, test row, example or default naming one
+// sends a request that answers 404 not_found_error once it retires. The list follows Anthropic's
+// model deprecations page (https://docs.anthropic.com/en/docs/about-claude/model-deprecations);
+// add an id once its retirement date is announced.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,8 +29,7 @@ const SKIPPED = [
  * Ids a file may name, because they describe a model rather than call it. Claude Code drops
  * `effort` on these (its `supportsEffort`) and resolves its `sonnet` alias on Vertex AI to
  * Sonnet 4.5, which still matters where a partner platform such as Vertex AI keeps serving them
- * after the Claude API retired them; OpenCode's Anthropic provider sends Sonnet 4.5 no effort; and
- * the gateway tests rewrite ids between forms without sending them.
+ * after the Claude API retired them; and OpenCode's Anthropic provider sends Sonnet 4.5 no effort.
  */
 const ALLOWED = {
   'packages/reeval/src/contract/harness.ts': [
@@ -38,13 +38,8 @@ const ALLOWED = {
     'claude-sonnet-4-0',
     'claude-sonnet-4-5',
   ],
-  'packages/reeval/test/default-effort.test.ts': ['claude-sonnet-4-5'],
   'packages/reeval/test/refusals/gateway.json': ['claude-sonnet-4-5'],
-  'packages/reeval/test/gateway.test.ts': [
-    'claude-sonnet-4-5',
-    'anthropic/claude-sonnet-4-5',
-    'anthropic/claude-sonnet-4.5',
-  ],
+  'packages/reeval/test/plan/gateway/expected/vertex-yaml.txt': ['claude-sonnet-4-5'],
   'packages/harness-opencode/src/opencode-providers.ts': ['claude-sonnet-4-5'],
   'packages/harness-opencode/test/unit.test.ts': ['anthropic/claude-sonnet-4-5-20250929'],
 }
@@ -72,7 +67,7 @@ export function retiredModelProblems(root) {
       for (const [id] of line.matchAll(RETIRED)) {
         if (allowed?.includes(id)) continue
         problems.push(
-          `${file}:${i + 1} names ${id}, which Anthropic has retired on the Claude API (requests answer 404 not_found_error): use a current model such as claude-haiku-5-5 or claude-sonnet-5-5`,
+          `${file}:${i + 1} names ${id}, which Anthropic has retired or is retiring on the Claude API (requests answer 404 not_found_error once it retires): use a current model such as claude-haiku-5-5 or claude-sonnet-5-5`,
         )
       }
     })

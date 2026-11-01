@@ -2059,6 +2059,10 @@ environment:
       'route: claude code with the sonnet alias falls through vertex',
       route([VERTEX, DIRECT], claudeCode({ model: 'sonnet' })),
     ],
+    [
+      'route: claude code with the opusplan alias on vertex, direct off',
+      route([VERTEX, OFF], claudeCode({ model: 'opusplan' })),
+    ],
     ['model: anthropic on vertex, direct off', model('anthropic/m', undefined, [VERTEX, OFF])],
     ['model: google on vertex, direct off', model('google/m', undefined, [VERTEX, OFF])],
     ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],

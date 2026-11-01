@@ -703,7 +703,7 @@ describe('OpenRouter routes', () => {
       ],
     )
     assert.equal(agent.modelId?.('claude-haiku-4-5'), 'anthropic/claude-haiku-4.5')
-    assert.equal(anthropicOnOpenRouter('claude-sonnet-4-5'), 'anthropic/claude-sonnet-4.5')
+    assert.equal(anthropicOnOpenRouter('claude-opus-4-5'), 'anthropic/claude-opus-4.5')
     assert.equal(anthropicOnOpenRouter('claude-opus-5'), 'anthropic/claude-opus-5')
     assert.equal(anthropicOnOpenRouter('anthropic/claude-x'), 'anthropic/claude-x')
   })
@@ -878,7 +878,7 @@ describe('Vertex AI routes', () => {
   })
 
   test('Claude Code on Vertex is pointed at the project and brokered only on its model calls', () => {
-    const agent = onVertex({ kind: 'claude-code', model: 'claude-sonnet-4-5@20250929' } as never)
+    const agent = onVertex({ kind: 'claude-code', model: 'claude-opus-4-5@20251101' } as never)
     const host = 'us-east5-aiplatform.googleapis.com'
     assert.equal(agent.credential, 'Google Cloud credentials')
     assert.deepEqual(agent.hosts, [host])
@@ -889,7 +889,7 @@ describe('Vertex AI routes', () => {
       CLOUD_ML_REGION: 'us-east5',
     })
     assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
-    assert.equal(agent.modelId?.('anthropic/claude-sonnet-4-5'), 'claude-sonnet-4-5')
+    assert.equal(agent.modelId?.('anthropic/claude-opus-4-5'), 'claude-opus-4-5')
     assert.equal(agent.modelId?.('claude-haiku-4-5-20251001'), 'claude-haiku-4-5@20251001')
     assert.equal(
       agent.modelId?.('anthropic/claude-haiku-4-5-20251001'),
@@ -898,9 +898,9 @@ describe('Vertex AI routes', () => {
     assert.equal(agent.modelId?.('claude-haiku-4-5@20251001'), 'claude-haiku-4-5@20251001')
     const on = (method: string, h: string, path: string) =>
       onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
-    assert.ok(on('POST', host, `${STREAM}/claude-sonnet-4-5@20250929:streamRawPredict`))
-    assert.ok(on('POST', host, `${STREAM}/claude-sonnet-4-5:rawPredict?alt=sse`))
-    assert.ok(!on('GET', host, `${STREAM}/claude-sonnet-4-5:streamRawPredict`))
+    assert.ok(on('POST', host, `${STREAM}/claude-opus-4-5@20251101:streamRawPredict`))
+    assert.ok(on('POST', host, `${STREAM}/claude-opus-4-5:rawPredict?alt=sse`))
+    assert.ok(!on('GET', host, `${STREAM}/claude-opus-4-5:streamRawPredict`))
     assert.ok(!on('POST', 'aiplatform.googleapis.com', `${STREAM}/m:streamRawPredict`))
     assert.ok(
       !on('POST', host, `${STREAM.replace('reeval-512515', 'other')}/m:streamRawPredict`),
@@ -910,9 +910,9 @@ describe('Vertex AI routes', () => {
     assert.equal(
       agent.servedModel?.({
         host,
-        path: `${STREAM}/claude-sonnet-4-5@1:streamRawPredict`,
+        path: `${STREAM}/claude-opus-4-5@1:streamRawPredict`,
       } as never),
-      'claude-sonnet-4-5@1',
+      'claude-opus-4-5@1',
     )
     assert.equal(
       agent.servedModel?.({ host, path: `${STREAM}/count-tokens:rawPredict` } as never),

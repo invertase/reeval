@@ -420,7 +420,8 @@ export function vertexModelProbe(
 /**
  * Why Vertex AI can't serve a routed harness's model, or undefined when it can: fx's Chat
  * Completions endpoint and OpenCode's `google-vertex` provider serve Google's models, and Claude
- * only over Anthropic's own API there; Claude Code's `sonnet` alias names a retiring model there.
+ * only over Anthropic's own API there; Claude Code's `sonnet` and `opusplan` aliases name a
+ * retiring model there.
  * A bare fx id is OpenAI's everywhere else, so only a bare `gemini-…` one is taken as Google's.
  */
 export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undefined {

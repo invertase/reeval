@@ -336,11 +336,12 @@ const CLAUDE_CODE_NO_EFFORT = new Set([
 
 /**
  * The model each alias names in claude-code 2.1.290's catalog: its default, and on Vertex AI its
- * Vertex one where that differs.
+ * Vertex one where that differs. `opusplan` runs Opus in plan mode and Sonnet's model otherwise.
  */
 const CLAUDE_CODE_ALIASES: Record<string, { default: string; vertex?: string }> = {
   opus: { default: 'claude-opus-5-5' },
   sonnet: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5' },
+  opusplan: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5' },
   haiku: { default: 'claude-haiku-4-5' },
   fable: { default: 'claude-fable-5-1' },
 }
@@ -390,7 +391,7 @@ export const claudeCodeModelName = (model: string, gateway?: string): string =>
 
 /**
  * Why Claude Code can't run the alias `model` on Vertex AI: claude-code 2.1.290 resolves `sonnet`
- * there to `claude-sonnet-4-5`, which Anthropic retires on 2026-11-30.
+ * and `opusplan` there to `claude-sonnet-4-5`, which Anthropic retires on 2026-11-30.
  */
 export const claudeCodeVertexAliasRefusal = (model: string): string | undefined => {
   const retired = claudeAlias(model)?.vertex

@@ -117,6 +117,7 @@
   "route: claude code with effort on an alias its catalog resolves to one it lists, on vertex": null,
   "route: claude code with the sonnet alias on vertex, direct off": "UsageError: evals/a.eval.ts › e on claude-code:sonnet: no gateway in the list can serve it (vertex: Claude Code resolves sonnet on Vertex AI to claude-sonnet-4-5, which Anthropic retires on 2026-11-30: name the model, e.g. claude-sonnet-5-5). Drop direct({ enabled: false }) from gateway to fall back to Claude Code's own key.",
   "route: claude code with the sonnet alias falls through vertex": null,
+  "route: claude code with the opusplan alias on vertex, direct off": "UsageError: evals/a.eval.ts › e on claude-code:opusplan: no gateway in the list can serve it (vertex: Claude Code resolves opusplan on Vertex AI to claude-sonnet-4-5, which Anthropic retires on 2026-11-30: name the model, e.g. claude-sonnet-5-5). Drop direct({ enabled: false }) from gateway to fall back to Claude Code's own key.",
   "model: anthropic on vertex, direct off": null,
   "model: google on vertex, direct off": null,
   "model: openai on vertex, direct off": "UsageError: the judge model \"openai/m\": no gateway in the list can serve it (vertex: reeval calls only google/* and anthropic/* models on Vertex AI). Drop direct({ enabled: false }) from gateway to fall back to its provider's own key."
