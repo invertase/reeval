@@ -2031,6 +2031,18 @@ environment:
       'route: claude code on vertex then direct',
       route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
     ],
+    [
+      "route: claude code with effort on a model its catalog doesn't list, on vertex, direct off",
+      route([VERTEX, OFF], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+    ],
+    [
+      "route: claude code with effort on a model its catalog doesn't list falls through vertex",
+      route([VERTEX, DIRECT], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+    ],
+    [
+      'route: claude code with effort on a model its catalog lists, on vertex',
+      route([VERTEX, OFF], claudeCode({ model: 'claude-sonnet-5-5', effort: 'low' })),
+    ],
     ['model: anthropic on vertex, direct off', model('anthropic/m', undefined, [VERTEX, OFF])],
     ['model: google on vertex, direct off', model('google/m', undefined, [VERTEX, OFF])],
     ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],

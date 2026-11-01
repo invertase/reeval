@@ -30,13 +30,13 @@ export default defineConfig({
     // Claude Code and its judge on Vertex AI, billed to GOOGLE_CLOUD_PROJECT, with a token from
     // the host's Application Default Credentials and no key at all. With vertex() alone in the
     // list, a harness or model Vertex can't serve stops the plan instead of falling back to its
-    // own key. The Anthropic API's dated id is sent to Vertex as claude-haiku-4-5@20251001.
+    // own key. Claude ids are the same on Vertex as on Anthropic's API.
     vertex: {
       defaults: {
-        harness: claudeCode({ model: 'claude-haiku-4-5-20251001' }),
+        harness: claudeCode({ model: 'claude-sonnet-5-5' }),
         sandbox: docker(),
       },
-      judge: { model: 'anthropic/claude-haiku-4-5-20251001' },
+      judge: { model: 'anthropic/claude-haiku-5-5' },
       gateway: [vertex()],
     },
   },

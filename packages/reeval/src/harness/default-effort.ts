@@ -33,9 +33,11 @@ export function noDefaultEffort(
       return undefined
     }
     case 'claude-code':
-      return claudeCodeTakesEffort(h.model)
-        ? undefined
-        : `Claude Code sends no effort to ${h.model}`
+      if (!claudeCodeTakesEffort(h.model)) return `Claude Code sends no effort to ${h.model}`
+      if (!claudeCodeTakesEffort(h.model, h.gateway)) {
+        return `Claude Code sends no effort to ${h.model} on Vertex AI`
+      }
+      return effortRefusedOn(h, h.gateway ?? 'direct')
     case 'antigravity': {
       const named = antigravityIdEffort(h.model)
       return named ? `the model id names its effort, ${named}` : undefined

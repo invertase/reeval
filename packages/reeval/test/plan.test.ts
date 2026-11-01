@@ -409,7 +409,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     assert.deepEqual(
       cells.map((c) => [c.harness, c.gateway]),
       [
-        ['claude-code:claude-sonnet-4-5', { name: 'vercel', skipped: [] }],
+        ['claude-code:claude-sonnet-5-5', { name: 'vercel', skipped: [] }],
         ['codex:gpt-5.4-mini', { name: 'vercel', skipped: [] }],
         [
           'cursor:composer-2.5',

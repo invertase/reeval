@@ -668,7 +668,7 @@ evaluate('a', async () => {})
   test('gateway: where each harness resolves, its keys, and an expired Vercel token', async () => {
     const config = await configOf(
       'gateway-vercel',
-      `{ harness: [claudeCode({ model: 'claude-sonnet-4-5' }), cursor({ model: 'composer-2.5' })],
+      `{ harness: [claudeCode({ model: 'claude-sonnet-5-5' }), cursor({ model: 'composer-2.5' })],
          gateway: [vercel()],
          judge: { model: 'anthropic/claude-haiku-4-5' },
          analysis: { model: 'google/gemini-3.8-flash' },
@@ -679,7 +679,7 @@ evaluate('a', async () => {})
     assert.deepEqual(
       keys.map((c) => c.summary),
       [
-        'AI_GATEWAY_API_KEY for claude-code:claude-sonnet-4-5: set',
+        'AI_GATEWAY_API_KEY for claude-code:claude-sonnet-5-5: set',
         'CURSOR_API_KEY for cursor:composer-2.5: set',
       ],
       'Claude Code on Vercel needs no ANTHROPIC_API_KEY',
@@ -696,11 +696,11 @@ evaluate('a', async () => {})
       [
         [
           'ok',
-          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct (fallback)',
+          'gateway vercel, direct: claude-code:claude-sonnet-5-5 → vercel, cursor:composer-2.5 → direct (fallback)',
         ],
         [
           'ok',
-          'gateway direct in profile local: claude-code:claude-sonnet-4-5 → direct, cursor:composer-2.5 → direct',
+          'gateway direct in profile local: claude-code:claude-sonnet-5-5 → direct, cursor:composer-2.5 → direct',
         ],
       ],
     )
@@ -725,7 +725,7 @@ evaluate('a', async () => {})
   test('gateway: a judge or analysis model that falls back to direct is marked', async () => {
     const config = await configOf(
       'gateway-model-fallback',
-      `{ harness: claudeCode({ model: 'claude-sonnet-4-5' }),
+      `{ harness: claudeCode({ model: 'claude-sonnet-5-5' }),
          gateway: [vertex({ project: 'p' })],
          judge: { model: 'openai/gpt-5.4-mini' },
          analysis: { model: 'openai/gpt-5.4-mini' },
@@ -737,9 +737,9 @@ evaluate('a', async () => {})
     assert.deepEqual(
       checkGateways(config, deps(), '.env.local').map((c) => c.summary),
       [
-        'gateway vertex, direct: claude-code:claude-sonnet-4-5 → vertex, judge openai/gpt-5.4-mini → direct (fallback), analysis openai/gpt-5.4-mini → direct (fallback)',
-        'gateway vertex, direct in profile pinned: claude-code:claude-sonnet-4-5 → vertex',
-        'gateway direct, vertex in profile first: claude-code:claude-sonnet-4-5 → direct',
+        'gateway vertex, direct: claude-code:claude-sonnet-5-5 → vertex, judge openai/gpt-5.4-mini → direct (fallback), analysis openai/gpt-5.4-mini → direct (fallback)',
+        'gateway vertex, direct in profile pinned: claude-code:claude-sonnet-5-5 → vertex',
+        'gateway direct, vertex in profile first: claude-code:claude-sonnet-5-5 → direct',
       ],
     )
   })

@@ -341,10 +341,31 @@ const claudeBase = (model: string) =>
     .replace(/@.*$/, '')
     .replace(/-\d{8}$/, '')
 
-/** Whether Claude Code sends an effort to `model`. */
-export const claudeCodeTakesEffort = (model: string): boolean => {
+/**
+ * The models Claude Code's own catalog says take effort (claude-code 2.1.290). On Vertex AI it
+ * sends an effort only to these: a model its catalog doesn't list, such as `claude-haiku-5-5`,
+ * gets none there, though it gets one on Anthropic's API and through a base URL.
+ */
+const CLAUDE_CODE_CATALOG_EFFORT = new Set([
+  'claude-sonnet-4-6',
+  'claude-sonnet-5',
+  'claude-sonnet-5-5',
+  'claude-opus-4-6',
+  'claude-opus-4-7',
+  'claude-opus-4-8',
+  'claude-opus-5',
+  'claude-opus-5-5',
+  'claude-fable-5',
+  'claude-fable-5-1',
+  'claude-mythos-5',
+  'claude-mythos-5-1',
+])
+
+/** Whether Claude Code sends an effort to `model`, through `gateway` when it's known. */
+export const claudeCodeTakesEffort = (model: string, gateway?: string): boolean => {
   const base = claudeBase(model)
-  return !base.includes('claude-3-') && !CLAUDE_CODE_NO_EFFORT.has(base)
+  if (base.includes('claude-3-') || CLAUDE_CODE_NO_EFFORT.has(base)) return false
+  return gateway !== 'vertex' || CLAUDE_CODE_CATALOG_EFFORT.has(base)
 }
 
 /** Antigravity model ids that name their effort, e.g. `gemini-3.8-flash-low`. */

@@ -96,6 +96,25 @@ describe('the shared default effort', () => {
     assert.equal(withDefaultEffort(haiku), haiku)
   })
 
+  test("follows Claude Code's gateway: none on Vertex AI to a model its catalog doesn't list", () => {
+    const haiku = claudeCode({ model: 'claude-haiku-5-5' })
+    assert.equal(withDefaultEffort(haiku).effort, 'medium')
+    assert.equal(withDefaultEffort({ ...haiku, gateway: 'vercel' }).effort, 'medium')
+    assert.equal(
+      noDefaultEffort({ ...haiku, gateway: 'vertex' }),
+      'Claude Code sends no effort to claude-haiku-5-5 on Vertex AI',
+    )
+    assert.equal(
+      withDefaultEffort({ ...claudeCode({ model: 'claude-sonnet-5-5' }), gateway: 'vertex' })
+        .effort,
+      'medium',
+    )
+    assert.equal(
+      noDefaultEffort({ ...haiku, gateway: 'openrouter' }),
+      "reeval doesn't send Claude Code's effort to claude-haiku-5-5 through OpenRouter yet",
+    )
+  })
+
   test("is left off where OpenCode's model answers an effort with a 400", () => {
     const haiku = opencode({ model: 'anthropic/claude-haiku-4-5' })
     assert.equal(noDefaultEffort(haiku), "Anthropic's API takes no effort on claude-haiku-4-5")
