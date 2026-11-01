@@ -34,9 +34,10 @@ cases to a family.
 
 ## `cant-tell-apart`
 
-Concern. A variant and its baseline both passed every run, or both failed every run (for a
-family, every case on both sides), so no number of runs can tell them apart; arms that always
-pass but differ in effort raise nothing. **Fix:** when both
+Concern. A variant and its baseline both passed every run, or both failed every run, on 4 runs a
+side or more (for a family, every case on both sides, over 6 cases or more), so no number of runs
+can tell them apart; arms that always pass but differ in effort, or in a compare question's win
+rates, raise nothing. **Fix:** when both
 always pass, make the task harder, so the baseline can fail; when both always fail, check the eval
 with an agent that does the task (an oracle, such as a fake agent writing the solution), and make
 the task easier if its checks pass.

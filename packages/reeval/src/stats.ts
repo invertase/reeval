@@ -208,7 +208,7 @@ export const familySmallSample = (pairs: number, low: number, high: number) =>
 /**
  * The fewest runs a side, from `from`, at which these observed rates would stop being a small
  * sample (`smallSample`). Equal or near rates always do, since the interval narrows toward 0: the
- * widest, two rates at 50%, settles at about 48.
+ * widest, two rates near 50%, settles at 45.
  */
 export function runsToSettle(variantRate: number, controlRate: number, from = 1): number {
   for (let n = Math.max(1, from); ; n++) {

@@ -234,15 +234,18 @@ describe('remark thresholds', () => {
       /^set runs: \d+, where the same rates would rule out 20 points either way$/,
     )
     const [same] = raise(only(record, 'tft same'), NO_HISTORY)
-    assert.equal(same?.kind, 'cant-tell-apart', 'a ceiling tie is not a small sample')
-    assert.equal(same?.severity, 'concern')
+    assert.equal(same?.kind, 'too-few-tries', 'one run a side is too few to say both always pass')
     assert.equal(
       same?.text,
-      "The marked variant and the baseline passed every run (1 of 1 and 1 of 1): the task can't tell them apart, since both always pass.",
+      "The marked variant passed 1 of 1 run and the baseline 1 of 1: the same, but 1 run a side can't rule out a difference of up to 79 points.",
     )
-    assert.equal(same?.fix?.edit, 'make the task harder, so the baseline can fail')
+    assert.equal(
+      same?.fix?.edit,
+      'set runs: 16, where the same rates would rule out 20 points either way',
+    )
     const [none] = raise(only(record, 'tft none'), NO_HISTORY)
     assert.equal(none?.kind, 'cant-tell-apart', 'a floor tie is not a small sample')
+    assert.equal(none?.severity, 'concern')
     assert.equal(
       none?.text,
       'The marked variant and the baseline failed every run (0 of 4 and 0 of 4): the task may be too hard, or the eval broken.',
@@ -251,10 +254,56 @@ describe('remark thresholds', () => {
       none?.fix?.edit,
       'check the eval with an oracle (a fake agent that writes the solution); if it passes, make the task easier',
     )
-    assert.deepEqual(
-      kinds(only(record, 'tft settled'), NO_HISTORY),
-      ['cant-tell-apart'],
+    const [ceiling] = raise(only(record, 'tft settled'), NO_HISTORY)
+    assert.equal(
+      ceiling?.kind,
+      'cant-tell-apart',
       'more runs never split 16 of 16 against 16 of 16',
+    )
+    assert.equal(
+      ceiling?.text,
+      "The marked variant and the baseline passed every run (16 of 16 and 16 of 16): the task can't tell them apart, since both always pass.",
+    )
+    assert.equal(ceiling?.fix?.edit, 'make the task harder, so the baseline can fail')
+    const floor = only(record, 'tft settled')
+    for (const e of floor.evals)
+      for (const c of e.cells) {
+        c.fail += c.pass
+        c.pass = 0
+      }
+    const [floored] = raise(floor, NO_HISTORY)
+    assert.equal(floored?.kind, 'cant-tell-apart')
+    assert.match(floored?.text ?? '', /failed every run \(0 of 16 and 0 of 16\)/)
+    assert.notEqual(
+      floored?.id,
+      ceiling?.id,
+      'a floor after a ceiling on the same source is a new remark, so it prints',
+    )
+    const asked = (wins: [number, number]) => {
+      const r = only(record, 'tft settled')
+      for (const e of r.evals)
+        e.answers = [
+          {
+            question: 'Which is clearer?',
+            model: 'fake',
+            votes: [],
+            rates: [
+              { cut: 'within', name: 'plain', wins: wins[0], n: 8 },
+              { cut: 'within', name: 'marked', wins: wins[1], n: 8 },
+            ],
+          },
+        ]
+      return r
+    }
+    assert.deepEqual(
+      kinds(asked([0, 8]), NO_HISTORY),
+      [],
+      'a ceiling a pairwise question separates is told apart by the question',
+    )
+    assert.deepEqual(
+      kinds(asked([4, 4]), NO_HISTORY),
+      ['cant-tell-apart'],
+      'a question that splits evenly tells nothing apart',
     )
     const faster = only(record, 'tft settled')
     for (const e of faster.evals)
@@ -316,7 +365,8 @@ describe('remark thresholds', () => {
     const [agreeFew] = raise(family('tft agree few $id'), NO_HISTORY)
     assert.equal(
       agreeFew?.text,
-      "The marked variant and the baseline passed every run (over 2 cases): the task can't tell them apart, since both always pass.",
+      "The marked variant, pooled over 2 cases: the same, but a family's lift needs 6 to hold.",
+      'two cases are too few to say every case always passes',
     )
   })
 

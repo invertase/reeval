@@ -123,12 +123,22 @@ function boundOf(cells: CellResult[]): Bound | null {
 
 type Tie = { variant: CellResult; base: CellResult; bound: Bound }
 
+/** A pairwise question whose sides' win rates differ: it tells arms that always pass apart. */
+const questionSeparates = (e: EvalResult) =>
+  e.questions.some(
+    (q) =>
+      q.kind === 'pairs' &&
+      new Set(q.rates.filter((r) => r.n > 0).map((r) => r.wins / r.n)).size > 1,
+  )
+
 /**
  * cant-tell-apart (concern): a variant and its baseline both passed every run, or both failed
- * every one, so no number of runs can tell them apart. Both passing means the task is too easy to
- * show the change; both failing means it may be too hard, or the eval broken. Callers leave out a
- * ceiling whose effort differs (`effortDiffers`): effort tells those arms apart. It names the
- * first such variant, counting the others.
+ * every one, on at least `COMPARE_RUNS` runs a side (`PAIRED_MIN` cases for a family), so no
+ * number of runs can tell them apart. Both passing means the task is too easy to show the change;
+ * both failing means it may be too hard, or the eval broken. Callers leave out a ceiling whose
+ * effort differs (`effortDiffers`) or whose pairwise question's wins differ
+ * (`questionSeparates`): those tell the arms apart. It names the first such variant, counting the
+ * others. Its id carries the bound, so a floor after a ceiling on the same source prints again.
  */
 function cantTellApart(
   e: EvalResult,
@@ -156,7 +166,7 @@ function cantTellApart(
       : 'check the eval with an oracle (a fake agent that writes the solution); if it passes, make the task easier'
   return [
     {
-      id: remarkId('cant-tell-apart', e.path, entry),
+      id: remarkId('cant-tell-apart', e.path, entry, bound),
       evalId: e.path,
       kind: 'cant-tell-apart',
       severity: 'concern',
@@ -175,8 +185,9 @@ function cantTellApart(
  * 0 of 2 one way or the other comes up about 1 run in 8), or a `same` whose interval still reaches
  * past `SMALL_SAMPLE_MARGIN`. It names the variant with the widest gap, and the fix the runs a side
  * at which the observed rates would hold (`runsToHold`) or, for a `same`, settle (`runsToSettle`),
- * never fewer than `COMPARE_RUNS`. A tie where both sides always pass or always fail is
- * `cantTellApart` instead, since runs can't break it. A family is judged by its pooled lift
+ * never fewer than `COMPARE_RUNS`. A tie where both sides always pass or always fail, on
+ * `COMPARE_RUNS` runs a side or more, is `cantTellApart` instead, since runs can't break it; below
+ * that, "always" rests on too few runs and stays here. A family is judged by its pooled lift
  * (`pooledTooFewTries`), not each case's.
  */
 function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
@@ -187,9 +198,11 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
     for (const variant of unit.cells) {
       const base = unit.cells.find((c) => c.key === variant.vs)
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
-      const bound = boundOf([variant, base])
+      const bound =
+        Math.min(counted(variant), counted(base)) >= COMPARE_RUNS ? boundOf([variant, base]) : null
       if (bound) {
-        if (bound === 'fail' || !variant.effortDiffers) ties.push({ variant, base, bound })
+        if (bound === 'fail' || !(variant.effortDiffers || questionSeparates(e)))
+          ties.push({ variant, base, bound })
         continue
       }
       const gap = Math.abs(rate(variant) - rate(base))
@@ -255,7 +268,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
  * that lift doesn't hold (`insufficient` below `PAIRED_MIN` discordant pairs or cases, or within
  * noise) and either differs or rests on a small sample (`familySmallSample`). Many cases that all
  * agree are `insufficient` but settled, and raise nothing. A tie where every case on both sides
- * passed, or every one failed, is `cantTellApart` instead.
+ * passed, or every one failed, over `PAIRED_MIN` cases or more, is `cantTellApart` instead.
  */
 function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
   const cells = (e.cases ?? []).flatMap((k) => k.cells)
@@ -263,11 +276,11 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
   const weak = (e.pooled ?? []).filter((p) => {
     const own = cells.filter((c) => c.key === p.key)
     const bases = cells.filter((c) => own.some((v) => v.vs === c.key))
-    const bound = p.effect === 'same' ? boundOf([...own, ...bases]) : null
+    const bound = p.effect === 'same' && p.pairs >= PAIRED_MIN ? boundOf([...own, ...bases]) : null
     const [variant] = own
     const [base] = bases
     if (bound && variant && base) {
-      if (bound === 'fail' || !own.some((c) => c.effortDiffers))
+      if (bound === 'fail' || !(own.some((c) => c.effortDiffers) || questionSeparates(e)))
         ties.push({ variant, base, bound, cases: p.pairs })
       return false
     }

@@ -1207,6 +1207,31 @@ evaluate('hello', async (c) => {
     )
   })
 
+  test('a tie at a ceiling is tagged from 4 attempts a side, not on fewer', async () => {
+    const tieOf = async (name: string, runs: number) => {
+      const p = await compareProject(name, runs)
+      const config = join(p.dir, 'reeval.config.ts')
+      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' } }" }))
+      const run = await runCli(p.dir, ['run'])
+      assert.equal(run.code, 0, run.stdout)
+      const { digest } = await digestOf(p.dir)
+      const cells = digest.facts.find((f) => f.kind === 'pass@1')?.cells as
+        | Array<{ lift?: string; smallSample?: boolean; tie?: string }>
+        | undefined
+      const variant = cells?.find((c) => c.lift)
+      return { smallSample: variant?.smallSample, tie: variant?.tie }
+    }
+    assert.deepEqual(await tieOf('analyze-tie-four', 4), {
+      smallSample: true,
+      tie: 'both always pass',
+    })
+    assert.deepEqual(
+      await tieOf('analyze-tie-one', 1),
+      { smallSample: true, tie: undefined },
+      'one pass a side is too few to say both always pass',
+    )
+  })
+
   test('one counted attempt a side is a direction within noise, flagged as a small sample', async () => {
     const p = await compareProject('analyze-sparse-lift', 1)
     const run = await runCli(p.dir, ['run', '-v'])

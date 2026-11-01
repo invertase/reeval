@@ -142,7 +142,7 @@ export const RULES = [
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favor the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
   "An observed fact is a value the eval's own code recorded with c.observe (what the agent installed, a count): counts tallies strings and each item of an array once per attempt, numbers summarizes number values. Observations never change pass, fail or the exit code: cite them as what happened, not as a check.",
-  "tie beside smallSample means both sides passed every attempt (both always pass: the task is too easy to tell them apart) or failed every attempt (both always fail: the task may be too hard, or the eval broken). More runs won't separate them: say the task needs to be harder, or the eval checked (an oracle agent should pass it), not that it needs more runs.",
+  `tie beside a lift's verdict means both sides passed every attempt (both always pass: pass@1 can't tell them apart) or failed every attempt (both always fail: the task may be too hard, or the eval broken), on at least ${COMPARE_RUNS} a side. More runs won't separate them, smallSample or not: never say it needs more runs. Both always fail: say the eval needs checking (an oracle agent should pass it). Both always pass: when an effort verdict (fewer or more) or a compare question's win rates separate the arms, that is the result; otherwise say the task needs to be harder.`,
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -162,20 +162,21 @@ const bound = (c: Counts) =>
   c.counted === 0 ? null : c.pass === c.counted ? 'pass' : c.pass === 0 ? 'fail' : null
 
 /**
- * `{ smallSample: true }` beside a lift's verdict when it rests on few attempts, with `tie` when
- * both sides passed, or both failed, every attempt; else nothing.
+ * Beside a lift's verdict: `smallSample: true` when it rests on few attempts, and `tie` when both
+ * sides passed, or both failed, every one of at least `COMPARE_RUNS` counted attempts a side,
+ * which the `cant-tell-apart` remark reads the same way; else nothing.
  */
-const smallSampleFlag = (variant: Counts, control: Counts) => {
-  if (
-    !smallSample(
-      { pass: variant.pass, n: variant.counted },
-      { pass: control.pass, n: control.counted },
-    )
+const sampleFlags = (variant: Counts, control: Counts) => {
+  const small = smallSample(
+    { pass: variant.pass, n: variant.counted },
+    { pass: control.pass, n: control.counted },
   )
-    return {}
-  const both = bound(variant) === bound(control) ? bound(variant) : null
+  const both =
+    Math.min(variant.counted, control.counted) >= COMPARE_RUNS && bound(variant) === bound(control)
+      ? bound(variant)
+      : null
   return {
-    smallSample: true,
+    ...(small ? { smallSample: true } : {}),
     ...(both ? { tie: both === 'pass' ? 'both always pass' : 'both always fail' } : {}),
   }
 }
@@ -419,7 +420,7 @@ export async function buildDigestKeepingDropped(
             ? {
                 lift: digestLift(c.lift.points, c.lift.interval.lo, c.lift.interval.hi),
                 verdict: digestLiftVerdict(c.lift.withinNoise),
-                ...smallSampleFlag(c.lift.variant, c.lift.control),
+                ...sampleFlags(c.lift.variant, c.lift.control),
               }
             : {}),
         })),
@@ -1027,7 +1028,7 @@ export async function buildDigestKeepingDropped(
                 passRate: `${x.lift.variant.pass}/${x.lift.variant.counted} vs ${x.lift.control.pass}/${x.lift.control.counted}`,
                 lift: digestLift(x.lift.points, x.lift.interval.lo, x.lift.interval.hi),
                 liftVerdict: digestLiftVerdict(x.lift.withinNoise),
-                ...smallSampleFlag(x.lift.variant, x.lift.control),
+                ...sampleFlags(x.lift.variant, x.lift.control),
               }
             : {}),
           checks: apart.map((k) => ({
