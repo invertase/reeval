@@ -24,4 +24,6 @@ export default defineConfig({
 })
 ```
 
+Every container sets `NPM_CONFIG_UPDATE_NOTIFIER=false`, so npm and pnpm never ask `registry.npmjs.org` for a newer version of themselves, which `egress: 'deny-all'` would block and record.
+
 Every option is optional, and `podman()` takes the same ones. For each option and its default, see [the `docker()` options](/reference/options#docker). For more information about the `sandbox` option, see [Choose a sandbox](/configuration/sandboxes). For more information about the image recipes, see [Bake the tools](/configuration/environments/toolchains). For more information about the `egress` option and its automatic hosts, see [Restrict sandbox egress](/configuration/environments/egress).
