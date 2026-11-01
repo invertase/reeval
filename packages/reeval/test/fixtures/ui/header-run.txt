@@ -15,8 +15,8 @@ REEVAL v0.16.1
               aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either
               way).
 
-  ℹ  Hint:    1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort
-              will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)
+  ℹ  Hint:    1 compare runs once per cell; below 4 runs a side its lift shows only a direction and
+              its effort can't be tested (profile smoke's limit.runs caps it; --runs 4 replaces it)
 
   ◆  Preparing 1 sandbox (docker)...
   ✓  docker ready 12s

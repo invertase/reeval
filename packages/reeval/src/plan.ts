@@ -11,7 +11,7 @@ import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import { majorityOf } from './options.ts'
 import type { Prices } from './prices.ts'
-import { EFFECT_MIN_COUNTED, PAIRED_MIN } from './stats.ts'
+import { COMPARE_RUNS, PAIRED_MIN } from './stats.ts'
 import { clip, formatDuration, plural } from './text.ts'
 import type {
   Budget,
@@ -355,12 +355,13 @@ function gateHint(rows: PlanRow[]): string[] {
   ]
 }
 
-/** The runs a side before both a compare's lift and its effort can get a verdict. */
-const VERDICT_MIN_RUNS = Math.max(EFFECT_MIN_COUNTED, EFFORT_MIN_RUNS)
+/** The runs a side the plan suggests, so a compare's lift can hold and its effort can be tested. */
+const VERDICT_MIN_RUNS = Math.max(COMPARE_RUNS, EFFORT_MIN_RUNS)
 
 /**
- * One line when compares outside a family run too few times per cell for any verdict: their lift
- * and effort say `can't tell yet` however the attempts go. `rows` are those that plan a lift.
+ * One line when compares outside a family run too few times per cell for their lift to hold: it
+ * shows the direction the attempts went, and their effort can't be tested. `rows` are those that
+ * plan a lift.
  */
 function verdictHint(rows: PlanRow[]): string[] {
   const few = rows.filter((r) => !r.family && r.plan.runs < VERDICT_MIN_RUNS)
@@ -375,7 +376,7 @@ function verdictHint(rows: PlanRow[]): string[] {
       ? `profile ${profile}'s limit.runs caps ${one ? 'it' : 'them'}; --runs ${VERDICT_MIN_RUNS} replaces it`
       : `runs: ${VERDICT_MIN_RUNS}`
   return [
-    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; a verdict needs ${VERDICT_MIN_RUNS} runs a side, so ${one ? 'its' : 'their'} lift and effort will say can't tell yet (${fix})`,
+    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; below ${VERDICT_MIN_RUNS} runs a side ${one ? 'its' : 'their'} lift shows only a direction and ${one ? 'its' : 'their'} effort can't be tested (${fix})`,
   ]
 }
 
@@ -400,7 +401,7 @@ function familyHints(rows: PlanRow[]): string[] {
     .map(([id, { n, of }]) => {
       const has = n === of ? `has ${plural(n, 'case')}` : `runs ${n} of its ${of} cases`
       const fix = of >= PAIRED_MIN ? 'run all its cases' : 'add cases'
-      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
+      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} to hold, so it shows only a direction whatever the runs (${fix})`
     })
 }
 

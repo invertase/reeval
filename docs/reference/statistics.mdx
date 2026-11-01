@@ -17,13 +17,13 @@ Lift is the variant's pass rate minus the baseline's, between -1 and 1. Newcombe
 
 ## Variant outcomes
 
-`helped` means a low end above zero, `made it worse` means a high end below zero, and `can't tell yet` means zero inside the interval or fewer than four counted attempts on a side. Equal rates print no effect word. An assertion uses the same rule.
+`helped` means the variant's pass rate is above the baseline's, `made it worse` below it, and `same` equal to it, at any number of counted attempts. The interval says whether the difference holds: zero inside it raises the `too-few-tries` remark. An assertion uses the same rule.
 
 For more information about the printed effect words, see [Read the result](/results/compare/lift#read-the-result). For more information about the printed outcomes, see [Read a run's output](/results/output).
 
-## Four-attempt minimum
+## Too few runs
 
-Below four counted attempts on either side, the word is `can't tell yet`. This includes two of two against zero of two, even though its interval excludes zero. At four a side, the word follows the interval.
+When zero is inside the interval, or a side has fewer than four counted attempts, the `too-few-tries` remark prints with the result and names the `runs` at which a difference that size would hold. Two of two against zero of two still raises it: its interval excludes zero, but when nothing changed that split comes up about one run in eight. A family raises it when its pooled lift is insufficient or within noise.
 
 ## Cases as pairs
 
@@ -33,7 +33,7 @@ For more information about declaring cases, see [Cases](/evaluations/task/cases)
 
 One attempt per side uses Newcombe's paired interval and needs six discordant pairs, where only one side passed. Several attempts per case use a t interval over the pass-rate differences and need six paired cases. Six is the first count whose exact test can reach a p below 0.05.
 
-The 95% interval calls `helped`, `made it worse`, or `can't tell yet`, and below six the result is insufficient. The reported McNemar or Wilcoxon p decides nothing.
+The pooled pass rates give `helped`, `made it worse`, or `same`, the 95% interval says whether it holds, and below six the result is insufficient. The reported McNemar or Wilcoxon p decides nothing.
 
 ## Tokens, tool calls and time
 

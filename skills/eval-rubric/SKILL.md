@@ -26,9 +26,10 @@ reeval doesn't check these, so read the eval for them yourself:
 
 ## `too-few-tries`
 
-Suggestion. A variant and its baseline differ by at least 50 points with fewer than
-4 counted tries a side, so the effect reads "can't tell yet" on a gap that matters. **Fix:** raise
-`runs` to 4 or more.
+Concern. A variant's difference from its baseline doesn't hold (its 95% interval spans 0), or a
+side has fewer than 4 counted tries, so the effect is only a direction; a family's is its pooled
+lift's, insufficient below 6 cases. **Fix:** raise `runs` to the number the remark names, or add
+cases to a family.
 
 ## `check-never-fails`
 

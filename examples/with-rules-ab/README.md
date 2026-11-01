@@ -41,8 +41,8 @@ pass             records the change in the changelog
   +1 more passed
 ```
 
-The eval sets no `runs`, so the compare runs each arm four times, the fewest for a verdict.
-`pnpm eval --runs 1` is a cheaper smoke run that reads `can't tell yet`.
+The eval sets no `runs`, so the compare runs each arm four times, the fewest whose lift often holds.
+`pnpm eval --runs 1` is a cheaper smoke run that shows only a direction.
 
 | File | What it is |
 |---|---|

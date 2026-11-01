@@ -11,7 +11,6 @@ import { render } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
 import {
   checkEffect,
-  EFFECT_MIN_COUNTED,
   type Effect,
   effectOf,
   factSegment,
@@ -109,17 +108,21 @@ describe('suiteResult over the record corpus', () => {
 
 describe('effect', () => {
   const side = (pass: number, counted: number) => ({ pass, counted })
-  const interval = (low: number, high: number) => ({ low, high })
   const cases: Array<[string, Effect, ReturnType<typeof side>, ReturnType<typeof side>]> = [
     ['4 of 4 against 0 of 4 is better', 'better', side(4, 4), side(0, 4)],
-    ['4 of 4 against 1 of 4 is better', 'better', side(4, 4), side(1, 4)],
     ['0 of 4 against 4 of 4 is worse', 'worse', side(0, 4), side(4, 4)],
-    ['3 of 4 against 2 of 4 is unclear', 'unclear', side(3, 4), side(2, 4)],
+    [
+      '3 of 4 against 2 of 4 is better: the interval is the remark’s, not the direction’s',
+      'better',
+      side(3, 4),
+      side(2, 4),
+    ],
     ['4 of 4 against 4 of 4 is the same', 'same', side(4, 4), side(4, 4)],
     ['0 of 4 against 0 of 4 is the same', 'same', side(0, 4), side(0, 4)],
-    ['3 of 3 against 0 of 3 is unclear: under 4 a side', 'unclear', side(3, 3), side(0, 3)],
-    ['1 of 1 against 1 of 1 is unclear: under 4 a side', 'unclear', side(1, 1), side(1, 1)],
-    ['10 of 10 against 0 of 3 is unclear: one side under 4', 'unclear', side(10, 10), side(0, 3)],
+    ['1 of 1 against 0 of 1 is better at one run a side', 'better', side(1, 1), side(0, 1)],
+    ['1 of 1 against 1 of 1 is the same at one run a side', 'same', side(1, 1), side(1, 1)],
+    ['2 of 3 against 1 of 2 is better: rates, not counts', 'better', side(2, 3), side(1, 2)],
+    ['1 of 2 against 2 of 4 is the same rate', 'same', side(1, 2), side(2, 4)],
   ]
   for (const [name, expected, variant, control] of cases) {
     test(name, () => {
@@ -130,23 +133,16 @@ describe('effect', () => {
         notRun: 0,
       })
       assert.equal(checkEffect(t(variant), t(control)), expected)
+      assert.equal(effectOf(variant, control), expected)
     })
   }
 
-  test('reads the stored interval, never recomputes it', () => {
-    assert.equal(effectOf(side(4, 4), side(3, 4), interval(0.01, 0.5)), 'better')
-    assert.equal(effectOf(side(3, 4), side(4, 4), interval(-0.5, -0.01)), 'worse')
-    assert.equal(effectOf(side(4, 4), side(3, 4), interval(-0.2, 0.5)), 'unclear')
-    assert.equal(effectOf(side(4, 4), side(3, 4), null), 'unclear')
-    assert.equal(EFFECT_MIN_COUNTED, 4)
-  })
-
-  test('a side where the check never ran is not a fail: unclear, not better', () => {
+  test('a side where the check never ran is not a fail: no effect, not better', () => {
     const notRun: CheckTally = { pass: 0, fail: 0, error: 0, notRun: 4 }
     const passed: CheckTally = { pass: 4, fail: 0, error: 0, notRun: 0 }
     const failed: CheckTally = { pass: 0, fail: 4, error: 0, notRun: 0 }
-    assert.equal(checkEffect(passed, notRun), 'unclear')
-    assert.equal(checkEffect(notRun, passed), 'unclear')
+    assert.equal(checkEffect(passed, notRun), null)
+    assert.equal(checkEffect(notRun, passed), null)
     // The same 4 attempts, counted as fails, would be a difference.
     assert.equal(checkEffect(passed, failed), 'better')
   })
@@ -211,13 +207,13 @@ describe('a record with checks that never ran', () => {
     }
     for (const k of variant.checks) {
       assert.equal(k.outcome.status, 'ran')
-      assert.equal(k.effect, 'unclear', `${k.label}: the baseline never ran it`)
+      assert.equal(k.effect, null, `${k.label}: the baseline never ran it`)
     }
     assert.equal(variant.effect, 'better')
     assert.deepEqual(variant.interval, { low: 0.307, high: 1 })
   })
 
-  test('a baseline with no counted attempt makes each variant check unclear, not null', () => {
+  test('a baseline with no counted attempt gives each variant check no effect', () => {
     const record = read(raw)
     const e = record.evals.find((x) => x.name === 'greets in the house style')
     const control = e?.cells.find((c) => c.key === 'fake/plain/docker')
@@ -229,7 +225,7 @@ describe('a record with checks that never ran', () => {
     const variant = cellsOf(s).find((c) => c.key === 'fake/with-house-greeting/docker')
     assert.ok(variant?.checks.length)
     assert.equal(variant.vs, control.key)
-    for (const k of variant.checks) assert.equal(k.effect, 'unclear', k.label)
+    for (const k of variant.checks) assert.equal(k.effect, null, k.label)
     const baseline = cellsOf(s).find((c) => c.key === control.key)
     assert.deepEqual(
       baseline?.checks.map((k) => [k.label, k.outcome.status]),
@@ -403,11 +399,7 @@ describe('outcomes the record alone has', () => {
       text(s)
         .split('\n\n')
         .find((b) => b.includes(family)) ?? ''
-    assert.match(
-      block,
-      /^ {4}with-skill +3 of 3 {2}can't tell yet$/m,
-      'the pooled row has the variant',
-    )
+    assert.match(block, /^ {4}with-skill +3 of 3 {2}helped$/m, 'the pooled row has the variant')
   })
 
   test("a family's questions are every case's, summed over the cases that answered them", () => {

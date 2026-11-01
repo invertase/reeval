@@ -11,7 +11,6 @@ import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
 import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
-import { EFFECT_MIN_COUNTED } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { AttemptAnswer } from '../types.ts'
 import { formatTokens } from '../usage.ts'
@@ -117,8 +116,8 @@ export type DigestInput = {
 }
 
 export const RULES = [
-  `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${EFFECT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
-  `When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the ${EFFECT_MIN_COUNTED}-attempt floor still applies then.`,
+  'Lift (variant pass@1 minus control pass@1) is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate or the number of attempts.',
+  `When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match.`,
   `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when no split of the attempts' values can reach it (2 vs 2 cannot, and ties raise the floor) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
   "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
@@ -142,27 +141,11 @@ const pts = (x: number | null | undefined) =>
 const liftText = (points: number, lo: number, hi: number) =>
   `${pts(points)} pts (95% ${pts(lo)}…${pts(hi)})`
 
-/** Digest lift copy: sparse cells are not measured, and keep the counts. */
-function digestLift(
-  variantCounted: number,
-  controlCounted: number,
-  points: number,
-  lo: number,
-  hi: number,
-): string {
-  return Math.min(variantCounted, controlCounted) < EFFECT_MIN_COUNTED
-    ? `not enough attempts for lift (${variantCounted} vs ${controlCounted})`
-    : liftText(points, lo, hi)
-}
+/** Digest lift copy: the point estimate and its interval, at any number of attempts. */
+const digestLift = (points: number, lo: number, hi: number) => liftText(points, lo, hi)
 
-function digestLiftVerdict(
-  variantCounted: number,
-  controlCounted: number,
-  withinNoise: boolean,
-): 'insufficient' | 'within noise' | 'effect' {
-  if (Math.min(variantCounted, controlCounted) < EFFECT_MIN_COUNTED) return 'insufficient'
-  return withinNoise ? 'within noise' : 'effect'
-}
+const digestLiftVerdict = (withinNoise: boolean): 'within noise' | 'effect' =>
+  withinNoise ? 'within noise' : 'effect'
 
 /** Observed sources (or eval fingerprint) drift is not an effect of the thing under test. */
 function evalChangedLift(): string {
@@ -401,18 +384,8 @@ export async function buildDigestKeepingDropped(
           gated: c.gate !== 'none',
           ...(c.lift && !e.family
             ? {
-                lift: digestLift(
-                  c.lift.variant.counted,
-                  c.lift.control.counted,
-                  c.lift.points,
-                  c.lift.interval.lo,
-                  c.lift.interval.hi,
-                ),
-                verdict: digestLiftVerdict(
-                  c.lift.variant.counted,
-                  c.lift.control.counted,
-                  c.lift.withinNoise,
-                ),
+                lift: digestLift(c.lift.points, c.lift.interval.lo, c.lift.interval.hi),
+                verdict: digestLiftVerdict(c.lift.withinNoise),
               }
             : {}),
         })),
@@ -577,7 +550,7 @@ export async function buildDigestKeepingDropped(
           }
         : {
             passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
-            lift: digestLift(f.variant_counted, f.control_counted, f.points, f.lo, f.hi),
+            lift: digestLift(f.points, f.lo, f.hi),
             passVerdict: f.pass_verdict,
           }),
       toolCalls: f.tools_ratios,
@@ -1014,18 +987,8 @@ export async function buildDigestKeepingDropped(
           ...(x.lift
             ? {
                 passRate: `${x.lift.variant.pass}/${x.lift.variant.counted} vs ${x.lift.control.pass}/${x.lift.control.counted}`,
-                lift: digestLift(
-                  x.lift.variant.counted,
-                  x.lift.control.counted,
-                  x.lift.points,
-                  x.lift.interval.lo,
-                  x.lift.interval.hi,
-                ),
-                liftVerdict: digestLiftVerdict(
-                  x.lift.variant.counted,
-                  x.lift.control.counted,
-                  x.lift.withinNoise,
-                ),
+                lift: digestLift(x.lift.points, x.lift.interval.lo, x.lift.interval.hi),
+                liftVerdict: digestLiftVerdict(x.lift.withinNoise),
               }
             : {}),
           checks: apart.map((k) => ({

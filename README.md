@@ -29,7 +29,7 @@ Cursor ⋅ Claude Code ⋅ Codex ⋅ Antigravity ⋅ OpenCode ⋅ Goose ⋅ pi �
 
 - **Real agents**: each harness runs the agent itself, with its own tools, skills, and rules, as it works on a developer's machine ([Choose an agent](docs/configuration/agents/index.mdx)).
 - **Keys stay on the host**: each attempt starts in a fresh sandbox that holds only a placeholder key. reeval's egress gateway swaps in the real key on requests to that provider and nowhere else ([Pass secrets](docs/configuration/environments/secrets.mdx)).
-- **Compare a change**: one eval runs a baseline and its variants with the same prompt and checks, then prints whether each variant helped, made it worse, or can't tell yet ([Measure lift against a baseline](docs/results/compare/lift.mdx)).
+- **Compare a change**: one eval runs a baseline and its variants with the same prompt and checks, then prints whether each variant helped, made it worse, or did the same ([Measure lift against a baseline](docs/results/compare/lift.mdx)).
 - **Pinned environments**: an environment starts from a workspace, such as a git repository at a fixed ref, then adds files, setup steps, rules, skills, and MCP servers, so every attempt starts from the same state ([Define an environment](docs/configuration/environments/index.mdx)).
 - **History in Git**: recorded runs sit beside the code. `reeval query` reads them with SQL, and `reeval studio` shows each attempt's transcript, diff, and checks ([Record runs in Git](docs/evaluations/runs/recording.mdx)).
 
@@ -118,7 +118,7 @@ pass             triages a GitHub issue with the AI SDK
 1 pass
 ```
 
-Without the skill, no attempt used `Output.object`; with it, all four did. `helped` means the 95% interval of the difference sits above zero (`-v` prints it), and `made it worse` that it sits below. When the interval spans zero, or an arm has too few attempts, reeval prints `can't tell yet`. `+1 more passed` folds the checks that every arm passed.
+Without the skill, no attempt used `Output.object`; with it, all four did. `helped` means the variant passed more often than the baseline, and `made it worse` less often. When the 95% interval of the difference spans zero (`-v` prints it), the `too-few-tries` remark names the `runs` that would make it hold. `+1 more passed` folds the checks that every arm passed.
 
 ## Run in CI and inspect runs
 

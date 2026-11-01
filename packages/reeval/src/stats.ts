@@ -149,13 +149,32 @@ export const minimumP = (n1: number, n2: number) =>
 export const PAIRED_MIN = 6
 
 /**
- * Counted attempts a side before a pass-rate lift can be called: below it, every view says
- * `insufficient` (`can't tell yet`, `unclear`), whatever the interval. A product floor that keeps
- * `reeval run`, `reeval query`, the judge-key lift and `reeval analyze` agreeing, not one that
- * makes the stated 95% exact: at 4 a side, a 4/4 against 0/4 split happens by chance about 7% of
- * the time when nothing changed.
+ * The runs a side a compare defaults to and the plan suggests. It doesn't gate the effect: a lift
+ * always reads as its observed direction, and whether its interval excludes 0 decides whether it
+ * holds. At 4 a side, a 4/4 against 0/4 split happens by chance about 7% of the time when nothing
+ * changed.
  */
-export const EFFECT_MIN_COUNTED = 4
+export const COMPARE_RUNS = 4
+
+/** The most runs a side `runsToHold` searches before it calls a difference too small to settle. */
+export const RUNS_TO_HOLD_MAX = 200
+
+/**
+ * The fewest runs a side at which a difference at these observed rates would hold: the
+ * Newcombe interval excludes 0. Null when the rates are equal (no run count separates them) or
+ * when even `RUNS_TO_HOLD_MAX` doesn't.
+ */
+export function runsToHold(variantRate: number, controlRate: number, from = 1): number | null {
+  if (variantRate === controlRate) return null
+  for (let n = Math.max(1, from); n <= RUNS_TO_HOLD_MAX; n++) {
+    const { low, high } = liftInterval(
+      { pass: Math.round(variantRate * n), n },
+      { pass: Math.round(controlRate * n), n },
+    )
+    if (!containsZero(low, high)) return n
+  }
+  return null
+}
 
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */
 export type PairCounts = { both: number; variantOnly: number; controlOnly: number; neither: number }

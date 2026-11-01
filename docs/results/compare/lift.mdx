@@ -3,7 +3,7 @@ title: "Measure lift against a baseline"
 description: "See whether a skill, doc, or MCP server changes what the harness does."
 ---
 
-A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
+A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or did the `same`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
 
 The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/getting-started/quickstart) or [Environments](/configuration/environments).
 
@@ -50,7 +50,7 @@ To print the interval under each variant, pass `-v`:
 
 The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
-For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/reference/statistics#variant-outcomes).
+For when each effect word applies, and when a difference holds, see [Variant outcomes](/reference/statistics#variant-outcomes).
 
 If the baseline and the variant pass every attempt, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change, such as a rules file or a doc that repeats the skill, gives both cells the same instructions and measures nothing either.
 

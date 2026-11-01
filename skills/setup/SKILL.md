@@ -187,10 +187,9 @@ End with a short message, not a report:
 
 ```text
 pass             stores invoice totals in cents with the billing skill
-  We can't tell yet: with-billing-skill passed 2 of 2 tries, while plain failed 2 of 2 tries.
   arm                     pass
   plain                   0 of 2
-  with-billing-skill      2 of 2  can't tell yet
+  with-billing-skill      2 of 2  helped
   check                   plain   with-billing-skill
   total in integer cents  0 of 2  2 of 2
   a currency column       0 of 2  2 of 2
@@ -200,8 +199,8 @@ pass             stores invoice totals in cents with the billing skill
 ```
 
 - Each arm's `N of M` is passing attempts. The variant's word is its effect against the control:
-  `helped`, `made it worse`, or `can't tell yet`, which it always is below 4 runs a side
-  (`--runs 4` to find out). The check table shows which check told the arms apart.
+  `helped`, `made it worse`, or `same`; below 4 runs a side a `too-few-tries` remark says when
+  it doesn't hold yet (`--runs 4` to find out). The check table shows which check told the arms apart.
 - `Remarks:` after the tally names an eval that needs work, with the line to fix. Remarks never
   change a verdict.
 - Both arms passing is a result, not a broken eval: the agent already does this without the

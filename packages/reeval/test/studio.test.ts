@@ -435,7 +435,7 @@ describe('view-models over a real history', () => {
       ]),
       [
         [null, [['Did it write…', 2, 2, null]]],
-        [null, [['Did it write…', 2, 2, null]]],
+        [null, [['Did it write…', 2, 2, 0]]],
       ],
     )
   })
@@ -507,10 +507,10 @@ describe('view-models over a real history', () => {
         r.counted,
         r.lift && Math.round(r.lift.points * 100),
       ])
-    // 2 against 2 is below EFFECT_MIN_COUNTED, so no key's lift is measured.
+    // A key's lift is its direction at any number of attempts; the interval says whether it holds.
     assert.deepEqual(keyLifts(entry), [
-      ['login', 2, 2, null],
-      ['checkout', 0, 2, null],
+      ['login', 2, 2, 50],
+      ['checkout', 0, 2, 0],
     ])
     const four = {
       ...entry,
@@ -528,7 +528,7 @@ describe('view-models over a real history', () => {
     ])
     const thin = {
       ...entry,
-      attempts: [first, skillOne],
+      attempts: [skillOne],
     }
     assert.equal(
       cellJudgeRates(thin, 'fake/skill/fake').every((r) => r.lift === null),

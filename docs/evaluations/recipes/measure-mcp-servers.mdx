@@ -3,7 +3,7 @@ title: "Measure MCP servers"
 description: "See whether an MCP server helped a harness."
 ---
 
-You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
+You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `same`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
 
 ## Run one task with and without the server
 
@@ -55,7 +55,7 @@ evaluate(
 )
 ```
 
-The prompt doesn't name the server, so the file assertion passes on the baseline only when the harness finds the version another way. The baseline has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+The prompt doesn't name the server, so the file assertion passes on the baseline only when the harness finds the version another way. The baseline has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the `too-few-tries` remark often says the effect doesn't hold yet.
 
 </Step>
 <Step title="Run the comparison">

@@ -1630,7 +1630,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.verdict-hints',
     area: 'Records and studio',
-    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named",
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will show only a direction whatever happens; a profile's `limit.runs` cut is named",
     plan: [
       'compare/verdicts',
       'compare/verdicts-no-control',
@@ -1679,13 +1679,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'remarks',
     area: 'CLI and runner',
-    name: 'Remarks at the end of `reeval run` and in `reeval show`, from fixed thresholds: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `<run>/remarks.json` (copied by `reeval record`)',
+    name: 'Remarks at the end of `reeval run` and in `reeval show`, from fixed thresholds: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start` and `too-few-tries`, kept in `<run>/remarks.json` (copied by `reeval record`)',
     unit: ['reeval/test/remarks.test.ts'],
   },
   {
     id: 'remarks.too-few-tries',
     area: 'CLI and runner',
-    name: 'Remark `too-few-tries`: a variant and its baseline differ by half their tries or more with fewer than 4 tries a side',
+    name: "Remark `too-few-tries`: a variant whose difference from its baseline doesn't hold (its interval spans 0), or that matches it on fewer than 4 runs a side, with the runs that would make it hold",
     unit: ['reeval/test/remarks.test.ts'],
   },
   {

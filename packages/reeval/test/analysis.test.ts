@@ -22,7 +22,7 @@ import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
-import { EFFECT_MIN_COUNTED, mannWhitney, minimumP } from '../src/stats.ts'
+import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
 import { analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
@@ -226,7 +226,7 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
 })
 
 describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)', () => {
-  test('harness contrasts are controlled within a run; a clean sweep of 2 a side is too few to call', async () => {
+  test('harness contrasts are controlled within a run; a clean sweep of 2 a side holds', async () => {
     const p = await historyProject('facts-harness', 'harness-compare')
     const all = await facts(p.dir)
     golden('harness-compare-facts', all)
@@ -246,8 +246,8 @@ describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)'
         compareControl?.control_pass,
         compareControl?.pass_verdict,
       ],
-      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'insufficient'],
-      'antigravity failed both control attempts that cursor passed: 2 a side is below the minimum',
+      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'effect'],
+      'antigravity failed both control attempts that cursor passed: 0 of 2 against 2 of 2 excludes 0',
     )
     assert.deepEqual(
       rows.filter((r) => r.tier === 'not_measured').map((r) => r.factor),
@@ -673,10 +673,10 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     const first = await runCli(p.dir)
     assert.equal(first.code, 0, first.stdout)
     // Two tries a side is below the effort table's four, so only the arms print.
-    assert.match(first.stdout, /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
+    assert.match(first.stdout, /^ {2}skilled {12}2 of 2 {2}helped$/m)
     assert.doesNotMatch(first.stdout, /^ {2}effort /m)
     const { read } = readRun(p.dir)
-    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
+    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}helped$/m)
     assert.equal((await runCli(p.dir)).code, 0)
     const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest', '-v'])
     assert.equal(compare.code, 0, compare.stderr)
@@ -931,9 +931,9 @@ const HEAD = '20260926T104633Z_041aef3_ci_jzvq'
 const BASE = '20260926T104130Z_60f3dc9_cursor-agent_92gs'
 
 describe('reeval analyze', () => {
-  test('the prompt and rules say insufficient lift is not measured', () => {
+  test('the prompt says insufficient is not measured, and the lift rule has no floor', () => {
     assert.match(SYSTEM_PROMPT, /insufficient is not measured: never put it on a results line/)
-    assert.match(RULES[0] ?? '', new RegExp(`fewer than ${EFFECT_MIN_COUNTED} counted attempts`))
+    assert.match(RULES[0] ?? '', /whatever the point estimate or the number of attempts/)
   })
 
   test('the prompt and rules say missing usage omits tokens, not insufficient', () => {
@@ -1199,13 +1199,13 @@ evaluate('hello', async (c) => {
     )
   })
 
-  test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
+  test('one counted attempt a side is a direction within noise, not an effect', async () => {
     const p = await compareProject('analyze-sparse-lift', 1)
     const run = await runCli(p.dir, ['run', '-v'])
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /^ {2}\S+ +1 of 1 {2}can't tell yet\n {4}difference \+100 points, 95% interval −12…\+100$/m,
+      /^ {2}\S+ +1 of 1 {2}helped\n {4}difference \+100 points, 95% interval −12…\+100$/m,
       '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)
@@ -1215,10 +1215,7 @@ evaluate('hello', async (c) => {
     )?.find((c) => c.lift)
     assert.deepEqual(
       { lift: variant?.lift, verdict: variant?.verdict },
-      { lift: 'not enough attempts for lift (1 vs 1)', verdict: 'insufficient' },
-    )
-    assert.ok(
-      digest.rules.some((r) => r.includes('not measured') && r.includes('never a results line')),
+      { lift: '+100 pts (95% −12…+100)', verdict: 'within noise' },
     )
     const controlled = await query(
       p.dir,
@@ -1226,7 +1223,7 @@ evaluate('hello', async (c) => {
     )
     assert.deepEqual(
       controlled.map((r) => [r.pass_verdict, r.variant_counted, r.control_counted]),
-      [['insufficient', 1, 1]],
+      [['noise', 1, 1]],
     )
   })
 
@@ -1416,16 +1413,16 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.doesNotMatch(dry.stdout.split('\n')[0] ?? '', / vs /)
   })
 
-  for (const [runs, effect, lift, verdict] of [
-    [2, "can't tell yet", 'not enough attempts for lift (2 vs 2)', 'insufficient'],
-    [3, "can't tell yet", 'not enough attempts for lift (3 vs 3)', 'insufficient'],
-    [4, 'helped', '+100 pts (95% +31…+100)', 'effect'],
+  for (const [runs, lift, verdict, passVerdict] of [
+    [2, '+100 pts (95% +7…+100)', 'effect', 'effect'],
+    [3, '+100 pts (95% +21…+100)', 'effect', 'effect'],
+    [4, '+100 pts (95% +31…+100)', 'effect', 'effect'],
   ] as const) {
     test(`${runs} against ${runs}: every view gives the same verdict`, async () => {
       const p = await compareProject(`analyze-lift-${runs}`, runs)
       const run = await runCli(p.dir)
       assert.equal(run.code, 0, run.stdout)
-      assert.match(run.stdout, new RegExp(`^ {2}\\S+ +${runs} of ${runs} {2}${effect}$`, 'm'))
+      assert.match(run.stdout, new RegExp(`^ {2}\\S+ +${runs} of ${runs} {2}helped$`, 'm'))
       const { digest } = await digestOf(p.dir)
       const pass = digest.facts.find((f) => f.kind === 'pass@1')
       const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
@@ -1445,21 +1442,21 @@ evaluate('greets', { runs: 1 }, async (c) => {
         p.dir,
         "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",
       )
-      assert.equal(row?.pass_verdict, verdict)
+      assert.equal(row?.pass_verdict, passVerdict)
     })
   }
 
-  test('every view reads one minimum of counted attempts', async () => {
+  test('every view reads one number of compare runs', async () => {
     const stats = await import('../src/stats.ts')
     const suite = await import('../src/view/suite.ts')
     const view = await import('../src/view/index.ts')
-    assert.equal(stats.EFFECT_MIN_COUNTED, 4)
-    assert.equal(suite.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
-    assert.equal(view.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
+    assert.equal(stats.COMPARE_RUNS, 4)
+    assert.equal(suite.COMPARE_RUNS, stats.COMPARE_RUNS)
+    assert.equal(view.COMPARE_RUNS, stats.COMPARE_RUNS)
     const src = join(import.meta.dirname, '../src')
     const defines = readdirSync(src, { recursive: true, encoding: 'utf8' })
       .filter((f) => f.endsWith('.ts'))
-      .filter((f) => /\bconst \w*MIN_COUNTED\b/.test(readFileSync(join(src, f), 'utf8')))
+      .filter((f) => /\bconst COMPARE_RUNS\b/.test(readFileSync(join(src, f), 'utf8')))
     assert.deepEqual(defines, ['stats.ts'], 'one definition, which every view imports')
   })
 
@@ -1969,9 +1966,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         r.checks,
       ]),
       [
-        ['current-skill', 'no-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
-        ['new-skill', 'no-skill', 0, 0, 'insufficient', null, 5],
-        ['new-skill', 'current-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
+        ['current-skill', 'no-skill', 0, 0, 'noise', 'Social OAuth', 5],
+        ['new-skill', 'no-skill', 0, 0, 'noise', null, 5],
+        ['new-skill', 'current-skill', 0, 0, 'noise', 'Social OAuth', 5],
       ],
     )
     const { digest } = await digestOf(p.dir, ['--vs', 'none'])
@@ -1985,9 +1982,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         (f.checks as Row[]).map((k) => k.label),
       ]),
       [
-        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
-        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', []],
-        ['new-skill', 'current-skill', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
+        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', []],
+        ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
       ],
     )
     assert.equal(

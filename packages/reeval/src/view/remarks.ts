@@ -20,7 +20,7 @@ export type RunRemarks = {
 
 /** Each remark kind's severity. */
 export const REMARK_KINDS: Record<Remark['kind'], { severity: 'concern' | 'suggestion' }> = {
-  'too-few-tries': { severity: 'suggestion' },
+  'too-few-tries': { severity: 'concern' },
   'check-never-fails': { severity: 'suggestion' },
   'flaky-check': { severity: 'concern' },
   'slow-mcp-start': { severity: 'concern' },

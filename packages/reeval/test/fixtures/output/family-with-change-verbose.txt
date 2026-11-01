@@ -18,7 +18,7 @@
   pass  all cases
     arm            pass
     plain          0 of 4
-    with-skill     4 of 4  can't tell yet
+    with-skill     4 of 4  helped
       with-skill: 4 paired cases, 95% interval +31…+100
 
 4 pass

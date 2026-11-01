@@ -18,6 +18,6 @@
   pass  all cases
     arm            pass
     plain          0 of 4
-    with-skill     4 of 4  can't tell yet
+    with-skill     4 of 4  helped
 
 4 pass

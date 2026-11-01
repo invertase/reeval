@@ -204,7 +204,7 @@
 | Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio | ✓ 2 | — | — | — | — | — |
 | What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks, null (`n/a`) where the harness can't time it | ✓ 1 | — | — | — | — | — |
 | Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) | ✓ 1 | ✓ 1 | — | — | — | — |
-| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named | — | ✓ 6 | — | — | — | — |
+| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will show only a direction whatever happens; a profile's `limit.runs` cut is named | — | ✓ 6 | — | — | — | — |
 | Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest | ✓ 1 | — | — | — | — | — |
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 2 | — | — | — | — | — |
 | Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare’s control named by its environment in the digest | ✓ 1 | — | — | — | — | — |
@@ -231,8 +231,8 @@
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `reeval run --dry-run` checks each sandbox image: ready, to build, stale or missing | ✓ 1 | — | — | — | — | — |
-| Remarks at the end of `reeval run` and in `reeval show`, from fixed thresholds: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `<run>/remarks.json` (copied by `reeval record`) | ✓ 1 | — | — | — | — | — |
-| Remark `too-few-tries`: a variant and its baseline differ by half their tries or more with fewer than 4 tries a side | ✓ 1 | — | — | — | — | — |
+| Remarks at the end of `reeval run` and in `reeval show`, from fixed thresholds: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start` and `too-few-tries`, kept in `<run>/remarks.json` (copied by `reeval record`) | ✓ 1 | — | — | — | — | — |
+| Remark `too-few-tries`: a variant whose difference from its baseline doesn't hold (its interval spans 0), or that matches it on fewer than 4 runs a side, with the runs that would make it hold | ✓ 1 | — | — | — | — | — |
 | Remark `check-never-fails`: a check passed every try in the last 5 recorded default-branch runs and 20 tries | ✓ 1 | — | — | — | — | — |
 | Remark `flaky-check`: a flaky cell’s check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more | ✓ 1 | — | — | — | — | — |
 | Remark `slow-mcp-start`: a stdio MCP server took 2s or more to answer `initialize`, or never did, counted over the turns that recorded it; prints in every run | ✓ 1 | — | — | — | — | — |

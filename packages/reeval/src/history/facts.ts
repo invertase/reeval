@@ -4,7 +4,7 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { containsZero, EFFECT_MIN_COUNTED, liftInterval, median, round3, wilson } from '../stats.ts'
+import { containsZero, liftInterval, median, round3, wilson } from '../stats.ts'
 import { totalTokens } from '../usage.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
@@ -197,12 +197,7 @@ function passCols(v: Side, c: Side): Row {
     lo: round3(lift.low),
     hi: round3(lift.high),
     within_noise: noise ? 1 : 0,
-    pass_verdict:
-      Math.min(v.counted, c.counted) < EFFECT_MIN_COUNTED
-        ? 'insufficient'
-        : noise
-          ? 'noise'
-          : 'effect',
+    pass_verdict: noise ? 'noise' : 'effect',
   }
 }
 

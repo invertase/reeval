@@ -4,17 +4,18 @@
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
+import {
+  COMPARE_RUNS,
+  containsZero,
+  liftInterval,
+  PAIRED_MIN,
+  RUNS_TO_HOLD_MAX,
+  runsToHold,
+} from '../stats.ts'
 import { clip } from '../text.ts'
 import type { Remark } from '../view/remarks.ts'
-import {
-  type CellResult,
-  EFFECT_MIN_COUNTED,
-  type EvalResult,
-  type SuiteResult,
-} from '../view/suite.ts'
+import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
-/** too-few-tries: the gap between two sides' pass rates that matters, as a fraction. */
-export const TOO_FEW_TRIES_GAP = 0.5
 /** check-never-fails: recorded default-branch runs in a row with no fail, and their tries. */
 export const NEVER_FAILS_RUNS = 5
 export const NEVER_FAILS_TRIES = 20
@@ -48,12 +49,12 @@ export type RemarkContext = {
 
 /** `KIND_ORDER` ranks remarks of one severity: the ones most worth acting on first. */
 const KIND_ORDER: Remark['kind'][] = [
+  'too-few-tries',
   'flaky-check',
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
   'snapshot-too-large',
-  'too-few-tries',
   'check-never-fails',
 ]
 
@@ -94,37 +95,112 @@ function units(e: EvalResult): Array<{ id: string; cells: CellResult[] }> {
 
 const armOf = (c: CellResult) => c.variant ?? (c.environment === '-' ? 'baseline' : c.environment)
 
+const runs = (n: number) => `${n} ${n === 1 ? 'run' : 'runs'}`
+
+/** Whether a variant's difference from its baseline holds: its interval excludes 0. */
+function holds(variant: CellResult, base: CellResult): boolean {
+  const { low, high } = liftInterval(
+    { pass: variant.passed, n: counted(variant) },
+    { pass: base.passed, n: counted(base) },
+  )
+  return !containsZero(low, high)
+}
+
 /**
- * too-few-tries (suggestion): a variant and its baseline differ by at least `TOO_FEW_TRIES_GAP`,
- * with fewer than `EFFECT_MIN_COUNTED` counted tries on a side, so the effect reads "can't tell
- * yet" on a gap that matters. Equal rates never raise it.
+ * too-few-tries (concern): a variant's direction against its baseline doesn't hold yet. Their
+ * pass rates differ but the interval on the difference spans 0, or either side has fewer than
+ * `COMPARE_RUNS` runs, where a difference whose interval excludes 0 can still be chance: when
+ * nothing changed, 2 of 2 against 0 of 2 one way or the other comes up about 1 run in 8. It names
+ * the variant with the widest gap, and the fix the runs a side at which a difference at the
+ * observed rates would hold (`runsToHold`), never fewer than `COMPARE_RUNS`. A family is judged
+ * by its pooled lift (`pooledTooFewTries`), not each case's.
  */
 function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
-  let worst: { variant: CellResult; base: CellResult; gap: number } | null = null
+  if (e.pooled) return pooledTooFewTries(e, entry, ctx)
+  const weak: Array<{ variant: CellResult; base: CellResult; gap: number; held: boolean }> = []
   for (const unit of units(e)) {
     for (const variant of unit.cells) {
       const base = unit.cells.find((c) => c.key === variant.vs)
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
-      if (Math.min(counted(variant), counted(base)) >= EFFECT_MIN_COUNTED) continue
       const gap = Math.abs(rate(variant) - rate(base))
-      if (gap >= TOO_FEW_TRIES_GAP && (!worst || gap > worst.gap)) worst = { variant, base, gap }
+      const held = gap > 0 && holds(variant, base)
+      const few = Math.min(counted(variant), counted(base)) < COMPARE_RUNS
+      if (!few && (gap === 0 || held)) continue
+      weak.push({ variant, base, gap, held })
     }
   }
+  const worst = [...weak].sort((a, b) => b.gap - a.gap)[0]
   if (!worst) return []
-  const { variant, base } = worst
+  const { variant, base, gap, held } = worst
   const harnesses = new Set(units(e).flatMap((u) => u.cells.map((c) => c.harness))).size > 1
   const on = harnesses ? ` on ${variant.harness}` : ''
+  const counts = `The ${armOf(variant)} variant${on} passed ${variant.passed} of ${runs(counted(variant))} and the baseline ${base.passed} of ${counted(base)}`
+  const others = weak.length - 1
+  const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
+  const side = Math.max(counted(variant), counted(base))
+  const needed = gap
+    ? runsToHold(rate(variant), rate(base), Math.max(side + 1, COMPARE_RUNS))
+    : null
+  const direction = rate(variant) > rate(base) ? 'better' : 'worse'
+  const fewest = runs(Math.min(counted(variant), counted(base)))
+  const text = held
+    ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${more}`
+    : gap
+      ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${more}`
+      : `${counts}: the same, but ${fewest} a side can't show a difference.${more}`
+  const edit = held
+    ? `set runs: ${COMPARE_RUNS} or more, so a split this wide is less likely by chance`
+    : !gap
+      ? `set runs: ${COMPARE_RUNS} or more, so a difference can show`
+      : needed
+        ? `set runs: ${needed}, where a difference this size would hold`
+        : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
   return [
     {
       id: remarkId('too-few-tries', e.path, entry),
       evalId: e.path,
       kind: 'too-few-tries',
-      severity: 'suggestion',
-      text: `${capital(armOf(variant))}${on} passed ${variant.passed} of ${tries(counted(variant))} and ${armOf(base)} ${base.passed} of ${counted(base)}: too few tries to tell whether the difference holds.`,
+      severity: 'concern',
+      text,
       evidence: [variant.path, base.path],
+      fix: { at: ctx.locate(entry, null), edit },
+    },
+  ]
+}
+
+/**
+ * too-few-tries on a family: its pooled lift is the result for its cases, so it's raised when
+ * that lift is `insufficient` (below `PAIRED_MIN` discordant pairs or cases), or differs and is
+ * within noise.
+ */
+function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
+  const weak = (e.pooled ?? []).filter(
+    (p) => p.verdict === 'insufficient' || (p.verdict === 'noise' && p.effect !== 'same'),
+  )
+  const [arm] = weak
+  if (!arm) return []
+  const cells = (e.cases ?? []).flatMap((k) => k.cells)
+  const variant = cells.find((c) => c.key === arm.key)
+  const harnesses = new Set(cells.map((c) => c.harness)).size > 1
+  const on = harnesses && variant ? ` on ${variant.harness}` : ''
+  const others = weak.length - 1
+  const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
+  const direction = arm.effect === 'same' ? 'the same' : arm.effect
+  const few = arm.verdict === 'insufficient'
+  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${few ? `a family's lift needs ${PAIRED_MIN} to hold` : "the difference doesn't hold"}.${more}`
+  return [
+    {
+      id: remarkId('too-few-tries', e.path, entry),
+      evalId: e.path,
+      kind: 'too-few-tries',
+      severity: 'concern',
+      text,
+      evidence: [arm.path],
       fix: {
         at: ctx.locate(entry, null),
-        edit: `set runs: ${EFFECT_MIN_COUNTED} or more, so each side counts at least ${EFFECT_MIN_COUNTED} tries`,
+        edit: few
+          ? `add cases, so the pooled lift has ${PAIRED_MIN} to hold on`
+          : `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the difference can hold`,
       },
     },
   ]
