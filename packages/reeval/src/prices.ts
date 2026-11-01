@@ -18,7 +18,7 @@ export const MODELS_DEV = 'https://models.dev/api.json'
 /** The providers whose own API a harness or judge calls; the first one wins on a shared id. */
 const PROVIDERS = ['anthropic', 'openai', 'google', 'xai']
 /**
- * Their ids name the provider (`anthropic/claude-sonnet-4.5`), so they never shadow a direct one;
+ * Their ids name the provider (`anthropic/claude-sonnet-5.5`), so they never shadow a direct one;
  * Vercel's wins on an id both list.
  */
 const GATEWAYS = ['vercel', 'openrouter']

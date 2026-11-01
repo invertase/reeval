@@ -1,7 +1,8 @@
-// Fails `pnpm docs:check` on a Claude model id Anthropic has retired on the Claude API, in any
-// tracked file: a workflow, test row, example or default naming one sends a request that only
-// answers 404 not_found_error. The list follows Anthropic's model deprecations page
-// (https://docs.anthropic.com/en/docs/about-claude/model-deprecations); add an id once it retires.
+// Fails `pnpm docs:check` on a Claude model id Anthropic has retired, or announced the retirement
+// of, on the Claude API, in any tracked file: a workflow, test row, example or default naming one
+// sends a request that answers 404 not_found_error once it retires. The list follows Anthropic's
+// model deprecations page (https://docs.anthropic.com/en/docs/about-claude/model-deprecations);
+// add an id once its retirement date is announced.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,10 +10,10 @@ import { join } from 'node:path'
 /**
  * Retired ids, their aliases, OpenRouter's dotted forms, Bedrock's (`anthropic.claude-v2:1`,
  * `us.anthropic.…`) and the `claude-4-sonnet` order: Claude 1, 2 and Instant, every Claude 3,
- * Sonnet 4 and Opus 4 (`-20250514`, `-4-0`, `-4`) and Opus 4.1.
+ * Sonnet 4 and Opus 4 (`-20250514`, `-4-0`, `-4`), Opus 4.1 and Sonnet 4.5.
  */
 const RETIRED =
-  /(?<![\w.-])(?:(?:[a-z]{2,6}(?:-gov)?\.)?anthropic[/.])?claude-(?:(?:sonnet|opus)-4(?:[-.]0|-20250514)?|opus-4[-.]1(?:-20250805)?|4(?:[-.]1)?-(?:sonnet|opus)|3(?:[-.]\d)?-(?:sonnet|haiku|opus)[\w.-]*|(?:sonnet|haiku|opus)-3(?:[-.]\d)?[\w.-]*|[12](?:\.\d)?|v[12](?::\d+)?|instant[\w.-]*)(?![\w.]|-\d)/g
+  /(?<![\w.-])(?:(?:[a-z]{2,6}(?:-gov)?\.)?anthropic[/.])?claude-(?:(?:sonnet|opus)-4(?:[-.]0|-20250514)?|opus-4[-.]1(?:-20250805)?|sonnet-4[-.]5(?:-20250929)?|4(?:[-.]1)?-(?:sonnet|opus)|4[-.]5-sonnet|3(?:[-.]\d)?-(?:sonnet|haiku|opus)[\w.-]*|(?:sonnet|haiku|opus)-3(?:[-.]\d)?[\w.-]*|[12](?:\.\d)?|v[12](?::\d+)?|instant[\w.-]*)(?![\w.]|-\d)/g
 
 /**
  * Files that quote what was, not what reeval calls: release-please writes CHANGELOG.md from PR
@@ -26,15 +27,21 @@ const SKIPPED = [
 
 /**
  * Ids a file may name, because they describe a model rather than call it. Claude Code drops
- * `effort` on these (its `supportsEffort`), which still matters where a partner platform such as
- * Vertex AI keeps serving them after the Claude API retired them.
+ * `effort` on these (its `supportsEffort`) and resolves its `sonnet` alias on Vertex AI to
+ * Sonnet 4.5, which still matters where a partner platform such as Vertex AI keeps serving them
+ * after the Claude API retired them; and OpenCode's Anthropic provider sends Sonnet 4.5 no effort.
  */
 const ALLOWED = {
   'packages/reeval/src/contract/harness.ts': [
     'claude-opus-4-0',
     'claude-opus-4-1',
     'claude-sonnet-4-0',
+    'claude-sonnet-4-5',
   ],
+  'packages/reeval/test/refusals/gateway.json': ['claude-sonnet-4-5'],
+  'packages/reeval/test/plan/gateway/expected/vertex-yaml.txt': ['claude-sonnet-4-5'],
+  'packages/harness-opencode/src/opencode-providers.ts': ['claude-sonnet-4-5'],
+  'packages/harness-opencode/test/unit.test.ts': ['anthropic/claude-sonnet-4-5-20250929'],
 }
 
 /** One problem per retired id per line of the tracked text files under `root`, this one aside. */
@@ -60,7 +67,7 @@ export function retiredModelProblems(root) {
       for (const [id] of line.matchAll(RETIRED)) {
         if (allowed?.includes(id)) continue
         problems.push(
-          `${file}:${i + 1} names ${id}, which Anthropic has retired on the Claude API (requests answer 404 not_found_error): use a current model such as claude-haiku-5-5 or claude-sonnet-5-5`,
+          `${file}:${i + 1} names ${id}, which Anthropic has retired or is retiring on the Claude API (requests answer 404 not_found_error once it retires): use a current model such as claude-haiku-5-5 or claude-sonnet-5-5`,
         )
       }
     })

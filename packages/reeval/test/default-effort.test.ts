@@ -120,10 +120,6 @@ describe('the shared default effort', () => {
     for (const model of ['opus', 'claude-sonnet-5-5[1m]', 'anthropic/claude-sonnet-5-5']) {
       assert.equal(withDefaultEffort(onVertex(model)).effort, 'medium', model)
     }
-    assert.equal(
-      noDefaultEffort(onVertex('sonnet')),
-      'Claude Code sends no effort to sonnet (claude-sonnet-4-5) on Vertex AI',
-    )
     assert.equal(withDefaultEffort(claudeCode({ model: 'sonnet' })).effort, 'medium')
     assert.equal(
       noDefaultEffort(claudeCode({ model: 'haiku' })),

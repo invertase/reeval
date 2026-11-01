@@ -7,7 +7,7 @@ import type { PairAttempt } from '../src/compare/pairs.ts'
 import { answerQuestion } from '../src/compare/questions.ts'
 import { scoreWithModel } from '../src/judge/model.ts'
 
-const MODEL = 'anthropic/claude-sonnet-4.5'
+const MODEL = 'anthropic/claude-sonnet-5.5'
 const SAMPLING = ['temperature', 'topP', 'topK', 'top_p', 'top_k']
 
 describe('sampling parameters on anthropic/* models', () => {
