@@ -204,7 +204,10 @@ pass             stores invoice totals in cents with the billing skill
   `helped`, `made it worse`, or `same`; on a small sample (below 4 runs a side, or a `same` at
   2 of 4 against 2 of 4) a `too-few-tries` remark says it doesn't hold yet and names the `runs`. When
   both arms pass every run, or both fail every run, at 4 runs a side or more, a `cant-tell-apart`
-  remark says more runs won't help: make the task harder, or check the eval. The check table shows which check told the arms apart.
+  remark says more runs won't help: make the task harder, or check the eval. When both pass but
+  another measure differs, the line under the variant names it (`Same pass rate · 5× faster.`),
+  and a measure that only leans gets a `too-few-tries` remark with the runs that would confirm it.
+  The check table shows which check told the arms apart.
 - `Worth knowing:` under an eval in `reeval run`'s list names what about it needs work, with the line to fix. Remarks never
   change a verdict.
 - Both arms passing is a result, not a broken eval: the agent already does this without the

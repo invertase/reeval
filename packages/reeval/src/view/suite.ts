@@ -15,9 +15,10 @@ import type {
 } from '../history/types.ts'
 import { COMPARE_RUNS } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
-import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
+import { cellEffort } from './effort.ts'
 import { caseLabel } from './family.ts'
 import { checksByLabel, checkTries, labeledJudgments } from './judgments.ts'
+import { cellMeasures, familyMeasures, type Measure } from './measures.ts'
 import { attemptAnswerRows, isNotGatedPass, notRunYet, runOutcome } from './model.ts'
 import { type ObservedTally, observedTallies } from './observations.ts'
 
@@ -222,8 +223,8 @@ export type CellResult = {
   minLift: number | null
   /** Medians over the counted attempts; null below `COMPARE_RUNS` of them. */
   effort: EffortCounters | null
-  /** On a variant, its tool calls, agent time or tokens differ from its baseline's by the rank test. */
-  effortDiffers: boolean
+  /** On a variant, every measure against its baseline (`cellMeasures`); null on a control. */
+  measures: Measure[] | null
   /** Why attempts failed or errored where no check says: a timeout, an infra error, a throw. */
   errors: CellError[]
   /**
@@ -342,6 +343,8 @@ export type PooledArm = {
   /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
   minLift: number | null
   outcome: 'pass' | 'fail'
+  /** Every measure over the cases (`familyMeasures`). */
+  measures: Measure[]
 }
 
 type Side = { pass: number; counted: number }
@@ -523,14 +526,6 @@ function errorsOf(e: EvalEntry, cell: CellRecord): CellError[] {
   return out
 }
 
-function effortDiffers(e: EvalEntry, cell: CellRecord, baseline: CellRecord | undefined): boolean {
-  if (!baseline) return false
-  const c = contrastEffort(cellSamples(e, cell.key), cellSamples(e, baseline.key))
-  if (!c) return false
-  const moved = (v: EffortVerdict | null) => v === 'fewer' || v === 'more'
-  return moved(c.verdict) || moved(c.timeVerdict) || moved(c.tokensVerdict)
-}
-
 function questionsOf(e: EvalEntry): Array<QuestionResult | AttemptQuestionResult> {
   const pairs = (e.answers ?? []).map(
     (a): QuestionResult => ({
@@ -646,7 +641,8 @@ function cellsOf(
       interval,
       minLift: lift?.minLift ?? null,
       effort: effortOf(e, cell),
-      effortDiffers: cell.role === 'variant' && effortDiffers(e, cell, baseline),
+      measures:
+        cell.role === 'variant' && baseline ? cellMeasures(e, cell.key, baseline.key) : null,
       errors: errorsOf(e, cell),
       ...(snapshots.length ? { snapshots } : {}),
       searches: attempts.map((a) => a.activity.webSearches),
@@ -797,6 +793,7 @@ function familyResult(
         verdict: lift.verdict,
         minLift: lift.minLift ?? null,
         outcome: lift.outcome,
+        measures: familyMeasures(sorted, lift),
       }
     }),
     questions: familyQuestions(sorted),

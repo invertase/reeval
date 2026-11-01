@@ -64,6 +64,14 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
   `runs: 4` a cell, as lift does (below it lift shows only a direction and effort can't be tested; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.
+- **One comparison per variant** against its baseline covers every measure: pass rate, each
+  check's pass rate, each judge's scores, each compare question's votes, tool calls, agent time
+  and tokens. Each is `better`, `worse`, `same` or `leans` (a difference its own test doesn't hold
+  yet, with the runs that would hold it). The status list prints the ones that hold under the
+  variant (`Same pass rate · 5× faster.`), `reeval compare -v` the leans too, and
+  `reeval query measure_effects` has a row per measure. When both arms pass every run, a measure
+  that holds is the result (no remark), one that leans raises `too-few-tries` with the runs, and
+  all the same raises `cant-tell-apart`.
 - With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
   variant against variant too.
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each

@@ -29,15 +29,19 @@ reeval doesn't check these, so read the eval for them yourself:
 Concern. A variant's difference from its baseline doesn't hold (its 95% interval spans 0), or it
 rests on a small sample, in any direction: a side has fewer than 4 counted tries, or a `same`'s
 interval still reaches past 20 points (2 of 4 against 2 of 4), so the effect is only a direction;
-a family's is its pooled lift's, insufficient below 6 cases. **Fix:** raise `runs` to the number the remark names, or add
-cases to a family.
+a family's is its pooled lift's, insufficient below 6 cases. It also prints when both arms pass
+every run and no other measure (effort, a judge, a check, a compare question) is better or worse,
+but some lean: a difference its own test doesn't hold yet ("the variant looks different: 8%
+faster; about 9 runs a side would confirm it"). **Fix:** raise `runs` to the number the remark
+names, or add cases to a family.
 
 ## `cant-tell-apart`
 
 Concern. A variant and its baseline both passed every run, or both failed every run, on 4 runs a
 side or more (for a family, every case on both sides, over 6 cases or more), so no number of runs
-can tell them apart; arms that always pass but differ in effort, or in a compare question's win
-rates, raise nothing. **Fix:** when both
+can tell them apart. On a pass ceiling it prints only when every other measure of the comparison
+is the same too; one that is better or worse is the result and raises nothing, and one that only
+leans raises `too-few-tries`. Both failing always raises it. **Fix:** when both
 always pass, make the task harder, so the baseline can fail; when both always fail, check the eval
 with an agent that does the task (an oracle, such as a fake agent writing the solution), and make
 the task easier if its checks pass.

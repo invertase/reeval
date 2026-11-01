@@ -1216,18 +1216,23 @@ evaluate('hello', async (c) => {
       assert.equal(run.code, 0, run.stdout)
       const { digest } = await digestOf(p.dir)
       const cells = digest.facts.find((f) => f.kind === 'pass@1')?.cells as
-        | Array<{ lift?: string; smallSample?: boolean; tie?: string }>
+        | Array<{ lift?: string; smallSample?: boolean; tie?: string; looks?: string }>
         | undefined
       const variant = cells?.find((c) => c.lift)
-      return { smallSample: variant?.smallSample, tie: variant?.tie }
+      return {
+        smallSample: variant?.smallSample,
+        ceiling: variant?.tie ?? (variant?.looks ? 'looks' : undefined),
+      }
     }
-    assert.deepEqual(await tieOf('analyze-tie-four', 4), {
-      smallSample: true,
-      tie: 'both always pass',
-    })
+    const four = await tieOf('analyze-tie-four', 4)
+    assert.equal(four.smallSample, true)
+    assert.ok(
+      four.ceiling === 'both always pass' || four.ceiling === 'looks',
+      `a ceiling at 4 a side is a tie, or a lean where the fake agent's time differs: ${four.ceiling}`,
+    )
     assert.deepEqual(
       await tieOf('analyze-tie-one', 1),
-      { smallSample: true, tie: undefined },
+      { smallSample: true, ceiling: undefined },
       'one pass a side is too few to say both always pass',
     )
   })

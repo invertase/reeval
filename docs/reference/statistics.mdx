@@ -23,7 +23,9 @@ For more information about the printed effect words, see [Read the result](/resu
 
 ## Too few runs
 
-A small sample is a side with fewer than four counted attempts, or an interval that spans zero and still reaches past 20 points either way. The effect word always prints. On a small sample, whatever the direction, the `too-few-tries` remark prints beside it, and so does a difference whose interval spans zero. When both sides pass every attempt, or both fail every attempt, on four runs a side or more, the `cant-tell-apart` remark prints instead: more runs can't separate them. Below four, `too-few-tries` prints, since a few passes don't show that a side always passes. Two sides that always pass raise nothing when their effort differs or a compare question's win rates do, since those tell them apart.
+A small sample is a side with fewer than four counted attempts, or an interval that spans zero and still reaches past 20 points either way. The effect word always prints. On a small sample, whatever the direction, the `too-few-tries` remark prints beside it, and so does a difference whose interval spans zero.
+
+When both sides pass every attempt, or both fail every attempt, on four runs a side or more, more runs can't split their pass rates. The remark then reads the rest of [the comparison](#one-comparison-over-every-measure). Below four, `too-few-tries` prints, since a few passes don't show that a side always passes.
 
 | Result | Remark |
 |---|---|
@@ -31,13 +33,34 @@ A small sample is a side with fewer than four counted attempts, or an interval t
 | 2 of 2 against 0 of 2 | better by 100 points, on only 2 runs a side |
 | 1 of 1 against 1 of 1 | the same, but 1 run a side can't rule out a difference of up to 79 points |
 | 2 of 4 against 2 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
-| 4 of 4 against 4 of 4 | `cant-tell-apart`: both always pass, so make the task harder |
-| 0 of 4 against 0 of 4 | `cant-tell-apart`: the task may be too hard, or the eval broken |
+| 4 of 4 against 4 of 4, some measure better or worse | none: the comparison is the result |
+| 4 of 4 against 4 of 4, some measure leans | `too-few-tries`: the variant looks different, and about N runs a side would confirm it |
+| 4 of 4 against 4 of 4, every measure the same | `cant-tell-apart`: both always pass, so make the task harder |
+| 0 of 4 against 0 of 4 | `cant-tell-apart`: the task may be too hard, or the eval broken, whatever else differs |
 | 4 of 4 against 0 of 4 | none: the difference holds |
 
 The remark names the `runs`, never fewer than four, at which a difference that size would hold, or at which equal rates would rule out 20 points either way. Two of two against zero of two raises it though its interval excludes zero: when nothing changed, that split comes up about one run in eight. A family's sample is its cases: it is small below six cases, or when its pooled interval spans zero and reaches past 20 points. A family raises the remark when its pooled lift doesn't hold, insufficient or within noise, and its rates differ or its sample is small. Many cases that agree, some passing and some failing on both sides, are insufficient but raise nothing; six or more cases that all pass, or all fail, on both sides raise `cant-tell-apart`.
 
-`reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule. Beside a cell's lift, the digest adds `tie: 'both always pass'` or `'both always fail'` when both sides passed, or failed, every one of four counted attempts or more.
+`reeval query`'s `contrasts` and `factor_effects` add `small_sample` beside `pass_verdict`, and the `reeval analyze` digest adds `smallSample: true` beside a lift's verdict, by the same rule. Beside a cell's lift, the digest adds `tie: 'both always pass'` or `'both always fail'` when the remark would say `cant-tell-apart`, and `looks: 'N runs'` when it would say the variant looks different.
+
+## One comparison over every measure
+
+```text
+     Variants, by pass rate:
+       marked  4 of 4  same
+         Same pass rate · 5× faster.
+```
+
+reeval compares each variant with its baseline on every measure the run has, each with the test reeval already prints it with. The status list, `reeval compare -v`, the remarks, the `reeval analyze` digest and `reeval query measure_effects` all read this one comparison, so they never disagree.
+
+| Measure | Test | Magnitude |
+|---|---|---|
+| Pass rate, and each check's own pass rate | Newcombe's interval, as lift: holds when it excludes zero with four counted attempts a side | `+25 pts` |
+| Each judge's scores | Mann-Whitney at p below 0.05 | the mean score's difference, `judge "tidy" +0.12` |
+| Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant 6 of 6` |
+| Tool calls, agent time, tokens | the effort verdict above (paired by case in a family) | the medians' ratio, `5× faster`, `10× fewer tokens` |
+
+Each measure is `better` or `worse` when its test holds, `same` when the two sides are exactly equal, and `leans` on any other difference: one the test doesn't hold. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200. Each measure's test stands alone: no correction across measures, since the comparison makes no single combined claim.
 
 ## Cases as pairs
 

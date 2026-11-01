@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { familiesOf } from '../src/history/families.ts'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
 import { readRemarks } from '../src/remarks/files.ts'
 import { defaultBranch } from '../src/remarks/index.ts'
@@ -297,31 +298,50 @@ describe('remark thresholds', () => {
       ceiling?.id,
       'a floor after a ceiling on the same source is a new remark, so it prints',
     )
-    const asked = (wins: [number, number]) => {
+    const asked = (winners: Array<'plain' | 'marked' | 'tie'>) => {
       const r = only(record, 'tft settled')
-      for (const e of r.evals)
+      for (const e of r.evals) {
+        const harness = e.cells[0]?.harness ?? 'fake'
         e.answers = [
           {
             question: 'Which is clearer?',
             model: 'fake',
-            votes: [],
-            rates: [
-              { cut: 'within', name: 'plain', wins: wins[0], n: 8 },
-              { cut: 'within', name: 'marked', wins: wins[1], n: 8 },
-            ],
+            votes: winners.map((winner, i) => ({
+              cut: 'within' as const,
+              harness,
+              run: i + 1,
+              a: 'plain',
+              b: 'marked',
+              winner,
+              swapped: false,
+            })),
+            rates: [],
           },
         ]
+      }
       return r
     }
     assert.deepEqual(
-      kinds(asked([0, 8]), NO_HISTORY),
+      kinds(asked(Array(8).fill('marked')), NO_HISTORY),
       [],
-      'a ceiling a pairwise question separates is told apart by the question',
+      'a ceiling a question tells apart (8 of 8, p 0.008) needs no remark: the comparison is the result',
+    )
+    const [looks] = raise(asked(Array(4).fill('marked')), NO_HISTORY)
+    assert.equal(looks?.kind, 'too-few-tries', '4 of 4 leans: the sign test needs 6 to hold')
+    assert.equal(
+      looks?.text,
+      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 4 of 4; about 6 runs a side would confirm it.',
+    )
+    assert.equal(looks?.fix?.edit, 'set runs: 6, where the soonest of these would hold')
+    assert.deepEqual(
+      kinds(asked(['plain', 'plain', 'marked', 'marked']), NO_HISTORY),
+      ['cant-tell-apart'],
+      'a question that splits evenly is the same',
     )
     assert.deepEqual(
-      kinds(asked([4, 4]), NO_HISTORY),
+      kinds(asked(['tie', 'tie', 'tie', 'tie']), NO_HISTORY),
       ['cant-tell-apart'],
-      'a question that splits evenly tells nothing apart',
+      'a question with no decisive pair is the same',
     )
     const faster = only(record, 'tft settled')
     for (const e of faster.evals)
@@ -334,6 +354,15 @@ describe('remark thresholds', () => {
       [],
       'a ceiling whose effort differs is told apart by its effort',
     )
+    const nudged = only(record, 'tft settled')
+    for (const e of nudged.evals) {
+      for (const a of e.attempts) a.timings.agentMs = 1000
+      const first = e.attempts.find((a) => e.cells.find((c) => c.key === a.cell)?.lift)
+      if (first) first.timings.agentMs = 500
+    }
+    const [nudge] = raise(nudged, NO_HISTORY)
+    assert.equal(nudge?.kind, 'too-few-tries', 'one faster attempt of 16 leans, short of holding')
+    assert.match(nudge?.text ?? '', /looks different: \d+% faster; about \d+ runs a side/)
     assert.deepEqual(
       kinds(only(record, 'tft enough'), NO_HISTORY),
       [],
@@ -374,6 +403,16 @@ describe('remark thresholds', () => {
       kinds(family('tft agree $id'), NO_HISTORY),
       ['cant-tell-apart'],
       '30 cases that all pass on both sides are a ceiling, not a small sample',
+    )
+    const quicker = family('tft agree $id')
+    for (const e of quicker.evals)
+      for (const a of e.attempts)
+        a.timings.agentMs = e.cells.find((c) => c.key === a.cell)?.lift ? 10 : 1000
+    quicker.families = familiesOf(quicker.evals, () => undefined)
+    assert.deepEqual(
+      kinds(quicker, NO_HISTORY),
+      [],
+      'a family ceiling whose paired effort holds over its cases is told apart by it',
     )
     assert.deepEqual(
       kinds(family('tft split $id'), NO_HISTORY),

@@ -98,3 +98,46 @@ test('the status list: one line a pass, and a sentence for each way an eval went
     PLAIN.replace(/^[├└]─ /gm, '  ').replace(/^[│ ] {4}/gm, '    '),
   )
 })
+
+const FASTER = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', {})
+
+evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+  for (let i = 0; i < (c.attempt.cell.role === 'variant' ? 1 : 5); i++) await c.send('go')
+  expect(1, 'one').toBe(1)
+})
+`
+
+test('a compare whose effort holds prints its comparison, which every reader shares, and no tie remark', async () => {
+  const p = await project('status-measures', {
+    'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 150 }' }),
+    'evals/s.eval.ts': FASTER,
+  })
+  const run = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  const list = listOf(run.stdout)
+  assert.match(list, /^ {7}marked {2}4 of 4 {2}same\n {9}Same pass rate · [4-6](\.\d)?× faster\.$/m)
+  assert.doesNotMatch(list, /Worth knowing|can't tell them apart|looks different/)
+  const rows = await runCli(p.dir, ['query', 'measure_effects', '--json'])
+  assert.equal(rows.code, 0, rows.stderr)
+  const effects = JSON.parse(rows.stdout) as Array<Record<string, unknown>>
+  assert.deepEqual(
+    effects.map((r) => [r.measure, r.verdict, r.variant, r.control]),
+    [
+      ['pass', 'same', 'marked', 'fake/plain/fake'],
+      ['tools', 'same', 'marked', 'fake/plain/fake'],
+      ['agentMs', 'better', 'marked', 'fake/plain/fake'],
+      ['check', 'same', 'marked', 'fake/plain/fake'],
+    ],
+  )
+  const again = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(again.code, 0, again.stdout + again.stderr)
+  const idOf = (stdout: string) => /· run (\S+)/.exec(stdout)?.[1] ?? ''
+  const compare = await runCli(p.dir, ['compare', idOf(run.stdout), idOf(again.stdout), '-v'])
+  assert.equal(compare.code, 0, compare.stdout + compare.stderr)
+  assert.match(
+    compare.stdout,
+    /fake\/marked\/fake vs baseline +same pass rate · [4-6](\.\d)?× faster → same pass rate · [4-6](\.\d)?× faster/,
+  )
+})

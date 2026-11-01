@@ -54,6 +54,7 @@ Each built-in view returns one kind of row.
 | `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
+| `measure_effects` | `run_id`, `eval_key`, `family`, `harness`, `variant`, `cell_key`, `control`, `measure`, `label`, `variant_value`, `control_value`, `estimate`, `lo`, `hi`, `p`, `verdict`, `leaning`, `text`, `needed`, `unit`, `started_at`, `branch` |
 | `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
 | `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
@@ -124,6 +125,16 @@ reeval query "SELECT factor, level, tier, points FROM factor_effects"
 `tier` is `controlled`, `pooled`, `paired`, `observed`, or `not_measured`. `run_id` is null for `pooled` and `not_measured`.
 
 `pass_verdict` is `effect`, `noise`, `insufficient` (a family below six pairs or cases), or `not_comparable` (the eval changed). `small_sample` is 1 when the row rests on a small sample, and null when the eval changed. A `paired` row's sample is its cases, so it is small below six of them.
+
+## `measure_effects`
+
+`measure_effects` lists one row per measure of each variant's comparison with its baseline in a run: a variant cell's, or a family's pooled variant's (`family` 1).
+
+```bash title="Query"
+reeval query "SELECT variant, measure, label, verdict, text, needed FROM measure_effects"
+```
+
+`measure` is `pass`, `check`, `judge`, `question`, `tools`, `agentMs` or `tokens`, and `label` names the check, judge or question. `verdict` is `better`, `worse`, `same` or `leans`, by the measure's own test; `leaning` says which way a lean goes, and `needed` the runs a side (or cases, by `unit`) at which it would hold. For the tests, see [One comparison over every measure](/reference/statistics#one-comparison-over-every-measure).
 
 ## `skill_reads`
 

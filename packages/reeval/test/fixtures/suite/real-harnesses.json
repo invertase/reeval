@@ -54,7 +54,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -83,7 +83,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -112,7 +112,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -141,7 +141,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -170,7 +170,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -199,7 +199,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -228,7 +228,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]

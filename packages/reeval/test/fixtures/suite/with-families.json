@@ -64,7 +64,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "assertion",
@@ -102,7 +102,53 @@
                     },
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": [
+                      {
+                        "measure": "pass",
+                        "label": null,
+                        "variant": 1,
+                        "control": 0,
+                        "estimate": 1,
+                        "lo": -0.122,
+                        "hi": 1,
+                        "p": null,
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "pass rate +100 pts",
+                        "needed": 4,
+                        "unit": "runs"
+                      },
+                      {
+                        "measure": "tools",
+                        "label": null,
+                        "variant": 1,
+                        "control": 1,
+                        "estimate": 1,
+                        "lo": null,
+                        "hi": null,
+                        "p": 1,
+                        "verdict": "same",
+                        "leaning": null,
+                        "text": "same tool calls",
+                        "needed": null,
+                        "unit": "runs"
+                      },
+                      {
+                        "measure": "agentMs",
+                        "label": null,
+                        "variant": 94,
+                        "control": 184,
+                        "estimate": 0.5108695652173914,
+                        "lo": null,
+                        "hi": null,
+                        "p": 1,
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "2× faster",
+                        "needed": null,
+                        "unit": "runs"
+                      }
+                    ],
                     "errors": [],
                     "searches": [0],
                     "fetches": [0]
@@ -131,7 +177,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "infra",
@@ -166,7 +212,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "infra",
@@ -212,7 +258,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "assertion",
@@ -250,7 +296,53 @@
                     },
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": [
+                      {
+                        "measure": "pass",
+                        "label": null,
+                        "variant": 1,
+                        "control": 0,
+                        "estimate": 1,
+                        "lo": -0.122,
+                        "hi": 1,
+                        "p": null,
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "pass rate +100 pts",
+                        "needed": 4,
+                        "unit": "runs"
+                      },
+                      {
+                        "measure": "tools",
+                        "label": null,
+                        "variant": 1,
+                        "control": 1,
+                        "estimate": 1,
+                        "lo": null,
+                        "hi": null,
+                        "p": 1,
+                        "verdict": "same",
+                        "leaning": null,
+                        "text": "same tool calls",
+                        "needed": null,
+                        "unit": "runs"
+                      },
+                      {
+                        "measure": "agentMs",
+                        "label": null,
+                        "variant": 135,
+                        "control": 184,
+                        "estimate": 0.7336956521739131,
+                        "lo": null,
+                        "hi": null,
+                        "p": 1,
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "27% faster",
+                        "needed": null,
+                        "unit": "runs"
+                      }
+                    ],
                     "errors": [],
                     "searches": [0],
                     "fetches": [0]
@@ -279,7 +371,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "infra",
@@ -314,7 +406,7 @@
                     "interval": null,
                     "minLift": null,
                     "effort": null,
-                    "effortDiffers": false,
+                    "measures": null,
                     "errors": [
                       {
                         "kind": "infra",
@@ -341,7 +433,54 @@
                 },
                 "verdict": "insufficient",
                 "minLift": 0.2,
-                "outcome": "fail"
+                "outcome": "fail",
+                "measures": [
+                  {
+                    "measure": "pass",
+                    "label": null,
+                    "variant": 1,
+                    "control": 0,
+                    "estimate": 1,
+                    "lo": 0.07,
+                    "hi": 1,
+                    "p": 0.5,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "pass rate +100 pts",
+                    "needed": null,
+                    "unit": "cases"
+                  },
+                  {
+                    "measure": "tools",
+                    "label": null,
+                    "variant": 1,
+                    "control": 1,
+                    "estimate": 1,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same tool calls",
+                    "needed": null,
+                    "unit": "cases"
+                  },
+                  {
+                    "measure": "agentMs",
+                    "label": null,
+                    "variant": 114.5,
+                    "control": 184,
+                    "estimate": 0.6222826086956522,
+                    "lo": null,
+                    "hi": null,
+                    "p": 0.5,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "1.6× faster",
+                    "needed": 17,
+                    "unit": "cases"
+                  }
+                ]
               }
             ],
             "questions": [],
@@ -384,7 +523,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -413,7 +552,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -467,7 +606,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -496,7 +635,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -555,7 +694,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -584,7 +723,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -638,7 +777,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "assertion",
@@ -673,7 +812,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -727,7 +866,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "judge",
@@ -762,7 +901,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -816,7 +955,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -845,7 +984,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -893,7 +1032,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -946,7 +1085,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "assertion",
@@ -984,7 +1123,53 @@
                 },
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": [
+                  {
+                    "measure": "pass",
+                    "label": null,
+                    "variant": 1,
+                    "control": 0,
+                    "estimate": 1,
+                    "lo": -0.122,
+                    "hi": 1,
+                    "p": null,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "pass rate +100 pts",
+                    "needed": 4,
+                    "unit": "runs"
+                  },
+                  {
+                    "measure": "tools",
+                    "label": null,
+                    "variant": 1,
+                    "control": 1,
+                    "estimate": 1,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same tool calls",
+                    "needed": null,
+                    "unit": "runs"
+                  },
+                  {
+                    "measure": "agentMs",
+                    "label": null,
+                    "variant": 95,
+                    "control": 200,
+                    "estimate": 0.475,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "2.1× faster",
+                    "needed": null,
+                    "unit": "runs"
+                  }
+                ],
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -1013,7 +1198,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -1048,7 +1233,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -1117,7 +1302,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -1149,7 +1334,68 @@
                 },
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": [
+                  {
+                    "measure": "pass",
+                    "label": null,
+                    "variant": 1,
+                    "control": 1,
+                    "estimate": 0,
+                    "lo": -0.793,
+                    "hi": 0.793,
+                    "p": null,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same pass rate",
+                    "needed": null,
+                    "unit": "runs"
+                  },
+                  {
+                    "measure": "tools",
+                    "label": null,
+                    "variant": 1,
+                    "control": 1,
+                    "estimate": 1,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same tool calls",
+                    "needed": null,
+                    "unit": "runs"
+                  },
+                  {
+                    "measure": "agentMs",
+                    "label": null,
+                    "variant": 119,
+                    "control": 260,
+                    "estimate": 0.4576923076923077,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "2.2× faster",
+                    "needed": null,
+                    "unit": "runs"
+                  },
+                  {
+                    "measure": "question",
+                    "label": "Which greeting reads more like our house style?",
+                    "variant": 1,
+                    "control": 0,
+                    "estimate": 1,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "\"Which greeting reads more like our house style?\" picked the variant 1 of 1",
+                    "needed": 6,
+                    "unit": "runs"
+                  }
+                ],
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -1178,7 +1424,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -1213,7 +1459,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -1317,7 +1563,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0, 0, 0],
                 "fetches": [0, 0, 0]
