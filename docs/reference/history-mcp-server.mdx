@@ -59,7 +59,7 @@ The `query` tool runs one `SELECT` or `WITH` on the `.reeval/history.db` file. A
 
 ## `query_schema`
 
-The `query_schema` tool returns `{ objects }` with `name`, `type` (`table` or `view`), and `columns`. It omits `meta`, `files`, `sqlite_*`, `family_lift_m`, `effort_m`, `contrasts_m`, `factor_effects_m`, `flaky_m`, `drift_m`, and `check_streaks_m`.
+The `query_schema` tool returns `{ objects }` with `name`, `type` (`table` or `view`), and `columns`. It omits `meta`, `files`, `sqlite_*`, `case_lift_m`, `effort_m`, `contrasts_m`, `factor_effects_m`, `flaky_m`, `drift_m`, and `check_streaks_m`.
 
 For more information about views and tables, see [Query views and tables reference](/reference/query-views).
 
@@ -70,7 +70,7 @@ Each `query_<view>` tool returns the same `{ columns, rows, truncated }` shape. 
 Each view has its own tool:
 
 - `query_lift`
-- `query_family_lift`
+- `query_case_lift`
 - `query_effort`
 - `query_contrasts`
 - `query_question_pairs`

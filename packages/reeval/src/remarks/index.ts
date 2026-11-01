@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { inCI } from '../env.ts'
 import { git } from '../git.ts'
+import { caseEntries, unfoldCases } from '../history/cases.ts'
 import { comparableFingerprint, type HistoryDb, openHistoryDb } from '../history/db.ts'
 import { recordNames, scratchDir } from '../history/files.ts'
 import type { EvalEntry, RunRecord } from '../history/types.ts'
@@ -116,10 +117,19 @@ async function settleRemarks(
   )
 }
 
-const one = <T>(db: HistoryDb, sql: string, params: Array<string>) =>
+const one = <T>(db: HistoryDb, sql: string, params: Array<string | null>) =>
   (db.query(sql, params).rows[0] as T | undefined) ?? null
 
-function historyOf(db: HistoryDb, branch: string | null): NonNullable<RemarkContext['history']> {
+/**
+ * The history's answers for a run's evals, each case of an eval with cases asked as itself: the
+ * history keys it by its eval, checks over every case and flakiness per case.
+ */
+function historyOf(
+  db: HistoryDb,
+  branch: string | null,
+  caseOf: ReadonlyMap<string, { evalKey: string; caseKey: string }>,
+): NonNullable<RemarkContext['history']> {
+  const at = (key: string) => caseOf.get(key) ?? { evalKey: key, caseKey: null as string | null }
   return {
     streak: (evalKey, cellKey, label, fingerprint) =>
       branch === null
@@ -128,14 +138,15 @@ function historyOf(db: HistoryDb, branch: string | null): NonNullable<RemarkCont
             db,
             `SELECT streak_runs AS runs, streak_tries AS tries FROM check_streaks
              WHERE eval_key = ? AND cell_key = ? AND label = ? AND fingerprint = ? AND branch = ?`,
-            [evalKey, cellKey, label, fingerprint, branch],
+            [at(evalKey).evalKey, cellKey, label, fingerprint, branch],
           ),
     flaky: (evalKey, cellKey, fingerprint) =>
       one<{ cause: string }>(
         db,
         `SELECT cause FROM flaky_cells
-         WHERE eval_key = ? AND cell_key = ? AND fingerprint = ? AND verdict = 'flaky'`,
-        [evalKey, cellKey, fingerprint],
+         WHERE eval_key = ? AND cell_key = ? AND case_key IS ? AND fingerprint = ?
+           AND verdict = 'flaky'`,
+        [at(evalKey).evalKey, cellKey, at(evalKey).caseKey, fingerprint],
       ),
     window: (evalKey, cellKey, label, fingerprint) => {
       const rows = db.query(
@@ -143,7 +154,7 @@ function historyOf(db: HistoryDb, branch: string | null): NonNullable<RemarkCont
          JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
          WHERE k.eval_key = ? AND k.cell_key = ? AND k.label = ? AND c.comparable = ?
          ORDER BY k.run_id DESC LIMIT ${FLAKY_WINDOW}`,
-        [evalKey, cellKey, label, fingerprint],
+        [at(evalKey).evalKey, cellKey, label, fingerprint],
       ).rows as Array<{ pass: number; fail: number }>
       return rows.reduce<CheckWindow>(
         (w, r) => ({
@@ -237,16 +248,25 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
   const db = runs.length ? await openHistoryDb(config.root, config.history.dir) : null
   try {
     const loc = locator(config.root)
-    for (const entry of record.evals) await loc.prepare(entry, needlesOf(entry))
+    const cases = unfoldCases(record)
+    const caseOf = new Map(
+      record.evals.flatMap((e) =>
+        caseEntries(e).flatMap((m, i) => {
+          const k = e.cases?.[i]
+          return k ? [[m.id, { evalKey: e.key, caseKey: k.key }] as const] : []
+        }),
+      ),
+    )
+    for (const entry of cases.evals) await loc.prepare(entry, needlesOf(entry))
     const ctx: RemarkContext = {
-      history: db ? historyOf(db, await defaultBranch(config.root)) : null,
+      history: db ? historyOf(db, await defaultBranch(config.root), caseOf) : null,
       comparable: (entry, cellKey) => {
         const cell = entry.cells.find((c) => c.key === cellKey)
         return cell ? comparableFingerprint(cell, entry.attempts) : ''
       },
       locate: loc.locate,
     }
-    const candidates = deterministicRemarks(suiteResult(record), record, ctx)
+    const candidates = deterministicRemarks(suiteResult(record), cases, ctx)
     return candidates.length ? await settleRemarks(config, record, candidates) : []
   } finally {
     db?.close()

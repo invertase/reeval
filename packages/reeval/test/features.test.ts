@@ -1126,17 +1126,20 @@ export const features: Feature[] = [
     env: 'plain',
     canary: /gets the case masked: expected '\[REDACTED\]' to be '\[REDACTED\]'/,
     evals: {
-      'lands [[REDACTED]]': { outcome: 'pass', attempts: ['fake/plain/fake#1'] },
-      'canary [[REDACTED]]': {
+      lands: { outcome: 'pass', attempts: ['fake/plain/fake#[REDACTED]#1'] },
+      canary: {
         outcome: 'fail',
-        attempts: ['fake/plain/fake#1'],
+        attempts: ['fake/plain/fake#[REDACTED]#1'],
         error: { kind: 'assertion', message: /gets the case masked/ },
       },
     },
     async record({ run, project, runDir, stdout }) {
       assert.deepEqual(
-        run.evals.map((e) => e.id),
-        ['evals/canary.eval.ts › canary [[REDACTED]]', 'evals/lands.eval.ts › lands [[REDACTED]]'],
+        run.evals.map((e) => [e.id, e.cases?.map((k) => k.key)]),
+        [
+          ['evals/canary.eval.ts › canary', ['[REDACTED]']],
+          ['evals/lands.eval.ts › lands', ['[REDACTED]']],
+        ],
       )
       const recorded = await runCli(project, ['record'])
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
@@ -1144,7 +1147,7 @@ export const features: Feature[] = [
       const built = await runCli(project, ['studio', 'build', '--out', site])
       assert.equal(built.code, 0, built.stdout + built.stderr)
       const history = await runCli(project, ['history'])
-      assert.match(history.stdout, /lands \[\[REDACTED\]\]/)
+      assert.match(history.stdout, /lands/)
       const runs = join(project, '.reeval', 'runs')
       for (const [where, text] of [
         ['the terminal', stdout],
@@ -1155,8 +1158,8 @@ export const features: Feature[] = [
       ] as const) {
         assert.doesNotMatch(text, /sk-ant-|reeval-fixture-not-a-key/, `${where} has the key`)
       }
-      // Twin: the same search finds the masked name in the run.
-      assert.notEqual(filesContaining(runDir, 'lands [[REDACTED]]'), '')
+      // Twin: the same search finds the masked case's row in the run.
+      assert.notEqual(filesContaining(runDir, 'pass  [REDACTED]  1 of 1'), '')
     },
   },
   {
@@ -3269,18 +3272,23 @@ export const features: Feature[] = [
     env: 'cases',
     canary: /expected 'ahoy' to be 'hello'/,
     evals: {
-      'lands [ahoy]': { outcome: 'pass', attempts: ['fake/cases/fake#1'] },
-      'canary [hello]': {
+      lands: { outcome: 'pass', attempts: ['fake/cases/fake#ahoy#1'] },
+      canary: {
         outcome: 'fail',
-        attempts: ['fake/cases/fake#1'],
+        attempts: ['fake/cases/fake#hello#1'],
         error: { kind: 'assertion', message: /expected 'ahoy' to be 'hello'/ },
       },
     },
     record: ({ run }) => {
-      const lands = run.evals.find((e) => e.name === 'lands [ahoy]')
-      assert.ok(lands, 'the case runs as lands [ahoy]')
-      assert.equal(lands.family, undefined)
-      assert.equal(run.families, undefined, 'one case is not a family')
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.deepEqual(
+        lands?.cases?.map((k) => [k.key, k.outcome, k.verdict]),
+        [['ahoy', 'pass', undefined]],
+        'the case is a row inside its eval',
+      )
+      assert.equal(lands?.caseCount, 1)
+      assert.equal(lands?.family, undefined)
+      assert.equal(run.families, undefined, 'the record has no families')
     },
   },
   {
@@ -3289,33 +3297,34 @@ export const features: Feature[] = [
     env: 'rate',
     canary: /passes its case: expected 'c' not to be 'c'/,
     evals: Object.fromEntries(
-      ['lands', 'canary'].flatMap((name) =>
-        ['a', 'b', 'c'].map((key) => [
-          `${name} [${key}]`,
-          {
-            outcome: key === 'c' ? ('fail' as const) : ('pass' as const),
-            attempts: ['fake/rate/fake#1'],
-            ...(key === 'c'
-              ? {
-                  error: {
-                    kind: 'assertion' as const,
-                    message: /passes its case: expected 'c' not to be 'c'/,
-                  },
-                }
-              : {}),
+      (['lands', 'canary'] as const).map((name) => [
+        name,
+        {
+          outcome: name === 'lands' ? ('pass' as const) : ('fail' as const),
+          attempts: ['a', 'b', 'c'].map((key) => `fake/rate/fake#${key}#1`),
+          error: {
+            kind: 'assertion' as const,
+            message: /passes its case: expected 'c' not to be 'c'/,
           },
-        ]),
-      ),
+          clean: ['fake/rate/fake#a#1', 'fake/rate/fake#b#1'],
+        },
+      ]),
     ),
     record: ({ run, runDir, stdout }) => {
       const rates = (name: string) =>
-        run.families
-          ?.find((f) => f.name === name)
-          ?.rates.map((r) => [r.rate, r.passRate, r.outcome])
-      assert.ok(
-        run.evals.every((e) => e.verdict === 'family'),
-        "each case's family is its verdict",
-      )
+        run.evals
+          .find((e) => e.name === name)
+          ?.cells.map((c) => [c.rate?.rate, c.rate?.passRate, c.rate?.outcome])
+      for (const e of run.evals)
+        assert.deepEqual(
+          e.cases?.map((k) => [k.key, k.outcome, k.verdict]),
+          [
+            ['a', 'pass', 'family'],
+            ['b', 'pass', 'family'],
+            ['c', 'fail', 'family'],
+          ],
+          'each case keeps its own outcome, and the rate over them decides',
+        )
       assert.match(
         stdout,
         /^Done in \S+ · 1 failed · 1 passed$/m,
@@ -3366,35 +3375,38 @@ export const features: Feature[] = [
     env: 'next-app',
     canary: /runs on its own stack: expected 'next' to be 'vite'/,
     evals: {
-      'lands [next]': { outcome: 'pass', attempts: ['fake/next-app/fake#1'] },
-      'lands [vite]': { outcome: 'pass', attempts: ['fake/vite-app/fake#1'] },
-      'canary [next]': { outcome: 'pass', attempts: ['fake/next-app/fake#1'] },
-      'canary [vite]': {
+      lands: {
+        outcome: 'pass',
+        attempts: ['fake/next-app/fake#next#1', 'fake/vite-app/fake#vite#1'],
+      },
+      canary: {
         outcome: 'fail',
-        attempts: ['fake/next-app/fake#1', 'fake/vite-app/fake#1'],
+        attempts: [
+          'fake/next-app/fake#next#1',
+          'fake/next-app/fake#vite#1',
+          'fake/vite-app/fake#vite#1',
+        ],
         error: { kind: 'assertion', message: /expected 'next' to be 'vite'/ },
-        clean: ['fake/vite-app/fake#1'],
+        clean: ['fake/next-app/fake#next#1', 'fake/vite-app/fake#vite#1'],
       },
     },
     record: ({ run }) => {
-      const lands = run.evals.find((e) => e.name === 'lands [next]')
+      const lands = run.evals.find((e) => e.name === 'lands')
+      const own = (e: typeof lands, key: string) => e?.cases?.find((k) => k.key === key)
       assert.deepEqual(
-        lands?.excluded,
+        own(lands, 'next')?.excluded,
         [{ case: 'next', environment: 'vite-app' }],
         'its own pairs',
       )
-      assert.deepEqual(run.evals.find((e) => e.name === 'lands [vite]')?.excluded, [
-        { case: 'vite', environment: 'next-app' },
-      ])
+      assert.deepEqual(own(lands, 'vite')?.excluded, [{ case: 'vite', environment: 'next-app' }])
       assert.deepEqual(
-        lands?.cells.map((c) => [c.environment, c.traits]),
+        own(lands, 'next')?.cells.map((c) => [c.environment, c.traits]),
         [['next-app', { stack: 'next' }]],
       )
-      const canary = run.evals.find((e) => e.name === 'canary [next]')
-      assert.deepEqual(canary?.excluded, [{ case: 'next', environment: 'vite-app' }])
-      const family = run.families?.find((f) => f.name === 'lands')
+      const canary = run.evals.find((e) => e.name === 'canary')
+      assert.deepEqual(own(canary, 'next')?.excluded, [{ case: 'next', environment: 'vite-app' }])
       assert.deepEqual(
-        [family?.cases, family?.ran, family?.excluded],
+        [lands?.caseCount, lands?.cases?.length, lands?.excluded],
         [
           3,
           2,
@@ -3405,7 +3417,7 @@ export const features: Feature[] = [
             { case: 'astro', environment: 'vite-app' },
           ],
         ],
-        'a case where leaves out everywhere stays in the family',
+        'a case where leaves out everywhere stays in the eval',
       )
     },
   },
@@ -3700,13 +3712,12 @@ export const features: Feature[] = [
     env: '-',
     canary: /is red: expected 'green' to be 'red'/,
     evals: {
-      'lands [red]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'lands [blue]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'canary [red]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'canary [green]': {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#red#1', 'fake/-/fake#blue#1'] },
+      canary: {
         outcome: 'fail',
-        attempts: ['fake/-/fake#1'],
+        attempts: ['fake/-/fake#red#1', 'fake/-/fake#green#1'],
         error: { kind: 'assertion', message: /is red: expected 'green' to be 'red'/ },
+        clean: ['fake/-/fake#red#1'],
       },
     },
     record: ({ stdout }) => {
@@ -3715,7 +3726,7 @@ export const features: Feature[] = [
         stdout,
         /✗ canary {2}1 of 2 runs passed\n +Passed 1 of 2 on fake\.\n +Failed cases: green\.\n +✗ is red {2}failed 1 of 2 runs\n +expected 'green' to be 'red'/,
       )
-      assert.match(stdout, /\nDone in \S+ · 1 failed · 3 passed\n/)
+      assert.match(stdout, /\nDone in \S+ · 1 failed · 1 passed\n/)
     },
   },
   {

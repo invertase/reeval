@@ -41,14 +41,7 @@ const CROCKFORD = '0123456789abcdefghjkmnpqrstvwxyz'
 export const randomSuffix = (length: number) =>
   [...randomBytes(length)].map((b) => CROCKFORD[b % 32]).join('')
 
-/** Lower-case letters, digits and dashes, for use inside file names. */
-export const slugify = (text: string, max: number) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, max)
-    .replace(/-+$/, '')
+export { evalSlug, slugify } from './slug.ts'
 
 /** `20260924T152700Z`, the part of a run id that orders runs. */
 export const RUN_STAMP_LENGTH = 16
@@ -72,8 +65,3 @@ export function newRunId(
 }
 
 export { RUN_ID } from './view/paths.ts'
-
-/** Readable, unique directory name for an eval id. */
-export function evalSlug(id: string): string {
-  return `${slugify(id, 60) || 'eval'}-${sha256(id).slice(0, 6)}`
-}

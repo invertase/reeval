@@ -118,7 +118,7 @@ Two of three cases pass, a rate of 67%, so the `all cases` row passes:
 
 Under the default `'all'`, every case must pass.
 
-Each case's record keeps what it did, so case `c` reads `fail`, with `verdict: 'family'`. The run's exit code and tally read the `all cases` row instead. `reeval compare` shows a case that flipped as `now fails` or `now passes`, and `--fail-on-regression` reads the `all cases` row.
+In the record, the cases are rows in the evaluation's `cases`. Case `c` keeps what it did, `fail`, with `verdict: 'family'`, and the rate over the cases decides the evaluation, its exit code and the tally. `reeval compare` shows a case that flipped as `now fails` or `now passes`, and `--fail-on-regression` reads the `all cases` row.
 
 ## Run a case on some environments
 
@@ -140,7 +140,7 @@ evaluate(
     // ...
 ```
 
-The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and each case's record keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). The record's family keeps every pair in its own `excluded`, including a case `where` leaves out everywhere, which runs nothing. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
+The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and each case in the record's `cases` keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). The evaluation's own `excluded` lists every pair, including a case `where` leaves out everywhere, which runs nothing. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
 
 `where` gives the same answer every run. To run only some environments now, such as the Next.js ones on a pull request, filter the cells with [`reeval run --trait stack=next`](/reference/cli#filtering-cells-by-trait) or a profile's [`limit.traits`](/reference/profiles#traits) instead.
 

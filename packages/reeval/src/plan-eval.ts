@@ -158,7 +158,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     profile: ctx.profile,
     runs: ctx.runs,
     skipped: declaration.mode === 'skip' || declaration.mode === 'todo',
-    pooled: declaration.family !== undefined,
+    pooled: (declaration.family?.cases ?? 0) >= 2,
   })
   const { harnesses } = resolvedEval
   if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) {

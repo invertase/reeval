@@ -16,11 +16,12 @@
   rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates (not
   each case's). Prefer it to separate evals when the cases are one population: six cases at
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
-  discordant cases shows only a direction (`insufficient` in `reeval query family_lift`), so
+  discordant cases shows only a direction (`insufficient` in `reeval query case_lift`), so
   aim for six cases or more; the plan hints when there are fewer. No `runs: { bestOf }` beside it.
   `gate: { passRate }` gates each cell's rate over the cases (the mean of each case's pass@1), so
   one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass. The
-  failing case still records `fail` (with `verdict: 'family'`); the family's row is the verdict.
+  failing case still records `fail` (with `verdict: 'family'`); the eval, one entry with its
+  cases inside, takes the verdict and counts once in the tally.
 - Each case has a key, which names its row: a string or number is its own key, an object its
   `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
   80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate`, never a

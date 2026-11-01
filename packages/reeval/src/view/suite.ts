@@ -2,6 +2,8 @@
 // cells and checks, with each variant's effect. Recomputed from the record on every read and
 // never persisted, so a run recorded by any reeval renders. No model is involved: every field
 // here is the result, and the exit code reads only these.
+
+import { unfoldCases } from '../history/cases.ts'
 import type {
   AttemptRecord,
   CellRecord,
@@ -68,8 +70,7 @@ export type SuiteResult = {
    */
   errors: string[]
   /**
-   * Outcomes counted per block: each family case is one, each eval with no cases is one, and a
-   * family whose pooled gate failed is one more fail. `errors` counts the run's `errors`, and
+   * Outcomes counted per eval, an eval with `cases` once. `errors` counts the run's `errors`, and
    * `notGated` the passes whose cells are all `gate: 'none'` (studies), which `pass` leaves out.
    */
   tally: SuiteTally
@@ -847,7 +848,8 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
 }
 
 /** The facts of a run, from its record. Pure: the same record always gives the same result. */
-export function suiteResult(record: RunRecord): SuiteResult {
+export function suiteResult(folded: RunRecord): SuiteResult {
+  const record = unfoldCases(folded)
   const families = new Map((record.families ?? []).map((f) => [f.id, f]))
   const byFile = new Map<string, EvalResult[]>()
   const seen = new Set<string>()
@@ -861,30 +863,27 @@ export function suiteResult(record: RunRecord): SuiteResult {
     canceled: 0,
     skipped: 0,
   }
-  const count = (e: EvalEntry) => {
-    const o = outcomeOf(e)
+  const count = (result: EvalResult) => {
+    const o = result.outcome
     if (o === 'infra_error') tally.infraError++
-    else if (o === 'pass' && isNotGatedPass(e)) tally.notGated++
+    else if (o === 'pass' && isNotGatedResult(result)) tally.notGated++
     else tally[o]++
   }
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []
     byFile.set(e.file, evals)
-    // A case its family's rate gates isn't a verdict of its own: the family's is counted instead.
-    if (e.verdict !== 'family') count(e)
     const family = e.family && families.get(e.family.id)
     if (!family) {
-      evals.push(evalResult(record, e, evals.length))
+      const result = evalResult(record, e, evals.length)
+      count(result)
+      evals.push(result)
       continue
     }
     if (seen.has(family.id)) continue
     seen.add(family.id)
     const cases = record.evals.filter((x) => x.family?.id === family.id)
     const result = familyResult(record, family, cases, evals.length)
-    if (cases.some((x) => x.verdict === 'family')) {
-      if (result.outcome === 'infra_error') tally.infraError++
-      else tally[result.outcome]++
-    } else if (family.outcome === 'fail') tally.fail++
+    count(result)
     evals.push(result)
   }
   const files = [...byFile]
@@ -893,7 +892,7 @@ export function suiteResult(record: RunRecord): SuiteResult {
   return {
     runId: record.runId,
     status: record.status,
-    outcome: runOutcome(record),
+    outcome: runOutcome(folded),
     errors,
     tally,
     files,

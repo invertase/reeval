@@ -818,7 +818,7 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
   The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
 </Property>
 
-An evaluation with `cases` reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. Under `gate: 'all'`, a case fails on its own assertions, and a failed case fails the evaluation. Under `{ passRate }`, the `all cases` row's rate decides instead. The [`family_lift`](/reference/query-views#familylift) view lists each evaluation's pooled lift.
+An evaluation with `cases` reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. Under `gate: 'all'`, a case fails on its own assertions, and a failed case fails the evaluation. Under `{ passRate }`, the `all cases` row's rate decides instead. The [`case_lift`](/reference/query-views#caselift) view lists each evaluation's pooled lift.
 
 For more information about comparisons, see [Measure lift against a control](/results/compare/lift).
 
@@ -843,7 +843,7 @@ evaluate(
 </Property>
 
 <Property name="where" type="(pair: { case, environment, harness }) => boolean" optional>
-  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the record and its `whereExcluded` in `--dry-run --json`. The record's family lists every pair in its `excluded`, including those of a case left out everywhere. reeval refuses `where` without `cases`. `where` never sees the profile or the flags: to run only some environments today, use [`--trait`](/reference/cli#filtering-cells-by-trait) or a profile's [`limit.traits`](/reference/profiles#traits), which narrow after it.
+  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the eval's `cases` in the record and its `whereExcluded` in `--dry-run --json`. The eval's own `excluded` lists every pair, including those of a case left out everywhere. reeval refuses `where` without `cases`. `where` never sees the profile or the flags: to run only some environments today, use [`--trait`](/reference/cli#filtering-cells-by-trait) or a profile's [`limit.traits`](/reference/profiles#traits), which narrow after it.
 </Property>
 
 For more information, see [Evaluate many cases](/evaluations/task/cases).

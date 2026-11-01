@@ -70,7 +70,7 @@ CREATE TABLE factor_effects_m (
   note TEXT
 );
 CREATE TABLE flaky_m (
-  eval_key TEXT, cell_key TEXT, fingerprint TEXT, runs INTEGER, flaky_runs INTEGER,
+  eval_key TEXT, cell_key TEXT, case_key TEXT, fingerprint TEXT, runs INTEGER, flaky_runs INTEGER,
   first_seen TEXT, last_seen TEXT, pass INTEGER, counted INTEGER, infra_error INTEGER,
   pass_at_1 REAL, lo REAL, hi REAL, verdict TEXT, cause TEXT, min_attempts INTEGER
 );
@@ -85,9 +85,9 @@ CREATE TABLE check_streaks_m (
 );
 `
 
-const FAMILY_COLUMNS = [
+const CASE_LIFT_COLUMNS = [
   'run_id',
-  'family_id',
+  'eval_key',
   'harness',
   'variant',
   'pairs',
@@ -143,6 +143,7 @@ type Attempt = {
   key: string
   outcome: string
   error_kind: string | null
+  case_key: string | null
   tools: number
   agent_ms: number
   file_edits: number
@@ -326,7 +327,7 @@ export function deriveFacts(db: DatabaseSync): void {
   )
   const attempts = rowsOf<Attempt>(
     db.prepare(
-      `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits, files_changed,
+      `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, case_key, tools, agent_ms, file_edits, files_changed,
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens
        FROM attempts ORDER BY run_id, rowid`,
     ),
@@ -664,10 +665,10 @@ export function deriveFacts(db: DatabaseSync): void {
 
   // Paired: each variant of an eval with cases against its control over the cases of one run,
   // each case a paired sample, as its record computed it.
-  const familyLifts = rowsOf<Record<(typeof FAMILY_COLUMNS)[number], SQLInputValue>>(
-    db.prepare(`SELECT ${FAMILY_COLUMNS.join(', ')} FROM family_lift_m`),
+  const caseLifts = rowsOf<Record<(typeof CASE_LIFT_COLUMNS)[number], SQLInputValue>>(
+    db.prepare(`SELECT ${CASE_LIFT_COLUMNS.join(', ')} FROM case_lift_m`),
   )
-  for (const f of familyLifts) {
+  for (const f of caseLifts) {
     factorRows.push({
       factor: 'environment',
       level: f.variant,
@@ -675,7 +676,7 @@ export function deriveFacts(db: DatabaseSync): void {
       context: f.harness,
       tier: 'paired',
       run_id: f.run_id,
-      eval_key: f.family_id,
+      eval_key: f.eval_key,
       strata: f.pairs,
       runs: 1,
       points: f.points,
@@ -802,26 +803,58 @@ export function deriveFacts(db: DatabaseSync): void {
   }
   insertAll(db, 'factor_effects_m', factorRows)
 
-  // flaky_cells: mixed outcomes pooled over comparable runs.
-  const flaky = new Map<string, Cell[]>()
+  // flaky_cells: mixed outcomes pooled over comparable runs, per case: cases that differ in
+  // difficulty aren't one flaky cell.
+  type Unit = {
+    cell: Cell
+    caseKey: string | null
+    attempts: Attempt[]
+    pass: number
+    fail: number
+    infra: number
+  }
+  const flaky = new Map<string, Unit[]>()
   for (const c of cells) {
-    const id = `${c.eval_key}\0${c.key}\0${c.comparable}`
-    flaky.set(id, [...(flaky.get(id) ?? []), c])
+    const all = byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []
+    const units: Unit[] = all.some((a) => a.case_key !== null)
+      ? [...new Set(all.map((a) => a.case_key))].map((caseKey) => {
+          const list = all.filter((a) => a.case_key === caseKey)
+          return {
+            cell: c,
+            caseKey,
+            attempts: list,
+            pass: list.filter((a) => a.outcome === 'pass').length,
+            fail: list.filter((a) => a.outcome === 'fail').length,
+            infra: list.filter((a) => a.outcome === 'infra_error').length,
+          }
+        })
+      : [
+          {
+            cell: c,
+            caseKey: null,
+            attempts: all,
+            pass: c.pass,
+            fail: c.fail,
+            infra: c.infra_error,
+          },
+        ]
+    for (const u of units) {
+      const id = `${c.eval_key}\0${c.key}\0${u.caseKey ?? ''}\0${c.comparable}`
+      flaky.set(id, [...(flaky.get(id) ?? []), u])
+    }
   }
   const flakyRows: Row[] = []
   for (const list of flaky.values()) {
-    const pass = list.reduce((n, c) => n + c.pass, 0)
-    const fail = list.reduce((n, c) => n + c.fail, 0)
+    const pass = list.reduce((n, u) => n + u.pass, 0)
+    const fail = list.reduce((n, u) => n + u.fail, 0)
     if (!(pass > 0 && fail > 0)) continue
-    const first = list[0] as Cell
-    const infra = list.reduce((n, c) => n + c.infra_error, 0)
-    const failing = list.flatMap((c) =>
-      (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).filter((a) => a.outcome === 'fail'),
-    )
+    const first = list[0] as Unit
+    const infra = list.reduce((n, u) => n + u.infra, 0)
+    const failing = list.flatMap((u) => u.attempts.filter((a) => a.outcome === 'fail'))
     const w = wilson(pass, pass + fail)
     const passedDiffs = new Set(
-      list.flatMap((c) =>
-        (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).flatMap((a) => {
+      list.flatMap((u) =>
+        u.attempts.flatMap((a) => {
           const sha = a.outcome === 'pass' && diffs.get(`${a.run_id}\0${a.key}`)
           return sha ? [sha] : []
         }),
@@ -842,13 +875,14 @@ export function deriveFacts(db: DatabaseSync): void {
           : sameWork
             ? 'check'
             : 'agent'
-    const starts = list.map((c) => c.started_at).sort()
+    const starts = list.map((u) => u.cell.started_at).sort()
     flakyRows.push({
-      eval_key: first.eval_key,
-      cell_key: first.key,
-      fingerprint: first.comparable,
+      eval_key: first.cell.eval_key,
+      cell_key: first.cell.key,
+      case_key: first.caseKey,
+      fingerprint: first.cell.comparable,
       runs: list.length,
-      flaky_runs: list.filter((c) => c.pass > 0 && c.fail > 0).length,
+      flaky_runs: list.filter((u) => u.pass > 0 && u.fail > 0).length,
       first_seen: starts[0] ?? null,
       last_seen: starts.at(-1) ?? null,
       pass,

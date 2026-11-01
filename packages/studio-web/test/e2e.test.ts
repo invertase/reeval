@@ -21,6 +21,7 @@ import { after, before, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { type Browser, chromium, type Page } from 'playwright-core'
 import { withUnknownFields } from '../../reeval/scripts/schema/validate.ts'
+import { readableRecord } from '../../reeval/src/view/record.ts'
 import { e2eNewlineAnswer } from '../../reeval/test/support/real-runs.ts'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
@@ -299,7 +300,9 @@ describe('studio in a browser', () => {
    * such attempt's page, the count in its Checks tab and one row per name in its Observed table.
    */
   async function readObserved(page: Page, url: string, runId: string, out: string, label: string) {
-    const record = JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8'))
+    const record = readableRecord(
+      JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8')),
+    )
     type Observed = { id: string; cell: string; observations?: Array<{ name: string }> }
     for (const e of record.evals as Array<{ slug: string; attempts: Observed[] }>) {
       for (const a of e.attempts) {
@@ -343,7 +346,9 @@ describe('studio in a browser', () => {
    * per question; a run without pairwise answers shows none.
    */
   async function readAnswers(page: Page, url: string, runId: string, out: string, label: string) {
-    const record = JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8'))
+    const record = readableRecord(
+      JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8')),
+    )
     type Asked = { attempts: Array<{ answers?: Array<{ question: string }> }> }
     for (const e of record.evals as Array<Asked & { slug: string }>) {
       const asked = new Set(e.attempts.flatMap((a) => (a.answers ?? []).map((q) => q.question)))

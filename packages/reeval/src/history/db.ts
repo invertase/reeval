@@ -12,6 +12,7 @@ import { BUILD_ID, ownRequire } from '../root.ts'
 import type { JSONValue } from '../types.ts'
 import { filesChanged } from '../view/effort.ts'
 import { cellMeasures, familyMeasures, type Measure } from '../view/measures.ts'
+import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
@@ -22,7 +23,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 21
+const DB_VERSION = 22
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -71,37 +72,42 @@ CREATE TABLE runs (
 );
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
-  tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, family_id TEXT,
-  case_index INTEGER, verdict TEXT, declared TEXT,
+  tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, cases INTEGER,
+  declared TEXT,
   PRIMARY KEY (run_id, key)
 );
--- Each eval with cases per run: its cases, and each cell's pass@1 over them (the mean of the
--- cases' pass@1).
-CREATE TABLE families (
-  run_id TEXT NOT NULL, family_id TEXT NOT NULL, file TEXT, groups TEXT, name TEXT,
-  cases INTEGER, ran INTEGER, cell_key TEXT NOT NULL, cell_cases INTEGER, pass INTEGER,
-  counted INTEGER, pass_at_1 REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
-  PRIMARY KEY (run_id, family_id, cell_key)
+-- Each case of an eval with cases per run. verdict 'family': the case's outcome is its own, and
+-- the eval's pass@1 over its cases gates the run.
+CREATE TABLE cases (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, case_key TEXT NOT NULL, case_index INTEGER,
+  name TEXT, outcome TEXT, verdict TEXT, pass_at_1 REAL, fingerprint TEXT, excluded TEXT,
+  PRIMARY KEY (run_id, eval_key, case_key)
+);
+-- Each cell of each case: its passes and counted attempts.
+CREATE TABLE case_rates (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, case_key TEXT NOT NULL,
+  case_index INTEGER, pass INTEGER, counted INTEGER, pass_at_1 REAL, outcome TEXT,
+  PRIMARY KEY (run_id, eval_key, cell_key, case_key)
 );
 -- Every answer to a question asked of one attempt on its own (one without across): the choice it
 -- picked when the question has choices, its text, or the error when the call failed.
 CREATE TABLE attempt_answers_m (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, attempt_key TEXT NOT NULL,
   attempt_id TEXT, outcome TEXT, question TEXT NOT NULL, choice TEXT, text TEXT, error TEXT,
-  model TEXT, resolved_model TEXT, input_path TEXT
+  model TEXT, resolved_model TEXT, input_path TEXT, case_key TEXT
 );
 -- Every c.observe(name, value) an attempt made, its last value per name: the JSON as text, its
 -- kind, and the value again as num when it's a number and as text when it's a string.
 CREATE TABLE attempt_values_m (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, attempt_key TEXT NOT NULL,
   attempt_id TEXT, outcome TEXT, name TEXT NOT NULL, value TEXT, kind TEXT, num REAL, text TEXT,
-  turn INTEGER
+  turn INTEGER, case_key TEXT
 );
 -- Every pairwise question's vote: a pair of sides (arms within a harness, harnesses across an arm)
 -- on one run, shown in one order (swapped = 1: b first), and the side picked or 'tie'.
 CREATE TABLE votes (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
-  pair_run INTEGER, a TEXT, b TEXT, winner TEXT, swapped INTEGER, reason TEXT
+  pair_run INTEGER, a TEXT, b TEXT, winner TEXT, swapped INTEGER, reason TEXT, case_key TEXT
 );
 -- Each pair of sides' head-to-head per question: a pair decides when both orders agree (or one
 -- ties); a split is a pair whose orders picked opposite sides, split_first those that picked
@@ -109,18 +115,18 @@ CREATE TABLE votes (
 CREATE TABLE question_pairs_m (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
   a TEXT, b TEXT, pairs INTEGER, a_wins INTEGER, b_wins INTEGER, ties INTEGER, splits INTEGER,
-  splits_first INTEGER
+  splits_first INTEGER, case_key TEXT
 );
 -- Each variant against its control on every measure: one row per measure (pass, check, judge,
--- question, tools, agentMs, tokens) and label, per eval or family per run.
+-- question, tools, agentMs, tokens) and label, per eval per run.
 CREATE TABLE measure_effects_m (
-  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, family INTEGER, harness TEXT, variant TEXT,
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, pooled INTEGER, harness TEXT, variant TEXT,
   cell_key TEXT, control TEXT, measure TEXT, label TEXT, variant_value REAL,
   control_value REAL, estimate REAL, lo REAL, hi REAL, p REAL, verdict TEXT, leaning TEXT,
   text TEXT, needed INTEGER, unit TEXT
 );
-CREATE TABLE family_lift_m (
-  run_id TEXT NOT NULL, family_id TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
+CREATE TABLE case_lift_m (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
   cell_key TEXT, control TEXT,
   pairs INTEGER, variant_pass_at_1 REAL, control_pass_at_1 REAL, discordant_vc INTEGER,
   discordant_cv INTEGER, points REAL, lo REAL, hi REAL, method TEXT, p REAL,
@@ -137,7 +143,7 @@ CREATE TABLE cells (
     .join(', ')},
   runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER, skipped INTEGER, pass_at_1 REAL,
   outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL, lift_hi REAL, within_noise INTEGER,
-  min_lift REAL, comparable TEXT,
+  min_lift REAL, comparable TEXT, cases INTEGER, rate_lo REAL, rate_hi REAL, rate_method TEXT,
   PRIMARY KEY (run_id, eval_key, key)
 );
 CREATE TABLE attempts (
@@ -148,6 +154,7 @@ CREATE TABLE attempts (
   last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
   reasoning_effort TEXT, served_reasoning_effort TEXT, files_changed INTEGER, reasoning_ms INTEGER,
+  case_key TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -225,12 +232,12 @@ CREATE VIEW lift AS
   WHERE c.role = 'variant';
 
 -- Each variant against its control over an eval's cases, paired by case, per run.
-CREATE VIEW family_lift AS
+CREATE VIEW case_lift AS
   SELECT f.*, r.started_at, r.branch
-  FROM family_lift_m f JOIN runs r USING (run_id);
+  FROM case_lift_m f JOIN runs r USING (run_id);
 
--- Each variant against its control on every measure, one row per measure, per eval (a family's
--- pooled over its cases) per run: verdict better or worse when the measure's own test holds,
+-- Each variant against its control on every measure, one row per measure, per eval (pooled = 1:
+-- over its cases, on an eval with several) per run: verdict better or worse when the measure's own test holds,
 -- same at no difference, leans at a difference it doesn't hold; needed the runs (unit) to hold it.
 CREATE VIEW measure_effects AS
   SELECT m.*, r.started_at, r.branch
@@ -356,11 +363,11 @@ CREATE VIEW check_rates AS
   FROM cell_checks k
   JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key;
 
--- One eval per run: outcome and pass@1, with the branch and pull request. A case with verdict
--- 'family' doesn't fail the run on its own outcome: its family's rate does.
+-- One eval per run: outcome and pass@1, with the branch and pull request. An eval with cases is
+-- one row; its cases are in cases.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
-    e.verdict, e.pass_at_1, e.fingerprint
+    e.cases, e.pass_at_1, e.fingerprint
   FROM (SELECT key AS eval_key, * FROM evals) e JOIN runs r USING (run_id);
 
 -- Each judge question's pass rate per cell per run, where it differs from that cell's last run.
@@ -381,7 +388,7 @@ CREATE VIEW verdict_flips AS
 
 export const VIEW_NAMES = [
   'lift',
-  'family_lift',
+  'case_lift',
   'effort',
   'contrasts',
   'question_pairs',
@@ -551,7 +558,7 @@ function insertRun(
   for (const e of record.evals) {
     const cellEnv = new Map(e.cells.map((c) => [c.key, c.environmentDigest ?? '']))
     run(
-      `INSERT INTO evals VALUES (${Array(16).fill('?').join(', ')})`,
+      `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
       record.runId,
       e.key,
       e.id,
@@ -564,26 +571,54 @@ function insertRun(
       e.outcome,
       e.passRate,
       json(e.sources),
-      e.family?.id ?? null,
-      e.family?.case ?? null,
-      e.verdict ?? null,
+      e.caseCount ?? null,
       e.todo ? 'todo' : e.skip ? 'skip' : null,
     )
-    for (const c of e.cells)
-      if (c.role === 'variant' && c.lift)
-        insertMeasures(
-          run,
+    if ((e.caseCount ?? 0) < 2)
+      for (const c of e.cells)
+        if (c.role === 'variant' && c.lift)
+          insertMeasures(
+            run,
+            record.runId,
+            e.key,
+            false,
+            c,
+            c.lift.vs,
+            cellMeasures(e, c.key, c.lift.vs),
+          )
+    for (const k of e.cases ?? []) {
+      run(
+        `INSERT INTO cases VALUES (${Array(10).fill('?').join(', ')})`,
+        record.runId,
+        e.key,
+        k.key,
+        k.index,
+        caseName(e, k),
+        k.outcome,
+        k.verdict ?? null,
+        k.passRate,
+        k.fingerprint,
+        k.excluded ? json(k.excluded) : null,
+      )
+      for (const c of k.cells) {
+        run(
+          `INSERT INTO case_rates VALUES (${Array(9).fill('?').join(', ')})`,
           record.runId,
           e.key,
-          false,
-          c,
-          c.lift.vs,
-          cellMeasures(e, c.key, c.lift.vs),
+          c.key,
+          k.key,
+          k.index,
+          c.pass,
+          c.pass + c.fail,
+          c.passRate,
+          c.outcome,
         )
+      }
+    }
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
-        `INSERT INTO cells VALUES (${Array(29 + PART_KEYS.length)
+        `INSERT INTO cells VALUES (${Array(33 + PART_KEYS.length)
           .fill('?')
           .join(', ')})`,
         record.runId,
@@ -616,6 +651,10 @@ function insertRun(
         c.lift ? (c.lift.withinNoise ? 1 : 0) : null,
         c.lift?.minLift ?? null,
         comparableFingerprint(c, e.attempts),
+        c.rate?.cases ?? null,
+        c.rate?.interval.lo ?? null,
+        c.rate?.interval.hi ?? null,
+        c.rate?.interval.method ?? null,
       )
       for (const k of c.checks ?? []) {
         run(
@@ -636,10 +675,16 @@ function insertRun(
         )
       }
     }
-    for (const answer of e.answers ?? []) {
+    const answers = [
+      ...(e.answers ?? []).map((answer) => ({ answer, caseKey: null as string | null })),
+      ...(e.cases ?? []).flatMap((k) =>
+        (k.answers ?? []).map((answer) => ({ answer, caseKey: k.key as string | null })),
+      ),
+    ]
+    for (const { answer, caseKey } of answers) {
       for (const v of answer.votes) {
         run(
-          `INSERT INTO votes VALUES (${Array(11).fill('?').join(', ')})`,
+          `INSERT INTO votes VALUES (${Array(12).fill('?').join(', ')})`,
           record.runId,
           e.key,
           answer.question,
@@ -651,11 +696,12 @@ function insertRun(
           v.winner,
           v.swapped ? 1 : 0,
           v.reason ?? null,
+          caseKey,
         )
       }
       for (const t of pairTallies(answer.votes)) {
         run(
-          `INSERT INTO question_pairs_m VALUES (${Array(13).fill('?').join(', ')})`,
+          `INSERT INTO question_pairs_m VALUES (${Array(14).fill('?').join(', ')})`,
           record.runId,
           e.key,
           answer.question,
@@ -669,12 +715,13 @@ function insertRun(
           t.ties,
           t.splits,
           t.splitsFirst,
+          caseKey,
         )
       }
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(32).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(33).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -707,6 +754,7 @@ function insertRun(
         a.servedEffort ?? null,
         filesChanged(a.changedFiles),
         a.activity.reasoningMs,
+        a.case ?? null,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
@@ -777,7 +825,7 @@ function insertRun(
       }
       for (const q of a.answers ?? []) {
         run(
-          `INSERT INTO attempt_answers_m VALUES (${Array(13).fill('?').join(', ')})`,
+          `INSERT INTO attempt_answers_m VALUES (${Array(14).fill('?').join(', ')})`,
           record.runId,
           e.key,
           a.cell,
@@ -791,11 +839,12 @@ function insertRun(
           q.model,
           q.resolvedModel ?? null,
           q.input?.path ?? null,
+          a.case ?? null,
         )
       }
       for (const o of a.observations ?? []) {
         run(
-          `INSERT INTO attempt_values_m VALUES (${Array(12).fill('?').join(', ')})`,
+          `INSERT INTO attempt_values_m VALUES (${Array(13).fill('?').join(', ')})`,
           record.runId,
           e.key,
           a.cell,
@@ -808,6 +857,7 @@ function insertRun(
           typeof o.value === 'number' ? o.value : null,
           typeof o.value === 'string' ? o.value : null,
           o.turn,
+          a.case ?? null,
         )
       }
       for (const j of a.judgements) {
@@ -851,44 +901,25 @@ function insertRun(
         )
       })
     }
-  }
-  for (const f of record.families ?? []) {
-    for (const r of f.rates) {
-      run(
-        `INSERT INTO families VALUES (${Array(16).fill('?').join(', ')})`,
+    const members = e.lifts?.length ? caseEntries(e) : []
+    for (const l of e.lifts ?? [])
+      insertMeasures(
+        run,
         record.runId,
-        f.id,
-        f.file,
-        json(f.group),
-        f.name,
-        f.cases,
-        f.ran,
-        r.cell,
-        r.cases,
-        r.pass,
-        r.counted,
-        r.rate,
-        r.interval.lo,
-        r.interval.hi,
-        r.interval.method,
-        f.outcome,
+        e.key,
+        true,
+        e.cells.find((c) => c.key === l.variant),
+        l.vs,
+        familyMeasures(members, l),
       )
-    }
-    const cases = record.evals.filter((x) => x.family?.id === f.id)
-    for (const l of f.lifts) {
-      const cell = cases.flatMap((x) => x.cells).find((c) => c.key === l.variant)
-      insertMeasures(run, record.runId, f.id, true, cell, l.vs, familyMeasures(cases, l))
-    }
-    for (const l of f.lifts) {
-      const e = l.effort
-      const cell = record.evals
-        .find((x) => x.family?.id === f.id && x.cells.some((c) => c.key === l.variant))
-        ?.cells.find((c) => c.key === l.variant)
+    for (const l of e.lifts ?? []) {
+      const effort = l.effort
+      const cell = e.cells.find((c) => c.key === l.variant)
       run(
-        `INSERT INTO family_lift_m VALUES (${Array(30).fill('?').join(', ')})`,
+        `INSERT INTO case_lift_m VALUES (${Array(30).fill('?').join(', ')})`,
         record.runId,
-        f.id,
-        f.name,
+        e.key,
+        e.name,
         cell?.harness ?? null,
         cell?.variant ?? cell?.environment ?? null,
         l.variant,
@@ -907,15 +938,15 @@ function insertRun(
         l.verdict,
         l.minLift ?? null,
         l.outcome,
-        e?.tools.ratio ?? null,
-        e?.tools.p ?? null,
-        e?.tools.verdict ?? null,
-        e?.agentMs.ratio ?? null,
-        e?.agentMs.p ?? null,
-        e?.agentMs.verdict ?? null,
-        e?.tokens?.ratio ?? null,
-        e?.tokens?.p ?? null,
-        e?.tokens?.verdict ?? null,
+        effort?.tools.ratio ?? null,
+        effort?.tools.p ?? null,
+        effort?.tools.verdict ?? null,
+        effort?.agentMs.ratio ?? null,
+        effort?.agentMs.p ?? null,
+        effort?.agentMs.verdict ?? null,
+        effort?.tokens?.ratio ?? null,
+        effort?.tokens?.p ?? null,
+        effort?.tokens?.verdict ?? null,
       )
     }
   }
@@ -925,7 +956,7 @@ function insertMeasures(
   run: (sql: string, ...values: SQLInputValue[]) => unknown,
   runId: string,
   evalKey: string,
-  family: boolean,
+  pooled: boolean,
   cell: CellRecord | undefined,
   control: string,
   measures: readonly Measure[] | null,
@@ -935,7 +966,7 @@ function insertMeasures(
       `INSERT INTO measure_effects_m VALUES (${Array(20).fill('?').join(', ')})`,
       runId,
       evalKey,
-      family ? 1 : 0,
+      pooled ? 1 : 0,
       cell?.harness ?? null,
       cell?.variant ?? cell?.environment ?? null,
       cell?.key ?? null,
@@ -960,8 +991,9 @@ const DATA_TABLES = [
   'measure_effects_m',
   'runs',
   'evals',
-  'families',
-  'family_lift_m',
+  'cases',
+  'case_rates',
+  'case_lift_m',
   'attempt_answers_m',
   'attempt_values_m',
   'votes',
@@ -1166,7 +1198,7 @@ export async function openHistoryDb(
     schema() {
       const objects = rowsOf<{ name: string; type: 'table' | 'view' }>(
         db.prepare(
-          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'family_lift_m', 'measure_effects_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
+          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'case_lift_m', 'measure_effects_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
         ),
       )
       return objects.map((o) => ({

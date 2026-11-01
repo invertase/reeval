@@ -54,9 +54,9 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
-import { checkVerdict } from '../view/contrasts.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
+import { checkTallies, discrimination, foldCases } from './cases.ts'
 import { familiesOf, pooledPassRate } from './families.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -1080,45 +1080,6 @@ function liftOf(control: CellRecord, variant: CellRecord, pooled: boolean): Lift
 }
 
 /**
- * Each cell's checks: every label any attempt of the eval recorded, tallied over the cell's
- * counted attempts (pass or fail). An attempt that counted without reaching a label, because
- * an `expect.require` or a thrown error before it ended the body, counts it `notRun`.
- */
-function checkTallies(entry: EvalEntry): void {
-  const labels = [
-    ...new Set(entry.attempts.flatMap((a) => (a.assertions ?? []).map((x) => x.label))),
-  ]
-  if (!labels.length) return
-  for (const c of entry.cells) {
-    const counted = entry.attempts.filter(
-      (a) => a.cell === c.key && (a.outcome === 'pass' || a.outcome === 'fail'),
-    )
-    if (!counted.length) continue
-    c.checks = labels.map((label) => {
-      const tally = { label, pass: 0, fail: 0, error: 0, notRun: 0 }
-      for (const a of counted) {
-        const status = a.assertions?.find((x) => x.label === label)?.status
-        if (status === undefined) tally.notRun++
-        else tally[status]++
-      }
-      return tally
-    })
-  }
-}
-
-/** Puts the control's tally beside each of the variant's checks, with whether it discriminates. */
-function discrimination(control: CellRecord, variant: CellRecord): void {
-  for (const check of variant.checks ?? []) {
-    const k = control.checks?.find((x) => x.label === check.label)
-    if (!k) continue
-    const { label: _label, ...tally } = k
-    check.control = tally
-    const verdict = checkVerdict(check, k)
-    if (verdict) check.verdict = verdict
-  }
-}
-
-/**
  * Marks a best-of cell's attempts past its majority's first: `added` for one that ran, `skipped`
  * for one the majority before it left unrun.
  */
@@ -1136,6 +1097,9 @@ function markBestOf(cell: CellRecord, attempts: AttemptRecord[]): void {
     if (a.outcome === 'fail') fail++
   }
 }
+
+/** A case of an eval with several cases, which pools its gates over them. */
+const pooled = (entry: EvalEntry) => (entry.family?.cases ?? 0) >= 2
 
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */
 function rollUp(evals: EvalEntry[]): void {
@@ -1158,7 +1122,7 @@ function rollUp(evals: EvalEntry[]): void {
         (x) => x.role === 'control' && x.harness === c.harness && x.sandbox === c.sandbox,
       )
       if (control) discrimination(control, c)
-      const lift = control && liftOf(control, c, entry.family !== undefined)
+      const lift = control && liftOf(control, c, pooled(entry))
       if (!lift) continue
       c.lift = lift
       if (lift.minLift !== undefined && lift.interval.lo < lift.minLift && c.outcome === 'pass') {
@@ -1169,7 +1133,7 @@ function rollUp(evals: EvalEntry[]): void {
       entry.cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
     )
     // Its family's rate over the cases gates a case's `{ passRate }` cells (`familiesOf`).
-    if (entry.family && entry.cells.some((c) => pooledPassRate(c) !== undefined)) {
+    if (pooled(entry) && entry.cells.some((c) => pooledPassRate(c) !== undefined)) {
       entry.verdict = 'family'
     } else delete entry.verdict
     const gated = new Set(entry.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
@@ -1456,5 +1420,5 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
       : {}),
   }
-  return { record, artifacts: out.files, moves: out.moves }
+  return { record: foldCases(record), artifacts: out.files, moves: out.moves }
 }

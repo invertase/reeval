@@ -143,8 +143,8 @@ A check head never reached reads `not run`, not a failure. `can't compare` names
 (eval, config or profile `defaults`) keeps the eval comparable: base's attempts are re-scored
 under head's gate, so a flip the gate alone explains is `gate changed`, not a regression, and
 one base would still have passed under the new gate is `regressed`. An eval Ctrl-C
-canceled is `can't compare` with that side `canceled`. A pooled family with a `minLift` gets
-its own `<template> (all cases)` row for its pooled gate, which can regress while every case passes
-(`kind: "family"` in `--json`). `--fail-on-regression` exits 1 on a regressed eval or family gate,
-or on a new or can't-compare one that fails, unless head was canceled. `-v` adds each cell's
+canceled is `can't compare` with that side `canceled`. An eval with `cases` is one row
+with its cases' rows inside it (`cases` in `--json`); its pooled `minLift` or `passRate` gate
+decides the row, so it can regress while every case passes. `--fail-on-regression` exits 1 on a
+regressed eval, or on a new or can't-compare one that fails, unless head was canceled. `-v` adds each cell's
 lift and effort, base → head.

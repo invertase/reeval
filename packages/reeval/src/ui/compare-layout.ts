@@ -7,14 +7,13 @@
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced, plural } from '../text.ts'
-import {
-  type CompareCell,
-  type CompareFamilyLift,
-  type CompareFamilyRate,
-  type CompareRow,
-  type CompareStatus,
-  rowKey,
-  type StackChange,
+import type {
+  CompareCell,
+  CompareFamilyLift,
+  CompareFamilyRate,
+  CompareRow,
+  CompareStatus,
+  StackChange,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
 import { type Measure, measuresLine } from '../view/measures.ts'
@@ -99,7 +98,7 @@ const TALLY: CompareStatus[] = [
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
 
-/** A case its family's rate gates that flipped: what it did, while its family's row is the verdict. */
+/** A case its eval's rate gates that flipped: what it did, while its eval's row is the verdict. */
 const FLIPPED: Partial<Record<CompareStatus, string>> = {
   regressed: 'now fails',
   fixed: 'now passes',
@@ -146,34 +145,36 @@ const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Show
   return o === 'pass' && isStudy(unit?.result.cells ?? []) ? 'not_gated' : o
 }
 
-/** An eval, one case of a family, or the family itself, as compare rows name it: by its id. */
+/** An eval, or one case of an eval with `cases`, as compare rows name it: by its id or case key. */
 type Unit = { file: string; result: EvalResult }
 
-/**
- * Every eval and family case in a run, by eval id, in file-path then source order, each family
- * after its cases by its own id. A case is given as an eval of its own, its name the family's with
- * the case filled in.
- */
+/** Every eval in a run, by eval id, in file-path then source order. */
 function unitsOf(suite: SuiteResult): Map<string, Unit> {
   const out = new Map<string, Unit>()
   for (const file of suite.files) {
     for (const e of [...file.evals].sort((a, b) => a.order - b.order)) {
-      if (!e.cases) {
-        out.set(e.id, { file: file.path, result: e })
-        continue
-      }
-      for (const k of e.cases) out.set(k.id, { file: file.path, result: caseAsEval(e, k) })
-      out.set(rowKey({ id: e.id, kind: 'family' }), { file: file.path, result: e })
+      out.set(e.id, { file: file.path, result: e })
     }
   }
   return out
 }
 
-const caseAsEval = (family: EvalResult, k: CaseResult): EvalResult => ({
-  ...family,
+/** An eval's cases, by case key, each given as an eval of its own named for the case. */
+function caseUnitsOf(units: Map<string, Unit>, id: string): Map<string, Unit> {
+  const unit = units.get(id)
+  const out = new Map<string, Unit>()
+  for (const k of unit?.result.cases ?? []) {
+    out.set(k.label, { file: unit?.file ?? '', result: caseAsEval(unit?.result as EvalResult, k) })
+  }
+  return out
+}
+
+const caseAsEval = (e: EvalResult, k: CaseResult): EvalResult => ({
+  ...e,
   path: k.path,
   id: k.id,
-  name: k.name,
+  group: [],
+  name: k.label,
   template: null,
   order: k.order,
   family: false,
@@ -193,7 +194,7 @@ type Units = { base: Map<string, Unit>; head: Map<string, Unit> }
  * before it in base's, so a removed eval sits where it was (beside the one renamed from it).
  */
 function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; unit?: Unit }> {
-  const byId = new Map(rows.map((r) => [rowKey(r), r]))
+  const byId = new Map(rows.map((r) => [r.id, r]))
   const all = [...units.head.values(), ...units.base.values()]
   const files = [...new Set(all.map((u) => u.file))].sort()
   const out: Array<{ row: CompareRow; unit?: Unit }> = []
@@ -212,16 +213,15 @@ function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; uni
       out.push({ row: byId.get(id) as CompareRow, ...(unit ? { unit } : {}) })
     }
   }
-  const seen = new Set(out.map((e) => rowKey(e.row)))
-  for (const row of rows) if (!seen.has(rowKey(row))) out.push({ row })
+  const seen = new Set(out.map((e) => e.row.id))
+  for (const row of rows) if (!seen.has(row.id)) out.push({ row })
   return out
 }
 
 const nameOf = (row: CompareRow, unit: Unit | undefined) => {
-  const all = row.kind === 'family' ? ' (all cases)' : ''
-  if (!unit) return `${row.id}${all}`
+  if (!unit) return row.id
   const e = unit.result
-  return `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}${all}`
+  return `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}`
 }
 
 const headLine = (word: Text, name: string) =>
@@ -362,19 +362,15 @@ function changedParts(row: CompareRow, changes: StackChange[]): string {
     .join(', ')
 }
 
-/**
- * The cells only one run ran, when the runs ran different cells of the eval; on a family, the
- * variants whose pooled lift only one run has.
- */
+/** The cells, or an eval's cases, only one run ran, when the runs ran different ones. */
 function cellRows(row: CompareRow): Item[] {
-  const noun = row.kind === 'family' ? 'variants' : 'cells'
+  const scope = (noun: string, added: string[] = [], removed: string[] = []) => [
+    ...(added.length ? [{ indent: 2, cells: [`${noun} added`, added.join(', ')] }] : []),
+    ...(removed.length ? [{ indent: 2, cells: [`${noun} removed`, removed.join(', ')] }] : []),
+  ]
   return [
-    ...(row.cells?.added.length
-      ? [{ indent: 2, cells: [`${noun} added`, row.cells.added.join(', ')] }]
-      : []),
-    ...(row.cells?.removed.length
-      ? [{ indent: 2, cells: [`${noun} removed`, row.cells.removed.join(', ')] }]
-      : []),
+    ...scope('cells', row.cells?.added, row.cells?.removed),
+    ...scope('cases', row.caseScope?.added, row.caseScope?.removed),
   ]
 }
 
@@ -398,7 +394,7 @@ const pooledShort = (l: PooledSide | null) =>
   l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})` : '–'
 
 /**
- * A family row's gates: each variant's pooled lift and each cell's rate over the cases, base →
+ * The gates of an eval with `cases`: each variant's lift paired by case and each cell's rate over the cases, base →
  * head, with the `minLift` or `passRate` a side fell short of, red when head's did and green when
  * only base's did.
  */
@@ -506,8 +502,60 @@ function block(
   { row, unit }: { row: CompareRow; unit?: Unit },
   opts: CompareOptions,
 ): Block {
-  const base = units.base.get(rowKey(row))?.result
-  const head = units.head.get(rowKey(row))?.result
+  const own = ownBlock(c, input, units, { row, ...(unit ? { unit } : {}) }, opts)
+  if (!row.cases) return own
+  const cases = caseBlocks(
+    c,
+    input,
+    { base: caseUnitsOf(units.base, row.id), head: caseUnitsOf(units.head, row.id) },
+    row.cases,
+    opts,
+  )
+  return {
+    lines: [...own.lines, ...cases.lines.map((line) => (line ? `  ${line}` : line))],
+    ids: own.ids || cases.ids,
+  }
+}
+
+/** An eval's case rows that changed, as blocks of their own, then `+N same`. */
+function caseBlocks(
+  c: Colors,
+  input: CompareInput,
+  units: Units,
+  rows: CompareRow[],
+  opts: CompareOptions,
+): Block {
+  const lines: string[] = []
+  let ids = false
+  let same = 0
+  for (const entry of ordered(rows, units)) {
+    if (entry.row.status === 'same' && !shownRow(c, entry.row, units, opts)) {
+      same++
+      continue
+    }
+    const b = ownBlock(c, input, units, entry, opts)
+    ids ||= b.ids
+    lines.push(...b.lines)
+  }
+  if (same) lines.push(c.dim(`+${same} same`))
+  return { lines, ids }
+}
+
+/** Whether a same row still has something to show: a changed gate, `-v`'s stats or a shift. */
+const shownRow = (c: Colors, row: CompareRow, units: Units, opts: CompareOptions) =>
+  !!row.gate ||
+  !!(opts.verbose && row.perCell?.length) ||
+  shiftRows(c, units.base.get(row.id)?.result, units.head.get(row.id)?.result).length > 0
+
+function ownBlock(
+  c: Colors,
+  input: CompareInput,
+  units: Units,
+  { row, unit }: { row: CompareRow; unit?: Unit },
+  opts: CompareOptions,
+): Block {
+  const base = units.base.get(row.id)?.result
+  const head = units.head.get(row.id)?.result
   const word = statusWord(c, row)
   const top = headLine(word, nameOf(row, unit))
   const baseId = input.base?.runId ?? ''
@@ -516,10 +564,11 @@ function block(
     ...(opts.verbose ? statsRows(c, row, base, head) : []),
     ...shiftRows(c, base, head),
   ]
-  const family = row.kind === 'family'
+  const pooled = pooledItems(c, row)
+  const withCases = row.cases !== undefined
   if (row.status === 'regressed' || row.status === 'fixed') {
-    const evidence = family
-      ? pooledItems(c, row)
+    const evidence = withCases
+      ? pooled
       : base && head
         ? flips(c, base, head, (b, h, indent) =>
             row.status === 'regressed'
@@ -540,11 +589,11 @@ function block(
       top,
       ...table(gateRows(c, row)),
       ...table([
-        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
-        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
+        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
       ]),
       ...table([...cellRows(row), ...stats]),
-      ...resultBody(c, head),
+      ...(withCases ? [] : resultBody(c, head)),
     ]
     return { lines, ids: true }
   }
@@ -554,11 +603,11 @@ function block(
       top,
       ...(changed ? table([{ indent: 2, cells: ['changed', changed] }]) : []),
       ...table([
-        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
-        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
+        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
       ]),
-      ...table([...cellRows(row), ...stats, ...(family ? pooledItems(c, row) : [])]),
-      ...(family ? [] : resultBody(c, head)),
+      ...table([...cellRows(row), ...stats, ...pooled]),
+      ...(withCases ? [] : resultBody(c, head)),
     ]
     return { lines, ids: true }
   }
@@ -567,10 +616,10 @@ function block(
       lines: [
         top,
         ...table([
-          idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
-          ...(family ? pooledItems(c, row) : []),
+          idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
+          ...pooled,
         ]),
-        ...(family ? [] : resultBody(c, head)),
+        ...(withCases ? [] : resultBody(c, head)),
       ],
       ids: true,
     }
@@ -580,8 +629,8 @@ function block(
       lines: [
         top,
         ...table([
-          idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
-          ...(family ? pooledItems(c, row) : []),
+          idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+          ...pooled,
         ]),
       ],
       ids: true,
@@ -591,17 +640,18 @@ function block(
 }
 
 /**
- * `1 regressed · 1 fixed · 1 can't compare · 4 same`: what needs a look first, zeros left out. A
- * case its family's rate gates that flipped is `1 case now fails`, after the verdicts.
+ * `1 regressed · 1 fixed · 1 can't compare · 4 same`: what needs a look first, zeros left out,
+ * an eval with `cases` counted once. A case its eval's rate gates that flipped is
+ * `1 case now fails`, after the verdicts.
  */
 export function compareTally(c: Colors, rows: CompareRow[]): string {
-  const verdicts = rows.filter((r) => !flipped(r))
   const count = (s: CompareStatus) => {
-    const n = verdicts.filter((r) => r.status === s).length
+    const n = rows.filter((r) => r.status === s).length
     return n ? [paintStatus(c, s)(`${n} ${WORD[s]}`)] : []
   }
+  const caseRows = rows.flatMap((r) => r.cases ?? [])
   const cases = Object.values(FLIPPED).flatMap((word) => {
-    const n = rows.filter((r) => flipped(r) === word).length
+    const n = caseRows.filter((r) => flipped(r) === word).length
     const verb = n === 1 ? word : (FLIPPED_MANY[word] ?? word)
     return n ? [c.dim(`${plural(n, 'case')} ${verb}`)] : []
   })
@@ -646,24 +696,19 @@ function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): strin
   const units = unitsOf(suite)
   const order = ['fail', 'infra_error', 'canceled', 'pass', 'not_gated', 'skipped'] as const
   const tally = (rows: CompareRow[], noun: string) => {
-    const shown = rows.map((r) => shownOutcome(r, 'head', units.get(rowKey(r))))
+    const shown = rows.map((r) => shownOutcome(r, 'head', units.get(r.id)))
     const counts = order.flatMap((o) => {
       const n = shown.filter((x) => x === o).length
       return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
     })
     return `${plural(rows.length, noun)}${counts.length ? ` (${counts.join(c.dim(' · '))})` : ''}`
   }
-  const families = input.rows.filter((r) => r.kind === 'family')
-  const evals = input.rows.filter((r) => r.kind !== 'family' && r.verdict !== 'family')
   return [
     `No earlier recorded run to compare ${runId} with, so every eval is new.`,
     ...(blocks.length ? ['', ...blocks] : []),
     '',
     ...sideNotes(c, input),
-    [
-      ...(evals.length || !families.length ? [tally(evals, 'new eval')] : []),
-      ...(families.length ? [tally(families, 'pooled gate')] : []),
-    ].join(c.dim(' · ')),
+    tally(input.rows, 'new eval'),
   ]
 }
 
@@ -680,12 +725,7 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
     same = 0
   }
   for (const entry of ordered(input.rows, units)) {
-    const key = rowKey(entry.row)
-    const shown =
-      entry.row.gate ||
-      (opts.verbose && entry.row.perCell?.length) ||
-      shiftRows(c, units.base.get(key)?.result, units.head.get(key)?.result).length
-    if (entry.row.status === 'same' && !shown) {
+    if (entry.row.status === 'same' && !shownRow(c, entry.row, units, opts)) {
       same++
       continue
     }

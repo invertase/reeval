@@ -663,6 +663,8 @@ async function startRun({
         await cleanupRun(target.runId)
       } catch {}
     }
+    const { unfoldCases } = await import('./history/cases.ts')
+    const previous = aside.record ?? target.previous
     return {
       runId: target.runId,
       stagingDir: stagingDir(config.root, target.runId),
@@ -679,7 +681,8 @@ async function startRun({
       worktreePatch: patch,
       author: who,
       scratch,
-      previous: aside.record ?? target.previous,
+      // Resume matches attempts by the entry each case ran as, so it reads the record that way.
+      previous: previous && unfoldCases(previous),
       previousArtifacts: aside.artifacts ?? target.previousArtifacts,
     }
   }
@@ -929,7 +932,7 @@ async function executeRun(
       skipped
         .filter((p) => !p.attempt.plan.skip)
         .map((p) => ({
-          id: p.id,
+          id: p.attempt.family?.id ?? p.id,
           harness: p.attempt.harness,
           sandbox: p.attempt.sandbox,
           plugins: p.attempt.pluginBuilds ?? [],

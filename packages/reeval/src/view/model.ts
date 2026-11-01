@@ -183,24 +183,16 @@ export function activityLabel(
  */
 export function runOutcome(run: {
   status: RunRecord['status']
-  evals: ReadonlyArray<Pick<EvalEntry, 'outcome' | 'verdict'>>
-  families?: ReadonlyArray<{ outcome: 'pass' | 'fail' }>
+  evals: ReadonlyArray<Pick<EvalEntry, 'outcome'>>
   errors?: readonly string[]
 }): Outcome {
   if (run.status === 'interrupted') return 'skipped'
   if (run.errors?.length) return 'fail'
-  const outcomes = [...run.evals.map(verdictOutcome), ...(run.families ?? []).map((f) => f.outcome)]
+  const outcomes = run.evals.map((e) => e.outcome)
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
   return 'pass'
 }
-
-/**
- * An eval's outcome as a verdict: a case whose family's rate over the cases gates it
- * (`verdict: 'family'`) fails through the family, not on its own.
- */
-export const verdictOutcome = (e: Pick<EvalEntry, 'outcome' | 'verdict'>): Outcome =>
-  e.verdict === 'family' && e.outcome === 'fail' ? 'pass' : e.outcome
 
 /**
  * The eval hasn't run yet: its run stopped (interrupted, or out of budget) or a filtered resume
@@ -593,9 +585,11 @@ export type CompareViewRow = {
   headScore: number | null
   /** Cells in both runs, with lift and effort on each side. */
   perCell: CompareCell[]
-  /** See `CompareRow`: a pooled family's gate, with no slug, pass@1 or score of its own. */
-  kind?: 'family'
+  /** See `CompareRow`: an eval with `cases`, each case's row, and its gates over the cases. */
+  cases?: CompareRow['cases']
+  caseScope?: CompareRow['caseScope']
   lifts?: CompareRow['lifts']
+  rates?: CompareRow['rates']
 }
 
 const meanScore = (e: EvalEntry | undefined) => {
@@ -668,8 +662,7 @@ export function compareView(
   records: { base?: RunRecord; head?: RunRecord } = {},
 ) {
   const rows: CompareViewRow[] = compare(base, head).map((row) => {
-    const evalOf = (run: HistoryEntry) =>
-      row.kind === 'family' ? undefined : run.evals.find((e) => e.id === row.id)
+    const evalOf = (run: HistoryEntry) => run.evals.find((e) => e.id === row.id)
     const b = evalOf(base)
     const h = evalOf(head)
     const baseKeys = new Set(b?.cells.map((c) => c.key))

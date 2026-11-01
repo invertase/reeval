@@ -40,10 +40,14 @@ describe('eval names that hold a secret', () => {
     }
     const { run } = readRun(p.dir)
     assert.deepEqual(run.evals.map((e) => e.id).sort(), [
-      'evals/a.eval.ts › grp [REDACTED] › case [[REDACTED]]',
+      'evals/a.eval.ts › grp [REDACTED] › case',
       'evals/a.eval.ts › grp [REDACTED] › later [REDACTED]',
       'evals/a.eval.ts › plain [REDACTED]',
     ])
+    assert.deepEqual(
+      run.evals.flatMap((e) => e.cases ?? []).map((k) => k.key),
+      ['[REDACTED]'],
+    )
     const views: string[] = []
     for (const args of [
       ['run', '--dry-run'],
@@ -227,11 +231,11 @@ evaluate('keys', {
     const run = await runCli(p.dir, ['run', '--record'], { env })
     assert.equal(run.code, 0, run.stdout + run.stderr)
     const { run: record } = readRun(p.dir)
-    assert.deepEqual(record.evals.map((e) => e.id).sort(), [
-      'evals/a.eval.ts › keys [k [REDACTED]]',
-      'evals/a.eval.ts › keys [plain]',
-    ])
-    const excluded = (record.families ?? []).flatMap((f) => f.excluded ?? []).map((e) => e.case)
+    assert.deepEqual(
+      record.evals.map((e) => [e.id, e.cases?.map((k) => k.key)]),
+      [['evals/a.eval.ts › keys', ['k [REDACTED]', 'plain']]],
+    )
+    const excluded = record.evals.flatMap((e) => e.excluded ?? []).map((e) => e.case)
     assert.deepEqual(excluded.sort(), ['k [REDACTED]', 'plain'])
     const written = ['.reeval', 'evals/.history'].flatMap((d) => filesUnder(join(p.dir, d)))
     for (const text of [dry.stdout, dry.stderr, run.stdout, run.stderr, ...written]) {

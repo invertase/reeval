@@ -2,10 +2,18 @@ import { defineEnvironment, evaluate, expect, survey } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 
 const sandbox = fakeSandbox()
-const next = defineEnvironment('next-app', { sandbox, files: { 'stack.txt': 'next' }, traits: { stack: 'next' } })
-const vite = defineEnvironment('vite-app', { sandbox, files: { 'stack.txt': 'vite' }, traits: { stack: 'vite' } })
+const next = defineEnvironment('next-app', {
+  sandbox,
+  files: { 'stack.txt': 'next' },
+  traits: { stack: 'next' },
+})
+const vite = defineEnvironment('vite-app', {
+  sandbox,
+  files: { 'stack.txt': 'vite' },
+  traits: { stack: 'vite' },
+})
 const plain = defineEnvironment('plain', { sandbox })
-const skilled = plain.extend('with-skill', { skills: [] , files: { 'skill.txt': 'yes' } })
+const skilled = plain.extend('with-skill', { skills: [], files: { 'skill.txt': 'yes' } })
 
 // One case of three fails: the cell's rate over its cases, 0.67, clears its passRate 0.6, and
 // the failing case carries verdict 'family'.
@@ -36,7 +44,10 @@ evaluate(
 // A paired lift over the cases with a minLift it can't clear.
 evaluate(
   'lifted',
-  { cases: ['Ada', 'Grace', 'Linus'], compare: { control: plain, variants: [skilled], minLift: 0.5 } },
+  {
+    cases: ['Ada', 'Grace', 'Linus'],
+    compare: { control: plain, variants: [skilled], minLift: 0.5 },
+  },
   async (c, name) => {
     await c.send(`Greet ${name}.`)
     await expect(c.exec('test -f skill.txt'), 'has the skill').toSucceed()

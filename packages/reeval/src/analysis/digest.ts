@@ -6,6 +6,7 @@ import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
 import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import { questionShows, UNRECORDED_QUESTION_STATE } from '../compare/state.ts'
+import { caseEntries, familyOf } from '../history/cases.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
@@ -141,7 +142,7 @@ export const RULES = [
   `smallSample: true beside a lift's verdict means it rests on few attempts (fewer than ${COMPARE_RUNS} counted a side, fewer than ${PAIRED_MIN} cases for a family, or an interval that still reaches past ${Math.round(SMALL_SAMPLE_MARGIN * 100)} points either way): don't over-trust it. Report its direction with the n as directional; never as an established effect, or as showing no difference when the rates are equal.`,
   `When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match.`,
   `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when no split of the attempts' values can reach it (2 vs 2 cannot, and ties raise the floor) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
-  "A family fact is one eval with cases: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
+  "A cases fact is one eval with cases: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; its pass-rate fact carries no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. Its minLift gates the paired lift's lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "mixed": it passed and failed, too few times to call it flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
@@ -453,7 +454,7 @@ export async function buildDigestKeepingDropped(
           pass: `${c.pass}/${c.pass + c.fail}`,
           ...(c.infraError ? { infraError: c.infraError } : {}),
           gated: c.gate !== 'none',
-          ...(c.lift && !e.family
+          ...(c.lift && !e.lifts
             ? {
                 lift: digestLift(c.lift.points, c.lift.interval.lo, c.lift.interval.hi),
                 verdict: digestLiftVerdict(c.lift.withinNoise),
@@ -461,24 +462,24 @@ export async function buildDigestKeepingDropped(
               }
             : {}),
         })),
-        ...(e.family ? { family: e.family.id, case: e.family.case } : {}),
+        ...(e.cases ? { cases: e.cases.map((k) => k.key) } : {}),
       })
     }
-    // An eval with cases: its cases' lift paired by case, which its cases' facts leave out.
-    for (const f of r.record.families ?? []) {
-      const member = r.record.evals.find((e) => e.family?.id === f.id && evalKeys.has(e.key))
-      if (!member) continue
-      const cases = r.record.evals.filter((e) => e.family?.id === f.id)
-      fact('family', {
+    // An eval with several cases: each cell's rate over them and each lift paired by case.
+    for (const e of r.record.evals) {
+      const f = familyOf(e)
+      if (!f || f.cases < 2 || !evalKeys.has(e.key)) continue
+      const cases = caseEntries(e)
+      fact('cases', {
         run: short.get(r.record.runId),
-        family: f.id,
+        eval: tagOf(e.key),
         cases: f.ran === f.cases ? f.cases : `${f.ran} of ${f.cases}`,
         rates: f.rates.map((x) => ({
-          cell: cellTag(r.record.runId, member.key, x.cell),
+          cell: cellTag(r.record.runId, e.key, x.cell),
           passAt1: familyRateLabel(x),
         })),
         lifts: f.lifts.map((l) => ({
-          cell: cellTag(r.record.runId, member.key, l.variant),
+          cell: cellTag(r.record.runId, e.key, l.variant),
           lift: familyLiftLabel(l),
           verdict: l.verdict === 'lift' || l.verdict === 'drop' ? 'effect' : l.verdict,
           ...(familySmallSample(l.pairs, l.interval.lo, l.interval.hi)
@@ -916,23 +917,20 @@ export async function buildDigestKeepingDropped(
     }
     const [baseHeader, headHeader] = [runHeader(base.record, true), runHeader(head.record, true)]
     const inScope = (id: string) => scopeEvals.some((e) => e.id === id)
-    const familyCases = new Map(
-      [...(baseHeader.families ?? []), ...(headHeader.families ?? [])].map((f) => [
-        f.id,
-        f.caseIds,
-      ]),
-    )
-    const rows = compare(baseHeader, headHeader).filter((row) =>
-      row.kind === 'family' ? (familyCases.get(row.id) ?? []).some(inScope) : inScope(row.id),
-    )
+    const rows = compare(baseHeader, headHeader).filter((row) => inScope(row.id))
     fact('compare', {
       base: 'r1',
       head: 'r2',
       rows: rows.map((row) => ({
-        ...(row.kind === 'family'
-          ? { family: row.id }
-          : { eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id) }),
+        eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id),
         status: row.status,
+        ...(row.cases?.some((k) => k.status !== 'same')
+          ? {
+              cases: row.cases
+                .filter((k) => k.status !== 'same')
+                .map((k) => ({ case: k.id, status: k.status })),
+            }
+          : {}),
         ...(row.changes?.length ? { changes: row.changes } : {}),
         ...(row.gate ? { gate: row.gate } : {}),
         ...(row.canceled ? { canceled: row.canceled } : {}),

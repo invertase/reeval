@@ -115,4 +115,4 @@ infra error      starts its sandbox
 skipped          greets in Welsh
 todo             greets in Klingon
 
-8 fail · 8 pass · 1 infra error · 2 skipped
+8 fail · 3 pass · 1 infra error · 2 skipped
