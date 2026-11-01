@@ -54,8 +54,8 @@ const node22Image = () => {
 }
 
 /**
- * reeval's image with npm's update checks on, as an image built without a session (an eval's own)
- * has them, so only the session's env can turn them off.
+ * reeval's image with npm's update checks turned on in its `ENV`, as an eval's own Dockerfile can
+ * do, so only the session's env can turn them off.
  */
 const NOTIFIER_IMAGE = `reeval-test-notifier:${DEFAULT_IMAGE.split(':')[1]}`
 const notifierImage = () =>
@@ -775,7 +775,7 @@ describe('egress policy in Docker', {
     assert.equal(seen.length, 1, 'nothing else reached the upstream')
   })
 
-  test("pnpm's update check contacts no registry, so an offline install under deny-all is blocked nowhere", async () => {
+  test("pnpm's update check contacts no registry, so a dependency-free install under deny-all is blocked nowhere", async () => {
     notifierImage()
     const s = await createSession({ image: NOTIFIER_IMAGE, egress: egress({ policy: denyAll }) })
     sessions.push(s)
