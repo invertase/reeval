@@ -3,6 +3,7 @@
 // calls, and what Vertex can't serve.
 import { generateKeyPairSync } from 'node:crypto'
 import type { EndpointMatch, LocalResponse, RequestTransformation } from '@reeval/sandbox-docker'
+import { claudeCodeVertexAliasRefusal } from '../contract/harness.ts'
 import { UsageError } from '../errors.ts'
 import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
 import type {
@@ -419,10 +420,11 @@ export function vertexModelProbe(
 /**
  * Why Vertex AI can't serve a routed harness's model, or undefined when it can: fx's Chat
  * Completions endpoint and OpenCode's `google-vertex` provider serve Google's models, and Claude
- * only over Anthropic's own API there.
+ * only over Anthropic's own API there; Claude Code's `sonnet` alias names a retiring model there.
  * A bare fx id is OpenAI's everywhere else, so only a bare `gemini-…` one is taken as Google's.
  */
 export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undefined {
+  if (h.kind === 'claude-code') return claudeCodeVertexAliasRefusal(h.model)
   const provider = /^([^/]+)\//.exec(h.model)?.[1]
   if (h.kind === 'opencode') {
     return provider === 'google' || provider === 'google-vertex'

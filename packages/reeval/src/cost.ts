@@ -79,7 +79,7 @@ export const TYPICAL_JUDGE_CALL: { low: Tokens; high: Tokens } = {
 const EFFORT_SUFFIX = /-(none|minimal|low|medium|high|xhigh|max|thinking)$/
 
 /**
- * A model's price by its id, as written (`anthropic/claude-sonnet-4.5`) or without its
+ * A model's price by its id, as written (`anthropic/claude-sonnet-5.5`) or without its
  * `provider/` prefix, without `[param=…]` labels or a trailing effort
  * (`gemini-3.8-flash-medium`); null when `table` has no exact match.
  */

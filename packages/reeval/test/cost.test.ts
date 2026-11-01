@@ -50,10 +50,10 @@ describe('priceFor', () => {
 
   test("matches a gateway's `provider/model` id as written before the bare id", () => {
     const sonnet: Price = [3, 0.3, 3.75, 15]
-    const table = { ...TABLE, 'anthropic/claude-sonnet-4.5': sonnet }
-    assert.deepEqual(priceFor('anthropic/claude-sonnet-4.5', table), sonnet)
-    assert.deepEqual(priceFor('anthropic/claude-sonnet-4.5-high', table), sonnet)
-    assert.equal(priceFor('claude-sonnet-4.5', table), null)
+    const table = { ...TABLE, 'anthropic/claude-sonnet-5.5': sonnet }
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-5.5', table), sonnet)
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-5.5-high', table), sonnet)
+    assert.equal(priceFor('claude-sonnet-5.5', table), null)
   })
 
   test('prices reasoning as part of output, never on top of it', () => {
@@ -95,16 +95,16 @@ describe('priceFor', () => {
       [
         {
           id: 'e',
-          cell: cell('fx:anthropic/claude-sonnet-4.5'),
-          harness: { kind: 'fx', model: 'anthropic/claude-sonnet-4.5' },
+          cell: cell('fx:anthropic/claude-sonnet-5.5'),
+          harness: { kind: 'fx', model: 'anthropic/claude-sonnet-5.5' },
         },
       ],
       [],
       null,
       {
         ...PRICES,
-        table: { ...TABLE, 'anthropic/claude-sonnet-4.5': [3, 0.3, 3.75, 15] },
-        overlay: { 'claude-sonnet-4.5': [1, 1, 1, 1] },
+        table: { ...TABLE, 'anthropic/claude-sonnet-5.5': [3, 0.3, 3.75, 15] },
+        overlay: { 'claude-sonnet-5.5': [1, 1, 1, 1] },
         file: 'prices.json',
       },
     )
@@ -283,11 +283,11 @@ describe('loadPrices', () => {
       },
     },
     vercel: {
-      models: { 'anthropic/claude-sonnet-4.5': { cost: { input: 3, output: 15 } } },
+      models: { 'anthropic/claude-sonnet-5.5': { cost: { input: 3, output: 15 } } },
     },
     openrouter: {
       models: {
-        'anthropic/claude-sonnet-4.5': { cost: { input: 9, output: 9 } },
+        'anthropic/claude-sonnet-5.5': { cost: { input: 9, output: 9 } },
         'x-ai/grok-4.6': { cost: { input: 2, output: 6 } },
       },
     },
@@ -493,7 +493,7 @@ describe('loadPrices', () => {
     const { env } = cache()
     const expected = {
       'gemini-3.8-flash': FLASH,
-      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'anthropic/claude-sonnet-5.5': [3, 3, 3, 15],
       'x-ai/grok-4.6': [2, 2, 2, 6],
     }
     assert.deepEqual((await loadPrices(env, now, s.source)).table, expected)
@@ -542,7 +542,7 @@ describe('loadPrices', () => {
     const { env } = cache()
     assert.deepEqual((await loadPrices(env, now, s.source)).table, {
       'gemini-3.8-flash': FLASH,
-      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'anthropic/claude-sonnet-5.5': [3, 3, 3, 15],
       'x-ai/grok-4.6': [2, 2, 2, 6],
     })
   })
@@ -602,7 +602,7 @@ console.log(JSON.stringify(p.table))`
     assert.deepEqual(seen, ['http://models.reeval.test/api.json'])
     assert.deepEqual(JSON.parse(out), {
       'gemini-3.8-flash': FLASH,
-      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'anthropic/claude-sonnet-5.5': [3, 3, 3, 15],
       'x-ai/grok-4.6': [2, 2, 2, 6],
     })
   })

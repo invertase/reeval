@@ -381,10 +381,22 @@ const CLAUDE_CODE_CATALOG_EFFORT = new Set([
   'claude-mythos-5-1',
 ])
 
+const claudeAlias = (model: string) =>
+  CLAUDE_CODE_ALIASES[model.toLowerCase().replace(/\[1m\]$/, '')]
+
 /** `model` as the messages name it: an alias with the model it resolves to through `gateway`. */
-export const claudeCodeModelName = (model: string, gateway?: string): string => {
-  const alias = CLAUDE_CODE_ALIASES[model.toLowerCase().replace(/\[1m\]$/, '')]
-  return alias ? `${model} (${claudeBase(model, gateway)})` : model
+export const claudeCodeModelName = (model: string, gateway?: string): string =>
+  claudeAlias(model) ? `${model} (${claudeBase(model, gateway)})` : model
+
+/**
+ * Why Claude Code can't run the alias `model` on Vertex AI: claude-code 2.1.290 resolves `sonnet`
+ * there to `claude-sonnet-4-5`, which Anthropic retires on 2026-11-30.
+ */
+export const claudeCodeVertexAliasRefusal = (model: string): string | undefined => {
+  const retired = claudeAlias(model)?.vertex
+  return retired
+    ? `Claude Code resolves ${model} on Vertex AI to ${retired}, which Anthropic retires on 2026-11-30: name the model, e.g. claude-sonnet-5-5`
+    : undefined
 }
 
 /** Whether Claude Code sends an effort to `model`, through `gateway` when it's known. */

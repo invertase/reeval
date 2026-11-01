@@ -560,7 +560,7 @@ describe('Vercel AI Gateway routes', () => {
     assert.deepEqual(gemini.providers?.vercel?.models?.['google/gemini-3-flash']?.body, {
       providerOptions: { google: thinking, vertex: thinking },
     })
-    const claude = openCodeConfig({ model: 'vercel/anthropic/claude-sonnet-4.5', effort: 'high' })
+    const claude = openCodeConfig({ model: 'vercel/anthropic/claude-sonnet-5.5', effort: 'high' })
     assert.equal(claude.providers?.vercel?.models, undefined)
   })
 

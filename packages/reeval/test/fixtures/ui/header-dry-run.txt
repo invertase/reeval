@@ -5,7 +5,7 @@ REEVAL v0.16.1  dry run
   ➜  Config:    ../reeval.config.ts
   ➜  Profile:   pr (auto: CI is set)
   ➜  Harnesses: cursor:composer-2.5 (effort: not checked)
-                claude-code:claude-sonnet-4-5 (effort: none)
+                claude-code:claude-haiku-4-5 (effort: none)
                 codex:gpt-5.1-codex (effort: medium)
   ➜  Sandboxes: docker, fake
   ➜  Judge:     typesafe-ai/jev-1.14.0

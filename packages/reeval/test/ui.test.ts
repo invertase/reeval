@@ -740,10 +740,10 @@ describe('run header', () => {
       resumed: 3,
       config: '../reeval.config.ts',
       profile: { name: 'pr', reason: 'auto: CI is set' },
-      harnesses: ['cursor:composer-2.5', 'claude-code:claude-sonnet-4-5', 'codex:gpt-5.1-codex'],
+      harnesses: ['cursor:composer-2.5', 'claude-code:claude-haiku-4-5', 'codex:gpt-5.1-codex'],
       efforts: {
         'cursor:composer-2.5': 'not checked',
-        'claude-code:claude-sonnet-4-5': 'none',
+        'claude-code:claude-haiku-4-5': 'none',
         'codex:gpt-5.1-codex': 'medium',
       },
       sandboxes: ['docker', 'fake'],
