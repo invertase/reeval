@@ -246,17 +246,20 @@ evaluate('three arms', { compare: { baseline: none, variants: [current, next], g
       reasons?.answers?.[0]?.votes.every((v) => v.reason === 'the first slot writes ok.txt'),
     )
     const reasonWins =
-      /^ {2}question {2}Which reads better\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m
+      /^[│ ] +Question: Which reads better\?\n[│ ] +base +won 1 of 2\n[│ ] +skilled +won 1 of 2$/m
     assert.match(r.stdout, reasonWins)
-    assert.match(run.read('summary.md'), reasonWins)
+    assert.match(run.read('summary.md'), /^ {2}question {2}Which reads better\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m)
 
     // Three arms, three runs, and a vote for the side shown first: every pair splits with the
     // order, which the pooled rates (each arm 50%) and a "0 ties" count hide.
     assert.equal(named('three arms')?.answers?.[0]?.votes.length, 18)
     const armWins =
-      /^ {2}question {2}Which delivers a better user experience\?\n {4}no-skill {7}won \d+ of \d+\n {4}current-skill {2}won \d+ of \d+\n {4}new-skill {6}won \d+ of \d+$/m
+      /^[│ ] +Question: Which delivers a better user experience\?\n[│ ] +no-skill +won \d+ of \d+\n[│ ] +current-skill +won \d+ of \d+\n[│ ] +new-skill +won \d+ of \d+$/m
     assert.match(r.stdout, armWins)
-    assert.match(run.read('summary.md'), armWins)
+    assert.match(
+      run.read('summary.md'),
+      /^ {2}question {2}Which delivers a better user experience\?\n {4}no-skill {7}won \d+ of \d+\n {4}current-skill {2}won \d+ of \d+\n {4}new-skill {6}won \d+ of \d+$/m,
+    )
     const ux = `question = 'Which delivers a better user experience?'`
     const q = await runCli(p.dir, [
       'query',
@@ -429,7 +432,7 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
       ],
     )
     const wins =
-      /^ {2}question {2}Which is cleaner\?\n {4}base \(within\) {5}won 2 of 4\n {4}skilled \(within\) {2}won 2 of 4\n {4}one \(across\) {6}won 0 of 8\n {4}two \(across\) {6}won 8 of 8$/m
+      /^[│ ] +Question: Which is cleaner\?\n[│ ] +base \(within\) +won 2 of 4\n[│ ] +skilled \(within\) +won 2 of 4\n[│ ] +one \(across\) +won 0 of 8\n[│ ] +two \(across\) +won 8 of 8$/m
     assert.match(r.stdout, wins)
     assert.match(
       run.read('summary.md'),
@@ -455,7 +458,7 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
     assert.ok(!tidier.rates.some((x) => x.cut === 'across'))
     assert.match(
       r.stdout,
-      /^ {2}question {2}Which is tidier\?\n {4}base {11}won 2 of 4\n {4}skilled {8}won 2 of 4$/m,
+      /^[│ ] +Question: Which is tidier\?\n[│ ] +base +won 2 of 4\n[│ ] +skilled +won 2 of 4$/m,
     )
 
     // Attempts whose checks failed are left out of the pairs, a verdict the eval didn't assert or not.
@@ -487,7 +490,7 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
       JSON.parse(run.read(first?.input?.path ?? 'missing')).question,
       'Did it write ok.txt?',
     )
-    const tally = /^ {2}question {2}Did it write ok\.txt\?\n {4}yes 8 · no 4$/m
+    const tally = /^[│ ] +Question: Did it write ok\.txt\?\n[│ ] +yes 8 · no 4$/m
     assert.match(r.stdout, tally)
     assert.match(run.read('summary.md'), /Did it write ok\.txt\?/)
     const okTxt = `question = 'Did it write ok.txt?'`
@@ -522,15 +525,18 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
     ])
 
     // A free-text question asked of each attempt shows its answers.
-    assert.match(r.stdout, /^ {2}question {2}What did it write\?\n {4}\S+ +saw (ok|no)\.txt$/m)
+    assert.match(r.stdout, /^[│ ] +Question: What did it write\?\n[│ ] +\S+ +saw (ok|no)\.txt$/m)
 
     // A per-attempt question naming a command no attempt ran is warned about once.
     const unrun = 'question "What did it run?" checks names a command no attempt ran: "npm tset"'
     assert.deepEqual(
-      r.stdout.split('\n').filter((l) => l.includes('names a command no attempt ran')),
+      r.stdout
+        .split('\n')
+        .filter((l) => l.includes('names a command no attempt ran'))
+        .map((l) => l.replace(/^[│ ]+/, '')),
       [
-        `${unrun} on evals/each.eval.ts › unrun command, so each attempt's answer is that error. Outcomes are unchanged.`,
-        `    12 of 12 not answered: ${unrun}`,
+        `⚠  ${unrun} on evals/each.eval.ts › unrun command, so each attempt's answer is that error. Outcomes are unchanged.`,
+        `12 of 12 not answered: ${unrun}`,
       ],
     )
     for (const a of named('unrun command').attempts) assert.equal(a.answers?.[0]?.error, unrun)
@@ -602,7 +608,7 @@ evaluate('describes', { runs: 1, compare, questions: [{ question: 'What did it w
     )
     assert.match(
       r.stdout,
-      /^ {2}question {2}Which is cleaner\?\n {4}the model call failed: the model is over quota$/m,
+      /^[│ ] +Question: Which is cleaner\?\n[│ ] +The model call failed: the model is over quota$/m,
     )
     const run = readRun(p.dir)
     const e = run.evals.find((x) => x.name === 'asks')
@@ -625,7 +631,7 @@ evaluate('describes', { runs: 1, compare, questions: [{ question: 'What did it w
     assert.match(r.stdout, /question "What did it write\?" on .* failed: the model is over quota/)
     assert.match(
       r.stdout,
-      /^ {2}question {2}What did it write\?\n {4}2 of 2 not answered: the model is over quota$/m,
+      /^[│ ] +Question: What did it write\?\n[│ ] +2 of 2 not answered: the model is over quota$/m,
     )
     const described = run.evals.find((x) => x.name === 'describes')
     assert.equal(described?.outcome, 'pass')
@@ -684,7 +690,7 @@ evaluate('describes', { runs: 1, compare, questions: [{ question: 'What did it w
         )
       }
       assert.doesNotMatch(r.stdout, /aborted/)
-      assert.match(r.stdout, /^ {4}2 of 2 not answered: the run stopped before it was answered$/m)
+      assert.match(r.stdout, /^[│ ] +2 of 2 not answered: the run stopped before it was answered$/m)
     } finally {
       server.closeAllConnections()
       server.close()

@@ -169,7 +169,7 @@ evaluate('picks', { runs: 2 }, async (c) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /observed +orm +drizzle 1 · prisma 1\n +files +median 1\.5 · range 1–2 · 2 attempts/,
+      /Observed:\n +orm +drizzle 1 · prisma 1\n +files +median 1\.5 · range 1–2 · 2 attempts$/m,
     )
     const { run } = readRun(p.dir)
     const attempts = run.evals[0]?.attempts ?? []

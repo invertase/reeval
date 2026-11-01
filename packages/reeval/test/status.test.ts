@@ -38,7 +38,10 @@ const listOf = (stdout: string) => {
   const start = stdout.indexOf('evals/s.eval.ts\n')
   const end = stdout.indexOf('\nBrowse it:')
   assert.ok(start >= 0 && end > start, stdout)
-  return stdout.slice(start, end).replace(/^Done in \S+/m, 'Done in <time>')
+  return stdout
+    .slice(start, end)
+    .replace(/^Done in \S+/m, 'Done in <time>')
+    .replace(/Snapshot: \S+/g, 'Snapshot: <path>')
 }
 
 const PLAIN = `evals/s.eval.ts
@@ -52,11 +55,13 @@ const PLAIN = `evals/s.eval.ts
 │      "second check" failed once
 │        expected 'a' to be 'b' // Object.is equality
 │        at evals/s.eval.ts:13
+│    Snapshot: <path> (+1 more in summary.md)
 ├─ ✗ throws           0 of 1 run passed
 │    Failed on fake.
 │    1 run failed:
 │      the fixture is missing
-├─ ✓ compares         1 of 1 run passed
+│    Snapshot: <path>
+├─ ✓ compares         1 of 1 variant run passed
 │    Baseline plain passed 0 of 1.
 │    Variants, by pass rate:
 │      marked  1 of 1  helped
@@ -73,6 +78,7 @@ const PLAIN = `evals/s.eval.ts
        "is green" failed 2 times
          expected 'red' to be 'green' // Object.is equality
          at evals/s.eval.ts:28
+     Snapshot: <path> (+1 more in summary.md)
 
 Done in <time> · 4 failed · 3 passed`
 

@@ -490,10 +490,7 @@ describe('plain renderer', () => {
   test('no line says how an attempt ended; with --output-logs none, nothing prints per attempt', () => {
     for (const logOrder of ['stream', 'grouped'] as const) {
       const out = render(interleaved, options({ logOrder, outputLogs: 'none', heartbeatMs: 0 }))
-      assert.equal(
-        out,
-        lines('  ◆  Running...', '', ...RESULT),
-      )
+      assert.equal(out, lines('  ◆  Running...', '', ...RESULT))
     }
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
   })
@@ -859,7 +856,7 @@ describe('agent renderer', () => {
       output: options({ mode: 'agent' }),
     })
     renderer.onEvent(planEvent())
-    assert.equal(text, stripAnsi(draw([planEvent()], rich, 100)))
+    assert.equal(text, stripAnsi(draw([planEvent()], rich, Number.POSITIVE_INFINITY)))
     assert.ok(!text.includes('\x1b['))
   })
 
@@ -870,10 +867,7 @@ describe('agent renderer', () => {
       output: options({ mode: 'agent' }),
     })
     for (const e of interleaved) renderer.onEvent(e)
-    assert.equal(
-      text,
-      lines('  ◆  Running...', ...result(false)),
-    )
+    assert.equal(text, lines('  ◆  Running...', ...result(false)))
     assert.ok(!text.includes('\x1b['))
   })
 })
@@ -910,7 +904,9 @@ describe('interactive renderer', () => {
   })
 
   test("if Ink can't load, the run prints as a pipe's does, and wait resolves", async () => {
-    const { renderer, text } = interactive(() => Promise.reject(new Error("Cannot find package 'ink'")))
+    const { renderer, text } = interactive(() =>
+      Promise.reject(new Error("Cannot find package 'ink'")),
+    )
     for (const e of interleaved) renderer.onEvent(e)
     await renderer.wait()
     renderer.close()

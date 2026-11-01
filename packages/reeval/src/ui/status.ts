@@ -26,8 +26,10 @@ import type { RunRecord } from '../history/types.ts'
 import { clip, formatDuration, plural } from '../text.ts'
 import type { ErrorKind } from '../types.ts'
 import { formatUsage } from '../view/model.ts'
+import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
 import {
+  type AttemptQuestionResult,
   type CellResult,
   type CheckResult,
   countedOf,
@@ -35,6 +37,7 @@ import {
   type EvalResult,
   effectOf,
   isNotGatedResult,
+  type QuestionResult,
   type SuiteResult,
 } from '../view/suite.ts'
 import { checkLabel, statsLine } from './layout.ts'
@@ -54,7 +57,7 @@ export type StatusRow = {
   id: string
   name: string
   icon: StatusIcon
-  /** `3 of 4 runs passed`, `2 of 4 runs done`, `skipped`. */
+  /** `3 of 4 runs passed`, `8 of 8 variant runs passed` (a gated compare's baseline doesn't count), `2 of 4 runs done`, `skipped`. */
   summary: string
   detail: DetailLine[]
   /** It has remarks, under `Worth knowing:`, which a list printed once shows even on a pass. */
@@ -397,6 +400,8 @@ export function evalRow(
   const decide = deciding(cells)
   const passed = decide.reduce((n, c) => n + c.passed, 0)
   const ran = decide.reduce((n, c) => n + c.passed + c.failed + c.infraError, 0)
+  const compare = cells.some((c) => c.baseline)
+  const counted = compare && decide.length < cells.length ? 'variant run' : 'run'
   const summary = e.todo
     ? 'todo'
     : e.notRun
@@ -405,8 +410,7 @@ export function evalRow(
         ? e.outcome === 'canceled'
           ? 'canceled'
           : 'skipped'
-        : `${passed} of ${plural(ran, 'run')} passed`
-  const compare = cells.some((c) => c.baseline)
+        : `${passed} of ${plural(ran, counted)} passed`
   const tone = iconOf(e) === 'fail' ? 'red' : 'dim'
   const notes = ran ? [...retriedLines(decide), ...pageErrorNotes(decide)] : []
   const detail = ran
@@ -424,6 +428,11 @@ export function evalRow(
           ? checkLines(cells, armOf, tone)
           : checkLines(decide, (c) => harnessLabel(record, c), tone)),
         ...errorLines(compare ? cells : decide, tone),
+        ...(iconOf(e) === 'fail' ? snapshotLines(cells) : []),
+        ...questionLines(e.questions ?? []),
+        ...observedLines(e.observations ?? [], cells, (c) =>
+          compare ? armOf(c) : harnessLabel(record, c),
+        ),
         ...remarkLines(remarks, notes),
       ]
     : remarkLines(remarks, [])
@@ -436,6 +445,125 @@ export function evalRow(
     remarks: remarks.length + notes.length,
     compare,
   }
+}
+
+/** Free-text answers shown per question; the rest are in the record. */
+const ANSWERS_SHOWN = 3
+
+/** Rows of `[label, text]` at `depth`, the labels padded to one column. */
+const aligned = (
+  depth: DetailLine['depth'],
+  rows: Array<readonly [string, string]>,
+): DetailLine[] => {
+  const w = Math.max(0, ...rows.map(([label]) => label.length))
+  return rows.map(([label, text]) => ({ depth, text: `${label.padEnd(w)}  ${text}` }))
+}
+
+/** Each question's answer: who won the pairs, the tally of choices, or the first answers. */
+function questionLines(questions: Array<QuestionResult | AttemptQuestionResult>): DetailLine[] {
+  return questions.flatMap((q): DetailLine[] => {
+    const head = { depth: 0, text: `Question: ${clip(q.question, 100)}`, tone: 'heading' } as const
+    if (q.kind === 'attempts') {
+      const failed: DetailLine[] =
+        q.error === null
+          ? []
+          : [
+              {
+                depth: 1,
+                text: `${q.failed} of ${q.asked} not answered: ${clip(q.error, 200)}`,
+                tone: 'red',
+              },
+            ]
+      if (q.choices) {
+        const tally = q.choices.map((t) => `${t.choice} ${t.n}`).join(' · ')
+        return [head, { depth: 1, text: tally }, ...failed]
+      }
+      const shown = q.answers.slice(0, ANSWERS_SHOWN)
+      const more = q.answers.length - shown.length
+      return [
+        head,
+        ...aligned(
+          1,
+          shown.map((a) => [a.attempt, clip(a.text.replace(/\s+/g, ' '), 100)] as const),
+        ),
+        ...(more
+          ? [{ depth: 1, text: `${more} more: reeval query attempt_answers`, tone: 'dim' } as const]
+          : []),
+        ...failed,
+      ]
+    }
+    if (q.votes === 0 && q.error === null) {
+      return [
+        head,
+        {
+          depth: 1,
+          text: 'No pairs to judge: tries that failed their checks are left out.',
+          tone: 'dim',
+        },
+      ]
+    }
+    if (q.rates.length === 0 && q.error === null) {
+      return [head, { depth: 1, text: `${plural(q.votes, 'vote')}, every one a tie.`, tone: 'dim' }]
+    }
+    const cuts = new Set(q.rates.map((r) => r.cut)).size > 1
+    return [
+      head,
+      ...aligned(
+        1,
+        q.rates.map(
+          (r) => [cuts ? `${r.name} (${r.cut})` : r.name, `won ${r.wins} of ${r.n}`] as const,
+        ),
+      ),
+      ...(q.error === null
+        ? []
+        : [
+            {
+              depth: 1,
+              text: `The model call failed: ${clip(q.error, 200)}`,
+              tone: 'red',
+            } as const,
+          ]),
+    ]
+  })
+}
+
+/** Where a failed eval's first failed attempt's final workspace snapshot is, to open it. */
+function snapshotLines(cells: CellResult[]): DetailLine[] {
+  const [first, ...others] = cells.flatMap((c) => c.snapshots ?? [])
+  if (!first) return []
+  const more = others.length ? ` (+${others.length} more in summary.md)` : ''
+  return [{ depth: 0, text: `Snapshot: ${first}${more}`, tone: 'dim' }]
+}
+
+/** What `c.observe` recorded, each name's tally on one line, or a line per cell under it. */
+function observedLines(
+  tallies: ObservedTally[],
+  cells: CellResult[],
+  label: (c: CellResult) => string,
+): DetailLine[] {
+  if (!tallies.length) return []
+  const byKey = new Map(cells.map((c) => [c.key, c]))
+  const perCell = new Set(tallies.map((t) => t.cell)).size > 1
+  const width = Math.max(...tallies.map((t) => clip(t.name, 40).length))
+  const lines: DetailLine[] = [{ depth: 0, text: 'Observed:', tone: 'heading' }]
+  if (!perCell) {
+    for (const t of tallies) {
+      lines.push({ depth: 1, text: `${clip(t.name, 40).padEnd(width)}  ${observedLine(t)}` })
+    }
+    return lines
+  }
+  for (const name of new Set(tallies.map((t) => t.name))) {
+    lines.push({ depth: 1, text: clip(name, 40) })
+    const rows = tallies
+      .filter((t) => t.name === name)
+      .map((t) => {
+        const cell = byKey.get(t.cell)
+        return [cell ? label(cell) : t.cell, observedLine(t)] as const
+      })
+    const w = Math.max(...rows.map(([who]) => who.length))
+    for (const [who, line] of rows) lines.push({ depth: 2, text: `${who.padEnd(w)}  ${line}` })
+  }
+  return lines
 }
 
 /** `3 passed · 1 failed · 1 not gated`, from the suite's tally. */

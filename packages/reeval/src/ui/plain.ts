@@ -42,7 +42,7 @@ export type RendererOptions = {
   timers?: boolean
   /** `-v` (1) or `-vv` (2); `-vv` shows debug lines' times to the millisecond. */
   verbosity?: 0 | 1 | 2
-  /** The terminal's width, which a rich header's warnings and hints wrap to. */
+  /** The terminal's width, which the header's notes wrap to; off a terminal, lines don't wrap. */
   columns?: number
 }
 
@@ -292,7 +292,7 @@ export class PlainRenderer implements Renderer {
   }
 
   get #columns() {
-    return this.#o.columns || 80
+    return this.#o.columns || Number.POSITIVE_INFINITY
   }
 
   /** The header block names a sandbox warning; GitHub Actions also annotates it. */

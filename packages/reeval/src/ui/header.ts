@@ -1,7 +1,7 @@
 // What `reeval run` prints before its logs, in every mode: the plan as a block of facts under a
 // title, its warnings and hints wrapped to the terminal's width with a hanging indent, and one
 // line per step until the attempts start. Off a color terminal the same lines print without
-// color.
+// color, and off any terminal without wrapping, since whatever shows them wraps.
 import { formatDuration, plural } from '../text.ts'
 import { type Colors, type Paint, stripAnsi } from './colors.ts'
 import type { ReevalEvent, RunHeader } from './events.ts'

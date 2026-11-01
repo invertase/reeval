@@ -13,7 +13,8 @@ import { pointerLine, statusList } from './status.ts'
 import { Tagger } from './tags.ts'
 
 const MAX_LINES = 12
-const WIDTH = 100
+/** Agents read whole lines, so the header's notes don't wrap. */
+const WIDTH = Number.POSITIVE_INFINITY
 
 export type AgentRendererOptions = {
   out: OutputStream
