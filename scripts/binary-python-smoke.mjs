@@ -167,13 +167,14 @@ function sh(command, args, cwd, env = {}) {
   return { ...r, out }
 }
 const reeval = (cwd, args, env) => sh(binary, args, cwd, env)
-/** The last line that says how the run went, e.g. `1 fail · 2 pass`. */
+/** The tally on the run's `Done in …` line, e.g. `1 failed · 2 passed`. */
 const outcome = (r) =>
   r.out
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => /^\d+ (pass|fail)/.test(l))
+    .filter((l) => l.startsWith('Done in '))
     .at(-1)
+    ?.replace(/^Done in [^·]+· /, '')
 
 const failures = []
 const check = (name, ok) => {
@@ -196,7 +197,7 @@ for (const version of versions) {
   check(
     `Python ${version}: greet and judged pass, the canary fails`,
     run.status === 1 &&
-      outcome(run) === '1 fail · 2 pass' &&
+      outcome(run) === '1 failed · 2 passed' &&
       /fail\s+canary/.test(run.out) &&
       /missing\.py|never written/.test(run.out),
   )
@@ -208,7 +209,7 @@ for (const f of ['pyproject.toml', 'uv.lock']) renameSync(join(dir, f), join(dir
 const venv = reeval(dir, ['run'], { SMOKE_PYTHON: last })
 check(
   `Python ${last} from .venv, without uv: the canary fails`,
-  venv.status === 1 && outcome(venv) === '1 fail · 2 pass',
+  venv.status === 1 && outcome(venv) === '1 failed · 2 passed',
 )
 
 // The SDK's own `reeval` command: it fetches this binary from its release directory, checks it
@@ -239,7 +240,7 @@ const name = basename(positionals[0])
 check(
   `uv run reeval: the SDK downloads ${name}, checks it and runs the evals`,
   shim.status === 1 &&
-    outcome(shim) === '1 fail · 2 pass' &&
+    outcome(shim) === '1 failed · 2 passed' &&
     shim.out.includes(`downloading ${name}`) &&
     !shim.out.includes('SHA256SUMS only') &&
     existsSync(join(shimCache, 'reeval', 'bin', version, name)),
@@ -330,7 +331,7 @@ if (values['platform-wheel']) {
   check(
     `uv run reeval from ${basename(own)}: its own binary, reeval ${version}, runs the evals, offline`,
     r.status === 1 &&
-      outcome(r) === '1 fail · 2 pass' &&
+      outcome(r) === '1 failed · 2 passed' &&
       !r.out.includes('downloading') &&
       v.stdout.trim() === version,
   )
@@ -342,7 +343,7 @@ if (values['platform-wheel']) {
   const pr = sh(pip.reeval, ['run'], pipProject, { ...ownEnv, SMOKE_PYTHON: last })
   check(
     `pip install ${basename(own)}: its own binary runs the evals on the venv's Python, offline`,
-    pip.ok && pv.stdout.trim() === version && pr.status === 1 && outcome(pr) === '1 fail · 2 pass',
+    pip.ok && pv.stdout.trim() === version && pr.status === 1 && outcome(pr) === '1 failed · 2 passed',
   )
 
   const links = pipVenv(

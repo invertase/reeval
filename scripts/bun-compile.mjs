@@ -75,35 +75,47 @@ const versions = Object.fromEntries(
 )
 writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)}\n`)
 
-// An --asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
-// only the bridge).
-const assets = [
-  'package.json',
-  'docker',
-  'bin',
-  'assets',
-  'skills',
-  'dist',
-  'vendor',
-  'versions.json',
-].flatMap((path) => ['--asset', path])
-const built = sh(
-  'bun',
-  [
-    'build',
-    '--compile',
+// An asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
+// only the bridge). The build runs through Bun.build, not `bun build`, for the plugin: Ink's
+// DEV-only devtools module imports react-devtools-core, an optional peer that isn't installed,
+// and an --external of it would be hoisted into an import every command fails on. Ink loads
+// that module only when the package resolves, which the empty stand-in never lets it reach.
+const assets = ['package.json', 'docker', 'bin', 'assets', 'skills', 'dist', 'vendor', 'versions.json']
+const script = join(stage, 'build.mjs')
+writeFileSync(
+  script,
+  `const [cli, target, outfile, assets] = JSON.parse(process.argv[2])
+const devtools = {
+  name: 'no-react-devtools',
+  setup(build) {
+    build.onResolve({ filter: /^react-devtools-core$/ }, () => ({ path: 'react-devtools-core', namespace: 'stub' }))
+    build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'export default {}', loader: 'js' }))
+  },
+}
+const built = await Bun.build({
+  entrypoints: [cli],
+  plugins: [devtools],
+  // What \`bun build --compile\` implies.
+  minify: true,
+  define: { 'process.env.NODE_ENV': '"production"' },
+  compile: {
+    target,
+    outfile,
+    assets,
     // reeval reads .env files itself, in its own order; the executable mustn't load them first.
-    '--no-compile-autoload-dotenv',
-    '--no-compile-autoload-bunfig',
-    '--compile-autoload-package-json',
-    `--target=${target}`,
-    cli,
-    ...assets,
-    '--outfile',
-    binary,
-  ],
-  { cwd: stage, stdio: 'inherit' },
+    autoloadDotenv: false,
+    autoloadBunfig: false,
+    autoloadPackageJson: true,
+  },
+})
+for (const log of built.logs) console.error(String(log))
+process.exit(built.success ? 0 : 1)
+`,
 )
+const built = sh('bun', [script, JSON.stringify([cli, target, resolve(binary), assets])], {
+  cwd: stage,
+  stdio: 'inherit',
+})
 rmSync(stage, { recursive: true, force: true })
 if (built.status !== 0) fail('bun build --compile failed')
 if (args['no-check'] || !runsHere) {
@@ -145,12 +157,14 @@ const node = (cwd, args, env) =>
 const compiled = (cwd, args, env) =>
   sh(join(alone, exe), args, { cwd, env: { ...process.env, XDG_CACHE_HOME: cache, ...env } })
 /** The last line that says how the run went, e.g. `16 pass` or `1 fail · 1 pass`. */
+/** The tally on the run's `Done in …` line, without the time. */
 const outcome = (r) =>
   stripVTControlCharacters(r.stdout + r.stderr)
     .split('\n')
-    .filter((l) => /^\d+ (pass|fail)/.test(l.trim()))
+    .filter((l) => l.startsWith('Done in '))
     .at(-1)
-    ?.trim()
+    ?.replace(/^Done in [^·]+· /, '')
+    .trim()
 const planned = (r) =>
   JSON.parse(r.stdout).evals.map((e) => `${e.file} › ${e.name} ${JSON.stringify(e.cells ?? [])}`)
 const why = (r) => (r.status === 0 ? '' : (r.stderr || r.stdout).trim().slice(-600))
@@ -200,7 +214,7 @@ if (docker.status === 0) {
   const r = compiled(fixture, ['run'], { REEVAL_FIXTURE_SANDBOX: 'docker' })
   check(
     'a Docker attempt behind the gateway',
-    r.status === 1 && outcome(r) === '1 fail · 1 pass',
+    r.status === 1 && outcome(r) === '1 failed · 1 passed',
     outcome(r) ?? why(r),
   )
   rmSync(fixture, { recursive: true, force: true })

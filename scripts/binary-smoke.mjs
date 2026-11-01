@@ -76,13 +76,14 @@ function reeval(cwd, args, env = {}) {
   console.log(args.includes('--json') ? `${out.slice(0, 300)}…` : out)
   return { ...r, out }
 }
-/** The last line that says how the run went, e.g. `16 pass` or `1 fail · 1 pass`. */
+/** The tally on the run's `Done in …` line, e.g. `16 passed` or `1 failed · 1 passed`. */
 const outcome = (r) =>
   stripVTControlCharacters(r.out)
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => /^\d+ (pass|fail)/.test(l))
+    .filter((l) => l.startsWith('Done in '))
     .at(-1)
+    ?.replace(/^Done in [^·]+· /, '')
 
 const failures = []
 const check = (name, ok) => {
@@ -101,7 +102,7 @@ try {
 } catch {}
 check(`the example plans (${evals} evals)`, plan.status === 0 && evals > 0)
 const run = reeval(example, ['run'])
-check('the example runs', run.status === 0 && /^\d+ pass$/.test(outcome(run) ?? ''))
+check('the example runs', run.status === 0 && /^\d+ passed$/.test(outcome(run) ?? ''))
 
 const site = join(example, 'site')
 const built = reeval(example, ['studio', 'build', '--scratch', '--out', site])
@@ -124,7 +125,7 @@ if (values.docker) {
   const image = reeval(fixture, ['image', 'build'], env)
   check('reeval image build', image.status === 0)
   const r = reeval(fixture, ['run'], env)
-  check('a Docker attempt behind the gateway', r.status === 1 && outcome(r) === '1 fail · 1 pass')
+  check('a Docker attempt behind the gateway', r.status === 1 && outcome(r) === '1 failed · 1 passed')
 }
 
 rmSync(alone, { recursive: true, force: true, maxRetries: 5 })
