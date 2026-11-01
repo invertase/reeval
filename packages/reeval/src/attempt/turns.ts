@@ -1,10 +1,11 @@
+import { TURN_EDITED } from '../assert.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
-import { diffSinceSnapshot } from '../diff.ts'
+import { changedBetween, diffSinceSnapshot, workspaceBlobs } from '../diff.ts'
 import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration, plural } from '../text.ts'
-import type { Diff, ExecResult, ExecRetry, Turn, TurnData, TurnRecord } from '../types.ts'
+import type { ExecResult, ExecRetry, Turn, TurnData, TurnRecord } from '../types.ts'
 import {
   type McpStartupLog,
   mcpStartupOf,
@@ -107,6 +108,7 @@ export function turnSender(
 ) {
   return async (prompt: string): Promise<Turn> => {
     const [box, agent] = await a.start('c.send()')
+    const before = await a.timed('diffMs', () => workspaceBlobs(box, a.signal))
     const entry: TurnRecord = {
       prompt,
       text: '',
@@ -231,12 +233,14 @@ export function turnSender(
       throw error
     }
     a.signal.throwIfAborted()
-    const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
+    const { diff, blobs } = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
     a.record.diff = diff
     if (a.spec.snapshot.when === 'turns')
       await takeSnapshot(a, box, `turn-${turnNumber}`, 'harness')
     const data: TurnData = { prompt, ...result, diff }
-    const turn: Turn = Object.freeze({ ...data, ...checks })
+    const turn: Turn = Object.freeze(
+      Object.assign({ ...data, ...checks }, { [TURN_EDITED]: changedBetween(before, blobs) }),
+    )
     a.turns.push(turn)
     return turn
   }

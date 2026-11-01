@@ -35,7 +35,13 @@ import {
   UsageError,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
-import { acceptIntoSnapshot, diffSinceSnapshot, snapshot } from '../src/diff.ts'
+import {
+  acceptIntoSnapshot,
+  changedBetween,
+  diffSinceSnapshot,
+  snapshot,
+  workspaceBlobs,
+} from '../src/diff.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
@@ -218,7 +224,7 @@ test('c.writeFile refuses absolute paths and paths that leave the workspace', as
     await writeFile('~/home.txt', 'home')
     assert.equal(await box.readFile('a/placed.txt'), 'kept')
     assert.equal(await box.readFile('~/home.txt'), 'home')
-    assert.deepEqual((await diffSinceSnapshot(box)).files, [])
+    assert.deepEqual((await diffSinceSnapshot(box)).diff.files, [])
   } finally {
     await box.destroy()
   }
@@ -245,7 +251,7 @@ test("the snapshot keeps one commit and no placed file's earlier content", async
       'nothing beside the workspace',
     )
     await box.writeFile('src/sum.js', 'fixed\n')
-    const diff = await diffSinceSnapshot(box)
+    const { diff } = await diffSinceSnapshot(box)
     assert.deepEqual(diff.files, [{ path: 'src/sum.js', status: 'modified' }])
     assert.match(diff.patch, /^-bug\n\+fixed\n/m)
   } finally {
@@ -267,7 +273,7 @@ test('changed paths come back as written, however git would quote them', async (
     await snapshot(box)
     for (const name of names) await box.writeFile(name, 'new\n')
     await box.writeFile('keep.txt', 'changed\n')
-    const diff = await diffSinceSnapshot(box)
+    const { diff } = await diffSinceSnapshot(box)
     const expected = [
       ...names.map((path) => ({ path, status: 'added' })),
       { path: 'keep.txt', status: 'modified' },
@@ -287,6 +293,38 @@ test('changed paths come back as written, however git would quote them', async (
       'a pattern drops a quoted path from the diff',
     )
     assert.match(judged.patch, /a b\.txt/)
+  } finally {
+    await box.destroy()
+  }
+})
+
+test("a turn's changed files are those whose content moved between two reads", async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  const quoted = process.platform === 'win32' ? 'a b.txt' : 't\tab.txt'
+  try {
+    for (const f of ['early.txt', 'edited.txt', 'gone.txt']) await box.writeFile(f, 'v1\n')
+    await snapshot(box)
+    await box.writeFile('early.txt', 'before the turn\n')
+    await box.writeFile('edited.txt', 'v2\n')
+    const before = await workspaceBlobs(box)
+    await box.writeFile('edited.txt', 'v3\n')
+    await box.writeFile(quoted, 'new\n')
+    await box.exec('rm gone.txt')
+    const { diff, blobs } = await diffSinceSnapshot(box)
+    assert.deepEqual(
+      diff.files.map((f) => f.path).sort(),
+      ['early.txt', 'edited.txt', 'gone.txt', quoted].sort(),
+    )
+    assert.deepEqual(
+      changedBetween(before, blobs).sort(),
+      ['edited.txt', 'gone.txt', quoted].sort(),
+    )
+    await box.writeFile('edited.txt', 'v2\n')
+    assert.deepEqual(
+      changedBetween(before, await workspaceBlobs(box)).sort(),
+      ['gone.txt', quoted].sort(),
+      'edited.txt back as it was when the turn started',
+    )
   } finally {
     await box.destroy()
   }

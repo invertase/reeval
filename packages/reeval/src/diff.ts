@@ -60,28 +60,60 @@ export async function acceptIntoSnapshot(
   }
 }
 
-export async function diffSinceSnapshot(sandbox: Sandbox, signal?: AbortSignal): Promise<Diff> {
-  const env = `${snapshotEnv(sandbox)} && ${GIT} add -A && `
-  const patch = await sandbox.execOwn(`${env}${GIT} diff --cached --binary HEAD`, { signal })
-  const names = await sandbox.execOwn(
-    `${env}${GIT} diff --cached --name-status --no-renames -z HEAD`,
+/**
+ * Each file that differs from the snapshot, by path, and the object id of its content now (all
+ * zeros once deleted). A path not in it is as the snapshot has it.
+ */
+export type Blobs = ReadonlyMap<string, string>
+
+type RawChange = FileChange & { blob: string }
+
+async function rawChanges(sandbox: Sandbox, signal?: AbortSignal): Promise<RawChange[]> {
+  const r = await sandbox.execOwn(
+    `${snapshotEnv(sandbox)} && ${GIT} add -A && ${GIT} diff --cached --raw --no-renames --no-abbrev -z HEAD`,
     { signal },
   )
-  if (patch.exitCode !== 0 || names.exitCode !== 0) {
-    throw new InfraError(`Failed to diff the workspace: ${patch.stderr || names.stderr}`)
-  }
+  if (r.exitCode !== 0) throw new InfraError(`Failed to diff the workspace: ${r.stderr}`)
   const status = { A: 'added', M: 'modified', D: 'deleted' } as const
-  // `-z` gives `status\0path\0` pairs, the path as is.
-  const fields = names.stdout.split('\0')
-  const files: FileChange[] = []
+  // `-z` gives `:<mode> <mode> <old id> <new id> <status>\0<path>\0` pairs, the path as is.
+  const fields = r.stdout.split('\0')
+  const changes: RawChange[] = []
   for (let i = 0; i + 1 < fields.length; i += 2) {
-    const code = fields[i] as string
-    files.push({
+    const [, , , blob = '', code = ''] = (fields[i] as string).split(' ')
+    changes.push({
       path: fields[i + 1] as string,
       status: status[code[0] as keyof typeof status] ?? 'modified',
+      blob,
     })
   }
-  return { patch: patch.stdout, files }
+  return changes
+}
+
+const blobsOf = (changes: RawChange[]): Blobs => new Map(changes.map((c) => [c.path, c.blob]))
+
+export async function diffSinceSnapshot(
+  sandbox: Sandbox,
+  signal?: AbortSignal,
+): Promise<{ diff: Diff; blobs: Blobs }> {
+  const patch = await sandbox.execOwn(
+    `${snapshotEnv(sandbox)} && ${GIT} add -A && ${GIT} diff --cached --binary HEAD`,
+    { signal },
+  )
+  if (patch.exitCode !== 0) throw new InfraError(`Failed to diff the workspace: ${patch.stderr}`)
+  const changes = await rawChanges(sandbox, signal)
+  const files = changes.map(({ path, status }) => ({ path, status }))
+  return { diff: { patch: patch.stdout, files }, blobs: blobsOf(changes) }
+}
+
+/** The workspace's `Blobs` now, to tell later which files a turn changed. */
+export async function workspaceBlobs(sandbox: Sandbox, signal?: AbortSignal): Promise<Blobs> {
+  return blobsOf(await rawChanges(sandbox, signal))
+}
+
+/** Paths whose content differs between two `Blobs`: a file changed, created or deleted between them. */
+export function changedBetween(before: Blobs, after: Blobs): string[] {
+  const paths = new Set([...after.keys(), ...before.keys()])
+  return [...paths].filter((p) => before.get(p) !== after.get(p))
 }
 
 /** Every file in the workspace as git sees it (its `.gitignore` applies), sorted. */

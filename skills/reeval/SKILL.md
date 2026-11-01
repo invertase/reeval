@@ -234,8 +234,10 @@ group('hello', () => {
   Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
-  `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
-  `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
+  `toHaveFetched(url?)`. `toHaveEdited` counts edit tools' events and the files that changed
+  while the agent ran the turn, so a shell write counts and a read doesn't. Guard files with
+  `expect(c).not.toHaveChanged(globs)`: its globs are exact, while `toHaveEdited`'s string
+  matches any path containing it. Label requirements with
   `expect`'s second argument: `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`.
 - Checks don't stop the eval: a failed `expect` is recorded, the body carries on, and the attempt
   fails at its end, with every failed check listed by label and line. Use `expect.require` for
