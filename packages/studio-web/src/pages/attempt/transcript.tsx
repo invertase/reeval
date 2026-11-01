@@ -279,7 +279,7 @@ function ItemRow({
 const foldable = (item: TranscriptItem) =>
   item.kind === 'event' && (item.event.type === 'tool' || item.event.type === 'reasoning')
 
-export function Transcript({ text }: { text: string }) {
+export function Transcript({ text, filesChanged }: { text: string; filesChanged?: number }) {
   const items = useMemo(() => transcriptItems(parseTranscript(text)), [text])
   const [open, setOpen] = useState<Set<number>>(() => new Set())
   const listRef = useRef<HTMLDivElement>(null)
@@ -327,7 +327,10 @@ export function Transcript({ text }: { text: string }) {
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{counts.tools} tool calls</Badge>
-        <Badge variant="secondary">{counts.edits} file edits</Badge>
+        {filesChanged === undefined ? null : (
+          <Badge variant="secondary">{filesChanged} files changed</Badge>
+        )}
+        <Badge variant="secondary">{counts.edits} edit tool calls</Badge>
         <Badge variant="secondary">{counts.reasoning} reasoning blocks</Badge>
         {foldables.length ? (
           <Button

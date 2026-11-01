@@ -203,6 +203,21 @@ export function turnSender(
     const count = (...types: string[]) =>
       result.transcript.filter((e) => types.includes(e.type)).length
     const failure = result.transcript.find((e) => e.type === 'error')
+    // The agent never got to work, so checks on its workspace say nothing about it.
+    const infra = timedOut || (result.status !== 'aborted' && rejectedKey)
+    // The diff counts every write, the shell's too. The turn's own files are the ones that moved
+    // since it started, so the eval's c.exec and c.writeFile between turns aren't in them.
+    let changes: Awaited<ReturnType<typeof diffSinceSnapshot>> | undefined
+    let diffError: unknown
+    if (!infra && !a.signal.aborted) {
+      try {
+        changes = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
+      } catch (error) {
+        diffError = error
+      }
+    }
+    const edited = changes ? changedBetween(before, changes.blobs) : undefined
+    const filesChanged = edited?.length
     a.report({
       kind: 'turn-end',
       turn: turnNumber,
@@ -210,13 +225,14 @@ export function turnSender(
       ms: result.durationMs,
       tools: count('tool', 'web-search', 'web-fetch'),
       fileEdits: count('file-edit'),
+      ...(filesChanged === undefined ? {} : { filesChanged }),
       ...(failure?.type === 'error'
         ? { error: clip(redactSecrets(failure.message.trim()), 300) }
         : {}),
     })
     debugLog(
       'harness',
-      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(redactSecrets(String(failure.message)), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
+      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${filesChanged === undefined ? '' : `${plural(filesChanged, 'file')} changed · `}${plural(count('file-edit'), 'edit tool call')}${failure && 'message' in failure ? ` · error: ${clip(redactSecrets(String(failure.message)), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
     )
     for (const s of entry.mcpStartup ?? []) {
       debugLog(
@@ -224,8 +240,6 @@ export function turnSender(
         `turn ${turnNumber} mcp ${s.server} ${s.ms === null ? "didn't answer initialize" : `answered initialize in ${formatDuration(s.ms)}`}`,
       )
     }
-    // The agent never got to work, so checks on its workspace say nothing about it.
-    const infra = timedOut || (result.status !== 'aborted' && rejectedKey)
     if (infra) {
       // Fails the attempt even when the eval's body catches it, like a failed start.
       const error = new InfraError(infra)
@@ -233,13 +247,14 @@ export function turnSender(
       throw error
     }
     a.signal.throwIfAborted()
-    const { diff, blobs } = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
+    if (diffError !== undefined || !changes || !edited) throw diffError
+    const { diff } = changes
     a.record.diff = diff
     if (a.spec.snapshot.when === 'turns')
       await takeSnapshot(a, box, `turn-${turnNumber}`, 'harness')
     const data: TurnData = { prompt, ...result, diff }
     const turn: Turn = Object.freeze(
-      Object.assign({ ...data, ...checks }, { [TURN_EDITED]: changedBetween(before, blobs) }),
+      Object.assign({ ...data, ...checks }, { [TURN_EDITED]: edited }),
     )
     a.turns.push(turn)
     return turn

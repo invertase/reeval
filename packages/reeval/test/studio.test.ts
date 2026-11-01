@@ -276,12 +276,14 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
     assert.ok(lead > 0 && tally > lead, 'the one-line verdict sits above the pass/fail tally')
   })
 
-  test('tool calls and file edits are counted apart, on every page', () => {
-    assert.equal(activityLabel({ tools: 21, fileEdits: 2 }), '21 tool calls · 2 file edits')
-    assert.equal(activityLabel({ tools: 1, fileEdits: 0 }), '1 tool call · 0 file edits')
+  test('tool calls, files changed and edit tool calls are counted apart, on every page', () => {
     assert.equal(
-      activityLabel({ tools: 3, fileEdits: 0 }, 2),
-      '3 tool calls · 0 file edits · 2 files changed',
+      activityLabel({ tools: 21, fileEdits: 2 }, 2),
+      '21 tool calls · 2 files changed · 2 edit tool calls',
+    )
+    assert.equal(
+      activityLabel({ tools: 1, fileEdits: 0 }, 1),
+      '1 tool call · 1 file changed · 0 edit tool calls',
     )
     const pages = ['pages/run.tsx', 'pages/attempt/index.tsx'].map((f) =>
       readFileSync(join(pkgRoot, '../studio-web/src', f), 'utf8'),

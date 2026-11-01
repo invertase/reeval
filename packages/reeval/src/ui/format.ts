@@ -61,7 +61,10 @@ export function progressLine(c: Colors, p: Progress): string {
       return `turn ${p.turn} started`
     case 'turn-end': {
       const status = p.status === 'completed' ? 'done' : c.red(p.status)
-      const activity = [plural(p.tools, 'tool call'), plural(p.fileEdits, 'file edit')].join(', ')
+      const activity = [
+        plural(p.tools, 'tool call'),
+        ...(p.filesChanged === undefined ? [] : [`${plural(p.filesChanged, 'file')} changed`]),
+      ].join(', ')
       const error = p.error ? `: ${c.red(oneLine(p.error, 160))}` : ''
       return `turn ${p.turn} ${status}${error} ${c.dim(`${formatDuration(p.ms)} · ${activity}`)}`
     }

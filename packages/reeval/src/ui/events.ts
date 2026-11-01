@@ -45,6 +45,11 @@ export type ProgressUpdate =
       ms: number
       tools: number
       fileEdits: number
+      /**
+       * The files the turn changed, from the workspace diff, so a file the shell wrote counts.
+       * Unset when the turn didn't get as far as a diff.
+       */
+      filesChanged?: number
       /** The turn's first error event, e.g. the provider's billing or auth error. */
       error?: string
     }

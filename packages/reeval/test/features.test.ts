@@ -3313,6 +3313,27 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/files-changed',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    args: ['-v'],
+    canary: /to deeply equal \[\]/,
+    record: ({ run, stdout }) => {
+      const attempt = landed(run)
+      assert.equal(attempt?.activity.fileEdits, 0, 'the shell write is no edit tool call')
+      assert.deepEqual(
+        attempt?.changedFiles.map((f) => f.path),
+        ['note.txt', 'setup.txt'],
+      )
+      const turn = stdout.split('\n').find((l) => l.includes('lands') && /turn 1 done/.test(l))
+      assert.match(
+        turn ?? '',
+        /· 1 tool call, 1 file changed$/,
+        "the eval's own write isn't the turn's",
+      )
+    },
+  },
+  {
     dir: 'run/best-of',
     tiers: ['fake'],
     env: 'best-of',

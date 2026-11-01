@@ -1621,6 +1621,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/replay-telemetry.test.ts'],
   },
   {
+    id: 'effort.files-changed',
+    area: 'Records and studio',
+    name: "Each turn's files changed from the workspace diff, a file the shell wrote included, on its turn line, in `debug.log` and beside the edit tool calls in summary.md and the studio",
+    fixtures: ['run/files-changed'],
+    unit: ['reeval/test/unit.test.ts', 'reeval/test/studio.test.ts'],
+  },
+  {
     id: 'effort.separation',
     area: 'Records and studio',
     name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`)',
