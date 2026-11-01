@@ -1644,7 +1644,7 @@
           "type": "string"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data as canonical JSON, with secrets in its strings masked as the record masks them; set on each case of an `evaluate.each`.",
           "type": "string"
         },
         "options": {

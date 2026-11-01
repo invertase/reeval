@@ -9,6 +9,7 @@ import { fingerprintOf } from '../src/history/assemble.ts'
 import { HISTORY_GITIGNORE, parseCheckIgnore } from '../src/history/ignore.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { sha256 } from '../src/ids.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
 import {
@@ -915,6 +916,52 @@ evaluate('sibling', async (c) => {
       fakeConfig({ harness: harness('Wrote it, differently') }),
     )
     assert.deepEqual(await agentRow(p.dir), ['drift', ['harness config changed']])
+  })
+
+  test("a case's hash masks its secrets, so the record can't confirm a guess and a rotated secret stays the same eval", async () => {
+    const each = (user: string) => `import { evaluate } from 'reeval'
+evaluate.each([{ user: '${user}', password: process.env.DB_PASSWORD }])('logs in %#', async (c) => {
+  await c.send('write hello.txt')
+})
+`
+    const p = await gitProject('case-secret', { 'evals/e.eval.ts': each('ada') })
+    const secret = { env: { DB_PASSWORD: 'postgres-dev-pass' } }
+    assert.equal((await runCli(p.dir, ['run', '--record'], secret)).code, 0)
+    const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
+    assert.equal(entry?.source?.case, sha256('{"password":"[REDACTED]","user":"ada"}'))
+    assert.notEqual(
+      entry?.source?.case,
+      sha256('{"password":"postgres-dev-pass","user":"ada"}'),
+      'canary: the raw case would confirm a guessed password',
+    )
+    const row = async (env: Record<string, string>) => {
+      assert.equal((await runCli(p.dir, ['run'], { env })).code, 0)
+      const r = (await compareJson(p.dir)).rows[0]
+      return [r?.status, r?.changes ?? []]
+    }
+    assert.deepEqual(await row({ DB_PASSWORD: 'postgres-ci-pass' }), ['same', []])
+    await writeFile(join(p.dir, 'evals/e.eval.ts'), each('grace'))
+    assert.deepEqual(await row(secret.env), ['drift', ['case data changed']])
+  })
+
+  test("a case's hash masks the value of its environment's secret(), whatever the variable is called", async () => {
+    const p = await gitProject('case-declared-secret', {
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const db = defineEnvironment('db', ({ secret }) => ({ env: { DB_CONN: secret.fromEnv('DB_CONN') } }))
+evaluate.each([{ conn: process.env.DB_CONN }])('connects %#', { environment: db }, async (c) => {
+  await c.send('write hello.txt')
+})
+`,
+    })
+    const run = await runCli(p.dir, ['run', '--record'], { env: { DB_CONN: 'pgpass1' } })
+    assert.equal(run.code, 0, run.stderr)
+    const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
+    assert.equal(entry?.source?.case, sha256('{"conn":"[REDACTED]"}'))
+    assert.notEqual(
+      entry?.source?.case,
+      sha256('{"conn":"pgpass1"}'),
+      'canary: DB_CONN is no secret name, so only its secret() masks it',
+    )
   })
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {

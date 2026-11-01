@@ -52,7 +52,7 @@
       "body": "b2",
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
-        "case": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd"
+        "caseJson": "{\"n\":1}"
       },
       "family": {
         "name": "case $n",
@@ -70,7 +70,7 @@
       "body": "b3",
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
-        "case": "363379742f80b51bdb9206579af7754911543079b9399cb3fc315fb199f476e8"
+        "caseJson": "{\"n\":2}"
       },
       "family": {
         "name": "case $n",

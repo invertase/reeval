@@ -26,7 +26,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { bodyHash, caseHash } from './eval-source.ts'
+import { bodyHash, caseJson } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
@@ -421,7 +421,10 @@ const evalEach =
     const body = bodyHash(fn, `evaluate.each("${template}")`, file)
     cases.forEach((item, i) => {
       const family = pooled ? { name, case: i, cases: cases.length } : undefined
-      const source = { body, case: caseHash(item, `evaluate.each("${template}") case ${i}`, file) }
+      const source = {
+        body,
+        caseJson: caseJson(item, `evaluate.each("${template}") case ${i}`, file),
+      }
       register('run', formatName(name, item, i), own, (c) => fn(c, item), source, hint, family)
     })
   }

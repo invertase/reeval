@@ -59,7 +59,7 @@ evaluate.each(handlers)(
 ```
 
 <Property name="cases" type="readonly T[]" required>
-  The cases, one evaluation each.
+  The cases, one evaluation each. Each case's data is part of its fingerprint, recorded as a sha256 of its JSON with secrets in its strings masked, so a rotated secret leaves the case the same evaluation. A secret held as a number, or a value under 8 characters in a secret-named variable that no `secret()` reads, is hashed as written: anyone who reads the history could confirm a guess at it.
 </Property>
 
 <Property name="options" type="EachOptions" optional>

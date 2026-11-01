@@ -22,7 +22,7 @@ import {
 } from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { optionsHash } from './eval-source.ts'
+import { caseHash, optionsHash } from './eval-source.ts'
 import { fellBackToDirect, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
@@ -55,7 +55,9 @@ import {
 import type { Limits } from './scheduler/core.ts'
 import type {
   AttemptMeta,
+  EnvVars,
   EvalOptions,
+  EvalSource,
   GroupOptions,
   ResolvedConfig,
   ResolvedGateway,
@@ -71,7 +73,7 @@ export type EvalDeclaration = {
   mode: TestMode
   groups: { name: string; options: GroupOptions }[]
   options: EvalOptions
-  /** Hashes of its body and case data, from whoever declared it. */
+  /** Its body's hash and case data, from whoever declared it. */
   source: DeclaredSource
   /** Set on each case of a pooled `evaluate.each`. */
   family?: DeclaredFamily
@@ -162,10 +164,6 @@ function planTests(
   const { name, mode, groups: enclosing } = declaration
   const groups = enclosing.map((g) => g.name)
   const { resolved } = resolvedEval
-  const source = {
-    ...declaration.source,
-    options: optionsHash([...enclosing.map((g) => g.options), declaration.options]),
-  }
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const gateways = ctx.profile?.gateway ?? ctx.config.gateway
@@ -209,6 +207,20 @@ function planTests(
         })
         .map((harness) => withDefaultEffort(harness, ctx.cursorEfforts))
   const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
+  const { caseJson, ...declared } = declaration.source
+  const source: EvalSource = {
+    ...declared,
+    ...(caseJson === undefined
+      ? {}
+      : {
+          case: caseHash(
+            caseJson,
+            process.env,
+            secretValues(resolved.env, resolvedEval.skip ? expand(resolved) : plannedAttempts),
+          ),
+        }),
+    options: optionsHash([...enclosing.map((g) => g.options), declaration.options]),
+  }
   let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {
     try {
@@ -372,6 +384,15 @@ function planTests(
           },
     }
   })
+}
+
+/**
+ * The values of the `secret()` variables the attempts read. The record masks them once the run
+ * has planned, and the case hash is taken here, before that, so it masks them itself.
+ */
+function secretValues(env: EnvVars, attempts: readonly PlannedAttempt[]): string[] {
+  const names = new Set(attempts.flatMap((a) => secretVarsIn(env, a)))
+  return [...names].flatMap((name) => process.env[name] ?? [])
 }
 
 /**
