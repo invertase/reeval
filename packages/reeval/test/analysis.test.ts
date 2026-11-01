@@ -1211,7 +1211,7 @@ evaluate('hello', async (c) => {
     const tieOf = async (name: string, runs: number) => {
       const p = await compareProject(name, runs)
       const config = join(p.dir, 'reeval.config.ts')
-      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' } }" }))
+      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' }, delayMs: 300 }" }))
       const run = await runCli(p.dir, ['run'])
       assert.equal(run.code, 0, run.stdout)
       const { digest } = await digestOf(p.dir)
@@ -1224,11 +1224,10 @@ evaluate('hello', async (c) => {
         ceiling: variant?.tie ?? (variant?.looks ? 'looks' : undefined),
       }
     }
-    const four = await tieOf('analyze-tie-four', 4)
-    assert.equal(four.smallSample, true)
-    assert.ok(
-      four.ceiling === 'both always pass' || four.ceiling === 'looks',
-      `a ceiling at 4 a side is a tie, or a lean where the fake agent's time differs: ${four.ceiling}`,
+    assert.deepEqual(
+      await tieOf('analyze-tie-four', 4),
+      { smallSample: true, ceiling: 'both always pass' },
+      "a ceiling at 4 a side is a tie: the fake agent's time differs by noise only",
     )
     assert.deepEqual(
       await tieOf('analyze-tie-one', 1),

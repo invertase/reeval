@@ -354,15 +354,33 @@ describe('remark thresholds', () => {
       [],
       'a ceiling whose effort differs is told apart by its effort',
     )
-    const nudged = only(record, 'tft settled')
-    for (const e of nudged.evals) {
-      for (const a of e.attempts) a.timings.agentMs = 1000
-      const first = e.attempts.find((a) => e.cells.find((c) => c.key === a.cell)?.lift)
-      if (first) first.timings.agentMs = 500
+    const timed = (variant: (i: number) => number, control: (i: number) => number) => {
+      const r = only(record, 'tft settled')
+      for (const e of r.evals) {
+        let v = 0
+        let k = 0
+        for (const a of e.attempts)
+          a.timings.agentMs = e.cells.find((c) => c.key === a.cell)?.lift
+            ? variant(v++)
+            : control(k++)
+      }
+      return r
     }
-    const [nudge] = raise(nudged, NO_HISTORY)
-    assert.equal(nudge?.kind, 'too-few-tries', 'one faster attempt of 16 leans, short of holding')
-    assert.match(nudge?.text ?? '', /looks different: \d+% faster; about \d+ runs a side/)
+    const spread = (lo: number, hi: number) => (i: number) => Math.round(lo + ((hi - lo) * i) / 15)
+    const [nudge] = raise(timed(spread(600, 1200), spread(750, 1250)), NO_HISTORY)
+    assert.equal(nudge?.kind, 'too-few-tries', 'medians 900 against 1000 lean, short of holding')
+    assert.match(nudge?.text ?? '', /looks different: 10% faster; about \d+ runs a side/)
+    assert.deepEqual(
+      kinds(
+        timed(
+          (i) => 1000 + (i % 3) * 20,
+          (i) => 1000 + (i % 2) * 30,
+        ),
+        NO_HISTORY,
+      ),
+      ['cant-tell-apart'],
+      'agent-time noise under 10% of the median is the same, so a ceiling is a tie',
+    )
     assert.deepEqual(
       kinds(only(record, 'tft enough'), NO_HISTORY),
       [],

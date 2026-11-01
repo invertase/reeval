@@ -60,7 +60,16 @@ reeval compares each variant with its baseline on every measure the run has, eac
 | Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant 6 of 6` |
 | Tool calls, agent time, tokens | the effort verdict above (paired by case in a family) | the medians' ratio, `5× faster`, `10× fewer tokens` |
 
-Each measure is `better` or `worse` when its test holds, `same` when the two sides are exactly equal, and `leans` on any other difference: one the test doesn't hold. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200. Each measure's test stands alone: no correction across measures, since the comparison makes no single combined claim.
+Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` when it reaches the measure's minimum effect, and is `same` below it, so timing noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
+
+| Measure | Minimum effect to lean |
+|---|---|
+| Pass rate, and each check's pass rate | 10 points |
+| A judge's score (0–1) | 0.05 between the mean scores |
+| A compare question | 60% of the decisive pairs for one side |
+| Tool calls, agent time, tokens | 10% between the medians |
+
+Each measure's test stands alone: no correction across measures, since the comparison makes no single combined claim.
 
 ## Cases as pairs
 

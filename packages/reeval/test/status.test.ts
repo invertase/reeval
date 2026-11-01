@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { fakeConfig, project, runCli } from './helpers.ts'
+import { copyOut } from './support/examples.ts'
 
 const EVALS = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
@@ -140,4 +141,38 @@ test('a compare whose effort holds prints its comparison, which every reader sha
     compare.stdout,
     /fake\/marked\/fake vs baseline +same pass rate · [4-6](\.\d)?× faster → same pass rate · [4-6](\.\d)?× faster/,
   )
+})
+
+const NOISE = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+
+evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+  await c.send('go')
+  expect(1, 'one').toBe(1)
+})
+`
+
+test('arms that differ only by agent-time noise are a tie: make the task harder', async () => {
+  const p = await project('status-noise', {
+    'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 300 }' }),
+    'evals/s.eval.ts': NOISE,
+  })
+  const run = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    listOf(run.stdout),
+    /passed every run \(4 of 4 and 4 of 4\): the task can't tell them apart, since both always pass\. Fix at evals\/s\.eval\.ts:\d+: make the task harder, so the baseline can fail\./,
+  )
+})
+
+test('with-compare-questions, whose question picked the variant 4 of 4, names the runs that would confirm it', async () => {
+  const dir = await copyOut('with-compare-questions')
+  const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    run.stdout,
+    /but the variant looks different: (.+ and )?"Which divide\(\) says more clearly what went wrong when b is…" picked the variant 4 of 4; about \d+ runs a side would confirm it\./,
+  )
+  assert.doesNotMatch(run.stdout, /make the task harder/)
 })

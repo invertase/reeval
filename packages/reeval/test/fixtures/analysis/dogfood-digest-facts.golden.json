@@ -16,11 +16,7 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true,
-        "measures": [
-          "leans: 3% fewer tool calls",
-          "leans: 9% faster"
-        ]
+        "smallSample": true
       },
       {
         "cell": "es-good",
@@ -31,8 +27,7 @@
         "smallSample": true,
         "measures": [
           "leans: 5.9× fewer tool calls",
-          "leans: 2× faster",
-          "leans: judge \"Pass only if the house-style variant is made with…\" −0.01"
+          "leans: 2× faster"
         ]
       }
     ]
@@ -54,10 +49,7 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true,
-        "measures": [
-          "leans: 6% fewer tool calls"
-        ]
+        "smallSample": true
       },
       {
         "cell": "es-good",
@@ -91,8 +83,7 @@
         "verdict": "within noise",
         "smallSample": true,
         "measures": [
-          "leans: 16% fewer tool calls",
-          "leans: 2% faster"
+          "leans: 16% fewer tool calls"
         ]
       },
       {
@@ -161,7 +152,6 @@
         "verdict": "within noise",
         "smallSample": true,
         "measures": [
-          "leans: 8% slower",
           "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45"
         ]
       },
@@ -1079,10 +1069,6 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
-    "measures": [
-      "leans: 3% fewer tool calls",
-      "leans: 9% faster"
-    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1106,8 +1092,7 @@
     "smallSample": true,
     "measures": [
       "leans: 5.9× fewer tool calls",
-      "leans: 2× faster",
-      "leans: judge \"Pass only if the house-style variant is made with…\" −0.01"
+      "leans: 2× faster"
     ],
     "checks": [],
     "sameOnBoth": 0,
@@ -1132,8 +1117,7 @@
     "smallSample": true,
     "measures": [
       "leans: 5.8× fewer tool calls",
-      "leans: 1.8× faster",
-      "leans: judge \"Pass only if the house-style variant is made with…\" −0.01"
+      "leans: 1.8× faster"
     ],
     "checks": [],
     "sameOnBoth": 0,
@@ -1156,9 +1140,6 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
-    "measures": [
-      "leans: 6% fewer tool calls"
-    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1229,8 +1210,7 @@
     "liftVerdict": "within noise",
     "smallSample": true,
     "measures": [
-      "leans: 16% fewer tool calls",
-      "leans: 2% faster"
+      "leans: 16% fewer tool calls"
     ],
     "checks": [],
     "sameOnBoth": 0,
@@ -1375,7 +1355,6 @@
     "liftVerdict": "within noise",
     "smallSample": true,
     "measures": [
-      "leans: 8% slower",
       "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45"
     ],
     "checks": [],

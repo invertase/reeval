@@ -72,6 +72,21 @@ type Side = { pass: number; counted: number }
 type Wins = { variant: number; control: number; voted: number }
 
 const LABEL_CHARS = 60
+
+/**
+ * The smallest difference that leans: below it a measure whose test doesn't hold reads `same`, so
+ * timing noise doesn't stand in for a difference. A difference its test holds is better or worse
+ * at any size. Pass-rate points; a judge's 0–1 score; a question's decisive win share; effort's
+ * relative difference in medians.
+ */
+export const RATE_MIN = 0.1
+export const JUDGE_MIN = 0.05
+export const QUESTION_MIN = 0.6
+export const EFFORT_MIN = 0.1
+
+/** A lean below its measure's minimum effect is `same`. */
+const atLeast = (verdict: MeasureVerdict, size: number, min: number): MeasureVerdict =>
+  verdict === 'leans' && size < min - 1e-9 ? 'same' : verdict
 const isCounted = (a: Pick<AttemptRecord, 'outcome'>) =>
   a.outcome === 'pass' || a.outcome === 'fail'
 const sign = (x: number) => (x > 0 ? '+' : x < 0 ? '−' : '±')
@@ -157,7 +172,7 @@ function rateMeasure(
   const hi = stored?.hi ?? computed.high
   const holds = !containsZero(lo, hi) && Math.min(v.counted, c.counted) >= COMPARE_RUNS
   const way = vr > cr ? 'better' : 'worse'
-  const verdict: MeasureVerdict = vr === cr ? 'same' : holds ? way : 'leans'
+  const verdict = atLeast(vr === cr ? 'same' : holds ? way : 'leans', Math.abs(vr - cr), RATE_MIN)
   const name = measure === 'pass' ? 'pass rate' : `"${clip(label ?? '', LABEL_CHARS)}"`
   const from = Math.max(v.counted, c.counted, COMPARE_RUNS - 1) + 1
   return {
@@ -171,7 +186,7 @@ function rateMeasure(
     p: null,
     verdict,
     leaning: verdict === 'leans' ? way : null,
-    text: verdict === 'same' ? `same ${name}` : `${name} ${pts(vr - cr)}`,
+    text: vr === cr ? `same ${name}` : `${name} ${pts(vr - cr)}`,
     needed:
       verdict !== 'leans'
         ? null
@@ -282,6 +297,12 @@ function effortMeasures(input: Input, runs: number): Measure[] {
         printed === 'fewer' ? 'better' : printed === 'more' ? 'worse' : s === 0 ? 'same' : 'leans'
       if (verdict === 'leans') needed = scaled(p, runs, RANK_FLOOR)
     }
+    verdict = atLeast(
+      verdict,
+      ratio === null ? (vm === 0 ? 0 : Number.POSITIVE_INFINITY) : Math.abs(ratio - 1),
+      EFFORT_MIN,
+    )
+    if (verdict !== 'leans') needed = null
     const fewer = s < 0
     const agrees = (r: number | null): r is number => r !== null && r < 1 === fewer && r !== 1
     const cMean = mean(c)
@@ -347,7 +368,7 @@ function judgeMeasures(input: Input, runs: number): Measure[] {
     const test = ys && mannWhitney(xs, ys)
     if (!ys || !test) return []
     const diff = mean(xs) - mean(ys)
-    const verdict = tested(test.p, test.sign, true)
+    const verdict = atLeast(tested(test.p, test.sign, true), Math.abs(diff), JUDGE_MIN)
     const name = `judge "${clip(label, LABEL_CHARS)}"`
     return [
       {
@@ -376,7 +397,11 @@ function questionMeasures(input: Input, cases: number): Measure[] {
     const decisive = wins.variant + wins.control
     const p = mcnemar(wins.variant, wins.control)
     const s = wins.variant - wins.control
-    const verdict = tested(p, s, true)
+    const verdict = atLeast(
+      tested(p, s, true),
+      decisive ? Math.max(wins.variant, wins.control) / decisive : 0,
+      QUESTION_MIN,
+    )
     const name = `"${clip(question, LABEL_CHARS)}"`
     const lead = s > 0 ? 'the variant' : 'the baseline'
     return [
@@ -393,7 +418,7 @@ function questionMeasures(input: Input, cases: number): Measure[] {
         leaning: leaningOf(verdict, s, true),
         text:
           verdict === 'same'
-            ? `${name} picked neither`
+            ? `${name} picked ${decisive ? 'each side about as often' : 'neither'}`
             : `${name} picked ${lead} ${Math.max(wins.variant, wins.control)} of ${decisive}`,
         needed: verdict === 'leans' ? signRuns(wins, cases) : null,
         unit: 'runs',

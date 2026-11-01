@@ -122,18 +122,74 @@ describe('one comparison over every measure', () => {
   })
 
   test('a difference the test does not hold leans, with the runs a side that would hold it', () => {
-    const variant = [{ ms: 500 }, ...times(15, { ms: 1000 })]
-    const ms = cellMeasures(entry(variant, times(16, { ms: 1000 })), 'marked', 'plain')
+    const variant = [700, 800, 1100, 1200].map((ms) => ({ ms }))
+    const control = [1000, 1050, 1100, 1150].map((ms) => ({ ms }))
+    const ms = cellMeasures(entry(variant, control), 'marked', 'plain')
     const time = of(ms, 'agentMs')
-    assert.equal(time.verdict, 'leans')
+    assert.equal(time.verdict, 'leans', 'medians 950 against 1075: 12%, short of the rank test')
     assert.equal(time.leaning, 'better')
-    assert.equal(time.text, '3% faster', 'the mean speaks where the medians are level')
-    assert.ok((time.needed ?? 0) > 16)
+    assert.equal(time.text, '12% faster')
+    assert.ok((time.needed ?? 0) > 4)
     const reading = tieOf('pass', ms)
     assert.ok(reading && reading !== 'tie' && reading.told === 'leans')
     assert.equal(reading.needed, time.needed)
     assert.equal(measuresLine(ms ?? []), 'same pass rate', 'a lean is left out by default')
-    assert.equal(measuresLine(ms ?? [], true), 'same pass rate · looks 3% faster')
+    assert.equal(measuresLine(ms ?? [], true), 'same pass rate · looks 12% faster')
+  })
+
+  test('a difference below its measure minimum that its test does not hold is the same', () => {
+    const noise = [1000, 1040, 980, 1020].map((ms) => ({ ms }))
+    const ms = cellMeasures(entry(noise, times(4, { ms: 1000 })), 'marked', 'plain')
+    assert.equal(of(ms, 'agentMs').verdict, 'same', 'medians 1010 against 1000: 1%, under 10%')
+    assert.equal(of(ms, 'agentMs').text, 'same agent time')
+    assert.equal(of(ms, 'agentMs').needed, null)
+    assert.equal(tieOf('pass', ms), 'tie', 'agent-time noise leaves a ceiling a tie')
+    const one = [{ ms: 500 }, ...times(15, { ms: 1000 })]
+    assert.equal(
+      of(cellMeasures(entry(one, times(16, { ms: 1000 })), 'marked', 'plain'), 'agentMs').verdict,
+      'same',
+      'one faster attempt of 16 leaves the medians level',
+    )
+    const scored = (xs: number[]) => xs.map((score) => ({ score }))
+    const judged = cellMeasures(
+      entry(scored([0.82, 0.8, 0.8, 0.8]), scored([0.8, 0.8, 0.8, 0.8])),
+      'marked',
+      'plain',
+    )
+    assert.equal(of(judged, 'judge').verdict, 'same', 'a 0.005 mean difference is under 0.05')
+    const asked = (winners: string[]) =>
+      of(
+        cellMeasures(entry(times(9, {}), times(9, {}), { winners }), 'marked', 'plain'),
+        'question',
+      )
+    const faint = asked([...times(5, 'marked'), ...times(4, 'plain')])
+    assert.equal(faint.verdict, 'same', '5 of 9 decisive is under 60/40')
+    assert.equal(faint.text, '"Which is clearer?" picked each side about as often')
+    assert.equal(
+      asked([...times(3, 'marked'), ...times(2, 'plain')]).verdict,
+      'leans',
+      '3 of 5 is 60/40',
+    )
+    const checked = (pass: number) =>
+      of(
+        cellMeasures(
+          entry(times(20, {}), times(20, {}), { checks: [pass, 20] }),
+          'marked',
+          'plain',
+        ),
+        'check',
+      )
+    assert.equal(checked(19).verdict, 'same', '19 of 20 against 20 of 20 is 5 points')
+    assert.equal(checked(19).text, '"compiles" −5 pts', 'a faint difference keeps its points')
+    assert.equal(checked(18).verdict, 'leans', '18 of 20 is 10 points')
+  })
+
+  test('a significant effect is better or worse at any size', () => {
+    const fast = [990, 991, 992, 993, 994, 995, 996, 997].map((ms) => ({ ms }))
+    const slow = [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007].map((ms) => ({ ms }))
+    const time = of(cellMeasures(entry(fast, slow), 'marked', 'plain'), 'agentMs')
+    assert.equal(time.verdict, 'better', 'a 1% difference its rank test holds')
+    assert.equal(time.text, '1% faster')
   })
 
   test('a question is tested by the exact sign test on its decisive pairs', () => {
