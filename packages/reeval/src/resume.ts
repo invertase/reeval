@@ -1,5 +1,6 @@
-// Resume a stopped, interrupted or budget-stopped run: same runId, skip completed attempts,
-// restart ones that never wrote a record (or only wrote `aborted`).
+// Resume a stopped, interrupted or budget-stopped run: same runId, skip the attempts that passed
+// or failed, restart ones that never wrote a record, only wrote `aborted` or ended in an infra
+// error. `--retry-errors` does the same to a finished run, which then reruns only its infra errors.
 import {
   existsSync,
   mkdirSync,
@@ -14,7 +15,7 @@ import { hostname } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
-import type { AttemptRecord, RunInvocation, RunRecord } from './history/types.ts'
+import type { AttemptRecord, AttemptRetry, RunInvocation, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
 import { RUN_ID, recordFileName, relativeFile } from './ids.ts'
 import { type LiveKept, replace } from './live.ts'
@@ -125,9 +126,17 @@ export function isCompletedAttempt(
   return outcome === 'pass' || outcome === 'fail' || outcome === 'infra_error'
 }
 
-const completedFromRecord = (record: RunRecord): string[] =>
+/** Completed with a result a resume keeps, a pass or a fail; an infra error runs again. */
+export function isKeptAttempt(
+  outcome: Outcome,
+  error: { kind: string } | null | undefined,
+): boolean {
+  return outcome !== 'infra_error' && isCompletedAttempt(outcome, error)
+}
+
+const keptFromRecord = (record: RunRecord): string[] =>
   record.evals.flatMap((e) =>
-    e.attempts.filter((a) => isCompletedAttempt(a.outcome, a.error)).map((a) => a.key),
+    e.attempts.filter((a) => isKeptAttempt(a.outcome, a.error)).map((a) => a.key),
   )
 
 function readEvalRecord(path: string): EvalRecord | null {
@@ -138,15 +147,19 @@ function readEvalRecord(path: string): EvalRecord | null {
   }
 }
 
-function stagingRecordComplete(staging: string, key: string): boolean {
+function stagingRecordComplete(
+  staging: string,
+  key: string,
+  done: typeof isCompletedAttempt = isCompletedAttempt,
+): boolean {
   const record = readEvalRecord(join(staging, 'evals', recordFileName(key)))
   if (!record) return false
-  return isCompletedAttempt(record.outcome, record.error)
+  return done(record.outcome, record.error)
 }
 
 /**
- * Attempt keys that already finished in `staging` or in an interrupted/budget scratch, so a
- * resume skips them.
+ * Attempt keys that already passed or failed in `staging` or in the previous record, so a
+ * resume skips them and runs the rest, infra errors included.
  */
 export function completedKeysFor(
   planned: readonly { key: string }[],
@@ -154,11 +167,61 @@ export function completedKeysFor(
   previous?: RunRecord | null,
 ): Set<string> {
   const keys = new Set<string>()
-  const fromPrevious = new Set(previous ? completedFromRecord(previous) : [])
+  const fromPrevious = new Set(previous ? keptFromRecord(previous) : [])
   for (const { key } of planned) {
-    if (stagingRecordComplete(staging, key) || fromPrevious.has(key)) keys.add(key)
+    if (stagingRecordComplete(staging, key, isKeptAttempt) || fromPrevious.has(key)) keys.add(key)
   }
   return keys
+}
+
+/** In staging: each attempt's earlier infra errors, by key, kept as the attempts run again. */
+export const RETRIES_FILE = 'retries.json'
+
+export function readRetries(staging: string): Map<string, AttemptRetry[]> {
+  try {
+    const parsed = JSON.parse(readFileSync(join(staging, RETRIES_FILE), 'utf8')) as Record<
+      string,
+      AttemptRetry[]
+    >
+    return new Map(Object.entries(parsed))
+  } catch {
+    return new Map()
+  }
+}
+
+/**
+ * The planned attempts that ended in an infra error, in staging or the previous record, and so
+ * run again; and each one's earlier errors, which `retries.json` keeps once `write` is set, so
+ * the record still has them after the worker replaces the attempt's staged record.
+ */
+export function noteRetries(
+  planned: readonly { key: string }[],
+  staging: string,
+  previous: RunRecord | null | undefined,
+  write: boolean,
+): { errored: Set<string>; retries: Map<string, AttemptRetry[]> } {
+  const retries = readRetries(staging)
+  const errored = new Set<string>()
+  const add = (key: string, retry: AttemptRetry) => {
+    const list = retries.get(key) ?? []
+    const same = (r: AttemptRetry) => r.at === retry.at && r.error.message === retry.error.message
+    if (!list.some(same)) list.push(retry)
+    retries.set(key, list)
+  }
+  for (const { key } of planned) {
+    const was = previousAttempt(previous, key)
+    if (was?.retries?.length && !retries.has(key)) retries.set(key, [...was.retries])
+    const staged = readEvalRecord(join(staging, 'evals', recordFileName(key)))
+    const last = staged ?? (was ? { outcome: was.outcome, error: was.error } : null)
+    if (last?.outcome !== 'infra_error' || !last.error || last.error.kind === 'aborted') continue
+    errored.add(key)
+    add(key, { error: last.error, at: staged?.startedAt ?? was?.startedAt ?? null })
+  }
+  if (write && retries.size) {
+    mkdirSync(staging, { recursive: true })
+    writeFileSync(join(staging, RETRIES_FILE), `${JSON.stringify(Object.fromEntries(retries))}\n`)
+  }
+  return { errored, retries }
 }
 
 /** An attempt the run planned that a filtered resume leaves out of its plan. */
@@ -250,6 +313,9 @@ type Candidate = {
   complete: boolean
   previous: RunRecord | null
   previousArtifacts: string | null
+  /** The scratch record, complete or not. */
+  record: RunRecord | null
+  artifacts: string | null
 }
 
 function progressLive(
@@ -293,6 +359,8 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
       complete: false,
       previous: null,
       previousArtifacts: null,
+      record: null,
+      artifacts: null,
     })
   }
   const scratch = scratchDir(root)
@@ -312,6 +380,8 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
       existing.previous = record
       existing.previousArtifacts = previousArtifacts
       existing.complete = complete
+      existing.record = record
+      existing.artifacts = previousArtifacts
       continue
     }
     found.set(runId, {
@@ -322,6 +392,8 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
       complete,
       previous: complete ? null : record,
       previousArtifacts: complete ? null : previousArtifacts,
+      record,
+      artifacts: previousArtifacts,
     })
   }
   return [...found.values()].sort((a, b) => (a.runId < b.runId ? -1 : 1))
@@ -403,6 +475,62 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
   return toTarget(found)
 }
 
+const finished = (c: Candidate) => !c.live && c.complete && c.record !== null
+
+/**
+ * `--retry-errors` with no ref (or `latest`): the newest finished run, whose scratch record is
+ * `complete`; `latest~N` counts back over those. A ref is a run id or unique prefix, as for
+ * `--resume`. A run that didn't finish is left to `--resume`, which retries its infra errors too.
+ */
+export async function resolveRetry(root: string, ref?: string): Promise<ResumeTarget> {
+  const candidates = await listCandidates(root)
+  const done = candidates.filter(finished)
+  const target = (c: Candidate): ResumeTarget => ({
+    runId: c.runId,
+    startedAt: new Date(c.startedAt),
+    kind: c.kind,
+    previous: c.record,
+    previousArtifacts: c.artifacts,
+  })
+  if (ref === undefined || ref === '' || ref === 'latest') {
+    const pick = done.at(-1)
+    if (!pick) {
+      throw new UsageError(
+        'No finished run to retry. --retry-errors re-runs the infra errors of a complete run in .reeval/runs; reeval run --resume continues one that stopped.',
+      )
+    }
+    return target(pick)
+  }
+  const back = /^latest~(\d+)$/.exec(ref)
+  if (back) {
+    const entry = done[done.length - 1 - Number(back[1])]
+    if (!entry)
+      throw new RefError(
+        `There ${done.length === 1 ? 'is only 1 finished run' : `are only ${done.length} finished runs`}, so ${ref} names none. reeval run --retry-errors retries the newest.`,
+      )
+    return target(entry)
+  }
+  const found = matchRef(candidates, ref)
+  if (!found) {
+    throw new RefError(
+      `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --retry-errors empty for the newest finished run.`,
+    )
+  }
+  if (found.live) throw stillRunning(found.runId)
+  if (!finished(found)) {
+    throw new UsageError(
+      `run ${found.runId} didn't finish. reeval run --resume ${found.runId} runs the rest and retries its infra errors.`,
+    )
+  }
+  return target(found)
+}
+
+/** The attempts of a run that ended in an infra error (not a cancel). */
+export const erroredAttempts = (record: Pick<RunRecord, 'evals'>): AttemptRecord[] =>
+  record.evals.flatMap((e) =>
+    e.attempts.filter((a) => a.outcome === 'infra_error' && a.error?.kind !== 'aborted'),
+  )
+
 /**
  * For a scratch resume: move the assembled record aside so the continuation can write the same
  * id. Staging already in place is left alone.
@@ -439,6 +567,23 @@ export async function prepareResume(target: ResumeTarget, root: string): Promise
       writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`)
     }
   }
+}
+
+/**
+ * Undoes a retry's {@link prepareResume} when it stops before the engine runs: the finished
+ * record and its artifacts go back to `.reeval/runs`, and its staging is removed.
+ */
+export async function restoreRetry(root: string, runId: string): Promise<void> {
+  const staging = stagingOf(root, runId)
+  const scratch = scratchDir(root)
+  const aside = join(staging, 'previous.json')
+  const recordPath = join(scratch, `${runId}.json`)
+  if (existsSync(aside) && !existsSync(recordPath)) renameSync(aside, recordPath)
+  const artifacts = join(staging, 'previous-artifacts')
+  if (existsSync(artifacts) && !existsSync(join(scratch, runId))) {
+    renameSync(artifacts, join(scratch, runId))
+  }
+  if (existsSync(recordPath)) rmSync(staging, { recursive: true, force: true })
 }
 
 export async function loadPrevious(staging: string): Promise<{
@@ -514,11 +659,15 @@ export function resumeSettings(
   runId: string,
   saved: RunInvocation,
   given: RunSettings,
-  { root, env = process.env }: { root: string; env?: NodeJS.ProcessEnv },
+  {
+    root,
+    env = process.env,
+    flag: continued = '--resume',
+  }: { root: string; env?: NodeJS.ProcessEnv; flag?: '--resume' | '--retry-errors' },
 ): { settings: RunSettings; notes: string[] } {
   const refuse = (started: string, flag: string) =>
     new UsageError(
-      `run ${runId} was started ${started}, and --resume finishes the attempts it planned. Leave ${flag} out, or start a new run without --resume.`,
+      `run ${runId} was started ${started}, and ${continued} finishes the attempts it planned. Leave ${flag} out, or start a new run without ${continued}.`,
     )
   const runs = Number(given.runs)
   const count = Number.isInteger(runs) && runs >= 1

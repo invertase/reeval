@@ -1,0 +1,24 @@
+{
+  "kind": "reeval-remarks",
+  "schemaVersion": 1,
+  "runId": "20261102T203212Z_bcd15e8_cursor-agent_35t1",
+  "createdAt": "2026-11-02T20:32:42.182Z",
+  "remarks": [
+    {
+      "id": "89129559ce2fbf2b1f8165efd5c8a082fce5290f570dc1ef74f052f572357052",
+      "evalId": "evals%2Fcases.eval.ts › greets",
+      "kind": "too-few-tries",
+      "severity": "concern",
+      "text": "The with-house-greeting variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold. It runs 2.1× faster, but 2 cases can't confirm it; 5 is the least that can.",
+      "evidence": [
+        "evals%2Fcases.eval.ts › greets/fake+with-house-greeting+docker"
+      ],
+      "fix": {
+        "at": "source:evals/cases.eval.ts#L11",
+        "edit": "add cases, so the pooled lift has 6 to hold on"
+      },
+      "firstSeenRun": "20261102T203212Z_bcd15e8_cursor-agent_35t1",
+      "printed": true
+    }
+  ]
+}

@@ -2064,6 +2064,14 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/resume.test.ts', 'reeval/test/results.test.ts', 'reeval/test/ui.test.ts'],
   },
   {
+    id: 'run.retry-errors',
+    area: 'CLI and runner',
+    name: "`reeval run --retry-errors [<ref>]`: run a finished run's infra-errored attempts again into the same run",
+    fixtures: ['run/retry-errors'],
+    plan: ['resume/retry-errors'],
+    unit: ['reeval/test/resume.test.ts'],
+  },
+  {
     id: 'cancel',
     area: 'CLI and runner',
     name: 'Eval timeouts, Ctrl-C and SIGTERM',

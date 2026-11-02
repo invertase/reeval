@@ -134,7 +134,7 @@ To continue a stopped, interrupted, or budget-stopped run, pass `--resume`:
 npx reeval run --resume
 ```
 
-The command keeps the run id. It skips finished attempts. It runs the remaining attempts. With no id, the command continues the newest stopped, interrupted, or budget-stopped run saved under the `.reeval` directory.
+It keeps the run id and its passes and fails, and reruns the rest. With no id, it continues the newest stopped, interrupted, or budget-stopped run in `.reeval`.
 
 Pass the run id from the plan, or a unique prefix of that id:
 
@@ -142,8 +142,18 @@ Pass the run id from the plan, or a unique prefix of that id:
 npx reeval run --resume 20261022T172927Z
 ```
 
-For more information about attempt budgets, see [Size runs with profiles](/evaluations/runs/profiles).
+## Retry infrastructure errors
 
-For more information about every `reeval run` flag, see [the `reeval run` command](/reference/cli#reeval-run).
+To rerun a finished run's infrastructure errors:
 
-For more information about every variable, see [Environment variables](/reference/environment-variables).
+```bash
+npx reeval run --retry-errors
+```
+
+```text
+retried 2 errored attempts: 1 now passes, 1 fails, 0 still error
+```
+
+See [Retrying infrastructure errors](/reference/cli#retrying-infrastructure-errors).
+
+For attempt budgets, every `reeval run` flag and every variable, see [Size runs with profiles](/evaluations/runs/profiles), [the `reeval run` command](/reference/cli#reeval-run) and [Environment variables](/reference/environment-variables).

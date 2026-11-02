@@ -728,6 +728,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
 </Property>
 
+<Property name="retries" type="AttemptRetry[]" optional>
+  The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran it again, oldest first: each `{ error, at }`, `at` being when that try started (null when it never did). The attempt's own `outcome` and `error` are its last try's. Absent when it never ran again.
+</Property>
+
 <Property name="setupProcesses" type="SetupProcess[]" optional>
   Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.
 </Property>

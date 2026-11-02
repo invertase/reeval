@@ -28,7 +28,7 @@ import {
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
-import { isCompletedAttempt, type LeftOut, previousAttempt } from '../resume.ts'
+import { isCompletedAttempt, type LeftOut, previousAttempt, readRetries } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
 import type {
@@ -62,6 +62,7 @@ import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT 
 import {
   type AttemptFiles,
   type AttemptRecord,
+  type AttemptRetry,
   type CellRecord,
   type ContextFile,
   type Cost,
@@ -212,6 +213,18 @@ const withoutCaps = <
 }: T) => rest
 
 const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.model ?? null))
+
+/**
+ * The harness's part of a fingerprint: its descriptor, less the operational limits, and less the
+ * fake harness's `failWith`, its stand-in for an outage, which a retry of the attempt outlives.
+ */
+export const harnessPart = (harness: HarnessDescriptor | undefined) => {
+  if (!harness) return sha256('null')
+  const { failWith: _, ...measured } = withoutCaps(harness) as typeof harness & {
+    failWith?: string
+  }
+  return sha256(JSON.stringify(measured))
+}
 
 /** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
@@ -436,6 +449,8 @@ function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) 
 
 /** What the run's attempts have in common, gathered while their records are read. */
 class Seen {
+  /** Each attempt's earlier infra errors, from staging's `retries.json`, by key. */
+  retries = new Map<string, AttemptRetry[]>()
   readonly sources = new Map<string, EvalEntry['sources']>()
   readonly byEval = new Map<string, EvalEntry>()
   readonly contexts = new Map<string, ContextFile>()
@@ -784,7 +799,7 @@ async function addPreviousAttempt(
   } else {
     const parts: FingerprintParts = {
       sources: sourcesPart(source, revision, sources),
-      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      harness: harnessPart(e.attempt?.harness),
       environment: cellRecord.environmentDigest,
       image: kept.imageId,
       agentCli: null,
@@ -796,6 +811,22 @@ async function addPreviousAttempt(
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
   }
+}
+
+/** The earlier infra errors of an attempt that ran again, less the try its record still is. */
+function retriesOf(
+  retries: AttemptRetry[] | undefined,
+  record: EvalRecord | null,
+): Pick<AttemptRecord, 'retries'> {
+  const earlier = (retries ?? []).filter(
+    (r) =>
+      !(
+        record?.outcome === 'infra_error' &&
+        r.at === (record.startedAt ?? null) &&
+        r.error.message === record.error?.message
+      ),
+  )
+  return earlier.length ? { retries: earlier } : {}
 }
 
 /** Reads one attempt's worker record, files its artifacts and adds it to its eval and cell. */
@@ -850,7 +881,7 @@ async function addAttempt(
     if (record) measured.add(cellRecord)
     const parts: FingerprintParts = {
       sources: sourcesPart(source, revision, sources),
-      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      harness: harnessPart(e.attempt?.harness),
       environment: environment?.digest ?? null,
       image: record?.image?.id ?? null,
       agentCli: record?.image?.agentCli ?? null,
@@ -886,6 +917,7 @@ async function addAttempt(
     outcome,
     error,
     durationMs: e.durationMs,
+    ...retriesOf(seen.retries.get(e.key), record),
     ...(await attemptEvidence(
       record,
       `${entry.slug}/${evalSlug(cell.key)}/${n}`,
@@ -1274,6 +1306,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }),
   )
   const seen = new Seen(input.sandbox)
+  seen.retries = readRetries(ctx.stagingDir)
   const judge = sha256(
     JSON.stringify({
       model: judgeModel,

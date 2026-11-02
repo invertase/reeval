@@ -57,7 +57,11 @@ export function headerLines(c: Colors, h: RunHeader, width: number): string[] {
     )
   }
   const many = (one: string, n: number, many = `${one}s`) => (n === 1 ? one : many)
-  const resumed = h.resumed ? c.dim(` (resumed, ${plural(h.resumed, 'attempt')} done)`) : ''
+  const continued = [
+    h.resumed ? `${plural(h.resumed, 'attempt')} done` : '',
+    h.retried ? `${plural(h.retried, 'error')} to retry` : '',
+  ].filter(Boolean)
+  const resumed = continued.length ? c.dim(` (resumed, ${continued.join(', ')})`) : ''
   const reason =
     h.profile && h.profile.reason !== '--profile' ? c.dim(` (${h.profile.reason})`) : ''
   return [

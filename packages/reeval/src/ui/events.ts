@@ -103,6 +103,8 @@ export type RunHeader = {
   dryRun: boolean
   /** Attempts already completed in the run this one resumes. */
   resumed?: number
+  /** Attempts it runs again after an infra error. */
+  retried?: number
   /** The config file, when it isn't in the current directory. */
   config?: string
   profile?: { name: string; reason: string }

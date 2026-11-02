@@ -350,6 +350,18 @@ export const cases: PlanCase[] = [
       ])
     },
   },
+  {
+    dir: 'resume',
+    name: 'retry-errors',
+    args: ['--retry-errors'],
+    async prepare(dir) {
+      const { writeScratch } = await import('./support/resume.ts')
+      writeScratch(dir, '20260101T000000Z_nogit_test_abcd', 'complete', [
+        { key: 'evals/r.eval.ts › done # fake/-/docker#1', outcome: 'pass' },
+        { key: 'evals/r.eval.ts › leftover # fake/-/docker#1', outcome: 'infra_error' },
+      ])
+    },
+  },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'

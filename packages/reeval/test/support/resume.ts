@@ -65,7 +65,18 @@ export function writeScratch(
       runId,
       status,
       startedAt: '2026-01-01T00:00:00.000Z',
-      evals: [{ attempts: attempts.map((a) => ({ ...a, error: null })) }],
+      evals: [
+        {
+          cells: [],
+          attempts: attempts.map((a) => ({
+            ...a,
+            error:
+              a.outcome === 'infra_error'
+                ? { kind: 'infra', message: 'agent start refused' }
+                : null,
+          })),
+        },
+      ],
     })}\n`,
   )
 }
