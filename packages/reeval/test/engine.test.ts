@@ -1088,6 +1088,7 @@ evaluate('passes', async () => {})
         '    Failed on fake.',
         '    ✗ toPass ok?  failed 1 of 1 run',
         '      judge score 0.30 is below 0.8 for "ok?" (fake) · evals/agent.eval.ts:6',
+        '    Snapshot: <path>',
         '  ✓ passes      1 of 1 run passed',
         '',
       ],

@@ -462,3 +462,48 @@ test('the prepare step settles rather than spin a line about to scroll out of re
   t.mock.timers.tick(800)
   assert.equal(out.length, 2)
 })
+
+test('the prepare step counts wide characters by their columns', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  const out: string[] = []
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => ({ rows: 24, columns: 10 }),
+  )
+  spinner.start('  ◆  Prep\n', 1)
+  spinner.before('準備中の箱です\n')
+  t.mock.timers.tick(80)
+  assert.equal(
+    out.at(-1),
+    `\x1b[3A\r\x1b[2C${SPINNER[1]}\r\x1b[3B`,
+    '14 columns take two lines at 10',
+  )
+})
+
+test('after a resize the prepare step measures again, and stops once the step is out of reach', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  const out: string[] = []
+  let size = { rows: 24, columns: 80 }
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => size,
+  )
+  spinner.start('  ◆  Preparing...\n', 1)
+  spinner.before(`${'x'.repeat(60)}\n`)
+  t.mock.timers.tick(80)
+  assert.equal(out.at(-1), `\x1b[2A\r\x1b[2C${SPINNER[1]}\r\x1b[2B`)
+  size = { rows: 24, columns: 30 }
+  t.mock.timers.tick(80)
+  assert.equal(
+    out.at(-1),
+    `\x1b[3A\r\x1b[2C${SPINNER[2]}\r\x1b[3B`,
+    'the 60 columns now wrap to two',
+  )
+  size = { rows: 3, columns: 30 }
+  const drawn = out.length
+  t.mock.timers.tick(800)
+  spinner.reported()
+  assert.equal(out.length, drawn, 'a step line past the top is never drawn on')
+})

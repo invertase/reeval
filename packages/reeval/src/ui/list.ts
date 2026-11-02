@@ -130,7 +130,8 @@ export function fileLines(files: StatusFile[], o: ListTextOptions): string[] {
 
 /**
  * The whole list once, as the run ends: failures, compares and evals with remarks expanded (with `-v`, every
- * row), other passes on one line each.
+ * row), other passes on one line each. `full` adds the detail the interactive list keeps behind
+ * `→ more` (the rest of each message, file excerpts, snapshots); `-v` implies it.
  */
 export function listLines(
   list: StatusList,
@@ -138,6 +139,7 @@ export function listLines(
   glyphs: boolean,
   pointer: string,
   verbose = false,
+  full = verbose,
 ): string[] {
   const expand = (row: StatusRow) =>
     row.detail.length > 0 &&
@@ -145,7 +147,7 @@ export function listLines(
   return [
     ...list.errors.flatMap((e) => [c.red(`error: ${e.split('\n')[0] ?? ''}`)]),
     ...(list.errors.length ? [''] : []),
-    ...fileLines(list.files, { colors: c, glyphs, expand, full: verbose }),
+    ...fileLines(list.files, { colors: c, glyphs, expand, full }),
     '',
     ...(list.hiddenRemarks ? [c.dim(`+${plural(list.hiddenRemarks, 'more remark')} (-v)`)] : []),
     ...list.notes.map((n) => c.yellow(n)),

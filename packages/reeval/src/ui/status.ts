@@ -31,7 +31,6 @@
 import type { RunRecord } from '../history/types.ts'
 import { clip, formatDuration, plural } from '../text.ts'
 import type { ErrorKind } from '../types.ts'
-import { measuresLine } from '../view/measures.ts'
 import { formatUsage } from '../view/model.ts'
 import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
@@ -210,9 +209,9 @@ function minLiftShort(e: EvalResult, own: CellResult[]): string {
 }
 
 /**
- * A variant's comparison with the control beyond pass rate (`measuresLine`): `5× faster · judge
- * "tidy" +0.12`, per harness it ran on. Only the measures that hold; `verbose` adds the ones that
- * only lean.
+ * A variant's comparison with the control beyond pass rate: `5× faster · judge "tidy" +0.12`, per
+ * harness it ran on. Only the measures that hold; `verbose` adds the ones that only lean, each
+ * `(leans)`. A judged check reads as its judge's score, not again as its pass rate.
  */
 function measureSets(
   e: EvalResult,
@@ -233,8 +232,11 @@ function measureSets(
         m.measure !== 'pass' &&
         (m.verdict === 'better' || m.verdict === 'worse' || (verbose && m.verdict === 'leans')),
     )
-    if (!shown.length) return []
-    return [{ harness, text: measuresLine(shown, verbose) }]
+    const judged = new Set(shown.filter((m) => m.measure === 'judge').map((m) => m.label))
+    const own = shown.filter((m) => m.measure !== 'check' || !judged.has(m.label))
+    if (!own.length) return []
+    const text = own.map((m) => (m.verdict === 'leans' ? `${m.text} (leans)` : m.text)).join(' · ')
+    return [{ harness, text }]
   })
 }
 
@@ -295,7 +297,12 @@ function compareLines(
   const baseRow = [`${baseName} (control)`, `${of(baseTally)}${disagreement(record, base)}`]
   const variants = [...new Set(cells.filter((c) => c.variant !== null).map((c) => c.variant))]
   if (!variants.length) {
-    return [{ depth: 0, text: `Control ${baseName} passed ${of(baseTally)}.` }]
+    return [
+      {
+        depth: 0,
+        text: `Control ${baseName} passed ${of(baseTally)}${disagreement(record, base)}.`,
+      },
+    ]
   }
   const rows = variants.map((v, order) => {
     const own = cells.filter((c) => c.variant === v)

@@ -225,7 +225,12 @@ const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
 })
 
 /** Feeds events to a renderer on a fake non-TTY stream, ticking the heartbeat between them. */
-function render(events: ReevalEvent[], output: OutputOptions, color = false): string {
+function render(
+  events: ReevalEvent[],
+  output: OutputOptions,
+  color = false,
+  verbosity: 0 | 1 = 0,
+): string {
   let text = ''
   let now = T0
   const out = { isTTY: false, write: (chunk: string) => (text += chunk) }
@@ -236,6 +241,7 @@ function render(events: ReevalEvent[], output: OutputOptions, color = false): st
     harness: 'cursor',
     now: () => now,
     timers: false,
+    verbosity,
   })
   for (const e of events) {
     const at = 'at' in e ? e.at : e.progress.at
@@ -296,6 +302,14 @@ const result = (glyphs: boolean) => [
 ]
 
 const RESULT = result(true)
+
+/** `interleaved` with a two-line failure message, whose second line is `-v` detail. */
+const withLongMessage = JSON.parse(
+  JSON.stringify(interleaved).replaceAll(
+    'french greeting: expected command to succeed, exit code 1\\n',
+    'french greeting: expected command to succeed, exit code 1\\nthe clone found no commits\\n',
+  ),
+) as ReevalEvent[]
 
 describe('plain renderer', () => {
   test('grouped: start lines stream, each attempt prints as one block when it ends', () => {
@@ -909,10 +923,24 @@ describe('agent renderer', () => {
     assert.equal(text, lines('  ◆  Running...', ...result(false)))
     assert.ok(!text.includes('\x1b['))
   })
+
+  test('prints the detail a terminal keeps behind -v, since an agent acts on it', () => {
+    let text = ''
+    const renderer = new AgentRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      output: options({ mode: 'agent' }),
+    })
+    for (const e of withLongMessage) renderer.onEvent(e)
+    assert.match(text, /^ {6}the clone found no commits$/m)
+    assert.ok(
+      !render(withLongMessage, options({ outputLogs: 'none' })).includes('found no commits'),
+      'a pipe keeps it for -v',
+    )
+  })
 })
 
 describe('interactive renderer', () => {
-  const interactive = (load: () => Promise<never>) => {
+  const interactive = (load: () => Promise<never>, verbosity: 0 | 1 = 0) => {
     let text = ''
     const out = {
       isTTY: true,
@@ -931,6 +959,7 @@ describe('interactive renderer', () => {
       now: () => T0,
       timers: false,
       load,
+      verbosity,
     })
     return { renderer, text: () => text }
   }
@@ -987,6 +1016,22 @@ describe('interactive renderer', () => {
     renderer.close()
     await renderer.wait()
     assert.equal(text(), lines('  ◆  Finished.', ...RESULT))
+  })
+
+  test('under -v with --output-logs none, the scrollback is the list -v prints to a pipe', async () => {
+    const mount = async () =>
+      ({
+        mountList: () => ({ waitUntilExit: async () => {}, unmount: () => {} }),
+      }) as never
+    const { renderer, text } = interactive(mount, 1)
+    for (const e of withLongMessage) renderer.onEvent(e)
+    renderer.close()
+    await renderer.wait()
+    const piped = render(withLongMessage, options({ outputLogs: 'none' }), false, 1)
+    const list = (out: string) => out.slice(out.indexOf('evals/results.eval.ts'))
+    assert.match(text(), /^│ {6}the clone found no commits$/m)
+    assert.match(text(), /^ {2}◆ {2}Finished\.\n\nevals\/results\.eval\.ts/)
+    assert.equal(list(text()), list(piped))
   })
 
   test("if Ink can't load, the run prints as a pipe's does, and wait resolves", async () => {
