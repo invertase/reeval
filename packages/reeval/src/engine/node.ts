@@ -311,7 +311,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
               group: e.group,
               name: e.name,
               skipped: skipped(test) || !matchesName(e),
-              family: test.attempt?.family,
+              attempt: test.attempt,
             }
           }),
         })

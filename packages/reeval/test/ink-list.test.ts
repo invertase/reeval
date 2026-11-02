@@ -5,7 +5,7 @@ import { render } from 'ink-testing-library'
 import { createElement as h } from 'react'
 import { colors } from '../src/ui/colors.ts'
 import { endText, startText } from '../src/ui/header.ts'
-import { CONFIRM_MS, doneLine, frameLines, ListApp, wrap } from '../src/ui/ink-list.ts'
+import { CONFIRM_MS, doneLine, frameLines, ListApp, openDetail, wrap } from '../src/ui/ink-list.ts'
 import { LiveList, SPINNER } from '../src/ui/list.ts'
 import type { StatusFile, StatusRow } from '../src/ui/status.ts'
 import { ListStore, rowsOf, StepSpinner } from '../src/ui/tty.ts'
@@ -413,63 +413,192 @@ test('under a passRate gate, a failed run marks the eval only once its cell can 
   assert.equal(strict.files()[0]?.rows[0]?.icon, 'failing', '3 fails of 4 can no longer reach 0.5')
 })
 
-test('an eval with cases is one row while it runs, each attempt naming its case', () => {
-  const live = new LiveList('fake')
-  const family = (n: number) => ({
-    id: 'evals/a.eval.ts › bank',
-    name: 'bank',
-    case: n,
-    cases: 2,
-  })
-  live.collected(
-    'evals/a.eval.ts',
-    ['red', 'blue'].map((k, i) => ({
+/** An eval with cases as `collected` lists it: each attempt planned in its cell. */
+const caseEvals = (cases: string[], harnesses: string[]) =>
+  cases.flatMap((k, i) =>
+    harnesses.map((harness) => ({
       id: `evals/a.eval.ts › bank [${k}]`,
-      key: `evals/a.eval.ts › bank [${k}] # fake/-/fake#1`,
+      key: `evals/a.eval.ts › bank [${k}] # ${harness}/-/fake#1`,
       group: [],
       name: `bank [${k}]`,
       skipped: false,
-      family: family(i),
+      attempt: {
+        n: 1,
+        gate: 'all',
+        label: harness,
+        cell: { key: `${harness}/-/fake`, role: 'control' },
+        family: { id: 'evals/a.eval.ts › bank', name: 'bank', case: i, cases: cases.length },
+      } as never,
     })),
   )
-  const [red, blue] = ['red', 'blue'].map(
-    (k) => `evals/a.eval.ts › bank [${k}] # fake/-/fake#1`,
-  ) as [string, string]
-  const ref = (key: string) =>
-    ({ key, attempt: { n: 1, gate: 'all', label: 'fake', cell: { key: 'fake/-/fake' } } }) as never
-  live.start(ref(red))
-  live.start(ref(blue))
-  live.end({ ...(ref(red) as object), state: 'failed', errors: ['no'] } as never)
-  const rows = live.files()[0]?.rows ?? []
-  assert.equal(rows.length, 1, 'one row for the eval, not one per case')
-  assert.equal(rows[0]?.name, 'bank')
-  assert.equal(rows[0]?.summary, '1 of 2 runs done · 2 cases')
-  assert.equal(rows[0]?.icon, 'failing', 'a failed case spins it red')
+
+const caseRef = (k: string, harness: string) => {
+  const key = `evals/a.eval.ts › bank [${k}] # ${harness}/-/fake#1`
+  return {
+    key,
+    attempt: { n: 1, gate: 'all', label: harness, cell: { key: `${harness}/-/fake` } },
+  } as never
+}
+
+test('an eval with cases is one row while it runs, its case table filling in as attempts end', () => {
+  const live = new LiveList('fake')
+  live.collected('evals/a.eval.ts', caseEvals(['red', 'blue', 'green'], ['claude', 'codex']))
+  const rows = () => live.files()[0]?.rows ?? []
+  assert.equal(rows().length, 1, 'one row for the eval, not one per case')
+  assert.equal(rows()[0]?.name, 'bank')
   assert.deepEqual(
-    rows[0]?.detail.map((d) => [d.mark, d.text]),
+    rows()[0]?.detail.map((d) => [d.mark, d.text]),
     [
-      ['fail', 'fake · red #1 failed'],
-      ['spin', 'fake · blue #1 starting'],
+      [undefined, '  case   claude  codex'],
+      ['queued', 'red    queued  queued'],
+      ['queued', 'blue   queued  queued'],
+      ['queued', 'green  queued  queued'],
+    ],
+    'queued, every cell is known from the plan',
+  )
+  live.start(caseRef('red', 'claude'))
+  live.start(caseRef('red', 'codex'))
+  live.start(caseRef('blue', 'claude'))
+  live.end({ ...(caseRef('red', 'claude') as object), state: 'passed' } as never)
+  live.end({ ...(caseRef('blue', 'claude') as object), state: 'failed', errors: ['no'] } as never)
+  assert.equal(rows()[0]?.summary, '2 of 6 runs done · 3 cases')
+  assert.equal(rows()[0]?.icon, 'failing', 'a failed case spins it red')
+  assert.deepEqual(
+    rows()[0]?.detail.map((d) => [d.mark, d.text]),
+    [
+      [undefined, '  case   claude  codex'],
+      ['spin', 'red    1 of 1  running'],
+      ['queued', 'blue   0 of 1  queued'],
+      ['queued', 'green  queued  queued'],
+      ['fail', 'claude · blue #1 failed'],
     ],
   )
-  assert.deepEqual(live.counts(), { done: 0, total: 1, running: 1, failed: 0, failing: 1 })
+  for (const [k, h] of [
+    ['red', 'codex'],
+    ['blue', 'codex'],
+    ['green', 'claude'],
+    ['green', 'codex'],
+  ] as const) {
+    live.start(caseRef(k, h))
+    live.end({ ...(caseRef(k, h) as object), state: 'passed' } as never)
+  }
+  assert.deepEqual(
+    rows()[0]?.detail.map((d) => [d.mark, d.text]),
+    [
+      [undefined, '  case   claude  codex'],
+      ['pass', 'red    1 of 1  1 of 1'],
+      ['fail', 'blue   0 of 1  1 of 1'],
+      ['pass', 'green  1 of 1  1 of 1'],
+      ['fail', 'claude · blue #1 failed'],
+    ],
+  )
+  assert.deepEqual(live.counts(), { done: 1, total: 1, running: 0, failed: 1, failing: 0 })
 })
 
-test("a queued attempt's line names its harness and run from its key, before it starts", () => {
+test('a queued attempt names its harness and its run in the cell, from the plan', () => {
   const live = new LiveList('fake')
-  live.collected('evals/a.eval.ts', [
+  live.collected(
+    'evals/a.eval.ts',
+    caseEvals(['red'], ['claude']).map((x) => ({
+      ...x,
+      attempt: { ...(x.attempt as object), n: 2 } as never,
+    })),
+  )
+  live.collected('evals/b.eval.ts', [
     {
-      id: 'evals/a.eval.ts › bank [red]',
-      key: 'evals/a.eval.ts › bank [red] # codex/-/fake#2',
+      id: 'evals/b.eval.ts › greets',
+      key: 'evals/b.eval.ts › greets # codex/-/fake#3',
       group: [],
-      name: 'bank [red]',
+      name: 'greets',
       skipped: false,
-      family: { id: 'evals/a.eval.ts › bank', name: 'bank', case: 0, cases: 1 },
+      attempt: { n: 3, gate: 'all', label: 'codex #3', cell: { key: 'codex/-/fake' } } as never,
     },
   ])
   assert.deepEqual(
-    live.files()[0]?.rows[0]?.detail.map((d) => d.text),
-    ['codex · red #2 queued'],
+    live.files()[1]?.rows[0]?.detail.map((d) => d.text),
+    ['codex #3 queued'],
+  )
+})
+
+const caseRows = (n: number, marked = true): StatusRow =>
+  row('bank', {
+    icon: 'fail',
+    detail: [
+      { depth: 0, text: 'Failed on q001; 11 of 12 cases passed.' },
+      { depth: 0, text: `${marked ? '  ' : ''}case  claude`, tone: 'dim', cases: 'head' },
+      ...Array.from({ length: n }, (_, i) => ({
+        depth: 0 as const,
+        text: `q${String(i + 1).padStart(3, '0')}  ${i ? '1' : '0'} of 1`,
+        cases: 'row' as const,
+        ...(marked ? { mark: i ? ('pass' as const) : ('fail' as const) } : {}),
+        ...(i < 8 ? {} : { only: 'full' as const }),
+      })),
+      ...(n > 8
+        ? [
+            {
+              depth: 0 as const,
+              text: `+${n - 8} more cases passed (-v)`,
+              tone: 'dim' as const,
+              only: 'compact' as const,
+              cases: 'more' as const,
+            },
+          ]
+        : []),
+      { depth: 0, mark: 'fail', text: 'answers  failed on q001' },
+      { depth: 1, text: 'the file as the agent left it', tone: 'dim', only: 'full' },
+    ],
+  })
+
+test('an open eval with cases shows its first 5, → shows every case, ← steps back to 5 then folds', async () => {
+  const store = new ListStore()
+  store.set({
+    files: [{ path: 'evals/a.eval.ts', rows: [caseRows(12)] }],
+    counts: { done: 0, total: 1 },
+  })
+  const app = mount(store)
+  try {
+    await settle()
+    assert.doesNotMatch(app.frame(), /q001/, 'collapsed')
+    app.stdin.write(KEY.right)
+    await settle()
+    const open = app.frame()
+    assert.match(open, /^ {6}✗ q001 {2}0 of 1$/m)
+    assert.match(open, /^ {6}✓ q005 {2}1 of 1$/m)
+    assert.doesNotMatch(open, /q006/, 'the first 5 cases')
+    assert.match(open, /^ {8}7 cases hidden, → to show$/m, 'under the case column')
+    assert.doesNotMatch(open, /more cases passed \(-v\)/, "the printed list's count isn't here")
+    assert.match(open, /answers {2}failed on q001/, 'the failed check still shows')
+    assert.match(open, /→ more/)
+    app.stdin.write(KEY.right)
+    await settle()
+    const full = app.frame()
+    assert.match(full, /^ {6}✓ q012 {2}1 of 1$/m, '→ again shows every case')
+    assert.doesNotMatch(full, /hidden/)
+    assert.match(full, /the file as the agent left it/)
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.match(app.frame(), /7 cases hidden/, '← steps back to 5')
+    assert.doesNotMatch(app.frame(), /q012/)
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.doesNotMatch(app.frame(), /q001/, '← again folds it')
+  } finally {
+    app.unmount()
+  }
+})
+
+test('openDetail hides nothing for 5 cases or fewer, and an unmarked table lines its count up', () => {
+  const five = openDetail(caseRows(5).detail, false)
+  assert.equal(five.filter((l) => l.cases === 'row').length, 5)
+  assert.ok(!five.some((l) => /hidden/.test(l.text)))
+  const six = openDetail(caseRows(6, false).detail, false)
+  assert.equal(six.filter((l) => l.cases === 'row').length, 5)
+  assert.ok(six.some((l) => l.text === '1 case hidden, → to show'))
+  const many = caseRows(12)
+  assert.equal(
+    openDetail(many.detail, true).filter((l) => l.cases === 'row').length,
+    12,
+    'full: every case, as -v prints them',
   )
 })
 

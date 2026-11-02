@@ -2,7 +2,7 @@
 // engine or `@vitest/*`.
 import type { RunRecord } from '../history/types.ts'
 import type { PrepareEvent } from '../sandbox/preflight.ts'
-import type { AttemptMeta, EvalMeta, FamilyMeta, SandboxWarning, TurnStatus } from '../types.ts'
+import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
 import type { RunRemarks } from '../view/remarks.ts'
 
@@ -94,8 +94,8 @@ export type CollectedEval = {
   group: string[]
   name: string
   skipped: boolean
-  /** One case of an eval with `cases`: that eval's id and name, and the case's place. */
-  family?: FamilyMeta | undefined
+  /** The attempt as planned: its cell and run, and on an eval with `cases`, its `family`. */
+  attempt?: AttemptMeta | undefined
 }
 
 /** What the plan line says, as the facts a terminal's run header lists one per line. */
