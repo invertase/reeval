@@ -23,7 +23,8 @@ export default defineConfig({
 
 - **The Boat SDK in the project.** `boat()` loads `@boatdev/sdk`, an optional peer of `{{ pkg }}`: `npm i @boatdev/sdk`.
 - **A Boat API key in `BOAT_API_KEY`**, in the shell or the `.env.local` file. The key stays on the host.
-- **An OpenSSH client.** reeval runs every command in the VM through `ssh` on the host.
+- **An OpenSSH client.** reeval runs every command in the VM through `ssh` on the host, with a key `ssh-keygen` makes for each attempt.
+- **reeval from npm, on Node.** The standalone `reeval` binary isn't verified with the Boat SDK yet.
 - **`egress: 'allow-all'`.** The VM keeps its own network, so reeval can't enforce a restricted policy there, and refuses `proxy`, the default, at plan time. The egress gateway still brokers the harness's key.
 - **The Cursor harness.** Other harnesses install their CLI as the attempt starts, which isn't verified on Boat yet. reeval refuses them at plan time until Boat snapshots bake each CLI in ahead of the run; run them in `docker()`.
 
@@ -60,7 +61,7 @@ export default defineConfig(({ secret }) => {
 })
 ```
 
-`apiKey` names the host variable with the key, `BOAT_API_KEY` by default. `prefix` starts every VM name reeval gives Boat, `reeval` by default: lowercase letters, digits, and dashes, at most 32 characters. Each VM's name is `<prefix>-<run>-<attempt>`, so a canceled run's cleanup deletes only its own VMs. Each VM also has a time to live of the attempt's timeout plus 10 minutes, so Boat removes one that cleanup missed.
+`apiKey` names the host variable with the key, `BOAT_API_KEY` by default. `prefix` starts every VM name reeval gives Boat, `reeval` by default: lowercase letters, digits, and dashes, at most 32 characters. Each VM's name is `<prefix>-<run>-<attempt>`, so a canceled run's cleanup deletes only its own VMs. Each VM also has a time to live at least 10 minutes past the longest the attempt can take, its timeout plus its setup allowance, so Boat removes one that cleanup missed.
 
 ## Verify with reeval doctor
 

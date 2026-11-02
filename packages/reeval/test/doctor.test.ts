@@ -55,7 +55,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   fetch: async () => new Response('{}', { status: 200 }),
   cloudHost: async () => null,
   vertexToken: async () => SECRET,
-  sshClient: async () => true,
+  missingSshTool: async () => null,
   boatAccount: async () => {},
   ...over,
 })
@@ -124,7 +124,7 @@ export default defineConfig({
     ])
     const failing = await rows({
       env: { BOAT_API_KEY: SECRET },
-      sshClient: async () => false,
+      missingSshTool: async () => 'ssh-keygen',
       boatAccount: async () => {
         throw new Error(`boat() needs the Boat SDK, which isn't installed (${SECRET})`)
       },

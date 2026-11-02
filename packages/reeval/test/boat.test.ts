@@ -1,10 +1,13 @@
 // boat() without Docker or a key: preflight's check of the account, a run's cleanup by name prefix
 // and an attempt's lifecycle, all against the fake Boat API (support/boat.ts) through the real SDK.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { symlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { checkBoat, removeRunSandboxes, runPrefix } from '../src/sandbox/boat.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
-import { project, readRun, runCli } from './helpers.ts'
+import { project, readRun, runCli, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
 
 let api: FakeBoat
@@ -132,6 +135,22 @@ evaluate('reaches', async (c) => {
     assert.ok(api.requests.some((q) => /^POST \/sandboxes\/bx_\w+\/sshkey$/.test(q.call)))
     assert.ok(api.requests.some((q) => /^DELETE \/sandboxes\/bx_\w+$/.test(q.call)))
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(api.key))
+  })
+
+  test('stops the run with exit 2, before any VM, when the host has no OpenSSH', async () => {
+    const p = await project('boat-no-ssh', files)
+    const bin = tempDir('no-ssh')
+    for (const tool of ['git', 'sh']) {
+      const found = spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' })
+      symlinkSync(found.stdout.trim(), join(bin, tool))
+    }
+    api.requests.length = 0
+    const r = await runCli(p.dir, ['run'], {
+      env: { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key, PATH: bin },
+    })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stdout + r.stderr, /boat\(\) runs every command over SSH, and there's no ssh/)
+    assert.ok(!api.requests.some((q) => q.call === 'POST /sandboxes'), 'no VM was started')
   })
 
   test('stops the run with exit 2 naming the variable when the key is unset', async () => {

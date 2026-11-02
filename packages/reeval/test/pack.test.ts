@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, posix, sep } from 'node:path'
+import { dirname, join, posix, sep } from 'node:path'
 import { test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
-import { fakeBoat, unreachableMachines } from './support/boat.ts'
+import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
 
 const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
   spawnTool(cmd, args, { cwd, env: baseEnv, encoding: 'utf8', timeout })
@@ -117,7 +117,7 @@ for (const installer of installers) {
     const run = cli('run')
     assert.equal(run.status, 0, run.stdout + run.stderr)
     assert.match(run.stdout, /^└─ ✓ hello {2}1 of 1 run passed$/m)
-    await boatInApp(app, pkg, () => {
+    await boatInApp(app, pkg, binCli(app), () => {
       const sdk = sh(
         installer.cmd,
         app,
@@ -134,11 +134,17 @@ const BOAT_SDK = '@boatdev/sdk'
 const boatPeer = (manifest: { peerDependencies: Record<string, string> }) =>
   (manifest.peerDependencies[BOAT_SDK] ?? '').replace(/^\^/, '')
 
-/** The installed CLI, run without blocking this process, which serves the fake Boat API. */
-const cliAsync = (app: string, args: string[], env: NodeJS.ProcessEnv) =>
+type Cli = (
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  cwd?: string,
+) => Promise<{ status: number | null; out: string }>
+
+/** A command, run without blocking this process, which serves the fake Boat API. */
+const spawnAsync = (cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) =>
   new Promise<{ status: number | null; out: string }>((resolve) => {
-    const child = spawn(join(app, 'node_modules/.bin/reeval'), args, {
-      cwd: app,
+    const child = spawn(cmd, args, {
+      cwd,
       env: { ...baseEnv, ...env },
       shell: process.platform === 'win32',
     })
@@ -152,41 +158,57 @@ const cliAsync = (app: string, args: string[], env: NodeJS.ProcessEnv) =>
     child.on('close', (status) => resolve({ status, out }))
   })
 
+/** The CLI an installer put in the project's node_modules/.bin. */
+const binCli =
+  (app: string): Cli =>
+  (args, env, cwd = app) =>
+    spawnAsync(join(app, 'node_modules/.bin/reeval'), args, cwd, env)
+
+const BOAT_CONFIG = (pkg: string) => `import { defineConfig } from '${pkg}'
+import { fakeHarness } from '${pkg}/harness'
+import { boat } from '${pkg}/sandbox/boat'
+export default defineConfig({ harnesses: fakeHarness(), sandbox: boat(), egress: 'allow-all' })
+`
+
 /**
  * boat() in a packed install: without the optional Boat SDK, core never loads it and a run stops
  * on its absence with the install sentence; with it, `doctor --online` loads it from the project
  * and reaches the (fake) Boat API.
  */
-async function boatInApp(app: string, pkg: string, addSdk: () => void) {
-  await writeFile(
-    join(app, 'reeval.boat.config.ts'),
-    `import { defineConfig } from '${pkg}'
-import { fakeHarness } from '${pkg}/harness'
-import { boat } from '${pkg}/sandbox/boat'
-export default defineConfig({ harnesses: fakeHarness(), sandbox: boat(), egress: 'allow-all' })
-`,
-  )
+async function boatInApp(app: string, pkg: string, cli: Cli, addSdk: () => void) {
+  await writeFile(join(app, 'reeval.boat.config.ts'), BOAT_CONFIG(pkg))
   const api = await fakeBoat(unreachableMachines)
   try {
     const env = { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key }
     const config = ['--config', 'reeval.boat.config.ts']
-    const planned = await cliAsync(app, ['run', '--dry-run', ...config], {})
+    const planned = await cli(['run', '--dry-run', ...config], {})
     assert.equal(planned.status, 0, planned.out)
-    const refused = await cliAsync(app, ['run', ...config], env)
+    const refused = await cli(['run', ...config], env)
     assert.equal(refused.status, 2, refused.out)
     assert.match(refused.out, /Install the Boat SDK in this project: npm i @boatdev\/sdk/)
     assert.deepEqual(api.live(), [])
     addSdk()
-    const doctor = await cliAsync(app, ['doctor', '--online', '--json', ...config], env)
-    const row = JSON.parse(doctor.out).checks.find((c: { id: string }) => c.id === 'boat')
-    assert.equal(row?.status, 'ok', doctor.out)
-    assert.ok(
-      api.requests.some((q) => q.call === 'GET /limits'),
-      'doctor reached Boat',
-    )
+    await reachesBoat(cli, api, app)
   } finally {
     await api.close()
   }
+}
+
+/** `doctor --online` in `cwd` loads the project's Boat SDK and reaches the fake Boat API. */
+async function reachesBoat(cli: Cli, api: FakeBoat, cwd: string) {
+  api.requests.length = 0
+  const env = { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key }
+  const doctor = await cli(
+    ['doctor', '--online', '--json', '--config', 'reeval.boat.config.ts'],
+    env,
+    cwd,
+  )
+  const row = JSON.parse(doctor.out).checks.find((c: { id: string }) => c.id === 'boat')
+  assert.equal(row?.status, 'ok', doctor.out)
+  assert.ok(
+    api.requests.some((q) => q.call === 'GET /limits'),
+    'doctor reached Boat',
+  )
 }
 
 // A project's own Vitest, another major for its own unit tests, is never loaded or run by reeval.
@@ -251,6 +273,15 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs reeval"
   const run = berry(app, ['reeval', 'run', '--ui', 'plain'], 60_000)
   assert.equal(run.status, 0, run.stdout + run.stderr)
   assert.match(run.stdout, /^└─ ✓ hello {2}1 of 1 run passed$/m)
+  const cli: Cli = (args, env) =>
+    spawnAsync('corepack', ['yarn', 'reeval', ...args], app, {
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0',
+      ...env,
+    })
+  await boatInApp(app, pkg, cli, () => {
+    const sdk = berry(app, ['add', `${BOAT_SDK}@${boatPeer(manifest)}`])
+    assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
+  })
 })
 
 test('the packed package installs into a clean project and runs reeval', {
@@ -350,6 +381,34 @@ test('the packed package installs into a clean project and runs reeval', {
   assert.equal(cli('show').status, 0)
   // Adapters the package bundles can't be resolved by name, but the run still records them.
   assert.equal(readRun(app).run.stack.packages['@reeval/harness-antigravity'], VERSION)
+
+  // A reeval installed somewhere without the Boat SDK (app/, for now) loads it from the project
+  // it runs in.
+  const elsewhere = join(dir, 'elsewhere')
+  await mkdir(elsewhere)
+  await writeFile(join(elsewhere, 'package.json'), '{ "name": "elsewhere", "private": true }')
+  await writeFile(join(elsewhere, 'reeval.boat.config.ts'), BOAT_CONFIG(pkg))
+  const sdk = (cwd: string) => {
+    const r = sh(
+      'npm',
+      cwd,
+      ['install', '--no-audit', '--no-fund', `${BOAT_SDK}@${boatPeer(manifest)}`],
+      240_000,
+    )
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+  }
+  sdk(elsewhere)
+  // Linked, as `npm link` or a shared store does: reeval's own imports resolve from app/.
+  await mkdir(join(elsewhere, 'node_modules', dirname(pkg)), { recursive: true })
+  symlinkSync(join(app, 'node_modules', pkg), join(elsewhere, 'node_modules', pkg), 'junction')
+  assert.ok(!existsSync(join(app, 'node_modules', BOAT_SDK)), 'app/ has no Boat SDK')
+  const api = await fakeBoat(unreachableMachines)
+  try {
+    await reachesBoat(binCli(app), api, elsewhere)
+  } finally {
+    await api.close()
+  }
+  await boatInApp(app, pkg, binCli(app), () => sdk(app))
 
   // Nothing that ships imports an @reeval/* package, and every chunk loads with the installed
   // package's dependencies alone. cli.js runs `reeval` or `reeval __worker` by importing the CLI's chunk

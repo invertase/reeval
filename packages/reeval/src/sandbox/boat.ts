@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url'
 import { createSshSession, EgressUnavailableError, SANDBOX_USER } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { egressLabel } from '../egress.ts'
+import { registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
 import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
@@ -51,7 +52,10 @@ export type BoatClient = {
     pageInfo?: { nextCursor: string | null; hasMore: boolean }
   }>
   deleteSandbox(p: { sandboxId: string; xAsciiConfirmDelete: string }): Promise<unknown>
-  limits(p?: Record<string, never>): Promise<{
+  limits(
+    p?: Record<string, never>,
+    init?: { signal?: AbortSignal },
+  ): Promise<{
     canStart: boolean
     startBlockedReason?: string
     activeSandboxes: number
@@ -136,9 +140,12 @@ export async function boatClient(
   }
   const { BoatApi, Configuration } = await loadBoatSdk(projectRoot)
   const basePath = process.env[BOAT_BASE_URL]
+  const accessToken = process.env[sandbox.apiKey.from]
+  // A variable whose name doesn't look secret (`BOAT_PROD`) isn't masked by name.
+  registerSecret(accessToken)
   return new BoatApi(
     new Configuration({
-      accessToken: process.env[sandbox.apiKey.from],
+      accessToken,
       ...(basePath ? { basePath } : {}),
     }),
   )
@@ -171,6 +178,10 @@ export const runPrefix = (sandbox: Pick<BoatSandboxDescriptor, 'prefix'>, runId:
 
 /** How long a created sandbox may take to be ready. */
 const READY_TIMEOUT_MS = 120_000
+/** How long a check of the account may wait on Boat, so an unreachable API can't stall a plan. */
+const LIMITS_TIMEOUT_MS = 15_000
+/** Boat's states a sandbox never leaves for `ready`; `cancelled` answers 404 after it's reported. */
+const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
 const TTL_MARGIN_S = 600
 
@@ -181,9 +192,11 @@ async function untilReady(
 ): Promise<BoatSandboxInfo> {
   const deadline = Date.now() + READY_TIMEOUT_MS
   for (;;) {
-    const { sandbox } = await api.get({ sandboxId: id })
+    const { sandbox } = await api.get({ sandboxId: id }).catch(async (error: unknown) => {
+      throw new InfraError(`Boat didn't report sandbox ${id}: ${await boatError(error)}`)
+    })
     if (['ready', 'idle', 'running'].includes(sandbox.state)) return sandbox
-    if (['archived', 'archiving', 'error', 'stopped', 'deleted'].includes(sandbox.state)) {
+    if (DEAD_STATES.includes(sandbox.state)) {
       throw new InfraError(
         `Boat sandbox ${id} stopped starting: ${sandbox.state}${sandbox.error ? ` (${sandbox.error})` : ''}`,
       )
@@ -254,11 +267,15 @@ export async function createBoatSandbox(
   const started = performance.now()
   const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
   let id: string | undefined
-  const cleanUp = async () => {
-    if (id) await deleteSandbox(api, id).catch(() => {})
-    await rm(dir, { recursive: true, force: true })
-  }
+  // The session's destroy and a failed start both clean up; the VM is deleted once.
+  let cleaned: Promise<void> | undefined
+  const cleanUp = () =>
+    (cleaned ??= (async () => {
+      if (id) await deleteSandbox(api, id).catch(() => {})
+      await rm(dir, { recursive: true, force: true })
+    })())
   try {
+    const key = await newKey(dir)
     const made = await api
       .create({
         idempotencyKey: name,
@@ -276,7 +293,6 @@ export async function createBoatSandbox(
       })
     id = made.sandbox.id
     await untilReady(api, id, options.signal)
-    const key = await newKey(dir)
     const ssh = await api
       .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
       .catch(async (error: unknown) => {
@@ -377,16 +393,29 @@ export async function removeRunSandboxes(
 /** Machines Boat would still start for the account: its cap on sandboxes at once, less what's running. */
 export async function boatCapacity(sandbox: BoatSandboxDescriptor): Promise<number | null> {
   const api = await boatClient(sandbox).catch(() => null)
-  const limits = await api?.limits().catch(() => null)
+  const limits = await api
+    ?.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
+    .catch(() => null)
   return limits ? Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes) : null
 }
 
+/** The host's OpenSSH tools a Boat sandbox runs on, or the first one missing. */
+export async function missingSshTool(): Promise<string | null> {
+  for (const [tool, args] of [
+    ['ssh', ['-V']],
+    ['ssh-keygen', ['-?']],
+  ] as const) {
+    const r = await run(tool, [...args]).catch(() => null)
+    if (!r) return tool
+  }
+  return null
+}
+
 /**
- * Preflight's check of one account: the key is set, the SDK loads, Boat takes the key and would
- * start the machine size asked for.
+ * Preflight's check of one account: the host has OpenSSH, the key is set, the SDK loads, Boat
+ * takes the key and would start the machine size asked for.
  */
 export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: string) {
-  const api = await boatClient(sandbox, projectRoot)
   const refuse = (message: string, usage: boolean) =>
     new PrepareError({
       class: 'config',
@@ -397,23 +426,33 @@ export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: str
       usage,
       message,
     })
-  const limits = await api.limits().catch(async (error: unknown) => {
-    const code = status(error)
-    if (code === 401 || code === 403) {
-      throw refuse(
-        `Boat refused the API key in ${sandbox.apiKey.from}: ${await boatError(error)}`,
-        true,
-      )
-    }
-    throw new PrepareError({
-      class: 'transient',
-      stage: 'boat',
-      ref: null,
-      cause: null,
-      log: null,
-      message: `Couldn't reach Boat: ${await boatError(error)}`,
+  const tool = await missingSshTool()
+  if (tool) {
+    throw refuse(
+      `boat() runs every command over SSH, and there's no ${tool} on PATH: install an OpenSSH client (openssh-client on Debian and Ubuntu)`,
+      true,
+    )
+  }
+  const api = await boatClient(sandbox, projectRoot)
+  const limits = await api
+    .limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
+    .catch(async (error: unknown) => {
+      const code = status(error)
+      if (code === 401 || code === 403) {
+        throw refuse(
+          `Boat refused the API key in ${sandbox.apiKey.from}: ${await boatError(error)}`,
+          true,
+        )
+      }
+      throw new PrepareError({
+        class: 'transient',
+        stage: 'boat',
+        ref: null,
+        cause: null,
+        log: null,
+        message: `Couldn't reach Boat: ${await boatError(error)}`,
+      })
     })
-  })
   const type = sandbox.type ?? 'small'
   const machine = limits.machineTypes?.find((m) => m.type === type)
   if (machine && !machine.available) {

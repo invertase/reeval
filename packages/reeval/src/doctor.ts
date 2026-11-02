@@ -103,8 +103,8 @@ export type DoctorDeps = {
   cloudHost: () => Promise<string | null>
   /** An access token from Application Default Credentials, as attempts on Vertex AI mint one. */
   vertexToken: () => Promise<string>
-  /** Whether an OpenSSH client is on PATH. */
-  sshClient: () => Promise<boolean>
+  /** The first OpenSSH tool `boat()` runs (`ssh`, `ssh-keygen`) that isn't on PATH, or null. */
+  missingSshTool: () => Promise<string | null>
   /**
    * Loads the Boat SDK for `root` and, `online`, asks Boat whether the account takes the key and
    * starts the machine size; throws with why not.
@@ -180,7 +180,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
       const { adcTokenSource } = await import('./gateway/vertex.ts')
       return (await adcTokenSource()()).token
     },
-    sshClient: async () => (await run('ssh', ['-V'])).code === 0,
+    missingSshTool: async () => (await import('./sandbox/boat.ts')).missingSshTool(),
     boatAccount: async (sandbox, root, online) => {
       const boat = await import('./sandbox/boat.ts')
       if (online) await boat.checkBoat(sandbox, root)
@@ -299,15 +299,16 @@ export async function checkBoat(
     accounts.set(`${sandbox.apiKey.from}\0${sandbox.type ?? 'small'}`, sandbox)
   }
   if (!accounts.size) return []
+  const missing = await deps.missingSshTool()
   const checks: Check[] = [
-    (await deps.sshClient())
-      ? { id: 'ssh', status: 'ok', summary: 'an OpenSSH client for boat()' }
-      : {
+    missing
+      ? {
           id: 'ssh',
           status: 'fail',
-          summary: "boat() runs every command over SSH, and there's no ssh on PATH",
+          summary: `boat() runs every command over SSH, and there's no ${missing} on PATH`,
           fix: 'install an OpenSSH client (openssh-client on Debian and Ubuntu)',
-        },
+        }
+      : { id: 'ssh', status: 'ok', summary: 'an OpenSSH client for boat()' },
   ]
   for (const sandbox of accounts.values()) {
     const key = sandbox.apiKey.from
