@@ -31,7 +31,7 @@ import {
   writeCurrent,
 } from '../src/resume.ts'
 import { retryCounts, retryLine } from '../src/retry.ts'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, noSignals, project, readRun, runCli } from './helpers.ts'
 import { SEEDED_RUN_ID, writeScratch, writeStoppedStaging } from './support/resume.ts'
 
 function writeLiveStaging(
@@ -1331,7 +1331,21 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     )
     const r = await runCli(p.dir, ['run', '--retry-errors'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /plan changed since it ran: it ran on reeval 0\.0\.1, and this is /)
+    assert.match(
+      r.stderr,
+      /ran on reeval 0\.0\.1, and this is \S+\. .* install reeval 0\.0\.1, or start/,
+    )
+    assert.doesNotMatch(r.stderr, /plan changed|put it back/)
+  })
+
+  test('an errored eval gone from the plan is refused', async () => {
+    const p = await project('retry-dropped', failing)
+    await runCli(p.dir, ['run'], outage)
+    const file = join(p.dir, 'evals/pair.eval.ts')
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^evaluate\('fails'.*$/m, ''))
+    const r = await runCli(p.dir, ['run', '--retry-errors'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /it no longer plans evals\/pair\.eval\.ts › fails # fake\/fake\/fake#1/)
   })
 
   test('another eval in the plan is refused', async () => {
@@ -1488,4 +1502,120 @@ test("restoreRetry leaves another process's retry alone", async () => {
   await restoreRetry(p.dir, SEEDED_RUN_ID)
   assert.equal(existsSync(join(staging, 'previous.json')), true)
   assert.equal(existsSync(join(p.dir, '.reeval', 'runs', `${SEEDED_RUN_ID}.json`)), false)
+})
+
+describe('reeval run --resume of a --retry-errors a Ctrl-C stopped', () => {
+  const slow = (started: string) => ({
+    'reeval.config.ts': fakeConfig(),
+    'evals/trio.eval.ts': `
+import { writeFileSync } from 'node:fs'
+import { evaluate, expect } from 'reeval'
+evaluate('passes', async (c) => { await c.send('hi') })
+evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
+evaluate('slow', async (c) => {
+  await c.send('hi')
+  if (process.env.REEVAL_TEST_SLOW) {
+    writeFileSync(${JSON.stringify(started)}, '')
+    await new Promise((_, reject) => c.signal.addEventListener('abort', () => reject(c.signal.reason)))
+  }
+})
+`,
+  })
+  const scratchOf = (dir: string, runId: string) => join(dir, '.reeval', 'runs', `${runId}.json`)
+  const down = { kind: 'infra', message: 'down' }
+  const git = {
+    sha: 'a'.repeat(40),
+    branch: 'then',
+    dirty: false,
+    diffHash: null,
+    worktreePatch: null,
+    worktreePatchNote: null,
+    commitTime: '2026-01-01T00:00:00Z',
+    shallow: false,
+    remote: null,
+  }
+
+  /** A run whose `passes` and `slow` errored an hour ago, then a retry of it a Ctrl-C stopped. */
+  const interruptedRetry = async (name: string) => {
+    const dir = join(tmpdir(), `reeval-${name}-${process.pid}-${Date.now()}`)
+    const started = join(dir, 'slow.started')
+    const p = await project(name, slow(started))
+    const first = await runCli(p.dir, ['run', '--concurrency', '1'])
+    assert.equal(first.code, 1, first.stdout + first.stderr)
+    const { run } = readRun(p.dir)
+    for (const e of run.evals) {
+      if (e.name === 'fails') continue
+      for (const a of e.attempts) Object.assign(a, { outcome: 'infra_error', error: down })
+    }
+    run.startedAt = new Date(Date.parse(run.startedAt) - 3_600_000).toISOString()
+    run.git = git
+    writeFileSync(scratchOf(p.dir, run.runId), JSON.stringify(run))
+    mkdirSync(dir, { recursive: true })
+    let pid = 0
+    const retry = runCli(p.dir, ['run', '--retry-errors', '--concurrency', '1'], {
+      env: { REEVAL_TEST_SLOW: '1' },
+      onOutput: (_, id) => {
+        pid = id
+        return true
+      },
+    })
+    while (!existsSync(started)) await new Promise((resolve) => setTimeout(resolve, 50))
+    process.kill(pid, 'SIGINT')
+    const stopped = await retry
+    assert.equal(stopped.code, 130, stopped.stdout + stopped.stderr)
+    const { run: after } = readRun(p.dir)
+    assert.equal(after.status, 'interrupted')
+    return { p, run }
+  }
+
+  test('finishes it as the retry would, keeping the run’s plan, git and duration', {
+    skip: noSignals,
+  }, async () => {
+    const { p, run } = await interruptedRetry('retry-ctrl-c')
+    const r = await runCli(p.dir, ['run', '--resume', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run: done } = readRun(p.dir)
+    assert.equal(done.runId, run.runId)
+    assert.equal(done.status, 'complete')
+    assert.deepEqual(done.plan, run.plan)
+    assert.deepEqual(done.git, run.git)
+    assert.deepEqual(done.dependencies, run.dependencies)
+    assert.equal(done.stack.reeval, run.stack.reeval)
+    assert.equal(done.retriedAt?.length, 1)
+    assert.ok(done.durationMs < run.durationMs + 600_000, `${done.durationMs}`)
+    const of = (name: string) => done.evals.find((e) => e.name === name)?.attempts[0]
+    assert.equal(of('slow')?.outcome, 'pass')
+    assert.deepEqual(
+      of('slow')?.retries?.map((x) => x.error.message),
+      ['down'],
+    )
+    assert.equal(
+      of('fails')?.startedAt,
+      run.evals.find((e) => e.name === 'fails')?.attempts[0]?.startedAt,
+    )
+  })
+
+  test('refuses a changed plan, as the retry would, and leaves the run as it was', {
+    skip: noSignals,
+  }, async () => {
+    const { p } = await interruptedRetry('retry-ctrl-c-changed')
+    const { run } = readRun(p.dir)
+    const bytes = readFileSync(scratchOf(p.dir, run.runId))
+    const file = join(p.dir, 'evals/trio.eval.ts')
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace("await c.send('hi')\n  if", "await c.send('hey')\n  if"),
+    )
+    const r = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /plan changed since it ran: the eval source of evals\/trio\.eval\.ts › slow changed\. --resume finishes run \S+'s --retry-errors/,
+    )
+    assert.deepEqual(readFileSync(scratchOf(p.dir, run.runId)), bytes)
+    assert.equal(existsSync(join(p.dir, '.reeval', 'staging', run.runId)), false)
+    const filtered = await runCli(p.dir, ['run', '--resume', '--', 'slow'])
+    assert.equal(filtered.code, 2, filtered.stdout + filtered.stderr)
+    assert.match(filtered.stderr, /stopped during a --retry-errors/)
+  })
 })

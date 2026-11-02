@@ -710,7 +710,13 @@ export type RunRecord = {
   status: 'complete' | 'interrupted' | 'budget'
   startedAt: string
   endedAt: string
+  /** How long the run ran, counting each `--retry-errors` of it but not the time between them. */
   durationMs: number
+  /**
+   * When each `reeval run --retry-errors` of the run started, oldest first; unset for a run never
+   * retried. A `--resume` of the run while it's `interrupted` finishes the last one.
+   */
+  retriedAt?: string[]
   author: string
   git: GitInfo | null
   runner: RunnerInfo

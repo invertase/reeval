@@ -155,15 +155,16 @@ reeval run --retry-errors 20261022T172927Z
 |---|---|---|
 | The run has infra errors | The run's outcome after the retry: 0, 1 or 3 | `retried 2 errored attempts: 1 now passes, 1 fails, 0 still error` |
 | The run has none | The run's own outcome: 0 or 1 | `run … has no infra errors, so --retry-errors has nothing to run again.`, and with `--json` the run's results |
-| The plan changed: an attempt the run planned is gone or new, a retried cell's eval source, harness, gateway, gate or judge isn't the run's, or this reeval isn't the version the run ran on | 2 | `run …'s plan changed since it ran: the eval source of evals/a.eval.ts › fails changed. …`, and the run is left as it was |
+| The plan changed: an infra-errored attempt is gone, an attempt is new, or a retried cell's eval source, harness, gateway, gate or judge isn't the run's | 2 | `run …'s plan changed since it ran: the eval source of evals/a.eval.ts › fails changed. …`, and the run is left as it was |
 | A retried attempt resolved another environment than its cell had | 2 | `run …'s plan changed since it ran: the environment of evals/a.eval.ts › fails changed. …`, after the attempts ran; the run is left as it was |
+| This reeval isn't the version the run ran on | 2 | `run … ran on reeval 0.17.2, and this is 0.18.0. … install reeval 0.17.2, or start a new run with reeval run.` |
 | The run is still running | 2 | `run … is still running. Wait for it to finish, then reeval run --retry-errors …` |
 | The run didn't finish | 2 | `run … didn't finish. reeval run --resume … runs the rest and retries its infra errors.` |
 | Filters, `--tag`, `--trait` or `--resume` beside it | 2 | Leave them out: a retry runs every errored attempt of the run |
 
 Each retried attempt keeps the errors it ended with before in its record's [`retries`](/reference/run-record), as `{ error, at }`. A run already recorded into the history folder is recorded again with the new outcomes, also when a `--resume` finishes an interrupted retry. A retry runs only the infra errors: an attempt the run skipped, such as one a best-of cell didn't need, stays skipped.
 
-The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`: `reeval run --resume` finishes it.
+The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
 
 ## `reeval clean`
 

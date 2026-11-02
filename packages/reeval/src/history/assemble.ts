@@ -160,10 +160,11 @@ export type AssembleInput = {
   answers?: SettledQuestions
   invocation?: RunInvocation
   /**
-   * `--retry-errors`, and when this process started it: the record keeps the run's plan, git
-   * state and stack, and its duration is the run's plus the retry's.
+   * `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process started
+   * it: the record keeps the run's plan, git state and stack, and its duration is the run's plus
+   * this process's.
    */
-  retry?: { startedAt: Date }
+  retry?: { startedAt: Date; resume: boolean }
 }
 
 export type AssembledRun = {
@@ -1460,6 +1461,13 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
         input.endedAt.getTime() -
         (input.retry?.startedAt ?? input.endedAt).getTime()
       : input.endedAt.getTime() - input.startedAt.getTime(),
+    ...(retried && input.retry
+      ? {
+          retriedAt: input.retry.resume
+            ? (retried.retriedAt ?? [])
+            : [...(retried.retriedAt ?? []), input.retry.startedAt.toISOString()],
+        }
+      : {}),
     author: input.author,
     git: retried ? await keptGit(retried, input.previousArtifacts, out) : gitState(input, out),
     runner: input.runner,

@@ -31,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
-import type { GitInfo, RunInvocation } from './history/types.ts'
+import type { GitInfo, RunInvocation, RunRecord } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -425,7 +425,7 @@ async function runCommand(
     })
   } catch (error) {
     renderer.close()
-    if (setup.retry !== undefined) await restoreRetry(setup.config.root, ctx.runId)
+    if (ctx.retry) await restoreRetry(setup.config.root, ctx.runId)
     else if (setup.resume === undefined) {
       await rm(ctx.stagingDir, { recursive: true, force: true })
     }
@@ -443,7 +443,7 @@ async function runCommand(
     renderer.close()
     return EXIT.ok
   }
-  if (setup.retry !== undefined && ctx.previous && retried.size) {
+  if (ctx.retry && ctx.previous && retried.size) {
     const { retryEnvironmentChanges } = await import('./retry.ts')
     const changes = retryEnvironmentChanges(ctx.previous, ctx.stagingDir, retried)
     if (changes.length) {
@@ -452,7 +452,7 @@ async function runCommand(
       renderer.close()
       await restoreRetry(setup.config.root, ctx.runId)
       throw new UsageError(
-        `run ${ctx.runId}'s plan changed since it ran: ${changes.join('; ')}. --retry-errors runs its errors again only with the plan they ran with, so the run is left as it was: put it back, or start a new run with reeval run.`,
+        `run ${ctx.runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, ctx.runId)} only with the plan they ran with, so the run is left as it was: put it back, or start a new run with reeval run.`,
       )
     }
   }
@@ -489,7 +489,7 @@ async function runCommand(
       language: { name: 'typescript' },
       enginePackages: engineVersions,
       sandbox: sandboxVersions,
-      ...(ctx.retryTarget ? { retry: { startedAt: ctx.retryStartedAt ?? ctx.startedAt } } : {}),
+      ...(ctx.retry ? { retry: ctx.retry } : {}),
       worktreePatch: ctx.worktreePatch,
       lockfiles: await lockfiles(ctx.config.root),
       git: ctx.git,
@@ -595,6 +595,15 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
     }
     return { nothing, saved: null, settings: null, notes: [], profileOf: undefined }
   }
+  if (
+    flags.resume !== undefined &&
+    continuesRetry(target.previous) &&
+    (filters.length || flags.tag?.length || flags.trait?.length)
+  ) {
+    throw new UsageError(
+      `run ${target.runId} stopped during a --retry-errors, which runs every infra-errored attempt of the run again, with its plan: leave out filters, --tag and --trait.`,
+    )
+  }
   const saved = await savedInvocation(root, target)
   if (!saved) {
     const note = `run ${target.runId} saved no --runs, profile or filters, so this ${flags.resume === undefined ? 'retry' : 'resume'} plans with the ones given now`
@@ -613,6 +622,9 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
   return { nothing: null, saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
 }
+
+/** A run a `--retry-errors` stopped during, which a `--resume` finishes as that retry. */
+const continuesRetry = (previous: RunRecord | null | undefined) => !!previous?.retriedAt?.length
 
 /** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
 const continuedRun = (root: string, flags: Pick<Flags, 'resume' | 'retry-errors'>) =>
@@ -708,10 +720,20 @@ type StartedRun = RunContext & {
   previous: import('./history/types.ts').RunRecord | null
   previousArtifacts: string | null
   /** A retry's run, prepared once its plan is known to be the run's. */
+  /** `--retry-errors`'s run, which it moves aside only once its plan is the run's. */
   retryTarget?: ResumeTarget
-  /** When this process started the retry; `startedAt` is the run's own start. */
-  retryStartedAt?: Date
+  /**
+   * A `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process
+   * started it; `startedAt` is the run's own start.
+   */
+  retry?: { startedAt: Date; resume: boolean }
 }
+
+/** What a retry, or a resume that finishes one, does to the run's errors, for its refusals. */
+const retryVerb = (retry: { resume: boolean }, runId: string) =>
+  retry.resume
+    ? `--resume finishes run ${runId}'s --retry-errors, which runs its errors again`
+    : '--retry-errors runs its errors again'
 
 /** The run's id and the state it starts from: commit, uncommitted changes, author. */
 async function startRun({
@@ -767,7 +789,10 @@ async function startRun({
       scratch,
       previous: aside.record ?? target.previous,
       previousArtifacts: aside.artifacts ?? target.previousArtifacts,
-      ...(retry === undefined ? {} : { retryTarget: target, retryStartedAt: startedAt }),
+      ...(retry === undefined ? {} : { retryTarget: target }),
+      ...(retry !== undefined || continuesRetry(aside.record ?? target.previous)
+        ? { retry: { startedAt, resume: retry === undefined } }
+        : {}),
     }
   }
   // Run ids sort in run order, so a second run in the same second takes the next second's id,
@@ -943,15 +968,15 @@ async function executeRun(
     const { errored } = continuing
       ? noteRetries(planned, stagingDir, ctx.previous, false)
       : { errored: new Set<string>() }
-    // A retry runs the infra errors and nothing else: not even an attempt the run skipped, such
-    // as one a best-of cell didn't need.
-    const completed = ctx.retryTarget
-      ? new Set(
-          planned
-            .map((p) => p.key)
-            .filter((key) => !errored.has(key) && previousAttempt(ctx.previous, key)),
-        )
-      : completedKeysFor(planned, stagingDir, ctx.previous)
+    const completed = completedKeysFor(planned, stagingDir, ctx.previous)
+    // A retry runs the infra errors and the attempts a cancel stopped, and nothing else: not even
+    // an attempt the run skipped, such as one a best-of cell didn't need.
+    if (ctx.retry) {
+      for (const { key } of planned) {
+        const was = previousAttempt(ctx.previous, key)
+        if (was && was.outcome !== 'infra_error') completed.add(key)
+      }
+    }
     const skipped = planned.map((p) =>
       completed.has(p.key)
         ? {
@@ -971,23 +996,26 @@ async function executeRun(
     if (named) throw named
     const efforts = await planEfforts(skipped)
     if (efforts) run.cursorEfforts = efforts
-    if (ctx.retryTarget && ctx.previous) {
+    if (ctx.retry && ctx.previous) {
+      // The record keeps the run's stack, so the attempts it runs again run on the same reeval.
+      const ranOn = ctx.previous.stack?.reeval
+      if (ranOn && ranOn !== version) {
+        throw new UsageError(
+          `run ${runId} ran on reeval ${ranOn}, and this is ${version}. ${retryVerb(ctx.retry, runId)} only on the reeval they ran on: install reeval ${ranOn}, or start a new run with reeval run.`,
+        )
+      }
       const { retryChanges } = await import('./retry.ts')
       const { judgePart } = await import('./history/assemble.ts')
       const { engineVersions } = await import('./engine/node.ts')
       const judged = judgePart(config, profile, version, engineVersions)
-      const changes = await retryChanges(ctx.previous, planned, errored, config.root, judged)
-      // The record keeps the run's stack, so the attempts it runs again run on the same reeval.
-      const ranOn = ctx.previous.stack?.reeval
-      if (ranOn && ranOn !== version) {
-        changes.unshift(`it ran on reeval ${ranOn}, and this is ${version}`)
-      }
+      const runs = new Set(planned.map((p) => p.key).filter((key) => !completed.has(key)))
+      const changes = await retryChanges(ctx.previous, planned, runs, config.root, judged)
       if (changes.length) {
         throw new UsageError(
-          `run ${runId}'s plan changed since it ran: ${changes.join('; ')}. --retry-errors runs its errors again only with the plan they ran with: put it back, or start a new run with reeval run.`,
+          `run ${runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, runId)} only with the plan they ran with: put it back, or start a new run with reeval run.`,
         )
       }
-      if (!setup.dryRun) {
+      if (ctx.retryTarget && !setup.dryRun) {
         await prepareResume(ctx.retryTarget, config.root, { held: true })
         const aside = await loadPrevious(stagingDir)
         ctx.previous = aside.record ?? ctx.previous

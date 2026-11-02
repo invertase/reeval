@@ -54,7 +54,13 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 
 <Property name="endedAt" type="string"></Property>
 
-<Property name="durationMs" type="number"></Property>
+<Property name="durationMs" type="number">
+  How long the run ran, counting each `--retry-errors` of it but not the time between them.
+</Property>
+
+<Property name="retriedAt" type="string[]" optional>
+  When each `reeval run --retry-errors` of the run started, oldest first; unset for a run never retried. A `--resume` of the run while it's `interrupted` finishes the last one.
+</Property>
 
 <Property name="author" type="string"></Property>
 

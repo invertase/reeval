@@ -25,26 +25,29 @@ const listed = (names: string[]) =>
 
 /**
  * How the plan differs from the run it would retry into, as sentences; none when it's the run's.
- * The attempts it would leave out or add, then the fingerprint parts a retried attempt's cell
- * would get from this plan that its cell in the run doesn't have.
+ * The run's infra errors it no longer plans and the attempts it plans that the run didn't, then
+ * the fingerprint parts that the cell of an attempt it `runs` would get from this plan and its
+ * cell in the run doesn't have.
  */
 export async function retryChanges(
   previous: RunRecord,
   planned: readonly PlannedItem[],
-  errored: ReadonlySet<string>,
+  runs: ReadonlySet<string>,
   root: string,
   judge: { part: string; model: string | null },
 ): Promise<string[]> {
   const had = new Map(previous.evals.flatMap((e) => e.attempts.map((a) => [a.key, e] as const)))
   const now = new Map(planned.map((p) => [p.key, p]))
   const changes: string[] = []
-  const gone = [...errored].filter((k) => !now.has(k))
+  const gone = previous.evals.flatMap((e) =>
+    e.attempts.filter((a) => a.outcome === 'infra_error' && !now.has(a.key)).map((a) => a.key),
+  )
   if (gone.length) changes.push(`it no longer plans ${listed(gone)}`)
   const added = planned.filter((p) => !p.attempt.plan.skip && !had.has(p.key)).map((p) => p.key)
   if (added.length) changes.push(`it plans ${listed(added)}, which the run didn't`)
   const files = new Map<string, Array<{ path: string; sha256: string }>>()
   const parts = new Map<string, Set<string>>()
-  for (const key of errored) {
+  for (const key of runs) {
     const p = now.get(key)
     const cell = had.get(key)?.cells.find((c) => c.key === p?.attempt.cell.key)
     if (!p || !cell?.fingerprintParts) continue
