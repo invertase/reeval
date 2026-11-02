@@ -111,7 +111,7 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
     )
     for (const s of nest(spans)) {
       events.push(
-        s.end > s.start
+        s.end > s.start || s.cat === 'attempt'
           ? slice(s, LANES, tid, us)
           : {
               name: s.name,
@@ -127,6 +127,7 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
     }
   }
   const changes = attempts
+    .filter((x) => x.end > x.start)
     .flatMap((x) => [
       { at: x.start, d: 1 },
       { at: x.end, d: -1 },
@@ -198,7 +199,13 @@ function attemptSpans(
   let cursor = start
   if (setupMs > 0) {
     const setup = within(start, Math.min(start + setupMs, firstTurn))
-    spans.push({ name: 'setup', ...setup, rank: 1, cat: 'phase', args: { setupMs } })
+    spans.push({
+      name: 'setup',
+      ...setup,
+      rank: 1,
+      cat: 'phase',
+      args: { setupMs, ...ESTIMATED },
+    })
     cursor = setup.end
   }
   const lines = transcripts.get(a.key) ?? []
@@ -224,7 +231,8 @@ function attemptSpans(
       if (Number.isNaN(at)) continue
       const placed = { start: Math.min(Math.max(at, s), e), end: 0 }
       placed.end = Math.min(Math.max(at + event.ms, placed.start), e)
-      spans.push({ name: event.name, ...placed, rank: 2, cat: event.cat, args: event.args })
+      const args = event.ms ? { ...event.args, durationMs: event.ms } : event.args
+      spans.push({ name: event.name, ...placed, rank: 2, cat: event.cat, args })
     }
   }
   const after = (name: string, ms: number, args: Record<string, unknown>) => {
@@ -234,11 +242,12 @@ function attemptSpans(
     cursor = placed.end
   }
   after('diff', diffMs, { diffMs })
-  const checkMs = a.checks.reduce((n, c) => n + c.durationMs, 0)
   if (a.checks.length) {
     for (const c of a.checks)
-      after(`check ${commandLine(c.command, 60)}`, c.durationMs, { exitCode: c.exitCode })
-    after('checks', checksMs - checkMs, { checksMs })
+      after(`check ${commandLine(c.command, 60)}`, c.durationMs, {
+        exitCode: c.exitCode,
+        durationMs: c.durationMs,
+      })
   } else after('checks', checksMs, { checksMs })
   after(a.judgements.length > 1 ? `judge ×${a.judgements.length}` : 'judge', judgeMs, {
     judgeMs,
@@ -273,7 +282,8 @@ function eventSpan(
 
 /**
  * The spans of one track, clipped so each lies inside the one it starts in: a track's `X`
- * slices must nest, and parallel tool calls or a subagent's calls can overlap.
+ * slices must nest, and parallel tool calls or a subagent's calls can overlap. A clipped span
+ * says by how much in `clippedMs`, so its drawn length isn't read as its measured one.
  */
 function nest(spans: Span[]): Span[] {
   const sorted = [...spans].sort((x, y) => x.start - y.start || x.rank - y.rank || y.end - x.end)
@@ -281,7 +291,8 @@ function nest(spans: Span[]): Span[] {
   return sorted.map((s) => {
     while (open.length && (open.at(-1) as Span).end <= s.start) open.pop()
     const parent = open.at(-1)
-    const span = parent && s.end > parent.end ? { ...s, end: Math.max(s.start, parent.end) } : s
+    const end = parent && s.end > parent.end ? Math.max(s.start, parent.end) : s.end
+    const span = end < s.end ? { ...s, end, args: { ...s.args, clippedMs: s.end - end } } : s
     if (span.end > span.start) open.push(span)
     return span
   })

@@ -332,8 +332,9 @@ describe('the record corpus', { concurrency: 4 }, () => {
           await run(`reeval show ${id} --trace`, (out) =>
             showCommand({ config, flags: { trace: true, out: traceFile }, out }, [id]),
           )
-          const trace = JSON.parse(readFileSync(traceFile, 'utf8')) as RunTrace
-          assert.deepEqual(traceProblems(trace), [], `${entry.name} ${id}: trace`)
+          const traceText = readFileSync(traceFile, 'utf8')
+          assert.deepEqual(traceProblems(JSON.parse(traceText) as RunTrace), [], `${id}: trace`)
+          assert.equal(countSecrets(traceText, {}), 0, `${entry.name} ${id}: trace secrets`)
           await run(
             `reeval compare ${id}`,
             (out) => compareCommand({ config, flags: {}, out }, [id]),

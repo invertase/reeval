@@ -196,14 +196,14 @@ reeval show [run]             One run: result blocks, --md (summary.md) or --jso
 
 [//]: # (/generated:cli-help:show)
 
-`--trace` writes the run's timeline as [Chrome Trace Event](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU) JSON, which [Perfetto](https://ui.perfetto.dev) and `chrome://tracing` open. It works on any recorded or scratch run, from any reeval version:
+`--trace` writes the run's timeline as [Chrome Trace Event](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU) JSON, which [Perfetto](https://ui.perfetto.dev) and `chrome://tracing` open. It works on any finished run, recorded or scratch, from any reeval version. A run still in progress has no record yet, so `reeval show` refuses its id; `reeval studio` shows it live:
 
 | Track | What it holds |
 |---|---|
 | `run <run id>` | The whole run, the time before its first attempt started (planning and preflight), and an `attempts running` counter |
 | `attempts`, `lane <n>` | Attempts that didn't overlap, in start order: reeval puts each attempt on the first lane free when it started, so there are as many lanes as attempts ever ran at once |
 
-Under each attempt, its `setup` runs from the attempt's start, and each `turn <n>` sits at the time it started, with the transcript's text, reasoning and tool calls nested under it when the run kept the transcript. The record holds only the totals of the `diff`, each `check <command>` and the `judge`, so they're placed one after another after the last turn and carry `placed: estimated` in their arguments. Every slice's arguments hold its record fields, such as the attempt's key, outcome and phase timings.
+Under each attempt, each `turn <n>` sits at the time it started, with the transcript's text, reasoning and tool calls nested under it when the run kept the transcript. A call that overlaps the one it started in is cut at that call's end and carries `clippedMs`. The record holds only the totals of `setup`, the `diff`, each `check <command>` and the `judge`, so `setup` is placed from the attempt's start and the rest one after another after the last turn, and each carries `placed: estimated` in its arguments. An estimated phase may really have run elsewhere: an eval's body can call `c.exec` or `c.judge` before or between turns, and the diff is taken around each turn. Every slice's arguments hold its record fields, such as the attempt's key, outcome and phase timings.
 
 For more information about reading one run, see [Show one run](/results/output#show-one-run).
 

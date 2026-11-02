@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type RunTrace, runTrace } from '../src/history/trace.ts'
@@ -95,9 +96,10 @@ describe('reeval show --trace', () => {
       'diff 6.5+0.2',
       'check npm test … 6.7+0.4',
       'check ls 7.1+0.1',
-      'checks 7.2+0.1',
-      'judge 7.3+2.7',
+      'judge 7.2+2.8',
     ])
+    const setup = trace.traceEvents.find((e) => e.name === 'setup')
+    assert.deepEqual(setup?.args, { setupMs: 2500, placed: 'estimated' })
     const judge = trace.traceEvents.find((e) => e.name === 'judge')
     assert.deepEqual(judge?.args, {
       judgeMs: 5000,
@@ -131,6 +133,18 @@ describe('reeval show --trace', () => {
     ])
     const retry = trace.traceEvents.find((e) => e.name === 'retry')
     assert.deepEqual([retry?.ph, retry?.ts], ['i', 5_000_000])
+    const read = trace.traceEvents.find((e) => e.name === 'read')
+    assert.deepEqual(read?.args, { ok: true, durationMs: 2000, clippedMs: 500 })
+  })
+
+  test('keeps an attempt that started and ended at once as a slice, out of the counter', () => {
+    const trace = runTrace(record([attempt('x#1', 1000, 0), attempt('x#2', 2000, 1000)]))
+    assert.deepEqual(traceProblems(trace), [])
+    assert.deepEqual(slices(trace, 1), ['a x#1 1+0', 'a x#2 2+1'])
+    const running = trace.traceEvents
+      .filter((e) => e.ph === 'C')
+      .map((e) => (e.args as { running: number }).running)
+    assert.deepEqual(running, [1, 0])
   })
 
   test('writes the trace of a run, by default under .reeval/traces', async () => {
@@ -158,5 +172,37 @@ evaluate('a', async (c) => {
     const out = join(tempDir('trace-out'), 'nested', 'run.json')
     assert.equal((await runCli(p.dir, ['show', run.runId, '--trace', '--out', out])).code, 0)
     assert.ok(existsSync(out))
+    const alone = await runCli(p.dir, ['show', '--out', out])
+    assert.notEqual(alone.code, 0)
+    assert.match(alone.stderr, /--out is where --trace writes its file/)
+    const both = await runCli(p.dir, ['show', '--trace', '--json'])
+    assert.notEqual(both.code, 0)
+    assert.match(both.stderr, /--trace, --json or --md, one at a time/)
+
+    const liveId = '20261102T180000Z_abc1234_elliot_k3f9'
+    const staging = join(p.dir, '.reeval', 'staging', liveId)
+    mkdirSync(staging, { recursive: true })
+    const now = new Date().toISOString()
+    writeFileSync(
+      join(staging, 'live.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        runId: liveId,
+        startedAt: now,
+        pid: process.pid,
+        host: hostname(),
+        heartbeatAt: now,
+        phase: 'running',
+        planned: 1,
+        counts: { done: 0, passed: 0, failed: 0, errored: 0, skipped: 0, running: 1 },
+        attempts: [],
+      }),
+    )
+    const live = await runCli(p.dir, ['show', liveId.slice(0, 16), '--trace'])
+    assert.notEqual(live.code, 0)
+    assert.match(
+      live.stderr,
+      new RegExp(`${liveId} is still running: .*reeval studio shows it live`),
+    )
   })
 })

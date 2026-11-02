@@ -244,7 +244,25 @@ export async function showRecord(config: ResolvedConfig, ref?: string) {
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
   const { config } = ctx
-  const entry = resolveRun(await allRuns(config), refs[0])
+  if (ctx.flags.out !== undefined && !ctx.flags.trace)
+    throw new CommandError('--out is where --trace writes its file: add --trace')
+  if (ctx.flags.trace && (ctx.flags.json || ctx.flags.md))
+    throw new CommandError('reeval show takes --trace, --json or --md, one at a time')
+  const entries = await allRuns(config)
+  const ref = refs[0]
+  if (ref && !entries.some((e) => e.runId.startsWith(ref))) {
+    const { listLive } = await import('./studio/live.ts')
+    const live = (
+      await listLive({ root: config.root, historyDir: config.history.dir, scratch: true })
+    ).find((r) => r.runId.startsWith(ref))
+    if (live)
+      throw new CommandError(
+        live.state === 'stopped'
+          ? `${live.runId} stopped without writing a record: reeval run --resume ${live.runId} finishes it, then reeval show reads it.`
+          : `${live.runId} is still running: reeval show reads the record it writes when it ends. reeval studio shows it live.`,
+      )
+  }
+  const entry = resolveRun(entries, ref)
   const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
   const run = await readRecord(join(dir, `${entry.runId}.json`))
   if (ctx.flags.trace) {
