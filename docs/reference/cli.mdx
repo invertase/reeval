@@ -428,7 +428,7 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 `reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled. An evaluation with `cases` is one row, with a row per case inside it; under a pooled `passRate` or `minLift` gate, the evaluation's rate over its cases decides, not a case that flipped.
 
-`reeval image build` exits 2 when every failed image is a usage error, else 3. It exits 3 before any pull when the disk can't hold the `tart()` images it would pull, even once Tart prunes its cache: like a full disk in a Docker build, that's the machine's state, not the config.
+`reeval image build` exits 2 when every failed image is a usage error, or when Docker's or Tart's check refuses the host or config, else 3. In a plan with both, either one's refusal still prints beside the other's results. It exits 3 before any pull when the disk can't hold the `tart()` images it would pull, even once Tart prunes its cache: like a full disk in a Docker build, that's the machine's state, not the config.
 
 Other errors, including a missing config file and a `tart()` image that `tart list` doesn't show, exit 2. A preflight infrastructure error or an unhandled crash exits 3.
 

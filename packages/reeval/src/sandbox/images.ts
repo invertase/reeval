@@ -499,9 +499,8 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
 /** `reeval image build --dry-run`: whether Tart has each image, and what a missing one weighs. */
 export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
   const { tartNames } = await import('./tart-cli.ts')
-  const { formatSize, pullSpace, pullSpaceLine, tartDigest, tartImageSize } = await import(
-    './tart-images.ts'
-  )
+  const { formatSize, pullSpace, pullSpaceLine, pullSpaceUnknown, tartDigest, tartImageSize } =
+    await import('./tart-images.ts')
   const { parseTartRef, tartListed } = await import('./tart-ref.ts')
   const have = await tartNames().catch((error: Error) => error)
   const lines = [
@@ -523,8 +522,11 @@ export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
       if (parseTartRef(image).oci) missing.push({ image, size })
     }
   }
-  const space = missing.length ? await pullSpace(missing) : null
-  if (space) lines.push(`  ${pullSpaceLine(space)}`)
+  if (missing.length && !(have instanceof Error)) {
+    const present = targets.map((t) => t.sandbox.image).filter((i) => tartListed(have, i))
+    const space = await pullSpace(missing, present)
+    lines.push(`  ${space ? pullSpaceLine(space) : pullSpaceUnknown()}`)
+  }
   return lines
 }
 

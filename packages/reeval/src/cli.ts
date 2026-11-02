@@ -96,7 +96,13 @@ const { green, red, dim, yellow } = colors(!!process.stdout.isTTY && !process.en
 const startedAt = Date.now()
 const argv = process.argv.slice(2)
 /** What the invocation log needs from the command as it goes. */
-const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string[] } = {
+const invocation: {
+  flags?: Flags
+  runId: string | null
+  unhandledErrors: string[]
+  /** The exit 3 is the machine's state (a full disk), not a bug: no `reeval report` hint. */
+  machineState?: boolean
+} = {
   runId: null,
   unhandledErrors: [],
 }
@@ -344,21 +350,22 @@ async function imageBuildCommand(
         failure: import('./sandbox/provider.ts').PrepareFailure
       }
   const outcomes: Outcome[] = []
+  // In a mixed plan, one kind's check refusing (the host, the engine, the images, the disk) is
+  // that kind's failed outcome, so the other kind's still run and print. A refused check that's
+  // the config's makes the exit 2 whatever else failed.
+  let refused = false
+  const refusal = (id: string, of: { evals: number }[], others: number) => (error: unknown) => {
+    if (!others || !(error instanceof PrepareError)) throw error
+    if (error.failure.usage) refused = true
+    const evals = of.reduce((n, t) => n + t.evals, 0)
+    outcomes.push({ id, evals, ok: false, failure: error.failure })
+    return []
+  }
   try {
-    // Tart refusing the host, the images or the disk stops its pulls, not the Docker builds.
     const pulled = vms.length
       ? await pullTartImages(vms, root, {
           log: (line) => console.log(line.startsWith('warning: ') ? yellow(line) : dim(line)),
-        }).catch((error: unknown) => {
-          if (!targets.length || !(error instanceof PrepareError)) throw error
-          outcomes.push({
-            id: 'tart',
-            evals: vms.reduce((n, t) => n + t.evals, 0),
-            ok: false,
-            failure: error.failure,
-          })
-          return []
-        })
+        }).catch(refusal('tart', vms, targets.length))
       : []
     for (const p of pulled) {
       outcomes.push(
@@ -377,7 +384,7 @@ async function imageBuildCommand(
       const built = await buildImages(targets, root, {
         log: (line) => console.log(dim(line)),
         force: !!flags.force,
-      })
+      }).catch(refusal('docker', targets, vms.length))
       for (const b of built) {
         outcomes.push(
           b.ok
@@ -389,6 +396,7 @@ async function imageBuildCommand(
   } catch (error) {
     if (!(error instanceof PrepareError)) throw error
     if (error.failure.usage) throw new UsageError(error.message)
+    if (error.failure.cause === 'enospc') invocation.machineState = true
     const { PreflightInfraError } = await import('./preflight.ts')
     throw new PreflightInfraError(error.message)
   }
@@ -414,7 +422,9 @@ async function imageBuildCommand(
   )
   if (!failed.length) return EXIT.ok
   // A missing docker({ image }) is fixed in the config; anything else is the build's.
-  return failed.every((o) => !o.ok && o.failure.usage) ? EXIT.usage : EXIT.infra
+  if (refused || failed.every((o) => !o.ok && o.failure.usage)) return EXIT.usage
+  invocation.machineState = failed.every((o) => !o.ok && o.failure.cause === 'enospc')
+  return EXIT.infra
 }
 
 /** The first 12 hex digits of an image id or digest. */
@@ -1585,7 +1595,10 @@ function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation[
         : null,
     unhandledErrors: invocation.unhandledErrors.map((e) => redactSecrets(e)),
   })
-  const broke = kind === 'crash' || code === EXIT.infra || invocation.unhandledErrors.length > 0
+  const broke =
+    kind === 'crash' ||
+    (code === EXIT.infra && !invocation.machineState) ||
+    invocation.unhandledErrors.length > 0
   const quiet =
     !!process.env.REEVAL_NO_REPORT_HINT ||
     command === 'report' ||

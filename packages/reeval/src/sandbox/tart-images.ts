@@ -102,8 +102,8 @@ export const pullNeeds = (size: TartSize) => (size.disk ?? size.download) + 134_
  * REEVAL_TEST_TART_FREE_BYTES to put a disk's edge where it wants one.
  */
 export async function tartFreeBytes(): Promise<number | null> {
-  const stand = process.env.REEVAL_TEST_TART_FREE_BYTES
-  if (stand) return Number(stand)
+  const stand = Number(process.env.REEVAL_TEST_TART_FREE_BYTES || Number.NaN)
+  if (Number.isFinite(stand)) return stand
   let dir = tartHome()
   while (!existsSync(dir) && dirname(dir) !== dir) dir = dirname(dir)
   const stats = await statfs(dir).catch(() => null)
@@ -112,15 +112,17 @@ export async function tartFreeBytes(): Promise<number | null> {
 
 /**
  * The bytes Tart's cache (`cache/`: pulled images and IPSWs) takes on disk, which `tart pull`
- * prunes to make room unless `TART_NO_AUTO_PRUNE` is set.
+ * prunes to make room unless `TART_NO_AUTO_PRUNE` is set. Leaves out the directories in `keep`:
+ * the images the plan already has, which a prune would leave the next run without.
  */
-export async function tartPrunableBytes(): Promise<number> {
+export async function tartPrunableBytes(keep: ReadonlySet<string> = new Set()): Promise<number> {
   if (process.env.TART_NO_AUTO_PRUNE) return 0
   const walk = async (dir: string): Promise<number> => {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
     let n = 0
     for (const e of entries) {
       const path = join(dir, e.name)
+      if (keep.has(path)) continue
       if (e.isDirectory()) n += await walk(path)
       // Disks are sparse: what a file holds, not its length.
       else if (e.isFile())
@@ -151,12 +153,29 @@ export type PullSpace = {
   verdict: 'fits' | 'prunes' | 'short'
 }
 
-/** The disk check for pulling `missing`; null when the free space can't be read. */
-export async function pullSpace(missing: MissingImage[]): Promise<PullSpace | null> {
+/** Where Tart caches each pulled OCI image in `present`: its `sha256:…` directory. */
+async function cachedDirs(present: string[]): Promise<Set<string>> {
+  const dirs = new Set<string>()
+  for (const image of present) {
+    const ref = parseTartRef(image)
+    const digest = ref.oci ? await tartDigest(image) : null
+    if (ref.oci && digest) dirs.add(join(tartHome(), 'cache', 'OCIs', ref.host, ref.repo, digest))
+  }
+  return dirs
+}
+
+/**
+ * The disk check for pulling `missing`, when the plan already has the images in `present`;
+ * null when the free space can't be read.
+ */
+export async function pullSpace(
+  missing: MissingImage[],
+  present: string[] = [],
+): Promise<PullSpace | null> {
   const free = await tartFreeBytes()
   if (free === null) return null
   const needs = missing.reduce((n, m) => n + (m.size ? pullNeeds(m.size) : 0), 0)
-  const prunable = needs > free ? await tartPrunableBytes() : 0
+  const prunable = needs > free ? await tartPrunableBytes(await cachedDirs(present)) : 0
   const verdict = needs <= free ? 'fits' : needs <= free + prunable ? 'prunes' : 'short'
   const unsized = missing.filter((m) => !m.size).map((m) => m.image)
   return { needs, free, prunable, dir: tartHome(), unsized, verdict }
@@ -180,6 +199,10 @@ export function pullSpaceLine(space: PullSpace): string {
     ? `${head}, and Tart prunes its cache (${cache}) to make room`
     : `${head}${space.prunable ? ` and ${cache}` : ''}: reeval image build refuses to pull`
 }
+
+/** The line for a disk check that couldn't read the free space. */
+export const pullSpaceUnknown = () =>
+  `disk  free space in ${tartHome()} unknown: disk check skipped`
 
 /** The warning when a pull fits only once Tart prunes images it cached. */
 export function pullPruneWarning(space: PullSpace): string {
@@ -231,6 +254,7 @@ export function pullSpaceMessage(missing: MissingImage[], space: PullSpace): str
         `  ${m.image} (${m.size ? `about ${formatSize(m.size.download)} to download, ${formatSize(pullNeeds(m.size))} on disk` : 'size unknown, not counted'})`,
     ),
     'Free some space, or set TART_HOME to a bigger volume, then run reeval image build again.',
+    `This doesn't count space macOS holds as purgeable. To pull anyway, ${missing.map((m) => `tart pull ${m.image}`).join(', ')} skips this check, and reeval run uses what it pulls.`,
   ].join('\n')
 }
 

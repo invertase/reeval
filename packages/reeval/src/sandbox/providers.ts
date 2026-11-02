@@ -329,7 +329,9 @@ export const tartProvider = (
         `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
       )
     }
-    const space = await images.pullSpace(missing)
+    const present = [...new Set(sandboxes.map((s) => s.image))].filter((i) => tartListed(have, i))
+    const space = await images.pullSpace(missing, present)
+    if (!space) ctx.log(images.pullSpaceUnknown())
     if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
     // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
     if (space?.verdict === 'short') {

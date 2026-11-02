@@ -14,7 +14,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { isAbsolute, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { formatSize, tartImageSize, tartPull } from '../src/sandbox/tart-images.ts'
+import { formatSize, pullSpace, tartImageSize, tartPull } from '../src/sandbox/tart-images.ts'
 import { parseTartRef, tartTagWarning } from '../src/sandbox/tart-ref.ts'
 import { project, readRun, runCli } from './helpers.ts'
 import { fakeDigest, fakeTart } from './support/fake-tart.ts'
@@ -267,8 +267,62 @@ describe('tart() images before the run', {
         `Not enough disk space to pull the image tart\\(\\) clones: Tart needs about 900000000 GB free in ${fake.env.TART_HOME}; there is \\d+(\\.\\d)? [GM]B\\.\\n  ${image.replace(/\./g, '\\.')} \\(about 30 GB to download, 900000000 GB on disk\\)\\nFree some space`,
       ),
     )
+    assert.match(r.stdout + r.stderr, /tart pull .+ skips this check/)
+    assert.doesNotMatch(r.stderr, /reeval report/, 'a full disk is no bug to report')
     assert.deepEqual(pulls(), [])
     assert.deepEqual(dockerCalls(), [])
+  })
+
+  test("in a mixed plan, Tart's disk refusal still prints when Docker's check refuses, exit 2", async () => {
+    const image = `${host}/cirruslabs/huge:1`
+    const fake = fakeTart()
+    noDocker(join(fake.dir, 'bin'))
+    const p = await project('tart-images-mixed-short', {
+      'reeval.config.ts': CONFIG,
+      'evals/vm.eval.ts': EVAL,
+      'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
+
+evaluate('in docker', { sandbox: docker() }, async () => {
+  expect(1).toBe(1)
+})
+`,
+    })
+    const env = { ...fake.env, TART_IMAGE: image, REEVAL_TEST_TART_ANY_HOST: '1' }
+    const r = await runCli(p.dir, ['image', 'build'], { env, timeoutMs: 120_000 })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stdout, /^✗ tart \(1 eval\): Not enough disk space to pull/m, r.stdout)
+    assert.match(r.stdout, /^✗ docker \(1 eval\): /m, r.stdout)
+  })
+
+  test("the disk check leaves the plan's own images out of what Tart would prune", async (t) => {
+    if (!posix) return t.skip('the fake tart is a bash script')
+    const have = `${host}/cirruslabs/small:15.6`
+    const fake = fakeTart([have])
+    const saved = {
+      TART_HOME: process.env.TART_HOME,
+      REEVAL_TEST_TART_FREE_BYTES: process.env.REEVAL_TEST_TART_FREE_BYTES,
+    }
+    const cached = join(fake.env.TART_HOME ?? '', 'cache', 'OCIs', host, 'cirruslabs', 'small')
+    writeFileSync(join(cached, fakeDigest(have), 'disk.img'), Buffer.alloc(4e6, 1))
+    const other = join(fake.env.TART_HOME ?? '', 'cache', 'OCIs', 'ghcr.io', 'a', 'old', 'sha256:0')
+    mkdirSync(other, { recursive: true })
+    writeFileSync(join(other, 'disk.img'), Buffer.alloc(1e6, 1))
+    Object.assign(process.env, { TART_HOME: fake.env.TART_HOME, REEVAL_TEST_TART_FREE_BYTES: '1' })
+    try {
+      const missing = [{ image: 'ghcr.io/a/b:1', size: { download: 1, disk: 2e6 } }]
+      const space = await pullSpace(missing, [have])
+      assert.ok(space && space.prunable >= 1e6 && space.prunable < 4e6, `${space?.prunable}`)
+      assert.equal(space?.verdict, 'short')
+      process.env.REEVAL_TEST_TART_FREE_BYTES = 'lots'
+      const real = (await pullSpace(missing, [have]))?.free
+      assert.ok(Number.isFinite(real) && real !== 1, `not a number is ignored: ${real}`)
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
   })
 
   test('a pull that fits once Tart prunes its cache warns and pulls', async () => {
