@@ -174,8 +174,9 @@ const pidFiles = () =>
 describe('a transport that orphans its processes', { timeout: 30_000 }, () => {
   // Killing the host's `sh` leaves the forwarder it started in the background running, as killing
   // `tart exec` or `ssh` can leave it in the VM; `run` runs the gateway's own commands for real.
+  // dash gives a background job /dev/null as stdin, so the forwarder reads its own through fd 3.
   const orphaning: ExecTransport = {
-    argv: (command) => ['sh', '-c', '"$@" <&0 & wait', 'sh', ...command],
+    argv: (command) => ['sh', '-c', 'exec 3<&0; "$@" <&3 & wait', 'sh', ...command],
     env: { PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}` },
     run: async (command, { input }) => {
       if (command.join(' ').includes('ca-certificates')) {
