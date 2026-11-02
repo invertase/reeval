@@ -99,7 +99,7 @@ export async function harnessFacts() {
       )
     }
     if (excluded) continue
-    const sandbox = suggestedSandbox(runsAgent(agent.platforms))
+    const sandbox = suggestedSandbox(runsAgent(kind, agent.platforms))
     if (!sandbox)
       problems.push(`${kind}: no sandbox kind runs it on ${agent.platforms.join(' or ')}`)
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)

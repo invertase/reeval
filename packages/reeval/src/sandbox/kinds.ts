@@ -48,6 +48,11 @@ export type SandboxCapabilities = {
   preflight: boolean
   /** Runs a plugin's `build` while preparing the image. */
   pluginBuilds: boolean
+  /**
+   * The real harnesses it runs: every one, or the ones verified on it so far. The rest are refused
+   * at plan time with its kind's `unverifiedHarnesses` sentence.
+   */
+  harnesses: 'all' | readonly string[]
 }
 
 /** A host path in a descriptor, made absolute against the file that declares it. */
@@ -64,6 +69,8 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = {
   provider(sandbox: D): string
   /** The cell id when `id` is unset. */
   id(sandbox: D): string
+  /** Why a real harness outside `capabilities.harnesses` doesn't run on it yet, and what to use. */
+  unverifiedHarnesses?: string
   /** The descriptor's host paths, which a declaration written as data makes absolute. */
   hostPaths: Readonly<Record<string, HostPath>>
   /** Whether the attempt's sandbox may take long to start: build an image, or boot a VM. */
@@ -114,6 +121,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     images: true,
     preflight: true,
     pluginBuilds: true,
+    harnesses: 'all',
   },
   provider: engineOf,
   id(s) {
@@ -160,6 +168,7 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
     images: false,
     preflight: false,
     pluginBuilds: false,
+    harnesses: 'all',
   },
   provider: () => 'fake',
   id: () => 'fake',
@@ -188,6 +197,8 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     images: false,
     preflight: true,
     pluginBuilds: false,
+
+    harnesses: 'all',
   },
   provider: () => 'tart',
   id: (s) => `tart:${idPart(s.image)}`,
@@ -224,7 +235,10 @@ const BOAT: SandboxKind<BoatSandboxDescriptor> = {
     images: false,
     preflight: true,
     pluginBuilds: false,
+    harnesses: ['cursor'],
   },
+  unverifiedHarnesses:
+    "Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
   provider: () => 'boat',
   id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
   hostPaths: {},
@@ -280,11 +294,17 @@ export function sandboxHelpers(
 }
 
 /**
- * Whether a sandbox can run a real harness whose bootstrap installs its CLI for `platforms`: it
- * gives the harness a session, keeps the credential out, and runs one of them.
+ * Whether a sandbox can run the real harness `harness`, whose bootstrap installs its CLI for
+ * `platforms`: it gives the harness a session, keeps the credential out, runs one of them, and
+ * has `harness` among the ones it runs.
  */
-export const runsAgent = (platforms: readonly NodeJS.Platform[]) => (c: SandboxCapabilities) =>
-  c.harnessSession && c.brokers && platforms.includes(c.platform)
+export const runsAgent =
+  (harness: string, platforms: readonly NodeJS.Platform[]) => (c: SandboxCapabilities) =>
+    c.harnessSession && c.brokers && platforms.includes(c.platform) && takesHarness(c, harness)
+
+/** Whether a sandbox with `c` runs the real harness `harness`. */
+export const takesHarness = (c: SandboxCapabilities, harness: string) =>
+  c.harnesses === 'all' || c.harnesses.includes(harness)
 
 /** The first helper of each kind that can, for a fix: `docker()`. */
 export const suggestedSandbox = (which: (capabilities: SandboxCapabilities) => boolean) =>

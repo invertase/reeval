@@ -46,6 +46,7 @@ import {
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
+import { boat } from '../../src/sandbox-boat.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,
@@ -519,6 +520,28 @@ export const CASES: Record<string, Case[]> = {
     [
       'fakeHarness good',
       any(fakeHarness, { script: [[{ exec: 'ls' }, { mcp: 's/t' }]], layout: 'pi' }),
+    ],
+    [
+      'claudeCode on boat()',
+      planned(
+        {},
+        {
+          harnesses: claudeCode({ model: 'claude-haiku-5-5' }),
+          sandbox: boat(),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
+      'cursor on boat()',
+      planned(
+        {},
+        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: boat(), egress: 'allow-all' },
+      ),
+    ],
+    [
+      "boat() under egress 'proxy'",
+      planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: boat() }),
     ],
     [
       'opencode mcp: {file:} in an arg',
