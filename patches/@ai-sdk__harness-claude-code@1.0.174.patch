@@ -1,5 +1,5 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index 51cb11be81d71ca8ae26c787b8b2269f5ec6e7a2..3d424df2ed9864a8d8061e2a0d7718fbc63f857a 100644
+index 8a4d7c5c37e66b07c0fe2c256e37035dc16bc384..2ed371c0a5f238c57f7d1db56ba9266acac98f95 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
 @@ -731,7 +731,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
@@ -13,10 +13,10 @@ index 51cb11be81d71ca8ae26c787b8b2269f5ec6e7a2..3d424df2ed9864a8d8061e2a0d7718fb
  			emit({
  				type: "stream-start",
 diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
-index 6b3abbb79439468e7b782f4609180e4acbf12a49..4a578710a1d2105184d53d32b636d8c32f6572b4 100644
+index b9d020f904e691b72cbc62786822a6772d213174..f62b5bf5a8ddb4b0aa086658ad7f465219f1f3ac 100644
 --- a/src/bridge/create-emit-stream-event.ts
 +++ b/src/bridge/create-emit-stream-event.ts
-@@ -199,9 +199,16 @@ export function createEmitStreamEvent({
+@@ -205,9 +205,16 @@ export function createEmitStreamEvent({
       * forwards them (e.g. `queued` and `started` for the prompt) straight to
       * the output stream, independently of the engine that yields
       * `system`/`init` at the start of each turn, so they can arrive before
