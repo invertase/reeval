@@ -185,7 +185,14 @@ describe('tart() images before the run', {
       'reeval.config.ts': CONFIG,
       'evals/vm.eval.ts': EVAL,
     })
-    const env = { ...fake.env, TART_IMAGE: image, REEVAL_TEST_TART_ANY_HOST: '1', ...extra }
+    // A petabyte free, whatever the runner has: the huge image still doesn't fit.
+    const env = {
+      ...fake.env,
+      TART_IMAGE: image,
+      REEVAL_TEST_TART_ANY_HOST: '1',
+      REEVAL_TEST_TART_FREE_BYTES: '1e15',
+      ...extra,
+    }
     const cli = (args: string[]) => runCli(p.dir, args, { env })
     const pulls = () => fake.log().filter((l) => l.startsWith('pull'))
     return { p, cli, pulls, dockerCalls, fake }
