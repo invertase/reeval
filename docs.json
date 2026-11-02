@@ -430,6 +430,10 @@
             {
               "title": "Podman",
               "href": "/configuration/sandboxes/podman"
+            },
+            {
+              "title": "Tart",
+              "href": "/configuration/sandboxes/tart"
             }
           ]
         },

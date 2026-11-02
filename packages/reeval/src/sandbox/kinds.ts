@@ -3,15 +3,17 @@
 // kind's name, so a new kind is one more entry.
 import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
+import { TART_MAX_CONCURRENT } from '../contract/tart.ts'
 import type {
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   InstallStep,
   SandboxDescriptor,
+  TartSandboxDescriptor,
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
 import type { SandboxOptions } from './index.ts'
-import type { Sandbox } from './types.ts'
+import { InfraError, type Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
 export type SandboxCapabilities = {
@@ -38,6 +40,8 @@ export type SandboxCapabilities = {
   processTable: boolean
   /** Starts from an image preflight prepares before the run, which the record names. */
   images: boolean
+  /** Has its provider checked, and what it starts from prepared, before the run. */
+  preflight: boolean
   /** Runs a plugin's `build` while preparing the image. */
   pluginBuilds: boolean
 }
@@ -58,8 +62,13 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = {
   id(sandbox: D): string
   /** The descriptor's host paths, which a declaration written as data makes absolute. */
   hostPaths: Readonly<Record<string, HostPath>>
-  /** Whether the attempt's sandbox may have to build an image as it starts. */
+  /** Whether the attempt's sandbox may take long to start: build an image, or boot a VM. */
   buildsAtStart(sandbox: D): boolean
+  /**
+   * The most of its sandboxes the host runs at once, across the run, and why: the cap when
+   * `maxConcurrent` is unset, and the most it may be. Unlimited when unset.
+   */
+  hostLimit?: { max: number; why: string }
   privileges(sandbox: D): SandboxPrivileges
   create(sandbox: D, options: SandboxOptions): Promise<Sandbox>
   /** What its sandboxes may use at once, when they run somewhere other than the host. */
@@ -98,6 +107,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     isolated: true,
     processTable: true,
     images: true,
+    preflight: true,
     pluginBuilds: true,
   },
   provider: engineOf,
@@ -142,6 +152,7 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
     isolated: false,
     processTable: false,
     images: false,
+    preflight: false,
     pluginBuilds: false,
   },
   provider: () => 'fake',
@@ -152,11 +163,43 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
   create: (sandbox, options) => createFakeSandbox(sandbox, options.env),
 }
 
+/**
+ * A Tart VM keeps Tart's network, so nothing it sends around the gateway's proxy is refused or
+ * recorded; what goes through the proxy is.
+ */
+export const TART_EGRESS: EgressCapabilities = { enforce: 'none', record: true }
+
+const TART: SandboxKind<TartSandboxDescriptor> = {
+  helpers: ['tart'],
+  capabilities: {
+    platform: 'darwin',
+    egress: TART_EGRESS,
+    brokers: true,
+    harnessSession: false,
+    isolated: true,
+    processTable: false,
+    images: false,
+    preflight: true,
+    pluginBuilds: false,
+  },
+  provider: () => 'tart',
+  id: (s) => `tart:${idPart(s.image)}`,
+  hostPaths: { 'ssh.key': 'file' },
+  buildsAtStart: () => true,
+  hostLimit: { max: TART_MAX_CONCURRENT, why: 'macOS runs two macOS VMs at a time' },
+  privileges: () => ({ root: false, capabilities: [] }),
+  async create() {
+    throw new InfraError(
+      "tart() sandboxes can be planned and prepared, but this reeval can't start one yet",
+    )
+  },
+}
+
 type Kinds = {
   [K in SandboxDescriptor['kind']]: SandboxKind<Extract<SandboxDescriptor, { kind: K }>>
 }
 
-export const SANDBOX_KINDS: Kinds = { docker: DOCKER, fake: FAKE }
+export const SANDBOX_KINDS: Kinds = { docker: DOCKER, fake: FAKE, tart: TART }
 
 export type SandboxKindName = keyof Kinds
 
@@ -194,6 +237,24 @@ export const suggestedSandbox = (which: (capabilities: SandboxCapabilities) => b
     .filter((k) => which(k.capabilities))
     .map((k) => `${k.helpers[0]}()`)
     .join(' or ')
+
+/** Why `sandbox.maxConcurrent` (in `where`) is wrong, or undefined. */
+export function maxConcurrentProblem(sandbox: SandboxDescriptor, where: string) {
+  const max = sandbox.maxConcurrent as unknown
+  if (max === undefined) return undefined
+  if (!(typeof max === 'number' && Number.isInteger(max) && max >= 1)) {
+    return `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`
+  }
+  const limit = SANDBOX_KINDS[sandbox.kind].hostLimit
+  if (limit && max > limit.max) {
+    return `sandbox.maxConcurrent in ${where} is ${max}, but ${SANDBOX_KINDS[sandbox.kind].helpers[0]}() runs at most ${limit.max} at once: ${limit.why}`
+  }
+  return undefined
+}
+
+/** The cap on `sandbox`'s provider across the run: its `maxConcurrent`, else its kind's limit. */
+export const providerLimit = (sandbox: SandboxDescriptor): number | undefined =>
+  sandbox.maxConcurrent || SANDBOX_KINDS[sandbox.kind].hostLimit?.max
 
 /** What the first of `sandboxes` that runs off the host may use, or null when none does or it doesn't answer. */
 export async function sandboxCapacity(sandboxes: readonly SandboxDescriptor[]) {

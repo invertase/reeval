@@ -482,7 +482,7 @@ For more information about the matchers, see [`toHaveSearched()`](/reference/mat
   A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. 
 </Property>
 
-For more information about sandbox factories, see [Choose a sandbox](/configuration/sandboxes). For the factories' own options, see [`docker()`](#docker).
+For more information about sandbox factories, see [Choose a sandbox](/configuration/sandboxes). For the factories' own options, see [`docker()`](#docker) and [`tart()`](#tart).
 
 ## `docker()`
 
@@ -534,6 +534,34 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 
 <Property name="docker.pids" type="number" optional>
   Processes and threads at once. Defaults to `1024`.
+</Property>
+
+## `tart()`
+
+`tart()` takes these options. Each attempt clones `image` into a new macOS VM, so each limit applies to one VM. For more information, see [Tart sandbox](/configuration/sandboxes/tart).
+
+<Property name="tart.image" type="string">
+  The VM to clone: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls once with `tart pull`, or the name of a local Tart VM. One word, required.
+</Property>
+
+<Property name="tart.id" type="string" optional>
+  The last segment of the cell key. Defaults to `tart:<image>`, the image's last path segment.
+</Property>
+
+<Property name="tart.maxConcurrent" type="number" optional>
+  The most VMs reeval runs at once across the run: `1` or `2`, and `2` by default, since macOS runs at most two macOS VMs at a time. The run's `concurrency` option still caps attempts overall.
+</Property>
+
+<Property name="tart.cpus" type="number" optional>
+  The VM's CPUs, a whole number. Defaults to the image's.
+</Property>
+
+<Property name="tart.memory" type="string | number" optional>
+  The VM's memory: `'8g'`, `'4096m'`, or a byte count. Defaults to the image's.
+</Property>
+
+<Property name="tart.ssh" type="{ user?: string; key: string | URL }" optional>
+  Reach the VM over SSH when `tart exec` can't, for an image without the Tart Guest Agent. `key` is a private key the image trusts, relative to the file that calls `tart()`, absolute, or a `file:` URL; `user` defaults to `admin`.
 </Property>
 
 ## `environments`

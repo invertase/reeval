@@ -1156,7 +1156,36 @@ export type DockerSandboxDescriptor = {
   /** Processes and threads at once. Default 1024. */
   pids?: number
 }
-export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
+/** A macOS VM on this Mac, cloned from `image` for each attempt by Tart, made by `tart()`. */
+export type TartSandboxDescriptor = {
+  kind: 'tart'
+  /** Cell id; defaults to `tart:<image>`, the image's last path segment. */
+  id?: string
+  /**
+   * The VM each attempt clones: an OCI image such as
+   * `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's name.
+   */
+  image: string
+  /**
+   * The most Tart VMs at once, across the run: 1 or 2, and 2 when unset, since macOS runs at most
+   * two macOS VMs at a time.
+   */
+  maxConcurrent?: number
+  /** CPUs each clone gets; the image's when unset. */
+  cpus?: number
+  /** Memory each clone gets: `'8g'`, `'4096m'`, or bytes; the image's when unset. */
+  memory?: string | number
+  /**
+   * Reach the VM over SSH when its Tart Guest Agent doesn't answer `tart exec`: as `user`
+   * (`admin` when unset), with `key`, a private key the image trusts, absolute or relative to the
+   * file it's written in.
+   */
+  ssh?: { user?: string; key: string }
+}
+export type SandboxDescriptor =
+  | FakeSandboxDescriptor
+  | DockerSandboxDescriptor
+  | TartSandboxDescriptor
 
 /**
  * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by

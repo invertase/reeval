@@ -935,6 +935,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'tart.sandbox',
+    area: 'Sandbox',
+    name: "`tart({ … })`: a macOS VM per attempt on Apple Silicon, under `egress: 'allow-all'`, at most two at once",
+    plan: ['tart/two-vms'],
+    unit: ['reeval/test/sandbox-kinds.test.ts', 'reeval/test/refusals.test.ts'],
+  },
+  {
     id: 'docker.privilege-warnings',
     area: 'Sandbox',
     name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',

@@ -266,6 +266,7 @@ export const cases: PlanCase[] = [
     env: { GITHUB_ACTIONS: 'true' },
   },
   { dir: 'privileges', name: 'levels', args: [] },
+  { dir: 'tart', name: 'two-vms', args: ['--concurrency', '8'] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },

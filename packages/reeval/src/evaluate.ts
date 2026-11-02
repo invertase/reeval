@@ -23,7 +23,7 @@ import {
   callerDir,
   environmentFrom,
   environmentPaths,
-  type MissingDockerfile,
+  type MissingHostFile,
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
@@ -79,7 +79,7 @@ function declare(node: DeclaredNode): void {
 }
 
 const missingIn =
-  (where: string): MissingDockerfile =>
+  (where: string): MissingHostFile =>
   (field, full) => {
     throw new UsageError(
       `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that declares it.`,

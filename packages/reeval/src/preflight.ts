@@ -63,7 +63,7 @@ export async function preflight(
 ): Promise<SandboxVersions> {
   const providers = options.providers ?? createProviders()
   const targets = prepareTargets(uses, providers, prepareLabel)
-  if (!targets.some((t) => capabilitiesOf(t.sandbox).images)) return { images: [] }
+  if (!targets.some((t) => capabilitiesOf(t.sandbox).preflight)) return { images: [] }
   let outcomes: Awaited<ReturnType<typeof prepareAll>>
   try {
     outcomes = await prepareAll(targets, {

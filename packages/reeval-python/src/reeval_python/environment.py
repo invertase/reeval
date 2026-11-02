@@ -65,6 +65,10 @@ class DockerSandbox(_Descriptor):
     """reeval's Docker sandbox, made by `docker(…)`."""
 
 
+class TartSandbox(_Descriptor):
+    """A macOS VM run by Tart, made by `tart(…)`."""
+
+
 class FakeHarness(_Descriptor):
     """The fake agent, made by `fake_harness(…)`."""
 
@@ -175,6 +179,13 @@ def docker(*, from_: str | None = None, **options: Any) -> DockerSandbox:
     return DockerSandbox(
         {"kind": "docker", **_present(**{"from": from_}), **value_to_wire(options)}
     )
+
+
+def tart(image: str, **options: Any) -> TartSandbox:
+    """A macOS VM cloned from `image` (an OCI image or a local VM) for each attempt, run by
+    Tart on this Apple Silicon Mac. It runs under `egress="allow-all"` only. `ssh={"key": …}`
+    is relative to the eval file."""
+    return TartSandbox({"kind": "tart", "image": image, **value_to_wire(options)})
 
 
 def fake_harness(**options: Any) -> FakeHarness:

@@ -45,7 +45,7 @@ import {
 } from '../../src/harness.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
-import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
+import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,
@@ -110,6 +110,7 @@ const mcpOn = (harness: HarnessDescriptor, use: (h: EnvironmentHelpers) => objec
   if (refusal) throw new UsageError(refusal)
 }
 const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
+const SEQUOIA = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
 /** A config's `gateway` list as the plan walks it: `direct()` at the end unless placed or off. */
 const listed = (gateways: GatewayDescriptor[]) =>
@@ -406,6 +407,38 @@ export const CASES: Record<string, Case[]> = {
     ['data: a bad install step', options({ sandbox: { kind: 'docker', install: [{ run: '' }] } })],
     ['data: in an environment', env({ sandbox: { kind: 'docker', memswap: '8g' } })],
     ['data: fake with a typo', options({ sandbox: { kind: 'fake', dri: '/tmp' } })],
+  ],
+  tart: [
+    ['not an object', any(tart, 'macos')],
+    ['no image', any(tart, {})],
+    ['an image with a space', any(tart, { image: 'macos sequoia' })],
+    ['a dockerfile', any(tart, { image: SEQUOIA, dockerfile: 'Dockerfile' })],
+    ['install', any(tart, { image: SEQUOIA, install: ['brew install jq'] })],
+    ['root', any(tart, { image: SEQUOIA, root: true })],
+    ['an unknown key with a hint', any(tart, { image: SEQUOIA, cpu: 4 })],
+    ['env on the sandbox', any(tart, { image: SEQUOIA, env: {} })],
+    ['fractional CPUs', any(tart, { image: SEQUOIA, cpus: 1.5 })],
+    ['a memory size tart does not take', any(tart, { image: SEQUOIA, memory: '8GB' })],
+    ['ssh without a key', any(tart, { image: SEQUOIA, ssh: { user: 'admin' } })],
+    ['ssh with a missing key', any(tart, { image: SEQUOIA, ssh: { key: join(DIR, 'nope') } })],
+    [
+      'a good one',
+      any(tart, { image: SEQUOIA, cpus: 4, memory: '8g', ssh: { key: join(DIR, 'a.txt') } }),
+    ],
+    ['three at once', any(tart, { image: SEQUOIA, maxConcurrent: 3 })],
+    [
+      'data: three at once',
+      options({ sandbox: { kind: 'tart', image: SEQUOIA, maxConcurrent: 3 } }),
+    ],
+    ['data: a typo', options({ sandbox: { kind: 'tart', image: SEQUOIA, cpu: 4 } })],
+    ['data: no image', options({ sandbox: { kind: 'tart' } })],
+    ['plan: under the default proxy', planned({ sandbox: tart({ image: SEQUOIA }) })],
+    ['plan: under deny-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'deny-all' })],
+    ['plan: under allow-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'allow-all' })],
+    [
+      'plan: three at once',
+      planned({ sandbox: { kind: 'tart', image: SEQUOIA, maxConcurrent: 3 }, egress: 'allow-all' }),
+    ],
   ],
   harness: [
     ['cursor without a model', any(cursor, {})],

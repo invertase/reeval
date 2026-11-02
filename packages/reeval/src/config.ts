@@ -14,7 +14,7 @@ import {
   helpersFor,
   isEnvironment,
   isSecret,
-  type MissingDockerfile,
+  type MissingHostFile,
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
@@ -230,9 +230,9 @@ export function parseYamlConfig(text: string, file: string): unknown {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** A config's Dockerfile that isn't there, named by its field. */
+/** A config's host file (a Dockerfile, an SSH key) that isn't there, named by its field. */
 const missingIn =
-  (file: string): MissingDockerfile =>
+  (file: string): MissingHostFile =>
   (field, full) => {
     throw new UsageError(
       `${field} in ${file}: ${full} doesn't exist. Paths in ${file} are relative to its directory.`,

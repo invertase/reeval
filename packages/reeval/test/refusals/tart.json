@@ -1,0 +1,23 @@
+{
+  "not an object": "UsageError: tart() takes an options object (got \"macos\")",
+  "no image": "UsageError: tart({ image }) takes an OCI image or a local VM name with no spaces, e.g. image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' (got undefined)",
+  "an image with a space": "UsageError: tart({ image }) takes an OCI image or a local VM name with no spaces, e.g. image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' (got \"macos sequoia\")",
+  "a dockerfile": "UsageError: tart() has no \"dockerfile\": a Tart VM starts from its image as is; reeval bakes nothing onto it.",
+  "install": "UsageError: tart() has no \"install\": a Tart VM starts from its image as is; put install commands in the environment setup.",
+  "root": "UsageError: tart() has no \"root\": the VM runs everything as the image user.",
+  "an unknown key with a hint": "UsageError: Unknown tart() option \"cpu\". Did you mean \"cpus\"?",
+  "env on the sandbox": "UsageError: Unknown tart() option \"env\". Variables and secrets belong in defineEnvironment({ env }).",
+  "fractional CPUs": "UsageError: tart({ cpus }) takes a whole number of CPUs above zero (got 1.5)",
+  "a memory size tart does not take": "UsageError: tart({ memory }) takes a size such as '8g' or '4096m', or bytes (got \"8GB\")",
+  "ssh without a key": "UsageError: tart({ ssh }) takes { user?, key }, where key is the path of a private key the image trusts (got {\"user\":\"admin\"})",
+  "ssh with a missing key": "UsageError: tart({ ssh: { key } }): <dir>/nope doesn't exist. Paths are relative to the file that calls tart().",
+  "a good one": null,
+  "three at once": "UsageError: tart({ maxConcurrent }) is 3, but macOS runs at most 2 macOS VMs at a time",
+  "data: three at once": "UsageError: sandbox.maxConcurrent in evals/a.eval.ts › e is 3, but tart() runs at most 2 at once: macOS runs two macOS VMs at a time",
+  "data: a typo": "UsageError: sandbox in evals/a.eval.ts › e: Unknown tart() option \"cpu\". Did you mean \"cpus\"?",
+  "data: no image": "UsageError: sandbox in evals/a.eval.ts › e: tart({ image }) takes an OCI image or a local VM name with no spaces, e.g. image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' (got undefined)",
+  "plan: under the default proxy": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the sandbox's only way out, but the tart sandbox keeps its own network, so what ignores the proxy would go out around it. Set egress: 'allow-all'.",
+  "plan: under deny-all": "UsageError: evaluate(\"e\") runs under egress 'deny-all', which needs turning egress off, but the tart sandbox enforces no egress policy.",
+  "plan: under allow-all": null,
+  "plan: three at once": "UsageError: sandbox.maxConcurrent in evaluate(\"e\") is 3, but tart() runs at most 2 at once: macOS runs two macOS VMs at a time"
+}
