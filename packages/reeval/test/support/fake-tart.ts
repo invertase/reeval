@@ -3,8 +3,9 @@
 // one per line. As in a VM, a `tart exec` command runs apart from the host's `tart`: in a process
 // group of its own, led by a shell above it, so killing `tart exec` leaves it running.
 //
-// FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent. FAKE_TART_NO_SUDO=1:
-// `sudo -n` asks for a password. FAKE_TART_RUN_FAILS=1: `tart run` exits at once.
+// FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent, after blocking for
+// FAKE_TART_EXEC_BLOCKS seconds as tart 2.41 does (about 30). FAKE_TART_NO_SUDO=1: `sudo -n` asks
+// for a password. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it (`1`: out of disk).
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,13 +20,14 @@ case "$cmd" in
   clone) mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image" ;;
   set) echo "$*" > "$root/vms/$1/set" ;;
   run)
-    [ -n "$FAKE_TART_RUN_FAILS" ] && { echo "no space for $1" >&2; exit 1; }
+    if [ "$FAKE_TART_RUN_FAILS" = 1 ]; then echo "no space for $1" >&2; exit 1; fi
+    [ -n "$FAKE_TART_RUN_FAILS" ] && { echo "$FAKE_TART_RUN_FAILS" >&2; exit 1; }
     touch "$root/vms/$1/running"
     while [ -f "$root/vms/$1/running" ]; do sleep 0.1; done ;;
   exec)
     [ "$1" = -i ] && shift
     vm=$1; shift
-    [ -n "$FAKE_TART_NO_AGENT" ] && { echo "guest agent not running" >&2; exit 1; }
+    [ -n "$FAKE_TART_NO_AGENT" ] && { sleep "\${FAKE_TART_EXEC_BLOCKS:-0}"; echo "is the Tart Guest Agent running?" >&2; exit 1; }
     [ -f "$root/vms/$vm/running" ] || { echo "$vm is not running" >&2; exit 1; }
     cd "$root/vms/$vm/home" || exit 1
     HOME="$root/vms/$vm/home" exec perl -e 'setpgrp(0, 0); exec @ARGV' /bin/sh -c '"$@"; exit $?' sh "$@" ;;

@@ -15,6 +15,12 @@ import { InfraError, type Sandbox } from './types.ts'
 
 /** How long a clone has to boot until a command runs in it. */
 const BOOT_TIMEOUT_MS = 180_000
+/**
+ * How long one boot probe waits: `tart exec` blocks, about 30s without the Guest Agent, until the
+ * agent answers. With an SSH key, `tart exec` gets less, so SSH is tried soon.
+ */
+export const PROBE_TIMEOUT_MS = 15_000
+export const EXEC_PROBE_WITH_SSH_MS = 5_000
 /** The user an SSH image is reached as when `ssh.user` is unset: Cirrus Labs' images'. */
 export const DEFAULT_SSH_USER = 'admin'
 /** Before the image's own PATH in every command, so Homebrew's tools (Node among them) are found. */
@@ -216,13 +222,30 @@ export async function createTartSandbox(
       exited = error.message
     })
     booted.once('exit', (code) => {
-      exited = `tart run exited (${code})${stderr.trim() ? `: ${stderr.trim()}` : ''}`
+      const why = stderr.trim()
+      exited = `tart run exited (${code})${why ? `: ${why}` : ''}`
+      if (/exceeds the system limit/i.test(why)) {
+        exited += `. macOS runs two macOS VMs at a time, and VMs outside this run hold the slots. Stop them (tart stop <name>), or run fewer: tart({ maxConcurrent: 1 })`
+      }
     })
-    const answers = async (g: Guest) => (await runIn(g, ['true'], { signal })).exitCode === 0
+    const deadline = Date.now() + BOOT_TIMEOUT_MS
+    /** Whether `g` runs a command within `ms`, and the boot deadline. */
+    const answers = async (g: Guest, ms = PROBE_TIMEOUT_MS) => {
+      const wait = Math.max(1, Math.min(ms, deadline - Date.now()))
+      const probe = AbortSignal.any([signal, AbortSignal.timeout(wait)])
+      try {
+        return (await runIn(g, ['true'], { signal: probe })).exitCode === 0
+      } catch (error) {
+        if (signal.aborted) throw error
+        return false
+      }
+    }
     const ssh = descriptor.ssh
     /** `tart exec` when the image's Guest Agent answers, else SSH when the eval gave a key. */
     const reach = async (): Promise<Guest | undefined> => {
-      if (await answers(tartGuest(vm))) return tartGuest(vm)
+      if (await answers(tartGuest(vm), ssh ? EXEC_PROBE_WITH_SSH_MS : PROBE_TIMEOUT_MS)) {
+        return tartGuest(vm)
+      }
       if (!ssh) return undefined
       const ip = await tartCli(['ip', vm, '--wait', '5'], { signal })
       const host = ip.stdout.trim()
@@ -230,7 +253,6 @@ export async function createTartSandbox(
       const viaSsh = sshGuest(host, ssh.key, ssh.user)
       return (await answers(viaSsh)) ? viaSsh : undefined
     }
-    const deadline = Date.now() + BOOT_TIMEOUT_MS
     for (;;) {
       if (exited) throw new InfraError(`${vm} didn't boot: ${exited}`)
       const reached = await untraced(reach)

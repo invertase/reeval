@@ -7,6 +7,7 @@ import { after, describe, test } from 'node:test'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import {
   createTartSandbox,
+  EXEC_PROBE_WITH_SSH_MS,
   execScript,
   memoryMb,
   removeRunVms,
@@ -160,6 +161,25 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     })
   })
 
+  test('an image without the Guest Agent reaches SSH soon, though tart exec blocks', async () => {
+    await withEnv(
+      { FAKE_TART_NO_AGENT: '1', FAKE_TART_EXEC_BLOCKS: '30', FAKE_TART_NO_SUDO: '1' },
+      async () => {
+        const started = Date.now()
+        const box = await createTartSandbox(vm({ ssh: { key: '/k/id_ed25519' } }), options())
+        try {
+          assert.ok(
+            Date.now() - started < EXEC_PROBE_WITH_SSH_MS + 5_000,
+            `reached in ${Date.now() - started}ms`,
+          )
+          assert.equal((await box.exec('printf ok')).stdout, 'ok')
+        } finally {
+          await box.destroy()
+        }
+      },
+    )
+  })
+
   test('an abort kills the command and everything it started in the VM', async () => {
     const box = await createTartSandbox(vm(), options())
     try {
@@ -181,6 +201,17 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
       await assert.rejects(
         createTartSandbox(vm(), options()),
         /^InfraError: reeval-run1-[0-9a-f]{6} didn't boot: tart run exited \(1\): no space for/,
+      )
+    })
+    assert.deepEqual(vms(), [])
+  })
+
+  test("names VMs outside the run as the cause when macOS's VM limit refuses a clone", async () => {
+    const refused = 'The number of VMs exceeds the system limit (other running VMs: mine-a, mine-b)'
+    await withEnv({ FAKE_TART_RUN_FAILS: refused }, async () => {
+      await assert.rejects(
+        createTartSandbox(vm(), options()),
+        /other running VMs: mine-a, mine-b\)\. macOS runs two macOS VMs at a time, and VMs outside this run hold the slots\. Stop them \(tart stop <name>\), or run fewer: tart\(\{ maxConcurrent: 1 \}\)$/,
       )
     })
     assert.deepEqual(vms(), [])
