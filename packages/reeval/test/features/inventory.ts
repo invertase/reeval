@@ -1992,7 +1992,7 @@ export const inventory: InventoryFeature[] = [
     id: 'output.layouts',
     area: 'CLI and runner',
     name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases',
-    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
+    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/cases'],
     unit: ['reeval/test/output.test.ts'],
   },
   {

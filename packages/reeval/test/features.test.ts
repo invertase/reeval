@@ -3332,7 +3332,7 @@ export const features: Feature[] = [
       )
       assert.match(
         stdout,
-        /✗ canary {2}2 of 3 runs passed\n +Passed 2 of 3 on fake\.\n +Pass rate over the cases: 67%, below passRate 0\.7\.\n +Failed cases: c\.\n/,
+        /✗ canary {2}2 of 3 runs passed · 3 cases\n +Failed on c; 2 of 3 cases passed\.\n +Pass rate over the cases: 67%, below passRate 0\.7\.\n +case {2}fake\n +✓ a {5}1 of 1\n +✓ b {5}1 of 1\n +✗ c {5}0 of 1\n/,
       )
       assert.deepEqual(rates('lands'), [[0.667, 0.6, 'pass']], 'the rate over the cases clears 0.6')
       assert.deepEqual(rates('canary'), [[0.667, 0.7, 'fail']], 'and is below 0.7')
@@ -3707,7 +3707,7 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'output/family',
+    dir: 'output/cases',
     tiers: ['fake'],
     env: '-',
     canary: /is red: expected 'green' to be 'red'/,
@@ -3721,10 +3721,10 @@ export const features: Feature[] = [
       },
     },
     record: ({ stdout }) => {
-      assert.match(stdout, /✓ lands {2}2 of 2 runs passed\n\n/)
+      assert.match(stdout, /✓ lands {2}2 of 2 runs passed · 2 cases\n\n/)
       assert.match(
         stdout,
-        /✗ canary {2}1 of 2 runs passed\n +Passed 1 of 2 on fake\.\n +Failed cases: green\.\n +✗ is red {2}failed 1 of 2 runs\n +expected 'green' to be 'red'/,
+        /✗ canary {2}1 of 2 runs passed · 2 cases\n +Failed on green; 1 of 2 cases passed\.\n +case {3}fake\n +✓ red {4}1 of 1\n +✗ green {2}0 of 1\n +✗ is red {2}failed on green\n +expected 'green' to be 'red'/,
       )
       assert.match(stdout, /\nDone in \S+ · 1 failed · 1 passed\n/)
     },

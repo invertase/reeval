@@ -12,6 +12,7 @@ Each row is a mistake, what reeval says and the fix.
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
 | `environments` beside `compare` | `… sets both environments and compare` | Move the environment into `compare.control` |
 | `evaluate.each(cases)(name, fn)` | `evaluate.each is not a function` | `evaluate(name, { cases }, async (c, item) => …)` |
+| `cases` for items that should each pass or fail alone | One failing case fails the whole eval | A loop: `for (const item of items) evaluate(nameOf(item), fn)` |
 | `where` without `cases`, or on a group | `… sets where without cases` / `Unknown option "where" in group(…)` | Put `where` beside `cases` on the eval |
 | `survey(…)`, or `gate: 'none'` | `survey is not a function` / `gate in … is 'all' …, { passRate } … or 'observe'` | `evaluate(name, { gate: 'observe' }, fn)` |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |

@@ -12,15 +12,20 @@
 //   pass rate holds, a `vs control` column (`5× faster`; with `-v`, the leans too, each marked `(leans)`).
 //   On several harnesses that comparison is a `H: …` line under the variant instead. With `-v`,
 //   each cell's difference and 95% interval follows its row.
-// - An eval with `cases` under `gate: { passRate }` gives each gated cell's rate over the cases:
-//   `Pass rate over the cases: 67%, below passRate 0.7.` (`on <cell>` when several are gated).
-// - A family whose cases didn't all pass names them: `Failed cases: green, blue.` (the first eight,
-//   then `and N more`).
+// - An eval with `cases` is one row, `· 3 cases` after its count. Without compare its outcome
+//   sentence names the cases that failed (`Failed on power; 2 of 3 cases passed.`, the first
+//   eight, then `and N more`). Under `gate: { passRate }` each gated cell's rate over the cases
+//   follows: `Pass rate over the cases: 67%, below passRate 0.7.` (`on <cell>` when several are
+//   gated). Then a case table: a row per case marked with its outcome, a column per cell (the
+//   control first) with its passes, `–` where `where` left it out; past eight cases only the failed
+//   ones, the rest in the full detail.
 // - Each failed check is `✗ label  failed 2 of 4 runs`, then its first message line and
 //   `file:line`, and a failed command's first stderr line; the rest of the message, the file
 //   excerpt and the snapshot only in the full detail. On several harnesses it adds `, all on H` or
 //   `, M of them on H`. A compare names the arms instead (`failed on react · the control
-//   (expected)`), where a control that isn't gated is expected to fail.
+//   (expected)`), where a control that isn't gated is expected to fail. An eval with cases and
+//   no compare names the cases (`failed on power`, `power 2 of 4` with several runs of it).
+// - An eval nothing gates prints its answers (questions, `c.observe`) even in a list printed once.
 // - Errors that aren't a check's: `✗ 2 runs hit an infrastructure error`, then the message.
 // - `Worth knowing:` the eval's remarks, each its brief unless the detail is full, then each check
 //   that needed its retries (`"label" passed on try 2 of 3.`) and the first capture whose page had
@@ -249,8 +254,7 @@ const padColumns = (text: string, width: number) =>
 
 /** Rows of cells padded to one column each, two spaces apart, measured in terminal columns. */
 function columns(rows: string[][]): string[] {
-  const widths =
-    rows[0]?.map((_, i) => Math.max(...rows.map((r) => stringWidth(r[i] ?? '')))) ?? []
+  const widths = rows[0]?.map((_, i) => Math.max(...rows.map((r) => stringWidth(r[i] ?? '')))) ?? []
   return rows.map((r) =>
     r
       .map((cell, i) => padColumns(cell, widths[i] ?? 0))
@@ -619,7 +623,8 @@ function caseTable(
       }),
     ]),
   ])
-  const compact = cases.length <= CASES_SHOWN ? cases : cases.filter(failedCase).slice(0, CASES_SHOWN)
+  const compact =
+    cases.length <= CASES_SHOWN ? cases : cases.filter(failedCase).slice(0, CASES_SHOWN)
   const shown = new Set(compact)
   const lines: DetailLine[] = [
     {

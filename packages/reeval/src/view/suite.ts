@@ -135,7 +135,7 @@ export type EvalResult = {
    * each question asked of any case, in first-asked order, summed over the cases that answered it.
    */
   questions: Array<QuestionResult | AttemptQuestionResult>
-  /** Each name its attempts observed with `c.observe`, tallied per cell; empty on a family. */
+  /** Each name its attempts observed with `c.observe`, tallied per cell; with cases, over every case. */
   observations: ObservedTally[]
 }
 
@@ -820,7 +820,7 @@ function familyResult(
         : [],
     ),
     questions: familyQuestions(sorted),
-    observations: [],
+    observations: observedTallies(sorted.flatMap((k) => k.attempts)),
   }
 }
 

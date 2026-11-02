@@ -413,6 +413,48 @@ test('under a passRate gate, a failed run marks the eval only once its cell can 
   assert.equal(strict.files()[0]?.rows[0]?.icon, 'failing', '3 fails of 4 can no longer reach 0.5')
 })
 
+test('an eval with cases is one row while it runs, each attempt naming its case', () => {
+  const live = new LiveList('fake')
+  const family = (n: number) => ({
+    id: 'evals/a.eval.ts › bank',
+    name: 'bank',
+    case: n,
+    cases: 2,
+  })
+  live.collected(
+    'evals/a.eval.ts',
+    ['red', 'blue'].map((k, i) => ({
+      id: `evals/a.eval.ts › bank [${k}]`,
+      key: `evals/a.eval.ts › bank [${k}] # fake/-/fake#1`,
+      group: [],
+      name: `bank [${k}]`,
+      skipped: false,
+      family: family(i),
+    })),
+  )
+  const [red, blue] = ['red', 'blue'].map(
+    (k) => `evals/a.eval.ts › bank [${k}] # fake/-/fake#1`,
+  ) as [string, string]
+  const ref = (key: string) =>
+    ({ key, attempt: { n: 1, gate: 'all', label: 'fake', cell: { key: 'fake/-/fake' } } }) as never
+  live.start(ref(red))
+  live.start(ref(blue))
+  live.end({ ...(ref(red) as object), state: 'failed', errors: ['no'] } as never)
+  const rows = live.files()[0]?.rows ?? []
+  assert.equal(rows.length, 1, 'one row for the eval, not one per case')
+  assert.equal(rows[0]?.name, 'bank')
+  assert.equal(rows[0]?.summary, '1 of 2 runs done · 2 cases')
+  assert.equal(rows[0]?.icon, 'failing', 'a failed case spins it red')
+  assert.deepEqual(
+    rows[0]?.detail.map((d) => [d.mark, d.text]),
+    [
+      ['fail', 'fake · red #1 failed'],
+      ['spin', 'fake · blue #1 starting'],
+    ],
+  )
+  assert.deepEqual(live.counts(), { done: 0, total: 1, running: 1, failed: 0, failing: 1 })
+})
+
 test('the footer counts the evals done, then those failed and those failing', () => {
   assert.equal(doneLine(c, { done: 9, total: 10 }), '9 of 10 evals done')
   assert.equal(

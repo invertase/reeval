@@ -19,9 +19,12 @@
   discordant cases shows only a direction (`insufficient` in `reeval query case_lift`), so
   aim for six cases or more; the plan hints when there are fewer. No `runs: { bestOf }` beside it.
   `gate: { passRate }` gates each cell's rate over the cases (the mean of each case's pass@1), so
-  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass. The
-  failing case still records `fail` (with `verdict: 'family'`); the eval, one entry with its
-  cases inside, takes the verdict and counts once in the tally.
+  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass, so a
+  failing case fails the eval. It is one eval: one row in `--dry-run` and the run output (a
+  case table under it when it fails, or with `-v`), one entry in the record with its cases
+  inside, counted once in the tally. The failing case still records `fail`.
+- For evals that pass or fail on their own, don't use `cases`: write a `for` loop that calls
+  `evaluate` once per item, with the item in the name.
 - Each case has a key, which names its row: a string or number is its own key, an object its
   `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
   80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate`, never a
@@ -30,7 +33,7 @@
   on which environment, at plan time, from each environment's `traits` (`defineEnvironment('next',
   { traits: { stack: 'next' } })`; never shown to the agent). Reading a trait no environment
   defines is an error; with `compare` it sees the control, and its answer holds for the variants.
-  `--dry-run` notes `excluded on vite-app: q2`, and each case's record keeps its own in
+  `--dry-run` notes `excluded on vite-app: q2`, the run's case table shows `–` there, and each case's record keeps its own in
   `excluded`. A cell left with no cases is an error: drop that environment instead.
 - `where` says which pairs fit, the same every run; to run only some environments today, use
   `reeval run --trait stack=next` (repeat to AND) or a profile's

@@ -450,9 +450,9 @@ describe('remark thresholds', () => {
     const [few] = raise(family('tft few cases'), NO_HISTORY)
     assert.equal(
       few?.text,
-      'The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold.',
+      'The marked variant, paired over 2 cases: better, but a paired lift needs 6 cases that differ between the arms to hold.',
     )
-    assert.equal(few?.fix?.edit, 'add cases, so the pooled lift has 6 to hold on')
+    assert.equal(few?.fix?.edit, 'add cases, so 6 or more can differ between the arms')
     assert.deepEqual(
       kinds(family('tft agree'), NO_HISTORY),
       ['cant-tell-apart'],
@@ -476,7 +476,7 @@ describe('remark thresholds', () => {
     const [agreeFew] = raise(family('tft agree few'), NO_HISTORY)
     assert.equal(
       agreeFew?.text,
-      'The marked variant, pooled over 2 cases: the same, but the pooled lift needs 6 to hold.',
+      'The marked variant, paired over 2 cases: the same, but a paired lift needs 6 cases that differ between the arms to hold.',
       'two cases are too few to say every case always passes',
     )
   })
@@ -722,7 +722,7 @@ evaluate(
     )
     assert.ok(
       first.includes(
-        'fixes: The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold. Fix at evals/fam.eval.ts:5: add cases, so the pooled lift has 6 to hold on.',
+        'fixes: The marked variant, paired over 2 cases: better, but a paired lift needs 6 cases that differ between the arms to hold. Fix at evals/fam.eval.ts:5: add cases, so 6 or more can differ between the arms.',
       ),
       first,
     )
