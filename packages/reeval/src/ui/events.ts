@@ -123,6 +123,8 @@ export type RunHeader = {
   budget: { attempts?: number; duration?: string }
   /** Serial: every attempt one after another. */
   estimateMs: number
+  /** How many attempts run at once, below `concurrency` when a sandbox provider caps it. */
+  parallel?: number
   concurrency: number
   /** Where the run's record lands; unset for `--dry-run`. */
   record?: string

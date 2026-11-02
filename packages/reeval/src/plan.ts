@@ -11,6 +11,7 @@ import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import { majorityOf } from './options.ts'
 import type { Prices } from './prices.ts'
+import { providerLimit, sandboxKind } from './sandbox/kinds.ts'
 import { COMPARE_RUNS, PAIRED_MIN } from './stats.ts'
 import { clip, formatDuration, plural } from './text.ts'
 import type {
@@ -66,6 +67,8 @@ export type RunPlan = {
   fewest: number
   /** Serial: every attempt one after another, best-of cells at their most. */
   estimateMs: number
+  /** How many attempts run at once: `concurrency`, held to the attempts and each provider's cap. */
+  parallel: number
   /** Agent and judge tokens, and their cost when there are prices; only for `--dry-run`. */
   cost?: PlanCost
   concurrency: number
@@ -172,6 +175,8 @@ export async function buildPlan(options: {
   let attempts = 0
   let fewest = 0
   let estimateMs = 0
+  const limits = new Map<string, number>()
+  let uncapped = false
   for (const { id, attempt } of planned) {
     const existing = rows.get(id)
     if (!existing || existing.plan.skip) {
@@ -191,6 +196,10 @@ export async function buildPlan(options: {
     if (attempt.bestOf === undefined || attempt.n <= majorityOf(attempt.bestOf)) fewest++
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
+    const provider = sandboxKind(attempt.sandbox).provider(attempt.sandbox)
+    const limit = providerLimit(attempt.sandbox)
+    if (limit === undefined) uncapped = true
+    else limits.set(provider, Math.max(limits.get(provider) ?? limit, limit))
     costed.push({ id, cell: attempt.cell, harness: attempt.harness })
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
@@ -250,6 +259,14 @@ export async function buildPlan(options: {
     attempts,
     fewest,
     estimateMs,
+    parallel: Math.max(
+      1,
+      Math.min(
+        options.concurrency,
+        attempts,
+        uncapped ? Number.POSITIVE_INFINITY : [...limits.values()].reduce((a, b) => a + b, 0),
+      ),
+    ),
     ...(options.prices
       ? { cost: planCost(costed, records, options.judgeModel ?? null, options.prices) }
       : {}),
@@ -438,10 +455,11 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   const effort = effortSummary(plan.efforts)
   if (effort) parts.push(effort)
   const serial = `~${formatDuration(plan.estimateMs)} serial`
-  const parallel = Math.min(plan.concurrency, plan.attempts)
+  const { parallel } = plan
+  const capped = parallel < Math.min(plan.concurrency, plan.attempts) ? `, ${parallel} at once` : ''
   parts.push(
     parallel > 1
-      ? `${serial} (~${formatDuration(plan.estimateMs / parallel)} at concurrency ${plan.concurrency})`
+      ? `${serial} (~${formatDuration(plan.estimateMs / parallel)} at concurrency ${plan.concurrency}${capped})`
       : serial,
   )
   const { attempts, duration } = plan.budget
@@ -504,6 +522,7 @@ export function runHeader(
       ...(plan.budget.duration !== undefined ? { duration: `${plan.budget.duration}` } : {}),
     },
     estimateMs: plan.estimateMs,
+    parallel: plan.parallel,
     concurrency: plan.concurrency,
   }
 }

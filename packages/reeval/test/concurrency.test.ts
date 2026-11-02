@@ -196,6 +196,23 @@ describe('concurrency', () => {
     )
   })
 
+  test("the estimate runs a capped sandbox's attempts only as many at once as it allows", async () => {
+    const p = await project('conc-estimate-cap', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+
+export default defineConfig({ harnesses: fakeHarness(), sandbox: docker({ maxConcurrent: 2 }) })
+`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+evaluate('a', { runs: 6 }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run', '--concurrency', '4'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^ {2}➜ {2}Est\. Time: .*\(concurrency: 4, 2 at once\)/m)
+  })
+
   test('--concurrency caps attempts across files, and the first slots go to every eval', async () => {
     const p = await project('conc-cap', {
       'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 800 }' }),
