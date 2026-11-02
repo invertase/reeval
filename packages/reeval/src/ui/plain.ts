@@ -363,8 +363,11 @@ export class PlainRenderer implements Renderer {
       // The attempt's own error, unless it's one of those checks.
       const shown = errorCheck(result)
       if (!shown?.at) {
+        // The annotation is titled with the eval, so it carries only the message, without `✗ failed`.
         const message = ghEscape(
-          failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'),
+          failureLines(colors(false), result, { max: ERROR_LINES })
+            .join('\n')
+            .replace(/^✗ failed {2}/, ''),
         )
         const at = locate(result)
         const where = at ? `,line=${at.line},col=${at.col}` : ''

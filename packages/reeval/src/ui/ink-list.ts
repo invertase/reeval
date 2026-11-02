@@ -244,7 +244,7 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
           finished.done,
           c.dim(finished.pointer),
         ]
-      : [progressLine(c, state.counts)]),
+      : [doneLine(c, state.counts)]),
     confirming && !finished ? c.yellow('Press q again to cancel the run.') : c.dim(keys),
   ]
   // One line spare, so Ink never draws a frame as tall as the terminal (it clears the screen then).
@@ -268,7 +268,7 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
  * `9 of 10 evals done · 1 failed · 1 failing`: the evals that ended failed, and those still going
  * with a run that already failed, which a red spinner marks.
  */
-export function progressLine(c: Colors, counts: ListState['counts']): string {
+export function doneLine(c: Colors, counts: ListState['counts']): string {
   const { done, total, failed = 0, failing = 0 } = counts
   return [
     c.dim(`${done} of ${total} evals done`),

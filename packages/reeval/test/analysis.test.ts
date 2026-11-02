@@ -1990,7 +1990,7 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
     // Every attempt misses MFA, so pass can't tell the arms apart; the check matrix does.
     const matrix =
       /^ {2}check {14}no-skill {2}current-skill {2}new-skill\n {2}Social OAuth {7}3 of 3 {4}0 of 3 {9}3 of 3$/m
-    assert.match(run.stdout, /^ +"Social OAuth" failed 3 times, all on current-skill$/m)
+    assert.match(run.stdout, /^ +✗ Social OAuth +failed on current-skill 3 of 3$/m)
     assert.match((await runCli(p.dir, ['show'])).stdout, matrix)
     assert.match(readRun(p.dir).read('summary.md'), matrix)
     const rows = await query(

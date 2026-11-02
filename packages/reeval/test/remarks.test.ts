@@ -154,7 +154,7 @@ const remarksOf = (dir: string, back = 0): RunRemarks | null => {
 
 /**
  * The remarks `reeval run`'s status list printed, one `<eval>: <remark>` line each from under the
- * eval's `Worth knowing:`, then the cap's `+N more remark (-v)`; null when it printed none.
+ * eval's `Worth knowing:` (or after it, when it's the only one), then the cap's `+N more remark (-v)`; null when it printed none.
  */
 const remarksBlock = (stdout: string) => {
   const lines: string[] = []
@@ -163,11 +163,15 @@ const remarksBlock = (stdout: string) => {
   for (const raw of stdout.split('\n')) {
     const line = raw.replace(/^[│├└─ ]*/, (m) => ' '.repeat(m.length))
     const indent = line.length - line.trimStart().length
-    const row = /^ *[✓✗●–○] (.+?) {2}/.exec(line)
+    const row = /^ {0,3}[✓✗●–○] (.+?) {2}/.exec(line)
     if (row) {
       name = row[1] as string
       heading = -1
     } else if (line.trim() === 'Worth knowing:') heading = indent
+    else if (line.trim().startsWith('Worth knowing: ')) {
+      lines.push(`${name}: ${line.trim().slice('Worth knowing: '.length)}`)
+      heading = -1
+    }
     else if (heading >= 0 && indent > heading && line.trim()) lines.push(`${name}: ${line.trim()}`)
     else heading = -1
     if (/^\+\d+ more remarks? \(-v\)$/.test(raw)) lines.push(raw)

@@ -441,8 +441,8 @@ function messageOf(f: FailedCheck): string {
 const LABEL_COLUMN = 40
 
 /**
- * `✗ label  failed 2 of 4 runs`, then the first line of its message and where it is, dimmed; the
- * message's other lines only in the full detail. A compare names the arms instead, the variants
+ * `✗ label  failed 2 of 4 runs`, then the first line of its message and where it is, dimmed, and a
+ * failed command's last stderr line; the message's other lines only in the full detail. A compare names the arms instead, the variants
  * first: `failed on react · the baseline (expected)`, where a baseline that isn't gated is
  * expected to fail. The `✗` is red only for a failure that counts against a failed eval.
  */
@@ -456,10 +456,7 @@ function checkLines(
   const groups = new Set(cells.map(groupOf)).size
   const several = cells.some((c) => countedOf(c) > 1)
   const baselineGated = cells.some((c) => c.baseline && c.gated)
-  const width = Math.min(
-    LABEL_COLUMN,
-    Math.max(...failed.map((f) => checkLabel(f.label).length)),
-  )
+  const width = Math.max(...failed.map((f) => clip(checkLabel(f.label), LABEL_COLUMN).length))
   const lines: DetailLine[] = []
   for (const f of failed) {
     const label = clip(checkLabel(f.label), LABEL_COLUMN).padEnd(width)
@@ -489,13 +486,26 @@ function checkLines(
       text: text.trimEnd(),
       ...(note ? { note } : {}),
     })
-    const [first, ...rest] = messageLines(messageOf(f), f.label)
+    const message = messageOf(f)
+    const [first, ...rest] = messageLines(message, f.label)
     const at = f.first.outcome.status === 'ran' ? f.first.outcome.at : null
     const shown = [first, at].filter(Boolean).join(' · ')
     if (shown) lines.push({ depth: 1, text: shown, tone: 'dim' })
+    const stderr = stderrTail(message)
+    if (stderr) lines.push({ depth: 1, text: `stderr: ${clip(stderr, LINE_MAX)}`, tone: 'dim' })
     for (const line of rest) lines.push({ depth: 1, text: line, tone: 'dim', only: 'full' })
   }
   return lines
+}
+
+/** A failed command's last line on stderr, which usually says why: `npm ERR! missing script: test`. */
+function stderrTail(message: string): string | undefined {
+  const section = /\n--- stderr ---\n([\s\S]*?)(?:\n--- stdout ---\n|$)/.exec(message)?.[1] ?? ''
+  return section
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .at(-1)
 }
 
 const ranOf = (k: CheckResult) =>
@@ -528,10 +538,11 @@ function errorLines(cells: CellResult[], failedEval: boolean): DetailLine[] {
   }
   return [...by.values()].flatMap((e) => {
     const fail = e.kind === 'assertion'
-    const mark = !failedEval ? 'miss' : fail ? 'fail' : 'error'
+    const mark =
+      e.kind === 'aborted' ? 'skipped' : !failedEval ? 'miss' : fail ? 'fail' : 'error'
     const tone = fail || !failedEval ? 'dim' : 'red'
     return [
-      { depth: 0, mark, text: `${plural(e.n, 'run')} ${ERROR_VERB[e.kind]}:` } as const,
+      { depth: 0, mark, text: `${plural(e.n, 'run')} ${ERROR_VERB[e.kind]}` } as const,
       ...messageLines(e.message, '', Number.POSITIVE_INFINITY).map(
         (text) => ({ depth: 1, text, tone }) as const,
       ),

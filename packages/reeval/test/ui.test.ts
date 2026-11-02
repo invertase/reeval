@@ -7,7 +7,7 @@ import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
-import { phaseOf, progressLine } from '../src/ui/format.ts'
+import { failureReason, phaseOf, progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
@@ -87,6 +87,7 @@ const defaultResult: EvalResult = {
   state: 'failed',
   durationMs: 363_000,
   errors: ['expected 1 to be 2 // Object.is equality'],
+  errorName: 'AssertionError',
   formattedErrors: [`\x1b[31m${assertion}\x1b[39m`],
   meta: { outcome: 'fail', errorKind: 'assertion', judgements: [], recordPath: '' },
 }
@@ -254,27 +255,25 @@ const LIST = [
   [
     '✗ greets in French             0 of 1 run passed',
     'Failed on fake.',
-    'Every failure was the same check:',
-    '  "french greeting" failed once',
-    '    expected command to succeed, exit code 1',
+    '✗ french greeting  failed 1 of 1 run',
+    '  expected command to succeed, exit code 1',
   ],
   [
     '✗ explains why greet.js fails  1 of 2 runs passed',
     'Passed 1 of 2 on fake.',
-    'Every failure was the same check:',
-    '  "names the root cause" failed once',
-    "    expected 'Docker is down' to contain 'null'",
+    '✗ names the root cause  failed 1 of 2 runs',
+    "  expected 'Docker is down' to contain 'null'",
   ],
   [
     '✗ reads the fixture repo       0 of 1 run passed',
     'Failed on fake.',
-    '1 run failed:',
+    '✗ 1 run failed',
     '  the fixture repo is missing',
   ],
   [
     '✗ starts its sandbox           0 of 1 run passed',
     'No run finished.',
-    '1 run hit an infrastructure error:',
+    '✗ 1 run hit an infrastructure error',
     '  the fake sandbox fell over',
   ],
   ['– greets in Welsh              skipped'],
@@ -321,7 +320,7 @@ describe('plain renderer', () => {
         '[adds#1 cursor]  +1:09 stdout | seeding greet.js',
         '[adds#1 cursor]  +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file changed',
         '[adds#1 cursor]  +5:29 $ node -e "…"…  exit 1 900ms',
-        '[adds#1 cursor]  AssertionError: expected 1 to be 2 // Object.is equality',
+        '[adds#1 cursor]  ✗ failed  expected 1 to be 2 // Object.is equality',
         '[adds#1 cursor]',
         '[adds#1 cursor]  - Expected',
         '[adds#1 cursor]  + Received',
@@ -376,7 +375,7 @@ describe('plain renderer', () => {
         ' +1:09 stdout | seeding greet.js',
         ' +3:19 turn 2 done 2m 10s · 2 tool calls, 1 file changed',
         ' +5:29 $ node -e "…"…  exit 1 900ms',
-        ' AssertionError: expected 1 to be 2 // Object.is equality',
+        ' ✗ failed  expected 1 to be 2 // Object.is equality',
         '',
         ' - Expected',
         ' + Received',
@@ -385,7 +384,7 @@ describe('plain renderer', () => {
         ' + 1',
         '',
         '  ❯ evals/hello.eval.ts:31:20',
-        '::error file=evals/hello.eval.ts,line=31,col=20,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn::AssertionError: expected 1 to be 2 // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- 2%0A+ 1%0A%0A ❯ evals/hello.eval.ts:31:20',
+        '::error file=evals/hello.eval.ts,line=31,col=20,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn::expected 1 to be 2 // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- 2%0A+ 1%0A%0A ❯ evals/hello.eval.ts:31:20',
       ),
     )
   })
@@ -419,8 +418,8 @@ describe('plain renderer', () => {
     const out = render(events, options({ githubActions: true, logPrefix: 'none' })).split('\n')
     const at = out.indexOf('  ❯ evals/hello.eval.ts:31:20')
     assert.deepEqual(out.slice(at + 1, at + 6), [
-      ' ✗ tests pass  evals/hello.eval.ts:33  expected command to succeed, exit code 1',
-      ' ✗ names it  expected 1 to be 3',
+      ' ✗ failed  tests pass: expected command to succeed, exit code 1  evals/hello.eval.ts:33',
+      ' ✗ failed  names it: expected 1 to be 3',
       '::error file=evals/hello.eval.ts,line=31,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn%3A toBe 2::expected 1 to be 2 // Object.is equality',
       '::error file=evals/hello.eval.ts,line=33,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn%3A tests pass::tests pass: expected command to succeed, exit code 1',
       out[at + 5],
@@ -433,6 +432,7 @@ describe('plain renderer', () => {
     const thrown: EvalResult = {
       ...defaultResult,
       errors: ['Error: user code bug'],
+      errorName: 'Error',
       formattedErrors: ['Error: user code bug\n ❯ evals/hello.eval.ts:40:9'],
       meta: {
         outcome: 'fail',
@@ -458,7 +458,8 @@ describe('plain renderer', () => {
     }
     for (const [result, annotations, listed] of [
       [thrown, 2, 1],
-      [clipped, 1, 0],
+      // The failed check is the error itself, so it prints once, as the attempt's failure.
+      [clipped, 1, 1],
     ] as const) {
       const events = interleaved.map((e) =>
         e.type === 'eval-end' && e.result === defaultResult ? { ...e, result } : e,
@@ -637,6 +638,29 @@ test("a gateway warning prints as it happens, in the plain and agent output, on 
     agent,
   )
   assert.equal(phaseOf({ at: s(2), kind: 'warning', text }), 'running')
+})
+
+test("an attempt's failure in a line: the message without its error's class, the judge's verdict, or canceled", () => {
+  assert.equal(failureReason(defaultResult), 'expected 1 to be 2 // Object.is equality')
+  assert.equal(
+    failureReason({ ...defaultResult, errors: ['TypeError: x is undefined\n    at evals/a.eval.ts:3'] }),
+    'x is undefined',
+  )
+  const judged: EvalResult = {
+    ...defaultResult,
+    meta: {
+      outcome: 'fail',
+      errorKind: 'judge',
+      judgements: [{ verdict: 'fail', score: 0.3, threshold: 0.8, question: 'ok?' }],
+      recordPath: '',
+    },
+  }
+  assert.match(failureReason(judged), /0\.30.*0\.8.*ok\?/)
+  const aborted: EvalResult = {
+    ...defaultResult,
+    meta: { outcome: 'fail', errorKind: 'aborted', judgements: [], recordPath: '' },
+  }
+  assert.equal(failureReason(aborted), 'canceled')
 })
 
 test('a check with retries says which try it ended on', () => {

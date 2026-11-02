@@ -139,6 +139,14 @@ const shortLeans = (measures: readonly Measure[] | null | undefined) => {
   return short.length ? ` It looks ${listed(short.map(leanText))}.` : ''
 }
 
+/** ` It looks 12× faster.`: `shortLeans` without the runs, for a remark's brief. */
+const briefLeans = (measures: readonly Measure[] | null | undefined) => {
+  const short = (measures ?? []).filter(
+    (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
+  )
+  return short.length ? ` It looks ${listed(short.map((m) => m.text))}.` : ''
+}
+
 /**
  * too-few-tries on a ceiling (concern): a variant and its baseline both passed every run and no
  * measure is better or worse, but some lean (`readMeasures`): the variant looks different, on too
@@ -318,13 +326,14 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const at = ctx.locate(entry, null)
   const these = others || also ? 'these differences' : 'this difference'
   const per = `${fewest} per side; set runs:`
-  const brief = held
+  const lead = held
     ? `${per} ${COMPARE_RUNS} at ${location(at)}, so a split this wide is less likely chance.`
     : !gap
       ? `${per} ${needed} at ${location(at)} to rule out a difference.`
       : needed
         ? `${per} ${needed} at ${location(at)} to confirm ${these}.`
         : undefined
+  const brief = lead && `${lead}${briefLeans(variant.measures)}`
   return [
     ...apart,
     {

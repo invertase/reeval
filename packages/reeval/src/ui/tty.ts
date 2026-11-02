@@ -61,7 +61,7 @@ const FRAME_MS = 80
  * place (the cursor goes up to it and back) until each sandbox is ready or failed, then settles to
  * `◆`. Lines printed under it are counted, so it stops before it would scroll out of reach.
  */
-class StepSpinner {
+export class StepSpinner {
   readonly #write: (text: string) => void
   readonly #c: Colors
   readonly #size: () => { rows: number; columns: number }

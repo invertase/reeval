@@ -51,37 +51,27 @@ const PLAIN = `evals/s.eval.ts
 ├─ ✓ passes           1 of 1 run passed
 ├─ ✗ two checks fail  0 of 2 runs passed
 │    Failed on fake every time.
-│    2 checks failed:
-│      "first check" failed once
-│        expected 1 to be 2 // Object.is equality
-│        at evals/s.eval.ts:12
-│      "second check" failed once
-│        expected 'a' to be 'b' // Object.is equality
-│        at evals/s.eval.ts:13
-│    Snapshot: <path> (+1 more in summary.md)
+│    ✗ first check   failed 1 of 1 run
+│      expected 1 to be 2 // Object.is equality · evals/s.eval.ts:12
+│    ✗ second check  failed 1 of 1 run
+│      expected 'a' to be 'b' // Object.is equality · evals/s.eval.ts:13
 ├─ ✗ throws           0 of 1 run passed
 │    Failed on fake.
-│    1 run failed:
+│    ✗ 1 run failed
 │      the fixture is missing
-│    Snapshot: <path>
 ├─ ✓ compares         1 of 1 variant run passed
-│    Baseline plain passed 0 of 1.
-│    Variants, by pass rate:
-│      marked  1 of 1  helped
-│    Every failure was the same check:
-│      "uses the marker" failed once, on the baseline
-│        expected false to be true // Object.is equality
-│        at evals/s.eval.ts:23
-│    Worth knowing:
-│      The marked variant passed 1 of 1 run and the baseline 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at evals/s.eval.ts:21: set runs: 4, where a difference this size would hold.
+│    Marked helped.
+│    arm               passed  verdict
+│    plain (baseline)  0 of 1
+│    marked            1 of 1  helped
+│    ✗ uses the marker  failed on the baseline · expected
+│      expected false to be true // Object.is equality · evals/s.eval.ts:23
+│    Worth knowing: 1 run per side; set runs: 4 at evals/s.eval.ts:21 to confirm this difference.
 └─ ✗ colors $id       1 of 3 runs passed
      Passed 1 of 3 on fake.
      Failed cases: red, blue.
-     Every failure was the same check:
-       "is green" failed 2 times
-         expected 'red' to be 'green' // Object.is equality
-         at evals/s.eval.ts:28
-     Snapshot: <path> (+1 more in summary.md)
+     ✗ is green  failed 2 of 3 runs
+       expected 'red' to be 'green' // Object.is equality · evals/s.eval.ts:28
 
 Done in <time> · 4 failed · 3 passed`
 
@@ -120,7 +110,7 @@ test('a compare whose effort holds prints its comparison, which every reader sha
   const run = await runCli(p.dir, ['run', '--ui', 'plain'])
   assert.equal(run.code, 0, run.stdout + run.stderr)
   const list = listOf(run.stdout)
-  assert.match(list, /^ {7}marked {2}4 of 4 {2}same\n {9}Same pass rate · [4-6](\.\d)?× faster\.$/m)
+  assert.match(list, /^ {5}arm {15}passed {2}verdict {2}vs baseline\n {5}plain \(baseline\) {2}4 of 4\n {5}marked {12}4 of 4 {2}same {5}[4-6](\.\d)?× faster$/m)
   assert.doesNotMatch(list, /Worth knowing|can't tell them apart|looks different/)
   const rows = await runCli(p.dir, ['query', 'measure_effects', '--json'])
   assert.equal(rows.code, 0, rows.stderr)
@@ -182,7 +172,7 @@ test('with-compare-questions, whose question picked the variant 4 of 4, names th
     config,
     readFileSync(config, 'utf8').replace('fakeHarness({', 'fakeHarness({ turnMs: 1000,'),
   )
-  const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  const run = await runCli(dir, ['run', '--ui', 'plain', '-v'], { timeoutMs: 300_000 })
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     run.stdout,
@@ -190,6 +180,12 @@ test('with-compare-questions, whose question picked the variant 4 of 4, names th
   )
   assert.match(run.stdout, / won 8 of 8$/m, 'the standings count the same votes')
   assert.doesNotMatch(run.stdout, /make the task harder/)
+  const brief = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  assert.match(
+    brief.stdout,
+    /^ {5}Worth knowing: Both passed every run, but the variant looks different; set runs: \d+ at with-compare-questions\.eval\.ts:\d+ to confirm it\.$/m,
+    'without -v, the remark is one short line',
+  )
 })
 
 test('with-effort at runs: 3, too few for a rank test, still names its speedup', async () => {
@@ -200,6 +196,6 @@ test('with-effort at runs: 3, too few for a rank test, still names its speedup',
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     run.stdout,
-    /It looks (.+ and )?[\d.]+× faster, but 3 runs a side can't confirm it; 4 is the least that can\./,
+    /^ {5}Worth knowing: 3 runs per side; set runs: \d+ at with-effort\.eval\.ts:\d+ to rule out a difference\. It looks (.+ and )?[\d.]+× faster\.$/m,
   )
 })
