@@ -317,7 +317,7 @@ evaluate(
     // The family is one row, its arms pooled over the cases. Agent time can hold either way on a
     // slow runner, so the vs control cell may lead with it.
     const pooled =
-      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/
+      /✓ writes ok\.txt {2}6 of 6 variant runs passed · 6 cases\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n[│ ]+case {6}base \(control\) {2}skilled\n[│ ]+✓ ada {7}0 of 1 {10}1 of 1\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
     assert.match(r.stdout, /^Done in \S+ · 1 passed$/m, 'the eval with cases counts once')
@@ -410,7 +410,7 @@ evaluate(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/,
+      /✗ writes ok\.txt {2}6 of 6 variant runs passed · 6 cases\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
