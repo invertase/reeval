@@ -29,7 +29,33 @@ export default defineConfig({
 })
 ```
 
-Before the run, preflight pulls `image` with `tart pull` unless Tart already has it. Each attempt clones it, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. When the Tart Guest Agent doesn't answer and `ssh: { key }` is set, it uses SSH instead. The clone is deleted when the attempt ends, and a canceled run's clones when the run does. For each option, see [the `tart()` options](/reference/options#tart).
+Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. When the Tart Guest Agent doesn't answer and `ssh: { key }` is set, it uses SSH instead. The clone is deleted when the attempt ends, and a canceled run's clones when the run does. For each option, see [the `tart()` options](/reference/options#tart).
+
+## Images
+
+`reeval run` never pulls an image: a macOS image is about 25 GB. Pull them first with `reeval image build`, which prints Tart's progress:
+
+```text
+$ npx reeval image build
+warning: tart(ghcr.io/cirruslabs/macos-sequoia-base:latest) uses the moving tag "latest": …
+tart pull ghcr.io/cirruslabs/macos-sequoia-base:latest
+…
+✓ tart:macos-sequoia-base:latest: ghcr.io/cirruslabs/macos-sequoia-base:latest eee659985b01
+1 image ready
+```
+
+| When | What happens |
+| :--- | :--- |
+| `reeval run`, and `tart list` doesn't show an image | Exit code 2, naming the image, its size, and `tart pull <image>` |
+| `reeval image build`, and the disk can't hold the images | Exit code 2 before any pull |
+| `reeval image build --dry-run` | Lists each image as ready or to pull, pulling nothing |
+| A plan with no `docker()` sandbox | `reeval image build` runs no Docker, and needs none installed |
+
+`tart pull <image>` works as well. Make a local VM with `tart clone` or `tart create`.
+
+<Warning>
+`:latest` or no tag warns: the tag can move between runs. Cirrus Labs' base images publish only `latest`, so pin one by digest, `…/macos-sequoia-base@sha256:…`. Each attempt records the digest it cloned in [`vmImage`](/reference/run-record).
+</Warning>
 
 ## Egress
 

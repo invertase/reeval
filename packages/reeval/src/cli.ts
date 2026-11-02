@@ -91,7 +91,7 @@ const version = PACKAGE_VERSION
 
 const HELP = helpText(version)
 
-const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
+const { green, red, dim, yellow } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
 
 const startedAt = Date.now()
 const argv = process.argv.slice(2)
@@ -287,18 +287,26 @@ function verbosityOf(flags: Flags): 0 | 1 | 2 {
 }
 
 /**
- * `reeval image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
- * sandboxes need; with `--dry-run`, lists them instead. `--profile` plans as `reeval run --profile`
- * does. Needs a config, as `reeval run` does: there is no default image.
+ * `reeval image build`: collects the evals (as `--dry-run` does), pulls every image their `tart()`
+ * sandboxes clone that Tart doesn't have, and builds every image their Docker sandboxes need; with
+ * `--dry-run`, lists them instead. A plan with no Docker sandbox never runs Docker. `--profile`
+ * plans as `reeval run --profile` does. Needs a config, as `reeval run` does: there is no default
+ * image.
  */
 async function imageBuildCommand(
   flags: Flags,
   configPath: string | undefined,
   filters: string[],
 ): Promise<number> {
-  const { buildImages, imagePlanLines, imageTargets, plannedImageUses } = await import(
-    './sandbox/images.ts'
-  )
+  const {
+    buildImages,
+    imagePlanLines,
+    imageTargets,
+    plannedImageUses,
+    pullTartImages,
+    tartPlanLines,
+    tartTargets,
+  } = await import('./sandbox/images.ts')
   const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
   const ctx = await startRun(setup)
   const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
@@ -309,48 +317,93 @@ async function imageBuildCommand(
     (parts) => unmatchedFilter(config, parts),
   )
   const targets = imageTargets(uses)
-  if (targets.length === 0) {
-    console.log('No eval runs in a Docker sandbox, so there are no images to build.')
+  const vms = tartTargets(uses)
+  if (targets.length === 0 && vms.length === 0) {
+    console.log(
+      'No eval runs in a Docker or Tart sandbox, so there are no images to build or pull.',
+    )
     return EXIT.ok
   }
+  const { tartTagWarning } = await import('./sandbox/tart-ref.ts')
+  for (const t of vms) {
+    const warning = tartTagWarning(t.sandbox.image)
+    if (warning) console.log(yellow(`warning: ${warning}`))
+  }
   if (flags['dry-run']) {
-    for (const line of await imagePlanLines(targets, root)) console.log(line)
+    if (vms.length) for (const line of await tartPlanLines(vms)) console.log(line)
+    if (targets.length) for (const line of await imagePlanLines(targets, root)) console.log(line)
     return EXIT.ok
   }
   const { PrepareError } = await import('./sandbox/provider.ts')
-  let built: Awaited<ReturnType<typeof buildImages>>
+  type Outcome =
+    | { id: string; evals: number; ok: true; ref: string; id12: string }
+    | {
+        id: string
+        evals: number
+        ok: false
+        failure: import('./sandbox/provider.ts').PrepareFailure
+      }
+  const outcomes: Outcome[] = []
   try {
-    built = await buildImages(targets, root, {
-      log: (line) => console.log(dim(line)),
-      force: !!flags.force,
-    })
+    if (vms.length) {
+      for (const p of await pullTartImages(vms, root, { log: (line) => console.log(dim(line)) })) {
+        outcomes.push(
+          p.ok
+            ? {
+                id: p.id,
+                evals: p.evals,
+                ok: true,
+                ref: p.image.ref,
+                id12: p.image.digest ? short12(p.image.digest) : 'local VM',
+              }
+            : { id: p.id, evals: p.evals, ok: false, failure: p.failure },
+        )
+      }
+    }
+    if (targets.length) {
+      const built = await buildImages(targets, root, {
+        log: (line) => console.log(dim(line)),
+        force: !!flags.force,
+      })
+      for (const b of built) {
+        outcomes.push(
+          b.ok
+            ? { id: b.id, evals: b.evals, ok: true, ref: b.image.ref, id12: short12(b.image.id) }
+            : { id: b.id, evals: b.evals, ok: false, failure: b.failure },
+        )
+      }
+    }
   } catch (error) {
     if (error instanceof PrepareError && error.failure.usage) throw new UsageError(error.message)
     throw error
   }
   // Every image, failed or not, so one broken image doesn't hide the state of the others.
-  for (const b of built) {
-    if (b.ok) {
-      const id = b.image.id.replace(/^sha256:/, '').slice(0, 12)
-      console.log(`${green('✓')} ${green(`${b.id}: ${b.image.ref}`)}${dim(` ${id}`)}`)
+  for (const o of outcomes) {
+    if (o.ok) {
+      console.log(`${green('✓')} ${green(`${o.id}: ${o.ref}`)}${dim(` ${o.id12}`)}`)
       continue
     }
-    const uses = b.evals ? ` (${b.evals} eval${b.evals === 1 ? '' : 's'})` : ''
-    const [headline = '', ...rest] = b.failure.message.split('\n')
-    console.log(`${red('✗')} ${red(`${b.id}${uses}: ${headline}`)}`)
+    const uses = o.evals ? ` (${o.evals} eval${o.evals === 1 ? '' : 's'})` : ''
+    const [headline = '', ...rest] = o.failure.message.split('\n')
+    console.log(`${red('✗')} ${red(`${o.id}${uses}: ${headline}`)}`)
     for (const line of rest) console.log(`  ${line}`)
   }
-  const failed = built.filter((b) => !b.ok)
-  const n = built.length
+  const failed = outcomes.filter((o) => !o.ok)
+  const n = outcomes.length
   console.log(
     failed.length
-      ? red(`${failed.length} of ${n} image${n === 1 ? '' : 's'} failed to build`)
+      ? red(
+          `${failed.length} of ${n} image${n === 1 ? '' : 's'} failed to ${vms.length ? (targets.length ? 'build or pull' : 'pull') : 'build'}`,
+        )
       : dim(`${n} image${n === 1 ? '' : 's'} ready`),
   )
   if (!failed.length) return EXIT.ok
   // A missing docker({ image }) is fixed in the config; anything else is the build's.
-  return failed.every((b) => !b.ok && b.failure.usage) ? EXIT.usage : EXIT.infra
+  return failed.every((o) => !o.ok && o.failure.usage) ? EXIT.usage : EXIT.infra
 }
+
+/** The first 12 hex digits of an image id or digest. */
+const short12 = (id: string) => id.replace(/^sha256:/, '').slice(0, 12)
 
 /** `reeval run`: check, plan, run the engine, then write the run and pick the exit code. */
 async function runCommand(

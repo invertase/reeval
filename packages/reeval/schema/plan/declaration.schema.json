@@ -3096,7 +3096,7 @@
           "pattern": "\\S"
         },
         "image": {
-          "description": "The VM each attempt clones: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's name.",
+          "description": "The VM each attempt clones: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, or a local VM's name. Tart must have it before the run: `reeval image build` (or `tart pull`) pulls it, and `reeval run` refuses one `tart list` doesn't show.",
           "type": "string",
           "pattern": "^\\S+$"
         },

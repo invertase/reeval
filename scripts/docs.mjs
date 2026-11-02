@@ -303,6 +303,7 @@ const RECORD_TYPES = [
   'PluginRecord',
   'EgressRecord',
   'AttemptImage',
+  'VmImage',
   'PhaseTimings',
   'FileChange',
   'McpStartup',

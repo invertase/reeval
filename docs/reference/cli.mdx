@@ -382,7 +382,7 @@ reeval report [run]           Collect a bug report: versions, reeval doctor, the
 
 ## `reeval image build`
 
-The `reeval image build` command builds the sandbox images a plan needs.
+The `reeval image build` command builds the Docker images a plan needs and pulls the `tart()` images Tart doesn't have. A plan with no `docker()` sandbox runs no Docker. For more information, see [Run in a macOS VM with Tart](/configuration/sandboxes/tart#images).
 
 [//]: # (generated:cli-help:image-build)
 
@@ -391,12 +391,16 @@ reeval image build [filter...]
                               Build every image the evals' Docker sandboxes need, per harness: reeval's
                               image (bakes in its CLI), from and dockerfile images, install layers.
                               Builds what's missing or stale (a from tag that moved upstream), three
-                              at a time, and reports every failure; exit 3 if any image failed
+                              at a time, and reports every failure; exit 3 if any image failed.
+                              Pulls the tart() images Tart doesn't have, with tart pull, once the
+                              disk has room for them (exit 2 if not); runs no Docker without a
+                              Docker sandbox
   --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                               harness, sandbox and tags pick the images (also REEVAL_PROFILE)
   --force                     Rebuild every image, pulling each base again
   --dry-run                   List the images, how each is made and how each stands, building
-                              nothing (a from tag is looked up in its registry, not pulled)
+                              and pulling nothing (a from tag or tart() image is looked up in its
+                              registry, not pulled)
 ```
 
 [//]: # (/generated:cli-help:image-build)
@@ -424,8 +428,8 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 `reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled. An evaluation with `cases` is one row, with a row per case inside it; under a pooled `passRate` or `minLift` gate, the evaluation's rate over its cases decides, not a case that flipped.
 
-`reeval image build` exits 2 when every failed image is a usage error, else 3.
+`reeval image build` exits 2 when every failed image is a usage error, else 3. It exits 2 before any pull when the disk can't hold the `tart()` images it would pull.
 
-Other errors, including a missing config file, exit 2. A preflight infrastructure error or an unhandled crash exits 3.
+Other errors, including a missing config file and a `tart()` image that `tart list` doesn't show, exit 2. A preflight infrastructure error or an unhandled crash exits 3.
 
 For more information about these codes in a CI job, see [Run evaluations in CI](/evaluations/runs/ci).

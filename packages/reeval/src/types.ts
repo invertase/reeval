@@ -1163,7 +1163,9 @@ export type TartSandboxDescriptor = {
   id?: string
   /**
    * The VM each attempt clones: an OCI image such as
-   * `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's name.
+   * `ghcr.io/cirruslabs/macos-sequoia-base:latest`, or a local VM's name. Tart must have it
+   * before the run: `reeval image build` (or `tart pull`) pulls it, and `reeval run` refuses one
+   * `tart list` doesn't show.
    */
   image: string
   /**
@@ -2740,6 +2742,14 @@ export type AttemptImage = {
   from?: { ref: string; digest: string | null }
 }
 
+/** The image a `tart()` attempt's VM was cloned from. */
+export type VmImage = {
+  /** The image as `tart({ image })` names it. */
+  ref: string
+  /** The OCI manifest digest (`sha256:…`) Tart had for it; null for a local VM, which has none. */
+  digest: string | null
+}
+
 /** What one judge call saw, and for a call that failed, why and what was retried first. */
 export type JudgeInput = {
   question: string
@@ -2862,6 +2872,8 @@ export type EvalRecord = {
   judgeInputs?: JudgeInput[]
   environment?: EnvironmentRecord
   image?: AttemptImage | null
+  /** See `AttemptRecord.vmImage`. */
+  vmImage?: VmImage
   /** Names of the variables and secrets set in the sandbox, and of the brokered secrets among them. */
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */

@@ -1,4 +1,5 @@
-// `reeval image build`: every image the planned attempts' Docker sandboxes need, built or listed.
+// `reeval image build`: every image the planned attempts' Docker sandboxes need, built or listed,
+// and the images their `tart()` sandboxes clone, pulled.
 import {
   type BakedHarness,
   contextHash,
@@ -28,6 +29,8 @@ import type {
   PluginSource,
   RunContext,
   SandboxDescriptor,
+  TartSandboxDescriptor,
+  VmImage,
 } from '../types.ts'
 import { prepareAll } from './preflight.ts'
 import {
@@ -38,7 +41,7 @@ import {
   usesReevalBase,
 } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
-import { attemptImage, createProviders, dockerKey } from './providers.ts'
+import { attemptImage, classifyTart, createProviders, dockerKey, vmImage } from './providers.ts'
 
 /**
  * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, the
@@ -466,6 +469,97 @@ export async function buildImages(
     return o.ok
       ? { ...t, ok: true, image: attemptImage(o.handle), ms: o.ms }
       : { ...t, ok: false, failure: o.failure, ms: o.ms }
+  })
+}
+
+/** One image `tart()` clones, with how many evals use it and the sandbox the first names it in. */
+export type TartTarget = { id: string; sandbox: TartSandboxDescriptor; evals: number }
+
+/** The distinct `tart()` images, in first-use order, with how many evals use each. */
+export function tartTargets(uses: ImageUse[]): TartTarget[] {
+  const targets = new Map<string, TartTarget & { seen: Set<string> }>()
+  for (const { id, sandbox } of uses) {
+    if (sandbox.kind !== 'tart') continue
+    const target = targets.get(sandbox.image) ?? {
+      id: sandboxId(sandbox),
+      sandbox,
+      evals: 0,
+      seen: new Set(),
+    }
+    if (!target.seen.has(id)) {
+      target.seen.add(id)
+      target.evals++
+    }
+    targets.set(sandbox.image, target)
+  }
+  return [...targets.values()].map(({ seen: _, ...t }) => t)
+}
+
+/** `reeval image build --dry-run`: whether Tart has each image, and what a missing one weighs. */
+export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
+  const { tartNames } = await import('./tart-cli.ts')
+  const { formatSize, tartDigest, tartImageSize } = await import('./tart-images.ts')
+  const have = await tartNames().catch((error: Error) => error)
+  const lines = [
+    `tart  ${targets.length} image${targets.length === 1 ? '' : 's'} (nothing pulled: --dry-run)`,
+  ]
+  for (const t of targets) {
+    const uses = t.evals ? ` · ${t.evals} eval${t.evals === 1 ? '' : 's'}` : ''
+    const { image } = t.sandbox
+    if (have instanceof Error) {
+      lines.push(`  ? ${t.id}${uses}  ${image}  (unchecked: ${have.message.split('\n')[0]})`)
+    } else if (have.has(image)) {
+      const digest = await tartDigest(image)
+      lines.push(`  ✓ ${t.id}${uses}  ${image}  (ready${digest ? `: ${short(digest)}` : ''})`)
+    } else {
+      const size = await tartImageSize(image, AbortSignal.timeout(10_000))
+      const weighs = size ? `: about ${formatSize(size.download)} to download` : ''
+      lines.push(`  + ${t.id}${uses}  ${image}  (to pull${weighs})`)
+    }
+  }
+  return lines
+}
+
+export type PulledImage = TartTarget &
+  ({ ok: true; image: VmImage; ms: number } | { ok: false; failure: PrepareFailure; ms: number })
+
+/**
+ * `reeval image build`: pulls every image Tart doesn't have, once the disk has room for all of
+ * them, and reports each with its digest. Runs no Docker.
+ */
+export async function pullTartImages(
+  targets: TartTarget[],
+  root: string,
+  options: { log: (line: string) => void; delays?: number[] },
+): Promise<PulledImage[]> {
+  const providers = createProviders({ pull: true })
+  const prepared = targets.map((t) => ({
+    kind: 'tart',
+    key: providers.tart?.key(t.sandbox, harnessFor('cursor')) ?? t.sandbox.image,
+    label: t.id,
+    sandbox: t.sandbox,
+    harness: harnessFor('cursor'),
+    plugins: [],
+    setBy: [],
+    runWide: false,
+  }))
+  const outcomes = await prepareAll(prepared, {
+    providers,
+    root,
+    log: options.log,
+    ...(options.delays ? { delays: options.delays } : {}),
+  })
+  return targets.map((t, i) => {
+    const o = outcomes[i] as (typeof outcomes)[number]
+    const image = o.ok ? vmImage(o.handle) : null
+    return image
+      ? { ...t, ok: true, image, ms: o.ms }
+      : {
+          ...t,
+          ok: false,
+          failure: o.ok ? classifyTart(new Error('tart() prepared no image')) : o.failure,
+          ms: o.ms,
+        }
   })
 }
 

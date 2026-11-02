@@ -145,6 +145,10 @@ option and confines the container the same way (bridge network, Docker's seccomp
 `tart({ image })` (an OCI macOS image or a local Tart VM) runs each attempt in a cloned macOS VM
 on an Apple Silicon Mac, at most two at once. It needs `egress: 'allow-all'`: under the default
 `proxy` or a restricted policy the plan exits 2. Only `fakeHarness()` runs in it so far.
+`reeval run` never pulls the image: one `tart list` doesn't show exits 2, naming `tart pull
+<image>`. Run `npx reeval image build` first, which pulls every `tart()` image the plan needs (and
+refuses, exit 2, when the disk can't hold them). Pin a version tag: `:latest` or no tag warns, and
+each attempt records the digest it cloned in `vmImage`.
 
 ```ts
 import { boat, createBoat } from 'reeval/sandbox/boat'

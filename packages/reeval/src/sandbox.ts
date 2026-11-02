@@ -79,8 +79,8 @@ function containerSandbox(
 
 /**
  * A macOS VM on this Apple Silicon Mac, run by [Tart](https://tart.run). Each attempt clones
- * `image` (an OCI image, which preflight pulls, or a local VM), boots it headless, works in it
- * over `tart exec`, and deletes it. `ssh` reaches an image without the Tart Guest Agent instead.
+ * `image` (an OCI image, which `reeval image build` pulls, or a local VM), boots it headless,
+ * works in it over `tart exec`, and deletes it. A run refuses an image Tart doesn't have. `ssh` reaches an image without the Tart Guest Agent instead.
  * At most two run at once (`maxConcurrent`), as macOS allows.
  *
  * The VM keeps Tart's network, so it runs under `egress: 'allow-all'` only: what ignores the

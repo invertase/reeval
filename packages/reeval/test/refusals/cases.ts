@@ -45,6 +45,7 @@ import {
 } from '../../src/harness.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
+import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-images.ts'
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
@@ -112,6 +113,12 @@ const mcpOn = (harness: HarnessDescriptor, use: (h: EnvironmentHelpers) => objec
 }
 const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
 const SEQUOIA = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
+/** What ghcr.io says the Sequoia base weighs: compressed layers, and the unpacked disk. */
+const SIZE = { download: 25_458_766_500, disk: 50_033_579_673 }
+/** A message reeval builds, refused as preflight refuses it. */
+const refuse = (message: string) => () => {
+  throw new UsageError(message)
+}
 
 /** A config's `gateway` list as the plan walks it: `direct()` at the end unless placed or off. */
 const listed = (gateways: GatewayDescriptor[]) =>
@@ -439,6 +446,24 @@ export const CASES: Record<string, Case[]> = {
     [
       'plan: three at once',
       planned({ sandbox: { kind: 'tart', image: SEQUOIA, maxConcurrent: 3 }, egress: 'allow-all' }),
+    ],
+    ['run: an image Tart lacks', refuse(missingImagesMessage([{ image: SEQUOIA, size: SIZE }]))],
+    [
+      'run: an image Tart lacks, unsized',
+      refuse(missingImagesMessage([{ image: SEQUOIA, size: null }])),
+    ],
+    [
+      'run: two images Tart lacks, one a local VM',
+      refuse(
+        missingImagesMessage([
+          { image: SEQUOIA, size: SIZE },
+          { image: 'sequoia-dev', size: null },
+        ]),
+      ),
+    ],
+    [
+      'image build: no room to pull',
+      refuse(pullSpaceMessage([{ image: SEQUOIA, size: SIZE }], 31e9, '/Users/me/.tart')),
     ],
   ],
   harness: [

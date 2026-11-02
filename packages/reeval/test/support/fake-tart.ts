@@ -6,6 +6,9 @@
 // FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent, after blocking for
 // FAKE_TART_EXEC_BLOCKS seconds as tart 2.41 does (about 30). FAKE_TART_NO_SUDO=1: `sudo -n` asks
 // for a password. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it (`1`: out of disk).
+// FAKE_TART_PULL_FAILS: `tart pull` fails, saying it.
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,10 +16,25 @@ import { join } from 'node:path'
 const TART = `#!/bin/bash
 root="$FAKE_TART_DIR"
 echo "$*" >> "$root/log"
+# As Tart caches an OCI image: a sha256: directory, and its tag a link to it.
+pulled() {
+  echo "$1" >> "$root/pulled"
+  case $1 in */*) ;; *) return ;; esac
+  repo=\${1%:*}; tag=\${1##*:}
+  [ "$repo" = "$1" ] || [ "\${tag#*/}" != "$tag" ] && { repo=$1; tag=latest; }
+  sum=$(printf %s "$1" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64)
+  dir="$TART_HOME/cache/OCIs/$repo"
+  mkdir -p "$dir/sha256:$sum" && ln -sfn "$dir/sha256:$sum" "$dir/$tag"
+}
 cmd=$1; shift
 case "$cmd" in
   --version) echo 2.30.0 ;;
-  pull) echo "$1" >> "$root/pulled" ;;
+  pull)
+    [ -n "$FAKE_TART_PULL_FAILS" ] && { echo "$FAKE_TART_PULL_FAILS" >&2; exit 1; }
+    echo "pulling manifest..."
+    echo "pulling disk (1.2 GB compressed)..."
+    for p in 0 3 9 10 25 50 75 99 100; do echo "$p%"; done
+    pulled "$1" ;;
   clone) mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image" ;;
   set) echo "$*" > "$root/vms/$1/set" ;;
   run)
@@ -37,7 +55,7 @@ case "$cmd" in
   list)
     printf '['; sep=
     for d in "$root"/vms/*/; do [ -d "$d" ] || continue; printf '%s{"Name":"%s"}' "$sep" "$(basename "$d")"; sep=,; done
-    [ -f "$root/pulled" ] && while read -r i; do printf '%s{"Name":"%s"}' "$sep" "$i"; sep=,; done < "$root/pulled"
+    [ -f "$root/pulled" ] && while read -r i; do case $i in */*) src=OCI ;; *) src=local ;; esac; printf '%s{"Name":"%s","Source":"%s"}' "$sep" "$i" "$src"; sep=,; done < "$root/pulled"
     echo ']' ;;
   *) echo "fake tart: no $cmd" >&2; exit 2 ;;
 esac
@@ -84,8 +102,19 @@ keep=
 done
 `
 
-/** A fake `tart` in a directory of its own: the variables that put it first on PATH, and its log. */
-export function fakeTart(): { dir: string; env: NodeJS.ProcessEnv; log: () => string[] } {
+/** The digest the fake `tart pull` gives `image`: the sha256 of its name. */
+export const fakeDigest = (image: string) =>
+  `sha256:${createHash('sha256').update(image).digest('hex')}`
+
+/**
+ * A fake `tart` in a directory of its own, with `images` pulled already: the variables that put
+ * it first on PATH (and its home in TART_HOME), and its log, which leaves those pulls out.
+ */
+export function fakeTart(images: string[] = []): {
+  dir: string
+  env: NodeJS.ProcessEnv
+  log: () => string[]
+} {
   const dir = mkdtempSync(join(tmpdir(), 'reeval-fake-tart-'))
   const bin = join(dir, 'bin')
   mkdirSync(join(dir, 'vms'), { recursive: true })
@@ -94,17 +123,25 @@ export function fakeTart(): { dir: string; env: NodeJS.ProcessEnv; log: () => st
     writeFileSync(join(bin, name), script)
     chmodSync(join(bin, name), 0o755)
   }
+  const env = {
+    FAKE_TART_DIR: dir,
+    TART_HOME: join(dir, 'home'),
+    PATH: `${bin}:${process.env.PATH ?? ''}`,
+  }
+  for (const image of images) {
+    spawnSync(join(bin, 'tart'), ['pull', image], { env: { ...process.env, ...env } })
+  }
   writeFileSync(join(dir, 'log'), '')
   return {
     dir,
-    env: { FAKE_TART_DIR: dir, PATH: `${bin}:${process.env.PATH ?? ''}` },
+    env,
     log: () => readFileSync(join(dir, 'log'), 'utf8').split('\n').filter(Boolean),
   }
 }
 
 /** Puts a {@link fakeTart} first on this process's PATH. */
-export function installFakeTart(): { dir: string; log: () => string[] } {
-  const fake = fakeTart()
+export function installFakeTart(images: string[] = []): { dir: string; log: () => string[] } {
+  const fake = fakeTart(images)
   Object.assign(process.env, fake.env)
   return fake
 }

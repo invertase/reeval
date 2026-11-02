@@ -46,7 +46,7 @@ import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
-import { fakeTart } from './support/fake-tart.ts'
+import { fakeDigest, fakeTart } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -3014,6 +3014,28 @@ export const features: Feature[] = [
     },
   },
   {
+    // tart() on the fake `tart`, which has the image already: the run clones it and pulls nothing.
+    dir: 'sandbox/tart-clones-image',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    canary:
+      /expected 'ghcr\.io\/cirruslabs\/macos-sequoia-base…' to be 'ghcr\.io\/cirruslabs\/macos-sequoia-base…'/,
+    hostEnv: (dir) => {
+      const fake = fakeTart(['ghcr.io/cirruslabs/macos-sequoia-base:15.6'])
+      fakeTarts.set(dir, fake.dir)
+      return { ...fake.env, REEVAL_TEST_TART_ANY_HOST: '1' }
+    },
+    record: ({ run, project, stdout }) => {
+      const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
+      assert.deepEqual(landed(run)?.vmImage, { ref: image, digest: fakeDigest(image) })
+      const log = readFileSync(join(fakeTarts.get(project) ?? '', 'log'), 'utf8')
+      assert.doesNotMatch(log, /^pull /m, 'the run pulled nothing')
+      assert.doesNotMatch(stdout, /moving tag/, 'a pinned tag has no warning')
+    },
+  },
+  {
     // tart() on the fake `tart` (test/support/fake-tart.ts), whose VMs list only their own listeners.
     dir: 'ui/serve-tart-own-port',
     tiers: ['fake'],
@@ -3022,7 +3044,7 @@ export const features: Feature[] = [
     posixModes: true,
     canary: /expected 'own port' to be 'reads PORT'/,
     hostEnv: (dir) => {
-      const fake = fakeTart()
+      const fake = fakeTart(['ghcr.io/cirruslabs/macos-sequoia-base:latest'])
       fakeTarts.set(dir, fake.dir)
       return { ...fake.env, REEVAL_TEST_TART_ANY_HOST: '1' }
     },

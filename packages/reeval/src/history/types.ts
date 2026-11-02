@@ -28,6 +28,7 @@ import type {
   StartRetry,
   TokenUsage,
   TurnStatus,
+  VmImage,
   WebEventType,
 } from '../types.ts'
 import type { CellEffort } from '../view/effort.ts'
@@ -183,6 +184,11 @@ export type AttemptRecord = {
   startedAt: string | null
   /** The image the container started from, in `stack.images`; null when the sandbox doesn't start from an image. */
   imageId: string | null
+  /**
+   * The image a `tart()` attempt's VM was cloned from, with the digest Tart had for it. Absent in
+   * other sandboxes, and in attempts that didn't reach their sandbox.
+   */
+  vmImage?: VmImage
   /** Names of the variables and secrets set in the sandbox, and the brokered ones; never values. */
   env: { vars: string[]; secrets: string[]; brokered: string[] }
   /** Skills, rules, and MCP config visible to the agent in its sandbox, by content hash. */
@@ -633,6 +639,7 @@ export type FingerprintParts = {
   /** Over the harness descriptor, less concurrency caps. */
   harness: string
   environment: string | null
+  /** The Docker image's id, or the digest of the image a `tart()` VM was cloned from. */
   image: string | null
   agentCli: string | null
   /** Over the judge's model, threshold and version. */
