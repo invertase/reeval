@@ -61,6 +61,7 @@ describe('sandbox kinds', () => {
       brokers: true,
       harnessSession: true,
       isolated: true,
+      processTable: true,
       images: true,
       pluginBuilds: true,
     })
@@ -70,6 +71,7 @@ describe('sandbox kinds', () => {
       brokers: false,
       harnessSession: false,
       isolated: false,
+      processTable: false,
       images: false,
       pluginBuilds: false,
     })

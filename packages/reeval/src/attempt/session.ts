@@ -104,7 +104,7 @@ const SETUP_COMMAND_CHARS = 200
  */
 async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const names = unbrokeredChecks(env)
-  if (!capabilitiesOf(a.spec.sandbox).isolated || !env.setup.length || !names.length) return []
+  if (!capabilitiesOf(a.spec.sandbox).processTable || !env.setup.length || !names.length) return []
   const r = await box.exec(
     [
       'for t in tr sed sort; do command -v "$t" >/dev/null || { echo "no $t in the image" >&2; exit 1; }; done',

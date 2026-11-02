@@ -155,7 +155,12 @@ for (const row of [scripted.row, dockerRow]) {
   describe(`sandbox prepare contract: ${row.name}`, { skip: row.skip, timeout: 600_000 }, () => {
     const prepare = (uses: PrepareUse[], provider = row.provider()) => {
       const providers = { [provider.kind]: provider }
-      const targets = prepareTargets(uses, providers, (u) => JSON.stringify(u.sandbox))
+      const targets = prepareTargets(
+        uses,
+        providers,
+        (u) => JSON.stringify(u.sandbox),
+        () => provider.kind,
+      )
       const retries: string[] = []
       return {
         targets,
@@ -243,6 +248,7 @@ describe('sandbox prepare contract: the generic layer', () => {
       [use({ kind: 'scripted', script: 'flaky', n: 9 } as unknown as SandboxDescriptor)],
       providers,
       () => 'flaky',
+      () => provider.kind,
     )
     const [outcome] = await prepareAll(targets, {
       providers,
@@ -269,6 +275,7 @@ describe('sandbox prepare contract: the generic layer', () => {
       [use(sandbox, 'reeval.config.ts'), built],
       { [provider.kind]: provider },
       () => 'scripted',
+      () => provider.kind,
     )
     assert.deepEqual(
       targets.map((t) => [t.setBy, t.runWide]),

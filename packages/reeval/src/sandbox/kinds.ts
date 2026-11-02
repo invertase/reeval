@@ -31,6 +31,11 @@ export type SandboxCapabilities = {
    * setup steps left running are worth recording. The fake sandbox is the host.
    */
   isolated: boolean
+  /**
+   * Has a Linux `/proc` for the agent's processes, and bash: what `leftRunning`, `c.serve`'s port
+   * probe and the background-exec kill-tree read.
+   */
+  processTable: boolean
   /** Starts from an image preflight prepares before the run, which the record names. */
   images: boolean
   /** Runs a plugin's `build` while preparing the image. */
@@ -91,6 +96,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     brokers: true,
     harnessSession: true,
     isolated: true,
+    processTable: true,
     images: true,
     pluginBuilds: true,
   },
@@ -134,6 +140,7 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
     brokers: false,
     harnessSession: false,
     isolated: false,
+    processTable: false,
     images: false,
     pluginBuilds: false,
   },

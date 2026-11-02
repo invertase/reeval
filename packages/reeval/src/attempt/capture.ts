@@ -38,7 +38,6 @@ import type {
   CapturePageFile,
   CaptureStep,
   CaptureUse,
-  SandboxDescriptor,
   ServeHandle,
   ServeRecord,
 } from '../types.ts'
@@ -90,12 +89,6 @@ function resolveUse(
   throw new Error(
     'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or set analysis.model or the judge model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
   )
-}
-
-/** Whether the sandbox is a Linux machine of its own (a container), with bash and its own /proc. */
-const ownLinux = (sandbox: SandboxDescriptor) => {
-  const { isolated, platform } = capabilitiesOf(sandbox)
-  return isolated && platform === 'linux'
 }
 
 /**
@@ -150,14 +143,14 @@ async function launch(
   const box = await sandboxFor(a, who)
   // A shell of its own keeps a compound command's `&&`, `;` and redirects together, as in the
   // foreground; reeval's log only takes what the command leaves on stdout and stderr.
-  const docker = ownLinux(a.spec.sandbox)
+  const { processTable } = capabilitiesOf(a.spec.sandbox)
   const tag = randomUUID()
   const log = `${BG_LOG}-${tag.slice(0, 8)}.log`
-  const wrapped = `${docker ? 'bash' : 'sh'} -c ${shellQuote(command)} >${log} 2>&1 & echo $$ $!`
+  const wrapped = `${processTable ? 'bash' : 'sh'} -c ${shellQuote(command)} >${log} 2>&1 & echo $$ $!`
   const r = await asCheck(a, () =>
     box.exec(wrapped, {
       signal: a.signal,
-      env: { ...(a.env?.checkVars ?? {}), ...extraEnv, ...(docker ? { [BG_TAG]: tag } : {}) },
+      env: { ...(a.env?.checkVars ?? {}), ...extraEnv, ...(processTable ? { [BG_TAG]: tag } : {}) },
     }),
   )
   const [group = '', pid = ''] = r.stdout.trim().split(/\s+/).slice(-2)
@@ -168,8 +161,8 @@ async function launch(
   }
   // The pid is the shell around the command (dash and bash run a compound one as its child), so
   // kill() also stops everything under it.
-  const tree = docker
-    ? // Its own Linux machine has bash and a /proc of its own: everything that inherited the tag.
+  const tree = processTable
+    ? // A /proc of the agent's own processes: everything that inherited the tag.
       `for e in /proc/[0-9]*/environ; do grep -qsxzF ${shellQuote(`${BG_TAG}=${tag}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done`
     : process.platform === 'win32'
       ? msysTreeKill(pid, group)
@@ -200,7 +193,7 @@ export async function serveCommand(
   port?: number,
 ): Promise<ServeHandle> {
   const box = await sandboxFor(a, 'c.serve()')
-  const tables = capabilitiesOf(a.spec.sandbox).isolated
+  const tables = capabilitiesOf(a.spec.sandbox).processTable
   const look = (pid?: string) =>
     untraced(() => box.exec(probeScript(pid, tables), { signal: a.signal })).then((r) =>
       parseProbe(r.stdout),

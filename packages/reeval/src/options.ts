@@ -162,12 +162,8 @@ export function harnessId(h: HarnessDescriptor): string {
   return `${base}${suffix}`
 }
 
-/**
- * The provider a sandbox runs on: its kind, or `podman` for a Docker sandbox on Podman. The
- * generic prepare layer takes any provider, so a kind with no entry is keyed by its name.
- */
-export const sandboxProvider = (s: SandboxDescriptor): string =>
-  isSandboxKind(s.kind) ? sandboxKind(s).provider(s) : s.kind
+/** The provider a sandbox runs on: its kind, or `podman` for a Docker sandbox on Podman. */
+export const sandboxProvider = (s: SandboxDescriptor): string => sandboxKind(s).provider(s)
 
 export const sandboxId = (s: SandboxDescriptor): string => s.id ?? sandboxKind(s).id(s)
 
