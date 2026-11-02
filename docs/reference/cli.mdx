@@ -200,8 +200,8 @@ reeval show [run]             One run: result blocks, --md (summary.md) or --jso
 
 | Track | What it holds |
 |---|---|
-| `run` | The whole run, the time before its first attempt started (planning and preflight), and an `attempts running` counter |
-| `lane <n>` | Attempts that didn't overlap, in start order: reeval puts each attempt on the first lane free when it started, so there are as many lanes as attempts ever ran at once |
+| `run <run id>` | The whole run, the time before its first attempt started (planning and preflight), and an `attempts running` counter |
+| `attempts`, `lane <n>` | Attempts that didn't overlap, in start order: reeval puts each attempt on the first lane free when it started, so there are as many lanes as attempts ever ran at once |
 
 Under each attempt, its `setup` runs from the attempt's start, and each `turn <n>` sits at the time it started, with the transcript's text, reasoning and tool calls nested under it when the run kept the transcript. The record holds only the totals of the `diff`, each `check <command>` and the `judge`, so they're placed one after another after the last turn and carry `placed: estimated` in their arguments. Every slice's arguments hold its record fields, such as the attempt's key, outcome and phase timings.
 
