@@ -16,7 +16,7 @@ import { join } from 'node:path'
 const TART = `#!/bin/bash
 root="$FAKE_TART_DIR"
 echo "$*" >> "$root/log"
-# As Tart caches an OCI image: a sha256: directory, and its tag a link to it.
+# As Tart caches an OCI image: a sha256: directory, and its tag a link to it by absolute path.
 pulled() {
   echo "$1" >> "$root/pulled"
   case $1 in */*) ;; *) return ;; esac

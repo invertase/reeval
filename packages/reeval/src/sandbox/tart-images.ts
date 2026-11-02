@@ -13,7 +13,7 @@ export const tartHome = () => process.env.TART_HOME || join(homedir(), '.tart')
 
 /**
  * The digest of the pulled image `image` names: its own, or the one its tag points to in Tart's
- * cache (`cache/OCIs/<host>/<repo>/<tag>`, a link to the `sha256:…` directory). Null for a local
+ * cache (`cache/OCIs/<host>/<repo>/<tag>`, a link to the `sha256:…` directory by absolute path). Null for a local
  * VM, which has none, or when the cache doesn't say.
  */
 export async function tartDigest(image: string): Promise<string | null> {

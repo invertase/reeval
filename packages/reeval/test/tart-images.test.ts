@@ -2,10 +2,10 @@
 // `reeval image build` pulls it (with progress, room for it checked first, and no Docker), on a
 // fake `tart` and a fake registry that answers as ghcr.io does, with a token.
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { formatSize, tartImageSize, tartPull } from '../src/sandbox/tart-images.ts'
 import { parseTartRef, tartTagWarning } from '../src/sandbox/tart-ref.ts'
@@ -197,7 +197,7 @@ describe('tart() images before the run', {
 
   test('reeval image build pulls it with progress and no Docker; then the run starts from it', async () => {
     const image = `${host}/cirruslabs/small:15.6`
-    const { p, cli, pulls, dockerCalls } = await setup(image)
+    const { p, cli, pulls, dockerCalls, fake } = await setup(image)
 
     const plan = await cli(['image', 'build', '--dry-run'])
     assert.equal(plan.code, 0, plan.stdout + plan.stderr)
@@ -219,6 +219,10 @@ describe('tart() images before the run', {
     assert.match(built.stdout, new RegExp(`^✓ tart:small:15\\.6: .+ ${digest.slice(7, 19)}$`, 'm'))
     assert.match(built.stdout, /^1 image ready$/m)
     assert.deepEqual(pulls(), [`pull ${image}`])
+    const link = readlinkSync(
+      join(fake.env.TART_HOME ?? '', 'cache', 'OCIs', host, 'cirruslabs', 'small', '15.6'),
+    )
+    assert.ok(isAbsolute(link), `Tart links a tag to its digest by absolute path, not ${link}`)
 
     const again = await cli(['image', 'build', '--dry-run'])
     assert.match(again.stdout, new RegExp(`\\(ready: ${digest.slice(7, 19)}\\)$`, 'm'))
