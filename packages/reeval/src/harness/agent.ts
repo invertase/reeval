@@ -169,10 +169,11 @@ export function agentSandboxProblem(agent: Agent, sandbox: SandboxDescriptor): s
   const fits = runsAgent(agent.platforms)
   const can = capabilitiesOf(sandbox)
   if (fits(can)) return undefined
+  // Only a sandbox with a harness session runs the bootstrap, so only its platform matters.
   const lacks = [
     ...(can.harnessSession ? [] : ['has no harness session']),
     ...(can.brokers ? [] : [`can't keep ${agent.credential} out of it`]),
-    ...(agent.platforms.includes(can.platform)
+    ...(!can.harnessSession || agent.platforms.includes(can.platform)
       ? []
       : [`runs ${can.platform}, not ${agent.platforms.join(' or ')}`]),
   ]

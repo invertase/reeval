@@ -106,6 +106,11 @@ describe('which sandbox a real harness runs in', () => {
     )
   })
 
+  test("the fake sandbox's platform is the host's, which it never names", () => {
+    const aixOnly = { ...AGENTS.cursor, platforms: ['aix'] as const }
+    assert.doesNotMatch(agentSandboxProblem(aixOnly, fakeSandbox()) ?? '', /runs /)
+  })
+
   test('a platform no sandbox runs leaves only the fake harness', () => {
     const darwinOnly = { ...AGENTS.cursor, platforms: ['darwin'] as const }
     assert.equal(
