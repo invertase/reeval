@@ -66,9 +66,10 @@ cd "$vm/home" && HOME="$vm/home" exec /bin/sh -c "\${@: -1}"
 `
 
 // A VM lists only its own listeners: the real lsof's, of processes working under the VM's
-// directory, as the command that asks does.
+// directory, as the command that asks does. lsof reports that directory with its symlinks
+// resolved (macOS's /var is /private/var).
 const LSOF = `#!/bin/bash
-vm=$(printf %s "$PWD" | sed -E 's#(/vms/[^/]+).*#\\1#')
+vm=$(cd "$(printf %s "$PWD" | sed -E 's#(/vms/[^/]+).*#\\1#')" && pwd -P)
 real=; for d in /usr/sbin /usr/bin /sbin /bin; do [ -x "$d/lsof" ] && { real=$d/lsof; break; }; done
 [ -n "$real" ] || { echo "fake tart: no lsof on this machine" >&2; exit 1; }
 keep=
