@@ -9,9 +9,10 @@
 #   real agents (Cursor) test/real-agents' smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
 # The weekly run is the pinned contract and the smoke, and skips (the gate says why) when main
-# hasn't moved since the last successful weekly run and no agent CLI or adapter has a release it
-# hadn't seen. The latest leg runs on demand, or when drift.yml's nightly key-free checks find a new
-# agent CLI release, which dispatches it alone (pinned=false, latest=true). PRs get the pinned
+# hasn't moved since the last successful weekly run, unless the last weekly run whose pinned
+# contract passed is four weeks old. The latest leg runs on demand, or when drift.yml's nightly
+# key-free checks find a new agent CLI release, which dispatches it alone (pinned=false,
+# latest=true) on the rows of the CLIs that released (latest_harnesses). PRs get the pinned
 # contract only. A dispatch's `harnesses` input (e.g. claude-code-gateway,codex-gateway) runs only
 # those rows' pinned contract and e2e, nothing else; naming an *-openrouter row also runs reeval's
 # own calls on OpenRouter (the judge and analysis). Budgets: each reeval run's budget.attempts, a
@@ -31,6 +32,12 @@ on:
         description: The contract on the newest agent CLI and SDK (the drift leg)
         type: boolean
         default: false
+      latest_harnesses:
+        description: >-
+          Only these contract rows in the drift leg, comma-separated (e.g. codex,goose); empty: every
+          row. The real-tier fixtures on Cursor run when it names cursor
+        type: string
+        default: ''
       harnesses:
         description: >-
           Only these contract rows, comma-separated (e.g. claude-code-gateway,codex-gateway), on the
@@ -63,48 +70,37 @@ jobs:
     outputs:
       run: ${{ steps.changes.outputs.run || 'true' }}
     steps:
-      # A weekly run goes ahead when main moved since the last successful weekly run, or when an
-      # agent CLI or adapter has a release that run's snapshot hadn't seen (scripts/drift/versions.mjs).
-      - if: github.event_name == 'schedule'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - if: github.event_name == 'schedule'
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: { node-version-file: package.json, package-manager-cache: false }
+      # A weekly run goes ahead when main moved since the last successful weekly run. Its agents
+      # and adapters are pinned, so an upstream release can't change its result; what it depends on
+      # outside the repo (the providers, their models, the keys) can, so it never skips when the
+      # last weekly run whose pinned contract passed is four weeks old. Any lookup that fails
+      # leaves it running.
       - if: github.event_name == 'schedule'
         id: changes
         name: anything new since the last successful weekly run
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/real.yml/runs?event=schedule&branch=main&status=success&per_page=1" \
-            --jq '.workflow_runs[0] | select(.) | "\(.id) \(.head_sha)"' || true)
+          runs="repos/$GITHUB_REPOSITORY/actions/workflows/real.yml/runs?event=schedule&branch=main&status=success"
+          last=$(gh api "$runs&per_page=1" --jq '.workflow_runs[0] | select(.) | "\(.id) \(.head_sha)"' || true)
           id=${last%% *} sha=${last#* }
-          [ -z "$id" ] || gh run download "$id" -R "$GITHUB_REPOSITORY" -n upstream-versions -D "$RUNNER_TEMP/previous" ||
-            echo "No snapshot from run $id"
-          set +e
-          GITHUB_OUTPUT="$RUNNER_TEMP/versions.out" node scripts/drift/versions.mjs \
-            --previous "$RUNNER_TEMP/previous/upstream-versions.json" --out "$RUNNER_TEMP/upstream-versions.json" > /dev/null
-          status=$?
-          set -e
-          changed=$(sed -n 's/^changed=//p' "$RUNNER_TEMP/versions.out" 2>/dev/null || true)
-          if [ "$status" -gt 1 ]; then
-            echo "Couldn't look up the newest versions, so the run goes ahead"; echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ -n "$id" ] && [ "$sha" = "$GITHUB_SHA" ] && [ -z "$changed" ]; then
-            echo "Skipped: nothing merged into main since run $id ($sha) and no new upstream release" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Runs: ${id:+main at $GITHUB_SHA, last successful weekly run $id at $sha; }new upstream releases: ${changed:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
+          # A skipped run succeeds too, so look past those for one whose pinned contract ran.
+          tested=$(gh api "$runs&per_page=8" --jq '.workflow_runs[] | "\(.id) \(.created_at)"' 2>/dev/null |
+            while read -r run created; do
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
+                --jq '.jobs[] | select((.name | startswith("contract (pinned)")) and .conclusion == "success") | .name' |
+                grep -q . && { echo "$created"; break; }
+            done || true)
+          if [ -z "$id" ] || [ "$sha" != "$GITHUB_SHA" ]; then
+            echo "Runs: main is at $GITHUB_SHA${id:+, the last successful weekly run $id was at $sha}" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$tested" ] || [ $(( $(date +%s) - $(date -d "$tested" +%s) )) -ge $((27 * 86400)) ]; then
+            echo "Runs: nothing merged since run $id, but no weekly pinned contract has passed in four weeks (last: ${tested:-none in the last 8 successful runs})" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipped: nothing merged into main since run $id ($sha), and the pinned contract last passed on $tested" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
           fi
-      - if: github.event_name == 'schedule'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: upstream-versions
-          path: ${{ runner.temp }}/upstream-versions.json
-          if-no-files-found: ignore
-          retention-days: 90
       # Annotates up front; the rows that need a missing key fail in the contract legs.
       - if: steps.changes.outputs.run != 'false'
         env:
@@ -154,7 +150,9 @@ jobs:
       !cancelled() && needs.gate.result == 'success' &&
       github.event_name == 'workflow_dispatch' && inputs.latest && inputs.harnesses == ''
     uses: ./.github/workflows/contract.yml
-    with: { versions: latest }
+    with:
+      versions: latest
+      harnesses: ${{ inputs.latest_harnesses }}
     secrets: inherit
 
   real:

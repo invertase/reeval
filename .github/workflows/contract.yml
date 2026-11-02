@@ -21,7 +21,7 @@ on:
         description: >-
           Only these rows, comma-separated, in the contract and e2e suites (the *-gateway and
           *-openrouter rows, which the default list leaves out, included); the Cursor checks after
-          them are skipped. Naming an *-openrouter row also runs reeval's own calls on OpenRouter
+          them are skipped, except on the latest versions with the cursor row named. Naming an *-openrouter row also runs reeval's own calls on OpenRouter
           (test/openrouter-real.test.ts). Empty: the default list
         type: string
         default: ''
@@ -41,6 +41,9 @@ jobs:
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row, or the ones asked for; one without its key fails, naming the variable.
       REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build' }}
+      # The @cursor/sdk shape and the real-tier fixtures on Cursor: on the default list, or on a
+      # latest leg that names the cursor row (drift.yml's, after a new @cursor/sdk).
+      CURSOR_CHECKS: ${{ inputs.harnesses == '' || (inputs.versions == 'latest' && contains(format(',{0},', inputs.harnesses), ',cursor,')) }}
       # The hard cap for this job: the contract on all eleven rows (contract.test.ts's attemptsFor:
       # 22 on Cursor and Antigravity, whose plugins load rules but which set no effort; 21 on Claude
       # Code and Grok Build, whose plugins don't load rules; 19 on OpenCode, with no hooks or rules;
@@ -115,12 +118,12 @@ jobs:
           TMPDIR: ${{ runner.temp }}/reeval-tests
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/openrouter-real.test.ts
       - name: the stored conversation @cursor/sdk declares
-        if: inputs.harnesses == ''
+        if: env.CURSOR_CHECKS == 'true'
         working-directory: packages/reeval
         run: node --test --experimental-strip-types --no-warnings test/cursor-sdk-shape.test.ts
       # Real Cursor: without its key each fixture fails, naming CURSOR_API_KEY.
       - name: real-tier fixtures on Cursor (web fetch recovery included)
-        if: inputs.harnesses == ''
+        if: env.CURSOR_CHECKS == 'true'
         working-directory: packages/reeval
         env:
           REEVAL_FIXTURE_TIERS: real
