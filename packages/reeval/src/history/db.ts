@@ -11,6 +11,7 @@ import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import type { JSONValue } from '../types.ts'
 import { filesChanged } from '../view/effort.ts'
+import { cellMeasures, familyMeasures, type Measure } from '../view/measures.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
@@ -109,6 +110,14 @@ CREATE TABLE question_pairs_m (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
   a TEXT, b TEXT, pairs INTEGER, a_wins INTEGER, b_wins INTEGER, ties INTEGER, splits INTEGER,
   splits_first INTEGER
+);
+-- Each variant against its control on every measure: one row per measure (pass, check, judge,
+-- question, tools, agentMs, tokens) and label, per eval or family per run.
+CREATE TABLE measure_effects_m (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, family INTEGER, harness TEXT, variant TEXT,
+  cell_key TEXT, control TEXT, measure TEXT, label TEXT, variant_value REAL,
+  control_value REAL, estimate REAL, lo REAL, hi REAL, p REAL, verdict TEXT, leaning TEXT,
+  text TEXT, needed INTEGER, unit TEXT
 );
 CREATE TABLE family_lift_m (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
@@ -219,6 +228,13 @@ CREATE VIEW lift AS
 CREATE VIEW family_lift AS
   SELECT f.*, r.started_at, r.branch
   FROM family_lift_m f JOIN runs r USING (run_id);
+
+-- Each variant against its control on every measure, one row per measure, per eval (a family's
+-- pooled over its cases) per run: verdict better or worse when the measure's own test holds,
+-- same at no difference, leans at a difference it doesn't hold; needed the runs (unit) to hold it.
+CREATE VIEW measure_effects AS
+  SELECT m.*, r.started_at, r.branch
+  FROM measure_effects_m m JOIN runs r USING (run_id);
 
 -- Cells with mixed outcomes, pooled over runs whose fingerprints match once agent runtime state is
 -- left out; 'flaky' needs FLAKY_MIN_ATTEMPTS counted attempts, else 'mixed'.
@@ -371,6 +387,7 @@ export const VIEW_NAMES = [
   'attempt_answers',
   'attempt_values',
   'factor_effects',
+  'measure_effects',
   'skill_reads',
   'context_use',
   'skill_files',
@@ -550,6 +567,17 @@ function insertRun(
       e.family?.case ?? null,
       e.todo ? 'todo' : e.skip ? 'skip' : null,
     )
+    for (const c of e.cells)
+      if (c.role === 'variant' && c.lift)
+        insertMeasures(
+          run,
+          record.runId,
+          e.key,
+          false,
+          c,
+          c.lift.vs,
+          cellMeasures(e, c.key, c.lift.vs),
+        )
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
@@ -844,6 +872,11 @@ function insertRun(
         f.outcome,
       )
     }
+    const cases = record.evals.filter((x) => x.family?.id === f.id)
+    for (const l of f.lifts) {
+      const cell = cases.flatMap((x) => x.cells).find((c) => c.key === l.variant)
+      insertMeasures(run, record.runId, f.id, true, cell, l.vs, familyMeasures(cases, l))
+    }
     for (const l of f.lifts) {
       const e = l.effort
       const cell = record.evals
@@ -886,7 +919,43 @@ function insertRun(
   }
 }
 
+function insertMeasures(
+  run: (sql: string, ...values: SQLInputValue[]) => unknown,
+  runId: string,
+  evalKey: string,
+  family: boolean,
+  cell: CellRecord | undefined,
+  control: string,
+  measures: readonly Measure[] | null,
+): void {
+  for (const m of measures ?? [])
+    run(
+      `INSERT INTO measure_effects_m VALUES (${Array(20).fill('?').join(', ')})`,
+      runId,
+      evalKey,
+      family ? 1 : 0,
+      cell?.harness ?? null,
+      cell?.variant ?? cell?.environment ?? null,
+      cell?.key ?? null,
+      control,
+      m.measure,
+      m.label,
+      m.variant,
+      m.control,
+      m.estimate,
+      m.lo,
+      m.hi,
+      m.p,
+      m.verdict,
+      m.leaning,
+      m.text,
+      m.needed,
+      m.unit,
+    )
+}
+
 const DATA_TABLES = [
+  'measure_effects_m',
   'runs',
   'evals',
   'families',
@@ -1095,7 +1164,7 @@ export async function openHistoryDb(
     schema() {
       const objects = rowsOf<{ name: string; type: 'table' | 'view' }>(
         db.prepare(
-          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'family_lift_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
+          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'family_lift_m', 'measure_effects_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
         ),
       )
       return objects.map((o) => ({

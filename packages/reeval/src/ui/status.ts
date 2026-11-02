@@ -10,6 +10,9 @@
 //   variant, highest pass rate first, naming the harnesses only where their pass rates differ, and
 //   `, not by minLift N` after the effect when the variant's lift (a family's pooled one) missed it.
 //   With `-v`, each of its cells' difference and 95% interval follows, as the result blocks print it.
+//   Under a variant, its comparison with the baseline when some other measure holds:
+//   `Same pass rate · 5× faster · judge "tidy" +0.12.` (with `-v`, `looks …` for the leans too),
+//   prefixed `H: ` on several harnesses.
 // - A family whose cases didn't all pass names them: `Failed cases: green, blue.` (the first eight,
 //   then `and N more`).
 // - Failed checks: `Every failure was the same check:` for one, `N checks failed:` for several,
@@ -25,6 +28,7 @@
 import type { RunRecord } from '../history/types.ts'
 import { clip, formatDuration, plural } from '../text.ts'
 import type { ErrorKind } from '../types.ts'
+import { measuresLine } from '../view/measures.ts'
 import { formatUsage } from '../view/model.ts'
 import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
@@ -175,6 +179,34 @@ function minLiftShort(e: EvalResult, own: CellResult[]): string {
   return missed == null ? '' : `, not by minLift ${Math.round(missed * 100)}`
 }
 
+/**
+ * Under a variant, its comparison with the baseline (`measuresLine`): `Same pass rate · 5× faster ·
+ * judge "tidy" +0.12.`, one line, or one per harness (`cursor: …`) when it ran on several. Only
+ * when some measure besides pass rate holds; `verbose` adds the ones that only lean.
+ */
+function measureLines(e: EvalResult, own: CellResult[], verbose: boolean): DetailLine[] {
+  const keys = new Set(own.map((c) => c.key))
+  const pooled = (e.pooled ?? []).filter((p) => keys.has(p.key))
+  const sets = pooled.length
+    ? pooled.map((p) => ({
+        harness: own.find((c) => c.key === p.key)?.harness ?? p.key,
+        measures: p.measures,
+      }))
+    : own.flatMap((c) => (c.measures ? [{ harness: c.harness, measures: c.measures }] : []))
+  const several = new Set(sets.map((x) => x.harness)).size > 1
+  return sets.flatMap(({ harness, measures }) => {
+    const shown = measures.filter(
+      (m) =>
+        m.measure !== 'pass' &&
+        (m.verdict === 'better' || m.verdict === 'worse' || (verbose && m.verdict === 'leans')),
+    )
+    if (!shown.length) return []
+    const line = measuresLine(measures, verbose)
+    const text = `${line.slice(0, 1).toUpperCase()}${line.slice(1)}.`
+    return [{ depth: 2, text: several ? `${harness}: ${text}` : text, tone: 'dim' } as const]
+  })
+}
+
 function compareLines(
   record: RunRecord,
   e: EvalResult,
@@ -216,6 +248,7 @@ function compareLines(
       depth: 1,
       text: `${r.v.padEnd(width)}  ${of(r.t)}${word}${disagreement(record, r.own)}`,
     })
+    lines.push(...measureLines(e, r.own, verbose))
     if (!verbose) continue
     for (const cell of r.own) {
       const stats = statsLine(cell, cells)

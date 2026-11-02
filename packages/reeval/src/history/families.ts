@@ -97,14 +97,24 @@ function metric(pairs: Array<[number, number]>): FamilyEffortMetric {
   }
 }
 
-function effortOf(pairs: Array<[Side, Side]>): FamilyEffort {
-  const per = (pick: (s: EffortSample) => number | undefined) =>
-    pairs.flatMap(([v, c]): Array<[number, number]> => {
-      const vs = v.samples.map(pick)
-      const cs = c.samples.map(pick)
-      if (!vs.every((x) => x !== undefined) || !cs.every((x) => x !== undefined)) return []
-      return [[median(vs) ?? 0, median(cs) ?? 0]]
-    })
+/**
+ * Each case's variant and control medians of one effort measure, over the cases where every
+ * counted attempt on both sides has it: the pairs a family's paired effort test ranks.
+ */
+export const casePairs = (
+  pairs: ReadonlyArray<readonly [readonly EffortSample[], readonly EffortSample[]]>,
+  pick: (s: EffortSample) => number | undefined,
+) =>
+  pairs.flatMap(([v, c]): Array<[number, number]> => {
+    const vs = v.map(pick)
+    const cs = c.map(pick)
+    if (!vs.every((x) => x !== undefined) || !cs.every((x) => x !== undefined)) return []
+    return [[median(vs) ?? 0, median(cs) ?? 0]]
+  })
+
+function effortOf(sides: Array<[Side, Side]>): FamilyEffort {
+  const pairs = sides.map(([v, c]) => [v.samples, c.samples] as const)
+  const per = (pick: (s: EffortSample) => number | undefined) => casePairs(pairs, pick)
   const tokens = per((s) => s.tokens)
   return {
     tools: metric(per((s) => s.tools)),

@@ -36,6 +36,8 @@ const VIEW_ROWS: Record<string, string> = {
     'value an attempt recorded with c.observe(name, value), its last per name: the attempt, its outcome, the JSON value with its kind, num for a number and text for a string',
   factor_effects:
     'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
+  measure_effects:
+    'measure per variant cell (a family’s pooled variant) per run: pass rate, each check, judge and compare question, tool calls, agent time and tokens, each side’s value, the estimate, interval or p, verdict (better, worse, same or leans), its text and the runs a lean needs to hold',
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
   flaky_cells: `cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,

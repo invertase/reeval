@@ -1211,23 +1211,27 @@ evaluate('hello', async (c) => {
     const tieOf = async (name: string, runs: number) => {
       const p = await compareProject(name, runs)
       const config = join(p.dir, 'reeval.config.ts')
-      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' } }" }))
+      writeFileSync(config, fakeConfig({ harness: "{ files: { 'ok.txt': 'y' }, delayMs: 300 }" }))
       const run = await runCli(p.dir, ['run'])
       assert.equal(run.code, 0, run.stdout)
       const { digest } = await digestOf(p.dir)
       const cells = digest.facts.find((f) => f.kind === 'pass@1')?.cells as
-        | Array<{ lift?: string; smallSample?: boolean; tie?: string }>
+        | Array<{ lift?: string; smallSample?: boolean; tie?: string; looks?: string }>
         | undefined
       const variant = cells?.find((c) => c.lift)
-      return { smallSample: variant?.smallSample, tie: variant?.tie }
+      return {
+        smallSample: variant?.smallSample,
+        ceiling: variant?.tie ?? (variant?.looks ? 'looks' : undefined),
+      }
     }
-    assert.deepEqual(await tieOf('analyze-tie-four', 4), {
-      smallSample: true,
-      tie: 'both always pass',
-    })
+    assert.deepEqual(
+      await tieOf('analyze-tie-four', 4),
+      { smallSample: true, ceiling: 'both always pass' },
+      "a ceiling at 4 a side is a tie: the fake agent's time differs by noise only",
+    )
     assert.deepEqual(
       await tieOf('analyze-tie-one', 1),
-      { smallSample: true, tie: undefined },
+      { smallSample: true, ceiling: undefined },
       'one pass a side is too few to say both always pass',
     )
   })
@@ -1238,7 +1242,7 @@ evaluate('hello', async (c) => {
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /^ +\S+ {2}1 of 1 {2}helped\n +difference \+100 points, 95% interval −12…\+100$/m,
+      /^ +\S+ {2}1 of 1 {2}helped\n(?: +Pass rate \+100 pts[^\n]*\n)? +difference \+100 points, 95% interval −12…\+100$/m,
       '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)

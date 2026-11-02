@@ -336,7 +336,13 @@ function effortTable(
   width: number,
 ): string[] {
   if (cells.length < 2 || cells.some((x) => !x.effort)) return []
-  if (!failed && !cells.some((x) => x.effortDiffers)) return []
+  const effortMoved = (x: CellResult) =>
+    (x.measures ?? []).some(
+      (m) =>
+        (m.measure === 'tools' || m.measure === 'agentMs' || m.measure === 'tokens') &&
+        (m.verdict === 'better' || m.verdict === 'worse'),
+    )
+  if (!failed && !cells.some(effortMoved)) return []
   const tokens = cells.some((x) => x.effort?.tokens !== null)
   const n = (v: number | null | undefined, f: (v: number) => string) => (v == null ? '–' : f(v))
   const items: Item[] = [

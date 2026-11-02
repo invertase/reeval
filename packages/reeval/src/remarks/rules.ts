@@ -17,6 +17,7 @@ import {
   smallSample,
 } from '../stats.ts'
 import { clip } from '../text.ts'
+import { boundOf, leanText, type Measure, type Reading, tieOf } from '../view/measures.ts'
 import type { Remark } from '../view/remarks.ts'
 import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
@@ -114,30 +115,83 @@ function holds(variant: CellResult, base: CellResult): boolean {
 type Bound = 'pass' | 'fail'
 
 /** `pass` when every side passed every counted run, `fail` when every side failed every one. */
-function boundOf(cells: CellResult[]): Bound | null {
-  if (!cells.length || cells.some((c) => !counted(c))) return null
-  if (cells.every((c) => c.failed === 0)) return 'pass'
-  if (cells.every((c) => c.passed === 0)) return 'fail'
-  return null
-}
+const bounded = (cells: CellResult[]): Bound | null =>
+  boundOf(cells.map((c) => ({ pass: c.passed, fail: c.failed })))
 
 type Tie = { variant: CellResult; base: CellResult; bound: Bound }
 
-/** A pairwise question whose sides' win rates differ: it tells arms that always pass apart. */
-const questionSeparates = (e: EvalResult) =>
-  e.questions.some(
-    (q) =>
-      q.kind === 'pairs' &&
-      new Set(q.rates.filter((r) => r.n > 0).map((r) => r.wins / r.n)).size > 1,
+type Look = { variant: CellResult; base: CellResult; reading: Reading & { told: 'leans' } }
+
+const listed = (items: string[]) =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+
+/**
+ * ` It looks 12× faster, but 3 runs a side can't confirm it; 4 is the least that can.`: leans too
+ * few runs can test, beside a pass-rate remark, which already counts the runs a rate needs.
+ */
+const shortLeans = (measures: readonly Measure[] | null | undefined) => {
+  const short = (measures ?? []).filter(
+    (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
   )
+  return short.length ? ` It looks ${listed(short.map(leanText))}.` : ''
+}
+
+/**
+ * too-few-tries on a ceiling (concern): a variant and its baseline both passed every run and no
+ * measure is better or worse, but some lean (`readMeasures`): the variant looks different, on too
+ * few runs to say. It names the first such variant's leans, counting the others, and the runs (or
+ * cases) at which the soonest would hold.
+ */
+function looksDifferent(
+  e: EvalResult,
+  entry: EvalEntry,
+  ctx: RemarkContext,
+  looks: Array<Look & { cases?: number }>,
+): Candidate[] {
+  const [first] = looks
+  if (!first) return []
+  const { variant, base, reading, cases } = first
+  const harnesses = new Set(units(e).flatMap((u) => u.cells.map((c) => c.harness))).size > 1
+  const on = harnesses ? ` on ${variant.harness}` : ''
+  const others = looks.length - 1
+  const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
+  const counts = cases
+    ? `over ${cases} ${cases === 1 ? 'case' : 'cases'}`
+    : `${variant.passed} of ${counted(variant)} and ${base.passed} of ${counted(base)}`
+  const { needed, unit } = reading
+  const about =
+    needed === null
+      ? `even ${RUNS_TO_HOLD_MAX} ${unit} wouldn't confirm it`
+      : unit === 'cases'
+        ? `about ${needed} cases would confirm it`
+        : `about ${runs(needed)} ${cases ? 'a case' : 'a side'} would confirm it`
+  const text = `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}), but the variant looks different: ${listed(reading.measures.map(leanText))}; ${about}.${more}`
+  const edit =
+    needed === null
+      ? "if a difference this faint doesn't matter, make the task harder, so the baseline can fail"
+      : unit === 'cases'
+        ? `add cases, to ${needed}, where the soonest of these would hold`
+        : `set runs: ${needed}${cases ? ' a case' : ''}, where the soonest of these would hold`
+  return [
+    {
+      id: remarkId('too-few-tries', e.path, entry, 'looks'),
+      evalId: e.path,
+      kind: 'too-few-tries',
+      severity: 'concern',
+      text,
+      evidence: [variant.path, base.path],
+      fix: { at: ctx.locate(entry, null), edit },
+    },
+  ]
+}
 
 /**
  * cant-tell-apart (concern): a variant and its baseline both passed every run, or both failed
- * every one, on at least `COMPARE_RUNS` runs a side (`PAIRED_MIN` cases for a family), so no
- * number of runs can tell them apart. Both passing means the task is too easy to show the change;
- * both failing means it may be too hard, or the eval broken. Callers leave out a ceiling whose
- * effort differs (`effortDiffers`) or whose pairwise question's wins differ
- * (`questionSeparates`): those tell the arms apart. It names the first such variant, counting the
+ * every one, on at least `COMPARE_RUNS` runs a side (`PAIRED_MIN` cases for a family), and on a
+ * ceiling every other measure of their comparison is the same (`tieOf`), so no number of runs can
+ * tell them apart. Both passing means the task is too easy to show the change; both failing means
+ * it may be too hard, or the eval broken, whatever else differs: a timeout counts as a fail, so
+ * effort differs exactly when one arm hangs. It names the first such variant, counting the
  * others. Its id carries the bound, so a floor after a ceiling on the same source prints again.
  */
 function cantTellApart(
@@ -194,15 +248,17 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   if (e.pooled) return pooledTooFewTries(e, entry, ctx)
   const weak: Array<{ variant: CellResult; base: CellResult; gap: number; held: boolean }> = []
   const ties: Tie[] = []
+  const looks: Look[] = []
   for (const unit of units(e)) {
     for (const variant of unit.cells) {
       const base = unit.cells.find((c) => c.key === variant.vs)
       if (!variant.vs || !base || !counted(variant) || !counted(base)) continue
       const bound =
-        Math.min(counted(variant), counted(base)) >= COMPARE_RUNS ? boundOf([variant, base]) : null
+        Math.min(counted(variant), counted(base)) >= COMPARE_RUNS ? bounded([variant, base]) : null
       if (bound) {
-        if (bound === 'fail' || !(variant.effortDiffers || questionSeparates(e)))
-          ties.push({ variant, base, bound })
+        const tie = tieOf(bound, variant.measures)
+        if (tie === 'tie') ties.push({ variant, base, bound })
+        else if (tie?.told === 'leans') looks.push({ variant, base, reading: tie })
         continue
       }
       const gap = Math.abs(rate(variant) - rate(base))
@@ -215,7 +271,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       weak.push({ variant, base, gap, held })
     }
   }
-  const apart = cantTellApart(e, entry, ctx, ties)
+  const apart = [...cantTellApart(e, entry, ctx, ties), ...looksDifferent(e, entry, ctx, looks)]
   const worst = [...weak].sort((a, b) => b.gap - a.gap)[0]
   if (!worst) return apart
   const { variant, base, gap, held } = worst
@@ -237,11 +293,12 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const margin = Math.round(SMALL_SAMPLE_MARGIN * 100)
   const direction = rate(variant) > rate(base) ? 'better' : 'worse'
   const fewest = runs(Math.min(counted(variant), counted(base)))
+  const also = shortLeans(variant.measures)
   const text = held
-    ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${more}`
+    ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${also}${more}`
     : gap
-      ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${more}`
-      : `${counts}: the same, but ${fewest} a side can't rule out a difference of up to ${reach} points.${more}`
+      ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${also}${more}`
+      : `${counts}: the same, but ${fewest} a side can't rule out a difference of up to ${reach} points.${also}${more}`
   const edit = held
     ? `set runs: ${COMPARE_RUNS} or more, so a split this wide is less likely by chance`
     : !gap
@@ -273,15 +330,17 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
 function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candidate[] {
   const cells = (e.cases ?? []).flatMap((k) => k.cells)
   const ties: Array<Tie & { cases: number }> = []
+  const looks: Array<Look & { cases: number }> = []
   const weak = (e.pooled ?? []).filter((p) => {
     const own = cells.filter((c) => c.key === p.key)
     const bases = cells.filter((c) => own.some((v) => v.vs === c.key))
-    const bound = p.effect === 'same' && p.pairs >= PAIRED_MIN ? boundOf([...own, ...bases]) : null
+    const bound = p.effect === 'same' && p.pairs >= PAIRED_MIN ? bounded([...own, ...bases]) : null
     const [variant] = own
     const [base] = bases
     if (bound && variant && base) {
-      if (bound === 'fail' || !(own.some((c) => c.effortDiffers) || questionSeparates(e)))
-        ties.push({ variant, base, bound, cases: p.pairs })
+      const tie = tieOf(bound, p.measures)
+      if (tie === 'tie') ties.push({ variant, base, bound, cases: p.pairs })
+      else if (tie?.told === 'leans') looks.push({ variant, base, reading: tie, cases: p.pairs })
       return false
     }
     return (
@@ -289,7 +348,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
       (p.effect !== 'same' || familySmallSample(p.pairs, p.interval.low, p.interval.high))
     )
   })
-  const apart = cantTellApart(e, entry, ctx, ties)
+  const apart = [...cantTellApart(e, entry, ctx, ties), ...looksDifferent(e, entry, ctx, looks)]
   const [arm] = weak
   if (!arm) return apart
   const variant = cells.find((c) => c.key === arm.key)
@@ -305,7 +364,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
     : arm.effect === 'same'
       ? `it can't rule out a difference of up to ${reach} points`
       : "the difference doesn't hold"
-  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${more}`
+  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${shortLeans(arm.measures)}${more}`
   return [
     ...apart,
     {

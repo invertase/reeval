@@ -54,7 +54,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -83,7 +83,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -137,7 +137,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "assertion",
@@ -172,7 +172,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -226,7 +226,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "judge",
@@ -261,7 +261,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -315,7 +315,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -344,7 +344,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -392,7 +392,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [],
                 "fetches": []
@@ -445,7 +445,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "assertion",
@@ -483,7 +483,59 @@
                 },
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": [
+                  {
+                    "measure": "pass",
+                    "label": null,
+                    "variant": 1,
+                    "control": 0,
+                    "estimate": 1,
+                    "lo": -0.122,
+                    "hi": 1,
+                    "p": null,
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "pass rate +100 pts",
+                    "needed": 4,
+                    "unit": "runs",
+                    "short": {
+                      "now": 1,
+                      "at": 4
+                    }
+                  },
+                  {
+                    "measure": "tools",
+                    "label": null,
+                    "variant": 1,
+                    "control": 1,
+                    "estimate": 1,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same tool calls",
+                    "needed": null,
+                    "unit": "runs",
+                    "short": null
+                  },
+                  {
+                    "measure": "agentMs",
+                    "label": null,
+                    "variant": 2,
+                    "control": 11,
+                    "estimate": 0.18181818181818182,
+                    "lo": null,
+                    "hi": null,
+                    "p": 1,
+                    "verdict": "same",
+                    "leaning": null,
+                    "text": "same agent time",
+                    "needed": null,
+                    "unit": "runs",
+                    "short": null
+                  }
+                ],
                 "errors": [],
                 "searches": [0],
                 "fetches": [0]
@@ -512,7 +564,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -547,7 +599,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [
                   {
                     "kind": "infra",
@@ -623,7 +675,7 @@
                 "interval": null,
                 "minLift": null,
                 "effort": null,
-                "effortDiffers": false,
+                "measures": null,
                 "errors": [],
                 "searches": [0, 0, 0],
                 "fetches": [0, 0, 0]

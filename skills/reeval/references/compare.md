@@ -64,6 +64,19 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
   `runs: 4` a cell, as lift does (below it lift shows only a direction and effort can't be tested; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.
+- **One comparison per variant** against its baseline covers every measure: pass rate, each
+  check's pass rate, each judge's scores, each compare question's votes, tool calls, agent time
+  and tokens. Each is `better`, `worse`, `same` or `leans` (a difference its own test doesn't hold
+  yet, at p below 0.1 and of at least 10 points, 0.05 of a judge's score, 60/40 of 4 or more
+  decisive pairs for a question at p below 0.2, or 10% of an effort median, with the runs that would hold it;
+  weaker is `same`, unless the sample is too small for its test to show anything: "12× faster,
+  but 3 runs a side can't confirm it; 4 is the least that can"). A question counts votes, both
+  orders of each pair, as its standings do ("in 8 of 8 votes (4 of 4 decisive pairs)"). Each measure keeps its own 0.05, so with identical arms some measure reads
+  better or worse by chance in about 1 run in 14 at 4 a side, and 1 in 7 at 8 or more. The status list prints the ones that hold under the
+  variant (`Same pass rate · 5× faster.`), `reeval compare -v` the leans too, and
+  `reeval query measure_effects` has a row per measure. When both arms pass every run, a measure
+  that holds is the result (no remark), one that leans raises `too-few-tries` with the runs, and
+  all the same raises `cant-tell-apart`.
 - With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
   variant against variant too.
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each

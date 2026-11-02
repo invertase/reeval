@@ -1698,8 +1698,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'remarks.cant-tell-apart',
     area: 'CLI and runner',
-    name: 'Remark `cant-tell-apart`: a variant and its baseline both passed every run (make the task harder) or both failed every run (check the eval), which no number of runs separates',
+    name: 'Remark `cant-tell-apart`: a variant and its baseline both passed every run with every other measure the same (make the task harder), or both failed every run (check the eval), which no number of runs separates; a measure that only leans raises `too-few-tries` with the runs that would confirm it',
     unit: ['reeval/test/remarks.test.ts'],
+  },
+  {
+    id: 'results.measures',
+    area: 'CLI and runner',
+    name: 'One comparison of each variant with its baseline over every measure (pass rate, each check, each judge, each compare question, tool calls, agent time, tokens), each better, worse, same or leans by its own test, read by the status list, `reeval compare -v`, the remarks, the digest and `reeval query measure_effects`',
+    unit: ['reeval/test/measures.test.ts', 'reeval/test/status.test.ts'],
   },
   {
     id: 'remarks.check-never-fails',

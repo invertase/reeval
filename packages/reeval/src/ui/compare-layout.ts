@@ -16,6 +16,7 @@ import {
   type StackChange,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
+import { type Measure, measuresLine } from '../view/measures.ts'
 import { observedShift } from '../view/observations.ts'
 import {
   type CaseResult,
@@ -412,11 +413,36 @@ function cellStats(cell: CompareCell): string {
   return [lift, effort].filter(Boolean).join(' · ')
 }
 
-function statsRows(c: Colors, row: CompareRow): Item[] {
-  return (row.perCell ?? []).flatMap((cell) => {
-    const stats = cellStats(cell)
-    return stats ? [{ indent: 2, cells: [cell.key, t(stats, c.dim)] }] : []
+/** Each variant's measures in one run, by its cell key (a family's pooled variants too). */
+function measuresByKey(e: EvalResult | undefined): Map<string, Measure[]> {
+  const out = new Map<string, Measure[]>()
+  for (const cell of [...(e?.cells ?? []), ...(e?.cases ?? []).flatMap((k) => k.cells)])
+    if (cell.measures && !e?.pooled) out.set(cell.key, cell.measures)
+  for (const p of e?.pooled ?? []) out.set(p.key, p.measures)
+  return out
+}
+
+/**
+ * `-v`: each cell's lift and effort, base → head, then each variant's comparison with its
+ * baseline in each run (`measuresLine`, leans included), when either says more than pass rate.
+ */
+function statsRows(c: Colors, row: CompareRow, base?: EvalResult, head?: EvalResult): Item[] {
+  const stats = (row.perCell ?? []).flatMap((cell) => {
+    const text = cellStats(cell)
+    return text ? [{ indent: 2, cells: [cell.key, t(text, c.dim)] }] : []
   })
+  const before = measuresByKey(base)
+  const after = measuresByKey(head)
+  const said = (m: Measure[] | undefined) =>
+    (m ?? []).some((x) => x.measure !== 'pass' && x.verdict !== 'same')
+  const measures = [...new Set([...after.keys(), ...before.keys()])].flatMap((key) => {
+    const b = before.get(key)
+    const h = after.get(key)
+    if (!said(b) && !said(h)) return []
+    const line = (m: Measure[] | undefined) => (m ? measuresLine(m, true) : '–')
+    return [{ indent: 2, cells: [`${key} vs baseline`, t(`${line(b)} → ${line(h)}`, c.dim)] }]
+  })
+  return [...stats, ...measures]
 }
 
 /** Each observed name (on each cell, with more than one) whose tally moved between the runs. */
@@ -452,7 +478,10 @@ function block(
   const top = headLine(word, nameOf(row, unit))
   const baseId = input.base?.runId ?? ''
   const headId = input.head.runId
-  const stats = [...(opts.verbose ? statsRows(c, row) : []), ...shiftRows(c, base, head)]
+  const stats = [
+    ...(opts.verbose ? statsRows(c, row, base, head) : []),
+    ...shiftRows(c, base, head),
+  ]
   const family = row.kind === 'family'
   if (row.status === 'regressed' || row.status === 'fixed') {
     const evidence = family

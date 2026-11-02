@@ -335,7 +335,7 @@ export function signedRank(differences: readonly number[]): { p: number; sign: n
   return { p: extreme / 2 ** n, sign }
 }
 
-function normalCdf(z: number): number {
+export function normalCdf(z: number): number {
   // Abramowitz and Stegun 7.1.26: plenty for a p-value that's only compared with 0.05.
   const t = 1 / (1 + (0.3275911 * Math.abs(z)) / Math.SQRT2)
   const poly =

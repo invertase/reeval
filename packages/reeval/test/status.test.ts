@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { fakeConfig, project, runCli } from './helpers.ts'
+import { copyOut } from './support/examples.ts'
 
 const EVALS = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
@@ -96,5 +99,95 @@ test('the status list: one line a pass, and a sentence for each way an eval went
   assert.equal(
     listOf(agent.stdout),
     PLAIN.replace(/^[├└]─ /gm, '  ').replace(/^[│ ] {4}/gm, '    '),
+  )
+})
+
+const FASTER = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', {})
+
+evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+  for (let i = 0; i < (c.attempt.cell.role === 'variant' ? 1 : 5); i++) await c.send('go')
+  expect(1, 'one').toBe(1)
+})
+`
+
+test('a compare whose effort holds prints its comparison, which every reader shares, and no tie remark', async () => {
+  const p = await project('status-measures', {
+    'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 150 }' }),
+    'evals/s.eval.ts': FASTER,
+  })
+  const run = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  const list = listOf(run.stdout)
+  assert.match(list, /^ {7}marked {2}4 of 4 {2}same\n {9}Same pass rate · [4-6](\.\d)?× faster\.$/m)
+  assert.doesNotMatch(list, /Worth knowing|can't tell them apart|looks different/)
+  const rows = await runCli(p.dir, ['query', 'measure_effects', '--json'])
+  assert.equal(rows.code, 0, rows.stderr)
+  const effects = JSON.parse(rows.stdout) as Array<Record<string, unknown>>
+  assert.deepEqual(
+    effects.map((r) => [r.measure, r.verdict, r.variant, r.control]),
+    [
+      ['pass', 'same', 'marked', 'fake/plain/fake'],
+      ['tools', 'same', 'marked', 'fake/plain/fake'],
+      ['agentMs', 'better', 'marked', 'fake/plain/fake'],
+      ['check', 'same', 'marked', 'fake/plain/fake'],
+    ],
+  )
+  const again = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(again.code, 0, again.stdout + again.stderr)
+  const idOf = (stdout: string) => /Run: +(\S+)/.exec(stdout)?.[1] ?? ''
+  const compare = await runCli(p.dir, ['compare', idOf(run.stdout), idOf(again.stdout), '-v'])
+  assert.equal(compare.code, 0, compare.stdout + compare.stderr)
+  assert.match(
+    compare.stdout,
+    /fake\/marked\/fake vs baseline +same pass rate · [4-6](\.\d)?× faster → same pass rate · [4-6](\.\d)?× faster/,
+  )
+})
+
+const NOISE = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+
+evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+  await c.send('go')
+  expect(1, 'one').toBe(1)
+})
+`
+
+test('arms that differ only by agent-time noise are a tie: make the task harder', async () => {
+  const p = await project('status-noise', {
+    'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 300 }' }),
+    'evals/s.eval.ts': NOISE,
+  })
+  const run = await runCli(p.dir, ['run', '--ui', 'plain'])
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    listOf(run.stdout),
+    /passed every run \(4 of 4 and 4 of 4\): the task can't tell them apart, since both always pass\. Fix at evals\/s\.eval\.ts:\d+: make the task harder, so the baseline can fail\./,
+  )
+})
+
+test('with-compare-questions, whose question picked the variant 4 of 4, names the runs that would confirm it', async () => {
+  const dir = await copyOut('with-compare-questions')
+  const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    run.stdout,
+    /but the variant looks different: (.+ and )?"Which divide\(\) says more clearly what went wrong when b is…" picked the variant in 8 of 8 votes \(4 of 4 decisive pairs\); about \d+ runs a side would confirm it\./,
+  )
+  assert.match(run.stdout, / won 8 of 8$/m, 'the standings count the same votes')
+  assert.doesNotMatch(run.stdout, /make the task harder/)
+})
+
+test('with-effort at runs: 3, too few for a rank test, still names its speedup', async () => {
+  const dir = await copyOut('with-effort')
+  const file = join(dir, 'with-effort.eval.ts')
+  writeFileSync(file, readFileSync(file, 'utf8').replace('runs: 4', 'runs: 3'))
+  const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    run.stdout,
+    /It looks (.+ and )?[\d.]+× faster, but 3 runs a side can't confirm it; 4 is the least that can\./,
   )
 })
