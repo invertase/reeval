@@ -260,6 +260,55 @@ const DELETE = `[ -e "$1" ] || [ -L "$1" ] || exit ${MISSING}
 [ -d "$1" ] && [ ! -L "$1" ] && { echo "is a directory" >&2; exit 1; }
 rm -f -- "$1"`
 
+/** Runs a path script with `sh` in the sandbox, the absolute path as `$1`. */
+type PathExec = (
+  script: string,
+  path: string,
+  abortSignal?: AbortSignal,
+) => Promise<{ exitCode: number; stdout: string; stderr: string }>
+
+/**
+ * A session's `stat`, `listDirectory` and `deleteFile` from one way to run the path scripts: each
+ * gets `null` when the script exits {@link MISSING} (no such path), and any other failure rejects
+ * with its stderr.
+ */
+export function pathOperations(
+  exec: PathExec,
+): Pick<DockerSession, 'stat' | 'listDirectory' | 'deleteFile'> {
+  const onPath = async (script: string, o: { path: string; abortSignal?: AbortSignal }) => {
+    const path = posix.resolve(SANDBOX_ROOT, o.path)
+    const r = await exec(script, path, o.abortSignal)
+    if (r.exitCode === MISSING) return null
+    if (r.exitCode !== 0) throw new Error(`${path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`)
+    return r.stdout
+  }
+  return {
+    async stat(o) {
+      const out = await onPath(STAT, o)
+      if (out === null) return null
+      const [type, size] = out.trim().split(' ')
+      return { type: type as 'file' | 'directory' | 'other', size: Number(size) }
+    },
+    async listDirectory(o) {
+      const out = await onPath(LIST, o)
+      if (out === null) return null
+      return out
+        .split('\0')
+        .filter(Boolean)
+        .map((line) => {
+          const tab = line.indexOf('\t')
+          return {
+            type: line.slice(0, tab) as 'file' | 'directory' | 'symlink' | 'other',
+            name: line.slice(tab + 1),
+          }
+        })
+    },
+    async deleteFile(o) {
+      return (await onPath(DELETE, o)) !== null
+    },
+  }
+}
+
 /**
  * The container's cgroup counts every process the kernel killed at its memory limit: cgroup v2's
  * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
@@ -515,20 +564,13 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     return r.exitCode === 0 ? new Uint8Array(r.stdout) : null
   }
 
-  /**
-   * `script` run by `sh` with the resolved path as `$1`: its stdout, or `null` when it exits
-   * {@link MISSING} (no such path). Any other failure rejects with its stderr.
-   */
-  const onPath = async (script: string, o: { path: string; abortSignal?: AbortSignal }) => {
-    const path = posix.resolve(SANDBOX_ROOT, o.path)
+  const paths = pathOperations(async (script, path, abortSignal) => {
     const r = await docker(['exec', ...user, id, 'sh', '-c', script, 'sh', path], {
-      signal: o.abortSignal,
+      signal: abortSignal,
       engine,
     })
-    if (r.exitCode === MISSING) return null
-    if (r.exitCode !== 0) throw new Error(`${path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`)
-    return r.stdout.toString('utf8')
-  }
+    return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+  })
 
   const writeBinaryFile = async (o: {
     path: string
@@ -641,29 +683,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         .slice((o.startLine ?? 1) - 1, o.endLine)
         .join('\n')
     },
-    async stat(o) {
-      const out = await onPath(STAT, o)
-      if (out === null) return null
-      const [type, size] = out.trim().split(' ')
-      return { type: type as 'file' | 'directory' | 'other', size: Number(size) }
-    },
-    async listDirectory(o) {
-      const out = await onPath(LIST, o)
-      if (out === null) return null
-      return out
-        .split('\0')
-        .filter(Boolean)
-        .map((line) => {
-          const tab = line.indexOf('\t')
-          return {
-            type: line.slice(0, tab) as 'file' | 'directory' | 'symlink' | 'other',
-            name: line.slice(tab + 1),
-          }
-        })
-    },
-    async deleteFile(o) {
-      return (await onPath(DELETE, o)) !== null
-    },
+    ...paths,
     writeBinaryFile,
     writeTextFile: (o) => writeBinaryFile({ ...o, content: Buffer.from(o.content, 'utf8') }),
     async writeFile(o) {

@@ -12,6 +12,7 @@ import {
   type EgressOptions,
   type EgressStatus,
   EgressUnavailableError,
+  pathOperations,
 } from './session.ts'
 import { traceDocker } from './trace.ts'
 
@@ -224,6 +225,11 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     }
   }
 
+  const paths = pathOperations(async (script, path, abortSignal) => {
+    const r = await ssh(asUserDirect(`sh -c ${q(script)} sh ${q(path)}`), '', abortSignal)
+    return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+  })
+
   const brokering: Partial<HarnessV1NetworkSandboxSession> = gateway
     ? {
         async setNetworkPolicy(policy: NetworkPolicy) {
@@ -306,6 +312,7 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
         .slice((o.startLine ?? 1) - 1, o.endLine)
         .join('\n')
     },
+    ...paths,
     writeBinaryFile,
     writeTextFile: (o) => writeBinaryFile({ ...o, content: Buffer.from(o.content, 'utf8') }),
     async writeFile(o) {
@@ -329,7 +336,8 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     destroy,
     restricted: () => {
       const { description, readFile, readBinaryFile, readTextFile, writeFile } = session
-      const { writeBinaryFile, writeTextFile, spawn, run } = session
+      const { writeBinaryFile, writeTextFile, stat, listDirectory, deleteFile, spawn, run } =
+        session
       return {
         description,
         readFile,
@@ -338,6 +346,9 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
         writeFile,
         writeBinaryFile,
         writeTextFile,
+        stat,
+        listDirectory,
+        deleteFile,
         spawn,
         run,
       }
