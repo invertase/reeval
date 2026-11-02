@@ -2,7 +2,7 @@
 // tree glyphs), coding agents (without), and the interactive list's rows. `LiveList` builds the
 // rows a run in progress shows from its events, before the record exists.
 import { formatDuration, plural } from '../text.ts'
-import type { CellGate } from '../types.ts'
+import type { Cell, CellGate } from '../types.ts'
 import { caseLabel } from '../view/family.ts'
 import type { Colors } from './colors.ts'
 import type { AttemptRef, CollectedEval, EvalResult, Progress } from './events.ts'
@@ -172,8 +172,8 @@ type LiveAttempt = {
   /** Its cell's key and gate, as planned; a cell's attempts decide it together. */
   cell?: string
   gate?: CellGate
-  /** Its cell is a control: the case table's columns put the control first. */
-  control?: boolean
+  /** Its cell as planned, which heads its case table column as the finished table does. */
+  place?: Cell
   phase: string
   error?: string
   /** Its case's key, on an eval with `cases`. */
@@ -231,11 +231,15 @@ function liveMark(own: LiveAttempt[], failedEval: boolean): DetailMark {
  * column per cell, the control first, each filling in as its attempts end.
  */
 function caseLines(attempts: LiveAttempt[], failedEval: boolean): DetailLine[] {
+  const places = new Map<string, Cell>()
+  for (const a of attempts)
+    if (a.cell && a.place && !places.has(a.cell)) places.set(a.cell, a.place)
+  const label = heading([...places.values()])
   const heads = new Map<string, string>()
-  const ordered = [...attempts].sort(
-    (a, b) => Number(b.control ?? false) - Number(a.control ?? false),
-  )
-  for (const a of ordered) if (a.cell && !heads.has(a.cell)) heads.set(a.cell, a.axes)
+  const control = (a: LiveAttempt) => Number(a.place?.role === 'control')
+  for (const a of [...attempts].sort((x, y) => control(y) - control(x))) {
+    if (a.cell && !heads.has(a.cell)) heads.set(a.cell, a.place ? label(a.place) : a.axes)
+  }
   const cases = [...new Set(attempts.flatMap((a) => (a.case === undefined ? [] : [a.case])))]
   const of = (name: string) => attempts.filter((a) => a.case === name)
   const table = columns([
@@ -247,15 +251,44 @@ function caseLines(attempts: LiveAttempt[], failedEval: boolean): DetailLine[] {
   ])
   return [
     { depth: 0, text: `  ${table[0] ?? ''}`, tone: 'dim', cases: 'head' },
-    ...cases.map(
-      (name, i): DetailLine => ({
+    ...cases.map((name, i): DetailLine => {
+      const failures = of(name).filter((a) => a.state === 'fail' || a.state === 'error')
+      const first = failures.find((a) => a.error)?.error
+      const more = failures.length > 1 ? ` (+${failures.length - 1} more)` : ''
+      return {
         depth: 0,
         text: table[i + 1] ?? '',
         mark: liveMark(of(name), failedEval),
         cases: 'row',
-      }),
-    ),
+        ...(first ? { note: `${first}${more}` } : {}),
+      }
+    }),
   ]
+}
+
+/**
+ * A cell's column heading, as the finished case table words it: on a compare the control's
+ * environment or the variant, with the harness when there are several; else the harness, with the
+ * environment and sandbox where the cells differ in them.
+ */
+function heading(cells: Cell[]): (c: Cell) => string {
+  const several = (part: (c: Cell) => string) => new Set(cells.map(part)).size > 1
+  const harnesses = several((c) => c.harness)
+  const envs = several((c) => c.environment)
+  const sandboxes = several((c) => c.sandbox)
+  if (cells.some((c) => c.role === 'variant')) {
+    return (c) =>
+      [
+        c.role === 'control' ? `${c.environment} (control)` : (c.variant ?? c.environment),
+        harnesses ? c.harness : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+  }
+  return (c) =>
+    [c.harness, envs ? `in ${c.environment}` : '', sandboxes ? `on ${c.sandbox}` : '']
+      .filter(Boolean)
+      .join(' ')
 }
 
 /** The list while a run goes, from its events: each eval's attempts and where they are. */
@@ -292,7 +325,7 @@ export class LiveList {
           ? {
               cell: planned.cell.key,
               gate: planned.gate,
-              control: planned.cell.role === 'control',
+              place: planned.cell,
             }
           : {}),
         ...(family ? { case: caseLabel(family.name, x.name) } : {}),
@@ -313,6 +346,7 @@ export class LiveList {
     if (ref.attempt) {
       a.cell = ref.attempt.cell.key
       a.gate = ref.attempt.gate
+      a.place ??= ref.attempt.cell
     }
     a.phase = phaseOf(undefined)
   }
@@ -330,6 +364,7 @@ export class LiveList {
     if (result.attempt) {
       a.cell = result.attempt.cell.key
       a.gate = result.attempt.gate
+      a.place ??= result.attempt.cell
     }
     a.state =
       outcome === 'pass'
@@ -404,13 +439,10 @@ export class LiveList {
     ]
       .filter(Boolean)
       .join(' · ')
-    const lines = e.attempts.map((a) => [a, this.#attemptLine(a)] as const)
+    // With cases, a failed attempt's message is its case row's note.
     const detail = cases
-      ? [
-          ...caseLines(e.attempts, failed),
-          ...lines.flatMap(([a, l]) => (a.state === 'fail' || a.state === 'error' ? [l] : [])),
-        ]
-      : lines.map(([, l]) => l)
+      ? caseLines(e.attempts, failed)
+      : e.attempts.map((a) => this.#attemptLine(a))
     return { id: e.id, name: e.name, icon, summary, detail, remarks: 0, compare: false }
   }
 

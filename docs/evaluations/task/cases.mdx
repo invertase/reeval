@@ -3,7 +3,7 @@ title: "Evaluate many cases"
 description: "Run the same evaluation over a list of cases and read one result."
 ---
 
-The `cases` option runs one evaluation over a list of inputs. Every case shares the options and the body, which takes the case as its second argument. An evaluation with cases is one evaluation, its cases inside it: under the default gate a failing case fails it. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
+The `cases` option runs one evaluation over a list of inputs. Every case shares the options and the body, which takes the case as its second argument. An evaluation with cases is one evaluation, its cases inside it: under the default gate a failing case fails it. For how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
 
 <Info>
 For evaluations that pass or fail on their own, write a loop instead: each `evaluate` call is its own evaluation.
@@ -135,9 +135,9 @@ evals/rate.eval.ts
       expected 'c' not to be 'c' // Object.is equality · evals/rate.eval.ts:8
 ```
 
-Under the default `'all'`, every case must pass, and a failing case fails the evaluation: `Failed on c; 2 of 3 cases passed.` A case whose every attempt hit an infra error makes the evaluation an infra error.
+Under the default `'all'`, every case must pass, and a failing case fails the evaluation: `Failed on c; 2 of 3 cases passed.` A case whose every attempt hit an infra error makes the evaluation an infra error, unless another case fails.
 
-In the record, the cases are rows in the evaluation's `cases`. Case `c` keeps what it did, `fail`, and the rate over the cases decides the evaluation, its exit code and the tally, which counts it once. `reeval compare` shows a case that flipped as `now fails` or `now passes`, and `--fail-on-regression` reads the evaluation's gate over its cases.
+In the record, the cases are rows in the evaluation's `cases`. Case `c` keeps its `fail`, and the rate over the cases decides the evaluation, its exit code and the tally. `reeval compare` shows a case that flipped as `now fails` or `now passes`, and `--fail-on-regression` reads the evaluation's gate over its cases.
 
 ## Run a case on some environments
 
@@ -159,9 +159,9 @@ evaluate(
     // ...
 ```
 
-The `reeval run --dry-run` notes list each pair left out, such as `where excludes 2 pairs · excluded on vite-app: q002, q004`, the run's case table shows `–` for them, and each case in the record's `cases` keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). The evaluation's own `excluded` lists every pair. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
+The `reeval run --dry-run` notes list each pair left out, such as `where excludes 2 pairs · excluded on vite-app: q002, q004`, the run's case table shows `–` for them, and each case in the record's `cases` keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). The evaluation's own `excluded` lists every pair, including a case `where` leaves out everywhere, which runs nothing. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
 
-`where` gives the same answer every run. To run only some environments now, such as the Next.js ones on a pull request, filter the cells with [`reeval run --trait stack=next`](/reference/cli#filtering-cells-by-trait) or a profile's [`limit.traits`](/reference/profiles#traits) instead.
+`where` gives the same answer every run. To run only some environments now, filter the cells with [`reeval run --trait stack=next`](/reference/cli#filtering-cells-by-trait) or a profile's [`limit.traits`](/reference/profiles#traits) instead.
 
 ## Compare over cases
 

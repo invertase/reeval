@@ -374,6 +374,14 @@ describe('runEngine: running', () => {
       collected.evals.map((e) => e.skipped),
       collected.file === 'evals/a.eval.ts' ? [false, true, true] : [false],
     )
+    const planned = events
+      .flatMap((e) => (e.type === 'collected' ? e.evals : []))
+      .flatMap((e) => (e.attempt ? [e.attempt.name] : []))
+    assert.deepEqual(
+      planned.sort(),
+      ['one', 'two'],
+      'each collected test carries its planned attempt',
+    )
   })
 
   test('a declared skip is flagged, and an attempt a resume skips because it completed is not', async () => {

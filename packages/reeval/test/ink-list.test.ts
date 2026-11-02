@@ -426,7 +426,13 @@ const caseEvals = (cases: string[], harnesses: string[]) =>
         n: 1,
         gate: 'all',
         label: harness,
-        cell: { key: `${harness}/-/fake`, role: 'control' },
+        cell: {
+          key: `${harness}/-/fake`,
+          harness,
+          environment: '-',
+          sandbox: 'fake',
+          role: 'control',
+        },
         family: { id: 'evals/a.eval.ts › bank', name: 'bank', case: i, cases: cases.length },
       } as never,
     })),
@@ -470,8 +476,12 @@ test('an eval with cases is one row while it runs, its case table filling in as 
       ['spin', 'red    1 of 1  running'],
       ['queued', 'blue   0 of 1  queued'],
       ['queued', 'green  queued  queued'],
-      ['fail', 'claude · blue #1 failed'],
     ],
+  )
+  assert.equal(
+    rows()[0]?.detail[2]?.note,
+    'no',
+    "a failed attempt's message is its case row's note",
   )
   for (const [k, h] of [
     ['red', 'codex'],
@@ -489,10 +499,41 @@ test('an eval with cases is one row while it runs, its case table filling in as 
       ['pass', 'red    1 of 1  1 of 1'],
       ['fail', 'blue   0 of 1  1 of 1'],
       ['pass', 'green  1 of 1  1 of 1'],
-      ['fail', 'claude · blue #1 failed'],
     ],
   )
   assert.deepEqual(live.counts(), { done: 1, total: 1, running: 0, failed: 1, failing: 0 })
+})
+
+test("a compare's live case table heads its columns as the finished table does, the control first", () => {
+  const live = new LiveList('fake')
+  const arm = (env: string, role: string, variant?: string) => ({
+    key: `fake/${env}/fake`,
+    harness: 'fake',
+    environment: env,
+    sandbox: 'fake',
+    role,
+    ...(variant ? { variant } : {}),
+  })
+  live.collected(
+    'evals/a.eval.ts',
+    ['a', 'b'].flatMap((k, i) =>
+      [arm('skilled', 'variant', 'skilled'), arm('app', 'control')].map((cell) => ({
+        id: `evals/a.eval.ts › w [${k}]`,
+        key: `evals/a.eval.ts › w [${k}] # ${cell.key}#1`,
+        group: [],
+        name: `w [${k}]`,
+        skipped: false,
+        attempt: {
+          n: 1,
+          gate: 'all',
+          label: cell.role === 'control' ? 'control' : 'skilled',
+          cell,
+          family: { id: 'evals/a.eval.ts › w', name: 'w', case: i, cases: 2 },
+        } as never,
+      })),
+    ),
+  )
+  assert.equal(live.files()[0]?.rows[0]?.detail[0]?.text, '  case  app (control)  skilled')
 })
 
 test('a queued attempt names its harness and its run in the cell, from the plan', () => {
@@ -599,6 +640,36 @@ test('openDetail hides nothing for 5 cases or fewer, and an unmarked table lines
     openDetail(many.detail, true).filter((l) => l.cases === 'row').length,
     12,
     'full: every case, as -v prints them',
+  )
+})
+
+test('openDetail keeps the failed and the running cases a long table would hide past its first 5', () => {
+  const live = new LiveList('fake')
+  const names = Array.from({ length: 12 }, (_, i) => `q${String(i + 1).padStart(2, '0')}`)
+  live.collected('evals/a.eval.ts', caseEvals(names, ['claude']))
+  for (const k of names.slice(0, 9)) {
+    live.start(caseRef(k, 'claude'))
+    if (k !== 'q08' && k !== 'q09')
+      live.end({ ...(caseRef(k, 'claude') as object), state: 'passed' } as never)
+  }
+  live.start(caseRef('q10', 'claude'))
+  live.end({ ...(caseRef('q10', 'claude') as object), state: 'failed', errors: ['no'] } as never)
+  const open = openDetail(live.files()[0]?.rows[0]?.detail ?? [], false)
+  assert.deepEqual(
+    open.filter((l) => l.cases === 'row').map((l) => [l.mark, l.text.split(' ')[0]]),
+    [
+      ['pass', 'q01'],
+      ['pass', 'q02'],
+      ['spin', 'q08'],
+      ['spin', 'q09'],
+      ['fail', 'q10'],
+    ],
+    'the failed case and both running ones, then the first passes, in table order',
+  )
+  assert.ok(open.some((l) => l.text === '  7 cases hidden, → to show'))
+  assert.ok(
+    open.findIndex((l) => /hidden/.test(l.text)) > open.findIndex((l) => l.text.startsWith('q10')),
+    'the count follows the table',
   )
 })
 

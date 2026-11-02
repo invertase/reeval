@@ -5,9 +5,11 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { caseEntries, foldCases, unfoldCases } from '../src/history/cases.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { openDetail } from '../src/ui/ink-list.ts'
+import { statusList } from '../src/ui/status.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { suiteResult } from '../src/view/suite.ts'
-import { fakeConfig, project, recordedRuns, runCli } from './helpers.ts'
+import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
 
 const before = corpusEntries().find((e) => e.name === 'before-cases')
@@ -203,6 +205,22 @@ evaluate('bank', { cases: ${JSON.stringify(keys)}, runs: 2 }, async (c, k) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /\+4 more cases: 2 failed, 2 passed \(-v\)$/m)
     assert.match(r.stdout, /ok {2}failed on q1 \(2 of 2 runs\), q2 \(2 of 2 runs\)/)
+
+    const { run } = readRun(p.dir)
+    const [row] = statusList({
+      record: run,
+      suite: suiteResult(run),
+      remarks: null,
+      verbose: false,
+    }).files.flatMap((f) => f.rows)
+    const open = openDetail(row?.detail ?? [], false)
+    assert.equal(
+      open.filter((l) => l.cases === 'row').length,
+      5,
+      'the interactive list opens the case table at five rows',
+    )
+    assert.ok(open.some((l) => l.text.endsWith('7 cases hidden, → to show')))
+    assert.ok(!open.some((l) => l.text.includes('(-v)')), "the printed list's count isn't there")
   })
 
   test('-v on a compare over cases prints the paired lift once, not a difference per case', async () => {
