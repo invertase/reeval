@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { fakeConfig, project, runCli } from './helpers.ts'
+import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 import { copyOut } from './support/examples.ts'
 
 const EVALS = `import { defineEnvironment, evaluate, expect } from 'reeval'
@@ -145,7 +145,7 @@ test('a compare whose effort holds prints its comparison, which every reader sha
   )
 })
 
-const NOISE = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const IDENTICAL = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
 
@@ -155,10 +155,10 @@ evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] }
 })
 `
 
-test('arms that differ only by agent-time noise are a tie: make the task harder', async () => {
-  const p = await project('status-noise', {
-    'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 300 }' }),
-    'evals/s.eval.ts': NOISE,
+test('identical arms are a tie: make the task harder', async () => {
+  const p = await project('status-identical', {
+    'reeval.config.ts': fakeConfig({ harness: '{ turnMs: 1000 }' }),
+    'evals/s.eval.ts': IDENTICAL,
   })
   const run = await runCli(p.dir, ['run', '--ui', 'plain'])
   assert.equal(run.code, 0, run.stdout + run.stderr)
@@ -166,10 +166,22 @@ test('arms that differ only by agent-time noise are a tie: make the task harder'
     listOf(run.stdout),
     /passed every run \(4 of 4 and 4 of 4\): the task can't tell them apart, since both always pass\. Fix at evals\/s\.eval\.ts:\d+: make the task harder, so the baseline can fail\./,
   )
+  const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
+  assert.deepEqual(
+    new Set(attempts.map((a) => a.timings.agentMs)),
+    new Set([1000]),
+    'turnMs is the agent time',
+  )
 })
 
 test('with-compare-questions, whose question picked the variant 4 of 4, names the runs that would confirm it', async () => {
   const dir = await copyOut('with-compare-questions')
+  const config = join(dir, 'reeval.config.ts')
+  // Agent time stays the same, so the question is the only lean.
+  writeFileSync(
+    config,
+    readFileSync(config, 'utf8').replace('fakeHarness({', 'fakeHarness({ turnMs: 1000,'),
+  )
   const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(

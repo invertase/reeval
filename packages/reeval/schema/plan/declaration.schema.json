@@ -1792,6 +1792,11 @@
             "additionalProperties": false
           }
         },
+        "turnMs": {
+          "description": "Each turn's recorded agent time, exactly, whatever the wall clock says: a test can compare agent time without scheduling jitter, which four runs a side can tell apart.",
+          "type": "number",
+          "minimum": 0
+        },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
           "type": "object",

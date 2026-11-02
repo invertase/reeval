@@ -81,11 +81,12 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             text,
             status,
             startedAt: new Date(startedAt).toISOString(),
-            durationMs: Date.now() - startedAt,
+            durationMs: descriptor.turnMs ?? Date.now() - startedAt,
             transcript,
             usage: null,
             model: descriptor.servedModel ?? null,
             unreported: [],
+            ...(descriptor.turnMs === undefined ? {} : { agentMs: descriptor.turnMs }),
           })
           const write = async (path: string, content: string) => {
             const time = at()

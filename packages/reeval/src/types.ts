@@ -594,6 +594,11 @@ export type FakeHarnessDescriptor = {
   delayMs?: number
   /** Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to. */
   ignoreAbort?: boolean
+  /**
+   * Each turn's recorded agent time, exactly, whatever the wall clock says: a test can compare
+   * agent time without scheduling jitter, which four runs a side can tell apart.
+   */
+  turnMs?: number
   /** Throw before the first turn starts, to simulate an infra failure. */
   failWith?: string
   /** The first this many session starts of an attempt never become ready, even when aborted (`true`: every one). */

@@ -158,6 +158,7 @@ export const fakeHarnessSchema = z.strictObject({
   text: z.string().optional(),
   delayMs: z.number().max(MAX_TIMER_MS, `must be ${TIMER_LIMIT}`).optional(),
   ignoreAbort: z.boolean().optional(),
+  turnMs: z.number().nonnegative().optional(),
   failWith: z.string().optional(),
   startHangs: z.union([z.number(), z.literal(true)]).optional(),
   reasoning: z.string().optional(),

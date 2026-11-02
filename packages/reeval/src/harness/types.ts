@@ -21,6 +21,11 @@ export type HarnessResult = {
    * reasoning events carry their own durations.
    */
   reasoningMs?: number | null
+  /**
+   * The turn's agent time, recorded in place of the wall clock around `send`; only the fake
+   * harness's `turnMs` sets it.
+   */
+  agentMs?: number
   /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
   /**
