@@ -1588,7 +1588,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     assert.match((await ok(['studio', 'build'])).stdout, /built \.\.\/\.\.\/\.\.\/studio-dist\//)
     assert.match(
       (await ok(['image', 'build', '--dry-run'])).stdout,
-      /No eval runs in a Docker sandbox/,
+      /No eval runs in a Docker or Tart sandbox/,
       "the config's fake sandbox, not the default docker()",
     )
     assert.match(
