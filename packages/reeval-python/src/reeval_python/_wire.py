@@ -1822,8 +1822,9 @@ class TartSandboxDescriptor(TypedDict):
     # Cell id; defaults to `tart:<image>`, the image's last path segment.
     id: NotRequired[str]
     # The VM each attempt clones: an OCI image such as
-    # `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's
-    # name.
+    # `ghcr.io/cirruslabs/macos-sequoia-base:latest`, or a local VM's name. Tart must have it
+    # before the run: `reeval image build` (or `tart pull`) pulls it, and `reeval run` refuses
+    # one `tart list` doesn't show.
     image: str
     kind: Literal["tart"]
     # The most Tart VMs at once, across the run: 1 or 2, and 2 when unset, since macOS runs at
