@@ -211,6 +211,26 @@ describe('a transport that orphans its processes', { timeout: 30_000 }, () => {
     assert.deepEqual(pidFiles(), [], 'and removed its pid file')
   })
 
+  test('a pid file whose pid is no longer a forwarder kills nothing', async () => {
+    const other = spawn('sleep', ['30'], { stdio: 'ignore' })
+    const files = {
+      '/tmp/reeval-egress-forwarder-reused.pid': String(other.pid),
+      '/tmp/reeval-egress-forwarder-group.pid': '-1',
+      '/tmp/reeval-egress-forwarder-empty.pid': '',
+    }
+    for (const [file, content] of Object.entries(files)) writeFileSync(file, content)
+    let gateway: Awaited<ReturnType<typeof startGateway>> | undefined
+    try {
+      gateway = await startGateway(orphaning, { policy: { mode: 'allow-all' } })
+      assert.ok(alive(other.pid ?? 0), 'the process that took the pid still runs')
+      for (const file of Object.keys(files)) assert.ok(!existsSync(file), `${file} is removed`)
+    } finally {
+      other.kill('SIGKILL')
+      for (const file of Object.keys(files)) rmSync(file, { force: true })
+      await gateway?.close()
+    }
+  })
+
   test('a transport that does not orphan has its forwarder left to it', async () => {
     const { transport, runs } = localTransport({ exitCode: 0 })
     const gateway = await startGateway(transport, { policy: { mode: 'allow-all' } })

@@ -43,6 +43,8 @@ export type Gateway = {
  * find it by its command line, which Linux cuts short of a long script.
  */
 const PID_FILE = '/tmp/reeval-egress-forwarder'
+/** How long `close()` waits for the sandbox to stop a forwarder a transport could orphan. */
+const CLOSE_TIMEOUT_MS = 10_000
 
 /** Runs the forwarder; under a transport that orphans it, as the shell that wrote its pid file. */
 function forwarderCommand(transport: ExecTransport, tag: string): string[] {
@@ -51,14 +53,21 @@ function forwarderCommand(transport: ExecTransport, tag: string): string[] {
   return ['sh', '-c', `echo $$ > ${PID_FILE}-${tag}.pid && exec "$@"`, 'sh', ...node]
 }
 
-/** Kills the forwarders whose pid files match `glob`, and removes the files. */
+/**
+ * Kills the forwarders whose pid files match `glob`, and removes the files. A pid is killed only
+ * while it's still a `node -e`: a forwarder that exited on its own leaves its file, and its pid
+ * may since be another process's.
+ */
 const killForwarders = (transport: ExecTransport, glob: string, signal?: AbortSignal) =>
   execRun(
     transport,
     [
       'sh',
       '-c',
-      `for f in ${PID_FILE}-${glob}.pid; do [ -f "$f" ] || continue; kill -9 "$(cat "$f")" 2>/dev/null; rm -f "$f"; done; true`,
+      `for f in ${PID_FILE}-${glob}.pid; do [ -f "$f" ] || continue; p=$(cat "$f"); rm -f "$f"
+case $p in ''|0|1|*[!0-9]*) continue ;; esac
+case $(ps -p "$p" -o command= 2>/dev/null) in *'node -e'*) kill -9 "$p" 2>/dev/null ;; esac
+done; true`,
     ],
     { input: '', signal },
   ).then(
@@ -94,6 +103,7 @@ export async function startGateway(
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
   // One forwarder holds PROXY_PORT in the sandbox, so an orphaned one would refuse this one.
   if (transport.orphans) await killForwarders(transport, '*', signal)
+  signal?.throwIfAborted()
   const tag = randomBytes(6).toString('hex')
   const proxy = createEgressProxy({ ...options, ca })
   const child = execSpawn(transport, forwarderCommand(transport, tag))
@@ -163,7 +173,10 @@ export async function startGateway(
     mux.destroy()
     proxy.close()
     for (const l of listeners.values()) void l.then((s) => s.close())
-    teardown = transport.orphans ? killForwarders(transport, tag) : Promise.resolve()
+    // Bounded: a sandbox that no longer answers would otherwise hold its teardown forever.
+    teardown = transport.orphans
+      ? killForwarders(transport, tag, AbortSignal.timeout(CLOSE_TIMEOUT_MS))
+      : Promise.resolve()
     return teardown
   }
   try {
