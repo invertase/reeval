@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { X509Certificate } from 'node:crypto'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
@@ -156,13 +156,15 @@ describe('the gateway over an exec transport', { timeout: 30_000 }, () => {
   })
 })
 
+/** Whether `pid` runs: a killed process its parent hasn't reaped yet is a zombie, not alive. */
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0)
-    return true
   } catch {
     return false
   }
+  const stat = existsSync(`/proc/${pid}/stat`) ? readFileSync(`/proc/${pid}/stat`, 'utf8') : ''
+  return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z'
 }
 
 /** The forwarders' pid files on the host, which the orphaning transport's sandbox is. */
@@ -205,7 +207,7 @@ describe('a transport that orphans its processes', { timeout: 30_000 }, () => {
       rmSync(staleFile, { force: true })
       await gateway?.close()
     }
-    assert.ok(!alive(own), 'closing stopped its forwarder')
+    await eventually('closing stopped its forwarder', () => !alive(own))
     assert.deepEqual(pidFiles(), [], 'and removed its pid file')
   })
 
