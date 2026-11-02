@@ -11,36 +11,44 @@ description: "Read the outcomes, the tally, and the remarks that reeval run and 
 with-reeval-mcp.eval.ts
 └─ ✗ adds a tested multiply function  0 of 1 run passed
      Failed on fake.
-     Every failure was the same check:
-       "toSucceed node --test" failed once
-         expected command to succeed, exit code 1
-         …
-         at with-reeval-mcp.eval.ts:13
+     ✗ toSucceed node --test  failed 1 of 1 run
+       expected command to succeed, exit code 1 · with-reeval-mcp.eval.ts:13
 
-Done in 1s · 1 failed
+Done in 846ms · 1 failed
 Browse it: reeval studio · summary .reeval/runs/…/summary.md
 ```
 
-Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` passed, `✗` failed or hit an infra error, `●` not gated (no cell is gated), `–` skipped or todo, and `○` canceled. A passing evaluation is one line. A failed one, a comparison, and one with remarks add sentences under it: how each harness did, the baseline and each variant with its effect, the cases of a family that failed, each failed assertion with its first message and file location, a failed evaluation's workspace snapshot, its observations, and each question's answers. For more information about what an assertion decides, see [Assertion](/reference/glossary#assertion). To print the sentences under every evaluation, pass `-v`.
+Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` passed, `✗` failed or hit an infra error, `●` not gated (no cell is gated), `–` skipped or todo, and `○` canceled. A passing evaluation is one line. A failed one, a comparison, and one with remarks add lines under it: how each harness did, a table of the arms, a family's failed cases, and each failed assertion with the runs or arms it failed on, its first message line (and a command's first stderr line) and its location. For more information, see [Assertion](/reference/glossary#assertion).
+
+`-v` prints them under every evaluation, with each full message and file excerpt, the workspace snapshot, each interval and each remark's whole sentence.
 
 `Done in` gives the run's time, then the tally, which omits zeros, as in `2 failed · 1 passed · 1 infra error`. A failure outside any evaluation prints first, as `error:`, and counts as a `run error`. `Browse it:` names the studio and the run's `summary.md` file. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
 
-On a terminal outside CI, unless `--ui` names a mode, the list draws while the run goes, and stays up once it ends so you can browse it: the up and down arrows move, the right arrow or enter opens an evaluation's sentences, the left arrow or escape folds them, and `q` quits and leaves the list in your scrollback. During the run, Ctrl-C cancels it, and so does `q` pressed twice within three seconds. Each attempt's own log lines print only with `--output-logs` (`-v` selects `full`), and then without the interactive list.
+On a terminal outside CI, unless `--ui` names a mode, the list draws while the run goes, and stays up once it ends so you can browse it: the up and down arrows move, the right arrow or enter opens an evaluation's lines, the right arrow again (`→ more`) shows the rest that `-v` prints, the left arrow or escape folds them, and `q` quits and leaves the list in your scrollback.
+
+A spinner turns while reeval waits on a sandbox, an agent turn or a judge. An evaluation gets its `✓` or `✗` once all its runs end; until then a red spinner marks one with a failed run, which the footer counts: `9 of 10 evals done · 1 failing`. Piped output has no spinner. During the run, Ctrl-C cancels it, and so does `q` pressed twice within three seconds. Each attempt's own log lines print only with `--output-logs` (`-v` selects `full`), and then without the interactive list.
 
 ## Read remarks
 
-Under an evaluation, `Worth knowing:` names concerns about it, such as a flaky assertion, a slow MCP server start, or too few runs for a difference to hold. reeval's own rules raise them from the run and its history, with no model. Each ends with `Fix at` and the file location to change. At most three concerns print, then `+N more remarks (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start, or too few runs for a difference to hold, prints on every run where it happens. The same list also names an assertion that passed only on a retry.
+Under an evaluation, `Worth knowing:` names concerns about it, such as a flaky assertion, a slow MCP server start, or too few runs for a difference to hold. reeval's own rules raise them from the run and its history, with no model. Each names the file location to change. At most three concerns print, then `+N more remarks (-v)`. To print the rest, each remark's whole sentence and any suggestion, pass `-v`. A concern prints on the run that first raises it; a slow server start, or too few runs, on every run. The same list also names an assertion that passed only on a retry.
 
-A remark looks like this:
+A remark looks like this, on one line when it's the only one:
 
 ```text
-└─ ✓ records the change in the changelog  1 of 1 run passed
-     Baseline short-rules passed 0 of 1.
-     Variants, by pass rate:
-       detailed-rules  1 of 1  helped
-     …
-     Worth knowing:
-       The detailed-rules variant passed 1 of 1 run and the baseline 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at with-rules-ab.eval.ts:14: set runs: 4, where a difference this size would hold.
+└─ ✓ records the change in the changelog  1 of 1 variant run passed
+     Detailed-rules helped.
+     arm                     passed  verdict
+     short-rules (baseline)  0 of 1
+     detailed-rules          1 of 1  helped
+     ✗ changelog entry  failed on the baseline · expected
+       expected CHANGELOG.md to match /## Unreleased\s+- feat: / · with-rules-ab.eval.ts:20
+     Worth knowing: 1 run per side; set runs: 4 at with-rules-ab.eval.ts:14 to confirm this difference.
+```
+
+A baseline that isn't gated fails as `expected`. With `-v`, the remark prints its whole sentence:
+
+```text
+     Worth knowing: The detailed-rules variant passed 1 of 1 run and the baseline 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at with-rules-ab.eval.ts:14: set runs: 4, where a difference this size would hold.
 ```
 
 ## Show one run

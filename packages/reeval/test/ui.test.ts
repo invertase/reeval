@@ -643,7 +643,10 @@ test("a gateway warning prints as it happens, in the plain and agent output, on 
 test("an attempt's failure in a line: the message without its error's class, the judge's verdict, or canceled", () => {
   assert.equal(failureReason(defaultResult), 'expected 1 to be 2 // Object.is equality')
   assert.equal(
-    failureReason({ ...defaultResult, errors: ['TypeError: x is undefined\n    at evals/a.eval.ts:3'] }),
+    failureReason({
+      ...defaultResult,
+      errors: ['TypeError: x is undefined\n    at evals/a.eval.ts:3'],
+    }),
     'x is undefined',
   )
   const judged: EvalResult = {

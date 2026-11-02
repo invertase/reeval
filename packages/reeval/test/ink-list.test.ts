@@ -5,7 +5,7 @@ import { render } from 'ink-testing-library'
 import { createElement as h } from 'react'
 import { colors } from '../src/ui/colors.ts'
 import { endText, startText } from '../src/ui/header.ts'
-import { CONFIRM_MS, frameLines, ListApp, doneLine, wrap } from '../src/ui/ink-list.ts'
+import { CONFIRM_MS, doneLine, frameLines, ListApp, wrap } from '../src/ui/ink-list.ts'
 import { LiveList, SPINNER } from '../src/ui/list.ts'
 import type { StatusFile, StatusRow } from '../src/ui/status.ts'
 import { ListStore, StepSpinner } from '../src/ui/tty.ts'
@@ -106,14 +106,26 @@ test('while the run goes: a spinner, the count, and the arrows move and open a r
     await settle()
     assert.match(app.frame(), /^❯ ✗ greets in French/m)
     assert.match(app.frame(), /^ {6}✗ says bonjour {2}failed 1 of 1 run$/m)
-    assert.doesNotMatch(app.frame(), /the file as the agent left it/, 'full detail waits for → again')
+    assert.doesNotMatch(
+      app.frame(),
+      /the file as the agent left it/,
+      'full detail waits for → again',
+    )
     assert.match(app.frame(), /↑↓ move · → more · q cancel/)
     app.stdin.write(KEY.right)
     await settle()
-    assert.match(app.frame(), /^ {8}the file as the agent left it$/m, '→ again shows the full detail')
+    assert.match(
+      app.frame(),
+      /^ {8}the file as the agent left it$/m,
+      '→ again shows the full detail',
+    )
     app.stdin.write(KEY.left)
     await settle()
-    assert.doesNotMatch(app.frame(), /the file as the agent left it/, '← steps back to the short detail')
+    assert.doesNotMatch(
+      app.frame(),
+      /the file as the agent left it/,
+      '← steps back to the short detail',
+    )
     assert.match(app.frame(), /says bonjour/)
     app.stdin.write(KEY.left)
     await settle()
@@ -332,15 +344,27 @@ test('an eval still going with a failed run spins, red, and only gets its ✗ on
     skipped: false,
   }))
   live.collected('evals/a.eval.ts', evals)
-  const [one, two] = evals.map((e) => ({ key: e.key, attempt: { n: 1, gate: 'all', label: 'fake #1' } }) as never)
+  const [one, two] = evals.map(
+    (e) => ({ key: e.key, attempt: { n: 1, gate: 'all', label: 'fake #1' } }) as never,
+  )
   live.start(one)
   live.start(two)
-  live.end({ key: evals[0]?.key, state: 'failed', errors: ['AssertionError: expected bonjour'] } as never)
+  live.end({
+    key: evals[0]?.key,
+    state: 'failed',
+    errors: ['AssertionError: expected bonjour'],
+  } as never)
   const going = live.files()[0]?.rows[0]
   assert.equal(going?.icon, 'failing')
   assert.equal(going?.summary, '1 of 2 runs done')
   assert.deepEqual(live.counts(), { done: 0, total: 1, running: 1, failed: 0, failing: 1 })
-  const state = { files: live.files(), logs: [], counts: live.counts(), phase: null, finished: null }
+  const state = {
+    files: live.files(),
+    logs: [],
+    counts: live.counts(),
+    phase: null,
+    finished: null,
+  }
   const red = colors(true)
   const head = frameLines(state, red, -1, null, 0)[1]?.text ?? ''
   assert.ok(head.includes(red.red('⠋')), 'the spinner is red')
@@ -361,12 +385,20 @@ test('the footer counts the evals done, then those failed and those failing', ()
 test("before the list, the prepare step's glyph spins in place, then settles to ◆ once each sandbox reports", (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] })
   const out: string[] = []
-  const spinner = new StepSpinner((s) => out.push(s), c, () => ({ rows: 24, columns: 80 }))
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => ({ rows: 24, columns: 80 }),
+  )
   spinner.start('  ◆  Preparing 2 sandboxes...\n', 2)
   assert.deepEqual(out, [`\x1b[1A\r\x1b[2C${SPINNER[0]}\r\x1b[1B`], 'up to the step line and back')
   spinner.before('  ✓  cursor ready\n')
   t.mock.timers.tick(80)
-  assert.equal(out.at(-1), `\x1b[2A\r\x1b[2C${SPINNER[1]}\r\x1b[2B`, 'a line under it moves it up one more')
+  assert.equal(
+    out.at(-1),
+    `\x1b[2A\r\x1b[2C${SPINNER[1]}\r\x1b[2B`,
+    'a line under it moves it up one more',
+  )
   spinner.reported()
   t.mock.timers.tick(80)
   assert.equal(out.at(-1), `\x1b[2A\r\x1b[2C${SPINNER[2]}\r\x1b[2B`, 'one sandbox still preparing')
@@ -380,7 +412,11 @@ test("before the list, the prepare step's glyph spins in place, then settles to 
 test('the prepare step settles rather than spin a line about to scroll out of reach', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] })
   const out: string[] = []
-  const spinner = new StepSpinner((s) => out.push(s), c, () => ({ rows: 4, columns: 80 }))
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => ({ rows: 4, columns: 80 }),
+  )
   spinner.start('  ◆  Preparing...\n', 1)
   spinner.before('a\nb\n')
   assert.equal(out.at(-1), '\x1b[1A\r\x1b[2C◆\r\x1b[1B')

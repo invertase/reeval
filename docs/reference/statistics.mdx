@@ -47,12 +47,12 @@ The remark names the `runs`, never fewer than four, at which a difference that s
 ## One comparison over every measure
 
 ```text
-     Variants, by pass rate:
-       marked  4 of 4  same
-         Same pass rate · 5× faster.
+     arm               passed  verdict  vs baseline
+     plain (baseline)  4 of 4
+     marked            4 of 4  same     5× faster
 ```
 
-reeval compares each variant with its baseline on every measure the run has, each with the test reeval already prints it with. The status list, `reeval compare -v`, the remarks, the `reeval analyze` digest and `reeval query measure_effects` all read this one comparison, so they never disagree.
+reeval compares each variant with its baseline on every measure the run has, each with the test reeval already prints it with. The status list's `vs baseline` column names the measures whose difference holds; `-v` adds the ones that only lean, each marked `looks`, and each variant's interval. The status list, `reeval compare -v`, the remarks, the `reeval analyze` digest and `reeval query measure_effects` all read this one comparison, so they never disagree.
 
 | Measure | Test | Magnitude |
 |---|---|---|

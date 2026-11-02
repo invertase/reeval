@@ -32,15 +32,15 @@ with a remark saying why:
 with-egress-allow-all.eval.ts
 └─ ✗ reads an SSH banner over raw TCP  0 of 1 run passed
      Failed on fake.
-     2 checks failed:
-       "toSucceed bash banner.sh" failed once
-         expected command to succeed, exit code 1
-         banner.sh: line 2: github.com: Temporary failure in name resolution
-         …
-     Snapshot: .reeval/runs/…/1/snapshots/final
-     Worth knowing:
-       It failed with "Temporary failure in name resolution" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail. Fix at with-egress-allow-all.eval.ts:5: set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY.
+     ✗ toSucceed bash banner.sh  failed 1 of 1 run
+       expected command to succeed, exit code 1 · with-egress-allow-all.eval.ts:12
+       stderr: banner.sh: line 2: github.com: Temporary failure in name resolution
+     ✗ toMatch /^SSH-2\.0-/      failed 1 of 1 run
+       expected '' to match /^SSH-2\.0-/ · with-egress-allow-all.eval.ts:13
+     Worth knowing: Only HTTP(S) leaves under egress 'proxy'; set egress: 'allow-all' at with-egress-allow-all.eval.ts:5 for raw TCP or UDP.
 ```
+
+`reeval run -v` prints the remark's whole sentence, with the error it saw and the fix.
 
 Under `'allow-all'` that traffic goes out directly, unfiltered and unrecorded, and can reach your
 LAN and cloud metadata; the record marks the attempt's egress `partial`. Set it on the evals that

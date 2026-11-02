@@ -124,10 +124,7 @@ describe('named check results', () => {
     ])
 
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
-    assert.match(
-      agent.stdout,
-      /^ {4}✗ house style {2}failed on the baseline 2 of 2 · expected$/m,
-    )
+    assert.match(agent.stdout, /^ {4}✗ house style {2}failed on the baseline 2 of 2 · expected$/m)
   })
 
   test('without a compare the attempts record their assertions and the result has no check matrix', async () => {

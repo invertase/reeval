@@ -671,6 +671,7 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
   const [first] = hits
   if (!first) return []
   const ofTries = hits.length > 1 ? ` (${hits.length} tries)` : ''
+  const at = ctx.locate(first.entry, null)
   return [
     {
       id: remarkId('proxy-only-egress', e.path, first.entry),
@@ -678,11 +679,12 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
       kind: 'proxy-only-egress',
       severity: 'concern',
       text: `It failed with "${first.error}"${ofTries} and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.`,
+      brief: `Only HTTP(S) leaves under egress 'proxy'; set egress: 'allow-all' at ${location(at)} for raw TCP or UDP.`,
       evidence: hits.map(
         (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
       ),
       fix: {
-        at: ctx.locate(first.entry, null),
+        at,
         edit: "set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY",
       },
     },

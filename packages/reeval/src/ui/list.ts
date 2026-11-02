@@ -69,7 +69,9 @@ export function detailSegments(c: Colors, line: DetailLine, glyph?: string): Seg
           ? c.bold
           : (t: string) => t
   return [
-    ...(mark ? [{ text: `${mark === 'spin' && glyph ? glyph : MARK[mark]} `, paint: markPaint }] : []),
+    ...(mark
+      ? [{ text: `${mark === 'spin' && glyph ? glyph : MARK[mark]} `, paint: markPaint }]
+      : []),
     { text: line.text, paint: textPaint },
     ...(line.note ? [{ text: ` · ${line.note}`, paint: c.dim }] : []),
   ]
@@ -286,7 +288,8 @@ export class LiveList {
     const detail: DetailLine[] = e.attempts.map((a): DetailLine => {
       const who = `${a.axes || this.#harness} #${a.n}`
       if (a.state === 'running') return { depth: 0, mark: 'spin', text: `${who} ${a.phase}` }
-      if (a.state === 'queued') return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
+      if (a.state === 'queued')
+        return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
       if (a.state === 'pass') return { depth: 0, mark: 'pass', text: `${who} passed` }
       if (a.state === 'skipped' || a.state === 'canceled') {
         return { depth: 0, mark: 'skipped', text: `${who} ${a.state}`, tone: 'dim' }

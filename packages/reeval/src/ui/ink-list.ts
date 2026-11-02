@@ -227,11 +227,11 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   const { rows: rowsTall, columns } = size
   const open = rows.find((r) => r.id === expanded)
   const more =
-    open && !full && shownDetail(open.detail, true).length !== shownDetail(open.detail, false).length
+    open &&
+    !full &&
+    shownDetail(open.detail, true).length !== shownDetail(open.detail, false).length
   const step = more ? '→ more' : '→ open'
-  const keys = finished
-    ? `↑↓ move · ${step} · ← close · q quit`
-    : `↑↓ move · ${step} · q cancel`
+  const keys = finished ? `↑↓ move · ${step} · ← close · q quit` : `↑↓ move · ${step} · q cancel`
   // The phase spins while reeval waits on the run, and settles once it ends.
   const glyph = finished ? c.teal('◆') : c.teal(SPINNER[frame % SPINNER.length] ?? '◆')
   const head = state.phase ? [`  ${glyph}  ${state.phase}`, ' '] : []

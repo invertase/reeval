@@ -171,8 +171,8 @@ const remarksBlock = (stdout: string) => {
     else if (line.trim().startsWith('Worth knowing: ')) {
       lines.push(`${name}: ${line.trim().slice('Worth knowing: '.length)}`)
       heading = -1
-    }
-    else if (heading >= 0 && indent > heading && line.trim()) lines.push(`${name}: ${line.trim()}`)
+    } else if (heading >= 0 && indent > heading && line.trim())
+      lines.push(`${name}: ${line.trim()}`)
     else heading = -1
     if (/^\+\d+ more remarks? \(-v\)$/.test(raw)) lines.push(raw)
   }
@@ -242,6 +242,11 @@ describe('remark thresholds', () => {
       'The marked variant passed 2 of 2 runs and the baseline 1 of 2: better by 50 points, but on too few runs for the difference to hold.',
     )
     assert.equal(remark?.fix?.edit, 'set runs: 6, where a difference this size would hold')
+    assert.match(
+      remark?.brief ?? '',
+      /^2 runs per side; set runs: 6 at evals\/tft-at\.eval\.ts\S* to confirm this difference\.$/,
+      'the line the run prints without -v',
+    )
     const [gap] = raise(only(record, 'tft gap'), NO_HISTORY)
     assert.equal(
       gap?.text,
@@ -268,6 +273,10 @@ describe('remark thresholds', () => {
     assert.equal(
       same?.fix?.edit,
       'set runs: 16, where the same rates would rule out 20 points either way',
+    )
+    assert.match(
+      same?.brief ?? '',
+      /^1 run per side; set runs: 16 at \S+ to rule out a difference\.$/,
     )
     const [none] = raise(only(record, 'tft none'), NO_HISTORY)
     assert.equal(none?.kind, 'cant-tell-apart', 'a floor tie is not a small sample')
@@ -519,6 +528,11 @@ describe('remark thresholds', () => {
       `It failed with "Network is unreachable" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.`,
     )
     assert.match(remark?.fix.edit ?? '', /^set egress: 'allow-all' on the eval/)
+    assert.match(
+      remark?.brief ?? '',
+      /^Only HTTP\(S\) leaves under egress 'proxy'; set egress: 'allow-all' at evals\/\S+ for raw TCP or UDP\.$/,
+      'the line the run prints without -v',
+    )
     // Twins: under allow-all the connection went direct, and a refusal means it reached the gateway.
     assert.deepEqual(kinds(egressed({ policy: 'allow-all', partial: true }), NO_HISTORY), [])
     const refused = { host: 'db.example.com', port: 443, connections: 1, reason: 'denied' }
