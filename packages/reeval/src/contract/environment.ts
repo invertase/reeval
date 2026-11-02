@@ -36,6 +36,10 @@ export const setupStepSchema = z.union([
   }),
 ])
 
+export const traitsSchema = z
+  .record(z.string(), z.union([z.string(), z.array(z.string()).readonly()]))
+  .readonly()
+
 export const environmentSpecSchema = z.strictObject({
   sandbox: sandboxDescriptorSchema.optional(),
   workspace: gitWorkspaceSchema.optional(),
@@ -47,6 +51,10 @@ export const environmentSpecSchema = z.strictObject({
   skills: z.array(skillSourceSchema).optional(),
   mcp: z.record(z.string(), mcpServerSchema).optional(),
   plugins: z.array(pluginSourceSchema).optional(),
+  traits: z
+    .record(z.string(), z.union([z.string(), z.array(z.string()).readonly()]))
+    .readonly()
+    .optional(),
 })
 
 export const environmentLayerSchema = z.strictObject({

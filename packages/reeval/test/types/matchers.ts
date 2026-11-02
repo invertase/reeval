@@ -47,6 +47,12 @@ evaluate('matchers', async (c: AttemptContext) => {
   expect(c).toHaveCalledSkill('greet')
   expect(c).toHaveCalledMcp('docs', 'search')
   expect(turn).toHaveCalledTool(/read/)
+  expect(turn).toStayWithin({ tokens: 200_000, toolCalls: { bash: 10 } })
+  expect(c).toStayWithin({ duration: '5m' })
+  // @ts-expect-error at least one limit
+  expect(turn).toStayWithin({})
+  // @ts-expect-error a budget is on a turn or c, not its text
+  expect(turn.text).toStayWithin({ tokens: 10 })
   const polled: Promise<void> = expect.poll(() => c).toHaveRun('npm test')
   await polled
   await expect(c.send('again')).resolves.toHaveEdited('greet.js')

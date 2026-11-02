@@ -233,14 +233,16 @@ export function checkRuntime(runtime: Runtime, nodeVersion: string): Check {
 /** Every harness and sandbox a run of the config can use: the config's, then each profile's. */
 export function configuredUses(config: ResolvedConfig) {
   const uses: Array<{ harness: HarnessDescriptor; sandbox: SandboxDescriptor; profile?: string }> =
-    config.harness.map((harness) => ({
-      harness: routedHarness(harness, config.gateway),
-      sandbox: environmentSandbox(config.environment, config.sandbox),
-    }))
+    config.harness.flatMap((harness) =>
+      (config.environments.length ? config.environments : [undefined]).map((e) => ({
+        harness: routedHarness(harness, config.gateway),
+        sandbox: environmentSandbox(e, config.sandbox),
+      })),
+    )
   for (const [name, profile] of Object.entries(config.profiles)) {
-    const harnesses = profile.defaults?.harness
-      ? [profile.defaults.harness].flat()
-      : profile.defaults?.environment || profile.defaults?.sandbox
+    const harnesses = profile.defaults?.harnesses
+      ? [profile.defaults.harnesses].flat()
+      : profile.defaults?.environments || profile.defaults?.sandbox
         ? config.harness
         : []
     const sandbox = profileSandbox(config, profile.defaults)
@@ -272,8 +274,8 @@ const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
 export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
   return [
-    `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harness') ? '' : " (reeval's default)"}`,
-    `sandbox ${sandboxId(environmentSandbox(config.environment, config.sandbox))}`,
+    `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harnesses') ? '' : " (reeval's default)"}`,
+    `sandbox ${[...new Set((config.environments.length ? config.environments : [undefined]).map((e) => sandboxId(environmentSandbox(e, config.sandbox))))].join(', ')}`,
     profiles.length ? `profiles ${profiles.join(', ')}` : 'no profiles',
   ].join(', ')
 }
@@ -825,7 +827,7 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
   }
   for (const { gateways, profile } of lists) {
     const harnesses = [
-      (profile && config.profiles[profile]?.defaults?.harness) || config.harness,
+      (profile && config.profiles[profile]?.defaults?.harnesses) || config.harness,
     ].flat()
     const where = profile ? `profile ${profile}` : config.file
     const list = `gateway ${gateways.map((g) => g.kind).join(', ')}${profile ? ` in profile ${profile}` : ''}`

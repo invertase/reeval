@@ -1,0 +1,10 @@
+no profile · 0 evals (8 skipped) · 0 cells · 0 attempts
+evals/where.eval.ts › stack questions [q1]  skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app, vite-app
+evals/where.eval.ts › stack questions [q2]  skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app, vite-app
+evals/where.eval.ts › stack questions [q3]  skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app, vite-app
+evals/where.eval.ts › per harness [x]       skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app, vite-app
+evals/where.eval.ts › per harness [y]       skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app, vite-app
+evals/where.eval.ts › with the skill [q1]   skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app
+evals/where.eval.ts › with the skill [q2]   skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app
+evals/where.eval.ts › with the skill [q3]   skipped: no cell left: --trait auth=clerk, --trait stack=vite match none of next-app
+excluded: —

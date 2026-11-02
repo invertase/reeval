@@ -102,7 +102,7 @@ async function treeOf(path: string): Promise<DeclarationTree> {
     registerGroup,
     getRunContext: () => run,
     collectingFile,
-    declareHarnesses: () => {},
+    declarePlanned: () => {},
   })
   let before = 0
   while (declaredBody(`b${before + 1}`)) before++
@@ -194,7 +194,7 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' },
     text: 'Wrote greet.js.',
   }),

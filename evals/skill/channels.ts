@@ -44,7 +44,7 @@ export function channels(base: Environment) {
       ]),
     },
   }))
-  return { baseline: skillCurrent, variants: [skillSplit, docs, mcp] }
+  return { control: skillCurrent, variants: [skillSplit, docs, mcp] }
 }
 
 /** Shared by every task: a reeval project the agent has never seen, and how to run it. */

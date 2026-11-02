@@ -34,21 +34,25 @@ const compareEval = (runs: number, variant: number, base: number, name = 'skill 
 import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate('${name}', { runs: ${runs}, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('${name}', { runs: ${runs}, compare: { control: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   const wins = c.attempt.cell.role === 'variant' ? ${variant} : ${base}
   expect(c.attempt.n <= wins, 'uses the marker').toBe(true)
 })
 `
 
-/** A pooled family of `cases` cases at one run each, where only the variant passes. */
+/** An eval of `cases` cases at one run each, where only the variant passes. */
 const familyEval = (cases: number, name: string) => `
 import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate.each(${JSON.stringify(Array.from({ length: cases }, (_, i) => ({ id: `c${i}` })))})(
-  '${name} $id',
-  { runs: 1, compare: { baseline: plain, variants: [marked] } },
+evaluate(
+  '${name}',
+  {
+    cases: ${JSON.stringify(Array.from({ length: cases }, (_, i) => ({ id: `c${i}` })))},
+    runs: 1,
+    compare: { control: plain, variants: [marked] },
+  },
   async (c) => {
     await c.send('go')
     expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
@@ -56,11 +60,11 @@ evaluate.each(${JSON.stringify(Array.from({ length: cases }, (_, i) => ({ id: `c
 )
 `
 
-/** A pooled family of `cases` cases at one run each, where both sides pass every case. */
+/** An eval of `cases` cases at one run each, where both sides pass every case. */
 const agreeingFamilyEval = (cases: number, name: string) =>
   familyEval(cases, name).replace("c.attempt.cell.role === 'variant'", 'true')
 
-/** A pooled family where both sides pass the even cases and fail the odd ones. */
+/** An eval with cases where both sides pass the even cases and fail the odd ones. */
 const splitFamilyEval = (cases: number, name: string) =>
   familyEval(cases, name)
     .replace('async (c) =>', 'async (c, { id }) =>')
@@ -108,7 +112,7 @@ const docs = defineEnvironment('${name}-docs', ({ file, mcp }) => ({
   files: { 'server.mjs': file('../${server}') },
   mcp: { docs: mcp.stdio(${command}) },
 }))
-evaluate('${name}', { environment: docs }, async (c) => {
+evaluate('${name}', { environments: docs }, async (c) => {
   await c.send('look it up')
   await c.send('and again')
   expect(true, 'answered').toBe(true)
@@ -211,11 +215,18 @@ evaluate('migrates', async (c) => {
   expect('psql: Network is unreachable', 'migrated').toBe('ok')
 })
 `,
+      'evals/observe.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('throws', { runs: 3, gate: 'observe' }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n < 3) throw new Error('no pick file')
+  expect(true, 'picked').toBe(true)
+})
+`,
       'evals/server.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const server = defineEnvironment('server', ({ secret }) => ({
   env: { CHECK_TOKEN: secret({ to: 'checks', optional: true }) },
 }))
-evaluate('serves', { runs: 2, environment: server }, async (c) => {
+evaluate('serves', { runs: 2, environments: server }, async (c) => {
   await c.send('go')
   expect(true, 'served').toBe(true)
 })
@@ -239,7 +250,7 @@ describe('remark thresholds', () => {
     assert.equal(remark?.severity, 'concern')
     assert.equal(
       remark?.text,
-      'The marked variant passed 2 of 2 runs and the baseline 1 of 2: better by 50 points, but on too few runs for the difference to hold.',
+      'The marked variant passed 2 of 2 runs and the control 1 of 2: better by 50 points, but on too few runs for the difference to hold.',
     )
     assert.equal(remark?.fix?.edit, 'set runs: 6, where a difference this size would hold')
     assert.match(
@@ -250,14 +261,14 @@ describe('remark thresholds', () => {
     const [gap] = raise(only(record, 'tft gap'), NO_HISTORY)
     assert.equal(
       gap?.text,
-      'The marked variant passed 2 of 3 runs and the baseline 1 of 3: better by 33 points, but on too few runs for the difference to hold.',
+      'The marked variant passed 2 of 3 runs and the control 1 of 3: better by 33 points, but on too few runs for the difference to hold.',
     )
     assert.equal(gap?.fix?.edit, 'set runs: 13, where a difference this size would hold')
     const [middle] = raise(only(record, 'tft middle'), NO_HISTORY)
     assert.equal(middle?.kind, 'too-few-tries')
     assert.equal(
       middle?.text,
-      "The marked variant passed 2 of 4 runs and the baseline 2 of 4: the same, but 4 runs a side can't rule out a difference of up to 49 points.",
+      "The marked variant passed 2 of 4 runs and the control 2 of 4: the same, but 4 runs a side can't rule out a difference of up to 49 points.",
       'a tie between the bounds at the default 4 runs a side is a small sample',
     )
     assert.match(
@@ -268,7 +279,7 @@ describe('remark thresholds', () => {
     assert.equal(same?.kind, 'too-few-tries', 'one run a side is too few to say both always pass')
     assert.equal(
       same?.text,
-      "The marked variant passed 1 of 1 run and the baseline 1 of 1: the same, but 1 run a side can't rule out a difference of up to 79 points.",
+      "The marked variant passed 1 of 1 run and the control 1 of 1: the same, but 1 run a side can't rule out a difference of up to 79 points.",
     )
     assert.equal(
       same?.fix?.edit,
@@ -283,7 +294,7 @@ describe('remark thresholds', () => {
     assert.equal(none?.severity, 'concern')
     assert.equal(
       none?.text,
-      'The marked variant and the baseline failed every run (0 of 4 and 0 of 4): the task may be too hard, or the eval broken.',
+      'The marked variant and the control failed every run (0 of 4 and 0 of 4): the task may be too hard, or the eval broken.',
     )
     assert.equal(
       none?.fix?.edit,
@@ -297,9 +308,9 @@ describe('remark thresholds', () => {
     )
     assert.equal(
       ceiling?.text,
-      "The marked variant and the baseline passed every run (16 of 16 and 16 of 16): the task can't tell them apart, since both always pass.",
+      "The marked variant and the control passed every run (16 of 16 and 16 of 16): the task can't tell them apart, since both always pass.",
     )
-    assert.equal(ceiling?.fix?.edit, 'make the task harder, so the baseline can fail')
+    assert.equal(ceiling?.fix?.edit, 'make the task harder, so the control can fail')
     const floor = only(record, 'tft settled')
     for (const e of floor.evals)
       for (const c of e.cells) {
@@ -352,7 +363,7 @@ describe('remark thresholds', () => {
     )
     assert.equal(
       looks?.text,
-      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant in 8 of 8 votes (4 of 4 decisive pairs); about 6 runs a side would confirm it.',
+      'The marked variant and the control passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant in 8 of 8 votes (4 of 4 decisive pairs); about 6 runs a side would confirm it.',
     )
     assert.equal(looks?.fix?.edit, 'set runs: 6, where the soonest of these would hold')
     assert.deepEqual(
@@ -422,7 +433,7 @@ describe('remark thresholds', () => {
     const [two] = raise(only(record, 'tft two'), NO_HISTORY)
     assert.equal(
       two?.text,
-      'The marked variant passed 2 of 2 runs and the baseline 0 of 2: better by 100 points, on only 2 runs a side.',
+      'The marked variant passed 2 of 2 runs and the control 0 of 2: better by 100 points, on only 2 runs a side.',
       'its interval excludes 0, but below 4 runs a side the split is too often chance',
     )
     assert.equal(
@@ -434,22 +445,22 @@ describe('remark thresholds', () => {
       evals: structuredClone(record.evals.filter((e) => e.family?.name === template)),
     })
     assert.deepEqual(
-      kinds(family('tft family $id'), NO_HISTORY),
+      kinds(family('tft family'), NO_HISTORY),
       [],
       'a family is judged by its pooled lift, which 6 discordant cases hold, not by each case',
     )
-    const [few] = raise(family('tft few cases $id'), NO_HISTORY)
+    const [few] = raise(family('tft few cases'), NO_HISTORY)
     assert.equal(
       few?.text,
-      "The marked variant, pooled over 2 cases: better, but a family's lift needs 6 to hold.",
+      'The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold.',
     )
     assert.equal(few?.fix?.edit, 'add cases, so the pooled lift has 6 to hold on')
     assert.deepEqual(
-      kinds(family('tft agree $id'), NO_HISTORY),
+      kinds(family('tft agree'), NO_HISTORY),
       ['cant-tell-apart'],
       '30 cases that all pass on both sides are a ceiling, not a small sample',
     )
-    const quicker = family('tft agree $id')
+    const quicker = family('tft agree')
     for (const e of quicker.evals)
       for (const a of e.attempts)
         a.timings.agentMs = e.cells.find((c) => c.key === a.cell)?.lift ? 10 : 1000
@@ -460,14 +471,14 @@ describe('remark thresholds', () => {
       'a family ceiling whose paired effort holds over its cases is told apart by it',
     )
     assert.deepEqual(
-      kinds(family('tft split $id'), NO_HISTORY),
+      kinds(family('tft split'), NO_HISTORY),
       [],
       '30 cases that agree, half passing and half failing, are insufficient for McNemar but settled',
     )
-    const [agreeFew] = raise(family('tft agree few $id'), NO_HISTORY)
+    const [agreeFew] = raise(family('tft agree few'), NO_HISTORY)
     assert.equal(
       agreeFew?.text,
-      "The marked variant, pooled over 2 cases: the same, but a family's lift needs 6 to hold.",
+      'The marked variant, pooled over 2 cases: the same, but the pooled lift needs 6 to hold.',
       'two cases are too few to say every case always passes',
     )
   })
@@ -573,6 +584,38 @@ describe('remark thresholds', () => {
     assert.equal(both?.evidence.length, 2)
   })
 
+  test('observe-throws: an observed eval that threw outside an expect in more than half its tries', async () => {
+    const record = only(await rules(), 'throws')
+    const [remark] = raise(record, NO_HISTORY)
+    assert.equal(remark?.kind, 'observe-throws')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      '2 of 3 tries threw outside an expect, so the eval recorded its own error, not what the agent did: no pick file',
+    )
+    assert.equal(remark?.evidence.length, 2)
+    const edit = (change: (a: RunRecord['evals'][number]['attempts'][number]) => void) => {
+      const copy = structuredClone(record)
+      change(copy.evals[0]?.attempts[0] as never)
+      return kinds(copy, NO_HISTORY)
+    }
+    assert.deepEqual(
+      edit((a) => Object.assign(a, { outcome: 'pass', error: null })),
+      [],
+      'half the tries',
+    )
+    assert.deepEqual(
+      edit((a) => {
+        a.assertions = [{ ...(a.assertions?.[0] as never), status: 'fail' }]
+      }),
+      [],
+      'a failed expect is a check, not a throw',
+    )
+    const gated = structuredClone(record)
+    for (const c of gated.evals[0]?.cells ?? []) c.gate = 'all'
+    assert.deepEqual(kinds(gated, NO_HISTORY), [], 'an evaluate fails on it instead')
+  })
+
   test('snapshot-too-large: an attempt over the cap took no snapshot, not one taken or off', async () => {
     const record = only(await rules(), 'serves')
     const taken = (
@@ -655,16 +698,16 @@ describe('remarks in reeval run', () => {
     for (const block of blocks) assert.doesNotMatch(block ?? '', /well written/)
   })
 
-  test('a fix points at its line, a family at its name template; too-few-tries prints every run, and an edit gives only its eval a new remark', async () => {
+  test('a fix points at its line, an eval with cases at its name; too-few-tries prints every run, and an edit gives only its eval a new remark', async () => {
     const p = await project('remarks-once', {
       'reeval.config.ts': fakeConfig({ harness: '{ turnMs: 1000 }' }),
       'evals/skill.eval.ts': compareEval(2, 2, 1),
       'evals/fam.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate.each([{ id: 'a' }, { id: 'b' }])(
-  'fixes $id',
-  { runs: 2, compare: { baseline: plain, variants: [marked] } },
+evaluate(
+  'fixes',
+  { cases: [{ id: 'a' }, { id: 'b' }], runs: 2, compare: { control: plain, variants: [marked] } },
   async (c) => {
     await c.send('go')
     expect(c.attempt.cell.role === 'variant' || c.attempt.n === 1, 'uses the marker').toBe(true)
@@ -675,19 +718,19 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
     const first = remarksBlock((await runCli(p.dir, ['run', '-v'])).stdout) ?? ''
     assert.ok(
       first.includes(
-        'skill helps: The marked variant passed 2 of 2 runs and the baseline 1 of 2: better by 50 points, but on too few runs for the difference to hold. Fix at evals/skill.eval.ts:5: set runs: 6, where a difference this size would hold.',
+        'skill helps: The marked variant passed 2 of 2 runs and the control 1 of 2: better by 50 points, but on too few runs for the difference to hold. Fix at evals/skill.eval.ts:5: set runs: 6, where a difference this size would hold.',
       ),
       first,
     )
     assert.ok(
       first.includes(
-        "fixes $id: The marked variant, pooled over 2 cases: better, but a family's lift needs 6 to hold. Fix at evals/fam.eval.ts:5: add cases, so the pooled lift has 6 to hold on.",
+        'fixes: The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold. Fix at evals/fam.eval.ts:5: add cases, so the pooled lift has 6 to hold on.',
       ),
       first,
     )
     const firstRun = readRun(p.dir).run.runId
     const second = await runCli(p.dir, ['run', '-v'])
-    assert.deepEqual(namedIn(remarksBlock(second.stdout)).sort(), ['fixes $id', 'skill helps'])
+    assert.deepEqual(namedIn(remarksBlock(second.stdout)).sort(), ['fixes', 'skill helps'])
     assert.ok(remarksOf(p.dir)?.remarks.every((r) => r.firstSeenRun === firstRun))
 
     await writeFile(
@@ -699,7 +742,7 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       (remarksOf(p.dir)?.remarks ?? []).map((r) => [r.evalId.split(' › ').at(-1), r.firstSeenRun]),
     )
     assert.notEqual(seen['skill helps'], firstRun, 'an edited eval gets a remark of its own')
-    assert.equal(seen['fixes $id'], firstRun)
+    assert.equal(seen['fixes'], firstRun)
   })
 
   test("an older reeval's remark, with no printed, counts as printed in the run that raised it", async () => {

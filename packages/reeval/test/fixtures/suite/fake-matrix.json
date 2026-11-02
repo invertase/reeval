@@ -97,6 +97,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -186,6 +187,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -275,6 +277,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -352,6 +355,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -400,6 +404,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }
@@ -613,6 +618,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }
@@ -683,6 +689,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }

@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('adds a divide function that refuses zero', { environment: math }, async (c) => {
+evaluate('adds a divide function that refuses zero', { environments: math }, async (c) => {
   await c.send(
     'Add divide(a, b) to src/math.js. It throws a RangeError when b is 0. ' +
       'Test both cases in test/math.test.js.',

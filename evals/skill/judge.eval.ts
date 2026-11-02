@@ -11,7 +11,7 @@ const task =
 
 group(
   'write an eval with a judge',
-  { compare: { ...channels(project('cli', 'judge')), gate: 'none' } },
+  { compare: { ...channels(project('cli', 'judge')), gate: 'observe' } },
   () => {
     evaluate('writes a judged eval', async (c) => {
       await c.send(task)

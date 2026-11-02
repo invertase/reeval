@@ -8,7 +8,7 @@ declareTree(
       name: 'a plain header from a declaration tree',
       mode: 'run',
       options: {
-        environment: {
+        environments: {
           kind: 'environment',
           name: 'tree-headers',
           layers: [

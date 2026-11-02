@@ -248,7 +248,7 @@ evaluate(
   'mixed',
   {
     runs: 2,
-    compare: { baseline, variants: [variant] },
+    compare: { control: baseline, variants: [variant] },
     questions: [{ question: 'Which page looks better?', across: 'environment', task: true, artifacts: ['landing'] }],
   },
   async (c) => {
@@ -266,7 +266,7 @@ evaluate(
       `import { evaluate } from 'reeval'
 import { baseline, variant } from './env.ts'
 
-evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
+evaluate('flat', { compare: { control: baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
   await c.send('write the page')
 })
 `,
@@ -278,7 +278,7 @@ import { baseline, variant } from './env.ts'
 
 evaluate(
   'lifted',
-  { runs: 2, compare: { baseline, variants: [variant], minLift: 0.6 } },
+  { runs: 2, compare: { control: baseline, variants: [variant], minLift: 0.6 } },
   async (c) => {
     await c.send('write the page')
     expect(c.attempt.cell.role === 'variant' || c.attempt.n === 1, 'passes').toBe(true)
@@ -905,7 +905,7 @@ evaluate('sibling', async (c) => {
     assert.deepEqual(await agentRow(p.dir), ['drift', ['body changed']])
     await write(importing({ runs: 2, extra: ", timeout: '10m'" }))
     assert.deepEqual(await agentRow(p.dir), ['same', []], 'runs and timeout change nothing')
-    await write(importing({ extra: ", pin: ['harness']" }))
+    await write(importing({ extra: ", pin: ['harnesses']" }))
     const [status, changes] = await agentRow(p.dir)
     assert.equal(status, 'drift')
     assert.ok((changes as string[]).includes('options changed'), String(changes))
@@ -920,7 +920,7 @@ evaluate('sibling', async (c) => {
 
   test("a case's hash masks its secrets, so the record can't confirm a guess and a rotated secret stays the same eval", async () => {
     const each = (user: string) => `import { evaluate } from 'reeval'
-evaluate.each([{ user: '${user}', password: process.env.DB_PASSWORD }])('logs in %#', async (c) => {
+evaluate('logs in', { cases: [{ id: '0', user: '${user}', password: process.env.DB_PASSWORD }] }, async (c) => {
   await c.send('write hello.txt')
 })
 `
@@ -928,10 +928,10 @@ evaluate.each([{ user: '${user}', password: process.env.DB_PASSWORD }])('logs in
     const secret = { env: { DB_PASSWORD: 'postgres-dev-pass' } }
     assert.equal((await runCli(p.dir, ['run', '--record'], secret)).code, 0)
     const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
-    assert.equal(entry?.source?.case, sha256('{"password":"[REDACTED]","user":"ada"}'))
+    assert.equal(entry?.source?.case, sha256('{"id":"0","password":"[REDACTED]","user":"ada"}'))
     assert.notEqual(
       entry?.source?.case,
-      sha256('{"password":"postgres-dev-pass","user":"ada"}'),
+      sha256('{"id":"0","password":"postgres-dev-pass","user":"ada"}'),
       'canary: the raw case would confirm a guessed password',
     )
     const row = async (env: Record<string, string>) => {
@@ -948,7 +948,7 @@ evaluate.each([{ user: '${user}', password: process.env.DB_PASSWORD }])('logs in
     const p = await gitProject('case-declared-secret', {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const db = defineEnvironment('db', ({ secret }) => ({ env: { DB_CONN: secret.fromEnv('DB_CONN') } }))
-evaluate.each([{ conn: process.env.DB_CONN }])('connects %#', { environment: db }, async (c) => {
+evaluate('connects', { cases: [{ id: '0', conn: process.env.DB_CONN }], environments: db }, async (c) => {
   await c.send('write hello.txt')
 })
 `,
@@ -956,10 +956,10 @@ evaluate.each([{ conn: process.env.DB_CONN }])('connects %#', { environment: db 
     const run = await runCli(p.dir, ['run', '--record'], { env: { DB_CONN: 'pgpass1' } })
     assert.equal(run.code, 0, run.stderr)
     const entry = readRun(p.dir, { history: HISTORY }).run.evals[0]
-    assert.equal(entry?.source?.case, sha256('{"conn":"[REDACTED]"}'))
+    assert.equal(entry?.source?.case, sha256('{"conn":"[REDACTED]","id":"0"}'))
     assert.notEqual(
       entry?.source?.case,
-      sha256('{"conn":"pgpass1"}'),
+      sha256('{"conn":"pgpass1","id":"0"}'),
       'canary: DB_CONN is no secret name, so only its secret() masks it',
     )
   })
@@ -1061,9 +1061,12 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
-  'writes ok.txt for %s',
-  { compare: { baseline: plain, variants: [skilled], minLift: ${minLift} } },
+evaluate(
+  'writes ok.txt',
+  {
+    cases: ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'],
+    compare: { control: plain, variants: [skilled], minLift: ${minLift} },
+  },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
@@ -1104,7 +1107,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal(regressed.code, 1, regressed.out)
     assert.match(
       regressed.out,
-      /^regressed {8}writes ok\.txt for %s \(all cases\)\n {2}base +\S+\n {2}head +\S+\n {2}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\) → \+0 \(−\d+…\+\d+\), not by minLift 20$/m,
+      /^regressed {8}writes ok\.txt \(all cases\)\n {2}base +\S+\n {2}head +\S+\n {2}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\) → \+0 \(−\d+…\+\d+\), not by minLift 20$/m,
     )
     assert.match(regressed.out, /^\+6 same$/m, 'the cases pass on their own')
     assert.match(regressed.out, /^1 regressed · 6 same$/m)
@@ -1125,7 +1128,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal((await runCli(p.dir, ['run'], baseOk)).code, 1)
     const drift = await compareCode('--fail-on-regression')
     assert.equal(drift.code, 1, drift.out)
-    assert.match(drift.out, /^can't compare {4}writes ok\.txt for %s \(all cases\)$/m)
+    assert.match(drift.out, /^can't compare {4}writes ok\.txt \(all cases\)$/m)
     assert.deepEqual((await familyRow())?.changes, ['options changed'])
     assert.equal((await runCli(p.dir)).code, 0)
     assert.equal((await compareCode('--fail-on-regression')).code, 0, 'canary: passing, it is fine')
@@ -1216,9 +1219,12 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
-  'writes ok.txt for %s',
-  { compare: { baseline: plain, variants: [skilled], minLift: 0.2 } },
+evaluate(
+  'writes ok.txt',
+  {
+    cases: ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'],
+    compare: { control: plain, variants: [skilled], minLift: 0.2 },
+  },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
@@ -1244,7 +1250,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal(shown.code, 0, `nothing regressed\n${shown.stdout}`)
     assert.match(
       shown.stdout,
-      /^same {13}writes ok\.txt for ada\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
+      /^same {13}writes ok\.txt \[ada\]\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
       'a gate change is named even where the outcome held',
     )
 
@@ -1258,7 +1264,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
   test('reeval compare has no row for a pooled family without a gate', async () => {
     const p = await gitProject('compare-family-ungated', {
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate.each(['ada', 'grace'])('greets %s', async (c) => {
+evaluate('greets', { cases: ['ada', 'grace'] }, async (c) => {
   await c.send('go')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
@@ -1372,11 +1378,11 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const one = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'one' } })
 const two = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'two' } })
-evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
+evaluate('uses one', { environments: one, runs: 3 }, async (c) => {
   await c.send('x')
   expect(await c.judge('Is it fine?', { diff: true })).toPass()
 })
-evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
+evaluate('uses two', { environments: two }, async (c) => { await c.send('x') })
 evaluate('uses none', async (c) => { await c.send('x') })
 `,
     })

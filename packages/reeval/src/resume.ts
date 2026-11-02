@@ -499,13 +499,14 @@ export type RunSettings = {
   profile?: string
   concurrency?: string
   tag?: string[]
+  trait?: string[]
   filters: string[]
 }
 
 /**
  * The settings a resume plans with: each one left out is the run's saved one. `--runs` or a
  * profile other than the run's is refused, since it plans other attempts than the ones kept;
- * filters and `--tag` replace the run's for this resume, and `--concurrency` wins with a note.
+ * filters, `--tag` and `--trait` replace the run's for this resume, and `--concurrency` wins with a note.
  * A `--runs` that isn't a count is left for the usual check to refuse. Saved path filters are
  * resolved from `root`, so the resume picks the same files from any directory.
  */
@@ -555,6 +556,7 @@ export function resumeSettings(
     settings.concurrency = String(saved.concurrency)
   }
   if (!given.tag?.length && saved.tags.length) settings.tag = saved.tags
+  if (!given.trait?.length && saved.traits?.length) settings.trait = saved.traits
   return { settings, notes }
 }
 

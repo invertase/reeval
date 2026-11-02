@@ -305,7 +305,7 @@ evaluate('leftover', async () => {})
       'evals/shot.eval.ts': `
 import { defineEnvironment, evaluate } from 'reeval'
 const site = defineEnvironment('site', { files: { 'server.cjs': ${JSON.stringify(server)} } })
-evaluate('shot', { environment: site }, async (c) => {
+evaluate('shot', { environments: site }, async (c) => {
   await c.capture(await c.serve('node server.cjs'), { name: 'home', path: '/login' })
 })
 `,
@@ -629,6 +629,111 @@ evaluate.todo('td')
     )
   })
 
+  test('a filtered resume keeps a left-out case’s where exclusions, and pools only the cases it ran', async () => {
+    const files = {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({ harnesses: fakeHarness({}) })
+`,
+      'evals/env.ts': `import { defineEnvironment } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const next = defineEnvironment('next-app', { sandbox, traits: { stack: 'next' } })
+export const vite = defineEnvironment('vite-app', { sandbox, traits: { stack: 'vite' } })
+`,
+      'evals/fam.eval.ts': `import { evaluate } from 'reeval'
+import { next, vite } from './env.ts'
+evaluate('fam', {
+  environments: [next, vite],
+  cases: ['next', 'vite', 'both'],
+  runs: 2,
+  gate: { passRate: 0.6 },
+  where: ({ case: k, environment }) => k === 'both' || environment.traits.stack === k,
+}, async (_c, k) => { if (k === 'next') throw new Error('next fails') })
+`,
+    }
+    const shape = (r: RunRecord) => ({
+      status: r.status,
+      evals: r.evals.map((e) => ({
+        name: e.name,
+        outcome: e.outcome,
+        verdict: e.verdict,
+        excluded: e.excluded,
+        cells: e.cells.map((c) => [c.key, c.outcome, c.pass, c.fail, c.skipped]),
+        attempts: e.attempts.map((a) => [a.key, a.outcome]),
+      })),
+      families: r.families?.map(({ lifts, ...f }) => f),
+      summary: r.summary,
+    })
+    const u = await project('resume-filter-cases-u', files)
+    assert.equal((await runCli(u.dir, ['run', '--ui', 'plain'])).code, 1)
+    const whole = shape(readRun(u.dir).run)
+    assert.equal(whole.families?.[0]?.ran, 3)
+
+    const p = await project('resume-filter-cases', files)
+    assert.equal((await runCli(p.dir, ['run', '--ui', 'plain'])).code, 1)
+    const started = readRun(p.dir).run
+    for (const e of started.evals) {
+      e.attempts = e.attempts.map((a) => ({ ...a, outcome: 'skipped', error: null }))
+    }
+    const scratch = join(p.dir, '.reeval', 'runs', `${started.runId}.json`)
+    writeFileSync(scratch, JSON.stringify({ ...started, status: 'interrupted' }))
+    const r = await runCli(p.dir, ['run', '--resume', started.runId, '[next]', '[both]'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const part = readRun(p.dir).run
+    assert.equal(part.status, 'interrupted')
+    const vite = part.evals.find((e) => e.name === 'fam [vite]')
+    assert.deepEqual(
+      vite?.attempts.map((a) => a.outcome),
+      ['skipped', 'skipped'],
+    )
+    assert.deepEqual(vite?.excluded, [{ case: 'vite', environment: 'next-app' }])
+    const family = part.families?.[0]
+    assert.equal(family?.ran, 2)
+    assert.equal(family?.outcome, 'fail')
+    assert.deepEqual(
+      family?.rates.map((x) => [x.cell, x.cases, x.pass, x.counted, x.outcome]),
+      [
+        ['fake/next-app/fake', 2, 2, 4, 'fail'],
+        ['fake/vite-app/fake', 1, 2, 2, 'pass'],
+      ],
+    )
+    assert.equal((await runCli(p.dir, ['run', '--resume', started.runId])).code, 1)
+    assert.deepEqual(shape(readRun(p.dir).run), whole)
+  })
+
+  test('a resume without --trait plans with the run’s saved --trait', async () => {
+    const p = await project('resume-saved-trait', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({ harnesses: fakeHarness({}) })
+`,
+      'evals/grid.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+const next = defineEnvironment('next-app', { sandbox, traits: { stack: 'next' } })
+const vite = defineEnvironment('vite-app', { sandbox, traits: { stack: 'vite' } })
+evaluate('grid', { environments: [next, vite], runs: 2 }, async () => {})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--ui', 'plain', '--trait', 'stack=next'])).code, 0)
+    const started = readRun(p.dir).run
+    assert.deepEqual(started.invocation?.traits, ['stack=next'])
+    for (const e of started.evals) {
+      e.attempts = e.attempts.map((a) => ({ ...a, outcome: 'skipped', error: null }))
+    }
+    const scratch = join(p.dir, '.reeval', 'runs', `${started.runId}.json`)
+    writeFileSync(scratch, JSON.stringify({ ...started, status: 'interrupted' }))
+    const r = await runCli(p.dir, ['run', '--resume', started.runId, '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const resumed = readRun(p.dir).run
+    assert.deepEqual(resumed.invocation?.traits, ['stack=next'])
+    assert.deepEqual(
+      resumed.evals[0]?.cells.map((c) => c.key),
+      ['fake/next-app/fake'],
+    )
+  })
+
   test("a filtered resume counts a .skip outside its filters as done, from the record's skip", async () => {
     const p = await project('resume-filter-skip-outside', {
       'reeval.config.ts': fakeConfig(),
@@ -813,8 +918,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { base } from './evals/envs.ts'
 export default defineConfig({
-  harness: fakeHarness({}),
-  environment: base,
+  harnesses: fakeHarness({}),
+  environments: base,
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ vote: 'A' }) },
 })
@@ -836,7 +941,7 @@ evaluate(
   'gated',
   {
     runs: 2,
-    compare: { baseline: base, variants: [skilled], minLift: 0.5 },
+    compare: { control: base, variants: [skilled], minLift: 0.5 },
     questions: [{ question: 'Which is cleaner?', across: 'environment', diff: true }],
   },
   async (c) => { await c.send('go') },

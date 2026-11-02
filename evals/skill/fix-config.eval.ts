@@ -11,7 +11,7 @@ const task =
 
 group(
   'fix a broken config',
-  { compare: { ...channels(project('notes', 'fix-config')), gate: 'none' } },
+  { compare: { ...channels(project('notes', 'fix-config')), gate: 'observe' } },
   () => {
     evaluate('fixes the config and the eval', async (c) => {
       const turn = await c.send(task)

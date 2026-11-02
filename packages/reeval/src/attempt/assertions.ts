@@ -1,6 +1,7 @@
 // An attempt's assertion records, from the matcher calls it made, however they were made (the
 // TypeScript `expect` or the attempt protocol's `expect` call): the one place a record's label,
 // its ` #n` and its message are decided, so the same calls make the same history keys.
+import { limitsLabel } from '../assert.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import { redactSecrets } from '../redact.ts'
 import type { AssertionRecord } from '../types.ts'
@@ -39,7 +40,12 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
   const seen = new Map<string, number>()
   const used = new Set<string>()
   return raw.map((r) => {
-    const named = r.args.length ? shown(r.args[0]) : shownSubject(r.subject)
+    const named =
+      r.matcher === 'toStayWithin'
+        ? limitsLabel(r.args[0])
+        : r.args.length
+          ? shown(r.args[0])
+          : shownSubject(r.subject)
     const base =
       r.label ?? clipped(named === undefined ? r.matcher : `${r.matcher} ${named}`, LABEL_LIMIT)
     let n = seen.get(base) ?? 0

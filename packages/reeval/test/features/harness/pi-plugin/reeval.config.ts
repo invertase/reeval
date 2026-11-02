@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // agent takes pi's layout (and image), so no key is needed. As the agent: read the plugin's skill
 // among pi's own, and expand the command reeval unpacked as a prompt template in .pi/prompts.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'pi',
     script: [
       [

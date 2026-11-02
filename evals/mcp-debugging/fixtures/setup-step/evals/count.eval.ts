@@ -5,7 +5,7 @@ const fixtures = defineEnvironment('user-fixtures', ({ file }) => ({
   setup: ['node scripts/prepare-fixtures.js'],
 }))
 
-group('users', { environment: fixtures }, () => {
+group('users', { environments: fixtures }, () => {
   evaluate('counts the users', async (c) => {
     await c.send('Write count.js, which prints how many users data/users.json has.')
     const run = await c.exec('node count.js')

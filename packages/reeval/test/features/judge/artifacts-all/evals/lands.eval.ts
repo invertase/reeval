@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { ui } from './env.ts'
 
 // artifacts: true sends every capture the attempt took, in the order it took them.
-evaluate('lands', { environment: ui }, async (c) => {
+evaluate('lands', { environments: ui }, async (c) => {
   await c.send('write the form')
   const server = await c.serve('node server.mjs')
   await c.capture(server, { name: 'empty' })

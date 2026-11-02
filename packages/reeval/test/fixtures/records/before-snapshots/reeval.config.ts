@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // A record corpus entry (from before evals[].attempts[].snapshots (copies of the attempt's workspace in .reeval/runs)), recorded by reeval 0.15.1 at 0fd30fc8.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({
       output: () => ({

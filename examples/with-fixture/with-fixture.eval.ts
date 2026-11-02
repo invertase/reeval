@@ -10,7 +10,7 @@ const csv = defineEnvironment('csv', ({ directory, file }) => ({
   },
 }))
 
-evaluate('adds the inverse of parseCsv', { environment: csv }, async (c) => {
+evaluate('adds the inverse of parseCsv', { environments: csv }, async (c) => {
   const turn = await c.send(
     'Add stringifyCsv(rows) to src/csv.js, the inverse of parseCsv, ' +
       'with a test that round-trips data/people.csv.',

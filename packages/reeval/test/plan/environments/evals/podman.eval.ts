@@ -13,7 +13,7 @@ const tools = defineEnvironment('tools', {
   }),
 })
 
-evaluate('docker', { environment: onDocker }, async () => {})
-evaluate('podman', { environment: onPodman }, async () => {})
-evaluate('podman from', { environment: podman22 }, async () => {})
-evaluate('podman install', { environment: tools }, async () => {})
+evaluate('docker', { environments: onDocker }, async () => {})
+evaluate('podman', { environments: onPodman }, async () => {})
+evaluate('podman from', { environments: podman22 }, async () => {})
+evaluate('podman install', { environments: tools }, async () => {})

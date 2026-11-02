@@ -12,7 +12,7 @@ evaluate.each([
   { task: 'a chat app', only: false },
   { task: 'a RAG pipeline', only: false },
   { task: 'a Python agent', only: true },
-])('recommends Genkit for $task', { harness: advisor, runs: 2 }, async (c, { task, only }) => {
+])('recommends Genkit for $task', { harnesses: advisor, runs: 2 }, async (c, { task, only }) => {
   const turn = await c.send(`Which framework should I use to build ${task}? Pick one.`)
   expect(turn.text, 'names Genkit').toContain('Genkit')
   if (only) expect(turn.text, 'names no other framework').not.toContain('LangChain')

@@ -20,7 +20,7 @@ const skilled = defineEnvironment('four-sources', ({ skill }) => ({
   ],
 }))
 
-evaluate('lists the skills it was given', { environment: skilled }, async (c) => {
+evaluate('lists the skills it was given', { environments: skilled }, async (c) => {
   const turn = await c.send(
     'List the names of the skills you have, one per line. Do not change any files.',
   )

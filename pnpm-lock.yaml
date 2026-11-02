@@ -94,6 +94,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-case-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-cases:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-checks:
     dependencies:
       reeval:
@@ -160,12 +172,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
-  examples/with-each:
-    dependencies:
-      reeval:
-        specifier: workspace:*
-        version: link:../../packages/reeval
-
   examples/with-effort:
     dependencies:
       reeval:
@@ -215,12 +221,6 @@ importers:
         version: link:../../packages/reeval
 
   examples/with-fake-judge:
-    dependencies:
-      reeval:
-        specifier: workspace:*
-        version: link:../../packages/reeval
-
-  examples/with-family-lift:
     dependencies:
       reeval:
         specifier: workspace:*

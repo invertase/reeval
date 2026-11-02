@@ -3,6 +3,6 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({}),
+  harnesses: fakeHarness({}),
   sandbox: fakeSandbox(),
 })

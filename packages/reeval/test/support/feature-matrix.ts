@@ -6,7 +6,7 @@
 //   --json      print { problems, markdown, current } for matrix.test.ts
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EVAL_OPTION_KEYS } from '../../src/options.ts'
+import { CASE_OPTION_KEYS, EVAL_OPTION_KEYS } from '../../src/options.ts'
 import { behaviors } from '../contract.test.ts'
 import { EVAL_OPTION_SPECS } from '../features/eval-options.ts'
 import { inventory } from '../features/inventory.ts'
@@ -39,7 +39,7 @@ const matrix = buildMatrix(inventory, {
     const file = join(packages, path)
     return existsSync(file) ? readFileSync(file, 'utf8') : null
   },
-  evalOptionKeys: EVAL_OPTION_KEYS,
+  evalOptionKeys: [...EVAL_OPTION_KEYS, ...CASE_OPTION_KEYS],
   evalOptionSpecs: EVAL_OPTION_SPECS,
   refusalText,
 })

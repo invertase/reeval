@@ -13,7 +13,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),
@@ -33,7 +33,7 @@ export default defineConfig({
     // stops the plan instead. Claude ids are the same on Vertex as on Anthropic's API.
     vertex: {
       defaults: {
-        harness: claudeCode({ model: 'claude-sonnet-5-5' }),
+        harnesses: claudeCode({ model: 'claude-sonnet-5-5' }),
         sandbox: docker(),
       },
       judge: { model: 'anthropic/claude-haiku-5-5' },

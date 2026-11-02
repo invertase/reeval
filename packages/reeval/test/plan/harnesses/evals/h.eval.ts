@@ -12,12 +12,12 @@ const python = defineEnvironment('python', {
 evaluate('both harnesses', async () => {})
 evaluate(
   'claude only, own id',
-  { harness: claudeCode({ model: 'opus', id: 'claude' }) },
+  { harnesses: claudeCode({ model: 'opus', id: 'claude' }) },
   async () => {},
 )
-evaluate('both harnesses on a dockerfile', { environment: tools }, async () => {})
+evaluate('both harnesses on a dockerfile', { environments: tools }, async () => {})
 evaluate(
   'claude on a toolchain base',
-  { harness: claudeCode({ model: 'claude-sonnet-5' }), environment: python },
+  { harnesses: claudeCode({ model: 'claude-sonnet-5' }), environments: python },
   async () => {},
 )

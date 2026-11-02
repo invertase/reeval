@@ -9,4 +9,4 @@ const review = defineEnvironment('review', ({ plugin }) => ({
   ],
 }))
 
-evaluate('loads the plugin', { environment: review }, async () => {})
+evaluate('loads the plugin', { environments: review }, async () => {})

@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // is a listener on the host that features.test.ts starts, at a non-loopback address.
 export default defineConfig({
   // As the agent: fetch the listener through the gateway.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: `curl -sS -m 10 http://${process.env.REEVAL_EGRESS_TARGET}/` }]],
   }),
 })

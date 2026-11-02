@@ -5,5 +5,5 @@ const node = defineEnvironment('node', {
   sandbox: docker({ install: ['npm i -g typescript@5'] }),
 })
 
-evaluate('fixes greet', { environment: node }, async () => {})
+evaluate('fixes greet', { environments: node }, async () => {})
 evaluate('on the default machine', async () => {})

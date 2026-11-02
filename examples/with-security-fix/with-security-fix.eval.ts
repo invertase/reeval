@@ -5,7 +5,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 const users = defineEnvironment('users', ({ directory }) => ({ files: directory('./project') }))
 const exploit = readFileSync(new URL('./hidden/exploit.test.js', import.meta.url), 'utf8')
 
-evaluate('fixes the SQL injection', { environment: users }, async (c) => {
+evaluate('fixes the SQL injection', { environments: users }, async (c) => {
   await c.send('findUser() in src/users.js is open to SQL injection. Fix it.')
 
   await expect(c.exec('node --test'), 'tests pass').toSucceed()

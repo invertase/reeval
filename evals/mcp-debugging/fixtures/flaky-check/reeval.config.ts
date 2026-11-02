@@ -12,7 +12,7 @@ setTimeout(() => {
 `
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'build.js': build },
     text: 'Created build.js.',
   }),

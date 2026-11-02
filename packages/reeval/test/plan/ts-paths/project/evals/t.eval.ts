@@ -6,7 +6,7 @@ const own = defineEnvironment('own', {
 })
 
 evaluate('from the config', {}, async () => {})
-evaluate('a literal environment', { environment: own }, async () => {})
+evaluate('a literal environment', { environments: own }, async () => {})
 evaluate(
   'a literal sandbox',
   { sandbox: { kind: 'docker', dockerfile: 'images/Dockerfile' } },

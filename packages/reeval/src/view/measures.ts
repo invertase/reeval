@@ -539,7 +539,7 @@ function questionMeasures(input: Input, cases: number): Measure[] {
       QUESTION_LEAN_P,
     )
     const name = `"${clip(question, LABEL_CHARS)}"`
-    const lead = s > 0 ? 'the variant' : 'the baseline'
+    const lead = s > 0 ? 'the variant' : 'the control'
     const votes = wins.variantVotes + wins.controlVotes
     const pairs = `${Math.max(wins.variant, wins.control)} of ${decisive} decisive ${decisive === 1 ? 'pair' : 'pairs'}`
     return [

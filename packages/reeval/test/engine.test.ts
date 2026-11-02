@@ -113,8 +113,8 @@ describe('engine', () => {
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
 })
 `,
       'evals/scaffold.eval.ts': math(1),
@@ -140,8 +140,8 @@ export default defineConfig({
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
 })
 `,
       'evals/right/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('alpha', async () => {})\n`,
@@ -363,8 +363,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 const id = (name: string) => process.env[name] ?? 'unset'
 export default defineConfig({
-  harness: [fakeHarness({ id: id('REEVAL_T_BOTH') }), fakeHarness({ id: id('REEVAL_T_ENV') }), fakeHarness({ id: id('REEVAL_T_SHELL') })],
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: [fakeHarness({ id: id('REEVAL_T_BOTH') }), fakeHarness({ id: id('REEVAL_T_ENV') }), fakeHarness({ id: id('REEVAL_T_SHELL') })],
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
 })
 `,
       '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
@@ -686,11 +686,11 @@ evaluate('flaky load', async () => {})
       'reeval.config.ts': fakeConfig(),
       'evals/broken.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const broken = defineEnvironment('broken', { setup: ['exit 7'] })
-evaluate('swallowed', { environment: broken }, async (c) => {
+evaluate('swallowed', { environments: broken }, async (c) => {
   await c.readFile('x').catch(() => null)
   expect(await c.exec('true').catch(() => ({ exitCode: 1 }))).toBeTruthy()
 })
-evaluate('concurrent', { environment: broken }, async (c) => {
+evaluate('concurrent', { environments: broken }, async (c) => {
   await Promise.allSettled([c.readFile('a'), c.exec('true'), c.writeFile('b', 'c')])
 })
 `,
@@ -1426,7 +1426,7 @@ evaluate('caught check alone', async (c) => {
       'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('scoped', { sandbox: fakeSandbox(), files: { 'README.md': 'the readme\\n' } })
-evaluate('scope', { environment: env }, async (c) => {
+evaluate('scope', { environments: env }, async (c) => {
   await c.send('go')
   expect(await c.judge('narrowed', { files: true, diff: ['src/'] })).toPass()
   expect(await c.judge('in full', { files: true, diff: true, contents: ['README.md', './src/app.ts'] })).toPass()
@@ -1908,7 +1908,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('compared', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('compared', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1916,7 +1916,7 @@ evaluate('repeated', { runs: 4 }, async (c) => {
   await c.send('go')
   expect(c.attempt.n % 4).not.toBe(0)
 })
-evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'none' }, runs: 2 }, async (c) => {
+evaluate('studied', { compare: { control: plain, variants: [skilled], gate: 'observe' }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('nope.txt')
 })
@@ -1926,13 +1926,13 @@ evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'no
     // The control's two failures don't fail it: only the gated variant's 2 of 2 gate.
     assert.match(
       r.stdout,
-      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}The skilled variant helped\.\n│ {4}arm {15}passed {2}verdict\n│ {4}plain \(baseline\) {2}0 of 2\n/m,
+      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}The skilled variant helped\.\n│ {4}arm +passed {2}verdict\n│ {4}plain \(control\) {2}0 of 2\n/m,
     )
     assert.match(r.stdout, /^├─ ✗ repeated {2}3 of 4 runs passed\n│ {4}Passed 3 of 4 on fake\.\n/m)
     // Nothing gates a study, so it reads ●, never ✓ beside 0 of 4.
     assert.match(
       r.stdout,
-      /^└─ ● studied {3}0 of 4 runs passed\n {5}The skilled variant passed as often as the baseline\.\n {5}arm {15}passed {2}verdict\n {5}plain \(baseline\) {2}0 of 2\n/m,
+      /^└─ ● studied {3}0 of 4 runs passed\n {5}The skilled variant passed as often as the control\.\n {5}arm +passed {2}verdict\n {5}plain \(control\) {2}0 of 2\n/m,
     )
   })
 
@@ -1941,7 +1941,7 @@ evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'no
       'reeval.config.ts': fakeConfig(),
       'evals/hang.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('stuck start', { harness: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (c) => {
+evaluate('stuck start', { harnesses: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (c) => {
   await c.send('go')
 })
 evaluate('fine', async () => expect(1).toBe(1))
@@ -1970,10 +1970,10 @@ evaluate('fine', async () => expect(1).toBe(1))
       'reeval.config.ts': fakeConfig(),
       'evals/once.eval.ts': `import { evaluate } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('recovers', { harness: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (c) => {
+evaluate('recovers', { harnesses: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (c) => {
   await c.send('go')
 })
-evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) }, async (c) => {
+evaluate('canary', { harnesses: fakeHarness({ id: 'steady', startTimeout: '1s' }) }, async (c) => {
   await c.send('go')
 })
 `,
@@ -1998,7 +1998,7 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /harness\.startTimeout in reeval\.config\.ts: Invalid duration "soon"/)
+    assert.match(r.stderr, /harnesses\.startTimeout in reeval\.config\.ts: Invalid duration "soon"/)
 
     // An operational limit, like maxConcurrent: results with and without it stay comparable.
     const fingerprint = async (harness: string) => {
@@ -2033,7 +2033,7 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
       'reeval.config.ts': fakeConfig(),
       'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('broken agent', { harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
+evaluate('broken agent', { harnesses: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
   await c.send('go')
 })
 evaluate('wrong answer', async () => expect(1).toBe(2))

@@ -16,7 +16,7 @@ const readsReadme = fakeJudge({
 
 evaluate(
   'documents the new function',
-  { environment: math, judge: { model: readsReadme } },
+  { environments: math, judge: { model: readsReadme } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js, and document it in README.md.')
 

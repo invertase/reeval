@@ -57,7 +57,9 @@ import {
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
+import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
 import { clip } from './text.ts'
+import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
 import type { CursorEfforts, RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -365,6 +367,7 @@ async function runCommand(
         ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
         filters: savedFilters(setup.config.root, filters),
         tags: runFlags.tag ?? [],
+        ...(runFlags.trait?.length ? { traits: runFlags.trait } : {}),
       }
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
@@ -390,7 +393,7 @@ async function runCommand(
     executed = await executeRun(ctx, setup, filters, renderer, {
       startedWith,
       notes: resumed?.notes ?? [],
-      narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length),
+      narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length || !!flags.trait?.length),
     })
   } catch (error) {
     renderer.close()
@@ -400,12 +403,8 @@ async function runCommand(
   const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions, leftOut } =
     executed
   invocation.unhandledErrors = engineRun.unhandledErrors
-  const engines = [
-    ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
-  ]
-  if ((interrupted || engineRun.canceled) && engines.length) {
-    const { removeRunContainers } = await import('./sandbox/docker.ts')
-    await removeRunContainers(ctx.runId, engines)
+  if ((interrupted || engineRun.canceled) && plan) {
+    await cleanupRun(ctx.runId, plan.sandboxes)
   }
   if (engineRun.stopped || !plan) {
     live?.remove()
@@ -536,6 +535,7 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
     profile: flags.profile,
     concurrency: flags.concurrency,
     tag: flags.tag,
+    trait: flags.trait,
     filters,
   }
   const resumed = resumeSettings(target.runId, saved, given, { root })
@@ -585,16 +585,15 @@ async function prepareRun(
     }
   }
   const sandboxes = [
-    environmentSandbox(config.environment, config.sandbox),
+    ...(config.environments.length ? config.environments : [undefined]).map((e) =>
+      environmentSandbox(e, config.sandbox),
+    ),
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    // Sized from the Docker (or Podman) VM when it answers, as a real run is, so --dry-run shows
-    // the same.
-    const container = sandboxes.find((s) => s.kind === 'docker')
-    if (!container) return hostCapacity()
-    const { dockerCapacity } = await import('@reeval/sandbox-docker')
-    return (await dockerCapacity(container.engine)) ?? hostCapacity()
+    // Sized from where the first sandbox that runs off the host runs (the Docker or Podman VM)
+    // when it answers, as a real run is, so --dry-run shows the same.
+    return (await sandboxCapacity(sandboxes)) ?? hostCapacity()
   })
   return {
     output,
@@ -602,6 +601,7 @@ async function prepareRun(
     profile,
     runs,
     tags: [...(flags.tag ?? []), ...(profile?.tags ?? [])],
+    traits: traitFlags(flags.trait),
     concurrency,
     budget: profile?.budget ?? config.budget,
     record: profile?.record ?? config.record,
@@ -636,6 +636,7 @@ async function startRun({
   profile,
   runs,
   tags,
+  traits,
   concurrency,
   verbosity,
   configFile,
@@ -659,8 +660,7 @@ async function startRun({
       : await loadPrevious(stagingDir(config.root, target.runId))
     if (!dryRun) {
       try {
-        const { removeRunContainers } = await import('./sandbox/docker.ts')
-        await removeRunContainers(target.runId, ['docker', 'podman'])
+        await cleanupRun(target.runId)
       } catch {}
     }
     return {
@@ -669,6 +669,7 @@ async function startRun({
       config,
       runs,
       tags,
+      traits,
       concurrency,
       profile,
       verbosity,
@@ -701,6 +702,7 @@ async function startRun({
     config,
     runs,
     tags,
+    traits,
     concurrency,
     profile,
     verbosity,
@@ -813,7 +815,8 @@ async function executeRun(
     narrowed: boolean
   },
 ) {
-  const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
+  const { runId, stagingDir, config, runs, tags, traits, concurrency, profile, verbosity } = ctx
+  const { configFile } = ctx
   const run = JSON.parse(
     JSON.stringify({
       runId,
@@ -821,6 +824,7 @@ async function executeRun(
       config,
       runs,
       tags,
+      traits,
       concurrency,
       profile,
       verbosity,
@@ -846,6 +850,7 @@ async function executeRun(
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
     checkLimitHarness(profile, config.file, collected)
+    checkTraitKeys(traitFilters(traits, profile), collected.traits)
     const completed = completedKeysFor(planned, stagingDir, ctx.previous)
     const skipped = planned.map((p) =>
       completed.has(p.key)
@@ -888,7 +893,7 @@ async function executeRun(
       ? [
           ...new Set(
             skipped
-              .filter((p) => !p.attempt.plan.skip && p.attempt.sandbox.kind === 'docker')
+              .filter((p) => !p.attempt.plan.skip && capabilitiesOf(p.attempt.sandbox).isolated)
               .filter((p) => isDirect(p.attempt.egress.policy))
               .map((p) => p.id),
           ),

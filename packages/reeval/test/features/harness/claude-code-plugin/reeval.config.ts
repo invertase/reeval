@@ -6,7 +6,7 @@ import { fakeHarness } from 'reeval/harness'
 // settings and marketplace that enable the plugin, the plugin's skill where it was copied, and
 // the MCP config it starts the plugin's server from.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'claude-code',
     script: [
       [

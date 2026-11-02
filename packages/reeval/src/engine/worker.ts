@@ -60,13 +60,15 @@ export function startWorker(channel: Channel): Worker {
 
   async function init(run: RunContext, file: string, select: number[] | null): Promise<void> {
     const harnesses = new Set<string>()
+    const traits = new Set<string>()
     useEngine({
       registerTest,
       registerGroup,
       getRunContext: () => run,
       collectingFile,
-      declareHarnesses: (ids) => {
+      declarePlanned: (ids, keys) => {
         for (const id of ids) harnesses.add(id)
+        for (const key of keys) traits.add(key)
       },
     })
     extendExpect(evalMatchers)
@@ -83,6 +85,7 @@ export function startWorker(channel: Channel): Worker {
           ...(options.attempt ? { attempt: options.attempt } : {}),
         })),
         harnesses: [...harnesses],
+        traits: [...traits],
       })
       if (select) {
         running = true

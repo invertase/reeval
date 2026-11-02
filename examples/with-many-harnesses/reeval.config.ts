@@ -16,7 +16,7 @@ export default defineConfig({
   // Two scripted agents that copy ./fake-agent's files into the workspace, each its own cell, so
   // the checks run without keys or Docker. The second runs the tests first, as a careful agent
   // would.
-  harness: [
+  harnesses: [
     fakeHarness({ id: 'fake-quick', files }),
     fakeHarness({ id: 'fake-careful', script: [[{ exec: 'node --test' }]], files }),
   ],
@@ -28,7 +28,7 @@ export default defineConfig({
     // Three agents on the same eval: ANTHROPIC_API_KEY, OPENAI_API_KEY and CURSOR_API_KEY.
     agents: {
       defaults: {
-        harness: [
+        harnesses: [
           claudeCode({ model: 'claude-sonnet-5' }),
           codex({ model: 'gpt-5.6-luna' }),
           cursor({ model: 'composer-2.5' }),

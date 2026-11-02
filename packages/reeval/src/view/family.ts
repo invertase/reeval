@@ -1,4 +1,4 @@
-// Labels for a pooled `evaluate.each`, shared by the terminal, summary.md and the studio.
+// Labels for an eval with `cases`, shared by the terminal, summary.md and the studio.
 import type {
   EvalEntry,
   FamilyEffortMetric,
@@ -72,10 +72,14 @@ export function familyHeadLabel(family: FamilyRecord): string {
 }
 
 /**
- * A case's short label: its name less the template's literal text before the first placeholder
- * and after the last, so `fixes $id` labels `fixes GH-101` as `GH-101`.
+ * A case's short label: its key, so `adds a check [nextjs]` under `adds a check` is `nextjs`. A
+ * family in an older record named its cases from a template, whose literal text before
+ * the first placeholder and after the last comes off: `fixes $id` labels `fixes GH-101` `GH-101`.
  */
 export function caseLabel(template: string, name: string): string {
+  if (name.startsWith(`${template} [`) && name.endsWith(']')) {
+    return name.slice(template.length + 2, -1) || name
+  }
   const placeholder = /%#|%s|\$[A-Za-z_][A-Za-z0-9_]*/g
   const matches = [...template.matchAll(placeholder)]
   const first = matches[0]

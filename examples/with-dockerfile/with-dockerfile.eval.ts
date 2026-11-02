@@ -6,7 +6,7 @@ const shop = defineEnvironment('shop', {
   sandbox: docker({ dockerfile: './sqlite/Dockerfile' }),
 })
 
-evaluate('queries the seeded database', { environment: shop }, async (c) => {
+evaluate('queries the seeded database', { environments: shop }, async (c) => {
   await c.send(
     'Write report.sql, a query on /opt/shop.db that lists the customer names alphabetically.',
   )

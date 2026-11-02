@@ -4,7 +4,7 @@ import { app } from './env.ts'
 
 // Patterns expand over the files git sees, in path order: the tests and the gitignored file
 // are out, and docs/** matches nothing, so it adds nothing.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   let state: Record<string, unknown> = {}
   const look = fakeJudge({

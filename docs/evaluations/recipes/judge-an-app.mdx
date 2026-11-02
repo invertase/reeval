@@ -20,7 +20,7 @@ import { nextApp } from './environments.ts'
 
 evaluate(
   'the chat page shows a composer',
-  { environment: nextApp },
+  { environments: nextApp },
   async (c) => {
     await c.send('Add a /chat page built on useChat from @ai-sdk/react.')
     await expect(c.exec('npm run build'), 'builds').toSucceed()

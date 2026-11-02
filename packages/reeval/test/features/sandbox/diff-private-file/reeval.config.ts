@@ -3,7 +3,7 @@ import { fakeHarness } from 'reeval/harness'
 
 // As the agent: a file and a directory only it can read, as `mktemp` and `umask 077` make them.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         {

@@ -6,7 +6,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
 // agent takes Cursor's layout: as the agent, run the session's hook from the workspace's
 // .cursor/hooks.json, then follow the unpacked rule.
 export default defineConfig({
-  harness:
+  harnesses:
     process.env.REEVAL_FIXTURE_HARNESS === 'cursor'
       ? cursor({ model: process.env.REEVAL_REAL_MODEL ?? 'composer-2.5' })
       : fakeHarness({

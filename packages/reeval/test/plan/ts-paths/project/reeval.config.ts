@@ -3,7 +3,7 @@ import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 
 export default defineConfig({
-  harness: fakeHarness(),
+  harnesses: fakeHarness(),
   sandbox: { kind: 'docker', dockerfile: 'docker/Dockerfile' },
   profiles: {
     nightly: { defaults: { sandbox: { kind: 'docker', dockerfile: './nightly/Dockerfile' } } },

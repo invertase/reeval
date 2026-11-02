@@ -46,7 +46,7 @@ function asksFirst(turn: { text: string }, created: string) {
 const evalList = async (c: AttemptContext) => (await c.exec(evalFiles)).stdout.trim()
 const names = (text: string) => text.split('\n').filter(Boolean)
 
-const target = (t: Target) => ({ compare: { ...arms(t), gate: 'none' as const } })
+const target = (t: Target) => ({ compare: { ...arms(t), gate: 'observe' as const } })
 
 group('sets up reeval', () => {
   evaluate('in a repo with skills, with a skill compare', target('supabase'), async (c) => {

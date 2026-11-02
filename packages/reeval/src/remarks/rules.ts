@@ -64,6 +64,7 @@ const KIND_ORDER: Remark['kind'][] = [
   'too-few-tries',
   'cant-tell-apart',
   'flaky-check',
+  'observe-throws',
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
@@ -185,10 +186,10 @@ function looksDifferent(
       : unit === 'cases'
         ? `about ${needed} cases would confirm it`
         : `about ${runs(needed)} ${cases ? 'a case' : 'a side'} would confirm it`
-  const text = `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}), but the variant looks different: ${listed(reading.measures.map(leanText))}; ${about}.${more}`
+  const text = `The ${armOf(variant)} variant${on} and the control passed every run (${counts}), but the variant looks different: ${listed(reading.measures.map(leanText))}; ${about}.${more}`
   const edit =
     needed === null
-      ? "if a difference this faint doesn't matter, make the task harder, so the baseline can fail"
+      ? "if a difference this faint doesn't matter, make the task harder, so the control can fail"
       : unit === 'cases'
         ? `add cases, to ${needed}, where the soonest of these would hold`
         : `set runs: ${needed}${cases ? ' a case' : ''}, where the soonest of these would hold`
@@ -238,11 +239,11 @@ function cantTellApart(
     : `${variant.passed} of ${counted(variant)} and ${base.passed} of ${counted(base)}`
   const text =
     bound === 'pass'
-      ? `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}): the task can't tell them apart, since both always pass.${more}`
-      : `The ${armOf(variant)} variant${on} and the baseline failed every run (${counts}): the task may be too hard, or the eval broken.${more}`
+      ? `The ${armOf(variant)} variant${on} and the control passed every run (${counts}): the task can't tell them apart, since both always pass.${more}`
+      : `The ${armOf(variant)} variant${on} and the control failed every run (${counts}): the task may be too hard, or the eval broken.${more}`
   const edit =
     bound === 'pass'
-      ? 'make the task harder, so the baseline can fail'
+      ? 'make the task harder, so the control can fail'
       : 'check the eval with an oracle (a fake agent that writes the solution); if it passes, make the task easier'
   return [
     {
@@ -303,7 +304,7 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const { variant, base, gap, held } = worst
   const harnesses = new Set(units(e).flatMap((u) => u.cells.map((c) => c.harness))).size > 1
   const on = harnesses ? ` on ${variant.harness}` : ''
-  const counts = `The ${armOf(variant)} variant${on} passed ${variant.passed} of ${runs(counted(variant))} and the baseline ${base.passed} of ${counted(base)}`
+  const counts = `The ${armOf(variant)} variant${on} passed ${variant.passed} of ${runs(counted(variant))} and the control ${base.passed} of ${counted(base)}`
   const others = weak.length - 1
   const more = others ? ` ${others} more ${others === 1 ? 'variant is' : 'variants are'} too.` : ''
   const side = Math.max(counted(variant), counted(base))
@@ -398,7 +399,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
   const few = arm.verdict === 'insufficient'
   const reach = Math.round(Math.max(-arm.interval.low, arm.interval.high) * 100)
   const why = few
-    ? `a family's lift needs ${PAIRED_MIN} to hold`
+    ? `the pooled lift needs ${PAIRED_MIN} to hold`
     : arm.effect === 'same'
       ? `it can't rule out a difference of up to ${reach} points`
       : "the difference doesn't hold"
@@ -781,6 +782,45 @@ function snapshotTooLarge(e: EvalResult, entries: EvalEntry[], ctx: RemarkContex
   ]
 }
 
+/**
+ * observe-throws: an eval with `gate: 'observe'` whose body threw outside an `expect` in more
+ * than half its counted tries. Such an eval fails only on run and infra errors, so those tries read
+ * `ran` while recording the eval's error, not what the agent did. One per eval.
+ */
+function observeThrows(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+  if (!entries.every((entry) => entry.cells.every((c) => c.gate === 'none'))) return []
+  const cellPaths = new Map<string, string>()
+  for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
+  const counted = entries.flatMap((entry) =>
+    entry.attempts
+      .filter((a) => a.outcome === 'pass' || a.outcome === 'fail')
+      .map((attempt) => ({ entry, attempt })),
+  )
+  const threw = counted.filter(
+    ({ attempt }) =>
+      attempt.error?.kind === 'assertion' &&
+      !(attempt.assertions ?? []).some((x) => x.status !== 'pass'),
+  )
+  const [first] = threw
+  if (!first || threw.length * 2 <= counted.length) return []
+  return [
+    {
+      id: remarkId('observe-throws', e.path, first.entry),
+      evalId: e.path,
+      kind: 'observe-throws',
+      severity: 'concern',
+      text: `${threw.length} of ${counted.length} tries threw outside an expect, so the eval recorded its own error, not what the agent did: ${clip(first.attempt.error?.message ?? '', 120)}`,
+      evidence: threw.map(
+        (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
+      ),
+      fix: {
+        at: ctx.locate(first.entry, null),
+        edit: "fix what the body throws, or check what can fail with expect, which gate: 'observe' records without failing",
+      },
+    },
+  ]
+}
+
 /** Every deterministic remark the run raises, ranked: concerns first, then by kind and eval. */
 export function deterministicRemarks(
   suite: SuiteResult,
@@ -802,6 +842,7 @@ export function deterministicRemarks(
         ...proxyOnlyEgress(e, own, ctx),
         ...setupProcessSecret(e, own, ctx),
         ...snapshotTooLarge(e, own, ctx),
+        ...observeThrows(e, own, ctx),
         ...tooFewTries(e, first, ctx),
         ...checkNeverFails(e, entries, ctx),
       )

@@ -3,6 +3,7 @@ import { allowedHosts } from '../egress.ts'
 import { builtPlugins, pluginBuildId } from '../environment/plugins.ts'
 import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
+import { sandboxKind } from '../sandbox/kinds.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { preparedWorkspace } from '../workspace.ts'
 import { traceEnvironment } from './debug.ts'
@@ -10,8 +11,8 @@ import type { Attempt } from './state.ts'
 
 /**
  * Resolves the attempt's environment (files, skills, secrets and their placeholders)
- * and finds the image a Docker sandbox starts from, which preflight prepared. Runs on the test's
- * signal, before the eval timer starts.
+ * and finds the image its sandbox starts from, when its kind has one, which preflight prepared.
+ * Runs on the test's signal, before the eval timer starts.
  */
 export async function prepareEnvironment(
   a: Attempt,
@@ -38,14 +39,16 @@ export async function prepareEnvironment(
   const debug = attemptDebug()
   if (debug) traceEnvironment(debug, spec, env)
   record.image = null
-  if (spec.sandbox.kind === 'docker') {
+  const kind = sandboxKind(spec.sandbox)
+  if (kind.capabilities.images) {
     const { preparedFor } = await import('../sandbox/preflight.ts')
-    const { attemptImage, dockerProvider, preparedImage } = await import('../sandbox/providers.ts')
+    const { attemptImage, createProviders, preparedImage } = await import('../sandbox/providers.ts')
     signal.throwIfAborted()
     // Preflight prepared every image before the run: an attempt only looks its image up.
-    const provider = dockerProvider({ engine: spec.sandbox.engine ?? 'docker' })
+    const provider = createProviders()[kind.provider(spec.sandbox)]
     const builds = builtPlugins(spec.environment.layers)
-    const prepared = preparedFor(root, runId, provider, spec.sandbox, spec.harness, builds)
+    const prepared =
+      provider && preparedFor(root, runId, provider, spec.sandbox, spec.harness, builds)
     if (!prepared) {
       throw new InfraError(`The sandbox image for ${where} wasn't prepared before the run started`)
     }

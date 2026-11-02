@@ -6,7 +6,7 @@ const app = defineEnvironment('server', ({ directory }) => ({
   env: { PORT: '4100' },
 }))
 
-evaluate('adds a health route', { environment: app }, async (c) => {
+evaluate('adds a health route', { environments: app }, async (c) => {
   await c.send('Add a GET /health route to server.js that responds 200 with "ok".')
 
   const server = await c.exec('node server.js', { background: true })

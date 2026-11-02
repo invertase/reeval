@@ -351,7 +351,7 @@ test('the packed package installs into a clean project and runs reeval', {
       `import { defineConfig } from '${pkg}'
 import { cursor } from '${pkg}/harness'
 import { docker } from '${pkg}/sandbox'
-export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
 `,
     )
     const built = sh(

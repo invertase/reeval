@@ -1,7 +1,7 @@
 # with-recommendation
 
 **Shows:** whether the agent recommends your product. The evals only ask questions: one open
-question, and `evaluate.each` over three rivals, which pools them into a family. A judge reads each
+question, and one with `cases` for three rivals, which pools them into one pass rate. A judge reads each
 answer and says whether it picked Genkit, which stands in for your product: put your product's
 name in its place in the prompts, judge questions and eval names.
 
@@ -26,11 +26,11 @@ may well recommend something else.
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the family's block, one row per rival:
+**What to look at:** the second eval's block, one row per rival:
 
 ```text
 pass             recommends Genkit for a production AI feature
-                 recommends Genkit over %s
+                 recommends Genkit over a rival
   pass  LangChain          1 of 1
   pass  LlamaIndex         1 of 1
   pass  the Vercel AI SDK  1 of 1

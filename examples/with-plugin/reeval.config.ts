@@ -12,7 +12,7 @@ export default defineConfig({
   // A scripted agent that calls the plugin's MCP server, as an agent following the release skill
   // would, then copies ./fake-agent's files into the workspace, so the checks run without keys or
   // Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ mcp: 'release:releases/next_version' }]],
     files: {
       'package.json': fakeAgent('package.json'),

@@ -13,7 +13,7 @@ import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: claudeCode({ model: 'claude-sonnet-5' }),
+  harnesses: claudeCode({ model: 'claude-sonnet-5' }),
   judge: { model: 'google/gemini-3.8-flash' },
   timeout: '15m',
 })

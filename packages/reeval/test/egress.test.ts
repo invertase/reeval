@@ -40,7 +40,7 @@ describe('the egress cascade', () => {
     const base: Resolved = {
       harness: [fake],
       sandbox: { kind: 'docker' },
-      environment: defineEnvironment('closed', { egress: 'deny-all' }),
+      environments: [defineEnvironment('closed', { egress: 'deny-all' })],
       compare: undefined,
       runs: 1,
       gate: undefined,
@@ -71,7 +71,7 @@ describe('the egress cascade', () => {
       allow: ['group.example.com'],
     })
     assert.equal(policyOf([group, { options: { egress: 'allow-all' }, where: 'e' }]), 'allow-all')
-    const open = cascade({ ...base, environment: undefined }, [], 'e', { profile })
+    const open = cascade({ ...base, environments: [] }, [], 'e', { profile })
     assert.deepEqual(open.resolved.egress, { inherited: { allow: ['profile.example.com'] } })
   })
 })

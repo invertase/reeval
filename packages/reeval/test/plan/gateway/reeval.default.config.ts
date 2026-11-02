@@ -4,7 +4,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({ id: 'a' }),
+  harnesses: fakeHarness({ id: 'a' }),
   sandbox: fakeSandbox(),
   profiles: { listed: { gateway: [direct()] } },
 })

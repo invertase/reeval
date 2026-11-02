@@ -6,7 +6,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'greet.js': "const greet = (name) => 'Hello, ' + name + '!'\n" },
     text: 'I wrote greet.js.',
   }),

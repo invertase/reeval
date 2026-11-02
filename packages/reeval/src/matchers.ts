@@ -10,16 +10,21 @@ import {
   changed,
   edited,
   fetched,
+  type Limits,
   type PathMatch,
   type Result,
   ran,
   searched,
   subjectError,
   type ToolInputMatch,
+  withinLimits,
 } from './assert.ts'
 import { isObjectLike, isThenable } from './object.ts'
 import { plural } from './text.ts'
 import type { CapturePage, ExecResult, JudgeFailure, StatusRange, Verdict } from './types.ts'
+
+/** At least one of `T`'s keys. */
+export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<T> }[keyof T]
 
 /** How the matcher was called: `not` is `expect(…).not`, which a matcher may answer itself. */
 export type MatcherFlags = { not: boolean }
@@ -180,6 +185,10 @@ export const MATCHERS = {
   toHaveEdited: matcher((actual, [path]: [path?: RegExp | string]) => edited(actual, path)),
 
   toHaveChanged: matcher((actual, [paths]: [paths?: PathMatch]) => changed(actual, paths)),
+
+  toStayWithin: matcher((actual, [limits]: [limits: AtLeastOne<Limits>], { not }) =>
+    withinLimits(actual, limits, not),
+  ),
 
   toHaveStatus: matcher((actual, [status]: [status: number | StatusRange]): Result => {
     if (!isCapture(actual)) throw subjectError('toHaveStatus() expects a c.capture() result')

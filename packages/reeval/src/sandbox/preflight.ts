@@ -57,15 +57,19 @@ const runWideLevel = (where: string) => {
   return level === 'config' || level === 'profile'
 }
 
-/** The distinct environments `uses` need, keyed by each provider. */
+/**
+ * The distinct environments `uses` need, keyed by each provider. `providerOf` names the provider in
+ * `providers` that prepares a sandbox; the generic layer takes any.
+ */
 export function prepareTargets(
   uses: PrepareUse[],
   providers: Record<string, SandboxProvider>,
   label: (use: PrepareUse) => string,
+  providerOf: (sandbox: SandboxDescriptor) => string = sandboxProvider,
 ): PrepareTarget[] {
   const targets = new Map<string, PrepareTarget>()
   for (const use of uses) {
-    const kind = sandboxProvider(use.sandbox)
+    const kind = providerOf(use.sandbox)
     const provider = providers[kind]
     if (!provider) continue
     const plugins = use.plugins ?? []
@@ -261,8 +265,7 @@ export function preparedFor(
     } catch {}
     read.set(file, doc)
   }
-  const entry =
-    read.get(file)?.[sandboxProvider(sandbox)]?.[provider.key(sandbox, harness, plugins)]
+  const entry = read.get(file)?.[provider.kind]?.[provider.key(sandbox, harness, plugins)]
   if (!entry) return undefined
   if ('failure' in entry) {
     throw new PrepareError({

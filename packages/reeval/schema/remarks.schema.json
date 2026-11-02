@@ -48,6 +48,7 @@
             "cant-tell-apart",
             "check-never-fails",
             "flaky-check",
+            "observe-throws",
             "proxy-only-egress",
             "setup-process-secret",
             "slow-mcp-start",

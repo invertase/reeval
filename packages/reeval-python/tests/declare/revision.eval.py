@@ -1,4 +1,4 @@
-from reeval_python import evaluate, evaluate_each, group
+from reeval_python import evaluate, group
 
 
 def versioned():
@@ -16,5 +16,5 @@ group("versioned", {"revision": 2, "runs": 2, "timeout": 120}, versioned)
 def unversioned(c): ...
 
 
-@evaluate_each([{"n": 1}, {"n": 2}], "case $n", {"revision": 1})
+@evaluate("case", {"cases": [1, 2], "revision": 1})
 def case(c, case): ...

@@ -3,7 +3,7 @@ import { plain } from './env.ts'
 
 // Both failed expects are recorded and the body carries on to the gate; the failed
 // `expect.require` ends it there, so `after the gate` never runs.
-evaluate('lands', { environment: plain }, async (c) => {
+evaluate('lands', { environments: plain }, async (c) => {
   await c.send('write the marker')
   await expect(c, 'says nope').toHaveFile('marker.txt', /nope/)
   expect(c.attempt.n, 'is the second').toBe(2)

@@ -7,7 +7,7 @@ const camelcase = defineEnvironment('camelcase', ({ git }) => ({
 }))
 const hidden = readFileSync(new URL('./hidden/separators.test.js', import.meta.url), 'utf8')
 
-evaluate('adds a separators option', { environment: camelcase }, async (c) => {
+evaluate('adds a separators option', { environments: camelcase }, async (c) => {
   await c.send(
     'Add a separators option to camelCase: a string of extra characters that also separate ' +
       "words, so camelCase('foo/bar', {separators: '/'}) is 'fooBar'. Add tests to test.js and " +

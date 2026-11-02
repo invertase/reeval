@@ -24,6 +24,7 @@ import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plu
 import { isObjectLike } from './object.ts'
 import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
+import { isSandboxKind, SANDBOX_KINDS, sandboxHelpers } from './sandbox/kinds.ts'
 import type {
   EgressPolicy,
   Environment,
@@ -49,6 +50,7 @@ import type {
   SecretTemplate,
   SkillHelper,
   SubstituteIn,
+  Traits,
 } from './types.ts'
 
 export class DefinitionError extends Error {
@@ -66,6 +68,7 @@ const SPEC_KEYS = [
   'skills',
   'mcp',
   'plugins',
+  'traits',
 ]
 /** Image fields that belong on `sandbox: docker({ … })`, not as sibling keys. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
@@ -85,6 +88,8 @@ const SPEC_HINTS: Record<string, string> = {
   repo: 'workspace',
   git: 'workspace',
   template: 'workspace',
+  tags: 'traits',
+  labels: 'traits',
 }
 
 export const isSecret = (value: unknown): value is Secret =>
@@ -1042,6 +1047,47 @@ export function checkEnv(env: unknown, where: string, Err = DefinitionError): vo
   }
 }
 
+const TRAIT_KEY = /^[a-z][a-zA-Z0-9_-]{0,31}$/
+const MAX_TRAITS = 16
+const MAX_TRAIT_VALUES = 32
+const MAX_TRAIT_LENGTH = 80
+
+function checkTraits(traits: unknown, where: string): void {
+  if (typeof traits !== 'object' || traits === null || Array.isArray(traits)) {
+    throw new DefinitionError(
+      `traits in ${where} must map a key to a string or a list of strings, e.g. traits: { stack: 'next' } (got ${JSON.stringify(traits)})`,
+    )
+  }
+  const entries = Object.entries(traits)
+  if (entries.length > MAX_TRAITS) {
+    throw new DefinitionError(`${where} has ${entries.length} traits; at most ${MAX_TRAITS}`)
+  }
+  const fits = (v: unknown) => typeof v === 'string' && v.length > 0 && v.length <= MAX_TRAIT_LENGTH
+  for (const [key, value] of entries) {
+    if (!TRAIT_KEY.test(key)) {
+      throw new DefinitionError(
+        `${where} trait "${key}" must start with a lowercase letter and have at most 32 letters, digits, "_" or "-"`,
+      )
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) throw new DefinitionError(`${where} trait "${key}" is an empty list`)
+      if (value.length > MAX_TRAIT_VALUES) {
+        throw new DefinitionError(
+          `${where} trait "${key}" lists ${value.length} values; at most ${MAX_TRAIT_VALUES}`,
+        )
+      }
+      if (value.every(fits) && new Set(value).size === value.length) continue
+    } else if (fits(value)) continue
+    throw new DefinitionError(
+      `${where} trait "${key}" must be a string of 1–${MAX_TRAIT_LENGTH} characters or a list of distinct ones (got ${JSON.stringify(value)})`,
+    )
+  }
+}
+
+/** The traits of an `extend` chain, merged by key with the child's winning. */
+export const traitsOf = (layers: readonly EnvironmentLayer[]): Traits =>
+  Object.freeze(Object.assign({}, ...layers.map((l) => l.spec.traits ?? {})))
+
 export const stepCommand = (step: string | { run: string }) =>
   typeof step === 'string' ? step : step.run
 
@@ -1077,6 +1123,7 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     if (problem) throw new DefinitionError(`workspace in ${where}: ${problem}`)
   }
   if (s.env !== undefined) checkEnv(s.env, where)
+  if (s.traits !== undefined) checkTraits(s.traits, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = <T>(key: 'setup' | 'skills' | 'plugins', value: T[] | undefined): T[] => {
     if (value !== undefined && !Array.isArray(value)) {
@@ -1190,7 +1237,7 @@ const environmentEnvelope = environmentDataSchema.extend({
 /**
  * What's wrong with an environment as data (from another language, or built by hand), in the
  * words `defineEnvironment` uses for each layer's spec, or undefined. `option` names the option
- * (`environment`, `compare.baseline`, …) and `where` the eval or config that set it.
+ * (`environments`, `compare.control`, …) and `where` the eval or config that set it.
  */
 export function environmentDataProblem(
   value: unknown,
@@ -1218,7 +1265,7 @@ export function environmentDataProblem(
   if (envelope) return envelope
   for (const layer of env.layers) {
     try {
-      const of = option === 'environment' ? at : where
+      const of = option === 'environments' ? at : where
       checkSpec(layer.spec, `layer "${layer.name}" of environment "${env.name}" in ${of}`)
     } catch (error) {
       if (error instanceof DefinitionError) return error.message
@@ -1233,13 +1280,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
 
-/** Throws for a Dockerfile, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
+/** Throws for a file, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
 export type MissingDockerfile = (field: string, full: string) => never
 
 /**
- * A sandbox descriptor written as data with its host paths made absolute against `base`, as
- * `docker({ dockerfile })` and `fakeSandbox({ dir })` resolve theirs: a Dockerfile, which must be
- * a file, and a fake sandbox's `dir`. Any other value is left for the checks to name.
+ * A sandbox descriptor written as data with its kind's host paths made absolute against `base`, as
+ * `docker({ dockerfile })` and `fakeSandbox({ dir })` resolve theirs; a `file` path must be a
+ * file. Any other value is left for the checks to name.
  */
 export function sandboxPaths(
   value: unknown,
@@ -1247,15 +1294,18 @@ export function sandboxPaths(
   field: string,
   missing: MissingDockerfile,
 ): unknown {
-  if (!isRecord(value)) return value
-  if (value.kind === 'docker' && isPath(value.dockerfile)) {
-    const full = toPath(value.dockerfile, base)
-    if (!statSync(full, { throwIfNoEntry: false })?.isFile()) missing(`${field}.dockerfile`, full)
-    return { ...value, dockerfile: full }
+  if (!isRecord(value) || !isSandboxKind(value.kind)) return value
+  let out = value
+  for (const [key, kind] of Object.entries(SANDBOX_KINDS[value.kind].hostPaths)) {
+    const path = value[key]
+    if (!isPath(path)) continue
+    const full = toPath(path, base)
+    if (kind === 'file' && !statSync(full, { throwIfNoEntry: false })?.isFile()) {
+      missing(`${field}.${key}`, full)
+    }
+    out = { ...out, [key]: full }
   }
-  return value.kind === 'fake' && isPath(value.dir)
-    ? { ...value, dir: toPath(value.dir, base) }
-    : value
+  return out
 }
 
 /**
@@ -1356,6 +1406,7 @@ function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment 
   }
   Object.defineProperty(env, 'extendEnvironment', { enumerable: false, value: extend })
   Object.defineProperty(env, 'extend', { enumerable: false, value: extend })
+  Object.defineProperty(env, 'traits', { enumerable: false, value: traitsOf(layers) })
   return Object.freeze(env) as Environment
 }
 
@@ -1399,16 +1450,6 @@ export type AppliedEnvironment = {
 
 export const NO_ENVIRONMENT = '-'
 
-/** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
-export const EMPTY_BASELINE = 'baseline'
-
-/**
- * An environment with no layers. As a compare's empty control it uses the first
- * variant's sandbox when that variant sets one, else the cascaded option sandbox,
- * else the implicit default Docker sandbox.
- */
-export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
-
 /** The last layer that sets `sandbox`, else `fallback` (the cascaded option sandbox). */
 export const sandboxOf = (
   layers: readonly EnvironmentLayer[],
@@ -1426,19 +1467,18 @@ export const environmentSandbox = (
  * else the profile's `defaults.sandbox`, else the config's.
  */
 export const profileSandbox = (
-  config: { environment?: Environment; sandbox: SandboxDescriptor },
-  defaults: Pick<ProfileDefaults, 'environment' | 'sandbox'> | undefined,
+  config: { environments: Environment[]; sandbox: SandboxDescriptor },
+  defaults: Pick<ProfileDefaults, 'environments' | 'sandbox'> | undefined,
 ): SandboxDescriptor =>
   environmentSandbox(
-    defaults?.environment ?? config.environment,
+    [defaults?.environments ?? config.environments].flat()[0],
     defaults?.sandbox ?? config.sandbox,
   )
 
 function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
-  const kind = isObjectLike(value) ? value.kind : undefined
-  if (!isObjectLike(value) || (kind !== 'docker' && kind !== 'fake')) {
+  if (!isObjectLike(value) || !isSandboxKind(value.kind)) {
     throw new DefinitionError(
-      `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${JSON.stringify(value)})`,
+      `sandbox in ${where} must come from ${sandboxHelpers()} (got ${JSON.stringify(value)})`,
     )
   }
   const max = value.maxConcurrent

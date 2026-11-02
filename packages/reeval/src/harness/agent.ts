@@ -4,12 +4,19 @@ import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { brokerToken } from '../gateway/token.ts'
 import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
-import { isDockerSandbox } from '../sandbox/docker.ts'
-import { InfraError, type Sandbox } from '../sandbox/types.ts'
-import type { AgentHarnessDescriptor, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
+import { capabilitiesOf, runsAgent, sandboxKind, suggestedSandbox } from '../sandbox/kinds.ts'
+import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
+import type {
+  AgentHarnessDescriptor,
+  SandboxDescriptor,
+  TokenUsage,
+  TranscriptEvent,
+  TurnStatus,
+} from '../types.ts'
 import { addUsage } from '../usage.ts'
 import {
   type AdapterVertex,
+  type Agent,
   agentAuth,
   agentFor,
   agentMcp,
@@ -154,12 +161,35 @@ async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVerte
   return { project: adc.project, location: adc.location, credentialsFile }
 }
 
-/** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
+/**
+ * Why `agent` can't run in `sandbox`: its kind has no harness session, can't keep the agent's
+ * credential out of it, or runs a platform the agent's bootstrap has no build for.
+ */
+export function agentSandboxProblem(agent: Agent, sandbox: SandboxDescriptor): string | undefined {
+  const fits = runsAgent(agent.platforms)
+  const can = capabilitiesOf(sandbox)
+  if (fits(can)) return undefined
+  // Only a sandbox with a harness session runs the bootstrap, so only its platform matters.
+  const lacks = [
+    ...(can.harnessSession ? [] : ['has no harness session']),
+    ...(can.brokers ? [] : [`can't keep ${agent.credential} out of it`]),
+    ...(!can.harnessSession || agent.platforms.includes(can.platform)
+      ? []
+      : [`runs ${can.platform}, not ${agent.platforms.join(' or ')}`]),
+  ]
+  const fix = suggestedSandbox(fits)
+  return `The ${agent.name} harness can't run in the ${sandboxKind(sandbox).provider(sandbox)} sandbox, which ${lacks.join(' and ')}: ${fix ? `set sandbox: ${fix} for this eval, or ` : ''}use fakeHarness() with fakeSandbox()`
+}
+
+/** A real agent through its AI SDK harness adapter, in a sandbox that gives it a harness session. */
 export function createAgentHarness(
   descriptor: AgentHarnessDescriptor,
+  sandbox: SandboxDescriptor,
   vertex?: VertexSettings,
 ): Harness {
   const catalog = agentFor(descriptor, vertex)
+  const problem = agentSandboxProblem(catalog, sandbox)
+  if (problem) throw new InfraError(problem)
   return {
     async start(sandbox, signal, { skills, mcp, plugins }) {
       const auth = agentAuth(catalog)
@@ -194,10 +224,8 @@ export function createAgentHarness(
         sandboxConfig: { workDir: WORKSPACE_DIR },
         ...(skills.length ? { skills } : {}),
       })
-      if (!isDockerSandbox(sandbox)) {
-        throw new InfraError(
-          `The ${catalog.name} harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()`,
-        )
+      if (!hasNetworkSession(sandbox)) {
+        throw new InfraError(`The ${catalog.name} harness got a sandbox with no harness session`)
       }
       const refusedSince = (from: number) =>
         (sandbox.brokeredStatuses?.() ?? []).slice(from).includes(401)

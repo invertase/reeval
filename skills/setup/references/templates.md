@@ -35,7 +35,7 @@ const migration = 'migrations/001_invoices.sql'
 
 evaluate(
   'stores invoice totals in cents with the billing skill',
-  { compare: { baseline: plain, variants: [withSkill] } },
+  { compare: { control: plain, variants: [withSkill] } },
   async (c) => {
     await c.send(
       `Write ${migration}: a Postgres migration creating an invoices table ` +
@@ -65,7 +65,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
     // A fake agent that stores the total as numeric: every eval must fail.
     canary: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           files: {
             'migrations/001_invoices.sql':
               'create table invoices (id int, total numeric(10,2));\n',
@@ -77,7 +77,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
     // A fake agent with a right answer: every eval must pass.
     oracle: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           files: {
             'migrations/001_invoices.sql':
               'CREATE TABLE public.invoices (\n  id bigserial PRIMARY KEY,\n' +
@@ -116,7 +116,7 @@ export const repo = defineEnvironment('repo', ({ directory }) => ({
 import { evaluate, expect } from 'reeval'
 import { repo } from './environments.ts'
 
-evaluate('adds a slugify helper that passes a hidden test', { environment: repo }, async (c) => {
+evaluate('adds a slugify helper that passes a hidden test', { environments: repo }, async (c) => {
   await c.send('Add slugify(text) to src/strings.ts and export it from src/index.ts.')
   await c.writeFile(
     'test/slugify.hidden.test.ts',
@@ -174,7 +174,7 @@ import { repo, withRules } from './environments.ts'
 
 evaluate(
   'follows AGENTS.md on a user-facing CLI change',
-  { compare: { baseline: repo, variants: [withRules] } },
+  { compare: { control: repo, variants: [withRules] } },
   async (c) => {
     await c.send('`acme deploy` should stop with a clear error when no region is set.')
     expect(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
@@ -241,7 +241,7 @@ const accepts = `node -e "import('./user.js').then(({ User }) => {
 
 evaluate(
   "uses Zod 4's top-level email format",
-  { compare: { baseline: zod, variants: [withZodSkill] } },
+  { compare: { control: zod, variants: [withZodSkill] } },
   async (c) => {
     await c.send('Create user.js exporting a zod schema User with a required email field.')
     await expect(c.exec(accepts), 'validates emails').toSucceed()
@@ -253,6 +253,6 @@ evaluate(
 
 - Pin the version you researched (`zod@4.1.12`), in the setup step and in what you tell the user.
 - Write the facts down as a skill only if the user wants to know what docs or a skill would
-  change. Otherwise drop the compare and keep `environment: zod`.
+  change. Otherwise drop the compare and keep `environments: zod`.
 - Check behavior (`validates emails`) and the specific API (`uses z.email()`) as two labeled
   checks, so the result says which one an agent missed.

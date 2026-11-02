@@ -521,9 +521,28 @@
         "name": {
           "description": "The name it was defined or extended under, which names its cells.",
           "type": "string"
+        },
+        "traits": {
+          "description": "Its layers' `traits`, merged by key with the child's winning; `{}` when none.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         }
       },
-      "required": ["extend", "extendEnvironment", "kind", "layers", "name"]
+      "required": ["extend", "extendEnvironment", "kind", "layers", "name", "traits"]
     },
     "EnvironmentLayer": {
       "description": "One environment in an `extend` chain.",
@@ -615,6 +634,28 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkillSource"
+          }
+        },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
           }
         },
         "workspace": {
@@ -860,6 +901,29 @@
           "description": "Each turn's recorded agent time, exactly, whatever the wall clock says: a test can compare agent time without scheduling jitter, which four runs a side can tell apart.",
           "type": "number",
           "minimum": 0
+        },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
         },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
@@ -1915,15 +1979,25 @@
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "description": "What every eval runs in when it names no environment.",
-          "$ref": "#/$defs/Environment"
+        "environments": {
+          "description": "What every eval runs in when it names no environment: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Environment"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "observe"]
             },
             {
               "type": "object",
@@ -1936,7 +2010,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them.",
           "anyOf": [
             {
@@ -2075,7 +2149,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "Harness ids to allow; evals left with none are skipped.",
           "type": "array",
           "items": {
@@ -2087,6 +2161,27 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "traits": {
+          "description": "Cells to run, by their environment's traits (with `compare`, the control's): each key's trait must equal the value, or one of a list's, or for a list trait contain it. Evals left with no cell are skipped.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
         }
       },
       "additionalProperties": false
@@ -2193,8 +2288,12 @@
         "env": {
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "$ref": "#/$defs/Environment"
+        "environments": {
+          "description": "Empty when the config names none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Environment"
+          }
         },
         "file": {
           "description": "The config file as typed from the current directory, or `reeval.config.ts` without one.",
@@ -2204,7 +2303,7 @@
           "description": "Unset means `'all'`; kept unset so the plan can hint when `runs > 1`.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "observe"]
             },
             {
               "type": "object",
@@ -2380,7 +2479,7 @@
         "debug",
         "defaultProfile",
         "env",
-        "environment",
+        "environments",
         "file",
         "gate",
         "gateway",
@@ -2512,6 +2611,13 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "traits": {
+          "description": "`reeval run --trait`: the cells to run, by their environment's traits; all must hold.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraitFilter"
           }
         },
         "verbosity": {
@@ -2899,6 +3005,26 @@
           "required": ["t"]
         }
       ]
+    },
+    "TraitFilter": {
+      "description": "One `--trait key=value`, or one key of a profile's `limit.traits`: a cell matches when its control's trait equals one of `values` or, for a list trait, contains one. Every filter must match.",
+      "type": "object",
+      "properties": {
+        "by": {
+          "description": "As the plan and refusals name it: `--trait lang=ts`, `profiles.ci.limit.traits.lang`.",
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["by", "key", "values"]
     },
     "VercelGatewayDescriptor": {
       "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",

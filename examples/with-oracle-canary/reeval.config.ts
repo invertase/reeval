@@ -13,7 +13,10 @@ const writes = (dir: string) => ({
 export default defineConfig({
   include: ['*.eval.ts'],
   // The oracle: a scripted agent that does the task right, with ./oracle's files. It must pass.
-  harness: fakeHarness({ files: writes('oracle'), text: 'I added clamp(n, min, max) and a test.' }),
+  harnesses: fakeHarness({
+    files: writes('oracle'),
+    text: 'I added clamp(n, min, max) and a test.',
+  }),
   // The sandbox real agents run in, so the checks pass or fail as they would for them.
   sandbox: docker(),
   profiles: {
@@ -25,7 +28,7 @@ export default defineConfig({
     // sandbox.
     canary: {
       defaults: {
-        harness: fakeHarness({ files: writes('canary'), text: 'I added clamp and a test.' }),
+        harnesses: fakeHarness({ files: writes('canary'), text: 'I added clamp and a test.' }),
       },
     },
   },

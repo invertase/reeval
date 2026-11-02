@@ -576,6 +576,66 @@ export type AttemptContext = {
 }
 export type EvalFn = (c: AttemptContext) => Promise<void>
 
+/** The body of an eval with `cases`: the attempt and its case. */
+export type CaseFn<T> = (c: AttemptContext, item: T) => Promise<void>
+
+/**
+ * One eval over several inputs: each case runs the body with every cell and run, and the cases
+ * pool into one pass rate (and, with `compare`, one lift paired by case). Per eval only.
+ */
+export type CaseOptions<T> = {
+  /** The inputs, each JSON data; the body gets one as its second argument. */
+  cases: readonly T[]
+  /**
+   * Each case's key, which names it in the output and the record. Without it, a string or a
+   * finite number is its own key, and an object uses its `id`, else its `name`.
+   */
+  caseKey?: (item: T) => string
+  /**
+   * Which case and environment pairs run, decided at plan time. It sees each environment's
+   * `traits`, and with `compare` the control, whose answer holds for every variant. Reading
+   * `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`
+   * and the record's `excluded`.
+   */
+  where?: Where<T>
+}
+
+/** Filter facts about an environment, for `where`: never sent to the agent, never prompt data. */
+export type Traits = Readonly<Record<string, string | readonly string[]>>
+
+/**
+ * One `--trait key=value`, or one key of a profile's `limit.traits`: a cell matches when its
+ * control's trait equals one of `values` or, for a list trait, contains one. Every filter must
+ * match.
+ */
+export type TraitFilter = {
+  key: string
+  values: string[]
+  /** As the plan and refusals name it: `--trait lang=ts`, `profiles.ci.limit.traits.lang`. */
+  by: string
+}
+
+/** `where`'s predicate: true runs the case on that environment (and harness). */
+export type Where<T> = (pair: {
+  case: T
+  environment: {
+    readonly name: string
+    /** The environment's traits; reading a key that no listed environment defines is refused. */
+    readonly traits: Readonly<Record<string, string | readonly string[] | undefined>>
+  }
+  /** The harness id; reading it decides each harness on its own. */
+  readonly harness: string
+}) => boolean
+
+/** A case and environment pair `where` left out. */
+export type ExcludedPair = {
+  /** The case key. */
+  case: string
+  environment: string
+  /** Set only when `where` read the harness. */
+  harness?: string
+}
+
 /** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
 export type FakeHarnessDescriptor = {
   kind: 'fake'
@@ -624,6 +684,14 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
+  /** Tokens the fake agent reports for every turn, as `turn.usage`; without it, null. */
+  usage?: {
+    input: number
+    output: number
+    cacheRead: number
+    cacheWrite: number
+    reasoning: number | null
+  }
   /**
    * Real sandbox actions, one list per `c.send` (the last list repeats), run in order before
    * `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.
@@ -1315,6 +1383,12 @@ export type EnvironmentSpec = {
    * parent's plugin of the same name.
    */
   plugins?: PluginSource[]
+  /**
+   * Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of
+   * strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited.
+   * Recorded on the cell, and never written to the sandbox, the prompt or the judge.
+   */
+  traits?: Traits
 }
 
 /**
@@ -1433,6 +1507,8 @@ export type Environment = {
   readonly name: string
   /** Its `extend` chain, root first. */
   readonly layers: readonly EnvironmentLayer[]
+  /** Its layers' `traits`, merged by key with the child's winning; `{}` when none. */
+  readonly traits: Traits
   /**
    * A child environment layered on this one; wherever it sets a key this one has, it wins.
    * `sandbox` is replaced entirely when the child sets one; when the child omits it, the
@@ -1532,27 +1608,41 @@ export type HarnessOption =
   | HarnessData
   | ((inherited: HarnessDescriptor[]) => HarnessDescriptor | HarnessDescriptor[])
 
-export type CompareGate = 'variants' | 'all' | 'none'
+/**
+ * An edit of the inherited environment list: `add` appends environments, `only` keeps the
+ * inherited ones with these names, in their order.
+ */
+export type EnvironmentEdit<E = Environment> = { add: E | E[] } | { only: string | string[] }
+
+/** One environment, a list (each is its own cell), or an edit of the inherited list, as data. */
+export type EnvironmentsData<E = EnvironmentData> = E | E[] | EnvironmentEdit<E>
+
+/** `EnvironmentsData`, or a function that edits the inherited list (TypeScript only). */
+export type EnvironmentsOption =
+  | EnvironmentsData<Environment>
+  | ((inherited: Environment[]) => Environment | Environment[])
+
+export type CompareGate = 'variants' | 'all' | 'observe'
 
 /**
- * The baseline and each variant run as their own environments, with the same prompt and checks.
+ * The control and each variant run as their own environments, with the same prompt and checks.
  * `compare` does not layer them. Share setup first with `environment.extend` / `extendEnvironment`.
  * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
 export type CompareOptions<E = Environment> = {
   /**
-   * The control. Not layered under the variants. Without it, the control is the environment the
-   * eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.
+   * The environment each variant is measured against. Not layered under the variants, and it
+   * replaces any `environments` the eval inherits.
    */
-  baseline?: E
+  control: E
   /** Other environments, each planned and run as itself. */
   variants: E[]
-  /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
+  /** Which cells decide pass/fail: `variants` (default), `all`, or `observe` (none of them). */
   gate?: CompareGate
   /** Lift in points from -1 to 1; a variant cell below it fails. */
   minLift?: number
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
-  harness?: Array<string | HarnessDescriptor>
+  harnesses?: Array<string | HarnessDescriptor>
 }
 
 /**
@@ -1783,19 +1873,23 @@ export type AttemptQuestionInput = {
 }
 
 /** An option a profile's `limit` can narrow, and `pin` can protect. */
-export type PinnableKey = 'harness' | 'runs' | 'compare'
+export type PinnableKey = 'harnesses' | 'runs' | 'compare'
 
 /**
  * How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt
  * passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at
- * least that share.
+ * least that share; `'observe'` gates nothing, so the eval's attempts run and are recorded, and
+ * only run and infra errors fail it.
  */
-export type GatePolicy = 'all' | { passRate: number }
+export type GatePolicy = 'all' | 'observe' | { passRate: number }
 
-/** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
-export type CellGate = GatePolicy | 'none'
+/**
+ * A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's, or
+ * any cell under `gate: 'observe'`).
+ */
+export type CellGate = Exclude<GatePolicy, 'observe'> | 'none'
 
-/** A compare object: `baseline` and `variants`. Same as `CompareOptions`. */
+/** A compare object: `control` and `variants`. Same as `CompareOptions`. */
 export type CompareSpec<E = Environment> = CompareOptions<E>
 
 type OddDigit = '1' | '3' | '5' | '7' | '9'
@@ -1818,12 +1912,12 @@ export type OddAtLeast3<N extends number> = number extends N
  */
 export type Runs<N extends number = number> = number | { bestOf: OddAtLeast3<N> }
 
-/** Options other than `environment` and `compare`, which are exclusive of each other. */
+/** Options other than `environments` and `compare`, which are exclusive of each other. */
 type EvalOptionFields<N extends number = number> = {
   /** Which agents run the eval; each harness is its own cell. */
-  harness?: HarnessOption
+  harnesses?: HarnessOption
   /**
-   * The default machine when the resolved environment omits `sandbox`. Cascades like `harness`.
+   * The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`.
    * Not an environment: it does not invent skills, files or a name.
    */
   sandbox?: SandboxDescriptor
@@ -1831,7 +1925,7 @@ type EvalOptionFields<N extends number = number> = {
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once
    * a majority of its `n` attempts agree and gates it on that majority; not on a compared eval.
    * Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach
-   * a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+   * a verdict, and anything else runs once, a case of an eval with `cases` included.
    */
   runs?: Runs<N>
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -1887,7 +1981,7 @@ export type EvalSource = {
   body: string
   /**
    * sha256 of the case's data as canonical JSON, with secrets in its strings masked as the record
-   * masks them; set on each case of an `evaluate.each`.
+   * masks them; set on each case of an eval with `cases`.
    */
   case?: string
   /** sha256 of the canonical options. */
@@ -1896,32 +1990,28 @@ export type EvalSource = {
 
 /**
  * `compare: false` is not an option here: a profile's `limit.compare: false` strips variants.
- * A compare with a `baseline` names every arm, so the cascaded `environment` is not applied, and
- * the same object can't set both. Without a `baseline`, the cascaded `environment` (this object's
- * own, or an inherited one) is the control.
+ * A compare names every arm, so an inherited `environments` is not applied, and the same object
+ * can't set both.
  */
-type EnvironmentOrCompare<E> =
+type EnvironmentOrCompare<E, Envs> =
   | {
-      /** What this group or eval runs in, and the control of a compare without a `baseline`. */
-      environment?: E
+      /**
+       * What this group or eval runs in: one environment, or a list, each its own cell beside
+       * each harness. `{ add }` and `{ only }` edit the inherited list.
+       */
+      environments?: Envs
       compare?: never
     }
   | {
-      /** Forbidden beside `compare.baseline`, which names the control. */
-      environment?: never
-      /** Environments to run side by side; `baseline` is the control. */
-      compare: CompareSpec<E> & { baseline: E }
-    }
-  | {
-      /** The control: the compare has no `baseline`. */
-      environment?: E
-      /** Environments to run side by side against `environment`, the control. */
-      compare: CompareSpec<E> & { baseline?: undefined }
+      /** Forbidden beside `compare`, whose `control` names what the eval runs in. */
+      environments?: never
+      /** Environments to run side by side; `control` is what each variant is measured against. */
+      compare: CompareSpec<E>
     }
 
 /** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
 export type EvalOptions<N extends number = number> = EvalOptionFields<N> &
-  EnvironmentOrCompare<Environment>
+  EnvironmentOrCompare<Environment, EnvironmentsOption>
 export type GroupOptions<N extends number = number> = EvalOptions<N>
 
 /**
@@ -1929,15 +2019,15 @@ export type GroupOptions<N extends number = number> = EvalOptions<N>
  * by name or a fake judge, and environments without `extend`. The same `environment` / compare
  * object split as `EvalOptions`.
  */
-export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
+export type EvalOptionsData = Omit<EvalOptionFields, 'harnesses' | 'judge'> & {
   /** Which agents run the eval; each harness is its own cell. */
-  harness?: HarnessData
+  harnesses?: HarnessData
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
-} & EnvironmentOrCompare<EnvironmentData>
+} & EnvironmentOrCompare<EnvironmentData, EnvironmentsData>
 
 /** An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`. */
-export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend'>
+export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend' | 'traits'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
@@ -1963,11 +2053,11 @@ export type Budget = {
 /** What evals get when they don't say otherwise: under groups and evals. */
 export type ProfileDefaults = {
   /** The agents every eval runs on, unless a group or eval replaces them. */
-  harness?: HarnessDescriptor | HarnessDescriptor[]
+  harnesses?: HarnessDescriptor | HarnessDescriptor[]
   /** The default machine when the resolved environment omits `sandbox`. */
   sandbox?: SandboxDescriptor
-  /** What every eval runs in when it names no environment. */
-  environment?: Environment
+  /** What every eval runs in when it names no environment: one, or a list (a cell each). */
+  environments?: Environment | Environment[]
   /** Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more). */
   runs?: Runs
   /** How each cell's attempts decide its outcome. */
@@ -1995,7 +2085,13 @@ export type ProfileLimit = {
   /** `false` runs the control only; `{ maxVariants }` keeps the first n variants. */
   compare?: false | { maxVariants: number }
   /** Harness ids to allow; evals left with none are skipped. */
-  harness?: string[]
+  harnesses?: string[]
+  /**
+   * Cells to run, by their environment's traits (with `compare`, the control's): each key's trait
+   * must equal the value, or one of a list's, or for a list trait contain it. Evals left with no
+   * cell are skipped.
+   */
+  traits?: Record<string, string | string[]>
 }
 
 /** How a run is sized: chosen with `--profile`, `REEVAL_PROFILE` or `defaultProfile`. */
@@ -2102,14 +2198,17 @@ export type ReevalConfig = {
   /** Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`. */
   include?: string[]
   /** The agents every eval runs on, unless a group or eval replaces them; default Cursor. */
-  harness?: HarnessDescriptor | HarnessDescriptor[]
+  harnesses?: HarnessDescriptor | HarnessDescriptor[]
   /**
    * The default machine when the resolved environment omits `sandbox`. Not an environment:
    * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
    */
   sandbox?: SandboxDescriptor
-  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
-  environment?: Environment
+  /**
+   * What every eval runs in when it names no environment and has no compare: one, or a list (a
+   * cell each).
+   */
+  environments?: Environment | Environment[]
   /**
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with
    * variants runs 4 a side and anything else once.
@@ -2200,9 +2299,9 @@ export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
 }
 
 /** `ProfileDefaults` as data: the environment without `extend`, and the judge as data. */
-export type ProfileDefaultsData = Omit<ProfileDefaults, 'environment' | 'judge'> & {
-  /** What every eval runs in when it names no environment. */
-  environment?: EnvironmentData
+export type ProfileDefaultsData = Omit<ProfileDefaults, 'environments' | 'judge'> & {
+  /** What every eval runs in when it names no environment: one, or a list (a cell each). */
+  environments?: EnvironmentData | EnvironmentData[]
   /** Defaults for `c.judge()`, merged field by field over the config's. */
   judge?: ConfigJudgeData
 }
@@ -2224,10 +2323,13 @@ export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
  */
 export type ReevalConfigData = Omit<
   ReevalConfig,
-  'environment' | 'judge' | 'profiles' | 'analysis' | 'gateway'
+  'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
-  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
-  environment?: EnvironmentData
+  /**
+   * What every eval runs in when it names no environment and has no compare: one, or a list (a
+   * cell each).
+   */
+  environments?: EnvironmentData | EnvironmentData[]
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
@@ -2283,7 +2385,8 @@ export type ResolvedConfig = {
    * sets one.
    */
   sandbox: SandboxDescriptor
-  environment: Environment | undefined
+  /** Empty when the config names none. */
+  environments: Environment[]
   /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
   runs: Runs | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
@@ -2403,9 +2506,8 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * A cell of an evaluation combines a harness, an environment (`-` when none is set), and that
- * environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded
- * environment, or an empty `baseline`) and each variant is that environment on its own,
- * including its sandbox.
+ * environment's sandbox id. With `compare`, the control is `compare.control` and each variant is
+ * that environment on its own, including its sandbox.
  */
 export type Cell = {
   /** The harness id, the environment name, and the sandbox id, joined with `/`. */
@@ -2425,9 +2527,16 @@ export type Cell = {
    * eight-character hash.
    */
   sandbox: string
+  /**
+   * `variant` on a compare's variant cell, else `control`: the compare's control, or any cell of
+   * an eval without `compare`, each environment of an `environments` grid included. A variant's
+   * lift is against the `control` cell on its harness and sandbox.
+   */
   role: CellRole
   /** The variant's name, for variant cells. */
   variant?: string
+  /** The environment's merged traits; unset when it has none. Not part of the key. */
+  traits?: Traits
 }
 
 /** A plugin as an attempt placed it. */
@@ -2835,10 +2944,11 @@ export type CaptureUseSpend = {
 
 /** Which environment ran as the control, so the studio can show it. */
 export type EvalCompareMeta = {
+  /** The control's environment name. */
   baseline: string
   /**
-   * Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or
-   * an empty environment named `baseline` when there was none.
+   * Not written, since a compare names its control. A record that has it ran the eval's cascaded
+   * environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.
    */
   from?: 'environment' | 'empty'
 }
@@ -2859,6 +2969,15 @@ export type EvalPlan = {
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy
   attempts: number
+  /** The case and environment pairs `where` left out of this case; unset when none. */
+  excluded?: ExcludedPair[]
+  /**
+   * On a case of a pooled family, every pair `where` left out of any of its cases, so the record
+   * keeps a case it left out everywhere; unset when none.
+   */
+  familyExcluded?: ExcludedPair[]
+  /** The environments `--trait` or a profile's `limit.traits` left out; unset when none. */
+  traitExcluded?: string[]
   notes: string[]
   /** Why the eval doesn't run at all, e.g. a profile's harness limit left none. */
   skip?: string
@@ -2946,7 +3065,7 @@ export type AttemptMeta = {
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
-  /** Set when the eval is a case of a pooled `evaluate.each`. */
+  /** Set when the eval is a case of an eval with `cases`. */
   family?: FamilyMeta
   /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
   gateway?: ResolvedGateway
@@ -2964,7 +3083,7 @@ export type ResolvedGateway = {
   skipped: Array<{ gateway: GatewayName; why: string }>
 }
 
-/** A case's place in its pooled `evaluate.each`. */
+/** A case's place in its eval with `cases`. */
 export type FamilyMeta = {
   /** `file › group › … › template`, like an eval id with the name template in place of the name. */
   id: string
@@ -2997,6 +3116,8 @@ export type RunContext = {
   runs?: number
   /** `reeval run --tag` and the profile's tags: each is a tag, or `!tag` to exclude; all must hold. */
   tags: string[]
+  /** `reeval run --trait`: the cells to run, by their environment's traits; all must hold. */
+  traits?: TraitFilter[]
   /** How many attempts run at once, across the run. */
   concurrency: number
   profile: ResolvedProfile | null

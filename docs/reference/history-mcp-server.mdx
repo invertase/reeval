@@ -43,7 +43,7 @@ For more information about the run record, see [Run record reference](/reference
 
 ## `compare`
 
-The `compare` tool returns one row per evaluation. `head` and `base` are run references, and `head` defaults to `latest`. When `base` is absent, it is the nearest earlier recorded run with status `complete`, preferring a Git ancestor when one exists. When `base` is set and `head` is absent, `head` is `latest`. Statuses are `regressed`, `fixed`, `drift`, `added`, `removed`, `infra`, and `same`. `changes` lists stack fields that differ. Unless `all` is true, `same` rows are left out and `same` counts them. With no baseline, `base` is `null` and `head` is `{ runId }`.
+The `compare` tool returns one row per evaluation. `head` and `base` are run references, and `head` defaults to `latest`. When `base` is absent, it is the nearest earlier recorded run with status `complete`, preferring a Git ancestor when one exists. When `base` is set and `head` is absent, `head` is `latest`. Statuses are `regressed`, `fixed`, `drift`, `added`, `removed`, `infra`, and `same`. `changes` lists stack fields that differ. Unless `all` is true, `same` rows are left out and `same` counts them. With no control, `base` is `null` and `head` is `{ runId }`.
 
 ## `analysis`
 

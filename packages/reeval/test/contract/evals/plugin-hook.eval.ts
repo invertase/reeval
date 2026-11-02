@@ -5,12 +5,12 @@ import { closed, PLUGIN_HOOK_MARKER, plugged, prompts, trimmed, withFakePlugin }
 // a harness that loads plugins but not their hooks leaves these out.
 const tags = ['plugin', 'plugin-hooks']
 
-evaluate('plugin hook', { environment: plugged, harness: withFakePlugin, tags }, async (c) => {
+evaluate('plugin hook', { environments: plugged, harnesses: withFakePlugin, tags }, async (c) => {
   await c.send(prompts.pluginHook)
   expect(await trimmed(c.readFile, PLUGIN_HOOK_MARKER)).toBe('hook-ran')
 })
 
 // Must fail: without the plugin, no hook writes the marker.
-evaluate('plugin hook canary', { environment: closed, tags }, async (c) => {
+evaluate('plugin hook canary', { environments: closed, tags }, async (c) => {
   expect(await trimmed(c.readFile, PLUGIN_HOOK_MARKER)).toBe('hook-ran')
 })

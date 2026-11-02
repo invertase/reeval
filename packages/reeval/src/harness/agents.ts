@@ -98,6 +98,8 @@ export type Agent = Layout & {
   name: string
   /** The `reeval/harness` factory, for messages. */
   factory: string
+  /** The platforms its bootstrap installs the agent's CLI for: a sandbox on another can't run it. */
+  platforms: readonly NodeJS.Platform[]
   /**
    * The host variable the harness authenticates with. It never enters the sandbox. With `token`,
    * what the token is minted from, for messages.
@@ -944,6 +946,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: PLUGIN_PARTS,
     name: 'Cursor',
     factory: 'cursor',
+    platforms: ['linux'],
     reasoning: 'streamed',
     reasoningTokens: false,
     credential: 'CURSOR_API_KEY',
@@ -974,6 +977,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Claude Code',
     factory: 'claudeCode',
+    platforms: ['linux'],
     reasoning: 'streamed',
     reasoningTokens: false,
     subagentCalls: true,
@@ -1022,6 +1026,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ],
     name: 'Antigravity',
     factory: 'antigravity',
+    platforms: ['linux'],
     // agy's stream-json has no thinking content, only each step's `thinking_tokens`.
     reasoning: 'none',
     reasoningTokens: true,
@@ -1058,6 +1063,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'agents', 'commands', 'mcp'],
     name: 'OpenCode',
     factory: 'opencode',
+    platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: 'provider',
@@ -1087,6 +1093,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
+    platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     // Goose's ACP server reports usage for its last model call only, which the adapter drops.
@@ -1125,6 +1132,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'commands', 'mcp'],
     name: 'pi',
     factory: 'pi',
+    platforms: ['linux'],
     reasoning: 'streamed',
     reasoningTokens: true,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -1160,6 +1168,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
+    platforms: ['linux'],
     // codex exec sends a reasoning item only once it's complete, when it sends one at all.
     reasoning: 'whole',
     reasoningTokens: true,
@@ -1200,6 +1209,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'fx',
     factory: 'fx',
+    platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: 'provider',
@@ -1229,6 +1239,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
+    platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: true,

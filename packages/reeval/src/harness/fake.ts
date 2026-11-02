@@ -3,8 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
-import { isDockerSandbox } from '../sandbox/docker.ts'
-import { InfraError, type Sandbox } from '../sandbox/types.ts'
+import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
 import type { Harness } from './types.ts'
@@ -83,7 +82,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             startedAt: new Date(startedAt).toISOString(),
             durationMs: descriptor.turnMs ?? Date.now() - startedAt,
             transcript,
-            usage: null,
+            usage: descriptor.usage ?? null,
             model: descriptor.servedModel ?? null,
             unreported: [],
             ...(descriptor.turnMs === undefined ? {} : { agentMs: descriptor.turnMs }),
@@ -214,7 +213,7 @@ async function brokerKey(
       `${credential} isn't set, so the fake agent has no key to broker. Set it in the environment or .env.local.`,
     )
   }
-  const network = isDockerSandbox(sandbox) ? sandbox.network : undefined
+  const network = hasNetworkSession(sandbox) ? sandbox.network : undefined
   if (!network?.setRequestTransformations) {
     throw new InfraError("fakeHarness({ brokers: true }) needs docker(): this sandbox can't broker")
   }

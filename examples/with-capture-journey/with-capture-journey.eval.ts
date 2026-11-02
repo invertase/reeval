@@ -6,7 +6,7 @@ const pricing = defineEnvironment('pricing', ({ directory }) => ({ files: direct
 // profile's judge would, and fx's (Jev) can't.
 const journey = { model: 'anthropic/claude-sonnet-5' }
 
-evaluate('reveals the price on click', { environment: pricing, capture: journey }, async (c) => {
+evaluate('reveals the price on click', { environments: pricing, capture: journey }, async (c) => {
   await c.send('The "Show price" button in index.html does nothing. Make it reveal the price.')
 
   await expect(c, 'click handler').toHaveFile('index.html', /addEventListener|onclick/)

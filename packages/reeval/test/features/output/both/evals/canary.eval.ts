@@ -5,7 +5,7 @@ import { marked, plain } from './env.ts'
 // Must fail: the marker says ok, not nope, so every variant fails too.
 evaluate(
   'canary',
-  { harness: [writer, copier], compare: { baseline: plain, variants: [marked] } },
+  { harnesses: [writer, copier], compare: { control: plain, variants: [marked] } },
   async (c) => {
     await expect(c, 'has the marker').toHaveFile('marker.txt', /nope/)
   },

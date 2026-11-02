@@ -117,17 +117,19 @@ const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str)
 /** A saved invocation, or undefined when it isn't one; its numbers are whole and at least 1. */
 export function readableInvocation(v: unknown): RunInvocation | undefined {
   if (!isObj(v)) return undefined
-  const { runs, profile, concurrency, filters, tags } = v
+  const { runs, profile, concurrency, filters, tags, traits } = v
   const count = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) >= 1)
   if (!count(runs) || !count(concurrency) || !(profile === undefined || str(profile)))
     return undefined
   if (!strings(filters) || !strings(tags)) return undefined
+  if (!(traits === undefined || strings(traits))) return undefined
   return {
     ...(runs === undefined ? {} : { runs: runs as number }),
     ...(profile === undefined ? {} : { profile }),
     ...(concurrency === undefined ? {} : { concurrency: concurrency as number }),
     filters,
     tags,
+    ...(traits?.length ? { traits } : {}),
   }
 }
 

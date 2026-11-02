@@ -76,7 +76,7 @@ export function OutcomeIcon({
     return (
       <CircleMinus
         className={cn('size-4 shrink-0 text-muted-foreground', className)}
-        aria-label="Missed, not gated"
+        aria-label="Ran with a failed check"
       />
     )
   }

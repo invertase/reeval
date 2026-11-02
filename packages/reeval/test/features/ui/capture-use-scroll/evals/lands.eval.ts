@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { fakeInstructions } from 'reeval/testing'
 import { ui } from './env.ts'
 
-evaluate('lands', { environment: ui }, async (c) => {
+evaluate('lands', { environments: ui }, async (c) => {
   const server = await c.serve('node server.mjs')
   await c.capture(server, {
     name: 'after',
