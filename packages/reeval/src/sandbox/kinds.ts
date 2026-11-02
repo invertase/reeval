@@ -3,6 +3,7 @@
 // kind's name, so a new kind is one more entry.
 import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
+import type { ListenerSource } from '../attempt/serve.ts'
 import { TART_MAX_CONCURRENT } from '../contract/tart.ts'
 import type {
   DockerSandboxDescriptor,
@@ -13,7 +14,7 @@ import type {
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
 import type { SandboxOptions } from './index.ts'
-import { InfraError, type Sandbox } from './types.ts'
+import type { Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
 export type SandboxCapabilities = {
@@ -34,10 +35,12 @@ export type SandboxCapabilities = {
    */
   isolated: boolean
   /**
-   * Has a Linux `/proc` for the agent's processes, and bash: what `leftRunning`, `c.serve`'s port
-   * probe and the background-exec kill-tree read.
+   * Has a Linux `/proc` for the agent's processes, and bash: what `leftRunning` and the
+   * background-exec kill-tree read.
    */
   processTable: boolean
+  /** How `c.serve` lists what listens in the sandbox. */
+  listeners: ListenerSource
   /** Starts from an image preflight prepares before the run, which the record names. */
   images: boolean
   /** Has its provider checked, and what it starts from prepared, before the run. */
@@ -106,6 +109,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     harnessSession: true,
     isolated: true,
     processTable: true,
+    listeners: 'proc',
     images: true,
     preflight: true,
     pluginBuilds: true,
@@ -151,6 +155,7 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
     harnessSession: false,
     isolated: false,
     processTable: false,
+    listeners: 'host',
     images: false,
     preflight: false,
     pluginBuilds: false,
@@ -178,6 +183,7 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     harnessSession: false,
     isolated: true,
     processTable: false,
+    listeners: 'lsof',
     images: false,
     preflight: true,
     pluginBuilds: false,
@@ -188,10 +194,13 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
   buildsAtStart: () => true,
   hostLimit: { max: TART_MAX_CONCURRENT, why: 'macOS runs two macOS VMs at a time' },
   privileges: () => ({ root: false, capabilities: [] }),
-  async create() {
-    throw new InfraError(
-      "tart() sandboxes can be planned and prepared, but this reeval can't start one yet",
-    )
+  async create(sandbox, options) {
+    const { createTartSandbox } = await import('./tart.ts')
+    return createTartSandbox(sandbox, options)
+  },
+  async cleanupRun(runId) {
+    const { removeRunVms } = await import('./tart.ts')
+    await removeRunVms(runId)
   },
 }
 

@@ -1,11 +1,29 @@
 // The `tart` CLI, as the Tart sandbox's provider and sessions call it.
+import { traceDocker } from '@reeval/sandbox-docker'
 import { type RunResult, run } from '@reeval/sandbox-docker/process'
 
-export type TartOptions = { signal?: AbortSignal; input?: string }
+export type TartOptions = { signal?: AbortSignal; input?: string | Uint8Array }
+
+/** Runs `bin` (`tart`, or `ssh` into a VM), into the attempt's trace as a docker command is. */
+export async function tracedRun(
+  bin: string,
+  args: string[],
+  options: TartOptions = {},
+): Promise<RunResult> {
+  const started = Date.now()
+  try {
+    const r = await run(bin, args, options)
+    traceDocker(args, started, { ...r, stdin: options.input?.length }, bin)
+    return r
+  } catch (error) {
+    traceDocker(args, started, { error }, bin)
+    throw error
+  }
+}
 
 /** Runs `tart <args>`; rejects only when `tart` can't be started. */
 export const tartCli = (args: string[], options: TartOptions = {}): Promise<RunResult> =>
-  run('tart', args, options)
+  tracedRun('tart', args, options)
 
 /** `tart <args>`'s stdout; throws its stderr when it fails. */
 export async function tartOk(args: string[], options: TartOptions = {}): Promise<string> {

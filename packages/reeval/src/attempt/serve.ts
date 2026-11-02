@@ -11,7 +11,7 @@ const POLL_MS = 200
 /** How many of the command's last lines an error shows. */
 const OUTPUT_LINES = 20
 
-/** A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` or `tcp6`. */
+/** A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` (or `tcp6`) or `lsof`. */
 export type Listener = { port: number; address: string }
 
 /** One look at the sandbox's listeners and whether the served command still runs. */
@@ -20,15 +20,21 @@ export type ServeProbe =
   | { proc: true; alive: boolean; listeners: Listener[] }
 
 /**
- * Prints `alive` while `pid` runs, then the sandbox's TCP tables, or `noproc` without them
- * (or without `tables`: the fake sandbox shares the host's, where other processes bind too).
+ * How a sandbox lists its TCP listeners: Linux's `/proc/net`, `lsof` (macOS), or not at all,
+ * asking the host instead, whose network the fake sandbox shares.
  */
-export function probeScript(pid?: string, tables = true): string {
+export type ListenerSource = 'proc' | 'lsof' | 'host'
+
+const READ_LISTENERS: Record<ListenerSource, string> = {
+  proc: 'if [ -r /proc/net/tcp ]; then cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; else echo noproc; fi',
+  lsof: 'if command -v lsof >/dev/null 2>&1; then echo lsof; lsof -nP -iTCP -sTCP:LISTEN -Fn 2>/dev/null; else echo noproc; fi',
+  host: 'echo noproc',
+}
+
+/** Prints `alive` while `pid` runs, then the sandbox's TCP listeners, or `noproc` without them. */
+export function probeScript(pid?: string, source: ListenerSource = 'proc'): string {
   const alive = pid ? `kill -0 ${pid} 2>/dev/null && echo alive; ` : ''
-  const read = tables
-    ? 'if [ -r /proc/net/tcp ]; then cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; else echo noproc; fi'
-    : 'echo noproc'
-  return `${alive}${read}; exit 0`
+  return `${alive}${READ_LISTENERS[source]}; exit 0`
 }
 
 /** `0100007F` → `127.0.0.1`; 32 hex digits → an IPv6 address. Each 32-bit word is host-endian. */
@@ -60,6 +66,15 @@ export function parseProbe(stdout: string): ServeProbe {
   const alive = lines.includes('alive')
   if (lines.includes('noproc')) return { proc: false, alive }
   const listeners: Listener[] = []
+  if (lines.includes('lsof')) {
+    // `lsof -Fn`: `n*:3000`, `n127.0.0.1:3000`, `n[::1]:3000`; `*` is every address.
+    for (const l of lines) {
+      const m = /^n(\*|\[[0-9a-f:.]+\]|[0-9.]+):(\d+)$/i.exec(l)
+      const address = m?.[1] === '*' ? '0.0.0.0' : (m?.[1] ?? '').replace(/^\[|\]$/g, '')
+      if (m && reachable(address)) listeners.push({ port: Number(m[2]), address })
+    }
+    return { proc: true, alive, listeners }
+  }
   for (const l of lines) {
     // `sl local remote st …`; state 0A is LISTEN.
     const m = /^\s*\d+:\s+([0-9A-F]+):([0-9A-F]{4})\s+\S+\s+0A\s/i.exec(l)
@@ -197,7 +212,7 @@ export type ServeWatch = {
   timeoutMs?: number
   /**
    * Without `/proc`: the address the port accepts on, or undefined while nothing does. The
-   * fake sandbox asks the host; a container with no `/proc` takes `want` on trust (`''`).
+   * fake sandbox asks the host; a sandbox that can't list them takes `want` on trust (`''`).
    */
   hostListening?: (port: number) => Promise<string | undefined>
 }

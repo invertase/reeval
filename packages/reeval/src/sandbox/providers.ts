@@ -230,12 +230,16 @@ export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
   }),
 })
 
-/** Why this host can't run Tart VMs, or null: macOS on Apple Silicon only. */
+/**
+ * Why this host can't run Tart VMs, or null: macOS on Apple Silicon only. reeval's own tests
+ * set REEVAL_TEST_TART_ANY_HOST to run the fixtures on a stand-in `tart` anywhere.
+ */
 export function tartHostProblem(
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
 ): string | null {
   if (platform === 'darwin' && arch === 'arm64') return null
+  if (process.env.REEVAL_TEST_TART_ANY_HOST === '1') return null
   return `tart() runs macOS VMs with Tart, which needs a Mac with Apple Silicon, and this machine is ${platform}-${arch}. Run these evals on one, or in docker().`
 }
 
