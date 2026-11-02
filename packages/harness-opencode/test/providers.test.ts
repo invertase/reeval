@@ -112,7 +112,7 @@ test("the main providers' keys go where OpenCode sends them", () => {
     vercel: {
       env: 'AI_GATEWAY_API_KEY',
       headers: bearer,
-      posts: ['ai-gateway.vercel.sh/v1/messages', 'ai-gateway.vercel.sh/v4/ai/messages'],
+      posts: ['ai-gateway.vercel.sh/v1/messages'],
     },
   }
   for (const [id, want] of Object.entries(expected)) assert.deepEqual(where(id), want, id)
@@ -351,7 +351,7 @@ test('Bedrock brokers its API key as a Bearer token, and its URL names the serve
     providerServedModel(bedrock, {
       method: 'POST',
       host: 'bedrock-mantle.eu-south-2.api.aws',
-      path: '/v1/chat/completions',
+      path: '/v1/responses',
       responseModel: 'openai.gpt-oss-120b',
     }),
     'openai.gpt-oss-120b',

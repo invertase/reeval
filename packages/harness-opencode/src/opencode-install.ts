@@ -13,7 +13,7 @@ export const OPENCODE_PACKAGE_JSON = `{
   "dependencies": {
     "@agentclientprotocol/sdk": "1.7.0",
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@opencode/cli": "2.1.4",
+    "@opencode/cli": "2.2.5",
     "ws": "8.21.0",
     "zod": "4.4.3"
   }
@@ -21,7 +21,7 @@ export const OPENCODE_PACKAGE_JSON = `{
 `
 
 export const OPENCODE_PNPM_WORKSPACE = `allowBuilds:
-  '@opencode/cli@2.1.4': true
+  '@opencode/cli@2.2.5': true
 ignoredOptionalDependencies:
   - '@opencode/cli-linux-arm64-musl'
   - '@opencode/cli-linux-x64-baseline-musl'
@@ -45,8 +45,8 @@ importers:
         specifier: 1.32.1
         version: 1.32.1(zod@4.4.3)
       '@opencode/cli':
-        specifier: 2.1.4
-        version: 2.1.4
+        specifier: 2.2.5
+        version: 2.2.5
       ws:
         specifier: 8.21.0
         version: 8.21.0
@@ -61,8 +61,8 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  '@hono/node-server@2.1.5':
-    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
+  '@hono/node-server@2.1.6':
+    resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
@@ -77,53 +77,53 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@opencode/cli-darwin-arm64@2.1.4':
-    resolution: {integrity: sha512-QwjyvovTdT0gFi5rxUyPVlYePIe3ELduR9olu+KJWe089XVIDOTMhxylBe/ZGIpvoXHYo6bp2NskIiqCFAEXsw==}
+  '@opencode/cli-darwin-arm64@2.2.5':
+    resolution: {integrity: sha512-UwGb2MIJqLSh4wfrkvqNiAohG1Wf5t96Nx7113QvmtCn5LGimmXYN0Tb1chD0mMRRdPvnUguevKRdwM0txZY1Q==}
     cpu: [arm64]
     os: [darwin]
 
-  '@opencode/cli-darwin-x64-baseline@2.1.4':
-    resolution: {integrity: sha512-htb+MYexlbFPc/da+jXePmclbXuMMX4m8kSIe24wbgy/npTC8wv1VHj0QTDt9YttTnnas+Yr1kNmJ7j/86yt+Q==}
+  '@opencode/cli-darwin-x64-baseline@2.2.5':
+    resolution: {integrity: sha512-Gwbf6l2i9hIz8marzoFoi5wy1h+VvfqVoGqV9tDwOaoxnK94DjYH9kzHr6JhkTCamr1+VOOcBZkpx/a1wwPeJw==}
     cpu: [x64]
     os: [darwin]
 
-  '@opencode/cli-darwin-x64@2.1.4':
-    resolution: {integrity: sha512-pdx0Iyl+IK1SdSQOhvz8JE4Rk0PGyacZ55FaxmyowYe9h0aFZNs3UAj7wNYod6Hsu4qsAeSVkdfQLr4SI8G1oA==}
+  '@opencode/cli-darwin-x64@2.2.5':
+    resolution: {integrity: sha512-z+wqIBXk5DVwXVdyQJHOwwnnOlFOx0LfAlx3PzubJjE/3a948KPBkJruF5zm6yyglJGzNgR3ji7oD/B/HOMD+w==}
     cpu: [x64]
     os: [darwin]
 
-  '@opencode/cli-linux-arm64@2.1.4':
-    resolution: {integrity: sha512-drw0LWMG0niaE94ePXm1h7qjFBZZRcSZD3gact3hx3OYPXesp7xrOt0bn3sicYNUN6fojERrDKR6jYrXmZX+rA==}
+  '@opencode/cli-linux-arm64@2.2.5':
+    resolution: {integrity: sha512-O4qOy/WRYQmhClMB/5qBaoYfzaDK1+PJRQOfU80ixyj5ruQbCxraH+VW2UyHb6RWOlUv41fec+isd62LvCuwuA==}
     cpu: [arm64]
     os: [linux]
 
-  '@opencode/cli-linux-x64-baseline@2.1.4':
-    resolution: {integrity: sha512-0/H4wRDAW4hA5IWN440XwDrRATbvT3cno+UUsqFynTu0TeGXNADjK2AZfvhNTfyJaVyCa+v7VhB+r7ghuMa5EQ==}
+  '@opencode/cli-linux-x64-baseline@2.2.5':
+    resolution: {integrity: sha512-oPOT+EMmdz56HnSFPRVwZ0QTVL5defhOacnwzazu0XOuCWUtEKh8icIn323SdCLtqZtzjuU1mt6p2/13V93WWg==}
     cpu: [x64]
     os: [linux]
 
-  '@opencode/cli-linux-x64@2.1.4':
-    resolution: {integrity: sha512-o8EJ0ZsT4dzDKN+0mpG2EKbNGzJyp+F1++Av28UReRVfiEv+N34eZEnN/unkiMoerKHad6W6Ii7k4ukTnPNmNQ==}
+  '@opencode/cli-linux-x64@2.2.5':
+    resolution: {integrity: sha512-BkHAfTqNsg/qphyHNrnH+DGkOxZsGjamNpM5DvwoEvz7ZAPNw8mEbMXGTCDOAH+/+40Eqeie6KNZBZZQwPCjaA==}
     cpu: [x64]
     os: [linux]
 
-  '@opencode/cli-windows-arm64@2.1.4':
-    resolution: {integrity: sha512-ZDKG+2rhCYb2ngl1B/H8Lx2ll9NjNLhghj10/War9eK5ASYysWvR+26+Bdv+/J29eZdzeXViJnOwf3tZBdMakA==}
+  '@opencode/cli-windows-arm64@2.2.5':
+    resolution: {integrity: sha512-vBwh07DSL9vAFyS3qEM95XOBOXxsuDiLxfG1HDTQ9UKRPrEOBW1tLJ//aLrKMTYtHPsb90SZi5XErYUTrAlumw==}
     cpu: [arm64]
     os: [win32]
 
-  '@opencode/cli-windows-x64-baseline@2.1.4':
-    resolution: {integrity: sha512-76bsf2uQK/vj2CI0p6dhten9ZD8HmGLeC4B1XfwEaD1xmWHB+8hwTGy5VVvHsoqH+flRQeq3Xfk0VCyQ9zA9+g==}
+  '@opencode/cli-windows-x64-baseline@2.2.5':
+    resolution: {integrity: sha512-MSSHmCs7301UnYROwPZUjx081pbfuavFgvr0A8zFyAyKu2bP+fMxNvzKcWXLNC8cnFF1flQtFZQlvUbS0+QwEA==}
     cpu: [x64]
     os: [win32]
 
-  '@opencode/cli-windows-x64@2.1.4':
-    resolution: {integrity: sha512-9h0Nb/3g6HxnFY6lawSqNSCxek0K3zUPjOAoF20pyPBaLMq65sXfWLVwgyS/21AM0NrUw77S9CeP0tPM+XrbGQ==}
+  '@opencode/cli-windows-x64@2.2.5':
+    resolution: {integrity: sha512-vIMrmUIvlOgWSXzLkScyHvV2ilcX3YAzbCaZ3RaSH5EgG7XbYu6WeiMMgmE+NIW7QejzAeSXt2yWAJVyaKxp4A==}
     cpu: [x64]
     os: [win32]
 
-  '@opencode/cli@2.1.4':
-    resolution: {integrity: sha512-vtHFa/1frSylpx1cZRuzmM2ecHWn6YB8cNvhw8eWKPvSFvDnckZXugDbi3LJYD9TGjRx2U6JRo725qwqtwMUfQ==}
+  '@opencode/cli@2.2.5':
+    resolution: {integrity: sha512-sJAwrwuVa5b+pA3O1UOiSDcC9DgdPVmtkWv6aF6q3+rOiOTCqrE41tkz1kyyE2O8BYPs4eOvBuzkQ6oEm8w5Mw==}
     cpu: [arm64, x64]
     os: [darwin, linux, win32]
     hasBin: true
@@ -238,8 +238,8 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
-  express-rate-limit@8.7.1:
-    resolution: {integrity: sha512-2FXbqkygil3mZiXzEtM0IjE/UBmBNot0J1GEVrJT4JbrvwOSoEtqtO+wHbiMQELWe1eNvHoYRg2dkjOid+6JkA==}
+  express-rate-limit@8.7.2:
+    resolution: {integrity: sha512-U1ScocxDD9WI09LaBVypvNkOtNR5yWAmZLkuKJdAzIchA4YKFYF6GT5IKER7epG58oXtjvGlV0/6ii0F83EyZg==}
     engines: {node: '>= 16'}
     peerDependencies:
       express: '>= 4.11'
@@ -289,8 +289,8 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  hono@4.13.14:
-    resolution: {integrity: sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==}
+  hono@4.13.16:
+    resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -318,8 +318,8 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
-  jose@6.2.13:
-    resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
+  jose@6.2.15:
+    resolution: {integrity: sha512-qdF6ewcZARtef63fJ9AKKZPgxw+t7USH6HLXYcD4CrdmSvDp79rpJSPFEKc90QBeGS63u1KQtN2MZQHC0yDIzA==}
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
@@ -505,13 +505,13 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@hono/node-server@2.1.5(hono@4.13.14)':
+  '@hono/node-server@2.1.6(hono@4.13.16)':
     dependencies:
-      hono: 4.13.14
+      hono: 4.13.16
 
   '@modelcontextprotocol/sdk@1.32.1(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 2.1.5(hono@4.13.14)
+      '@hono/node-server': 2.1.6(hono@4.13.16)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -520,9 +520,9 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.3.0
-      express-rate-limit: 8.7.1(express@5.3.0)
-      hono: 4.13.14
-      jose: 6.2.13
+      express-rate-limit: 8.7.2(express@5.3.0)
+      hono: 4.13.16
+      jose: 6.2.15
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -531,44 +531,44 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opencode/cli-darwin-arm64@2.1.4':
+  '@opencode/cli-darwin-arm64@2.2.5':
     optional: true
 
-  '@opencode/cli-darwin-x64-baseline@2.1.4':
+  '@opencode/cli-darwin-x64-baseline@2.2.5':
     optional: true
 
-  '@opencode/cli-darwin-x64@2.1.4':
+  '@opencode/cli-darwin-x64@2.2.5':
     optional: true
 
-  '@opencode/cli-linux-arm64@2.1.4':
+  '@opencode/cli-linux-arm64@2.2.5':
     optional: true
 
-  '@opencode/cli-linux-x64-baseline@2.1.4':
+  '@opencode/cli-linux-x64-baseline@2.2.5':
     optional: true
 
-  '@opencode/cli-linux-x64@2.1.4':
+  '@opencode/cli-linux-x64@2.2.5':
     optional: true
 
-  '@opencode/cli-windows-arm64@2.1.4':
+  '@opencode/cli-windows-arm64@2.2.5':
     optional: true
 
-  '@opencode/cli-windows-x64-baseline@2.1.4':
+  '@opencode/cli-windows-x64-baseline@2.2.5':
     optional: true
 
-  '@opencode/cli-windows-x64@2.1.4':
+  '@opencode/cli-windows-x64@2.2.5':
     optional: true
 
-  '@opencode/cli@2.1.4':
+  '@opencode/cli@2.2.5':
     optionalDependencies:
-      '@opencode/cli-darwin-arm64': 2.1.4
-      '@opencode/cli-darwin-x64': 2.1.4
-      '@opencode/cli-darwin-x64-baseline': 2.1.4
-      '@opencode/cli-linux-arm64': 2.1.4
-      '@opencode/cli-linux-x64': 2.1.4
-      '@opencode/cli-linux-x64-baseline': 2.1.4
-      '@opencode/cli-windows-arm64': 2.1.4
-      '@opencode/cli-windows-x64': 2.1.4
-      '@opencode/cli-windows-x64-baseline': 2.1.4
+      '@opencode/cli-darwin-arm64': 2.2.5
+      '@opencode/cli-darwin-x64': 2.2.5
+      '@opencode/cli-darwin-x64-baseline': 2.2.5
+      '@opencode/cli-linux-arm64': 2.2.5
+      '@opencode/cli-linux-x64': 2.2.5
+      '@opencode/cli-linux-x64-baseline': 2.2.5
+      '@opencode/cli-windows-arm64': 2.2.5
+      '@opencode/cli-windows-x64': 2.2.5
+      '@opencode/cli-windows-x64-baseline': 2.2.5
 
   accepts@2.0.0:
     dependencies:
@@ -667,7 +667,7 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
-  express-rate-limit@8.7.1(express@5.3.0):
+  express-rate-limit@8.7.2(express@5.3.0):
     dependencies:
       debug: 4.4.3
       express: 5.3.0
@@ -755,7 +755,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.13.14: {}
+  hono@4.13.16: {}
 
   http-errors@2.0.1:
     dependencies:
@@ -779,7 +779,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  jose@6.2.13: {}
+  jose@6.2.15: {}
 
   json-schema-traverse@1.0.0: {}
 
