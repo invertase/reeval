@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The version-drift leg's check of OpenCode's providers: runs the provider probe
+// The nightly drift workflow's check of OpenCode's providers: runs the provider probe
 // (packages/harness-opencode/scripts/probe-providers.ts) against the newest @opencode/cli, and
 // fails, with a diff, when the table it generates differs from the committed one: a provider
 // added, removed or newly refused, or a variable, header, host or endpoint changed. Key-free: the

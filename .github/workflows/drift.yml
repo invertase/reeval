@@ -1,0 +1,123 @@
+# The key-free drift checks, nightly: nothing here runs an agent or holds an API key. Each job fails
+# naming what drifted:
+#   versions             the newest agy, @cursor/sdk, OpenCode, Goose, pi, Codex, fx and Grok Build,
+#                        and the AI SDK harness adapters, against their pins (scripts/drift/versions.mjs)
+#   claude-code patch    whether the newest @ai-sdk/harness-claude-code still needs reeval's patch,
+#                        and whether the patch still applies (scripts/drift/claude-code-patch.mjs)
+#   opencode providers   the newest @opencode/cli probed per provider, against the committed table
+#                        (scripts/drift/opencode-providers.mjs; the probe's proxy answers every request)
+#   cursor-sdk shape     the newest @cursor/sdk still declares the stored-conversation fields the
+#                        Cursor harness recovers web calls from (scripts/drift/cursor-sdk-shape.mjs)
+# What only a real agent can tell (an output format, the stored conversation's contents, behavior)
+# stays in real.yml's latest leg. When a scheduled run finds an agent CLI release newer than its pin
+# that the last scheduled run hadn't seen, `latest leg` dispatches real.yml's latest leg on main.
+# PRs that change these checks run them too, without the dispatch.
+name: drift
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/drift.yml
+      - scripts/drift/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  versions:
+    name: versions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: { contents: read, actions: read }
+    outputs:
+      new_agents: ${{ steps.check.outputs.new_agents }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: package.json, package-manager-cache: false }
+      # The last scheduled run's snapshot, to tell a release that came out since from one that was
+      # already there.
+      - name: the last scheduled run's versions
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" -w drift.yml -e schedule -b main -s completed -L 1 --json databaseId --jq '.[0].databaseId // empty' || true)
+          [ -z "$run" ] || gh run download "$run" -R "$GITHUB_REPOSITORY" -n upstream-versions -D "$RUNNER_TEMP/previous" ||
+            echo "No snapshot from run $run"
+      - id: check
+        name: newest versions against the pins
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          set +e
+          node scripts/drift/versions.mjs --previous "$RUNNER_TEMP/previous/upstream-versions.json" --out "$RUNNER_TEMP/upstream-versions.json"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-versions
+          path: ${{ runner.temp }}/upstream-versions.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - if: steps.check.outputs.status != '0'
+        env: { STATUS: '${{ steps.check.outputs.status }}' }
+        run: exit "$STATUS"
+
+  claude-code-patch:
+    name: claude-code patch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - name: whether the newest @ai-sdk/harness-claude-code still needs reeval's patch
+        run: node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
+
+  opencode-providers:
+    name: opencode providers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - name: whether the newest @opencode/cli sends each provider's key where the table says
+        run: node --experimental-strip-types --no-warnings scripts/drift/opencode-providers.mjs
+
+  cursor-sdk-shape:
+    name: cursor-sdk shape
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: package.json, package-manager-cache: false }
+      - name: the stored conversation the newest @cursor/sdk declares
+        run: |
+          cd "$RUNNER_TEMP"
+          tar -xzf "$(npm pack @cursor/sdk@latest --silent)"
+          node "$GITHUB_WORKSPACE/scripts/drift/cursor-sdk-shape.mjs" package
+
+  latest-leg:
+    name: latest leg
+    needs: versions
+    if: >-
+      !cancelled() && github.event_name == 'schedule' && github.repository == 'invertase/reeval' &&
+      needs.versions.outputs.new_agents != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: { contents: read, actions: write }
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ needs.versions.outputs.new_agents }}
+        run: |
+          echo "New upstream releases: $NEW. Dispatching real.yml's latest leg."
+          gh workflow run real.yml -R "$GITHUB_REPOSITORY" --ref main -f pinned=false -f latest=true

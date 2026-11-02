@@ -1,28 +1,36 @@
-# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labeled
-# `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code).
-# A missing secret fails the rows that need it, naming the variable: asked for, the real tier never
-# skips. One run at a time.
+# The real-agent tier: real agents in Docker, weekly, on demand, and on PRs labeled `real-agents`.
+# It spends model credit, so it runs only in this repository (never a fork's code). A missing
+# secret fails the rows that need it, naming the variable: asked for, the real tier never skips.
+# One run at a time.
 #   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
 #                        and the CLI end to end, on the pinned agent versions
 #   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
-#                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
+#                        OpenCode, Goose, pi, Codex, fx and Grok Build
 #   real agents (Cursor) test/real-agents' smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
-# PRs get the pinned contract only. A dispatch's `harnesses` input (e.g.
-# claude-code-gateway,codex-gateway) runs only those rows' pinned contract and e2e, nothing else;
-# naming an *-openrouter row also runs reeval's own calls on OpenRouter (the judge and analysis). Budgets: each reeval run's budget.attempts, a ledger per job
-# (contract.yml) and the timeouts below.
+# The weekly run is the pinned contract and the smoke, and skips (the gate says why) when main
+# hasn't moved since the last successful weekly run and no agent CLI or adapter has a release it
+# hadn't seen. The latest leg runs on demand, or when drift.yml's nightly key-free checks find a new
+# agent CLI release, which dispatches it alone (pinned=false, latest=true). PRs get the pinned
+# contract only. A dispatch's `harnesses` input (e.g. claude-code-gateway,codex-gateway) runs only
+# those rows' pinned contract and e2e, nothing else; naming an *-openrouter row also runs reeval's
+# own calls on OpenRouter (the judge and analysis). Budgets: each reeval run's budget.attempts, a
+# ledger per job (contract.yml) and the timeouts below.
 name: real
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '47 4 * * 1'
   workflow_dispatch:
     inputs:
-      latest:
-        description: Also run the contract on the newest agent CLI and SDK (the drift leg)
+      pinned:
+        description: The contract on the pinned agent versions, the real-tier fixtures, the e2e and the Cursor smoke
         type: boolean
         default: true
+      latest:
+        description: The contract on the newest agent CLI and SDK (the drift leg)
+        type: boolean
+        default: false
       harnesses:
         description: >-
           Only these contract rows, comma-separated (e.g. claude-code-gateway,codex-gateway), on the
@@ -37,7 +45,7 @@ permissions:
 
 concurrency:
   group: real-${{ github.event.pull_request.number || github.ref }}
-  # A PR's newer push replaces its run; the nightly and dispatched runs always finish.
+  # A PR's newer push replaces its run; the weekly and dispatched runs always finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -50,10 +58,56 @@ jobs:
        (github.event.pull_request.head.repo.full_name == github.repository &&
         contains(github.event.pull_request.labels.*.name, 'real-agents')))
     runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    timeout-minutes: 5
+    permissions: { contents: read, actions: read }
+    outputs:
+      run: ${{ steps.changes.outputs.run || 'true' }}
     steps:
+      # A weekly run goes ahead when main moved since the last successful weekly run, or when an
+      # agent CLI or adapter has a release that run's snapshot hadn't seen (scripts/drift/versions.mjs).
+      - if: github.event_name == 'schedule'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - if: github.event_name == 'schedule'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: package.json, package-manager-cache: false }
+      - if: github.event_name == 'schedule'
+        id: changes
+        name: anything new since the last successful weekly run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/real.yml/runs?event=schedule&branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0] | select(.) | "\(.id) \(.head_sha)"' || true)
+          id=${last%% *} sha=${last#* }
+          [ -z "$id" ] || gh run download "$id" -R "$GITHUB_REPOSITORY" -n upstream-versions -D "$RUNNER_TEMP/previous" ||
+            echo "No snapshot from run $id"
+          set +e
+          GITHUB_OUTPUT="$RUNNER_TEMP/versions.out" node scripts/drift/versions.mjs \
+            --previous "$RUNNER_TEMP/previous/upstream-versions.json" --out "$RUNNER_TEMP/upstream-versions.json" > /dev/null
+          status=$?
+          set -e
+          changed=$(sed -n 's/^changed=//p' "$RUNNER_TEMP/versions.out" 2>/dev/null || true)
+          if [ "$status" -gt 1 ]; then
+            echo "Couldn't look up the newest versions, so the run goes ahead"; echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$id" ] && [ "$sha" = "$GITHUB_SHA" ] && [ -z "$changed" ]; then
+            echo "Skipped: nothing merged into main since run $id ($sha) and no new upstream release" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Runs: ${id:+main at $GITHUB_SHA, last successful weekly run $id at $sha; }new upstream releases: ${changed:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: github.event_name == 'schedule'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-versions
+          path: ${{ runner.temp }}/upstream-versions.json
+          if-no-files-found: ignore
+          retention-days: 90
       # Annotates up front; the rows that need a missing key fail in the contract legs.
-      - env:
+      - if: steps.changes.outputs.run != 'false'
+        env:
           HAS_CURSOR: ${{ secrets.CURSOR_API_KEY != '' }}
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
@@ -79,6 +133,9 @@ jobs:
   pinned:
     name: contract (pinned)
     needs: gate
+    if: >-
+      needs.gate.outputs.run == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.pinned || inputs.harnesses != '')
     # contract.yml's Google workload identity federation.
     permissions: { contents: read, id-token: write }
     uses: ./.github/workflows/contract.yml
@@ -92,21 +149,21 @@ jobs:
     needs: [gate, pinned]
     # contract.yml's Google workload identity federation.
     permissions: { contents: read, id-token: write }
-    # After the pinned leg, pass or fail, so the two never spend at once.
+    # After the pinned leg, pass, fail or skipped, so the two never spend at once.
     if: >-
       !cancelled() && needs.gate.result == 'success' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' && inputs.latest && inputs.harnesses == ''))
+      github.event_name == 'workflow_dispatch' && inputs.latest && inputs.harnesses == ''
     uses: ./.github/workflows/contract.yml
     with: { versions: latest }
     secrets: inherit
 
   real:
     name: real agents (Cursor)
-    needs: [gate, latest]
+    needs: [gate, pinned, latest]
     if: >-
-      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request' &&
-      (github.event_name != 'workflow_dispatch' || inputs.harnesses == '')
+      !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.run == 'true' &&
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || (inputs.pinned && inputs.harnesses == ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
