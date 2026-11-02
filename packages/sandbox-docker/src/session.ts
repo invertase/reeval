@@ -14,6 +14,7 @@ import { type Gateway, type GatewayOptions, startGateway } from './egress/gatewa
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
+import { containerTransport } from './egress/transport.ts'
 import { type Engine, engineEnv, engineSpec } from './engine.ts'
 import {
   BRIDGE_PORT,
@@ -382,7 +383,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     try {
       // Before anything but `sleep` runs, so a detached container never has a route out.
       await attach(policy)
-      gateway = await startGateway(id, { ...rest, policy }, signal, engine)
+      gateway = await startGateway(containerTransport(id, engine), { ...rest, policy }, signal)
       egress = { active: true }
     } catch (error) {
       // Only a direct container has a way out without the gateway.
