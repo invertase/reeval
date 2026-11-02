@@ -235,7 +235,9 @@ export class InteractiveRenderer implements Renderer {
       case 'prepare':
         this.#written = ''
         this.#plain.onEvent(e)
-        if (this.#app || this.#o.timers === false) return
+        // REEVAL_DEBUG writes the image builds to stderr, past what the spinner counts, so its
+        // step line would be lost; the step keeps its still ◆.
+        if (this.#app || this.#o.timers === false || process.env.REEVAL_DEBUG) return
         if (e.state === 'start') this.#spinner.start(this.#written, e.targets.length)
         else this.#spinner.reported()
         return

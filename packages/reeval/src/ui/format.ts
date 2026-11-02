@@ -198,8 +198,11 @@ function otherChecks(c: Colors, e: EvalResult): string[] {
   return (e.meta?.failedChecks ?? []).filter((x) => x !== shown).map((x) => checkLine(c, x))
 }
 
-/** An error's class before its message, `Error: ` or `AssertionError: `, which a fail doesn't print. */
-const ERROR_NAME = /^[\w.$]*Error: /
+/**
+ * The plain classes before a message, `Error: ` and `AssertionError: `, which a fail doesn't print.
+ * Any other class (`TypeError`, `ReferenceError`) stays: it says the eval's own code broke.
+ */
+const ERROR_NAME = /^(?:Assertion)?Error: /
 
 /**
  * A failed attempt's reason on one line, as the live list prints it after `failed` or `errored`:

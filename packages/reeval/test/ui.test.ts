@@ -640,14 +640,22 @@ test("a gateway warning prints as it happens, in the plain and agent output, on 
   assert.equal(phaseOf({ at: s(2), kind: 'warning', text }), 'running')
 })
 
-test("an attempt's failure in a line: the message without its error's class, the judge's verdict, or canceled", () => {
+test("an attempt's failure in a line: the message without a plain Error's class, the judge's verdict, or canceled", () => {
   assert.equal(failureReason(defaultResult), 'expected 1 to be 2 // Object.is equality')
+  assert.equal(
+    failureReason({
+      ...defaultResult,
+      errors: ['Error: the fixture is missing\n    at evals/a.eval.ts:3'],
+    }),
+    'the fixture is missing',
+  )
   assert.equal(
     failureReason({
       ...defaultResult,
       errors: ['TypeError: x is undefined\n    at evals/a.eval.ts:3'],
     }),
-    'x is undefined',
+    'TypeError: x is undefined',
+    'a TypeError keeps its class: the eval itself broke',
   )
   const judged: EvalResult = {
     ...defaultResult,
@@ -926,6 +934,47 @@ describe('interactive renderer', () => {
     })
     return { renderer, text: () => text }
   }
+
+  test('the prepare step spins, except under REEVAL_DEBUG, whose stderr lines it cannot count', (t) => {
+    t.mock.timers.enable({ apis: ['setInterval'] })
+    const step = (debug: string | undefined) => {
+      const env = process.env.REEVAL_DEBUG
+      if (debug === undefined) delete process.env.REEVAL_DEBUG
+      else process.env.REEVAL_DEBUG = debug
+      try {
+        let text = ''
+        const out = {
+          isTTY: true,
+          write: (chunk: string) => {
+            text += chunk
+            return true
+          },
+        }
+        const renderer = new InteractiveRenderer({
+          out,
+          stdout: out as never,
+          stdin: {} as never,
+          colors: colors(false),
+          output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+          harness: 'cursor',
+          now: () => T0,
+          load: () => new Promise<never>(() => {}),
+        })
+        renderer.onEvent({
+          type: 'prepare',
+          at: T0,
+          state: 'start',
+          targets: [{ label: 'docker' } as never],
+        } as never)
+        return text
+      } finally {
+        if (env === undefined) delete process.env.REEVAL_DEBUG
+        else process.env.REEVAL_DEBUG = env
+      }
+    }
+    assert.ok(step(undefined).includes('\x1b[1A'), 'the spinner draws on the step line')
+    assert.ok(!step('1').includes('\x1b['), 'no cursor moves under REEVAL_DEBUG')
+  })
 
   test('quitting the list leaves the whole list in the scrollback, as a pipe prints it', async () => {
     const { renderer, text } = interactive(
