@@ -541,9 +541,13 @@ function caseBlocks(
   return { lines, ids }
 }
 
-/** Whether a same row still has something to show: a changed gate, `-v`'s stats or a shift. */
+/**
+ * Whether a same row still has something to show: a changed gate, a case that flipped under the
+ * eval's rate (which the tally counts), `-v`'s stats or a shift.
+ */
 const shownRow = (c: Colors, row: CompareRow, units: Units, opts: CompareOptions) =>
   !!row.gate ||
+  !!row.cases?.some((k) => k.status !== 'same') ||
   !!(opts.verbose && row.perCell?.length) ||
   shiftRows(c, units.base.get(row.id)?.result, units.head.get(row.id)?.result).length > 0
 

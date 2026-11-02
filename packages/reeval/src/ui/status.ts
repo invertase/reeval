@@ -24,7 +24,7 @@
 //   excerpt and the snapshot only in the full detail. On several harnesses it adds `, all on H` or
 //   `, M of them on H`. A compare names the arms instead (`failed on react · the control
 //   (expected)`), where a control that isn't gated is expected to fail. An eval with cases and
-//   no compare names the cases (`failed on power`, `power 2 of 4` with several runs of it).
+//   no compare names the cases (`failed on power`, `power (2 of 4 runs)` with several runs of it).
 // - An eval nothing gates prints its answers (questions, `c.observe`) even in a list printed once.
 // - Errors that aren't a check's: `✗ 2 runs hit an infrastructure error`, then the message.
 // - `Worth knowing:` the eval's remarks, each its brief unless the detail is full, then each check
@@ -53,7 +53,7 @@ import {
   type QuestionResult,
   type SuiteResult,
 } from '../view/suite.ts'
-import { checkLabel, statsLine } from './layout.ts'
+import { checkLabel, pairedStats, statsLine } from './layout.ts'
 import { shownRemarks } from './remarks.ts'
 
 /** `failing`: still running, with a run that already failed; its outcome isn't decided yet. */
@@ -363,6 +363,16 @@ function compareLines(
       }
     }
     if (!verbose) continue
+    if (e.pooled) {
+      // Over cases, the arms' difference is the paired lift, once per variant cell.
+      const keys = new Set(r.own.map((c) => c.key))
+      for (const p of e.pooled.filter((x) => keys.has(x.key))) {
+        const cell = r.own.find((c) => c.key === p.key)
+        const who = keys.size > 1 && cell ? `${harnessLabel(record, cell)}: ` : ''
+        lines.push({ depth: 1, text: `${who}${pairedStats(p)}`, tone: 'dim' })
+      }
+      continue
+    }
     for (const cell of r.own) {
       const stats = statsLine(cell, cells)
       const who = r.own.length > 1 ? `${harnessLabel(record, cell)}: ` : ''
@@ -500,7 +510,7 @@ function checkLines(
       }
     } else if (o.cases) {
       const shown = [...f.byGroup].slice(0, CASES_NAMED)
-      const named = shown.map(([k, t]) => (t.ran > 1 ? `${k} ${t.failed} of ${t.ran}` : k))
+      const named = shown.map(([k, t]) => (t.ran > 1 ? `${k} (${t.failed} of ${t.ran} runs)` : k))
       const more = f.byGroup.size - shown.length
       text = `${label}  failed on ${named.join(', ')}${more ? ` and ${more} more` : ''}`
     } else {
@@ -569,10 +579,10 @@ function casesHeadline(e: EvalResult, cells: CellResult[]): string {
 }
 
 /** `Pass rate over the cases: 67%, below passRate 0.7.`, per cell gated on its rate. */
-function rateLines(e: EvalResult): DetailLine[] {
+function rateLines(e: EvalResult, label: (key: string) => string): DetailLine[] {
   const rates = e.rates ?? []
   return rates.map((r): DetailLine => {
-    const on = rates.length > 1 ? ` on ${r.key}` : ''
+    const on = rates.length > 1 ? ` on ${label(r.key)}` : ''
     const short = r.outcome === 'fail' ? 'below' : 'clearing'
     return {
       depth: 0,
@@ -652,7 +662,14 @@ function caseTable(
   const hidden = cases.filter((k) => !shown.has(k))
   if (hidden.length) {
     const word = hidden.length === 1 ? 'case' : 'cases'
-    const passed = hidden.every((k) => k.outcome === 'pass') ? ' passed' : ''
+    const failedHidden = hidden.filter(failedCase).length
+    const passedHidden = hidden.filter((k) => k.outcome === 'pass').length
+    const passed =
+      passedHidden === hidden.length
+        ? ' passed'
+        : failedHidden
+          ? `: ${failedHidden} failed, ${passedHidden} passed`
+          : ''
     const count = compact.length ? `+${hidden.length} more ${word}` : `${hidden.length} ${word}`
     lines.push({ depth: 0, text: `${count}${passed} (-v)`, tone: 'dim', only: 'compact' })
   }
@@ -797,7 +814,10 @@ export function evalRow(
                   : outcomeSentence(tallyBy(decide, labeler(record, decide))),
               } as const,
             ]),
-        ...rateLines(e),
+        ...rateLines(e, (key) => {
+          const cell = decide.find((c) => c.key === key)
+          return cell ? labeler(record, decide)(cell) : key
+        }),
         ...caseTable(record, e, compare ? cells : decide, { compare, failedEval }),
         ...(compare
           ? checkLines(cells, armOf, { failedEval, compare, cases: false })

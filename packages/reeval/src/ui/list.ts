@@ -1,6 +1,7 @@
 // The status list as text, for every surface that prints it line by line: CI and pipes (with
 // tree glyphs), coding agents (without), and the interactive list's rows. `LiveList` builds the
 // rows a run in progress shows from its events, before the record exists.
+import { parseAttemptKey } from '../debug/files.ts'
 import { formatDuration, plural } from '../text.ts'
 import type { CellGate } from '../types.ts'
 import { caseLabel } from '../view/family.ts'
@@ -222,10 +223,12 @@ export class LiveList {
         name: [...x.group, x.family?.name ?? x.name].join(' › '),
         attempts: [],
       }
+      // Until it starts, its key names its cell (the harness first) and its run.
+      const planned = parseAttemptKey(x.key)
       const a: LiveAttempt = {
         key: x.key,
-        axes: '',
-        n: e.attempts.length + 1,
+        axes: planned?.cell.split('/')[0] ?? '',
+        n: planned?.n ?? e.attempts.length + 1,
         state: 'queued',
         gated: true,
         phase: '',

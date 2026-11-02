@@ -455,6 +455,24 @@ test('an eval with cases is one row while it runs, each attempt naming its case'
   assert.deepEqual(live.counts(), { done: 0, total: 1, running: 1, failed: 0, failing: 1 })
 })
 
+test("a queued attempt's line names its harness and run from its key, before it starts", () => {
+  const live = new LiveList('fake')
+  live.collected('evals/a.eval.ts', [
+    {
+      id: 'evals/a.eval.ts › bank [red]',
+      key: 'evals/a.eval.ts › bank [red] # codex/-/fake#2',
+      group: [],
+      name: 'bank [red]',
+      skipped: false,
+      family: { id: 'evals/a.eval.ts › bank', name: 'bank', case: 0, cases: 1 },
+    },
+  ])
+  assert.deepEqual(
+    live.files()[0]?.rows[0]?.detail.map((d) => d.text),
+    ['codex · red #2 queued'],
+  )
+})
+
 test('the footer counts the evals done, then those failed and those failing', () => {
   assert.equal(doneLine(c, { done: 9, total: 10 }), '9 of 10 evals done')
   assert.equal(

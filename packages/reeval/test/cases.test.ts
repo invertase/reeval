@@ -7,6 +7,7 @@ import { caseEntries, foldCases, unfoldCases } from '../src/history/cases.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { suiteResult } from '../src/view/suite.ts'
+import { fakeConfig, project, recordedRuns, runCli } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
 
 const before = corpusEntries().find((e) => e.name === 'before-cases')
@@ -160,5 +161,72 @@ describe('an eval with cases in a record from before it was one entry', () => {
     const plain = { ...r, evals: r.evals.filter((e) => !e.cases) }
     assert.equal(foldCases(plain), plain)
     assert.equal(unfoldCases(plain), plain)
+  })
+})
+
+describe('reeval compare of an eval with cases', () => {
+  test('names a case that flipped under the rate that still gates the eval', async () => {
+    const p = await project('compare-rated-case', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+const bad = process.env.BAD ?? ''
+evaluate('rated', { cases: ['a', 'b', 'c', 'd', 'e'], gate: { passRate: 0.7 } }, async (c, k) => {
+  await c.send(k)
+  expect(k, 'ok').not.toBe(bad)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const head = await runCli(p.dir, ['run', '--record'], { env: { BAD: 'e' } })
+    assert.equal(head.code, 0, head.stdout + head.stderr)
+    const [a, b] = recordedRuns(p.dir)
+    const cmp = await runCli(p.dir, ['compare', a ?? '', b ?? ''])
+    assert.equal(cmp.code, 0, cmp.stdout + cmp.stderr)
+    assert.match(cmp.stdout, /1 case now fails · 1 same$/m)
+    assert.match(cmp.stdout, /^ {2}now fails +e$/m, 'the tally counts it, so a block names it')
+  })
+})
+
+describe('reeval run prints an eval with cases', () => {
+  test('the compact count says how many hidden cases failed, and a check names their runs', async () => {
+    const keys = Array.from({ length: 12 }, (_, i) => `q${i + 1}`)
+    const p = await project('cases-compact-count', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('bank', { cases: ${JSON.stringify(keys)}, runs: 2 }, async (c, k) => {
+  await c.send(k)
+  expect(Number(k.slice(1)) > 10, 'ok').toBe(true)
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /\+4 more cases: 2 failed, 2 passed \(-v\)$/m)
+    assert.match(r.stdout, /ok {2}failed on q1 \(2 of 2 runs\), q2 \(2 of 2 runs\)/)
+  })
+
+  test('-v on a compare over cases prints the paired lift once, not a difference per case', async () => {
+    const p = await project('cases-paired-stats', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const app = defineEnvironment('app', { env: { SKILL: '' } })
+const skilled = app.extend('skilled', { env: { SKILL: 'yes' } })
+evaluate(
+  'writes',
+  { cases: ['a', 'b', 'c', 'd', 'e', 'f'], compare: { control: app, variants: [skilled] } },
+  async (c) => {
+    await c.send('go')
+    expect((await c.exec('printf %s "$SKILL"')).stdout, 'skill').toBe('yes')
+  },
+)
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--ui', 'plain', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(
+      r.stdout.match(/paired over 6 cases, 95% interval [−+]\d+…[−+]\d+ points/g)?.length,
+      1,
+    )
+    assert.doesNotMatch(r.stdout, /difference [−+]\d+ points/, 'no unpaired difference per case')
   })
 })
