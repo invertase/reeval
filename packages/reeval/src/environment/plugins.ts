@@ -9,6 +9,7 @@ import { credentialsIn } from '../contract/plain.ts'
 import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
+import { capabilitiesOf, suggestedSandbox } from '../sandbox/kinds.ts'
 import { withoutBom } from '../text.ts'
 import type {
   EnvironmentLayer,
@@ -746,8 +747,8 @@ export function buildRefusal(
   name?: string,
   root?: string,
 ): string | undefined {
-  if (p.build === undefined || sandbox.kind === 'docker') return undefined
-  return `${name ? `plugin "${name}"` : pluginCall(p, root)} has a build, which runs in a Docker image layer: use docker()`
+  if (p.build === undefined || capabilitiesOf(sandbox).pluginBuilds) return undefined
+  return `${name ? `plugin "${name}"` : pluginCall(p, root)} has a build, which runs in a Docker image layer: use ${suggestedSandbox((c) => c.pluginBuilds)}`
 }
 
 /** ` + 2 plugin builds` in an image's label, or nothing without one. */

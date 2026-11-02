@@ -1,3 +1,4 @@
+import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { EgressTraffic, Substitution } from '@reeval/sandbox-docker'
 import type { ExecResult } from '../types.ts'
 
@@ -64,6 +65,11 @@ export interface Sandbox {
    */
   getPortEndpoint?(opts: { port: number; protocol?: 'http' | 'ws' }): Promise<{ url: string }>
 }
+
+/** A sandbox that also exposes its harness session, so a real harness drives the same machine. */
+export type NetworkSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
+
+export const hasNetworkSession = (s: Sandbox): s is NetworkSandbox => 'network' in s
 
 /** A failure of the sandbox or harness infrastructure, as opposed to the agent's work. */
 export class InfraError extends Error {

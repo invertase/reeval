@@ -2,7 +2,6 @@
 // one allows on its own, and whether its sandbox can enforce it.
 import { isIP } from 'node:net'
 import {
-  DOCKER_EGRESS,
   type EgressCapabilities,
   HARNESS_HOSTS,
   type NetworkPolicy,
@@ -12,7 +11,7 @@ import { localPluginServers } from './environment/plugins.ts'
 import { plannedSecrets } from './environment.ts'
 import type { VertexSettings } from './gateway/vertex.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
-import { FAKE_EGRESS } from './sandbox/fake.ts'
+import { capabilitiesOf, SANDBOX_KINDS, suggestedSandbox } from './sandbox/kinds.ts'
 import type {
   EgressPolicy,
   EnvironmentLayer,
@@ -30,10 +29,9 @@ import { isCI } from './ui/mode.ts'
 export const DEFAULT_EGRESS_ALLOW: readonly string[] = PACKAGE_HOSTS
 
 /** What each sandbox kind can do about egress, as its provider declares it. */
-export const SANDBOX_EGRESS: Record<SandboxDescriptor['kind'], EgressCapabilities> = {
-  docker: DOCKER_EGRESS,
-  fake: FAKE_EGRESS,
-}
+export const SANDBOX_EGRESS = Object.fromEntries(
+  Object.entries(SANDBOX_KINDS).map(([kind, k]) => [kind, k.capabilities.egress]),
+) as Record<SandboxDescriptor['kind'], EgressCapabilities>
 
 /** The policy an attempt runs under when nothing sets one. */
 export const DEFAULT_EGRESS: EgressPolicy = 'proxy'
@@ -132,7 +130,8 @@ export function unenforceable(
   where: string,
 ): string | undefined {
   const needs = egressNeeds(planned)
-  const can = SANDBOX_EGRESS[sandbox.kind].enforce
+  const capabilities = capabilitiesOf(sandbox)
+  const can = capabilities.egress.enforce
   if (LEVELS.indexOf(can) >= LEVELS.indexOf(needs)) return undefined
   const hosts = allowedHosts(planned)?.join(', ')
   const what =
@@ -145,10 +144,12 @@ export function unenforceable(
     can === 'none'
       ? 'enforces no egress policy'
       : `only enforces ${can === 'all-or-nothing' ? "'allow-all' or 'deny-all'" : can}`
-  const hint =
-    sandbox.kind === 'fake'
-      ? " (its commands run on the host). Run it in docker(), or set egress: 'allow-all'"
-      : ''
+  const enforcing = suggestedSandbox(
+    (c) => LEVELS.indexOf(c.egress.enforce) >= LEVELS.indexOf(needs),
+  )
+  const hint = capabilities.isolated
+    ? ''
+    : ` (its commands run on the host). ${enforcing ? `Run it in ${enforcing}, or set` : 'Set'} egress: 'allow-all'`
   return `${where} runs under egress ${describeEgress(planned.policy)}, which needs ${what}, but the ${sandbox.kind} sandbox ${enforces}${hint}.`
 }
 

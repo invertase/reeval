@@ -57,6 +57,7 @@ import {
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
+import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
 import { clip } from './text.ts'
 import type { CursorEfforts, RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
@@ -400,12 +401,8 @@ async function runCommand(
   const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions, leftOut } =
     executed
   invocation.unhandledErrors = engineRun.unhandledErrors
-  const engines = [
-    ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
-  ]
-  if ((interrupted || engineRun.canceled) && engines.length) {
-    const { removeRunContainers } = await import('./sandbox/docker.ts')
-    await removeRunContainers(ctx.runId, engines)
+  if ((interrupted || engineRun.canceled) && plan) {
+    await cleanupRun(ctx.runId, plan.sandboxes)
   }
   if (engineRun.stopped || !plan) {
     live?.remove()
@@ -589,12 +586,9 @@ async function prepareRun(
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    // Sized from the Docker (or Podman) VM when it answers, as a real run is, so --dry-run shows
-    // the same.
-    const container = sandboxes.find((s) => s.kind === 'docker')
-    if (!container) return hostCapacity()
-    const { dockerCapacity } = await import('@reeval/sandbox-docker')
-    return (await dockerCapacity(container.engine)) ?? hostCapacity()
+    // Sized from where the first sandbox that runs off the host runs (the Docker or Podman VM)
+    // when it answers, as a real run is, so --dry-run shows the same.
+    return (await sandboxCapacity(sandboxes)) ?? hostCapacity()
   })
   return {
     output,
@@ -659,8 +653,7 @@ async function startRun({
       : await loadPrevious(stagingDir(config.root, target.runId))
     if (!dryRun) {
       try {
-        const { removeRunContainers } = await import('./sandbox/docker.ts')
-        await removeRunContainers(target.runId, ['docker', 'podman'])
+        await cleanupRun(target.runId)
       } catch {}
     }
     return {
@@ -888,7 +881,7 @@ async function executeRun(
       ? [
           ...new Set(
             skipped
-              .filter((p) => !p.attempt.plan.skip && p.attempt.sandbox.kind === 'docker')
+              .filter((p) => !p.attempt.plan.skip && capabilitiesOf(p.attempt.sandbox).isolated)
               .filter((p) => isDirect(p.attempt.egress.policy))
               .map((p) => p.id),
           ),

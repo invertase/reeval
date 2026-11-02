@@ -23,6 +23,7 @@ import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
 import { redactSecrets } from '../redact.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
+import { capabilitiesOf, sandboxKind } from '../sandbox/kinds.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
 import { asCheck } from './checks.ts'
@@ -103,7 +104,7 @@ const SETUP_COMMAND_CHARS = 200
  */
 async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const names = unbrokeredChecks(env)
-  if (a.spec.sandbox.kind !== 'docker' || !env.setup.length || !names.length) return []
+  if (!capabilitiesOf(a.spec.sandbox).isolated || !env.setup.length || !names.length) return []
   const r = await box.exec(
     [
       'for t in tr sed sort; do command -v "$t" >/dev/null || { echo "no $t in the image" >&2; exit 1; }; done',
@@ -418,7 +419,12 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     onWarning: (text) => a.report({ kind: 'warning', text }),
   })
   a.sandbox = box
-  if (spec.sandbox.kind === 'fake') debugLog('container', `fake sandbox at ${box.workdir}`)
+  if (!capabilitiesOf(spec.sandbox).isolated) {
+    debugLog(
+      'container',
+      `${sandboxKind(spec.sandbox).provider(spec.sandbox)} sandbox at ${box.workdir}`,
+    )
+  }
   a.phases = brokerPhases(box, env.substitutions)
   if (a.signal.aborted) void box.destroy()
   a.signal.throwIfAborted()
@@ -498,7 +504,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   if (layout.pluginPlacement === 'namespaced') {
     await writePluginMcp(box, env, plugins, timed.servers)
   }
-  const harness = await createHarness(spec.harness, spec.vertex)
+  const harness = await createHarness(spec.harness, spec.sandbox, spec.vertex)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await startHarness(a, harness, box, {

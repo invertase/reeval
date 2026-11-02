@@ -2,7 +2,7 @@
 // harness catalog (src/harness/agents.ts), each adapter's builtin tool catalog, and the rows of
 // the harness contract (test/support/harnesses.ts), whose real runs check tokens and the served
 // model.
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
@@ -12,6 +12,7 @@ const { OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
+const { runsAgent, suggestedSandbox } = await import(join(src, 'sandbox/kinds.ts'))
 const { PLUGIN_PARTS } = await import(join(src, 'environment/plugins.ts'))
 const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
 
@@ -65,12 +66,6 @@ const EXCLUDED_KINDS = []
 export async function harnessFacts() {
   const problems = []
   const facts = []
-  const agentTs = readFileSync(join(src, 'harness/agent.ts'), 'utf8')
-  if (!agentTs.includes('harness needs the Docker sandbox')) {
-    problems.push(
-      "harness/agent.ts no longer refuses a non-Docker sandbox: update the matrix's Sandbox column",
-    )
-  }
   for (const [kind, agent] of Object.entries(AGENTS)) {
     const row = harnesses.find((r) => r.id === kind)
     if (!row) {
@@ -104,8 +99,11 @@ export async function harnessFacts() {
       )
     }
     if (excluded) continue
+    const sandbox = suggestedSandbox(runsAgent(agent.platforms))
+    if (!sandbox)
+      problems.push(`${kind}: no sandbox kind runs it on ${agent.platforms.join(' or ')}`)
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
-    const h = { kind, agent, row, page, mcp, web }
+    const h = { kind, agent, row, page, mcp, web, sandbox }
     facts.push(h)
   }
   for (const row of harnesses) {
@@ -165,7 +163,7 @@ export function renderMatrix(facts, { href }) {
     h.row.servedModel && !h.row.servedModelGap ? '✓' : h.row.wireModel ? 'partial' : '✗',
     yes(h.web.search),
     yes(h.web.fetch),
-    code('docker()'),
+    code(h.sandbox),
   ])
   const line = (cells) => `| ${cells.join(' | ')} |`
   return [line(head), `|${head.map(() => '---').join('|')}|`, ...rows.map(line)].join('\n')

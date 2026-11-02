@@ -1,4 +1,5 @@
 import type { Sandbox } from '../sandbox/index.ts'
+import { capabilitiesOf } from '../sandbox/kinds.ts'
 import type { EvalRecord } from '../types.ts'
 import type { Attempt } from './state.ts'
 
@@ -111,7 +112,7 @@ async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalReco
 export function contextTaker(a: Attempt) {
   let taken = false
   return async (box: Sandbox, signal: AbortSignal) => {
-    if (taken || a.spec.sandbox.kind !== 'docker') return
+    if (taken || !capabilitiesOf(a.spec.sandbox).isolated) return
     taken = true
     a.record.context = await agentContext(box, signal)
   }

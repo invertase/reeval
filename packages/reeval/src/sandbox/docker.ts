@@ -1,5 +1,4 @@
 import { posix } from 'node:path'
-import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import {
   createDockerSession,
   DEFAULT_IMAGE,
@@ -23,7 +22,7 @@ import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
-import { InfraError, type Sandbox } from './types.ts'
+import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
 
 /**
  * Removes every container still labeled with the run: a worker killed by the signal that
@@ -41,11 +40,6 @@ export async function removeRunContainers(
     if (ids.length) await docker([...ENGINES[engine].rmForce, ...ids], { engine }).catch(() => {})
   }
 }
-
-/** A Docker sandbox also exposes its harness session, so the harness drives the same container. */
-export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
-
-export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
 
 /** Distinct gateway warnings an attempt prints before one line says there are more. */
 const GATEWAY_WARNINGS = 5
@@ -89,7 +83,7 @@ function gatewayEvents(
 export async function createDockerSandbox(
   descriptor: DockerSandboxDescriptor,
   options: SandboxOptions,
-): Promise<DockerSandbox> {
+): Promise<NetworkSandbox> {
   const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
   const engine = descriptor.engine ?? 'docker'
   const spec = engineSpec(engine)
