@@ -1959,8 +1959,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.status-list',
     area: 'CLI and runner',
-    name: "`reeval run`'s per-eval status list: one line a passing eval, a sentence for each way one failed (harnesses, checks, errors, a family's cases), `Worth knowing:` for its remarks, and on an interactive terminal an Ink list you browse with the arrow keys",
+    name: "`reeval run`'s per-eval status list: one line a passing eval, a line for each way one failed (harnesses, each failed check as `✗` with the runs or arms it failed on, errors, a family's cases), a compare's table of arms, `Worth knowing:` for its remarks in one short line each (`-v` the whole sentence), and on an interactive terminal an Ink list you browse with the arrow keys, → again for the full detail",
     unit: ['reeval/test/status.test.ts', 'reeval/test/ink-list.test.ts', 'reeval/test/ui.test.ts'],
+  },
+  {
+    id: 'output.wait-spinner',
+    area: 'CLI and runner',
+    name: "On an interactive terminal, a spinner while reeval waits (the sandbox prepare step, each running eval's agent turn and judge), red on an eval still running whose run already failed, and an eval's ✓ or ✗ only once all its runs end, counted in the footer as `N failing`",
+    unit: ['reeval/test/ink-list.test.ts'],
   },
   {
     id: 'output.flags',

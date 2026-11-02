@@ -44,11 +44,8 @@ Change `to: 'checks'` to `to: 'agent'` and the first check fails:
 with-secret-for-checks.eval.ts
 └─ ✗ keeps the test token from the agent  0 of 1 run passed
      Failed on fake.
-     Every failure was the same check:
-       "the agent's env" failed once
-         expected 'CURL_CA_BUNDLE=/etc/ssl/certs/ca-cert…' not to match /^E2E_TOKEN=/m
-         at with-secret-for-checks.eval.ts:12
-     Snapshot: .reeval/runs/20261101T222130Z_…/snapshots/final
+     ✗ the agent's env  failed 1 of 1 run
+       expected 'CURL_CA_BUNDLE=/etc/ssl/certs/ca-cert…' not to match /^E2E_TOKEN=/m · with-secret-for-checks.eval.ts:12
 ```
 
 | File | What it is |

@@ -182,28 +182,29 @@ export function prepareStepLines(
   ]
 }
 
-/** The last line before the attempts' own: how their logs will print. */
-export function startLine(c: Colors, output: OutputOptions): string {
-  const text =
-    output.outputLogs === 'none'
-      ? 'Running...'
-      : output.outputLogs === 'errors-only'
-        ? 'Running; logs print for failed attempts only...'
-        : output.logOrder === 'stream'
-          ? 'Streaming logs...'
-          : "Running; each attempt's logs print as it ends..."
-  return `  ${c.teal('◆')}  ${text}`
+/** The start line's text: how the attempts' logs will print. */
+export function startText(output: OutputOptions): string {
+  return output.outputLogs === 'none'
+    ? 'Running...'
+    : output.outputLogs === 'errors-only'
+      ? 'Running; logs print for failed attempts only...'
+      : output.logOrder === 'stream'
+        ? 'Streaming logs...'
+        : "Running; each attempt's logs print as it ends..."
 }
 
-/** What the start line becomes once the run ends, on a terminal that redraws it. */
-export function endLine(c: Colors, status: 'complete' | 'interrupted' | 'budget'): string {
-  const text =
-    status === 'interrupted'
-      ? 'Canceled.'
-      : status === 'budget'
-        ? 'Stopped at the budget.'
-        : 'Finished.'
-  return `  ${c.teal('◆')}  ${text}`
+/** The last line before the attempts' own: how their logs will print. */
+export function startLine(c: Colors, output: OutputOptions): string {
+  return `  ${c.teal('◆')}  ${startText(output)}`
+}
+
+/** What the start line's text becomes once the run ends, on a terminal that redraws it. */
+export function endText(status: 'complete' | 'interrupted' | 'budget'): string {
+  return status === 'interrupted'
+    ? 'Canceled.'
+    : status === 'budget'
+      ? 'Stopped at the budget.'
+      : 'Finished.'
 }
 
 /** The plan as the header block: its facts, `--dry-run`'s table, then each kind of note. */

@@ -17,7 +17,14 @@ import {
   smallSample,
 } from '../stats.ts'
 import { clip } from '../text.ts'
-import { boundOf, leanText, type Measure, type Reading, tieOf } from '../view/measures.ts'
+import {
+  boundOf,
+  leanText,
+  type Measure,
+  measurePhrase,
+  type Reading,
+  tieOf,
+} from '../view/measures.ts'
 import type { Remark } from '../view/remarks.ts'
 import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
@@ -102,6 +109,9 @@ function units(e: EvalResult): Array<{ id: string; cells: CellResult[] }> {
 
 const armOf = (c: CellResult) => c.variant ?? (c.environment === '-' ? 'baseline' : c.environment)
 
+/** `evals/a.eval.ts:12` from `source:evals/a.eval.ts#L12`. */
+const location = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, ':$1')
+
 const runs = (n: number) => `${n} ${n === 1 ? 'run' : 'runs'}`
 
 /** Whether a variant's difference from its baseline holds: its interval excludes 0. */
@@ -134,7 +144,17 @@ const shortLeans = (measures: readonly Measure[] | null | undefined) => {
   const short = (measures ?? []).filter(
     (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
   )
-  return short.length ? ` It looks ${listed(short.map(leanText))}.` : ''
+  return short.length
+    ? ` It ${listed(short.map((m) => leanText({ ...m, text: measurePhrase(m) })))}.`
+    : ''
+}
+
+/** ` So far, marked runs 12× faster.`: `shortLeans` without the runs, for a remark's brief. */
+const briefLeans = (variant: string, measures: readonly Measure[] | null | undefined) => {
+  const short = (measures ?? []).filter(
+    (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
+  )
+  return short.length ? ` So far, ${variant} ${listed(short.map(measurePhrase))}.` : ''
 }
 
 /**
@@ -173,6 +193,11 @@ function looksDifferent(
       : unit === 'cases'
         ? `add cases, to ${needed}, where the soonest of these would hold`
         : `set runs: ${needed}${cases ? ' a case' : ''}, where the soonest of these would hold`
+  const at = ctx.locate(entry, null)
+  const brief =
+    needed === null
+      ? undefined
+      : `Both passed every run, but the variant looks different; ${unit === 'cases' ? `add cases, to ${needed},` : `set runs: ${needed}${cases ? ' a case' : ''}`} at ${location(at)} to confirm it.`
   return [
     {
       id: remarkId('too-few-tries', e.path, entry, 'looks'),
@@ -180,8 +205,9 @@ function looksDifferent(
       kind: 'too-few-tries',
       severity: 'concern',
       text,
+      ...(brief ? { brief } : {}),
       evidence: [variant.path, base.path],
-      fix: { at: ctx.locate(entry, null), edit },
+      fix: { at, edit },
     },
   ]
 }
@@ -307,6 +333,17 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       : needed
         ? `set runs: ${needed}, where a difference this size would hold`
         : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
+  const at = ctx.locate(entry, null)
+  const these = others || also ? 'these differences' : 'this difference'
+  const per = `${fewest} per side; set runs:`
+  const lead = held
+    ? `${per} ${COMPARE_RUNS} at ${location(at)}, so a split this wide is less likely by chance.`
+    : !gap
+      ? `${per} ${needed} at ${location(at)} to rule out a difference.`
+      : needed
+        ? `${per} ${needed} at ${location(at)} to confirm ${these}.`
+        : undefined
+  const brief = lead && `${lead}${briefLeans(armOf(variant), variant.measures)}`
   return [
     ...apart,
     {
@@ -315,8 +352,9 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       kind: 'too-few-tries',
       severity: 'concern',
       text,
+      ...(brief ? { brief } : {}),
       evidence: [variant.path, base.path],
-      fix: { at: ctx.locate(entry, null), edit },
+      fix: { at, edit },
     },
   ]
 }
@@ -643,6 +681,7 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
   const [first] = hits
   if (!first) return []
   const ofTries = hits.length > 1 ? ` (${hits.length} tries)` : ''
+  const at = ctx.locate(first.entry, null)
   return [
     {
       id: remarkId('proxy-only-egress', e.path, first.entry),
@@ -650,11 +689,12 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
       kind: 'proxy-only-egress',
       severity: 'concern',
       text: `It failed with "${first.error}"${ofTries} and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.`,
+      brief: `Only HTTP(S) leaves under egress 'proxy'; set egress: 'allow-all' at ${location(at)} for raw TCP or UDP.`,
       evidence: hits.map(
         (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
       ),
       fix: {
-        at: ctx.locate(first.entry, null),
+        at,
         edit: "set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY",
       },
     },

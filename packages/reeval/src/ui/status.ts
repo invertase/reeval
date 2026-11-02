@@ -6,25 +6,26 @@
 //   one harness reads `Passed on H every time.`, `Failed on H every time.` or `Passed N of M on H.`;
 //   several read `Passed on A and B every time.` when every run passed, `Failed on A and B every
 //   time.` when none did, else `A passed N of M, B N of M.`
-// - A compare reads `Control <arm> passed N of M.`, then `Variants, by pass rate:` with one line per
-//   variant, highest pass rate first, naming the harnesses only where their pass rates differ, and
-//   `, not by minLift N` after the effect when the variant's lift (a family's pooled one) missed it.
-//   With `-v`, each of its cells' difference and 95% interval follows, as the result blocks print it.
-//   Under a variant, its comparison with the control when some other measure holds:
-//   `Same pass rate · 5× faster · judge "tidy" +0.12.` (with `-v`, `looks …` for the leans too),
-//   prefixed `H: ` on several harnesses.
+// - A compare reads a headline (`Failed on react; 2 of 3 variants helped.`, `The marked variant
+//   helped.`), then one table: the control and each variant, highest pass rate first, with its
+//   pass rate, effect (`, not by minLift N` when its lift missed it) and, when some measure besides
+//   pass rate holds, a `vs control` column (`5× faster`; with `-v`, `looks …` for the leans too).
+//   On several harnesses that comparison is a `H: …` line under the variant instead. With `-v`,
+//   each cell's difference and 95% interval follows its row.
 // - An eval with `cases` under `gate: { passRate }` gives each gated cell's rate over the cases:
 //   `Pass rate over the cases: 67%, below passRate 0.7.` (`on <cell>` when several are gated).
 // - A family whose cases didn't all pass names them: `Failed cases: green, blue.` (the first eight,
 //   then `and N more`).
-// - Failed checks: `Every failure was the same check:` for one, `N checks failed:` for several,
-//   each `"label" failed N times`, then its first message and `at file:line`. With one harness
-//   nothing more; else `, all on H` when every failure was on H, `, M of them on H` when H had
-//   more than half of them, and nothing when no harness did. A compare counts every arm's runs
-//   and tells them apart by arm (`the control` or the variant) instead of by harness.
-// - `Worth knowing:` the eval's remarks, one line each, then each check that needed its retries
-//   (`"label" passed on try 2 of 3.`) and the first capture whose page had errors
-//   (`2 page errors in capture "home" → <file>`, with `(+N more captures)`).
+// - Each failed check is `✗ label  failed 2 of 4 runs`, then its first message line and
+//   `file:line`, and a failed command's first stderr line; the rest of the message, the file
+//   excerpt and the snapshot only in the full detail. On several harnesses it adds `, all on H` or
+//   `, M of them on H`. A compare names the arms instead (`failed on react · the control
+//   (expected)`), where a control that isn't gated is expected to fail.
+// - Errors that aren't a check's: `✗ 2 runs hit an infrastructure error`, then the message.
+// - `Worth knowing:` the eval's remarks, each its brief unless the detail is full, then each check
+//   that needed its retries (`"label" passed on try 2 of 3.`) and the first capture whose page had
+//   errors (`2 page errors in capture "home" → <file>`, with `(+N more captures)`); one item prints
+//   on the `Worth knowing:` line itself.
 //
 // Only the cells that decide the outcome count: the gated ones, or every cell of a study.
 import type { RunRecord } from '../history/types.ts'
@@ -49,14 +50,43 @@ import {
 import { checkLabel, statsLine } from './layout.ts'
 import { shownRemarks } from './remarks.ts'
 
-export type StatusIcon = 'queued' | 'running' | 'pass' | 'fail' | 'observe' | 'skipped' | 'canceled'
+/** `failing`: still running, with a run that already failed; its outcome isn't decided yet. */
+export type StatusIcon =
+  | 'queued'
+  | 'running'
+  | 'failing'
+  | 'pass'
+  | 'fail'
+  | 'observe'
+  | 'skipped'
+  | 'canceled'
+
+/**
+ * A status glyph before a detail line's text: `spin` is an attempt reeval is waiting on (the
+ * interactive list animates it), `fail` a red `✗`, `miss` a dim one (a failure that doesn't fail
+ * the eval, such as a compare's control), `error` a red `✗` for a timeout or infra error.
+ */
+export type DetailMark = 'spin' | 'pass' | 'fail' | 'miss' | 'error' | 'queued' | 'skipped'
 
 /** A detail line: its depth under the row, and how it's painted. */
 export type DetailLine = {
   depth: 0 | 1 | 2
   text: string
   tone?: 'dim' | 'red' | 'heading'
+  mark?: DetailMark
+  /** Dimmed after the text, past a ` · `. */
+  note?: string
+  /**
+   * `full`: only with `-v`, or once the interactive list's open eval is opened again (file
+   * excerpts, snapshot paths, a remark's whole sentence). `compact`: only without them (its short
+   * form).
+   */
+  only?: 'compact' | 'full'
 }
+
+/** The lines a detail shows, compact or `full`. */
+export const shownDetail = (lines: DetailLine[], full: boolean): DetailLine[] =>
+  lines.filter((l) => !l.only || (l.only === 'full') === full)
 
 export type StatusRow = {
   /** The eval's id, or the family's. */
@@ -99,8 +129,6 @@ const ERROR_VERB: Record<ErrorKind | 'turn', string> = {
 
 const MESSAGE_LINES = 4
 const LINE_MAX = 160
-
-const times = (n: number) => (n === 1 ? 'once' : `${n} times`)
 
 /** `cursor (composer-2.5)`, from the record's cell. */
 function harnessLabel(record: RunRecord, cell: CellResult): string {
@@ -182,11 +210,15 @@ function minLiftShort(e: EvalResult, own: CellResult[]): string {
 }
 
 /**
- * Under a variant, its comparison with the control (`measuresLine`): `Same pass rate · 5× faster ·
- * judge "tidy" +0.12.`, one line, or one per harness (`cursor: …`) when it ran on several. Only
- * when some measure besides pass rate holds; `verbose` adds the ones that only lean.
+ * A variant's comparison with the control beyond pass rate (`measuresLine`): `5× faster · judge
+ * "tidy" +0.12`, per harness it ran on. Only the measures that hold; `verbose` adds the ones that
+ * only lean.
  */
-function measureLines(e: EvalResult, own: CellResult[], verbose: boolean): DetailLine[] {
+function measureSets(
+  e: EvalResult,
+  own: CellResult[],
+  verbose: boolean,
+): Array<{ harness: string; text: string }> {
   const keys = new Set(own.map((c) => c.key))
   const pooled = (e.pooled ?? []).filter((p) => keys.has(p.key))
   const sets = pooled.length
@@ -195,7 +227,6 @@ function measureLines(e: EvalResult, own: CellResult[], verbose: boolean): Detai
         measures: p.measures,
       }))
     : own.flatMap((c) => (c.measures ? [{ harness: c.harness, measures: c.measures }] : []))
-  const several = new Set(sets.map((x) => x.harness)).size > 1
   return sets.flatMap(({ harness, measures }) => {
     const shown = measures.filter(
       (m) =>
@@ -203,12 +234,54 @@ function measureLines(e: EvalResult, own: CellResult[], verbose: boolean): Detai
         (m.verdict === 'better' || m.verdict === 'worse' || (verbose && m.verdict === 'leans')),
     )
     if (!shown.length) return []
-    const line = measuresLine(measures, verbose)
-    const text = `${line.slice(0, 1).toUpperCase()}${line.slice(1)}.`
-    return [{ depth: 2, text: several ? `${harness}: ${text}` : text, tone: 'dim' } as const]
+    return [{ harness, text: measuresLine(shown, verbose) }]
   })
 }
 
+/** Rows of cells padded to one column each, two spaces apart. */
+function columns(rows: string[][]): string[] {
+  const widths = rows[0]?.map((_, i) => Math.max(...rows.map((r) => (r[i] ?? '').length))) ?? []
+  return rows.map((r) =>
+    r
+      .map((cell, i) => cell.padEnd(widths[i] ?? 0))
+      .join('  ')
+      .trimEnd(),
+  )
+}
+
+const upper = (text: string) => `${text.slice(0, 1).toUpperCase()}${text.slice(1)}`
+
+/** `Failed on react; 2 of 3 variants helped.`: what failed the compare, then what it found. */
+function compareHeadline(
+  failed: string[],
+  rows: Array<{ v: string; effect: Effect | null }>,
+): string {
+  const helped = rows.filter((r) => r.effect === 'better').length
+  const worse = rows.filter((r) => r.effect === 'worse').length
+  const [one] = rows
+  const found =
+    rows.length === 1 && one
+      ? one.effect === 'better' || one.effect === 'worse'
+        ? `the ${one.v} variant ${EFFECT[one.effect]}`
+        : one.effect === 'same'
+          ? `the ${one.v} variant passed as often as the control`
+          : ''
+      : [
+          helped ? `${helped} of ${rows.length} variants helped` : '',
+          worse ? `${worse} made it worse` : '',
+        ]
+          .filter(Boolean)
+          .join(', ') || (rows.some((r) => r.effect) ? 'no variant changed the pass rate' : '')
+  const text = [failed.length ? `failed on ${failed.join(', ')}` : '', found]
+    .filter(Boolean)
+    .join('; ')
+  return text ? `${upper(text)}.` : ''
+}
+
+/**
+ * A compare as a headline, then one table: the control and each variant (highest pass rate
+ * first) with its pass rate and effect, and a `vs control` column when some other measure holds.
+ */
 function compareLines(
   record: RunRecord,
   e: EvalResult,
@@ -219,14 +292,11 @@ function compareLines(
   const name = (c: CellResult) => (c.environment === '-' ? 'no environment' : c.environment)
   const baseTally = tallyBy(base, () => 'baseline')[0] ?? { passed: 0, counted: 0 }
   const baseName = [...new Set(base.map(name))].join(', ')
-  const lines: DetailLine[] = [
-    {
-      depth: 0,
-      text: `Control ${baseName} passed ${of(baseTally)}${disagreement(record, base)}.`,
-    },
-  ]
+  const baseRow = [`${baseName} (control)`, `${of(baseTally)}${disagreement(record, base)}`]
   const variants = [...new Set(cells.filter((c) => c.variant !== null).map((c) => c.variant))]
-  if (!variants.length) return lines
+  if (!variants.length) {
+    return [{ depth: 0, text: `Control ${baseName} passed ${of(baseTally)}.` }]
+  }
   const rows = variants.map((v, order) => {
     const own = cells.filter((c) => c.variant === v)
     const t = tallyBy(own, () => v ?? '')[0] ?? { passed: 0, counted: 0 }
@@ -241,30 +311,64 @@ function compareLines(
   })
   const rate = (t: { passed: number; counted: number }) => (t.counted ? t.passed / t.counted : -1)
   rows.sort((a, b) => rate(b.t) - rate(a.t) || a.order - b.order)
-  const width = Math.max(...rows.map((r) => r.v.length))
-  lines.push({ depth: 0, text: 'Variants, by pass rate:', tone: 'heading' })
-  for (const r of rows) {
-    const short = minLiftShort(e, r.own)
-    const word = r.effect ? `  ${EFFECT[r.effect]}${short}` : short ? `  ${short.slice(2)}` : ''
-    lines.push({
-      depth: 1,
-      text: `${r.v.padEnd(width)}  ${of(r.t)}${word}${disagreement(record, r.own)}`,
-    })
-    lines.push(...measureLines(e, r.own, verbose))
+  const sets = rows.map((r) => measureSets(e, r.own, verbose))
+  // On one harness a variant's measures are a column; on several, a line per harness under it.
+  const several = new Set(cells.map((c) => c.harness)).size > 1
+  const column = !several && sets.some((s) => s.length > 0)
+  const table = columns([
+    ['arm', 'passed', 'verdict', ...(column ? ['vs control'] : [])],
+    [...baseRow, '', ...(column ? [''] : [])],
+    ...rows.map((r, i) => {
+      const short = minLiftShort(e, r.own)
+      const word = r.effect ? `${EFFECT[r.effect]}${short}` : short.slice(2)
+      return [
+        r.v,
+        `${of(r.t)}${disagreement(record, r.own)}`,
+        word,
+        ...(column ? [sets[i]?.[0]?.text ?? ''] : []),
+      ]
+    }),
+  ])
+  const failed = iconOf(e) === 'fail' ? failedArms(cells) : []
+  const headline = compareHeadline(failed, rows)
+  const lines: DetailLine[] = [
+    ...(headline ? [{ depth: 0, text: headline } as const] : []),
+    { depth: 0, text: table[0] ?? '', tone: 'dim' },
+    { depth: 0, text: table[1] ?? '' },
+  ]
+  for (const [i, r] of rows.entries()) {
+    lines.push({ depth: 0, text: table[i + 2] ?? '' })
+    if (several) {
+      for (const s of sets[i] ?? []) {
+        lines.push({ depth: 1, text: `${s.harness}: ${s.text}`, tone: 'dim' })
+      }
+    }
     if (!verbose) continue
     for (const cell of r.own) {
       const stats = statsLine(cell, cells)
       const who = r.own.length > 1 ? `${harnessLabel(record, cell)}: ` : ''
-      if (stats) lines.push({ depth: 2, text: `${who}${stats}`, tone: 'dim' })
+      if (stats) lines.push({ depth: 1, text: `${who}${stats}`, tone: 'dim' })
     }
   }
   return lines
 }
 
+/** The arms whose gated cells failed, by name. */
+function failedArms(cells: CellResult[]): string[] {
+  const missed = cells.filter((c) => c.gated && c.outcome !== 'pass' && c.outcome !== 'skipped')
+  return [...new Set(missed.map((c) => (c.baseline ? 'the control' : (c.variant ?? '-'))))]
+}
+
+type Tried = { failed: number; ran: number }
+
 type FailedCheck = {
   label: string
   failed: number
-  byHarness: Map<string, number>
+  ran: number
+  /** Each group's (harness, or a compare's arm) failures of it, in the cells' order. */
+  byGroup: Map<string, Tried>
+  /** A gated cell failed it, so it counts against the eval. */
+  gated: boolean
   first: CheckResult
 }
 
@@ -274,13 +378,30 @@ function failedChecks(cells: CellResult[], groupOf: (c: CellResult) => string): 
     for (const k of cell.checks) {
       if (k.outcome.status !== 'ran' || k.outcome.failed + k.outcome.errored === 0) continue
       const n = k.outcome.failed + k.outcome.errored
-      const f = by.get(k.label) ?? { label: k.label, failed: 0, byHarness: new Map(), first: k }
+      const f = by.get(k.label) ?? {
+        label: k.label,
+        failed: 0,
+        ran: 0,
+        byGroup: new Map(),
+        gated: false,
+        first: k,
+      }
       f.failed += n
-      const h = groupOf(cell)
-      f.byHarness.set(h, (f.byHarness.get(h) ?? 0) + n)
+      f.gated ||= cell.gated
+      const g = f.byGroup.get(groupOf(cell)) ?? { failed: 0, ran: 0 }
+      g.failed += n
+      g.ran += ranOf(k)
+      f.byGroup.set(groupOf(cell), g)
       if (f.first.outcome.status === 'ran' && !f.first.outcome.assertion) f.first = k
       by.set(k.label, f)
     }
+  }
+  // The runs that reached each check, where it failed or not.
+  for (const f of by.values()) {
+    f.ran = cells.reduce(
+      (n, c) => n + c.checks.filter((k) => k.label === f.label).reduce((m, k) => m + ranOf(k), 0),
+      0,
+    )
   }
   return [...by.values()].sort((a, b) => b.failed - a.failed || a.first.order - b.first.order)
 }
@@ -288,9 +409,9 @@ function failedChecks(cells: CellResult[], groupOf: (c: CellResult) => string): 
 /** `, all on H` or `, M of them on H`, per the rules at the top. */
 function where(f: FailedCheck, harnesses: number): string {
   if (harnesses < 2) return ''
-  const [top] = [...f.byHarness].sort((a, b) => b[1] - a[1])
+  const [top] = [...f.byGroup].sort((a, b) => b[1].failed - a[1].failed)
   if (!top) return ''
-  const [h, n] = top
+  const [h, { failed: n }] = top
   if (n === f.failed) return f.failed === 1 ? `, on ${h}` : `, all on ${h}`
   return n * 2 > f.failed ? `, ${n} of them on ${h}` : ''
 }
@@ -306,43 +427,89 @@ function messageLines(text: string, label = '', max = LINE_MAX): string[] {
     .map((l) => clip(l, max))
 }
 
-/** A failure's message is red only on a failed eval: a passing compare's control misses are expected. */
+/** The check's first failure's message: its assertion, else the judge's verdict. */
+function messageOf(f: FailedCheck): string {
+  const o = f.first.outcome
+  const judge = f.first.judge
+  return o.status === 'ran' && o.assertion
+    ? o.assertion
+    : judge
+      ? `judge: ${judge.question} (scores ${judge.scores.join(', ')}, threshold ${judge.threshold})`
+      : ''
+}
+
+const LABEL_COLUMN = 40
+
+/**
+ * `✗ label  failed 2 of 4 runs`, then the first line of its message and where it is, dimmed, and a
+ * failed command's first stderr line; the message's other lines only in the full detail. A compare names the arms instead, the variants
+ * first: `failed on react · the control (expected)`, where a control that isn't gated is
+ * expected to fail. The `✗` is red only for a failure that counts against a failed eval.
+ */
 function checkLines(
   cells: CellResult[],
   groupOf: (c: CellResult) => string,
-  tone: 'red' | 'dim',
+  o: { failedEval: boolean; compare: boolean },
 ): DetailLine[] {
   const failed = failedChecks(cells, groupOf)
   if (!failed.length) return []
-  const harnesses = new Set(cells.map(groupOf)).size
-  const lines: DetailLine[] = [
-    {
-      depth: 0,
-      text:
-        failed.length === 1
-          ? 'Every failure was the same check:'
-          : `${failed.length} checks failed:`,
-      tone: 'heading',
-    },
-  ]
+  const groups = new Set(cells.map(groupOf)).size
+  const several = cells.some((c) => countedOf(c) > 1)
+  const baselineGated = cells.some((c) => c.baseline && c.gated)
+  const width = Math.max(...failed.map((f) => clip(checkLabel(f.label), LABEL_COLUMN).length))
+  const lines: DetailLine[] = []
   for (const f of failed) {
+    const label = clip(checkLabel(f.label), LABEL_COLUMN).padEnd(width)
+    let text: string
+    let note: string | undefined
+    if (o.compare) {
+      const count = (t: Tried) => (several ? ` ${t.failed} of ${t.ran}` : '')
+      const arms = [...f.byGroup].filter(([arm]) => arm !== 'the control')
+      const base = f.byGroup.get('the control')
+      const named = arms.map(([arm, t]) => `${arm}${count(t)}`).join(', ')
+      const baseText = base ? `the control${count(base)}` : ''
+      const expected = base && !baselineGated
+      if (named) {
+        text = `${label}  failed on ${named}`
+        if (base) note = expected ? `${baseText} (expected)` : undefined
+        if (base && !expected) text += ` · ${baseText}`
+      } else {
+        text = `${label}  failed on ${baseText}`
+        if (expected) note = 'expected'
+      }
+    } else {
+      text = `${label}  failed ${f.failed} of ${plural(f.ran, 'run')}${where(f, groups)}`
+    }
     lines.push({
-      depth: 1,
-      text: `"${checkLabel(f.label)}" failed ${times(f.failed)}${where(f, harnesses)}`,
+      depth: 0,
+      mark: o.failedEval && f.gated ? 'fail' : 'miss',
+      text: text.trimEnd(),
+      ...(note ? { note } : {}),
     })
-    const o = f.first.outcome
-    const judge = f.first.judge
-    const message =
-      o.status === 'ran' && o.assertion
-        ? o.assertion
-        : judge
-          ? `judge: ${judge.question} (scores ${judge.scores.join(', ')}, threshold ${judge.threshold})`
-          : ''
-    for (const text of messageLines(message, f.label)) lines.push({ depth: 2, text, tone })
-    if (o.status === 'ran' && o.at) lines.push({ depth: 2, text: `at ${o.at}`, tone: 'dim' })
+    const message = messageOf(f)
+    const [first, ...rest] = messageLines(message, f.label)
+    const at = f.first.outcome.status === 'ran' ? f.first.outcome.at : null
+    const shown = [first, at].filter(Boolean).join(' · ')
+    if (shown) lines.push({ depth: 1, text: shown, tone: 'dim' })
+    const stderr = stderrHead(message)
+    if (stderr) lines.push({ depth: 1, text: `stderr: ${clip(stderr, LINE_MAX)}`, tone: 'dim' })
+    const after = stderr ? rest.filter((l) => l.trim() !== stderr) : rest
+    for (const line of after) lines.push({ depth: 1, text: line, tone: 'dim', only: 'full' })
   }
   return lines
 }
+
+/** A failed command's first line on stderr, which usually says why, before what followed from it. */
+function stderrHead(message: string): string | undefined {
+  const section = /\n--- stderr ---\n([\s\S]*?)(?:\n--- stdout ---\n|$)/.exec(message)?.[1] ?? ''
+  return section
+    .split('\n')
+    .map((l) => l.trim())
+    .find(Boolean)
+}
+
+const ranOf = (k: CheckResult) =>
+  k.outcome.status === 'ran' ? k.outcome.passed + k.outcome.failed + k.outcome.errored : 0
 
 const CASES_NAMED = 8
 
@@ -364,8 +531,12 @@ function caseLines(e: EvalResult): DetailLine[] {
   return [...rateLines, { depth: 0, text: `Failed cases: ${named.join(', ')}${more}.` }]
 }
 
-/** Errors no failed check explains: timeouts, infrastructure errors, throws. Never clipped: their remedy is often last. */
-function errorLines(cells: CellResult[], tone: 'red' | 'dim'): DetailLine[] {
+/**
+ * Errors no failed check explains: timeouts, infrastructure errors, throws. Never clipped: their
+ * remedy is often last. A throw fails its attempt as a failed check does, so it reads as one; the
+ * rest are errors, red on a failed eval.
+ */
+function errorLines(cells: CellResult[], failedEval: boolean): DetailLine[] {
   const by = new Map<string, { kind: ErrorKind | 'turn'; message: string; n: number }>()
   for (const c of cells) {
     for (const err of c.errors) {
@@ -375,12 +546,17 @@ function errorLines(cells: CellResult[], tone: 'red' | 'dim'): DetailLine[] {
       by.set(key, e)
     }
   }
-  return [...by.values()].flatMap((e) => [
-    { depth: 0, text: `${plural(e.n, 'run')} ${ERROR_VERB[e.kind]}:`, tone: 'heading' } as const,
-    ...messageLines(e.message, '', Number.POSITIVE_INFINITY).map(
-      (text) => ({ depth: 1, text, tone }) as const,
-    ),
-  ])
+  return [...by.values()].flatMap((e) => {
+    const fail = e.kind === 'assertion'
+    const mark = e.kind === 'aborted' ? 'skipped' : !failedEval ? 'miss' : fail ? 'fail' : 'error'
+    const tone = fail || !failedEval ? 'dim' : 'red'
+    return [
+      { depth: 0, mark, text: `${plural(e.n, 'run')} ${ERROR_VERB[e.kind]}` } as const,
+      ...messageLines(e.message, '', Number.POSITIVE_INFINITY).map(
+        (text) => ({ depth: 1, text, tone }) as const,
+      ),
+    ]
+  })
 }
 
 /** `evals/a.eval.ts:12` from `source:evals/a.eval.ts#L12`. */
@@ -407,18 +583,33 @@ function pageErrorNotes(cells: CellResult[]): string[] {
   ]
 }
 
+/**
+ * `Worth knowing:` on the line itself when there's one remark or note, else as a heading over
+ * them. A remark with a short form (`brief`) gives it, and its whole sentence in the full detail.
+ */
 function remarkLines(remarks: Remark[], notes: string[]): DetailLine[] {
-  if (!remarks.length && !notes.length) return []
-  return [
-    { depth: 0, text: 'Worth knowing:', tone: 'heading' },
-    ...remarks.map((r) => ({
-      depth: 1 as const,
-      text: r.fix.edit
+  const items = [
+    ...remarks.map((r) => {
+      const full = r.fix.edit
         ? `${r.text} Fix at ${location(r.fix.at)}: ${r.fix.edit}.`
-        : `${r.text} At ${location(r.fix.at)}.`,
-    })),
-    ...notes.map((text) => ({ depth: 1 as const, text })),
+        : `${r.text} At ${location(r.fix.at)}.`
+      return { full, compact: r.brief ?? full }
+    }),
+    ...notes.map((text) => ({ full: text, compact: text })),
   ]
+  if (!items.length) return []
+  const one = items.length === 1
+  const lines: DetailLine[] = one ? [] : [{ depth: 0, text: 'Worth knowing:', tone: 'heading' }]
+  const depth = one ? 0 : 1
+  const lead = one ? 'Worth knowing: ' : ''
+  for (const { full, compact } of items) {
+    if (compact === full) lines.push({ depth, text: `${lead}${full}` })
+    else {
+      lines.push({ depth, text: `${lead}${compact}`, only: 'compact' })
+      lines.push({ depth, text: `${lead}${full}`, only: 'full' })
+    }
+  }
+  return lines
 }
 
 /** A compare's failures are told apart by arm: `the control`, or the variant's name. */
@@ -456,7 +647,7 @@ export function evalRow(
           ? 'canceled'
           : 'skipped'
         : `${passed} of ${plural(ran, counted)} passed`
-  const tone = iconOf(e) === 'fail' ? 'red' : 'dim'
+  const failedEval = iconOf(e) === 'fail'
   const notes = ran ? [...retriedLines(decide), ...pageErrorNotes(decide)] : []
   const detail = ran
     ? [
@@ -470,10 +661,10 @@ export function evalRow(
             ]),
         ...caseLines(e),
         ...(compare
-          ? checkLines(cells, armOf, tone)
-          : checkLines(decide, (c) => harnessLabel(record, c), tone)),
-        ...errorLines(compare ? cells : decide, tone),
-        ...(iconOf(e) === 'fail' ? snapshotLines(cells) : []),
+          ? checkLines(cells, armOf, { failedEval, compare })
+          : checkLines(decide, (c) => harnessLabel(record, c), { failedEval, compare })),
+        ...errorLines(compare ? cells : decide, failedEval),
+        ...(failedEval ? snapshotLines(cells) : []),
         ...questionLines(e.questions ?? []),
         ...observedLines(e.observations ?? [], cells, (c) =>
           compare ? armOf(c) : harnessLabel(record, c),
@@ -577,7 +768,7 @@ function snapshotLines(cells: CellResult[]): DetailLine[] {
   const [first, ...others] = cells.flatMap((c) => c.snapshots ?? [])
   if (!first) return []
   const more = others.length ? ` (+${others.length} more in summary.md)` : ''
-  return [{ depth: 0, text: `Snapshot: ${first}${more}`, tone: 'dim' }]
+  return [{ depth: 0, text: `Snapshot: ${first}${more}`, tone: 'dim', only: 'full' }]
 }
 
 /** What `c.observe` recorded, each name's tally on one line, or a line per cell under it. */

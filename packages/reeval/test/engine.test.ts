@@ -71,7 +71,7 @@ describe('engine', () => {
     assert.equal(r.code, 1)
     assert.match(
       r.stdout,
-      /^└─ ✗ math {2}0 of 1 run passed\n {5}Failed on fake\.\n {5}Every failure was the same check:\n {7}"toBe 2" failed once\n {9}expected 1 to be 2 \/\/ Object\.is equality\n {9}at evals\/math\.eval\.ts:3$/m,
+      /^└─ ✗ math {2}0 of 1 run passed\n {5}Failed on fake\.\n {5}✗ toBe 2 {2}failed 1 of 1 run\n {7}expected 1 to be 2 \/\/ Object\.is equality · evals\/math\.eval\.ts:3$/m,
     )
     assert.doesNotMatch(r.stdout + r.stderr, /vitest/i)
     const [e] = readRun(p.dir).evals
@@ -228,7 +228,7 @@ evaluate('top level', async () => {})
     assert.equal(r.code, 1)
     assert.match(
       r.stdout,
-      /^├─ ✗ outer › inner › slow {2}0 of 1 run passed\n│ {4}Failed on fake\.\n│ {4}1 run timed out:\n│ {6}The eval timed out$/m,
+      /^├─ ✗ outer › inner › slow {2}0 of 1 run passed\n│ {4}Failed on fake\.\n│ {4}✗ 1 run timed out\n│ {6}The eval timed out$/m,
     )
     assert.match(r.stdout, /^├─ ✓ outer › fast {10}1 of 1 run passed$/m)
     const evals = readRun(p.dir).evals
@@ -1086,11 +1086,8 @@ evaluate('passes', async () => {})
         'evals/agent.eval.ts',
         '  ✗ agent eval  0 of 1 run passed',
         '    Failed on fake.',
-        '    Every failure was the same check:',
-        '      "toPass ok?" failed once',
-        '        judge score 0.30 is below 0.8 for "ok?" (fake)',
-        '        at evals/agent.eval.ts:6',
-        '    Snapshot: <path>',
+        '    ✗ toPass ok?  failed 1 of 1 run',
+        '      judge score 0.30 is below 0.8 for "ok?" (fake) · evals/agent.eval.ts:6',
         '  ✓ passes      1 of 1 run passed',
         '',
       ],
@@ -1113,7 +1110,7 @@ evaluate('passes', async () => {})
     assert.equal(r.code, 1)
     assert.match(
       r.stdout,
-      /^ {7}"toPass ok\?" failed once\n {9}judge score 0\.30 is below 0\.8 for "ok\?" \(fake\)\n {9}at evals\/agent\.eval\.ts:6$/m,
+      /^ {5}✗ toPass ok\? {2}failed 1 of 1 run\n {7}judge score 0\.30 is below 0\.8 for "ok\?" \(fake\) · evals\/agent\.eval\.ts:6$/m,
     )
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
@@ -1417,7 +1414,7 @@ evaluate('caught check alone', async (c) => {
     )
     assert.match(
       r.stdout,
-      /^│ {6}"tests pass" failed once\n│ {8}expected command to succeed, exit code 3$/m,
+      /^│ {4}✗ tests pass +failed 1 of 1 run\n│ {6}expected command to succeed, exit code 3 · evals\/\S+:\d+$/m,
     )
   })
 
@@ -1771,7 +1768,7 @@ evaluate('huge diff', async () => {
     assert.equal(plain.code, 1, plain.stdout + plain.stderr)
     assert.match(
       plain.stdout,
-      new RegExp(`^ {5}1 run ended a turn with an error:\n {7}${billing}$`, 'm'),
+      new RegExp(`^ {5}✗ 1 run ended a turn with an error\n {7}${billing}$`, 'm'),
     )
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
@@ -1779,7 +1776,7 @@ evaluate('huge diff', async () => {
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
     assert.match(
       agent.stdout,
-      new RegExp(`^ {4}1 run ended a turn with an error:\n {6}${billing}$`, 'm'),
+      new RegExp(`^ {4}✗ 1 run ended a turn with an error\n {6}${billing}$`, 'm'),
     )
   })
 
@@ -1929,13 +1926,13 @@ evaluate('studied', { compare: { control: plain, variants: [skilled], gate: 'obs
     // The control's two failures don't fail it: only the gated variant's 2 of 2 gate.
     assert.match(
       r.stdout,
-      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}Control plain passed 0 of 2\.\n/m,
+      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}The skilled variant helped\.\n│ {4}arm +passed {2}verdict\n│ {4}plain \(control\) {2}0 of 2\n/m,
     )
     assert.match(r.stdout, /^├─ ✗ repeated {2}3 of 4 runs passed\n│ {4}Passed 3 of 4 on fake\.\n/m)
     // Nothing gates a study, so it reads ●, never ✓ beside 0 of 4.
     assert.match(
       r.stdout,
-      /^└─ ● studied {3}0 of 4 runs passed\n {5}Control plain passed 0 of 2\.\n/m,
+      /^└─ ● studied {3}0 of 4 runs passed\n {5}The skilled variant passed as often as the control\.\n {5}arm +passed {2}verdict\n {5}plain \(control\) {2}0 of 2\n/m,
     )
   })
 
@@ -2022,7 +2019,7 @@ evaluate('canary', { harnesses: fakeHarness({ id: 'steady', startTimeout: '1s' }
     assert.equal(r.code, 3, r.stdout)
     assert.match(
       r.stdout,
-      /^└─ ✗ agent eval {2}0 of 1 run passed\n {5}No run finished\.\n {5}1 run hit an infrastructure error:\n {7}agent CLI failed to start$/m,
+      /^└─ ✗ agent eval {2}0 of 1 run passed\n {5}No run finished\.\n {5}✗ 1 run hit an infrastructure error\n {7}agent CLI failed to start$/m,
     )
     assert.match(r.stdout, /^Done in \S+ · 1 infra error$/m)
     const [e] = readRun(p.dir).evals
@@ -2068,7 +2065,7 @@ evaluate('fine', async () => {})
     const out = r.stdout + r.stderr
     assert.equal(r.code, 1, out)
     assert.ok(Date.now() - started < 15_000, `waited ${Date.now() - started}ms for a stuck turn`)
-    assert.match(out, /^ {5}1 run timed out:\n {7}The eval timed out$/m)
+    assert.match(out, /^ {5}✗ 1 run timed out\n {7}The eval timed out$/m)
     assert.doesNotMatch(out, /Hook timed out|hookTimeout/)
     const [e] = readRun(p.dir).evals
     const [turn] = e?.attempts[0]?.turns ?? []
@@ -2087,7 +2084,7 @@ evaluate('fine', async () => {})
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.ok(Date.now() - started < 20_000, 'did not wait for the agent')
-    assert.match(r.stdout, /^ {5}1 run timed out:\n {7}The eval timed out$/m)
+    assert.match(r.stdout, /^ {5}✗ 1 run timed out\n {7}The eval timed out$/m)
     assert.doesNotMatch(r.stdout, /testTimeout/)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
@@ -2175,7 +2172,7 @@ evaluate('fine', async () => {})
       assert.equal(evals[0]?.error?.kind, 'aborted')
       assert.match(
         r.stdout,
-        /^└─ ○ agent eval {2}0 of 1 run passed\n {5}No run finished\.\n {5}1 run canceled:\n {7}The run was canceled$/m,
+        /^└─ ○ agent eval {2}0 of 1 run passed\n {5}No run finished\.\n {5}– 1 run canceled\n {7}The run was canceled$/m,
       )
       assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were canceled$/m)
       assert.match(r.stdout, /^Done in \S+ · 1 canceled$/m, 'a canceled attempt is not a fail')

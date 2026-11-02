@@ -4,11 +4,11 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { render } from 'ink-testing-library'
 import { createElement as h } from 'react'
 import { colors } from '../src/ui/colors.ts'
-import { endLine, startLine } from '../src/ui/header.ts'
-import { CONFIRM_MS, frameLines, ListApp, wrap } from '../src/ui/ink-list.ts'
-import { LiveList } from '../src/ui/list.ts'
+import { endText, startText } from '../src/ui/header.ts'
+import { CONFIRM_MS, doneLine, frameLines, ListApp, wrap } from '../src/ui/ink-list.ts'
+import { LiveList, SPINNER } from '../src/ui/list.ts'
 import type { StatusFile, StatusRow } from '../src/ui/status.ts'
-import { ListStore } from '../src/ui/tty.ts'
+import { ListStore, StepSpinner } from '../src/ui/tty.ts'
 
 const c = colors(false)
 const KEY = { up: '\u001B[A', down: '\u001B[B', right: '\u001B[C', left: '\u001B[D' }
@@ -33,8 +33,9 @@ const files = (): StatusFile[] => [
         icon: 'fail',
         summary: '0 of 1 run passed',
         detail: [
-          { depth: 0, text: 'Failed on fake.' },
-          { depth: 1, text: 'expected greeting to be bonjour', tone: 'red' },
+          { depth: 0, mark: 'fail', text: 'says bonjour  failed 1 of 1 run' },
+          { depth: 1, text: 'expected greeting to be bonjour', tone: 'dim' },
+          { depth: 1, text: 'the file as the agent left it', tone: 'dim', only: 'full' },
         ],
       }),
     ],
@@ -80,7 +81,7 @@ test('frameLines tags each line with its row and opens only the expanded one', (
       [-1, 'evals/a.eval.ts'],
       [0, '  ✓ writes greet.js   1 of 1 run passed'],
       [1, '❯ ✗ greets in French  0 of 1 run passed'],
-      [1, '      Failed on fake.'],
+      [1, '      ✗ says bonjour  failed 1 of 1 run'],
       [1, '        expected greeting to be bonjour'],
       [-1, ''],
       [-1, 'evals/b.eval.ts'],
@@ -98,16 +99,37 @@ test('while the run goes: a spinner, the count, and the arrows move and open a r
     assert.match(app.frame(), /^❯ ✓ writes greet\.js/m, 'the first row is selected')
     assert.match(app.frame(), /^2 of 3 evals done$/m)
     assert.match(app.frame(), /↑↓ move · → open · q cancel/)
-    assert.doesNotMatch(app.frame(), /Failed on fake/, 'nothing is open yet')
+    assert.doesNotMatch(app.frame(), /says bonjour/, 'nothing is open yet')
     app.stdin.write(KEY.down)
     await settle()
     app.stdin.write(KEY.right)
     await settle()
     assert.match(app.frame(), /^❯ ✗ greets in French/m)
-    assert.match(app.frame(), /^ {6}Failed on fake\.$/m)
+    assert.match(app.frame(), /^ {6}✗ says bonjour {2}failed 1 of 1 run$/m)
+    assert.doesNotMatch(
+      app.frame(),
+      /the file as the agent left it/,
+      'full detail waits for → again',
+    )
+    assert.match(app.frame(), /↑↓ move · → more · q cancel/)
+    app.stdin.write(KEY.right)
+    await settle()
+    assert.match(
+      app.frame(),
+      /^ {8}the file as the agent left it$/m,
+      '→ again shows the full detail',
+    )
     app.stdin.write(KEY.left)
     await settle()
-    assert.doesNotMatch(app.frame(), /Failed on fake/, '← folds it')
+    assert.doesNotMatch(
+      app.frame(),
+      /the file as the agent left it/,
+      '← steps back to the short detail',
+    )
+    assert.match(app.frame(), /says bonjour/)
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.doesNotMatch(app.frame(), /says bonjour/, '← folds it')
     app.stdin.write(KEY.up)
     app.stdin.write(KEY.up)
     await settle()
@@ -181,19 +203,19 @@ test('once the run has ended, q quits at once and takes the whole frame down', a
   }
 })
 
-test('the header line above the list says Running... while it goes, then how the run ended', async () => {
+test('the header line above the list spins on Running... while it goes, then says how the run ended', async () => {
   const store = new ListStore()
   const output = { outputLogs: 'none', logOrder: 'stream' } as never
-  store.set({ files: files(), counts: { done: 2, total: 3 }, phase: startLine(c, output) })
+  store.set({ files: files(), counts: { done: 2, total: 3 }, phase: startText(output) })
   const app = mount(store)
   try {
     await settle()
-    assert.match(app.frame(), /^ {2}◆ {2}Running\.\.\.$/m)
-    store.set({ phase: endLine(c, 'complete'), finished: FINISHED })
+    assert.match(app.frame(), /^ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] {2}Running\.\.\.$/m)
+    store.set({ phase: endText('complete'), finished: FINISHED })
     await settle()
     assert.match(app.frame(), /^ {2}◆ {2}Finished\.$/m)
     assert.doesNotMatch(app.frame(), /Running/)
-    store.set({ phase: endLine(c, 'interrupted') })
+    store.set({ phase: endText('interrupted') })
     await settle()
     assert.match(app.frame(), /^ {2}◆ {2}Canceled\.$/m)
   } finally {
@@ -252,7 +274,7 @@ test('once the run ends, the first failure is selected and open, with the tally 
     assert.match(frame, /^error: evals\/c\.eval\.ts failed to load$/m, "an error's first line")
     assert.match(frame, /^1 eval stopped at its budget$/m)
     assert.match(frame, /^Done in 1\.2s · 1 failed · 2 passed$/m)
-    assert.match(frame, /↑↓ move · → open · ← close · q quit/)
+    assert.match(frame, /↑↓ move · → more · ← close · q quit/, 'the open row has more to show')
     assert.doesNotMatch(frame, /evals done/)
   } finally {
     app.unmount()
@@ -310,4 +332,133 @@ test('the frame fits the terminal, wrapped footer included, and refits when it r
   } finally {
     app.unmount()
   }
+})
+
+test('an eval still going with a failed run spins, red, and only gets its ✗ once every run ended', () => {
+  const live = new LiveList('fake')
+  const evals = ['one', 'two'].map((n) => ({
+    id: 'greets',
+    key: `evals/a.eval.ts::greets::${n}`,
+    group: [],
+    name: 'greets',
+    skipped: false,
+  }))
+  live.collected('evals/a.eval.ts', evals)
+  const [one, two] = evals.map(
+    (e) =>
+      ({
+        key: e.key,
+        attempt: { n: 1, gate: 'all', label: 'fake #1', cell: { key: 'fake/-/fake' } },
+      }) as never,
+  )
+  live.start(one)
+  live.start(two)
+  live.end({
+    key: evals[0]?.key,
+    state: 'failed',
+    errors: ['AssertionError: expected bonjour'],
+  } as never)
+  const going = live.files()[0]?.rows[0]
+  assert.equal(going?.icon, 'failing')
+  assert.equal(going?.summary, '1 of 2 runs done')
+  assert.deepEqual(live.counts(), { done: 0, total: 1, running: 1, failed: 0, failing: 1 })
+  const state = {
+    files: live.files(),
+    logs: [],
+    counts: live.counts(),
+    phase: null,
+    finished: null,
+  }
+  const red = colors(true)
+  const head = frameLines(state, red, -1, null, 0)[1]?.text ?? ''
+  assert.ok(head.includes(red.red('⠋')), 'the spinner is red')
+  assert.doesNotMatch(head, /✗/, 'no ✗ while a run goes')
+  live.end({ key: evals[1]?.key, state: 'passed', errors: [] } as never)
+  assert.equal(live.files()[0]?.rows[0]?.icon, 'fail')
+  assert.deepEqual(live.counts(), { done: 1, total: 1, running: 0, failed: 1, failing: 0 })
+})
+
+test('under a passRate gate, a failed run marks the eval only once its cell can no longer pass', () => {
+  const live = new LiveList('fake')
+  const evals = ['1', '2', '3', '4'].map((n) => ({
+    id: 'flaky',
+    key: `evals/a.eval.ts::flaky::${n}`,
+    group: [],
+    name: 'flaky',
+    skipped: false,
+  }))
+  live.collected('evals/a.eval.ts', evals)
+  const ref = (key: string) =>
+    ({
+      key,
+      attempt: { n: 1, gate: { passRate: 0.5 }, label: 'fake', cell: { key: 'fake/-/fake' } },
+    }) as never
+  const end = (key: string, state: 'passed' | 'failed') =>
+    live.end({ ...(ref(key) as object), state, errors: state === 'failed' ? ['no'] : [] } as never)
+  const [a, b, c, d] = evals.map((e) => e.key) as [string, string, string, string]
+  live.start(ref(a))
+  end(a, 'failed')
+  assert.equal(live.files()[0]?.rows[0]?.icon, 'running', '1 fail of 4 can still pass at 0.5')
+  for (const k of [b, c, d]) {
+    live.start(ref(k))
+    end(k, 'passed')
+  }
+  assert.equal(live.files()[0]?.rows[0]?.icon, 'pass', '3 of 4 meets passRate 0.5')
+  const strict = new LiveList('fake')
+  strict.collected('evals/a.eval.ts', evals)
+  for (const k of [a, b, c]) {
+    strict.start(ref(k))
+    strict.end({ ...(ref(k) as object), state: 'failed', errors: ['no'] } as never)
+  }
+  assert.equal(strict.files()[0]?.rows[0]?.icon, 'failing', '3 fails of 4 can no longer reach 0.5')
+})
+
+test('the footer counts the evals done, then those failed and those failing', () => {
+  assert.equal(doneLine(c, { done: 9, total: 10 }), '9 of 10 evals done')
+  assert.equal(
+    doneLine(c, { done: 9, total: 10, failed: 1, failing: 1 }),
+    '9 of 10 evals done · 1 failed · 1 failing',
+  )
+})
+
+test("before the list, the prepare step's glyph spins in place, then settles to ◆ once each sandbox reports", (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  const out: string[] = []
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => ({ rows: 24, columns: 80 }),
+  )
+  spinner.start('  ◆  Preparing 2 sandboxes...\n', 2)
+  assert.deepEqual(out, [`\x1b[1A\r\x1b[2C${SPINNER[0]}\r\x1b[1B`], 'up to the step line and back')
+  spinner.before('  ✓  cursor ready\n')
+  t.mock.timers.tick(80)
+  assert.equal(
+    out.at(-1),
+    `\x1b[2A\r\x1b[2C${SPINNER[1]}\r\x1b[2B`,
+    'a line under it moves it up one more',
+  )
+  spinner.reported()
+  t.mock.timers.tick(80)
+  assert.equal(out.at(-1), `\x1b[2A\r\x1b[2C${SPINNER[2]}\r\x1b[2B`, 'one sandbox still preparing')
+  spinner.reported()
+  assert.equal(out.at(-1), '\x1b[2A\r\x1b[2C◆\r\x1b[2B', 'the last one settles it')
+  const drawn = out.length
+  t.mock.timers.tick(800)
+  assert.equal(out.length, drawn, 'and it stops')
+})
+
+test('the prepare step settles rather than spin a line about to scroll out of reach', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  const out: string[] = []
+  const spinner = new StepSpinner(
+    (s) => out.push(s),
+    c,
+    () => ({ rows: 4, columns: 80 }),
+  )
+  spinner.start('  ◆  Preparing...\n', 1)
+  spinner.before('a\nb\n')
+  assert.equal(out.at(-1), '\x1b[1A\r\x1b[2C◆\r\x1b[1B')
+  t.mock.timers.tick(800)
+  assert.equal(out.length, 2)
 })

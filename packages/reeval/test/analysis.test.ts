@@ -674,7 +674,7 @@ evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }
     const first = await runCli(p.dir)
     assert.equal(first.code, 0, first.stdout)
     // Two tries a side is below the effort table's four, so only the arms print.
-    assert.match(first.stdout, /^ +skilled {2}2 of 2 {2}helped$/m)
+    assert.match(first.stdout, /^ +skilled +2 of 2 {2}helped\b/m)
     assert.doesNotMatch(first.stdout, /^ {2}effort /m)
     const { read } = readRun(p.dir)
     assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}helped$/m)
@@ -1242,7 +1242,7 @@ evaluate('hello', async (c) => {
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /^ +\S+ {2}1 of 1 {2}helped\n(?: +Pass rate \+100 pts[^\n]*\n)? +difference \+100 points, 95% interval −12…\+100$/m,
+      /^ +\S+ +1 of 1 {2}helped\b[^\n]*\n(?: +Pass rate \+100 pts[^\n]*\n)? +difference \+100 points, 95% interval −12…\+100$/m,
       '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)
@@ -1464,7 +1464,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
       const p = await compareProject(`analyze-lift-${runs}`, runs)
       const run = await runCli(p.dir)
       assert.equal(run.code, 0, run.stdout)
-      assert.match(run.stdout, new RegExp(`^ +\\S+ {2}${runs} of ${runs} {2}helped$`, 'm'))
+      assert.match(run.stdout, new RegExp(`^ +\\S+ +${runs} of ${runs} {2}helped\\b`, 'm'))
       const { digest } = await digestOf(p.dir)
       const pass = digest.facts.find((f) => f.kind === 'pass@1')
       const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
@@ -1990,7 +1990,7 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
     // Every attempt misses MFA, so pass can't tell the arms apart; the check matrix does.
     const matrix =
       /^ {2}check {14}no-skill {2}current-skill {2}new-skill\n {2}Social OAuth {7}3 of 3 {4}0 of 3 {9}3 of 3$/m
-    assert.match(run.stdout, /^ +"Social OAuth" failed 3 times, all on current-skill$/m)
+    assert.match(run.stdout, /^ +✗ Social OAuth +failed on current-skill 3 of 3$/m)
     assert.match((await runCli(p.dir, ['show'])).stdout, matrix)
     assert.match(readRun(p.dir).read('summary.md'), matrix)
     const rows = await query(

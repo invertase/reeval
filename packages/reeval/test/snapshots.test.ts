@@ -418,12 +418,12 @@ describe('snapshots through the CLI', () => {
     assert.equal(app?.type === 'file' && app.data.toString(), 'export const answer = 42\n')
   })
 
-  test("a failed attempt's result block prints its snapshot", async () => {
+  test("a failed attempt's result block prints its snapshot with -v", async () => {
     const p = await project('snapshots-failed', {
       'reeval.config.ts': fakeConfig({ harness: WRITES }),
       'evals/app.eval.ts': evalFile('{}', 'something else'),
     })
-    const run = await runCli(p.dir, ['run'])
+    const run = await runCli(p.dir, ['run', '-v'])
     assert.equal(run.code, 1, run.stdout + run.stderr)
     const { run: record } = readRun(p.dir)
     assert.match(

@@ -45,7 +45,7 @@ describe('named check results', () => {
     // The eval list names the failed check and the arm it failed on; a passing compare stays open.
     assert.match(
       r.stdout,
-      /^ {5}Every failure was the same check:\n {7}"house style" failed 2 times, all on the control\n {9}expected file styled\.txt to exist\n {9}at evals\/s\.eval\.ts:12$/m,
+      /^ {5}✗ house style {2}failed on the control 2 of 2 · expected\n {7}expected file styled\.txt to exist · evals\/s\.eval\.ts:12$/m,
     )
     assert.doesNotMatch(r.stdout, /toSucceed/, 'a check that never ran did not fail')
     // The summary's matrix has the checks that failed or didn't run on some arm; the rest pass on both.
@@ -124,10 +124,7 @@ describe('named check results', () => {
     ])
 
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
-    assert.match(
-      agent.stdout,
-      /^ {4}Every failure was the same check:\n {6}"house style" failed 2 times, all on the control$/m,
-    )
+    assert.match(agent.stdout, /^ {4}✗ house style {2}failed on the control 2 of 2 · expected$/m)
   })
 
   test('without a compare the attempts record their assertions and the result has no check matrix', async () => {

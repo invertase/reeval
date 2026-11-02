@@ -69,7 +69,7 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
       r.stdout,
-      /✗ g › writes ok\.txt {2}2 of 4 runs passed\n[│ ]+good passed 2 of 2, bad 0 of 2\.\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on bad\n[│ ]+expected file ok\.txt to exist\n[│ ]+at evals\/m\.eval\.ts:6\n/,
+      /✗ g › writes ok\.txt {2}2 of 4 runs passed\n[│ ]+good passed 2 of 2, bad 0 of 2\.\n[│ ]+✗ toHaveFile ok\.txt {2}failed 2 of 4 runs, all on bad\n[│ ]+expected file ok\.txt to exist · evals\/m\.eval\.ts:6\n/,
     )
     assert.match(r.stdout, /^Done in \S+ · 1 failed$/m)
     const thirds = await project('matrix-thirds', {
@@ -311,7 +311,7 @@ evaluate(
     assert.equal(r.code, 0, r.stdout + r.stderr)
     // The family is one row, its arms pooled over the cases.
     const pooled =
-      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+Control base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped\n/
+      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
     assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
@@ -352,7 +352,7 @@ evaluate(
     assert.equal(family?.outcome, 'pass')
     assert.match(
       read('summary.md'),
-      /^ {2}pass {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped$/m,
+      /^ {2}pass {2}all cases\n {4}arm +pass\n {4}base {11}0 of 6\n {4}skilled +6 of 6 {2}helped$/m,
     )
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
@@ -406,7 +406,7 @@ evaluate(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+Control base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped, not by minLift 60\n/,
+      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}"toHaveFile ok\.txt" \+100 pts\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
@@ -442,7 +442,7 @@ evaluate(
     ])
     assert.deepEqual(JSON.parse(paired.stdout), [{ small_sample: 1 }], 'three cases are too few')
     // Three pairs are too few for the lift to hold, however one-sided they are: it shows the direction.
-    assert.match(r.stdout, /^[│ ]+skilled {2}6 of 6 {2}helped$/m)
+    assert.match(r.stdout, /^[│ ]+skilled +6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts$/m)
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
@@ -467,7 +467,7 @@ group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
     assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     // A successful compare reads as one: the control's expected misses aren't failures.
     const block =
-      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+Control base passed 0 of 2\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}2 of 2 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on the control\n/
+      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict\n[│ ]+base \(control\) {2}0 of 2\n[│ ]+skilled +2 of 2 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the control 2 of 2 · expected\n/
     assert.match(r.stdout, block)
     assert.match(r.stdout, /^Done in \S+ · 1 passed · 2 ran$|^Done in \S+ · 1 passed$/m)
 
@@ -489,7 +489,7 @@ group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
     const md = readRun(p.dir).read('summary.md')
     assert.match(
       md,
-      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m,
+      /^pass {13}g › writes ok\.txt\n {2}arm +pass\n {2}base {15}0 of 2\n {2}skilled +2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m,
     )
     assert.match(md, /^#### ○ fake\/base\/fake#1 · 1 check failed$/m)
     assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
@@ -550,11 +550,11 @@ evaluate('no worse', { runs: 1, compare: { control: base, variants: [skilled], m
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
     assert.match(
       r.stdout,
-      /✗ all gated {2}1 of 2 runs passed\n[│ ]+Control base passed 0 of 1\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}1 of 1 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed once, on the control\n/,
+      /✗ all gated {2}1 of 2 runs passed\n[│ ]+Failed on the control; the skilled variant helped\.\n[│ ]+arm +passed {2}verdict\n[│ ]+base \(control\) {2}0 of 1\n[│ ]+skilled +1 of 1 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the control\n/,
     )
     assert.match(
       r.stdout,
-      /● no worse +1 of 2 runs passed\n[│ ]+Control base passed 1 of 1\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}0 of 1 {2}made it worse, not by minLift 50\n(?:[│ ]+.+\n)*?[│ ]+the variant is worse\n/,
+      /● no worse +1 of 2 runs passed\n[│ ]+The skilled variant made it worse\.\n[│ ]+arm +passed {2}verdict\n[│ ]+base \(control\) {2}1 of 1\n[│ ]+skilled +0 of 1 {2}made it worse, not by minLift 50\n(?:[│ ]+.+\n)*?[│ ]+the variant is worse\n/,
     )
     assert.match(r.stdout, /^Done in \S+ · 1 failed · 1 ran$/m)
   })
@@ -1833,7 +1833,7 @@ evaluate('greets', { runs: 1, compare: { control: plain, variants: [withSkill] }
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /^[│ ]+with-skill {2}1 of 1 {2}helped$/m)
+    assert.match(r.stdout, /^[│ ]+with-skill +1 of 1 {2}helped$/m)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])
