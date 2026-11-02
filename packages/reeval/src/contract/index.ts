@@ -76,6 +76,7 @@ import {
 } from './plain.ts'
 import { pairFactorSchema, questionOptionsSchema, questionSchema } from './questions.ts'
 import { durationSchema, jsonValueSchema } from './shared.ts'
+import { tartSandboxSchema } from './tart.ts'
 
 /**
  * The schemas that own a `$def` in schema/plan/, by its name there. scripts/schema/zod.ts puts
@@ -87,6 +88,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   Duration: durationSchema,
   DockerSandboxDescriptor: dockerSandboxSchema,
   FakeSandboxDescriptor: fakeSandboxSchema,
+  TartSandboxDescriptor: tartSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

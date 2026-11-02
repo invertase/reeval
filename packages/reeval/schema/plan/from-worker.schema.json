@@ -2580,6 +2580,9 @@
         },
         {
           "$ref": "#/$defs/DockerSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/TartSandboxDescriptor"
         }
       ]
     },
@@ -2668,6 +2671,68 @@
       },
       "required": [],
       "additionalProperties": {}
+    },
+    "TartSandboxDescriptor": {
+      "description": "A macOS VM on this Mac, cloned from `image` for each attempt by Tart, made by `tart()`.",
+      "type": "object",
+      "properties": {
+        "cpus": {
+          "description": "CPUs each clone gets; the image's when unset.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "description": "Cell id; defaults to `tart:<image>`, the image's last path segment.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "image": {
+          "description": "The VM each attempt clones: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's name.",
+          "type": "string",
+          "pattern": "^\\S+$"
+        },
+        "kind": {
+          "type": "string",
+          "const": "tart"
+        },
+        "maxConcurrent": {
+          "description": "The most Tart VMs at once, across the run: 1 or 2, and 2 when unset, since macOS runs at most two macOS VMs at a time.",
+          "type": "number"
+        },
+        "memory": {
+          "description": "Memory each clone gets: `'8g'`, `'4096m'`, or bytes; the image's when unset.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
+            },
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          ]
+        },
+        "ssh": {
+          "description": "Reach the VM over SSH when its Tart Guest Agent doesn't answer `tart exec`: as `user` (`admin` when unset), with `key`, a private key the image trusts, absolute or relative to the file it's written in.",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "user": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["key"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["image", "kind"],
+      "additionalProperties": false
     },
     "TurnStatus": {
       "enum": ["aborted", "completed", "error"]

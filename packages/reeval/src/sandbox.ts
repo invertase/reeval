@@ -3,11 +3,17 @@ import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkDockerOptions, type DockerOptions } from './contract/docker.ts'
+import { checkTartOptions, type TartOptions } from './contract/tart.ts'
 import { callerDir, toPath } from './environment.ts'
 import { UsageError } from './errors.ts'
-import type { DockerSandboxDescriptor, FakeSandboxDescriptor } from './types.ts'
+import type {
+  DockerSandboxDescriptor,
+  FakeSandboxDescriptor,
+  TartSandboxDescriptor,
+} from './types.ts'
 
 export type { DockerOptions } from './contract/docker.ts'
+export type { TartOptions } from './contract/tart.ts'
 
 /**
  * One local Docker container per attempt. By default it's the image `reeval image build` makes. One
@@ -72,6 +78,34 @@ function containerSandbox(
 }
 
 /**
+ * A macOS VM on this Apple Silicon Mac, run by [Tart](https://tart.run). Each attempt clones
+ * `image` (an OCI image, which preflight pulls, or a local VM), boots it headless, works in it
+ * over `tart exec`, and deletes it. `ssh` reaches an image without the Tart Guest Agent instead.
+ * At most two run at once (`maxConcurrent`), as macOS allows.
+ *
+ * The VM keeps Tart's network, so it runs under `egress: 'allow-all'` only: what ignores the
+ * egress gateway's proxy goes out directly, unrecorded. Brokered secrets still stay on the host.
+ */
+export function tart(options: TartOptions): TartSandboxDescriptor {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new UsageError(`tart() takes an options object (got ${JSON.stringify(options)})`)
+  }
+  checkTartOptions(options)
+  const { ssh, ...rest } = options
+  const descriptor: TartSandboxDescriptor = { kind: 'tart', ...structuredClone(rest) }
+  if (ssh) {
+    const key = toPath(ssh.key, callerDir() ?? process.cwd())
+    if (!existsSync(key) || !statSync(key).isFile()) {
+      throw new UsageError(
+        `tart({ ssh: { key } }): ${key} doesn't exist. Paths are relative to the file that calls tart().`,
+      )
+    }
+    descriptor.ssh = { ...(ssh.user !== undefined && { user: ssh.user }), key }
+  }
+  return descriptor
+}
+
+/**
  * A temp directory on the host with no isolation. For tests and the fake harness only. A relative
  * `dir` resolves against the file that calls `fakeSandbox()`; it may also be absolute or a `file:`
  * URL, such as `new URL('./sandboxes', import.meta.url)`.
@@ -86,4 +120,9 @@ export const fakeSandbox = ({
     ...(dir !== undefined && { dir: toPath(dir, callerDir() ?? process.cwd()) }),
   }) satisfies FakeSandboxDescriptor
 
-export type { DockerSandboxDescriptor, FakeSandboxDescriptor, SandboxDescriptor } from './types.ts'
+export type {
+  DockerSandboxDescriptor,
+  FakeSandboxDescriptor,
+  SandboxDescriptor,
+  TartSandboxDescriptor,
+} from './types.ts'

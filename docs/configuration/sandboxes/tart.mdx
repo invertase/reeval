@@ -1,0 +1,54 @@
+---
+title: "Run in a macOS VM with Tart"
+description: "Run each attempt in its own macOS VM on an Apple Silicon Mac."
+---
+
+`tart()` returns a sandbox that runs each attempt in a fresh macOS VM, cloned from an image with [Tart](https://tart.run) and deleted when the attempt ends.
+
+<Warning>
+Only `fakeHarness()` runs in `tart()` so far: the real agents need a harness session in the VM, which lands in a later release. Each attempt of a real agent fails as an infrastructure error.
+</Warning>
+
+## Requirements
+
+- **A Mac with Apple Silicon.** On any other machine, reeval exits with code 2 before the run.
+- **Tart on `PATH`.** Install it with `brew install cirruslabs/cli/tart`.
+- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, check, and add Node with `brew install node` if it's missing. Without them, an attempt runs without the gateway, unrecorded, unless it brokers a secret, which fails it.
+
+## `tart()`
+
+`{{ pkg }}/sandbox` exports the function. The `sandbox` option accepts its return value:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { tart } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  sandbox: tart({ image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' }),
+  egress: 'allow-all',
+})
+```
+
+Before the run, preflight pulls `image` with `tart pull` unless Tart already has it. Each attempt clones it, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. When the Tart Guest Agent doesn't answer and `ssh: { key }` is set, it uses SSH instead. The clone is deleted when the attempt ends, and a canceled run's clones when the run does. For each option, see [the `tart()` options](/reference/options#tart).
+
+## Egress
+
+| Policy | Under `tart()` |
+| :--- | :--- |
+| `allow-all` | Runs. The VM keeps Tart's network; what ignores the proxy goes out directly, unrecorded |
+| `proxy`, the default | Refused with exit code 2: the gateway isn't the VM's only way out |
+| `deny-all`, `{ allow }` | Refused with exit code 2: `tart()` enforces no policy yet |
+
+Brokered secrets stay on the host under `allow-all` too: the agent sees a placeholder, and the egress gateway puts the real key on its requests.
+
+## Concurrency
+
+macOS runs at most two macOS VMs at a time, so reeval runs at most two `tart()` attempts at once, whatever `concurrency` says. VMs you run outside reeval take the same slots: an attempt that finds none free fails as an infrastructure error, naming the VMs that hold them. To run fewer, set `maxConcurrent`:
+
+```ts title="reeval.config.ts"
+  sandbox: tart({ image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest', maxConcurrent: 1 }),
+```
+
+`maxConcurrent: 1` runs one at a time; reeval refuses more than `2`.
+
+For more information about the `sandbox` option, see [Choose a sandbox](/configuration/sandboxes). For more information about the `egress` option, see [Restrict sandbox egress](/configuration/environments/egress).

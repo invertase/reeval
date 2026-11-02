@@ -51,6 +51,31 @@ test('parseProbe keeps the reachable LISTEN rows of /proc/net/tcp and tcp6', () 
   assert.deepEqual(parseProbe('alive\nnoproc\n'), { proc: false, alive: true })
 })
 
+test("parseProbe keeps lsof's reachable listeners, as macOS lists them", () => {
+  const probe = parseProbe(
+    [
+      'alive',
+      'lsof',
+      'p101',
+      'n*:3000',
+      'n127.0.0.1:5173',
+      'n[::1]:8080',
+      'n10.0.0.2:9000',
+      '',
+    ].join('\n'),
+  )
+  assert.deepEqual(probe, {
+    proc: true,
+    alive: true,
+    listeners: [
+      { port: 3000, address: '0.0.0.0' },
+      { port: 5173, address: '127.0.0.1' },
+      { port: 8080, address: '::1' },
+    ],
+  })
+  assert.deepEqual(parseProbe('lsof\n'), { proc: true, alive: false, listeners: [] })
+})
+
 const on = (...ports: Array<[number, string]>): Listener[] =>
   ports.map(([port, address]) => ({ port, address }))
 const state = (listeners: Listener[], more: Partial<Parameters<typeof decide>[0]> = {}) => ({
@@ -271,11 +296,21 @@ test('the probe script reads the listeners from /proc and whether the pid runs',
     )
     assert.ok(probe.proc && probe.alive)
     assert.ok(probe.listeners.some((l) => l.port === port && l.address === '::1'))
+    if (spawnSync('sh', ['-c', 'command -v lsof']).status === 0) {
+      const viaLsof = parseProbe(
+        spawnSync('sh', ['-c', probeScript(String(child.pid), 'lsof')]).stdout.toString(),
+      )
+      assert.ok(viaLsof.proc && viaLsof.alive)
+      assert.ok(
+        viaLsof.listeners.some((l) => l.port === port && l.address === '::1'),
+        'and from lsof',
+      )
+    }
     const gone = parseProbe(spawnSync('sh', ['-c', probeScript('999999999')]).stdout.toString())
     assert.equal(gone.alive, false)
     assert.deepEqual(
       parseProbe(
-        spawnSync('sh', ['-c', probeScript(String(process.pid), false)]).stdout.toString(),
+        spawnSync('sh', ['-c', probeScript(String(process.pid), 'host')]).stdout.toString(),
       ),
       {
         proc: false,

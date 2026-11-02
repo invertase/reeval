@@ -78,6 +78,12 @@ export async function prepareEnvironment(
       'image',
       `ready ${ref} (${id.replace(/^sha256:/, '').slice(0, 12)}) · prepared before the run${ref !== base ? ` · on ${base}` : ''}${agentCli ? ` · agent CLI ${agentCli}` : ''}${install.length ? ` · install: ${install.join(' && ')}` : ''}`,
     )
+  } else if (kind.capabilities.isolated) {
+    const from = 'image' in spec.sandbox ? spec.sandbox.image : undefined
+    debugLog(
+      'image',
+      `${from ?? 'none recorded'} · ${kind.helpers[0]}() prepared it before the run and starts each attempt from it`,
+    )
   } else {
     debugLog('image', `none: the ${spec.sandbox.kind} sandbox runs on the host`)
   }

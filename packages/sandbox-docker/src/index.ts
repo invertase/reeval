@@ -53,7 +53,13 @@ export {
   removeContainerDetached,
 } from './docker-cli.ts'
 export { contextFiles, dockerignoreMatcher } from './dockerignore.ts'
-export { CA_PATH, PROXY_PORT } from './egress/gateway.ts'
+export {
+  CA_PATH,
+  type Gateway,
+  type GatewayOptions,
+  PROXY_PORT,
+  startGateway,
+} from './egress/gateway.ts'
 export {
   DOCKER_EGRESS,
   defaultAllowedHosts,
@@ -80,6 +86,7 @@ export {
 } from './egress/rules.ts'
 export { placeholder, type SubstituteIn, type Substitution } from './egress/substitution.ts'
 export type { DerivedTokens } from './egress/tokens.ts'
+export type { ExecTransport } from './egress/transport.ts'
 export {
   dockerSeccompFile,
   ENGINES,
@@ -120,4 +127,4 @@ export {
   type SandboxLimits,
   type SessionOptions,
 } from './session.ts'
-export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand } from './trace.ts'
+export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'

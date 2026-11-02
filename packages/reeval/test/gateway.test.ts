@@ -351,10 +351,7 @@ describe('Vercel AI Gateway routes', () => {
     assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh', 'mcp.exa.ai'])
     assert.deepEqual(
       agent.endpoints.map((e) => [e.host, e.path]),
-      [
-        ['ai-gateway.vercel.sh', { exact: '/v1/messages' }],
-        ['ai-gateway.vercel.sh', { exact: '/v4/ai/messages' }],
-      ],
+      [['ai-gateway.vercel.sh', { exact: '/v1/messages' }]],
     )
     assert.deepEqual(agent.modelResponses, agent.endpoints)
     assert.equal(agent.modelId?.('google/gemini-3-flash'), 'vercel/google/gemini-3-flash')

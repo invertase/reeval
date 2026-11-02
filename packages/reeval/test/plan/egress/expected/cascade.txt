@@ -15,4 +15,4 @@ excluded: —
 image docker · cursor · 9 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
-  base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.174-patch.ad4864bb  (reeval's image: built when missing or when its base changed)

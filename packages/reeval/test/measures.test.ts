@@ -158,7 +158,7 @@ describe('one comparison over every measure', () => {
     assert.ok(reading && reading !== 'tie' && reading.told === 'leans')
     assert.equal(reading.needed, time.needed)
     assert.equal(measuresLine(ms ?? []), 'same pass rate', 'a lean is left out by default')
-    assert.equal(measuresLine(ms ?? [], true), 'same pass rate · looks 10% faster')
+    assert.equal(measuresLine(ms ?? [], true), 'same pass rate · 10% faster (leans)')
   })
 
   test('a difference below its measure minimum that its test does not hold is the same', () => {

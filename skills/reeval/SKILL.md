@@ -326,7 +326,8 @@ reeval analyze           reeval studio          reeval image build      reeval d
 `reeval run` ends with a status list: each eval file, a line per eval under it with its icon and
 `N of M runs passed`, and for a failure, a compare or an eval with remarks, a sentence for each
 way it went (the harnesses, a variant's effect as `helped`, `made it worse` or `same`, the failed
-checks with their messages and lines); `-v` expands every eval. Then the tally
+checks with their messages and lines; for an agent, also the rest of each message, the snapshot
+and each remark's whole sentence); `-v` expands every eval. Then the tally
 (`Done in 12s · 1 failed · 2 passed`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run; an eval with `gate: 'observe'` is `1 ran`, never a pass,
 so read its arm rows for what passed). `Worth knowing:` under an eval names what about it needs work

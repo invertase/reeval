@@ -35,7 +35,7 @@ import { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-to
 
 export const OPENCODE_HARNESS_ID = 'opencode'
 /** The `@opencode/cli` release the bootstrap installs (pinned in `opencode-install.ts`). */
-export const OPENCODE_CLI_VERSION = '2.1.4'
+export const OPENCODE_CLI_VERSION = '2.2.5'
 /** Where harness-placed skills go, under the sandbox home: OpenCode's own global directory. */
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 /**
@@ -207,6 +207,9 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     version: 'v1',
     harnessId: OPENCODE_HARNESS_ID,
     builtinTools: OPENCODE_BUILTIN_TOOLS,
+    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+    resolveHostToolCall: () => undefined,
+    isMcpToolCall: () => false,
     source: {
       type: 'npm-locked',
       packageJson: OPENCODE_PACKAGE_JSON,

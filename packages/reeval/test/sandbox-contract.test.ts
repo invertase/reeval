@@ -10,6 +10,7 @@ import { DEFAULT_IMAGE } from '@reeval/sandbox-docker'
 import { createSandbox, type Sandbox } from '../src/sandbox/index.ts'
 import type { SandboxDescriptor } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
+import { installFakeTart } from './support/fake-tart.ts'
 
 const dockerReady = (() => {
   try {
@@ -21,12 +22,21 @@ const dockerReady = (() => {
 })()
 const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 
+let fakeTartDir: string | undefined
 const kinds: Array<{ name: string; descriptor: () => SandboxDescriptor; skip: string | false }> = [
   { name: 'fake', descriptor: () => ({ kind: 'fake', dir: tempDir('contract') }), skip: false },
   {
     name: 'docker',
     descriptor: () => ({ kind: 'docker' }),
     skip: !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`,
+  },
+  {
+    name: 'tart, on a fake tart',
+    descriptor: () => {
+      if (!fakeTartDir) fakeTartDir = installFakeTart().dir
+      return { kind: 'tart', image: 'macos-sequoia-base' }
+    },
+    skip: process.platform === 'win32' && 'the fake tart is a bash script',
   },
 ]
 

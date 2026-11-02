@@ -736,7 +736,10 @@ export function readMeasures(measures: readonly Measure[]): Reading {
   }
 }
 
-/** `same pass rate · 5× faster · judge "tidy" +0.12`: pass rate, then the measures that hold. */
+/**
+ * `same pass rate · 5× faster · judge "tidy" +0.12`: pass rate, then the measures that hold, and with
+ * `leans` the ones that only lean, each marked `(leans)`.
+ */
 export const measuresLine = (measures: readonly Measure[], leans = false): string =>
   measures
     .filter(
@@ -746,7 +749,7 @@ export const measuresLine = (measures: readonly Measure[], leans = false): strin
         m.verdict === 'worse' ||
         (leans && m.verdict === 'leans'),
     )
-    .map((m) => (m.verdict === 'leans' && m.measure !== 'pass' ? `looks ${m.text}` : m.text))
+    .map((m) => (m.verdict === 'leans' && m.measure !== 'pass' ? `${m.text} (leans)` : m.text))
     .join(' · ')
 
 /**

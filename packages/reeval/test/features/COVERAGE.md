@@ -114,6 +114,7 @@
 | `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 8 | — | — |
 | Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 1 | — | — | ● 3 | ● 3 | — |
 | `podman({ … })`: `docker()`'s sandbox on rootless Podman, on the bridge network with Docker's seccomp profile | ✓ 3 | ✓ 1 | — | ● 1 | ● 2 | — |
+| `tart({ … })`: a macOS VM per attempt on Apple Silicon, under `egress: 'allow-all'`, at most two at once | ✓ 5 | ✓ 1 | ● 1 | — | — | — |
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 2 | ✓ 2 | — | — | — | — |
 | Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`) | — | — | — | ● 2 | — | — |
 | `docker({ memory, cpus, pids })` and their defaults | ✓ 1 | — | — | ● 1 | ● 1 | — |

@@ -1,32 +1,42 @@
 // The sandbox kind registry: every kind answers for itself, and what planning and the attempt ask
 // of a sandbox (egress, brokering, a harness session, the platform) comes from its capabilities.
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
 import { describe, test } from 'node:test'
+import { resolveConfig } from '../src/config.ts'
 import { SANDBOX_EGRESS } from '../src/egress.ts'
 import { agentSandboxProblem } from '../src/harness/agent.ts'
 import { AGENTS } from '../src/harness/agents.ts'
+import { fakeHarness } from '../src/harness.ts'
+import { planEval } from '../src/plan-eval.ts'
 import {
   capabilitiesOf,
   isSandboxKind,
+  maxConcurrentProblem,
+  providerLimit,
   SANDBOX_KINDS,
   sandboxHelpers,
   sandboxKind,
   suggestedSandbox,
 } from '../src/sandbox/kinds.ts'
-import { createProviders } from '../src/sandbox/providers.ts'
-import { docker, fakeSandbox, podman } from '../src/sandbox.ts'
+import { classifyTart, createProviders, tartHostProblem } from '../src/sandbox/providers.ts'
+import { docker, fakeSandbox, podman, tart } from '../src/sandbox.ts'
+import type { SandboxDescriptor } from '../src/types.ts'
+
+const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
 describe('sandbox kinds', () => {
   test('every kind is in the table, and nothing else is a kind', () => {
-    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['docker', 'fake'])
+    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['docker', 'fake', 'tart'])
     assert.ok(isSandboxKind('docker'))
-    assert.ok(!isSandboxKind('tart'))
+    assert.ok(isSandboxKind('tart'))
+    assert.ok(!isSandboxKind('vm'))
     assert.ok(!isSandboxKind('toString'))
     assert.ok(!isSandboxKind(undefined))
   })
 
   test('each kind names its helpers, and messages list them all', () => {
-    assert.equal(sandboxHelpers(), 'docker(), podman() or fakeSandbox()')
+    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox() or tart()')
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),
       'docker()',
@@ -39,7 +49,7 @@ describe('sandbox kinds', () => {
 
   test('every provider a kind names has a prepare provider', () => {
     const providers = createProviders()
-    for (const sandbox of [docker(), podman(), fakeSandbox()]) {
+    for (const sandbox of [docker(), podman(), fakeSandbox(), tart({ image: IMAGE })]) {
       const name = sandboxKind(sandbox).provider(sandbox)
       assert.equal(providers[name]?.kind, name)
     }
@@ -62,7 +72,9 @@ describe('sandbox kinds', () => {
       harnessSession: true,
       isolated: true,
       processTable: true,
+      listeners: 'proc',
       images: true,
+      preflight: true,
       pluginBuilds: true,
     })
     assert.deepEqual(capabilitiesOf(fakeSandbox()), {
@@ -72,9 +84,31 @@ describe('sandbox kinds', () => {
       harnessSession: false,
       isolated: false,
       processTable: false,
+      listeners: 'host',
       images: false,
+      preflight: false,
       pluginBuilds: false,
     })
+  })
+
+  test('Tart is an isolated macOS VM that brokers, preflight pulls, and has no harness session yet', () => {
+    assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
+      platform: 'darwin',
+      egress: { enforce: 'none', record: true },
+      brokers: true,
+      harnessSession: false,
+      isolated: true,
+      processTable: false,
+      listeners: 'lsof',
+      images: false,
+      preflight: true,
+      pluginBuilds: false,
+    })
+    assert.equal(
+      sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
+      'tart:macos-sequoia-base:latest',
+    )
+    assert.equal(sandboxKind(tart({ image: 'mine' })).provider(tart({ image: 'mine' })), 'tart')
   })
 
   test('what a Docker sandbox widens is its own privileges; the fake one widens none', () => {
@@ -117,5 +151,62 @@ describe('which sandbox a real harness runs in', () => {
       agentSandboxProblem(darwinOnly, docker()),
       "The Cursor harness can't run in the docker sandbox, which runs linux, not darwin: use fakeHarness() with fakeSandbox()",
     )
+  })
+})
+
+describe('how many sandboxes run at once', () => {
+  test('Tart runs two VMs at once unless maxConcurrent says fewer, and refuses more', () => {
+    assert.equal(providerLimit(tart({ image: IMAGE })), 2)
+    assert.equal(providerLimit(tart({ image: IMAGE, maxConcurrent: 1 })), 1)
+    assert.equal(maxConcurrentProblem(tart({ image: IMAGE, maxConcurrent: 2 }), 'e'), undefined)
+    assert.equal(
+      maxConcurrentProblem({ kind: 'tart', image: IMAGE, maxConcurrent: 3 }, 'e'),
+      'sandbox.maxConcurrent in e is 3, but tart() runs at most 2 at once: macOS runs two macOS VMs at a time',
+    )
+    assert.throws(() => tart({ image: IMAGE, maxConcurrent: 3 }), /at most 2 macOS VMs/)
+  })
+
+  test("each attempt's gate holds Tart to its limit, whatever the run's concurrency", () => {
+    const plan = (sandbox: SandboxDescriptor) => {
+      const config = resolveConfig(
+        { harnesses: fakeHarness(), sandbox, egress: 'allow-all' },
+        tmpdir(),
+        'reeval.config.ts',
+      )
+      const { tests } = planEval(
+        { name: 'e', mode: 'run', groups: [], options: {}, source: { body: '0'.repeat(64) } },
+        { config, profile: null, tags: [], concurrency: 8, file: undefined, order: 0 },
+      )
+      return tests?.[0]?.gate.limits
+    }
+    assert.deepEqual(plan(tart({ image: IMAGE })), { attempts: 8, 'sandbox:tart': 2 })
+    assert.deepEqual(plan(tart({ image: IMAGE, maxConcurrent: 1 })), {
+      attempts: 8,
+      'sandbox:tart': 1,
+    })
+    assert.deepEqual(plan(docker()), { attempts: 8 })
+  })
+
+  test('Docker and the fake sandbox have no limit of their own', () => {
+    assert.equal(providerLimit(docker()), undefined)
+    assert.equal(providerLimit(fakeSandbox()), undefined)
+    assert.equal(providerLimit(docker({ maxConcurrent: 8 })), 8)
+    assert.equal(maxConcurrentProblem(docker({ maxConcurrent: 64 }), 'e'), undefined)
+  })
+})
+
+describe('the Tart provider', () => {
+  test('runs on Apple Silicon Macs only', () => {
+    assert.equal(tartHostProblem('darwin', 'arm64'), null)
+    assert.match(tartHostProblem('darwin', 'x64') ?? '', /this machine is darwin-x64/)
+    assert.match(tartHostProblem('linux', 'arm64') ?? '', /Apple Silicon.*or in docker\(\)/)
+  })
+
+  test('keys on the image alone, and classes a full disk and a network error', () => {
+    const provider = createProviders().tart
+    assert.equal(provider?.key(tart({ image: 'a', cpus: 4 }), { kind: 'fake' }), '{"image":"a"}')
+    assert.equal(classifyTart(new Error('No space left on device')).cause, 'enospc')
+    assert.equal(classifyTart(new Error('connection reset by peer')).class, 'transient')
+    assert.equal(classifyTart(new Error('image not found')).class, 'config')
   })
 })

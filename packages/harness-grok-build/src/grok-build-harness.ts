@@ -241,6 +241,9 @@ export function createGrokBuild(
     version: 'v1',
     harnessId: GROK_BUILD_HARNESS_ID,
     builtinTools: GROK_BUILD_BUILTIN_TOOLS,
+    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+    resolveHostToolCall: () => undefined,
+    isMcpToolCall: () => false,
     source: { type: 'install-command', command: GROK_INSTALL_COMMAND },
     executable: 'grok-acp',
     args: [],

@@ -111,9 +111,11 @@ function scope(c: Colors, h: RunHeader): string {
 
 function estimate(c: Colors, h: RunHeader): string {
   const serial = `~${formatDuration(h.estimateMs)} ${c.dim('(serial)')}`
-  const parallel = Math.min(h.concurrency, h.attempts)
+  const most = Math.min(h.concurrency, h.attempts)
+  const parallel = h.parallel ?? most
   if (parallel <= 1) return serial
-  const at = `~${formatDuration(h.estimateMs / parallel)} ${c.dim(`(concurrency: ${h.concurrency})`)}`
+  const capped = parallel < most ? `, ${parallel} at once` : ''
+  const at = `~${formatDuration(h.estimateMs / parallel)} ${c.dim(`(concurrency: ${h.concurrency}${capped})`)}`
   return `${at} · ${serial}`
 }
 

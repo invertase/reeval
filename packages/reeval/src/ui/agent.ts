@@ -83,7 +83,9 @@ export class AgentRenderer implements Renderer {
           verbose,
           ...(e.notRun ? { notRun: e.notRun } : {}),
         })
-        for (const line of listLines(list, this.#c, false, pointerLine(e.summaryPath), verbose)) {
+        // An agent can't press → for the rest, and the snapshot and excerpt are what it acts on.
+        const pointer = pointerLine(e.summaryPath)
+        for (const line of listLines(list, this.#c, false, pointer, verbose, true)) {
           this.#write(line)
         }
         return

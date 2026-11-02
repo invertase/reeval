@@ -21,11 +21,16 @@ import {
   skillSourceSchema,
 } from './plain.ts'
 import { type Assert, durationSchema, nonEmpty, type Same } from './shared.ts'
+import { tartSandboxSchema } from './tart.ts'
 
 /** An environment's or layer's name, which names its cells. */
 export const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 
-export const sandboxDescriptorSchema = z.union([fakeSandboxSchema, dockerSandboxSchema])
+export const sandboxDescriptorSchema = z.union([
+  fakeSandboxSchema,
+  dockerSandboxSchema,
+  tartSandboxSchema,
+])
 
 export const setupStepSchema = z.union([
   nonEmpty(),

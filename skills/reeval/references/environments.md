@@ -142,6 +142,10 @@ podman({ from: 'python:3.12-slim' })
 Use `podman()` only where the user runs Podman instead of Docker: it takes every `docker()`
 option and confines the container the same way (bridge network, Docker's seccomp profile).
 
+`tart({ image })` (an OCI macOS image or a local Tart VM) runs each attempt in a cloned macOS VM
+on an Apple Silicon Mac, at most two at once. It needs `egress: 'allow-all'`: under the default
+`proxy` or a restricted policy the plan exits 2. Only `fakeHarness()` runs in it so far.
+
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds
 run as root. `root: true` or `capabilities` print a warning at the start of every run, so prefer
 `install`. A process killed at the memory limit makes the attempt an infra error

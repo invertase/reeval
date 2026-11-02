@@ -166,10 +166,11 @@ describe('automatic hosts', () => {
 })
 
 describe('what a sandbox can enforce', () => {
-  test('each provider declares it: Docker all of it and recording, the fake nothing', () => {
+  test('each provider declares it: Docker all of it and recording, Tart recording, the fake nothing', () => {
     assert.deepEqual(SANDBOX_EGRESS, {
       docker: { enforce: 'allowlist', record: true },
       fake: { enforce: 'none', record: false },
+      tart: { enforce: 'none', record: true },
     })
   })
 
@@ -194,6 +195,19 @@ describe('what a sandbox can enforce', () => {
     // Twin: proxy and allow-all need nothing, so the fake sandbox takes them.
     assert.equal(unenforceable({ policy: 'allow-all', auto: [] }, { kind: 'fake' }, 'e'), undefined)
     assert.equal(unenforceable({ policy: 'proxy', auto: [] }, { kind: 'fake' }, 'e'), undefined)
+  })
+
+  test('Tart takes allow-all only: under proxy what ignores the gateway goes around it', () => {
+    const vm = { kind: 'tart', image: 'macos' } as const
+    assert.equal(unenforceable({ policy: 'allow-all', auto: [] }, vm, 'e'), undefined)
+    assert.match(
+      unenforceable({ policy: 'proxy', auto: [] }, vm, 'e') ?? '',
+      /^e runs under egress 'proxy', .* the tart sandbox keeps its own network, .* Set egress: 'allow-all'\.$/,
+    )
+    assert.match(
+      unenforceable({ policy: 'deny-all', auto: [] }, vm, 'e') ?? '',
+      /the tart sandbox enforces no egress policy\.$/,
+    )
   })
 })
 

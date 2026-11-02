@@ -1,5 +1,5 @@
 // The sandbox providers reeval has, each meeting the prepare contract (provider.ts). Docker and
-// Podman build images; the fake sandbox needs nothing.
+// Podman build images, Tart pulls them, and the fake sandbox needs nothing.
 import {
   type DockerState,
   dockerState,
@@ -16,6 +16,7 @@ import type {
   FakeSandboxDescriptor,
   HarnessDescriptor,
   PluginSource,
+  TartSandboxDescriptor,
 } from '../types.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
 import {
@@ -229,6 +230,67 @@ export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
   }),
 })
 
+/**
+ * Why this host can't run Tart VMs, or null: macOS on Apple Silicon only. reeval's own tests
+ * set REEVAL_TEST_TART_ANY_HOST to run the fixtures on a stand-in `tart` anywhere.
+ */
+export function tartHostProblem(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): string | null {
+  if (platform === 'darwin' && arch === 'arm64') return null
+  if (process.env.REEVAL_TEST_TART_ANY_HOST === '1') return null
+  return `tart() runs macOS VMs with Tart, which needs a Mac with Apple Silicon, and this machine is ${platform}-${arch}. Run these evals on one, or in docker().`
+}
+
+/** How Tart's failures class: a full disk is a resource, a network error transient. */
+export function classifyTart(error: unknown): PrepareFailure {
+  const message = error instanceof Error ? error.message : String(error)
+  const enospc = /no space left|not enough (free )?(disk )?space/i.test(message)
+  return {
+    class: enospc ? 'resource' : isTransient(message) ? 'transient' : 'config',
+    stage: 'tart pull',
+    ref: null,
+    cause: enospc ? 'enospc' : null,
+    log: null,
+    message,
+  }
+}
+
+/** Tart: an image is pulled once per run, unless `tart list` has it already. */
+export const tartProvider = (): SandboxProvider<TartSandboxDescriptor> => ({
+  kind: 'tart',
+  async check() {
+    const { tartCli } = await import('./tart-cli.ts')
+    const problem =
+      tartHostProblem() ??
+      (await tartCli(['--version']).then(
+        (r) => (r.exitCode === 0 ? null : `tart --version failed: ${r.stderr.trim()}`),
+        () =>
+          "Tart isn't installed: there's no tart command on the PATH. Install it (brew install cirruslabs/cli/tart, see https://tart.run) and try again.",
+      ))
+    if (!problem) return
+    throw new PrepareError({
+      class: 'config',
+      stage: 'tart',
+      ref: null,
+      cause: null,
+      log: null,
+      usage: true,
+      message: problem,
+    })
+  },
+  key: (sandbox) => JSON.stringify({ image: sandbox.image }),
+  async prepare(sandbox, _harness, ctx) {
+    const { tartNames, tartOk } = await import('./tart-cli.ts')
+    if ((await tartNames(ctx.signal)).has(sandbox.image)) return { image: sandbox.image }
+    ctx.log(`tart pull ${sandbox.image}`)
+    await ctx.retry(() => tartOk(['pull', sandbox.image], { signal: ctx.signal }))
+    return { image: sandbox.image }
+  },
+  classify: classifyTart,
+})
+
 /** A fresh set of providers, one per run: each keeps the run's builds. */
 export const createProviders = (
   options: { refresh?: Refresh } = {},
@@ -236,4 +298,5 @@ export const createProviders = (
   docker: dockerProvider(options),
   podman: dockerProvider({ ...options, engine: 'podman' }),
   fake: fakeProvider(),
+  tart: tartProvider(),
 })
