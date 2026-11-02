@@ -1,0 +1,78 @@
+---
+title: "Run on Boat"
+description: "Run each attempt in its own boat.dev VM, over SSH."
+---
+
+`boat()` returns a sandbox that runs each attempt in a fresh [boat.dev](https://boat.dev) VM. reeval creates the VM as the attempt starts, runs the agent, the setup commands, and the assertions in it over SSH, and deletes it when the attempt ends.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { boat } from '{{ pkg }}/sandbox/boat'
+
+export default defineConfig({
+  harnesses: cursor({ model: 'composer-2.5' }),
+  sandbox: boat(),
+  egress: 'allow-all',
+})
+```
+
+## Requirements
+
+`reeval doctor` reports each requirement when a planned evaluation uses `boat()`. Before a run, reeval checks the same requirements and exits with code 2 when one fails, naming the fix.
+
+- **The Boat SDK in the project.** `boat()` loads `@boatdev/sdk`, an optional peer of `{{ pkg }}`: `npm i @boatdev/sdk`.
+- **A Boat API key in `BOAT_API_KEY`**, in the shell or the `.env.local` file. The key stays on the host.
+- **An OpenSSH client.** reeval runs every command in the VM through `ssh` on the host.
+- **`egress: 'allow-all'`.** The VM keeps its own network, so reeval can't enforce a restricted policy there, and refuses `proxy`, the default, at plan time. The egress gateway still brokers the harness's key.
+- **The Cursor harness.** Other harnesses install their CLI as the attempt starts, which isn't verified on Boat yet. reeval refuses them at plan time until Boat snapshots bake each CLI in ahead of the run; run them in `docker()`.
+
+## `boat()`
+
+`{{ pkg }}/sandbox/boat` exports `boat` and `createBoat`. `boat()` takes three options, each optional:
+
+```ts title="reeval.config.ts"
+  sandbox: boat({ type: 'large', id: 'boat-large', maxConcurrent: 4 }),
+```
+
+| Option | What it sets |
+| :--- | :--- |
+| `type` | The machine size: `'small'` (2 vCPUs, 4 GB, the default), `'default'`, `'large'`, or `'xlarge'` |
+| `id` | The last segment of the cell key, `boat` or `boat:<type>` by default |
+| `maxConcurrent` | The most VMs reeval runs at once across the run |
+
+`boat()` refuses the `docker()` options a VM doesn't have, and names what to use instead: `type` for `memory`, `cpus`, and `swap`, and the environment's `setup` for `image`, `from`, `dockerfile`, and `install`. The agent runs as the unprivileged `reeval` user, and `root` isn't available yet.
+
+## `createBoat()`
+
+`createBoat()` returns a `boat()` for another account or name prefix:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { createBoat } from '{{ pkg }}/sandbox/boat'
+
+export default defineConfig(({ secret }) => {
+  const boat = createBoat({
+    apiKey: secret.fromEnv('TEAM_BOAT_API_KEY'),
+    prefix: 'team-evals',
+  })
+  return { sandbox: boat({ type: 'large' }), egress: 'allow-all' }
+})
+```
+
+`apiKey` names the host variable with the key, `BOAT_API_KEY` by default. `prefix` starts every VM name reeval gives Boat, `reeval` by default: lowercase letters, digits, and dashes, at most 32 characters. Each VM's name is `<prefix>-<run>-<attempt>`, so a canceled run's cleanup deletes only its own VMs. Each VM also has a time to live of the attempt's timeout plus 10 minutes, so Boat removes one that cleanup missed.
+
+## Verify with reeval doctor
+
+To check the SSH client, the SDK, and the key, run `reeval doctor`. With `--online`, it also asks Boat whether it takes the key and starts the machine size:
+
+```bash
+npx reeval doctor --online
+```
+
+```text
+✓ ssh        an OpenSSH client for boat()
+✓ boat       Boat takes the key in BOAT_API_KEY and starts small machines
+```
+
+For every option and its default, see [the `boat()` options](/reference/options#boat). For what `allow-all` lets through, see [Egress](/configuration/environments/egress).

@@ -127,6 +127,14 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 `XAI_API_KEY` is the credential for the `grokBuild` harness.
 
+## `BOAT_API_KEY`
+
+`BOAT_API_KEY` is the Boat API key for `boat()`, unless `createBoat({ apiKey })` names another variable. It stays on the host.
+
+## `BOAT_BASE_URL`
+
+`BOAT_BASE_URL` points `boat()` at another Boat API, such as `http://127.0.0.1:8080/api/v1` for a local one. With no value, reeval uses Boat's own.
+
 ## `AWS_REGION`
 
 `AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [OpenCode providers table](/reference/options#opencode-providers).

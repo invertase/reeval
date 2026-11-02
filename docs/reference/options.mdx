@@ -569,6 +569,30 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
   Reach the VM over SSH when `tart exec` can't, for an image without the Tart Guest Agent. `key` is a private key the image trusts, relative to the file that calls `tart()`, absolute, or a `file:` URL; `user` defaults to `admin`.
 </Property>
 
+## `boat()`
+
+`boat()`, from `{{ pkg }}/sandbox/boat`, takes these options. `createBoat()` returns a `boat()` for one account and name prefix. For more information, see [Run on Boat](/configuration/sandboxes/boat).
+
+<Property name="boat.type" type="'small' | 'default' | 'large' | 'xlarge'" optional>
+  The VM's machine size. Defaults to `'small'`, with 2 vCPUs and 4 GB of memory.
+</Property>
+
+<Property name="boat.id" type="string" optional>
+  The last segment of the cell key. Defaults to `boat`, or `boat:<type>` for another `type`.
+</Property>
+
+<Property name="boat.maxConcurrent" type="number" optional>
+  The most VMs reeval runs at once across the run. A whole number of at least 1. The run's `concurrency` option still caps attempts overall.
+</Property>
+
+<Property name="createBoat.apiKey" type="SecretRef" optional>
+  The host variable with the Boat API key, as `secret.fromEnv('TEAM_BOAT_API_KEY')`. Defaults to `BOAT_API_KEY`. A string key is refused: the key stays on the host.
+</Property>
+
+<Property name="createBoat.prefix" type="string" optional>
+  The start of every VM name reeval gives Boat. Lowercase letters, digits, and dashes, starting and ending with a letter or digit, at most 32 characters. Defaults to `reeval`.
+</Property>
+
 ## `environments`
 
 `environments` names what an evaluation runs in, one cell each.

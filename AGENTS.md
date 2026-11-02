@@ -100,9 +100,11 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
 - `@vitest/expect` and `@vitest/utils` are pinned to exactly the same version, and only
   `packages/reeval/src/engine` imports them (`test/manifest.test.ts` and `test/engine.test.ts`
   hold both). `@vitest/utils` is Vitest's internal package and isn't semver-safe alone, so bump
-  them together. Everything `reeval` loads is one of the package's own `dependencies`: Yarn and pnpm
-  without `auto-install-peers` don't install peers, and the pack test's Yarn 1, Yarn Berry
-  Plug'n'Play and strict pnpm installs catch a missing one.
+ them together. Everything `reeval` loads is one of the package's own `dependencies`: Yarn and pnpm
+ without `auto-install-peers` don't install peers, and the pack test's Yarn 1, Yarn Berry
+ Plug'n'Play and strict pnpm installs catch a missing one. The one exception is an optional peer
+ a user installs for one feature (`@boatdev/sdk`, for `boat()`): only `import()` loads it, where
+ it's used, and the build fails on a static import of it.
 
 ## Repository layout
 

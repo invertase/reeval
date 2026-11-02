@@ -118,7 +118,12 @@ for (const installer of installers) {
     assert.equal(run.status, 0, run.stdout + run.stderr)
     assert.match(run.stdout, /^└─ ✓ hello {2}1 of 1 run passed$/m)
     await boatInApp(app, pkg, () => {
-      const sdk = sh(installer.cmd, app, [...installer.addSdk, `${BOAT_SDK}@${boatPeer(manifest)}`], 240_000)
+      const sdk = sh(
+        installer.cmd,
+        app,
+        [...installer.addSdk, `${BOAT_SDK}@${boatPeer(manifest)}`],
+        240_000,
+      )
       assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
     })
   })
@@ -175,7 +180,10 @@ export default defineConfig({ harnesses: fakeHarness(), sandbox: boat(), egress:
     const doctor = await cliAsync(app, ['doctor', '--online', '--json', ...config], env)
     const row = JSON.parse(doctor.out).checks.find((c: { id: string }) => c.id === 'boat')
     assert.equal(row?.status, 'ok', doctor.out)
-    assert.ok(api.requests.some((q) => q.call === 'GET /limits'), 'doctor reached Boat')
+    assert.ok(
+      api.requests.some((q) => q.call === 'GET /limits'),
+      'doctor reached Boat',
+    )
   } finally {
     await api.close()
   }
