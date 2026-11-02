@@ -534,6 +534,13 @@
           "description": "What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's `usage.cost`); absent when it names none.",
           "type": "number"
         },
+        "retries": {
+          "description": "The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran it again, oldest first: each `{ error, at }`, `at` being when that try started (null when it never did). The attempt's own `outcome` and `error` are its last try's. Absent when it never ran again.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptRetry"
+          }
+        },
         "seq": {
           "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
@@ -749,6 +756,26 @@
         "turns",
         "usage"
       ]
+    },
+    "AttemptRetry": {
+      "description": "An infra error an attempt ended with before it ran again, and when that try started.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "error": {
+          "$ref": "#/$defs/AttemptError"
+        }
+      },
+      "required": ["at", "error"]
     },
     "CaptureStep": {
       "description": "One instruction of a capture, as it ended. Its screenshot is `artifacts/<name>.step-<index>.png`, beside the capture's own `artifacts/<name>.png`.",
@@ -3141,6 +3168,7 @@
           "required": ["lockfiles"]
         },
         "durationMs": {
+          "description": "How long the run ran, counting each `--retry-errors` of it but not the time between them.",
           "type": "number"
         },
         "endedAt": {
@@ -3334,6 +3362,13 @@
             }
           },
           "required": ["version"]
+        },
+        "retriedAt": {
+          "description": "When each `reeval run --retry-errors` of the run started, oldest first; unset for a run never retried. A `--resume` of the run while it's `interrupted` finishes the last one.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "runId": {
           "description": "Also the file name: `<UTC start>_<short sha>_<author or ci>`.",

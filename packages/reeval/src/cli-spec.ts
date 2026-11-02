@@ -63,6 +63,7 @@ export const FLAGS = {
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
+  'retry-errors': { type: 'string', optional: true },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -105,6 +106,7 @@ const RUN_FLAGS: FlagName[] = [
   'output-logs',
   'verbose',
   'resume',
+  'retry-errors',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -170,9 +172,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 keep every attempt's trace.ndjson (else only failing attempts')
                                 Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
-                                skip completed attempts, restart in-flight ones. Without a ref, the
-                                newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix`,
+                                keep passed and failed attempts, restart in-flight and infra-errored
+                                ones. Without a ref, the newest resumable (Stopped staging, or an
+                                interrupted/budget scratch), not assembled latest. Ref is a run id or
+                                unique prefix
+    --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
+                                the same run; passes and fails stay. Without a ref, the newest
+                                finished run. Exit 2 when the plan or eval source changed since`,
   },
   clean: {
     flags: ['keep', 'images'],

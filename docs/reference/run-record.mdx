@@ -54,7 +54,13 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 
 <Property name="endedAt" type="string"></Property>
 
-<Property name="durationMs" type="number"></Property>
+<Property name="durationMs" type="number">
+  How long the run ran, counting each `--retry-errors` of it but not the time between them.
+</Property>
+
+<Property name="retriedAt" type="string[]" optional>
+  When each `reeval run --retry-errors` of the run started, oldest first; unset for a run never retried. A `--resume` of the run while it's `interrupted` finishes the last one.
+</Property>
 
 <Property name="author" type="string"></Property>
 
@@ -748,6 +754,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="startRetries" type="StartRetry[]" optional>
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
+</Property>
+
+<Property name="retries" type="AttemptRetry[]" optional>
+  The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran it again, oldest first: each `{ error, at }`, `at` being when that try started (null when it never did). The attempt's own `outcome` and `error` are its last try's. Absent when it never ran again.
 </Property>
 
 <Property name="setupProcesses" type="SetupProcess[]" optional>

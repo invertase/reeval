@@ -1,0 +1,7 @@
+no profile · 1 evals (1 skipped) · 1 cells · 1 attempts · resume 1 skipped, 1 retried
+warning: run 20260101T000000Z_nogit_test_abcd saved no --runs, profile or filters, so this retry plans with the ones given now
+evals/r.eval.ts › done      skipped: already completed in this run
+evals/r.eval.ts › leftover  fake/-/docker  control  gated  ×1
+excluded: —
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

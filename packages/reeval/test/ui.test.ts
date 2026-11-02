@@ -833,6 +833,7 @@ describe('run header', () => {
       ...header,
       dryRun: true,
       resumed: 3,
+      retried: 2,
       config: '../reeval.config.ts',
       profile: { name: 'pr', reason: 'auto: CI is set' },
       harnesses: ['cursor:composer-2.5', 'claude-code:claude-haiku-4-5', 'codex:gpt-5.1-codex'],

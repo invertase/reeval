@@ -304,11 +304,27 @@ async function claimRun(dir: string, runId: string): Promise<() => Promise<void>
   }
 }
 
-/** A record a resumed run replaces: the run stopped before it finished. */
-const unfinished = (bytes: Buffer, where: string) => {
+/**
+ * A record its continuation replaces: the run stopped before it finished, or `next` ran one of
+ * its infra errors again and keeps that error in the attempt's `retries`.
+ */
+const replaceable = (bytes: Buffer, where: string, next: Buffer) => {
   try {
-    const status = parseRecord(bytes, where).status
-    return status === 'interrupted' || status === 'budget'
+    const was = parseRecord(bytes, where)
+    if (was.status === 'interrupted' || was.status === 'budget') return true
+    const now = parseRecord(next, where)
+    const retried = new Map(
+      now.evals.flatMap((e) => e.attempts).map((a) => [a.key, a.retries ?? []] as const),
+    )
+    return was.evals
+      .flatMap((e) => e.attempts)
+      .some(
+        (a) =>
+          a.outcome === 'infra_error' &&
+          retried
+            .get(a.key)
+            ?.some((r) => r.at === a.startedAt && r.error.message === a.error?.message),
+      )
   } catch {
     return false
   }
@@ -323,7 +339,8 @@ const readIfThere = (path: string) =>
 /**
  * Claims the run, then writes `<dir>/<runId>/` (artifacts, and the snapshots `moves` brings in
  * by renaming), then `<dir>/<runId>.json` (the record). The record lands last and create-only, so a reader never sees a half-written run, and
- * a run is never rewritten, except an interrupted or budget-stopped one by its resumed run.
+ * a run is never rewritten, except an interrupted or budget-stopped one by its resumed run, and a
+ * finished one by its `--retry-errors`.
  */
 export async function writeRun(
   dir: string,
@@ -359,7 +376,7 @@ async function writeClaimed(
   const artifactDir = artifacts.size > 0 ? runDir(dir, runId) : null
   const existing = await readIfThere(recordPath)
   if (existing?.equals(bytes)) return { recordPath, artifactDir, created: false }
-  if (existing && !unfinished(existing, recordPath)) {
+  if (existing && !replaceable(existing, recordPath, bytes)) {
     throw new HistoryError(
       `${runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
     )
@@ -378,7 +395,37 @@ async function writeClaimed(
         await rename(source, target)
       }
     }
-    if (existing) await rm(recordPath, { force: true })
+    if (existing) {
+      // A replaced record never goes missing: the new one is renamed over it, which is atomic,
+      // and the claim keeps every other writer out meanwhile.
+      const old = join(dir, `.tmp-${tmpName()}`)
+      const tmp = join(dir, `.tmp-${tmpName()}.json`)
+      await writeFile(tmp, bytes)
+      let moved = false
+      try {
+        await rename(runDir(dir, runId), old).then(
+          () => {
+            moved = true
+          },
+          (error: NodeJS.ErrnoException) => {
+            if (error.code !== 'ENOENT') throw error
+          },
+        )
+        if (staging && artifactDir) await rename(staging, artifactDir)
+        await rename(tmp, recordPath)
+      } catch (error) {
+        // The old record stays, so its artifacts go back beside it.
+        if (moved) {
+          await rm(runDir(dir, runId), { recursive: true, force: true })
+          await rename(old, runDir(dir, runId))
+        }
+        throw error
+      } finally {
+        await rm(tmp, { force: true })
+      }
+      await rm(old, { recursive: true, force: true })
+      return { recordPath, artifactDir, created: true }
+    }
     // An artifact dir without a record is left over from an interrupted write.
     await rm(runDir(dir, runId), { recursive: true, force: true })
     if (staging && artifactDir) await rename(staging, artifactDir)

@@ -68,7 +68,7 @@ reeval doctor                 Check Node and npm, the config, Docker and its mem
 
 ## `reeval run`
 
-The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs.
+The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs. `--retry-errors` takes the same refs, over the finished runs.
 
 [//]: # (generated:cli-help:run)
 
@@ -104,9 +104,13 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               keep every attempt's trace.ndjson (else only failing attempts')
                               Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
   --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
-                              skip completed attempts, restart in-flight ones. Without a ref, the
-                              newest resumable (Stopped staging, or an interrupted/budget scratch),
-                              not assembled latest. Ref is a run id or unique prefix
+                              keep passed and failed attempts, restart in-flight and infra-errored
+                              ones. Without a ref, the newest resumable (Stopped staging, or an
+                              interrupted/budget scratch), not assembled latest. Ref is a run id or
+                              unique prefix
+  --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
+                              the same run; passes and fails stay. Without a ref, the newest
+                              finished run. Exit 2 when the plan or eval source changed since
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -137,6 +141,30 @@ Attempts the run planned that a resume's filters, `--tag` or `--trait` leave out
 `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` count from a `.env` file too. A run with no profile resumes with none, whatever `defaultProfile` picks now. A run an older reeval started saved no `invocation`: its resume plans with the flags given, with a note.
 
 A filter that names a path on disk, or any absolute filter, is saved relative to the project root in posix form, with its trailing `/` kept, so the resume picks the same files from any directory. For example, `./a` typed in `evals/` is saved as `evals/a`.
+
+### Retrying infrastructure errors
+
+```bash
+reeval run --retry-errors
+reeval run --retry-errors 20261022T172927Z
+```
+
+`--retry-errors [ref]` reruns a finished (`complete`) run's attempts whose outcome is `infra_error`, with the run's saved settings, as a resume does, and writes them back into that run under the same attempt ids. Its passes and fails stay as they were. A resume restarts infra-errored attempts too, alongside the ones that never finished.
+
+| Case | Exit | What it prints |
+|---|---|---|
+| The run has infra errors | The run's outcome after the retry: 0, 1 or 3 | `retried 2 errored attempts: 1 now passes, 1 fails, 0 still error` |
+| The run has none | The run's own outcome: 0 or 1 | `run … has no infra errors, so --retry-errors has nothing to run again.`, and with `--json` the run's results |
+| The plan changed: an infra-errored attempt is gone, an attempt is new, or a retried cell's eval source, harness, gateway, gate or judge isn't the run's | 2 | `run …'s plan changed since it ran: the eval source of evals/a.eval.ts › fails changed. …`, and the run is left as it was |
+| A retried attempt resolved another environment than its cell had | 2 | `run …'s plan changed since it ran: the environment of evals/a.eval.ts › fails changed. …`, after the attempts ran; the run is left as it was |
+| This reeval isn't the version the run ran on | 2 | `run … ran on reeval 0.17.2, and this is 0.18.0. … install reeval 0.17.2, or start a new run with reeval run.` |
+| The run is still running | 2 | `run … is still running. Wait for it to finish, then reeval run --retry-errors …` |
+| The run didn't finish | 2 | `run … didn't finish. reeval run --resume … runs the rest and retries its infra errors.` |
+| Filters, `--tag`, `--trait` or `--resume` beside it | 2 | Leave them out: a retry runs every errored attempt of the run |
+
+Each retried attempt keeps the errors it ended with before in its record's [`retries`](/reference/run-record), as `{ error, at }`. A run already recorded into the history folder is recorded again with the new outcomes, also when a `--resume` finishes an interrupted retry. A retry runs only the infra errors: an attempt the run skipped, such as one a best-of cell didn't need, stays skipped.
+
+The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
 
 ## `reeval clean`
 

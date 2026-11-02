@@ -96,7 +96,7 @@ type Feature = {
   /** Where `reeval run` starts, under the copied project; defaults to its root. */
   cwd?: string
   /** Runs on the copied project before `reeval run`. */
-  prepare?: (dir: string) => void
+  prepare?: (dir: string) => void | Promise<void>
   /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
   posixModes?: true
   /**
@@ -4010,6 +4010,32 @@ export const features: Feature[] = [
       assert.equal(readFileSync(join(project, '.reeval/current'), 'utf8').trim(), SEEDED_RUN_ID)
     },
   },
+  {
+    dir: 'run/retry-errors',
+    tiers: ['fake'],
+    env: 'retry',
+    args: ['--retry-errors'],
+    canary: /expected 'retry' to be 'errored'/,
+    prepare: async (dir) => {
+      const r = await runCli(dir, ['run'], {
+        env: { REEVAL_FIXTURE_OUTAGE: '1', REEVAL_FIXTURE_SANDBOX: 'fake' },
+      })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+    },
+    record: ({ run, project, stdout }) => {
+      assert.equal(
+        readdirSync(join(project, '.reeval/runs')).filter((n) => n.endsWith('.json')).length,
+        1,
+      )
+      for (const a of run.evals.flatMap((e) => e.attempts)) {
+        assert.deepEqual(
+          a.retries?.map((r) => r.error),
+          [{ kind: 'infra', message: 'fixture outage before the first turn' }],
+        )
+      }
+      assert.match(stdout, /^retried 2 errored attempts: 1 now passes, 1 fails, 0 still error$/m)
+    },
+  },
 ]
 
 /** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */
@@ -4142,7 +4168,7 @@ function fixtureTests(tiers: Tier[]) {
           reserveAttempts(row, 2, `fixture ${rowName(f)}`)
         }
         const p = await fixture(`features/${f.dir}`)
-        f.prepare?.(p.dir)
+        await f.prepare?.(p.dir)
         const cwd = join(p.dir, f.cwd ?? '')
         const r = await runCli(
           cwd,

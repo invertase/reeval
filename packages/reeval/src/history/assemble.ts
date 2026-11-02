@@ -28,7 +28,7 @@ import {
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
-import { isCompletedAttempt, type LeftOut, previousAttempt } from '../resume.ts'
+import { isCompletedAttempt, type LeftOut, previousAttempt, readRetries } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
 import type {
@@ -62,6 +62,7 @@ import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT 
 import {
   type AttemptFiles,
   type AttemptRecord,
+  type AttemptRetry,
   type CellRecord,
   type ContextFile,
   type Cost,
@@ -158,6 +159,12 @@ export type AssembleInput = {
   /** Each eval's pairwise answers by eval id, and each attempt's own answers by its key. */
   answers?: SettledQuestions
   invocation?: RunInvocation
+  /**
+   * `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process started
+   * it: the record keeps the run's plan, git state and stack, and its duration is the run's plus
+   * this process's.
+   */
+  retry?: { startedAt: Date; resume: boolean }
 }
 
 export type AssembledRun = {
@@ -212,6 +219,18 @@ const withoutCaps = <
 }: T) => rest
 
 const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.model ?? null))
+
+/**
+ * The harness's part of a fingerprint: its descriptor, less the operational limits, and less the
+ * fake harness's `failWith`, its stand-in for an outage, which a retry of the attempt outlives.
+ */
+export const harnessPart = (harness: HarnessDescriptor | undefined) => {
+  if (!harness) return sha256('null')
+  const { failWith: _, ...measured } = withoutCaps(harness) as typeof harness & {
+    failWith?: string
+  }
+  return sha256(JSON.stringify(measured))
+}
 
 /** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
@@ -436,6 +455,8 @@ function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) 
 
 /** What the run's attempts have in common, gathered while their records are read. */
 class Seen {
+  /** Each attempt's earlier infra errors, from staging's `retries.json`, by key. */
+  retries = new Map<string, AttemptRetry[]>()
   readonly sources = new Map<string, EvalEntry['sources']>()
   readonly byEval = new Map<string, EvalEntry>()
   readonly contexts = new Map<string, ContextFile>()
@@ -784,7 +805,7 @@ async function addPreviousAttempt(
   } else {
     const parts: FingerprintParts = {
       sources: sourcesPart(source, revision, sources),
-      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      harness: harnessPart(e.attempt?.harness),
       environment: cellRecord.environmentDigest,
       image: kept.imageId,
       agentCli: null,
@@ -796,6 +817,22 @@ async function addPreviousAttempt(
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
   }
+}
+
+/** The earlier infra errors of an attempt that ran again, less the try its record still is. */
+function retriesOf(
+  retries: AttemptRetry[] | undefined,
+  record: EvalRecord | null,
+): Pick<AttemptRecord, 'retries'> {
+  const earlier = (retries ?? []).filter(
+    (r) =>
+      !(
+        record?.outcome === 'infra_error' &&
+        r.at === (record.startedAt ?? null) &&
+        r.error.message === record.error?.message
+      ),
+  )
+  return earlier.length ? { retries: earlier } : {}
 }
 
 /** Reads one attempt's worker record, files its artifacts and adds it to its eval and cell. */
@@ -850,7 +887,7 @@ async function addAttempt(
     if (record) measured.add(cellRecord)
     const parts: FingerprintParts = {
       sources: sourcesPart(source, revision, sources),
-      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      harness: harnessPart(e.attempt?.harness),
       environment: environment?.digest ?? null,
       image: record?.image?.id ?? null,
       agentCli: record?.image?.agentCli ?? null,
@@ -886,6 +923,7 @@ async function addAttempt(
     outcome,
     error,
     durationMs: e.durationMs,
+    ...retriesOf(seen.retries.get(e.key), record),
     ...(await attemptEvidence(
       record,
       `${entry.slug}/${evalSlug(cell.key)}/${n}`,
@@ -1176,6 +1214,20 @@ function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
   return state
 }
 
+/** A retried run's git state as it ran, with its `worktree.patch` carried over byte-exact. */
+async function keptGit(
+  previous: RunRecord,
+  from: string | null | undefined,
+  out: Artifacts,
+): Promise<GitInfo | null> {
+  const ref = previous.git?.worktreePatch
+  if (ref && from) {
+    const bytes = await readFile(join(from, ...ref.path.split('/'))).catch(() => null)
+    if (bytes) out.files.set(ref.path, bytes)
+  }
+  return previous.git
+}
+
 const byName =
   <T>(key: (x: T) => string) =>
   (a: T, b: T) =>
@@ -1218,6 +1270,25 @@ function stackOf(
   }
 }
 
+/** The judge's part of every cell's fingerprint, and the judge model's name (null for none). */
+export function judgePart(
+  config: RunContext['config'],
+  profile: RunContext['profile'],
+  reeval: string,
+  enginePackages: Record<string, string>,
+): { part: string; model: string | null } {
+  const runJudge = profile ? mergeJudge(config.judge, profileJudge(profile)) : config.judge
+  const model = runJudge.model === undefined ? null : judgeModelName(runJudge.model)
+  const part = sha256(
+    JSON.stringify({
+      model,
+      threshold: runJudge.threshold,
+      version: judgeVersion(reeval, packageVersions(enginePackages), model ?? ''),
+    }),
+  )
+  return { part, model }
+}
+
 export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { ctx, engine } = input
   const { config, runId, profile } = ctx
@@ -1238,13 +1309,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }),
   )
   const seen = new Seen(input.sandbox)
-  const judge = sha256(
-    JSON.stringify({
-      model: judgeModel,
-      threshold: runJudge.threshold,
-      version: judgeVersion(input.reeval, packageVersions(input.enginePackages), judgeModel ?? ''),
-    }),
-  )
+  seen.retries = readRetries(ctx.stagingDir)
+  const { part: judge } = judgePart(config, profile, input.reeval, input.enginePackages)
   for (const e of engine.evals)
     await addAttempt(e, ctx, seen, out, judge, input.previous, input.previousArtifacts)
   if (input.previous) {
@@ -1335,6 +1401,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gate === 'none'),
     )
     .filter((a) => a.outcome === 'fail').length
+  const retried = input.retry && input.previous ? input.previous : null
+  const stack = stackOf(input, seen, judgeModel, runJudge.threshold)
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
     list === undefined ? undefined : [list].flat().map(harnessId)
   const record: RunRecord = {
@@ -1352,12 +1420,33 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           : 'complete',
     startedAt: input.startedAt.toISOString(),
     endedAt: input.endedAt.toISOString(),
-    durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
+    durationMs: retried
+      ? retried.durationMs +
+        input.endedAt.getTime() -
+        (input.retry?.startedAt ?? input.endedAt).getTime()
+      : input.endedAt.getTime() - input.startedAt.getTime(),
+    ...(retried && input.retry
+      ? {
+          retriedAt: input.retry.resume
+            ? (retried.retriedAt ?? [])
+            : [...(retried.retriedAt ?? []), input.retry.startedAt.toISOString()],
+        }
+      : {}),
     author: input.author,
-    git: gitState(input, out),
+    git: retried ? await keptGit(retried, input.previousArtifacts, out) : gitState(input, out),
     runner: input.runner,
-    dependencies: { lockfiles: input.lockfiles },
-    stack: stackOf(input, seen, judgeModel, runJudge.threshold),
+    dependencies: retried ? retried.dependencies : { lockfiles: input.lockfiles },
+    // The images, harnesses and context a retried attempt saw are its cell's, which the retry
+    // refuses to change; what ran them is the run's.
+    stack: retried?.stack
+      ? {
+          ...retried.stack,
+          images: stack.images,
+          harnesses: stack.harnesses,
+          judge: { ...retried.stack.judge, resolvedModels: stack.judge.resolvedModels },
+          context: stack.context,
+        }
+      : stack,
     environments: [...seen.environments.values()].sort(byName((e) => e.name)),
     profile: profile
       ? {
@@ -1384,13 +1473,15 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
         }
       : null,
     ...(input.invocation ? { invocation: input.invocation } : {}),
-    plan: {
-      evals: input.plan.evals,
-      cells: input.plan.cells,
-      attempts: input.plan.attempts,
-      estimateMs: Math.round(input.plan.estimateMs),
-      sandboxWarnings: input.plan.sandboxWarnings,
-    },
+    plan: retried
+      ? retried.plan
+      : {
+          evals: input.plan.evals,
+          cells: input.plan.cells,
+          attempts: input.plan.attempts,
+          estimateMs: Math.round(input.plan.estimateMs),
+          sandboxWarnings: input.plan.sandboxWarnings,
+        },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),

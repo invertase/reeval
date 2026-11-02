@@ -97,8 +97,11 @@ export type RunPlan = {
   questionModel: string | null
   /** The run this plan belongs to, minted or resumed before collect. */
   runId?: string
-  /** Set when this plan continues a stopped, interrupted or budget-stopped run. */
-  resume?: { runId: string; completed: number }
+  /**
+   * Set when this plan continues a stopped, interrupted or budget-stopped run, or retries a
+   * finished one: the attempts it keeps, and how many of the ones it runs ended in an infra error.
+   */
+  resume?: { runId: string; completed: number; retried?: number }
 }
 
 const median = (values: number[]) => {
@@ -465,6 +468,7 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   if (id) parts.push(`run ${id}`)
   if (config) parts.push(`config ${config}`)
   if (plan.resume) parts.push('resume')
+  if (plan.resume?.retried) parts.push(`retry ${plural(plan.resume.retried, 'errored attempt')}`)
   if (plan.profile) parts.push(`profile ${plan.profile.name} (${plan.profile.reason})`)
   const { skipped } = plan
   parts.push(plural(plan.evals, 'eval') + (skipped ? ` (${skipped} skipped)` : ''))
@@ -528,7 +532,8 @@ export function runHeader(
     sandboxes: run.sandboxes,
     ...(run.config ? { config: run.config } : {}),
     ...(run.dryRun || !run.record ? {} : { record: run.record }),
-    ...(plan.resume ? { resumed: plan.resume.completed } : {}),
+    ...(plan.resume?.completed ? { resumed: plan.resume.completed } : {}),
+    ...(plan.resume?.retried ? { retried: plan.resume.retried } : {}),
     ...(plan.profile ? { profile: { name: plan.profile.name, reason: plan.profile.reason } } : {}),
     harnesses: plan.harnesses,
     ...(Object.keys(plan.efforts).length ? { efforts: plan.efforts } : {}),
@@ -700,8 +705,11 @@ export type PlanDocument = {
   /** Minted or resumed before the plan was collected. */
   runId?: string
   profile: { name: string; reason: string } | null
-  /** Set when `--resume` continues a previous run. */
-  resume?: { runId: string; completed: number }
+  /**
+   * Set when `--resume` continues a previous run or `--retry-errors` retries one: the attempts
+   * it keeps, and how many of the ones it runs ended in an infra error.
+   */
+  resume?: { runId: string; completed: number; retried?: number }
   /** `attempts` at most; `fewest` start whatever the results (fewer when best-of cells may stop early). */
   totals: { evals: number; skipped: number; cells: number; attempts: number; fewest: number }
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }

@@ -1,7 +1,7 @@
 REEVAL v0.16.1  dry run
 
   ➜  Run:       20261029T144346Z_77bb468_elliot-hesp_72sn
-                (resumed, 3 attempts done)
+                (resumed, 3 attempts done, 2 errors to retry)
   ➜  Config:    ../reeval.config.ts
   ➜  Profile:   pr (auto: CI is set)
   ➜  Harnesses: cursor:composer-2.5 (effort: not checked)

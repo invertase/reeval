@@ -31,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
-import type { GitInfo, RunInvocation } from './history/types.ts'
+import type { GitInfo, RunInvocation, RunRecord } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -44,13 +44,20 @@ import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import {
   completedKeysFor,
+  erroredAttempts,
+  holdRetry,
   keptAttempts,
   type LeftOut,
   leftOutAttempts,
   liveAttempts,
   loadPrevious,
+  noteRetries,
   prepareResume,
+  previousAttempt,
+  type ResumeTarget,
   resolveResume,
+  resolveRetry,
+  restoreRetry,
   resumeSettings,
   savedFilters,
   savedInvocation,
@@ -350,7 +357,28 @@ async function runCommand(
   configPath: string | undefined,
   given: string[],
 ): Promise<number> {
-  const resumed = flags.resume === undefined ? null : await resumedRun(flags, given, configPath)
+  const retry = flags['retry-errors']
+  if (retry !== undefined && flags.resume !== undefined) {
+    throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
+  }
+  if (retry !== undefined && (given.length || flags.tag?.length || flags.trait?.length)) {
+    throw new UsageError(
+      '--retry-errors runs every infra-errored attempt of the run again, with its plan: leave out filters, --tag and --trait.',
+    )
+  }
+  const continued = flags.resume !== undefined || retry !== undefined
+  const resumed = continued ? await resumedRun(flags, given, configPath) : null
+  if (resumed?.nothing) {
+    // Nothing runs, so the exit code and `--json` are the run's own, as it was recorded.
+    const { nothing, record } = resumed.nothing
+    const outcome = runOutcome(record)
+    if (flags.json) {
+      console.error(nothing)
+      const { suiteResult } = await import('./view/suite.ts')
+      process.stdout.write(`${JSON.stringify({ ...suiteResult(record), outcome }, null, 2)}\n`)
+    } else console.log(nothing)
+    return outcome === 'fail' ? EXIT.failed : outcome === 'infra_error' ? EXIT.infra : EXIT.ok
+  }
   const runFlags = resumed?.settings ? { ...flags, ...resumed.settings } : flags
   const filters = resumed?.settings?.filters ?? given
   const setup = await prepareRun(runFlags, configPath, {
@@ -396,11 +424,15 @@ async function runCommand(
     })
   } catch (error) {
     renderer.close()
-    if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
+    if (ctx.retry) await restoreRetry(setup.config.root, ctx.runId)
+    else if (setup.resume === undefined) {
+      await rm(ctx.stagingDir, { recursive: true, force: true })
+    }
     throw error
   }
   const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions, leftOut } =
     executed
+  const { retried } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   if ((interrupted || engineRun.canceled) && plan) {
     await cleanupRun(ctx.runId, plan.sandboxes)
@@ -409,6 +441,19 @@ async function runCommand(
     live?.remove()
     renderer.close()
     return EXIT.ok
+  }
+  if (ctx.retry && ctx.previous && retried.size) {
+    const { retryEnvironmentChanges } = await import('./retry.ts')
+    const changes = retryEnvironmentChanges(ctx.previous, ctx.stagingDir, retried)
+    if (changes.length) {
+      questions?.cancel()
+      live?.remove()
+      renderer.close()
+      await restoreRetry(setup.config.root, ctx.runId)
+      throw new UsageError(
+        `run ${ctx.runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, ctx.runId)} only with the plan they ran with, so the run is left as it was: put it back, or start a new run with reeval run.`,
+      )
+    }
   }
 
   let stopped = cutShort || engineRun.canceled
@@ -443,6 +488,7 @@ async function runCommand(
       language: { name: 'typescript' },
       enginePackages: engineVersions,
       sandbox: sandboxVersions,
+      ...(ctx.retry ? { retry: ctx.retry } : {}),
       worktreePatch: ctx.worktreePatch,
       lockfiles: await lockfiles(ctx.config.root),
       git: ctx.git,
@@ -485,6 +531,12 @@ async function runCommand(
     ...(notRun > 0 && !stopped ? { notRun } : {}),
   })
   renderer.close()
+  if (retried.size) {
+    const { retryCounts, retryLine } = await import('./retry.ts')
+    const line = retryLine(retryCounts(record, retried, ctx.previous))
+    if (setup.json) console.error(line)
+    else console.log(line)
+  }
   const stepSummary = process.env.GITHUB_STEP_SUMMARY
   if (stepSummary && run.artifactDir) {
     await appendFile(stepSummary, await readFile(summary)).catch(() => {})
@@ -492,7 +544,14 @@ async function runCommand(
 
   const { config } = ctx
   const mode = setup.record
-  const autoRecord = flags.record || mode === 'always' || (mode === 'ci' && inCI())
+  const { recordFile } = await import('./history/files.ts')
+  // A retry or resume writes its outcomes into the history too, when the run was already recorded
+  // there: a resume may finish a retry that was interrupted.
+  const rerecord =
+    (setup.retry !== undefined || setup.resume !== undefined) &&
+    record.status === 'complete' &&
+    existsSync(recordFile(config.history.dir, record.runId))
+  const autoRecord = flags.record || mode === 'always' || (mode === 'ci' && inCI()) || rerecord
   // A run budget.duration stopped is recorded too, as status `budget`: it's what the budget
   // allowed, and compare never takes an incomplete run as its base. An interrupted one isn't.
   if (autoRecord && record.status !== 'interrupted') {
@@ -523,11 +582,31 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
   loadEnvFiles(path)
   const root = dirname(path)
-  const target = await resolveResume(root, flags.resume || undefined)
+  const target = await continuedRun(root, flags)
+  if (
+    flags['retry-errors'] !== undefined &&
+    target.previous &&
+    !erroredAttempts(target.previous).length
+  ) {
+    const nothing = {
+      nothing: `run ${target.runId} has no infra errors, so --retry-errors has nothing to run again.`,
+      record: target.previous,
+    }
+    return { nothing, saved: null, settings: null, notes: [], profileOf: undefined }
+  }
+  if (
+    flags.resume !== undefined &&
+    continuesRetry(target.previous) &&
+    (filters.length || flags.tag?.length || flags.trait?.length)
+  ) {
+    throw new UsageError(
+      `run ${target.runId} stopped during a --retry-errors, which runs every infra-errored attempt of the run again, with its plan: leave out filters, --tag and --trait.`,
+    )
+  }
   const saved = await savedInvocation(root, target)
   if (!saved) {
-    const note = `run ${target.runId} saved no --runs, profile or filters, so this resume plans with the ones given now`
-    return { saved: null, settings: null, notes: [note], profileOf: undefined }
+    const note = `run ${target.runId} saved no --runs, profile or filters, so this ${flags.resume === undefined ? 'retry' : 'resume'} plans with the ones given now`
+    return { nothing: null, saved: null, settings: null, notes: [note], profileOf: undefined }
   }
   const given = {
     runs: flags.runs,
@@ -537,10 +616,20 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
     trait: flags.trait,
     filters,
   }
-  const resumed = resumeSettings(target.runId, saved, given, { root })
+  const flag = flags.resume === undefined ? '--retry-errors' : '--resume'
+  const resumed = resumeSettings(target.runId, saved, given, { root, flag })
   const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
-  return { saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
+  return { nothing: null, saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
 }
+
+/** A run a `--retry-errors` stopped during, which a `--resume` finishes as that retry. */
+const continuesRetry = (previous: RunRecord | null | undefined) => !!previous?.retriedAt?.length
+
+/** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
+const continuedRun = (root: string, flags: Pick<Flags, 'resume' | 'retry-errors'>) =>
+  flags['retry-errors'] !== undefined
+    ? resolveRetry(root, flags['retry-errors'] || undefined)
+    : resolveResume(root, flags.resume || undefined)
 
 /**
  * Everything that can fail before the evals are collected: output mode, config, profile, flags.
@@ -613,6 +702,8 @@ async function prepareRun(
     configElsewhere: dirname(path) !== process.cwd(),
     /** `undefined` is a new run; `''` is newest resumable; a string is a run id or prefix. */
     resume: flags.resume,
+    /** Like `resume`, for `--retry-errors`. */
+    retry: flags['retry-errors'],
   }
 }
 
@@ -627,7 +718,21 @@ type StartedRun = RunContext & {
   scratch: string
   previous: import('./history/types.ts').RunRecord | null
   previousArtifacts: string | null
+  /** A retry's run, prepared once its plan is known to be the run's. */
+  /** `--retry-errors`'s run, which it moves aside only once its plan is the run's. */
+  retryTarget?: ResumeTarget
+  /**
+   * A `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process
+   * started it; `startedAt` is the run's own start.
+   */
+  retry?: { startedAt: Date; resume: boolean }
 }
+
+/** What a retry, or a resume that finishes one, does to the run's errors, for its refusals. */
+const retryVerb = (retry: { resume: boolean }, runId: string) =>
+  retry.resume
+    ? `--resume finishes run ${runId}'s --retry-errors, which runs its errors again`
+    : '--retry-errors runs its errors again'
 
 /** The run's id and the state it starts from: commit, uncommitted changes, author. */
 async function startRun({
@@ -640,6 +745,7 @@ async function startRun({
   verbosity,
   configFile,
   resume,
+  retry,
   dryRun,
 }: Prepared): Promise<StartedRun> {
   const startedAt = new Date()
@@ -650,9 +756,11 @@ async function startRun({
   const { stagingDir, sweepStaging } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
-  if (resume !== undefined) {
-    const target = await resolveResume(config.root, resume || undefined)
-    if (!dryRun) await prepareResume(target, config.root)
+  if (resume !== undefined || retry !== undefined) {
+    const target = await continuedRun(config.root, { resume, 'retry-errors': retry })
+    // A retry moves the finished run aside only once its plan is the run's.
+    if (!dryRun && retry === undefined) await prepareResume(target, config.root)
+    else if (!dryRun) holdRetry(target, config.root)
     await sweepStaging(config.root, target.runId)
     const aside = dryRun
       ? { record: target.previous, artifacts: target.previousArtifacts }
@@ -683,6 +791,10 @@ async function startRun({
       // Resume matches attempts by the entry each case ran as, so it reads the record that way.
       previous: previous && unfoldCases(previous),
       previousArtifacts: aside.artifacts ?? target.previousArtifacts,
+      ...(retry === undefined ? {} : { retryTarget: target }),
+      ...(retry !== undefined || continuesRetry(aside.record ?? target.previous)
+        ? { retry: { startedAt, resume: retry === undefined } }
+        : {}),
     }
   }
   // Run ids sort in run order, so a second run in the same second takes the next second's id,
@@ -846,6 +958,7 @@ async function executeRun(
   let live: LiveProgressWriter | undefined
   let kept = new Map<string, LiveKept>()
   let leftOut: LeftOut[] = []
+  let retried = new Set<string>()
   let questions: QuestionRunner | undefined
   const onPlan = async (collected: CollectedPlan) => {
     const { planned, excluded, matched, unmatched } = collected
@@ -853,7 +966,19 @@ async function executeRun(
     if (matched === 0) throw noMatch(config, filters, tags)
     checkLimitHarness(profile, config.file, collected)
     checkTraitKeys(traitFilters(traits, profile), collected.traits)
+    const continuing = setup.resume !== undefined || ctx.retryTarget !== undefined
+    const { errored } = continuing
+      ? noteRetries(planned, stagingDir, ctx.previous, false)
+      : { errored: new Set<string>() }
     const completed = completedKeysFor(planned, stagingDir, ctx.previous)
+    // A retry runs the infra errors and the attempts a cancel stopped, and nothing else: not even
+    // an attempt the run skipped, such as one a best-of cell didn't need.
+    if (ctx.retry) {
+      for (const { key } of planned) {
+        const was = previousAttempt(ctx.previous, key)
+        if (was && was.outcome !== 'infra_error') completed.add(key)
+      }
+    }
     const skipped = planned.map((p) =>
       completed.has(p.key)
         ? {
@@ -873,6 +998,36 @@ async function executeRun(
     if (named) throw named
     const efforts = await planEfforts(skipped)
     if (efforts) run.cursorEfforts = efforts
+    if (ctx.retry && ctx.previous) {
+      // The record keeps the run's stack, so the attempts it runs again run on the same reeval.
+      const ranOn = ctx.previous.stack?.reeval
+      if (ranOn && ranOn !== version) {
+        throw new UsageError(
+          `run ${runId} ran on reeval ${ranOn}, and this is ${version}. ${retryVerb(ctx.retry, runId)} only on the reeval they ran on: install reeval ${ranOn}, or start a new run with reeval run.`,
+        )
+      }
+      const { retryChanges } = await import('./retry.ts')
+      const { judgePart } = await import('./history/assemble.ts')
+      const { engineVersions } = await import('./engine/node.ts')
+      const judged = judgePart(config, profile, version, engineVersions)
+      const runs = new Set(planned.map((p) => p.key).filter((key) => !completed.has(key)))
+      const changes = await retryChanges(ctx.previous, planned, runs, config.root, judged)
+      if (changes.length) {
+        throw new UsageError(
+          `run ${runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, runId)} only with the plan they ran with: put it back, or start a new run with reeval run.`,
+        )
+      }
+      if (ctx.retryTarget && !setup.dryRun) {
+        await prepareResume(ctx.retryTarget, config.root, { held: true })
+        const aside = await loadPrevious(stagingDir)
+        ctx.previous = aside.record ?? ctx.previous
+        ctx.previousArtifacts = aside.artifacts
+      }
+    }
+    retried =
+      continuing && !setup.dryRun
+        ? noteRetries(planned, stagingDir, ctx.previous, true).errored
+        : errored
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
     const judge = runJudgeModel(config, profile)
@@ -922,7 +1077,13 @@ async function executeRun(
         )
       }
     }
-    if (completed.size) plan.resume = { runId, completed: completed.size }
+    if (completed.size || retried.size) {
+      plan.resume = {
+        runId,
+        completed: completed.size,
+        ...(retried.size ? { retried: retried.size } : {}),
+      }
+    }
     run.completed = [...completed]
     const done = leftOut.filter((l) => l.done).map((l) => l.key)
     kept = keptAttempts([...completed, ...done], stagingDir, ctx.previous)
@@ -1306,6 +1467,8 @@ async function executeRun(
     live,
     questions,
     leftOut,
+    /** The attempts that ran again after an infra error, by key; none on a dry run. */
+    retried: setup.dryRun ? new Set<string>() : retried,
   }
 }
 

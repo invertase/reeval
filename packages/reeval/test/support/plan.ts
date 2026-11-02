@@ -22,11 +22,14 @@ export type PlanCase = {
 export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument> {
   const p = await fixture(`plan/${c.dir}`)
   await c.prepare?.(p.dir)
+  const seeded = existsSync(join(p.dir, '.reeval/runs'))
   const r = await runCli(p.dir, ['run', '--dry-run', '--json', ...c.args], {
     ...(c.env ? { env: c.env } : {}),
   })
   assert.equal(r.code, 0, r.stdout + r.stderr)
-  assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
+  if (!seeded) {
+    assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
+  }
   try {
     return JSON.parse(r.stdout) as PlanDocument
   } catch (error) {
@@ -69,7 +72,10 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
     budget.duration === null ? '' : `duration ${budget.duration}`,
   ].filter(Boolean)
   if (caps.length) head.push(`budget ${caps.join(', ')} ${budget.fits ? '✓' : '✗'}`)
-  if (plan.resume) head.push(`resume ${plan.resume.completed} skipped`)
+  if (plan.resume) {
+    const retried = plan.resume.retried ? `, ${plan.resume.retried} retried` : ''
+    head.push(`resume ${plan.resume.completed} skipped${retried}`)
+  }
   const rows: string[][] = []
   for (const e of plan.evals) {
     const tags =

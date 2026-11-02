@@ -155,6 +155,9 @@ export type ContextFile = { path: string; sha256: string }
 /** An upstream provider behind a gateway, and how many of the attempt's calls it served. */
 export type UpstreamCount = { provider: string; calls: number }
 
+/** An infra error an attempt ended with before it ran again, and when that try started. */
+export type AttemptRetry = { error: AttemptError; at: string | null }
+
 export type AttemptRecord = {
   /**
    * `<eval key> # <cell key>#<n>`, or `<eval key> [<case>] # <cell key>#<n>` on an eval with
@@ -300,6 +303,13 @@ export type AttemptRecord = {
   judgements: JudgmentRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
+  /**
+   * The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran
+   * it again, oldest first: each `{ error, at }`, `at` being when that try started (null when it
+   * never did). The attempt's own `outcome` and `error` are its last try's. Absent when it never
+   * ran again.
+   */
+  retries?: AttemptRetry[]
   /**
    * Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret
    * without `hosts` in their environment, so they hold its real value while the agent works and
@@ -766,7 +776,13 @@ export type RunRecord = {
   status: 'complete' | 'interrupted' | 'budget'
   startedAt: string
   endedAt: string
+  /** How long the run ran, counting each `--retry-errors` of it but not the time between them. */
   durationMs: number
+  /**
+   * When each `reeval run --retry-errors` of the run started, oldest first; unset for a run never
+   * retried. A `--resume` of the run while it's `interrupted` finishes the last one.
+   */
+  retriedAt?: string[]
   author: string
   git: GitInfo | null
   runner: RunnerInfo
