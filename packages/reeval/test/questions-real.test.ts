@@ -1,4 +1,4 @@
-// Questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
+// Questions and the analyst on a real model, weekly (real.yml's `real agents (Cursor)` job,
 // never on PRs): test/real-agents' `questions` profile, under reeval.analysis.config.ts, runs 4 real
 // attempts on Cursor and pi, and google/gemini-3.8-flash answers its questions. Checks structure
 // only, never the model's wording, and never retries. Skipped unless REEVAL_TEST_REAL=1.

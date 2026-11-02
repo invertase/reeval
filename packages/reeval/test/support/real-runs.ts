@@ -1,4 +1,4 @@
-// The record corpus's real-harness runs from the nightly contract (real.yml), attempt by attempt:
+// The record corpus's real-harness runs from the real-agent contract (real.yml), attempt by attempt:
 // `real-e2e-pairs` holds two recorded runs of one eval per harness, and `real-contract` one run of
 // the harness contract per harness, with passing checks and failing canaries. Key-free readers of
 // real transcripts and diffs build on these.

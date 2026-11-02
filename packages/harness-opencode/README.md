@@ -55,7 +55,7 @@ node --experimental-strip-types scripts/probe-providers.ts <opencode> /tmp/catal
 node --experimental-strip-types scripts/provider-table.ts /tmp/probe.json /tmp/catalog.json
 ```
 
-The nightly drift leg runs the probe against the newest `@opencode/cli`
+The nightly drift workflow (`.github/workflows/drift.yml`) runs the probe against the newest `@opencode/cli`
 (`scripts/drift/opencode-providers.mjs` at the repo root) and fails, with a diff, when the table it
 would generate differs from this one.
 

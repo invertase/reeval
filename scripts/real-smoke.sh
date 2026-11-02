@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The nightly real-agent smoke: the real-tier feature fixtures, then test/real-agents' smoke
+# The weekly real-agent smoke: the real-tier feature fixtures, then test/real-agents' smoke
 # profile. Needs CURSOR_API_KEY, Docker and reeval's image (reeval image build); the smoke also needs
 # GOOGLE_GENERATIVE_AI_API_KEY, for its Gemini eval. Asked for, it never skips: a
 # missing key fails it, naming the variable.
