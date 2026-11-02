@@ -26,7 +26,7 @@ export const DEFAULT_LINES = 200
 /** What each view has one row per, for its tool's description. */
 const VIEW_ROWS: Record<string, string> = {
   lift: 'variant cell per run: its control, both sides’ pass counts and pass@1, lift points and the 95% interval (lo, hi), within_noise',
-  family_lift:
+  case_lift:
     'variant cell per eval with cases per run: its control, paired cases, both sides’ mean pass@1 over them, lift points and the 95% interval (lo, hi), verdict and effort ratios',
   effort:
     'cell per run: attempts, median tool calls, agent seconds and tokens; for a variant, the ratios to its control, p-values and verdicts (tokens omitted when either side has no usage sample)',
@@ -37,16 +37,16 @@ const VIEW_ROWS: Record<string, string> = {
   factor_effects:
     'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
   measure_effects:
-    'measure per variant cell (a family’s pooled variant) per run: pass rate, each check, judge and compare question, tool calls, agent time and tokens, each side’s value, the estimate, interval or p, verdict (better, worse, same or leans), its text and the runs a lean needs to hold',
+    'measure per variant cell (pooled over the cases, on an eval with several) per run: pass rate, each check, judge and compare question, tool calls, agent time and tokens, each side’s value, the estimate, interval or p, verdict (better, worse, same or leans), its text and the runs a lean needs to hold',
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
-  flaky_cells: `cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,
+  flaky_cells: `cell (per case, on an eval with cases) with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:
     'failed or infra-error attempt, with its harness, model, environment skill, error, OOM kills and first failed check',
   eval_trend:
-    'eval per run: outcome, the family verdict of a rate-gated case, pass@1, branch, PR and fingerprint',
+    'eval per run (an eval with cases is one, with how many): outcome, pass@1, branch, PR and fingerprint',
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',
   check_discrimination:
     'check (expect label) per variant cell per run: its passes, failures and not-run on both sides, and whether it discriminates (both-pass and both-fail checks measure nothing)',
@@ -249,7 +249,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, a row per pooled family with a minLift gate (kind: family), and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, an eval with cases as one row with its cases' rows in cases, and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),

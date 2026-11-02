@@ -1,9 +1,10 @@
 no profile · 1 evals · 4 cells · 4 attempts
 hint: evals/verdicts.eval.ts › six cases can runs 1 of its 6 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (run all its cases)
-evals/verdicts.eval.ts › six cases can [a]  a/base/docker     control          ungated  ×1  family six cases can case 1/6
-                                            a/skilled/docker  variant skilled  gated    ×1
-                                            b/base/docker     control          ungated  ×1
-                                            b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can  a/base/docker     control          ungated  ×1  1 of 6 cases
+                                        a/skilled/docker  variant skilled  gated    ×1
+                                        b/base/docker     control          ungated  ×1
+                                        b/skilled/docker  variant skilled  gated    ×1
+                                        case a            a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
 excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

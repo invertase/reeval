@@ -1,4 +1,4 @@
-no profile · 5 evals · 14 cells · 34 attempts
+no profile · 4 evals · 12 cells · 34 attempts
 hint: 1 compare runs 2 times per cell; below 4 runs a side its lift shows only a direction and its effort can't be tested (runs: 4)
 evals/observe.eval.ts › which database                 a/-/docker        control          ungated  ×3
                                                        b/-/docker        control          ungated  ×3
@@ -6,14 +6,14 @@ evals/observe.eval.ts › which database with the skill  a/base/docker     contr
                                                        a/skilled/docker  variant skilled  ungated  ×4
                                                        b/base/docker     control          ungated  ×4
                                                        b/skilled/docker  variant skilled  ungated  ×4
-evals/observe.eval.ts › which framework [chat]         a/-/docker        control          ungated  ×1  family which framework case 1/2
-                                                       b/-/docker        control          ungated  ×1
-evals/observe.eval.ts › which framework [rag]          a/-/docker        control          ungated  ×1  family which framework case 2/2
-                                                       b/-/docker        control          ungated  ×1
+evals/observe.eval.ts › which framework                a/-/docker        control          ungated  ×2  2 cases
+                                                       b/-/docker        control          ungated  ×2
+                                                       case chat         a/-/docker ×1, b/-/docker ×1
+                                                       case rag          a/-/docker ×1, b/-/docker ×1
 evals/observe.eval.ts › the compare observes           a/base/docker     control          ungated  ×2
                                                        a/skilled/docker  variant skilled  ungated  ×2
                                                        b/base/docker     control          ungated  ×2
                                                        b/skilled/docker  variant skilled  ungated  ×2
 excluded: —
-image docker · cursor · 5 evals
+image docker · cursor · 4 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

@@ -1,0 +1,4 @@
+$ test -f skill.txt
+exit 1
+--- stdout
+--- stderr

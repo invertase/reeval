@@ -1,4 +1,6 @@
 // `reeval/view`: browser-safe data for the studio. No `node:` imports.
+
+export { caseEntries, familyOf } from '../history/cases.ts'
 export type {
   ArtifactRef,
   AttemptRecord,

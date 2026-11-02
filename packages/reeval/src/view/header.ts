@@ -1,4 +1,10 @@
-import type { FamilyRecord, HistoryEntry, RunRecord } from '../history/types.ts'
+import type {
+  AttemptRecord,
+  CellRecord,
+  HistoryCell,
+  HistoryEntry,
+  RunRecord,
+} from '../history/types.ts'
 import { cellEffort } from './effort.ts'
 
 /** The derived header of one run: what listings, indexes and comparisons need without the record. */
@@ -47,78 +53,91 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
       ...(e.source ? { source: e.source } : {}),
       ...(e.revision !== undefined ? { revision: e.revision } : {}),
       outcome: e.outcome,
-      ...(e.verdict ? { verdict: e.verdict } : {}),
       passRate: e.passRate,
-      cells: e.cells.map((c) => ({
-        key: c.key,
-        role: c.role,
-        ...(c.variant !== undefined ? { variant: c.variant } : {}),
-        harness: c.harness,
-        model: c.model,
-        environment: c.environment,
-        environmentDigest: c.environmentDigest,
-        gate: c.gate,
-        fingerprint: c.fingerprint,
-        fingerprintParts: c.fingerprintParts,
-        runs: c.runs,
-        pass: c.pass,
-        fail: c.fail,
-        infraError: c.infraError,
-        skipped: c.skipped,
-        passRate: c.passRate,
-        outcome: c.outcome,
-        effort: cellEffort(e, c.key),
-        ...canceledIn(e, c.key),
-        ...(c.lift
-          ? {
-              lift: {
-                vs: c.lift.vs,
-                points: c.lift.points,
-                lo: c.lift.interval.lo,
-                hi: c.lift.interval.hi,
-                withinNoise: c.lift.withinNoise,
-              },
-            }
-          : {}),
-      })),
+      cells: e.cells.map((c) => historyCell(e.attempts, c)),
+      ...(e.cases
+        ? {
+            cases: e.cases.map((k) => {
+              const attempts = e.attempts.filter((a) => a.case === k.key)
+              return {
+                key: k.key,
+                outcome: k.outcome,
+                ...(k.verdict ? { verdict: k.verdict } : {}),
+                fingerprint: k.fingerprint,
+                ...(k.hash ? { hash: k.hash } : {}),
+                cells: k.cells.map((c) => historyCell(attempts, c)),
+              }
+            }),
+            caseCount: e.caseCount ?? e.cases.length,
+            ...(e.lifts?.length
+              ? {
+                  lifts: e.lifts.map((l) => ({
+                    variant: l.variant,
+                    vs: l.vs,
+                    points: l.points,
+                    lo: l.interval.lo,
+                    hi: l.interval.hi,
+                    ...(l.minLift !== undefined ? { minLift: l.minLift } : {}),
+                    outcome: l.outcome,
+                  })),
+                }
+              : {}),
+            ...gatedRates(e.cells),
+          }
+        : {}),
     })),
-    ...(record.families?.length
-      ? {
-          families: record.families.map(({ id, name, cases, ran, outcome, lifts, rates }) => ({
-            id,
-            name,
-            cases,
-            ran,
-            outcome,
-            caseIds: record.evals.filter((e) => e.family?.id === id).map((e) => e.id),
-            lifts: lifts.map((l) => ({
-              variant: l.variant,
-              vs: l.vs,
-              points: l.points,
-              lo: l.interval.lo,
-              hi: l.interval.hi,
-              ...(l.minLift !== undefined ? { minLift: l.minLift } : {}),
-              outcome: l.outcome,
-            })),
-            ...gatedRates(rates),
-          })),
-        }
-      : {}),
     ...(record.errors?.length ? { errors: record.errors } : {}),
   }
 }
 
-/** A family's rates that its `gate: { passRate }` gates, when it has any. */
-function gatedRates(rates: FamilyRecord['rates']) {
-  const gated = rates.flatMap(({ cell, rate, passRate, outcome }) =>
-    passRate !== undefined && outcome !== undefined ? [{ cell, rate, passRate, outcome }] : [],
+/** The cells' rates over the cases that a `gate: { passRate }` gates, when there are any. */
+function gatedRates(cells: readonly CellRecord[]) {
+  const gated = cells.flatMap(({ key, rate }) =>
+    rate?.passRate !== undefined && rate.outcome !== undefined
+      ? [{ cell: key, rate: rate.rate, passRate: rate.passRate, outcome: rate.outcome }]
+      : [],
   )
   return gated.length ? { rates: gated } : {}
 }
 
+function historyCell(attempts: readonly AttemptRecord[], c: CellRecord): HistoryCell {
+  return {
+    key: c.key,
+    role: c.role,
+    ...(c.variant !== undefined ? { variant: c.variant } : {}),
+    harness: c.harness,
+    model: c.model,
+    environment: c.environment,
+    environmentDigest: c.environmentDigest,
+    gate: c.gate,
+    fingerprint: c.fingerprint,
+    fingerprintParts: c.fingerprintParts,
+    runs: c.runs,
+    pass: c.pass,
+    fail: c.fail,
+    infraError: c.infraError,
+    skipped: c.skipped,
+    passRate: c.passRate,
+    outcome: c.outcome,
+    effort: cellEffort({ attempts: [...attempts] }, c.key),
+    ...canceledIn(attempts, c.key),
+    ...(c.lift
+      ? {
+          lift: {
+            vs: c.lift.vs,
+            points: c.lift.points,
+            lo: c.lift.interval.lo,
+            hi: c.lift.interval.hi,
+            withinNoise: c.lift.withinNoise,
+          },
+        }
+      : {}),
+  }
+}
+
 /** A cell's failed attempts that the run's interrupt canceled, when it has any. */
-function canceledIn(e: RunRecord['evals'][number], cell: string): { canceled?: number } {
-  const n = e.attempts.filter(
+function canceledIn(attempts: readonly AttemptRecord[], cell: string): { canceled?: number } {
+  const n = attempts.filter(
     (a) => a.cell === cell && a.outcome === 'fail' && a.error?.kind === 'aborted',
   ).length
   return n ? { canceled: n } : {}

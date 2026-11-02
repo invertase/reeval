@@ -1,28 +1,22 @@
-no profile · 6 evals · 22 cells · 22 attempts
+no profile · 3 evals · 10 cells · 22 attempts
 hint: evals/cases.eval.ts › pooled has 3 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 hint: evals/cases.eval.ts › keyed has 2 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
-evals/cases.eval.ts › pooled [ada]                   a/base/docker     control          ungated  ×1  family pooled case 1/3
-                                                     a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-evals/cases.eval.ts › pooled [grace]                 a/base/docker     control          ungated  ×1  family pooled case 2/3
-                                                     a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-evals/cases.eval.ts › pooled [linus]                 a/base/docker     control          ungated  ×1  family pooled case 3/3
-                                                     a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-evals/cases.eval.ts › keyed [ada]                    a/base/docker     control          ungated  ×1  family keyed case 1/2
-                                                     a/skilled/docker  variant skilled  gated    ×1
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1
-evals/cases.eval.ts › keyed [grace]                  a/base/docker     control          ungated  ×1  family keyed case 2/2
-                                                     a/skilled/docker  variant skilled  gated    ×1
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1
-evals/cases.eval.ts › one case is not pooled [only]  a/-/docker        control          gated    ×1
-                                                     b/-/docker        control          gated    ×1
+evals/cases.eval.ts › pooled                  a/base/docker     control          ungated  ×3  3 cases
+                                              a/skilled/docker  variant skilled  gated    ×3  minLift 0.2
+                                              b/base/docker     control          ungated  ×3
+                                              b/skilled/docker  variant skilled  gated    ×3  minLift 0.2
+                                              case ada          a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
+                                              case grace        a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
+                                              case linus        a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
+evals/cases.eval.ts › keyed                   a/base/docker     control          ungated  ×2  2 cases
+                                              a/skilled/docker  variant skilled  gated    ×2
+                                              b/base/docker     control          ungated  ×2
+                                              b/skilled/docker  variant skilled  gated    ×2
+                                              case ada          a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
+                                              case grace        a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
+evals/cases.eval.ts › one case is not pooled  a/-/docker        control          gated    ×1  1 case
+                                              b/-/docker        control          gated    ×1
+                                              case only         a/-/docker ×1, b/-/docker ×1
 excluded: —
-image docker · cursor · 6 evals
+image docker · cursor · 3 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

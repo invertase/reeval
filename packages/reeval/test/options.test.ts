@@ -199,9 +199,14 @@ evaluate(
       ['bigger', 'pass'],
       ['quick', 'pass'],
       ['later', 'skipped'],
-      ['adds [1+2]', 'pass'],
-      ['adds [3+4]', 'pass'],
+      ['adds', 'pass'],
     ])
+    assert.deepEqual(
+      readRun(p.dir)
+        .evals.at(-1)
+        ?.cases?.map((k) => k.key),
+      ['1+2', '3+4'],
+    )
     const none = await runCli(p.dir, ['run', 'no-such-eval'])
     assert.equal(none.code, 2)
     assert.match(none.stderr, /No evals matched .* with filter "no-such-eval"/)
@@ -312,33 +317,31 @@ evaluate(
     // The family is one row, its arms pooled over the cases. Agent time can hold either way on a
     // slow runner, so the vs control cell may lead with it.
     const pooled =
-      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/
+      /✓ writes ok\.txt {2}6 of 6 variant runs passed · 6 cases\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n[│ ]+case {6}base \(control\) {2}skilled\n[│ ]+✓ ada {7}0 of 1 {10}1 of 1\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
-    assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
+    assert.match(r.stdout, /^Done in \S+ · 1 passed$/m, 'the eval with cases counts once')
 
-    const { run, evals, read } = readRun(p.dir)
+    const { evals, read } = readRun(p.dir)
+    const [ev] = evals
+    assert.equal(evals.length, 1, 'one eval, its cases inside it')
+    assert.equal(ev?.id, 'evals/e.eval.ts › writes ok.txt')
     assert.deepEqual(
-      evals.map((e) => [e.name, e.family?.case]),
-      ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'].map((n, i) => [
-        `writes ok.txt [${n}]`,
-        i,
-      ]),
+      ev?.cases?.map((k) => [k.key, k.index]),
+      ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'].map((n, i) => [n, i]),
     )
     assert.ok(
-      evals.every((e) => e.cells.every((c) => c.lift?.minLift === undefined)),
+      ev?.cases?.every((k) => k.cells.every((c) => c.lift?.minLift === undefined)),
       'a case is not gated on minLift alone',
     )
-    const [family] = run.families ?? []
-    assert.equal(family?.id, 'evals/e.eval.ts › writes ok.txt')
     assert.deepEqual(
-      family?.rates.map((x) => [x.cell, x.pass, x.counted, x.interval.method]),
+      ev?.cells.map((c) => [c.key, c.rate?.pass, c.rate?.counted, c.rate?.interval.method]),
       [
         ['fake/base/fake', 0, 6, 'wilson'],
         ['fake/skilled/fake', 6, 6, 'wilson'],
       ],
     )
-    const lift = family?.lifts[0]
+    const lift = ev?.lifts?.[0]
     assert.deepEqual(
       [
         lift?.vs,
@@ -350,7 +353,7 @@ evaluate(
       ],
       ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
     )
-    assert.equal(family?.outcome, 'pass')
+    assert.equal(ev?.outcome, 'pass')
     assert.match(
       read('summary.md'),
       /^ {2}pass {2}all cases\n {4}arm +pass\n {4}base {11}0 of 6\n {4}skilled +6 of 6 {2}helped$/m,
@@ -362,12 +365,12 @@ evaluate(
 
     const q = await runCli(p.dir, [
       'query',
-      'select family_id, variant, pairs, variant_pass_at_1, control_pass_at_1, verdict, outcome from family_lift',
+      'select eval_key, variant, pairs, variant_pass_at_1, control_pass_at_1, verdict, outcome from case_lift',
       '--json',
     ])
     assert.equal(q.code, 0, q.stdout + q.stderr)
     assert.deepEqual(JSON.parse(q.stdout)[0], {
-      family_id: 'evals/e.eval.ts › writes ok.txt',
+      eval_key: 'evals/e.eval.ts › writes ok.txt',
       variant: 'skilled',
       pairs: 6,
       variant_pass_at_1: 1,
@@ -387,7 +390,7 @@ evaluate(
     )
     const rates = await runCli(p.dir, [
       'query',
-      'select cell_key, pass, counted, pass_at_1 from families where run_id = (select max(run_id) from runs) order by cell_key',
+      'select cell_key, sum(pass) as pass, sum(counted) as counted, avg(pass_at_1) as pass_at_1 from case_rates where run_id = (select max(run_id) from runs) group by cell_key order by cell_key',
       '--json',
     ])
     assert.equal(rates.code, 0, rates.stdout + rates.stderr)
@@ -407,18 +410,18 @@ evaluate(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/,
+      /✗ writes ok\.txt {2}6 of 6 variant runs passed · 6 cases\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
       r.stdout,
-      /^Done in \S+ · 1 failed · 6 passed$/m,
-      'the pooled gate is a fail of its own',
+      /^Done in \S+ · 1 failed$/m,
+      'the pooled gate fails the eval, counted once',
     )
-    const { run, evals } = readRun(p.dir)
-    assert.equal(run.families?.[0]?.outcome, 'fail')
+    const [ev] = readRun(p.dir).evals
+    assert.equal(ev?.outcome, 'fail')
     assert.ok(
-      evals.every((e) => e.outcome === 'pass'),
+      ev?.cases?.every((k) => k.outcome === 'pass'),
       'every case passed on its own',
     )
   })
@@ -431,7 +434,7 @@ evaluate(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const lift = readRun(p.dir).run.families?.[0]?.lifts[0]
+    const lift = readRun(p.dir).evals[0]?.lifts?.[0]
     assert.deepEqual(
       [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
       [3, 1, 't-cases', 'insufficient', 'pass'],

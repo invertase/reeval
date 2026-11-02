@@ -26,7 +26,7 @@ const entries = corpusEntries()
 /** What the corpus as a whole has to hold, so every part of a record is read by some test. */
 const REQUIRED = [
   'compare with lift',
-  'pooled family',
+  'eval with cases',
   'judge pass',
   'judge fail',
   'outcome fail',
@@ -53,7 +53,7 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
   const out = new Set<string>()
   const attempts = record.evals.flatMap((e) => e.attempts)
   if (record.evals.some((e) => e.cells.some((c) => c.lift))) out.add('compare with lift')
-  if (record.families?.some((f) => f.lifts.length)) out.add('pooled family')
+  if (record.evals.some((e) => e.lifts?.length)) out.add('eval with cases')
   for (const a of attempts) {
     for (const j of a.judgements) out.add(`judge ${j.verdict}`)
     out.add(`outcome ${a.outcome}`)

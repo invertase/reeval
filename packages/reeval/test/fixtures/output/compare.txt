@@ -5,13 +5,11 @@ can't compare    bills in minor units with the billing doc
   amount in minor units  failed
     expected command to succeed, exit code 1
 
-+1 same
-
-fixed            adds a double button that builds
-  build            fail → pass
-  types            not run → pass
-
-+1 same
+fixed            adds a $name button that builds
+  fixed            double
+    build            fail → pass
+    types            not run → pass
+  +2 same
 
 regressed        greets in the house style
   base             20261020T230147Z_958e309_cursor-agent_aamj
@@ -31,4 +29,4 @@ new              greets in Spanish
   spanish greeting  failed
     expected command to succeed, exit code 1
 
-1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 2 same

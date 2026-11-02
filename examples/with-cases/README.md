@@ -3,7 +3,7 @@
 **Shows:** one task over a list of cases. `cases` runs the eval once per case: the agent adds one
 function to `src/math.js` (`subtract`, `multiply`, `power`), and the eval calls it with that case's
 numbers through [`checks/call.mjs`](./checks/call.mjs). `caseKey` names each case by its `fn`, and
-the cases share one pooled pass rate.
+the cases make one eval: a failing case fails it.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
@@ -25,27 +25,31 @@ claude-code` runs the same evals on Claude Code, and `--profile <name>` on any o
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the eval's result block, a row per case. Here the fake agent's `power`
-multiplies instead:
+**What to look at:** the eval's row: one eval with three cases. When a case fails, the eval
+fails, and a table lists each case. Here the fake agent's `power` multiplies instead:
 
 ```text
-                 adds a function to src/math.js
-  pass  subtract   1 of 1
-  pass  multiply   1 of 1
-  fail  power      0 of 1
-    toBe 32        failed
-      expected '10' to be '32' // Object.is equality
-    +1 more passed
+with-cases.eval.ts
+  ✗ adds a function to src/math.js  2 of 3 runs passed · 3 cases
+    Failed on power; 2 of 3 cases passed.
+      case      fake
+    ✓ subtract  1 of 1
+    ✓ multiply  1 of 1
+    ✗ power     0 of 1
+    ✗ toBe 32  failed on power
+      expected '10' to be '32' // Object.is equality · with-cases.eval.ts:22
 ```
 
 `pnpm reeval run --dry-run` plans the eval as one row, and after a run
-`pnpm reeval query "SELECT name, cases, pass, pass_at_1, lo, hi FROM families"` has its pooled pass
-rate with a 95% interval:
+`pnpm reeval query "SELECT key, cases, pass_at_1, rate_lo, rate_hi FROM cells"` has each cell's
+pass rate over the cases with a 95% interval:
 
 ```text
-name                            cases  pass  pass_at_1  lo     hi
-adds a function to src/math.js  3      3     1          0.439  1
+key             cases  pass_at_1  rate_lo  rate_hi
+fake/math/fake  3      1          0.439    1
 ```
+
+To have each case pass or fail on its own, loop over them and call `evaluate` once per case.
 
 A string or number case is its own key, and an object's `id` or `name` is its key without
 `caseKey`. `pnpm reeval run power` runs one case.

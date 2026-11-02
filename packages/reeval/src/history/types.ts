@@ -156,12 +156,17 @@ export type ContextFile = { path: string; sha256: string }
 export type UpstreamCount = { provider: string; calls: number }
 
 export type AttemptRecord = {
-  /** `<eval key> # <cell key>#<n>`: unique in the run. */
+  /**
+   * `<eval key> # <cell key>#<n>`, or `<eval key> [<case>] # <cell key>#<n>` on an eval with
+   * `cases`: unique in the run.
+   */
   key: string
-  /** `<cell key>#<n>`: unique in its evaluation. */
+  /** `<cell key>#<n>`, or `<cell key>#<case>#<n>` on an eval with `cases`: unique in its evaluation. */
   id: string
   /** The cell's key; see `EvalEntry.cells`. */
   cell: string
+  /** The case's key, on an eval with `cases`; see `EvalEntry.cases`. */
+  case?: string
   /** Run number within the cell, from 1. */
   n: number
   /**
@@ -383,14 +388,13 @@ export type EvalEntry = {
   /**
    * Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is
    * `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated
-   * cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the
-   * case did, and its family's outcome is the verdict.
+   * cell's failures don't fail the evaluation. With `cases`, a cell's outcome is over every case.
    */
   outcome: Outcome
   /**
-   * `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a
-   * failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset
-   * otherwise, and on records from before a family pooled `passRate`.
+   * In records from before an eval with `cases` was one entry, `family` on a case whose
+   * `gate: { passRate }` its family held over the mean of its cases. Never written now: see
+   * `CaseRecord.verdict`.
    */
   verdict?: 'family'
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
@@ -414,10 +418,59 @@ export type EvalEntry = {
    * with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
    */
   answers?: CompareAnswer[]
-  /** Set on each case of an eval with `cases`; `RunRecord.families` has the suite. */
+  /**
+   * In records from before an eval with `cases` was one entry, set on each case, which was an
+   * entry of its own. Never written now; reading such a record folds the cases into one entry.
+   */
   family?: { id: string; name: string; case: number; cases: number }
+  /**
+   * The environments (and harnesses) `where` left out, one entry per case and environment,
+   * including those of a case it left out everywhere; unset when none.
+   */
+  excluded?: ExcludedPair[]
+  /**
+   * An eval with `cases`: each case that has attempts in this run, in list order, with its own
+   * cells. `cells` and `attempts` are over every case. Unset without cases.
+   */
+  cases?: CaseRecord[]
+  /** With `cases`: how many the list has, `cases` holding those with attempts in this run. */
+  caseCount?: number
+  /**
+   * With `cases` and `compare`: each variant cell against its control, paired by case. Its
+   * `minLift` gates the lift's lower bound, and a lift below it fails the variant cell.
+   */
+  lifts?: FamilyLift[]
+}
+
+/** One case of an eval with `cases`, and how its attempts went. */
+export type CaseRecord = {
+  /** The case's key: `nextjs` for the case keyed `nextjs`. */
+  key: string
+  /** Its place in the case list, from 0. */
+  index: number
+  /**
+   * The name it ran under in a record from before an eval with `cases` was one entry, when that
+   * isn't `<eval name> [<key>]` (a name template's, `fixes GH-101` for `fixes $id`).
+   */
+  name?: string
+  /** `EvalEntry.source.case`: the hash of the case's data. */
+  hash?: string
+  /**
+   * What the case did, over its own cells by each cell's gate. Under a `gate: { passRate }`, the
+   * eval's cell gates on the mean over the cases, so `verdict` says this outcome decides nothing.
+   */
+  outcome: Outcome
+  /** `family` when a cell's `gate: { passRate }` gates the mean over the cases, not this case. */
+  verdict?: 'family'
+  /** pass@1 over its gated cells' attempts. */
+  passRate: number | null
+  fingerprint: string
+  /** Its own cells: their attempts are those with this `case`. */
+  cells: CellRecord[]
   /** The environments (and harnesses) `where` left this case out of; unset when none. */
   excluded?: ExcludedPair[]
+  /** The eval's pairwise questions, answered over this case's attempts; unset without any. */
+  answers?: CompareAnswer[]
 }
 
 /** A 95% interval on a pooled rate or difference. */
@@ -433,7 +486,7 @@ export type FamilyInterval = {
   method: 'wilson' | 'newcombe-paired' | 't-cases'
 }
 
-/** One cell's pass@1 over a family's cases. */
+/** One cell's pass@1 over an eval's cases. */
 export type FamilyRate = {
   /** The cell's key, the same in every case. */
   cell: string
@@ -445,11 +498,14 @@ export type FamilyRate = {
   /** The mean of the cases' pass@1; at one attempt a case, `pass / counted`. */
   rate: number
   interval: FamilyInterval
-  /** The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1. */
+  /** The cell's `gate: { passRate }`: with cases it gates `rate`, not each case's pass@1. */
   passRate?: number
   /** Set with `passRate`: `fail` when `rate` is below it. */
   outcome?: 'pass' | 'fail'
 }
+
+/** A cell's pass@1 over an eval's cases. */
+export type CellRate = Omit<FamilyRate, 'cell'>
 
 /**
  * `lift` / `drop`: the interval excludes 0. `noise`: it doesn't. `insufficient`: fewer than 6
@@ -457,7 +513,7 @@ export type FamilyRate = {
  */
 export type FamilyVerdict = 'lift' | 'drop' | 'noise' | 'insufficient'
 
-/** One effort metric over a family's paired cases. */
+/** One effort metric over an eval's paired cases. */
 export type FamilyEffortMetric = {
   /** Cases with a value on both sides. */
   pairs: number
@@ -480,7 +536,7 @@ export type FamilyEffort = {
   tokens?: FamilyEffortMetric
 }
 
-/** A variant cell against its control over a family's cases, paired by case. */
+/** A variant cell against its control over an eval's cases, paired by case. */
 export type FamilyLift = {
   /** The variant cell's key. */
   variant: string
@@ -501,14 +557,18 @@ export type FamilyLift = {
   /** The interval spans 0. */
   withinNoise: boolean
   verdict: FamilyVerdict
-  /** The compare's `minLift`: on a family it gates this lower bound, not each case's. */
+  /** The compare's `minLift`: with cases it gates this lower bound, not each case's. */
   minLift?: number
   /** `fail` when `interval.lo` is below `minLift`. */
   outcome: 'pass' | 'fail'
   effort?: FamilyEffort
 }
 
-/** An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation. */
+/**
+ * In records from before an eval with `cases` was one entry: the eval over its cases, each case
+ * an entry of its own. Reading such a record folds it into the eval's `cases`, `lifts` and each
+ * cell's `rate`.
+ */
 export type FamilyRecord = {
   /** `file › group › … › template`. */
   id: string
@@ -624,7 +684,13 @@ export type CellRecord = Cell & {
    * reports the worst outcome. A variant below its `minLift` fails too.
    */
   outcome: Outcome
+  /** Unset on an eval with several `cases`, whose variants have `EvalEntry.lifts`. */
   lift?: Lift
+  /**
+   * On an eval with several `cases`: the cell's pass@1 over them. A `gate: { passRate }` gates
+   * `rate.rate`, the mean of the cases' pass@1, and sets `rate.outcome`.
+   */
+  rate?: CellRate
   /**
    * Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted
    * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
@@ -774,7 +840,10 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
-  /** Each eval with `cases` that ran; unset when none did. */
+  /**
+   * In records from before an eval with `cases` was one entry, each eval with `cases` that ran.
+   * Never written now; reading such a record folds it into its eval.
+   */
   families?: FamilyRecord[]
   /**
    * These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection
@@ -896,7 +965,15 @@ export type HistoryCell = Pick<
   canceled?: number
 }
 
-/** A family's pooled lift as the history listing keeps it: enough to compare its gate. */
+/** One case of an eval with `cases` in a `HistoryEntry`. */
+export type HistoryCase = Pick<
+  CaseRecord,
+  'key' | 'outcome' | 'verdict' | 'fingerprint' | 'hash'
+> & {
+  cells: HistoryCell[]
+}
+
+/** A pooled lift as the history listing keeps it: enough to compare its gate. */
 export type FamilyLiftSummary = Pick<FamilyLift, 'variant' | 'vs' | 'points' | 'outcome'> & {
   lo: number
   hi: number
@@ -937,22 +1014,19 @@ export type HistoryEntry = {
     source?: EvalEntry['source']
     revision?: EvalEntry['revision']
     outcome: Outcome
-    verdict?: EvalEntry['verdict']
     passRate: number | null
     cells: HistoryCell[]
+    /** An eval with `cases`: each case that ran, with its own cells; unset without cases. */
+    cases?: HistoryCase[]
+    /** With `cases`: how many the list has. */
+    caseCount?: number
+    /** With `cases` and `compare`: each variant's lift paired by case. */
+    lifts?: FamilyLiftSummary[]
+    /** With `cases`: its cells' rates over the cases that a `gate: { passRate }` gates; unset when none. */
+    rates?: Array<
+      Pick<FamilyRate, 'cell' | 'rate'> & Required<Pick<FamilyRate, 'passRate' | 'outcome'>>
+    >
   }>
-  /** The run's pooled families; unset when none ran. */
-  families?: Array<
-    Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'> & {
-      /** The eval ids of its cases in this run. */
-      caseIds: string[]
-      lifts: FamilyLiftSummary[]
-      /** Its cells' rates over the cases that a `gate: { passRate }` gates; unset when none. */
-      rates?: Array<
-        Pick<FamilyRate, 'cell' | 'rate'> & Required<Pick<FamilyRate, 'passRate' | 'outcome'>>
-      >
-    }
-  >
   /** The run's errors outside any attempt; unset when there were none. */
   errors?: string[]
 }

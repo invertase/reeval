@@ -170,10 +170,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cases',
     area: 'Config and selection',
-    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates',
+    name: '`cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape',
     plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
     fixtures: ['run/cases', 'run/cases-rate'],
-    unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
+    unit: [
+      'reeval/test/options.test.ts',
+      'reeval/test/results.test.ts',
+      'reeval/test/cases.test.ts',
+      'reeval/test/query.test.ts',
+      'reeval/test/history.test.ts',
+      'reeval/test/remarks.test.ts',
+    ],
   },
   {
     id: 'compare.harnesses',
@@ -1629,7 +1636,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.family-gate',
     area: 'Records and studio',
-    name: "An eval's pooled `minLift` gate over its cases is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
+    name: "An eval's pooled `minLift` gate over its cases gates its one row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
     unit: ['reeval/test/history.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
@@ -1998,7 +2005,7 @@ export const inventory: InventoryFeature[] = [
     id: 'output.layouts',
     area: 'CLI and runner',
     name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases',
-    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
+    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/cases'],
     unit: ['reeval/test/output.test.ts'],
   },
   {

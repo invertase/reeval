@@ -125,8 +125,9 @@ const formatRate = (n: number) => formatPercent(n)
 
 function Row({ row, head }: { row: CompareViewRow; head: string }) {
   const s = STATUS[row.status]
-  const family = row.kind === 'family'
-  const name = `${row.id.split(' › ').slice(1).join(' › ') || row.id}${family ? ' (all cases)' : ''}`
+  const family = row.lifts !== undefined
+  const name = row.id.split(' › ').slice(1).join(' › ') || row.id
+  const changedCases = (row.cases ?? []).filter((k) => k.status !== 'same')
   return (
     <TableRow className={row.status === 'same' ? 'opacity-70' : undefined}>
       <TableCell className="pl-4">
@@ -149,6 +150,25 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
         <div className="truncate font-mono text-[11px] text-muted-foreground">
           {row.id.split(' › ')[0]}
         </div>
+        {changedCases.length ? (
+          <ul className="text-[11px] text-muted-foreground" data-testid="compare-cases">
+            {changedCases.map((k) => (
+              <li key={k.id}>
+                case {k.id}: {STATUS[k.status].label.toLowerCase()}
+                {k.base && k.head && k.base !== k.head ? ` (${k.base} → ${k.head})` : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {row.caseScope ? (
+          <div className="text-[11px] text-muted-foreground">
+            compared on the cases both runs have
+            {row.caseScope.added.length ? ` · cases added ${row.caseScope.added.join(', ')}` : ''}
+            {row.caseScope.removed.length
+              ? ` · cases removed ${row.caseScope.removed.join(', ')}`
+              : ''}
+          </div>
+        ) : null}
         {row.cells ? (
           <div className="text-[11px] text-muted-foreground">
             compared on the {family ? 'variants' : 'cells'} both runs have
@@ -357,7 +377,7 @@ export function ComparePage() {
                   </TableHeader>
                   <TableBody>
                     {view.rows.map((row) => (
-                      <Row key={`${row.kind ?? 'eval'}:${row.id}`} row={row} head={head.runId} />
+                      <Row key={row.id} row={row} head={head.runId} />
                     ))}
                   </TableBody>
                 </Table>

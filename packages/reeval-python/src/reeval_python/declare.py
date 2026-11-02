@@ -361,7 +361,8 @@ def case_keys(cases: Sequence[Any], case_key: Callable[[Any], Any] | None, where
 
 
 def _register_cases(name: str, mode: Mode, opts: dict[str, Any], fn: Callable[..., Any]) -> None:
-    """Each case plans as a member of a pooled family named for the eval, `<name> [<key>]`."""
+    """Each case plans as an entry of its own named for the eval, `<name> [<key>]`, which the
+    record folds back into the eval."""
     where = f"evaluate({name!r})"
     cases = opts.pop("cases", None)
     case_key = opts.pop("case_key", None)
@@ -394,22 +395,20 @@ def _register_cases(name: str, mode: Mode, opts: dict[str, Any], fn: Callable[..
         pass
     keys = case_keys(cases, cast(Callable[[Any], Any] | None, case_key), where)
     body = body_hash(fn, where)
-    pooled = len(cases) > 1
-    if pooled:
-        path = (*(frame.name for frame in _group_stack), name)
-        key = " › ".join(path)
-        if key in _families:
-            raise ValueError(
-                f"{where} with cases is declared twice in this file. Each eval needs its own "
-                "name, or their cases are pooled into one. Give each its own name."
-                f"{_separator_hint(path, _families[key])}"
-            )
-        plain = _names.get(key)
-        if plain is not None and not plain[1]:
-            raise _named_like_family(plain[0], path)
-        _families[key] = path
+    path = (*(frame.name for frame in _group_stack), name)
+    key = " › ".join(path)
+    if key in _families:
+        raise ValueError(
+            f"{where} with cases is declared twice in this file. Each eval needs its own "
+            "name, or their cases are pooled into one. Give each its own name."
+            f"{_separator_hint(path, _families[key])}"
+        )
+    plain = _names.get(key)
+    if plain is not None and not plain[1]:
+        raise _named_like_family(plain[0], path)
+    _families[key] = path
     for index, (case, case_name) in enumerate(zip(cases, keys, strict=True)):
-        family = DeclaredFamily(name=name, case=index, cases=len(cases)) if pooled else None
+        family = DeclaredFamily(name=name, case=index, cases=len(cases))
         source: w.DeclaredSource = {
             "body": body,
             "caseJson": case_json(case, f"{where} case {case_name!r}"),

@@ -1,6 +1,6 @@
-// `cases` on an eval: each case's key, and the name its attempts plan under. A case plans as a
-// member of a pooled family named `<eval> [<key>]`, so pooling, the paired lift and every reader
-// read it as one eval with cases.
+// `cases` on an eval: each case's key, and the name its attempts plan under. A case plans as an
+// entry of its own named `<eval> [<key>]`, so its attempts keep their keys, and the record folds
+// the entries back into one eval with cases (`history/cases.ts`).
 import { UsageError } from './errors.ts'
 import { isObjectLike } from './object.ts'
 import { redactSecrets } from './redact.ts'

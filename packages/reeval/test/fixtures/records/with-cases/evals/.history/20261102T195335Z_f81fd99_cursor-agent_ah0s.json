@@ -1,0 +1,3521 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261102T195335Z_f81fd99_cursor-agent_ah0s",
+  "status": "complete",
+  "startedAt": "2026-11-02T19:53:35.473Z",
+  "endedAt": "2026-11-02T19:53:36.671Z",
+  "durationMs": 1198,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "f81fd992da39a6946a8e78c786dadee26fb013ad",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-11-02T19:52:58+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.18.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.13",
+      "@reeval/harness-opencode": "0.2.13",
+      "@reeval/harness-goose": "0.1.10",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.8",
+      "@ai-sdk/harness-claude-code": "1.0.171-patch.8cc1b324",
+      "@reeval/harness-codex": "0.1.10",
+      "@reeval/harness-fx": "0.1.5",
+      "@reeval/harness-grok-build": "0.1.8",
+      "ai": "7.0.156",
+      "@ai-sdk/harness": "1.0.167",
+      "@ai-sdk/anthropic": "4.0.91",
+      "@ai-sdk/google": "4.0.107",
+      "@ai-sdk/openai": "4.0.104",
+      "@ai-sdk/typesafe-ai": "3.0.29"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "991ce2915785"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "fake",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "next-app",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:39d20a9bc50fbccee9c4c098ca0a82d3af11647a0251c7857ba603163c308ffe",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "stack.txt",
+          "sha256": "c6c1c9a9c8543f1e4cd980064cf1625eeb61a90703b2464fff039f21682508b3"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "plain",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "vite-app",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:f1698ffe28371aadaf81d2774a33c0d8a89bbd98f177f4caa9e6e323d53c9f51",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "stack.txt",
+          "sha256": "b16efac145e9242cfb05d739a8509ac7295f381108dce0f753e52a1aaf48e7a1"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "with-skill",
+      "parent": "plain",
+      "overrides": [],
+      "digest": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "skill.txt",
+          "sha256": "8a798890fe93817163b10b5f7bd2ca4d25d84c52739a645a889c173eee7d9d3d"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 6,
+    "cells": 8,
+    "attempts": 18,
+    "estimateMs": 1404,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "df20f0887e57f5e559fdde31fe77eae7f05042adae1b7ed46c58bafecee241a6"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 6,
+    "attempts": 18,
+    "pass": 12,
+    "fail": 6,
+    "notGated": 3,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/cases.eval.ts › rated",
+      "key": "evals/cases.eval.ts › rated",
+      "slug": "evals-cases-eval-ts-rated-668fc2",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "rated",
+      "tags": [],
+      "fingerprint": "608191d7e9587767be82aecccab688e3e9f60000173eb0faa743a5095b955754",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 0.6666666666666666,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "aeca6de48460b103b172ff9da5897ae1eab717c0c531e5246be103021e60098d",
+          "fingerprintParts": {
+            "sources": "72dee4966c308161197aca924919f7b2d27f2f6d447a64f28c54f622672c9624",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "passRate 0.6"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": {
+            "passRate": 0.6
+          },
+          "overrides": [],
+          "runs": 3,
+          "pass": 2,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0.6666666666666666,
+          "outcome": "pass",
+          "rate": {
+            "cases": 3,
+            "pass": 2,
+            "counted": 3,
+            "rate": 0.667,
+            "interval": {
+              "lo": 0.208,
+              "hi": 0.939,
+              "level": 0.95,
+              "method": "wilson"
+            },
+            "passRate": 0.6,
+            "outcome": "pass"
+          },
+          "checks": [
+            {
+              "label": "passes its case",
+              "pass": 2,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › rated [a] # fake/fake/fake#1",
+          "id": "fake/fake/fake#a#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-02T19:53:36.244Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 107,
+          "turns": [
+            {
+              "prompt": "Greet a.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.295Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 34,
+            "agentMs": 0,
+            "diffMs": 34,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-rated-a-abff7a/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "not.toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:22"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-rated-a-abff7a/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "3dbd1479aacc26d520ce07d6c7a8c46c090c3f275c13a3e0be2dcce08d79ec91",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-rated-a-abff7a/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "a"
+        },
+        {
+          "key": "evals/cases.eval.ts › rated [b] # fake/fake/fake#1",
+          "id": "fake/fake/fake#b#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-11-02T19:53:36.247Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 103,
+          "turns": [
+            {
+              "prompt": "Greet b.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.288Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 24,
+            "agentMs": 0,
+            "diffMs": 44,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-rated-b-bb88b3/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "not.toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:22"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-rated-b-bb88b3/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "e4afd9f9092b480b0c7a31bda22a86f2f84d713d17b2a82b6af95b21975f6d51",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-rated-b-bb88b3/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "b"
+        },
+        {
+          "key": "evals/cases.eval.ts › rated [c] # fake/fake/fake#1",
+          "id": "fake/fake/fake#c#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-11-02T19:53:36.249Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "passes its case: expected 'c' not to be 'c' // Object.is equality"
+          },
+          "durationMs": 98,
+          "turns": [
+            {
+              "prompt": "Greet c.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.283Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 26,
+            "agentMs": 0,
+            "diffMs": 20,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-rated-c-3922df/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "not.toBe",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:22",
+              "message": "passes its case: expected 'c' not to be 'c' // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-rated-c-3922df/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "bfcbea3263bf4b9b1c0fc7697673e17f862f2433b986050f046369fe2978bbff",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-rated-c-3922df/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "c"
+        }
+      ],
+      "source": {
+        "body": "c7a3656e92d20b4cf4c2bc86bab22e81da0330c2e0aa3108ae84724ad04b76a2",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "cases": [
+        {
+          "key": "a",
+          "index": 0,
+          "hash": "ac8d8342bbb2362d13f0a559a3621bb407011368895164b628a54f7fc33fc43c",
+          "outcome": "pass",
+          "verdict": "family",
+          "passRate": 1,
+          "fingerprint": "e55f2579af4739a0b32c633e0d56e67f41e2bf48c7604095b2e7f775e4503b1b",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "b8f5652274f2a0f6c5df66e0727f5b5d6462dcb62e68980eae48f840c49d4120",
+              "fingerprintParts": {
+                "sources": "e28076db0165f0ef5d7044e536d2167e9603165bc9cf4218eeac3cfd3fc9729e",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "passRate 0.6"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": {
+                "passRate": 0.6
+              },
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "passes its case",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "index": 1,
+          "hash": "c100f95c1913f9c72fc1f4ef0847e1e723ffe0bde0b36e5f36c13f81fe8c26ed",
+          "outcome": "pass",
+          "verdict": "family",
+          "passRate": 1,
+          "fingerprint": "8851f41478a2d984bb118baf35f2128effb0efb55ad4969d181024996e047ab9",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "34f4d7d1857088223a17dfe3440d9742bdcf2f52c69a81baf2e5ffefd86ee1f7",
+              "fingerprintParts": {
+                "sources": "a490adeb67ae6c5e4c6e9ce22d0d0a823288bf379a1b4488c5e3337583c29dfb",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "passRate 0.6"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": {
+                "passRate": 0.6
+              },
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "passes its case",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "index": 2,
+          "hash": "879923da020d1533f4d8e921ea7bac61e8ba41d3c89d17a4d14e3a89c6780d5d",
+          "outcome": "fail",
+          "verdict": "family",
+          "passRate": 0,
+          "fingerprint": "2029eec29702a47c410b3f4ef71524c865b233bae8c0944dab887dbd903618f9",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "d25f16d609b9786965e91e5baa2c41b5df4a4b9619d8ef6303a630b3434c00b1",
+              "fingerprintParts": {
+                "sources": "a231cfcdaa89fb1de7714e8996f31807c9ba6386ebd93c2e1ca42348ea9d1a59",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "passRate 0.6"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": {
+                "passRate": 0.6
+              },
+              "overrides": [],
+              "runs": 1,
+              "pass": 0,
+              "fail": 1,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 0,
+              "outcome": "fail",
+              "checks": [
+                {
+                  "label": "passes its case",
+                  "pass": 0,
+                  "fail": 1,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "caseCount": 3
+    },
+    {
+      "id": "evals/cases.eval.ts › strict",
+      "key": "evals/cases.eval.ts › strict",
+      "slug": "evals-cases-eval-ts-strict-0fcd62",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "strict",
+      "tags": [],
+      "fingerprint": "40f72de6185c07bd7c090f4bdacbc36bac1177d44426058a67cce0a6fea0e9ee",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0.5,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "db70efbfcf77a371628c4c72d2f26dc439d4c8768830499e779b11fa06effd78",
+          "fingerprintParts": {
+            "sources": "36038b543b42b6bf8cddd4de2d11a61156e4fb95351046ada2d7394a7d00c831",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 4,
+          "pass": 2,
+          "fail": 2,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0.5,
+          "outcome": "fail",
+          "rate": {
+            "cases": 2,
+            "pass": 2,
+            "counted": 4,
+            "rate": 0.5,
+            "interval": {
+              "lo": 0,
+              "hi": 1,
+              "level": 0.95,
+              "method": "t-cases"
+            }
+          },
+          "checks": [
+            {
+              "label": "passes its case",
+              "pass": 2,
+              "fail": 2,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › strict [x] # fake/fake/fake#1",
+          "id": "fake/fake/fake#x#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-11-02T19:53:36.250Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 100,
+          "turns": [
+            {
+              "prompt": "Greet x.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.290Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 33,
+            "agentMs": 0,
+            "diffMs": 24,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:28"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "83384589a4944088350d58e824468f4d017f331e578ca5b670cb8b8d96a7791a",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "x"
+        },
+        {
+          "key": "evals/cases.eval.ts › strict [x] # fake/fake/fake#2",
+          "id": "fake/fake/fake#x#2",
+          "cell": "fake/fake/fake",
+          "n": 2,
+          "seq": 17,
+          "startedAt": "2026-11-02T19:53:36.610Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 44,
+          "turns": [
+            {
+              "prompt": "Greet x.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.628Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 13,
+            "agentMs": 0,
+            "diffMs": 13,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/2/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:28"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/2/transcript.jsonl",
+              "sha256": "456cc2f2f2bf3aeb9e5ed000dd80022ae8c3c1e0ccd5bc107cc4363924d78190",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-strict-x-6c40d5/fake-fake-fake-dc13e2/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "x"
+        },
+        {
+          "key": "evals/cases.eval.ts › strict [y] # fake/fake/fake#1",
+          "id": "fake/fake/fake#y#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-11-02T19:53:36.348Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "passes its case: expected 'y' to be 'x' // Object.is equality"
+          },
+          "durationMs": 75,
+          "turns": [
+            {
+              "prompt": "Greet y.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.374Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 19,
+            "agentMs": 0,
+            "diffMs": 17,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:28",
+              "message": "passes its case: expected 'y' to be 'x' // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "fc635e87166fea248fcf700426569836204bfaff44d6c42892752667e48364b4",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "y"
+        },
+        {
+          "key": "evals/cases.eval.ts › strict [y] # fake/fake/fake#2",
+          "id": "fake/fake/fake#y#2",
+          "cell": "fake/fake/fake",
+          "n": 2,
+          "seq": 18,
+          "startedAt": "2026-11-02T19:53:36.612Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "passes its case: expected 'y' to be 'x' // Object.is equality"
+          },
+          "durationMs": 47,
+          "turns": [
+            {
+              "prompt": "Greet y.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.630Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 13,
+            "agentMs": 0,
+            "diffMs": 14,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/2/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "passes its case",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:28",
+              "message": "passes its case: expected 'y' to be 'x' // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/2/transcript.jsonl",
+              "sha256": "019f2b4224ccb5d3fb8158e10732c26d2675f7c43b23a54d5820a6e116aacab3",
+              "bytes": 399
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-strict-y-ad030a/fake-fake-fake-dc13e2/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "y"
+        }
+      ],
+      "source": {
+        "body": "da811f9b58000c77a34b02d5f9dd881abdb340f74f1d407a57334d8f4b09f1e9",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "cases": [
+        {
+          "key": "x",
+          "index": 0,
+          "hash": "5e2b92cc57ce618dfbb54844a31775e4b95c6fb552ee6bf5a068133c12d2ad90",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "6525897b5e0eb65b305264692fbc7db8a20e30126a0a8e7c2020157efd52c808",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "075c97b2ce79ada893548feb465ae595b8ac4f2a2f37c04b1ffd45106640f6b2",
+              "fingerprintParts": {
+                "sources": "9656717cd98e2bf6f35ee383b0da54ff91805115a997f7c71403823368fa80d4",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 2,
+              "pass": 2,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "passes its case",
+                  "pass": 2,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "y",
+          "index": 1,
+          "hash": "1bba8f7c49a4655a1f7959d670ca160870b6ec960767a215c4ce03c8c9724f07",
+          "outcome": "fail",
+          "passRate": 0,
+          "fingerprint": "05a1fdd31ce5dd51d72188760ac5917c82114bb5469b24ce28de418e50f7fdb1",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "5ce04643b163825ea7e99f1f45967d33186988727c0d6bc5fd3ecd549e525370",
+              "fingerprintParts": {
+                "sources": "ad4c340dd18a83c8b4e1b2ee9becb24c9b1e45df529f4fd95f52f1172a67848a",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 2,
+              "pass": 0,
+              "fail": 2,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 0,
+              "outcome": "fail",
+              "checks": [
+                {
+                  "label": "passes its case",
+                  "pass": 0,
+                  "fail": 2,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "caseCount": 2
+    },
+    {
+      "id": "evals/cases.eval.ts › lands",
+      "key": "evals/cases.eval.ts › lands",
+      "slug": "evals-cases-eval-ts-lands-52cc65",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "lands",
+      "tags": [],
+      "fingerprint": "3560316d66cecd97cafe0de52d333522d12f69f5b2e6cdc0331e262a2b5e1281",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/next-app/fake",
+          "harness": "fake",
+          "environment": "next-app",
+          "sandbox": "fake",
+          "role": "control",
+          "traits": {
+            "stack": "next"
+          },
+          "fingerprint": "e92740555fecf4b057b3e6f1e536cdc0044d48400f838781e9ea0150897a1feb",
+          "fingerprintParts": {
+            "sources": "8cd0140ee13eae8359012dd3ac3eb320ad0602d587d17be08a9cdd35e1379505",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:39d20a9bc50fbccee9c4c098ca0a82d3af11647a0251c7857ba603163c308ffe",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:39d20a9bc50fbccee9c4c098ca0a82d3af11647a0251c7857ba603163c308ffe",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "rate": {
+            "cases": 1,
+            "pass": 1,
+            "counted": 1,
+            "rate": 1,
+            "interval": {
+              "lo": 0.207,
+              "hi": 1,
+              "level": 0.95,
+              "method": "wilson"
+            }
+          },
+          "checks": [
+            {
+              "label": "runs on its own stack",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/vite-app/fake",
+          "harness": "fake",
+          "environment": "vite-app",
+          "sandbox": "fake",
+          "role": "control",
+          "traits": {
+            "stack": "vite"
+          },
+          "fingerprint": "92da7735b9d261cd6e0a2735eef53c237e287f0edeb52a0abf86e564a992d1e0",
+          "fingerprintParts": {
+            "sources": "cc1370f8ff4a205154609ff71aa430e2529117245a9dc4285de32bba943dadfd",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:f1698ffe28371aadaf81d2774a33c0d8a89bbd98f177f4caa9e6e323d53c9f51",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:f1698ffe28371aadaf81d2774a33c0d8a89bbd98f177f4caa9e6e323d53c9f51",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "rate": {
+            "cases": 1,
+            "pass": 1,
+            "counted": 1,
+            "rate": 1,
+            "interval": {
+              "lo": 0.207,
+              "hi": 1,
+              "level": 0.95,
+              "method": "wilson"
+            }
+          },
+          "checks": [
+            {
+              "label": "runs on its own stack",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › lands [next] # fake/next-app/fake#1",
+          "id": "fake/next-app/fake#next#1",
+          "cell": "fake/next-app/fake",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-11-02T19:53:36.350Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 75,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 30,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lands-next-ada082/fake-next-app-fake-23258a/1/snapshots/final",
+              "bytes": 4,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "runs on its own stack",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:40"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {},
+          "case": "next"
+        },
+        {
+          "key": "evals/cases.eval.ts › lands [vite] # fake/vite-app/fake#1",
+          "id": "fake/vite-app/fake#vite#1",
+          "cell": "fake/vite-app/fake",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-11-02T19:53:36.352Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 73,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 28,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lands-vite-e54e84/fake-vite-app-fake-f801b9/1/snapshots/final",
+              "bytes": 4,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "runs on its own stack",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:40"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {},
+          "case": "vite"
+        }
+      ],
+      "source": {
+        "body": "0118d37c1fada4d184ea5f19578931a6cafd8e8bbd58c845aae3e4be8128d041",
+        "options": "749370fd5e846ea2b8dbdb5a6a2db79a5687e70702c1c0a71a3dae66562632d2"
+      },
+      "excluded": [
+        {
+          "case": "next",
+          "environment": "vite-app"
+        },
+        {
+          "case": "vite",
+          "environment": "next-app"
+        },
+        {
+          "case": "astro",
+          "environment": "next-app"
+        },
+        {
+          "case": "astro",
+          "environment": "vite-app"
+        }
+      ],
+      "cases": [
+        {
+          "key": "next",
+          "index": 0,
+          "hash": "ca1733b5cdea2efcd28cb357b253498f97440592edd06d89895c4abcb5cfaae5",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "87464be1e182c8105b6fff16ab81e6cf44e492e4d5b965a767b7fbfa2b79f97d",
+          "cells": [
+            {
+              "key": "fake/next-app/fake",
+              "harness": "fake",
+              "environment": "next-app",
+              "sandbox": "fake",
+              "role": "control",
+              "traits": {
+                "stack": "next"
+              },
+              "fingerprint": "e92740555fecf4b057b3e6f1e536cdc0044d48400f838781e9ea0150897a1feb",
+              "fingerprintParts": {
+                "sources": "8cd0140ee13eae8359012dd3ac3eb320ad0602d587d17be08a9cdd35e1379505",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:39d20a9bc50fbccee9c4c098ca0a82d3af11647a0251c7857ba603163c308ffe",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:39d20a9bc50fbccee9c4c098ca0a82d3af11647a0251c7857ba603163c308ffe",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "runs on its own stack",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ],
+          "excluded": [
+            {
+              "case": "next",
+              "environment": "vite-app"
+            }
+          ]
+        },
+        {
+          "key": "vite",
+          "index": 1,
+          "hash": "be7cb12aec368120ae061a4ef8a435b715b2bfb11c978137a15dca47362f7492",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "4260d892d75fe70a4110b8973c8da7c181f059f18504c8297e2fad9de1626473",
+          "cells": [
+            {
+              "key": "fake/vite-app/fake",
+              "harness": "fake",
+              "environment": "vite-app",
+              "sandbox": "fake",
+              "role": "control",
+              "traits": {
+                "stack": "vite"
+              },
+              "fingerprint": "92da7735b9d261cd6e0a2735eef53c237e287f0edeb52a0abf86e564a992d1e0",
+              "fingerprintParts": {
+                "sources": "cc1370f8ff4a205154609ff71aa430e2529117245a9dc4285de32bba943dadfd",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:f1698ffe28371aadaf81d2774a33c0d8a89bbd98f177f4caa9e6e323d53c9f51",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:f1698ffe28371aadaf81d2774a33c0d8a89bbd98f177f4caa9e6e323d53c9f51",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "runs on its own stack",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            }
+          ],
+          "excluded": [
+            {
+              "case": "vite",
+              "environment": "next-app"
+            }
+          ]
+        }
+      ],
+      "caseCount": 3
+    },
+    {
+      "id": "evals/cases.eval.ts › lifted",
+      "key": "evals/cases.eval.ts › lifted",
+      "slug": "evals-cases-eval-ts-lifted-e8f2f7",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "lifted",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "fingerprint": "662fab1614a69d128f41f4339f1255dbda1b11d6fe584236005e87c6cbb07333",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/plain/fake",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "eb1b6d3f5ee326586876d77df7b02d1634d5f9fbcee68c415153a6296f82d9fe",
+          "fingerprintParts": {
+            "sources": "6656069325f4b3777f1b228573dd12b40fd38487cb77f3713eb9ee62ee0036c4",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "none"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 3,
+          "pass": 0,
+          "fail": 3,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "rate": {
+            "cases": 3,
+            "pass": 0,
+            "counted": 3,
+            "rate": 0,
+            "interval": {
+              "lo": 0,
+              "hi": 0.561,
+              "level": 0.95,
+              "method": "wilson"
+            }
+          },
+          "checks": [
+            {
+              "label": "has the skill",
+              "pass": 0,
+              "fail": 3,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-skill/fake",
+          "harness": "fake",
+          "environment": "with-skill",
+          "sandbox": "fake",
+          "role": "variant",
+          "variant": "with-skill",
+          "fingerprint": "ed3d31d82a6539a56cc9871343703b4ef410321c3adbe44bfd8447b7090388c5",
+          "fingerprintParts": {
+            "sources": "6656069325f4b3777f1b228573dd12b40fd38487cb77f3713eb9ee62ee0036c4",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 3,
+          "pass": 3,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "fail",
+          "rate": {
+            "cases": 3,
+            "pass": 3,
+            "counted": 3,
+            "rate": 1,
+            "interval": {
+              "lo": 0.439,
+              "hi": 1,
+              "level": 0.95,
+              "method": "wilson"
+            }
+          },
+          "checks": [
+            {
+              "label": "has the skill",
+              "pass": 3,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 3,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "discriminates"
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › lifted [Ada] # fake/plain/fake#1",
+          "id": "fake/plain/fake#Ada#1",
+          "cell": "fake/plain/fake",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-11-02T19:53:36.354Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 87,
+          "turns": [
+            {
+              "prompt": "Greet Ada.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.377Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 18,
+            "agentMs": 0,
+            "diffMs": 20,
+            "checksMs": 9,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-plain-fake-57f9db/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 10
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 1,
+              "durationMs": 9,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-plain-fake-57f9db/1/checks/1.log",
+                "sha256": "761e5c58c35bc4ffafae8c18455adb92cfba738e756b6699ddf7bcb5f737577f",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-plain-fake-57f9db/1/transcript.jsonl",
+              "sha256": "66f7805224703a8dad9223050008c178950337728a40e79bd85bacdc030bc32f",
+              "bytes": 403
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-plain-fake-57f9db/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Ada"
+        },
+        {
+          "key": "evals/cases.eval.ts › lifted [Ada] # fake/with-skill/fake#1",
+          "id": "fake/with-skill/fake#Ada#1",
+          "cell": "fake/with-skill/fake",
+          "n": 1,
+          "seq": 9,
+          "startedAt": "2026-11-02T19:53:36.423Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 106,
+          "turns": [
+            {
+              "prompt": "Greet Ada.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.456Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 24,
+            "agentMs": 0,
+            "diffMs": 33,
+            "checksMs": 4,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-with-skill-fake-14b6ac/1/snapshots/final",
+              "bytes": 3,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "durationMs": 4
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 0,
+              "durationMs": 4,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-with-skill-fake-14b6ac/1/checks/1.log",
+                "sha256": "9d504278f5d4cdfe160f8889b094a54825fa3fc9ea8110897120cf563daebb92",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-with-skill-fake-14b6ac/1/transcript.jsonl",
+              "sha256": "b55221137cc2cdf85e757318eb8d305f7e852593bd340c3cca8d3008fad80a76",
+              "bytes": 403
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-ada-39ad15/fake-with-skill-fake-14b6ac/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Ada"
+        },
+        {
+          "key": "evals/cases.eval.ts › lifted [Grace] # fake/plain/fake#1",
+          "id": "fake/plain/fake#Grace#1",
+          "cell": "fake/plain/fake",
+          "n": 1,
+          "seq": 10,
+          "startedAt": "2026-11-02T19:53:36.425Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 100,
+          "turns": [
+            {
+              "prompt": "Greet Grace.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.449Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 18,
+            "agentMs": 0,
+            "diffMs": 16,
+            "checksMs": 5,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-plain-fake-57f9db/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 6
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 1,
+              "durationMs": 5,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-plain-fake-57f9db/1/checks/1.log",
+                "sha256": "761e5c58c35bc4ffafae8c18455adb92cfba738e756b6699ddf7bcb5f737577f",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-plain-fake-57f9db/1/transcript.jsonl",
+              "sha256": "9417d0972ea89ed09723664b52303e5174ae19014e3f8d65f8ebc3116914735c",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-plain-fake-57f9db/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Grace"
+        },
+        {
+          "key": "evals/cases.eval.ts › lifted [Grace] # fake/with-skill/fake#1",
+          "id": "fake/with-skill/fake#Grace#1",
+          "cell": "fake/with-skill/fake",
+          "n": 1,
+          "seq": 11,
+          "startedAt": "2026-11-02T19:53:36.427Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 110,
+          "turns": [
+            {
+              "prompt": "Greet Grace.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.464Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 24,
+            "agentMs": 0,
+            "diffMs": 37,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-with-skill-fake-14b6ac/1/snapshots/final",
+              "bytes": 3,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "durationMs": 3
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 0,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-with-skill-fake-14b6ac/1/checks/1.log",
+                "sha256": "9d504278f5d4cdfe160f8889b094a54825fa3fc9ea8110897120cf563daebb92",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-with-skill-fake-14b6ac/1/transcript.jsonl",
+              "sha256": "dfca275cac55fd49f032e9a56c48f2bae48d183e942d4ab7c078f5bc995a22b3",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-grace-7415c1/fake-with-skill-fake-14b6ac/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Grace"
+        },
+        {
+          "key": "evals/cases.eval.ts › lifted [Linus] # fake/plain/fake#1",
+          "id": "fake/plain/fake#Linus#1",
+          "cell": "fake/plain/fake",
+          "n": 1,
+          "seq": 12,
+          "startedAt": "2026-11-02T19:53:36.441Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 96,
+          "turns": [
+            {
+              "prompt": "Greet Linus.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.478Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 31,
+            "agentMs": 0,
+            "diffMs": 22,
+            "checksMs": 10,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-plain-fake-57f9db/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "message": "has the skill: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 11
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 1,
+              "durationMs": 10,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-plain-fake-57f9db/1/checks/1.log",
+                "sha256": "761e5c58c35bc4ffafae8c18455adb92cfba738e756b6699ddf7bcb5f737577f",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-plain-fake-57f9db/1/transcript.jsonl",
+              "sha256": "2dc3458d0ccaf1582b654e213dc167c9612629b6d439e81df167f7cc01371d07",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-plain-fake-57f9db/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Linus"
+        },
+        {
+          "key": "evals/cases.eval.ts › lifted [Linus] # fake/with-skill/fake#1",
+          "id": "fake/with-skill/fake#Linus#1",
+          "cell": "fake/with-skill/fake",
+          "n": 1,
+          "seq": 13,
+          "startedAt": "2026-11-02T19:53:36.526Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 84,
+          "turns": [
+            {
+              "prompt": "Greet Linus.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.551Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 18,
+            "agentMs": 0,
+            "diffMs": 20,
+            "checksMs": 5,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-with-skill-fake-14b6ac/1/snapshots/final",
+              "bytes": 3,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "has the skill",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/cases.eval.ts:53",
+              "durationMs": 5
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f skill.txt",
+              "exitCode": 0,
+              "durationMs": 5,
+              "log": {
+                "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-with-skill-fake-14b6ac/1/checks/1.log",
+                "sha256": "9d504278f5d4cdfe160f8889b094a54825fa3fc9ea8110897120cf563daebb92",
+                "bytes": 49
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-with-skill-fake-14b6ac/1/transcript.jsonl",
+              "sha256": "f03bdd2ea91e1186995a7a958037611ab056aff75f9c79c68eae9863de5f220f",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-lifted-linus-6dcc1e/fake-with-skill-fake-14b6ac/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "Linus"
+        }
+      ],
+      "source": {
+        "body": "05f8806ab202b4d949b43451e27e09e5ff070cc10c459f8acd489438ea8b1e27",
+        "options": "61f0b7fc502a13dd89799d3e57e68b0fa38a1ba6fe856edc604b16e82a9cb0ef"
+      },
+      "cases": [
+        {
+          "key": "Ada",
+          "index": 0,
+          "hash": "a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "e1c7fe7b9cde37571140c2e09f72a0c3242140c167cf4de4da5529479fcc1c44",
+          "cells": [
+            {
+              "key": "fake/plain/fake",
+              "harness": "fake",
+              "environment": "plain",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "27012915835496bbe28a1076d1e6d40d664b855ecfd84ff2a56e000561008e28",
+              "fingerprintParts": {
+                "sources": "4e8e4b0de3813ec60d079b7c13d4b04cd38c21a7f526aa3e6a58f662d0404d07",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "none"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "none",
+              "overrides": [],
+              "runs": 1,
+              "pass": 0,
+              "fail": 1,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 0,
+              "outcome": "fail",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 0,
+                  "fail": 1,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            },
+            {
+              "key": "fake/with-skill/fake",
+              "harness": "fake",
+              "environment": "with-skill",
+              "sandbox": "fake",
+              "role": "variant",
+              "variant": "with-skill",
+              "fingerprint": "2a56cb599b5aa678c76faf1cee89e62b5ff89edc896a50d736d7953fa621acd0",
+              "fingerprintParts": {
+                "sources": "4e8e4b0de3813ec60d079b7c13d4b04cd38c21a7f526aa3e6a58f662d0404d07",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0,
+                  "control": {
+                    "pass": 0,
+                    "fail": 1,
+                    "error": 0,
+                    "notRun": 0
+                  },
+                  "verdict": "discriminates"
+                }
+              ],
+              "lift": {
+                "vs": "fake/plain/fake",
+                "control": {
+                  "pass": 0,
+                  "counted": 1
+                },
+                "variant": {
+                  "pass": 1,
+                  "counted": 1
+                },
+                "points": 1,
+                "interval": {
+                  "lo": -0.122,
+                  "hi": 1,
+                  "level": 0.95,
+                  "method": "newcombe-wilson"
+                },
+                "withinNoise": true
+              }
+            }
+          ]
+        },
+        {
+          "key": "Grace",
+          "index": 1,
+          "hash": "bad16a216778d38f27207635c35207abebe263003bd3c1f41188025edd7dfa6c",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "7c08f978c89cfff66750abb7fb398b6ecf0af42407d9de97e8f24fc8c402e517",
+          "cells": [
+            {
+              "key": "fake/plain/fake",
+              "harness": "fake",
+              "environment": "plain",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "45a9cbc5b0c1168d163fc5151304cd98d09de9b0b2298a2ba96acc387765c483",
+              "fingerprintParts": {
+                "sources": "dd81f249e4941a08683c85b92efee6ebd69f4b27e31b00ae07a315828f05342b",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "none"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "none",
+              "overrides": [],
+              "runs": 1,
+              "pass": 0,
+              "fail": 1,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 0,
+              "outcome": "fail",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 0,
+                  "fail": 1,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            },
+            {
+              "key": "fake/with-skill/fake",
+              "harness": "fake",
+              "environment": "with-skill",
+              "sandbox": "fake",
+              "role": "variant",
+              "variant": "with-skill",
+              "fingerprint": "26b246f195b65294868ce2da533cfd708823b2ccc824ea5690198abb2076f40c",
+              "fingerprintParts": {
+                "sources": "dd81f249e4941a08683c85b92efee6ebd69f4b27e31b00ae07a315828f05342b",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0,
+                  "control": {
+                    "pass": 0,
+                    "fail": 1,
+                    "error": 0,
+                    "notRun": 0
+                  },
+                  "verdict": "discriminates"
+                }
+              ],
+              "lift": {
+                "vs": "fake/plain/fake",
+                "control": {
+                  "pass": 0,
+                  "counted": 1
+                },
+                "variant": {
+                  "pass": 1,
+                  "counted": 1
+                },
+                "points": 1,
+                "interval": {
+                  "lo": -0.122,
+                  "hi": 1,
+                  "level": 0.95,
+                  "method": "newcombe-wilson"
+                },
+                "withinNoise": true
+              }
+            }
+          ]
+        },
+        {
+          "key": "Linus",
+          "index": 2,
+          "hash": "03934446f361ed9828d830a5b8fc2bf36b8ae586c92093ed2174796d72621351",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "2e082c30ae21f9c5b07ce7623646ca509091f29a5655b3dec7abde617e62c04f",
+          "cells": [
+            {
+              "key": "fake/plain/fake",
+              "harness": "fake",
+              "environment": "plain",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "c3c4f1fbaa07febf9c9b1509da77c46630c6a4d89397da99422d5d9779465756",
+              "fingerprintParts": {
+                "sources": "1dc66b775355d6e0dca0d9bebfb77c27759457ecdff4835d5aee42f8e46c82dc",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "none"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "none",
+              "overrides": [],
+              "runs": 1,
+              "pass": 0,
+              "fail": 1,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 0,
+              "outcome": "fail",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 0,
+                  "fail": 1,
+                  "error": 0,
+                  "notRun": 0
+                }
+              ]
+            },
+            {
+              "key": "fake/with-skill/fake",
+              "harness": "fake",
+              "environment": "with-skill",
+              "sandbox": "fake",
+              "role": "variant",
+              "variant": "with-skill",
+              "fingerprint": "61e33b4af119ad18d7196e6171e5ca5a00dca8ae73c200344037b4b54b842377",
+              "fingerprintParts": {
+                "sources": "1dc66b775355d6e0dca0d9bebfb77c27759457ecdff4835d5aee42f8e46c82dc",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:e4cf82b6720e5ed09292e3fb1eb6f153b91dbdbca34ca5cdcbcc1c55c52dc6eb",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass",
+              "checks": [
+                {
+                  "label": "has the skill",
+                  "pass": 1,
+                  "fail": 0,
+                  "error": 0,
+                  "notRun": 0,
+                  "control": {
+                    "pass": 0,
+                    "fail": 1,
+                    "error": 0,
+                    "notRun": 0
+                  },
+                  "verdict": "discriminates"
+                }
+              ],
+              "lift": {
+                "vs": "fake/plain/fake",
+                "control": {
+                  "pass": 0,
+                  "counted": 1
+                },
+                "variant": {
+                  "pass": 1,
+                  "counted": 1
+                },
+                "points": 1,
+                "interval": {
+                  "lo": -0.122,
+                  "hi": 1,
+                  "level": 0.95,
+                  "method": "newcombe-wilson"
+                },
+                "withinNoise": true
+              }
+            }
+          ]
+        }
+      ],
+      "caseCount": 3,
+      "lifts": [
+        {
+          "variant": "fake/with-skill/fake",
+          "vs": "fake/plain/fake",
+          "pairs": 3,
+          "variantRate": 1,
+          "controlRate": 0,
+          "discordant": {
+            "variantOnly": 3,
+            "controlOnly": 0
+          },
+          "points": 1,
+          "interval": {
+            "lo": 0.206,
+            "hi": 1,
+            "level": 0.95,
+            "method": "newcombe-paired"
+          },
+          "p": 0.25,
+          "withinNoise": false,
+          "verdict": "insufficient",
+          "minLift": 0.5,
+          "outcome": "fail",
+          "effort": {
+            "tools": {
+              "pairs": 3,
+              "ratio": null,
+              "p": null,
+              "verdict": "insufficient"
+            },
+            "agentMs": {
+              "pairs": 3,
+              "ratio": null,
+              "p": null,
+              "verdict": "insufficient"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/cases.eval.ts › alone",
+      "key": "evals/cases.eval.ts › alone",
+      "slug": "evals-cases-eval-ts-alone-d5e74c",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "alone",
+      "tags": [],
+      "fingerprint": "8d6852076b80da324686ed710b26e3da5d1eaa1830a341dc4042746473785ed3",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "958b52d504243e9a564e14c7aa70df801cddb1b49bde34235424a9493805b901",
+          "fingerprintParts": {
+            "sources": "ba0006a57fa3415fdbfe0882fdeaf9de306d4c5f5d2e4c94ae607f0ad214a524",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › alone [only] # fake/fake/fake#1",
+          "id": "fake/fake/fake#only#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 14,
+          "startedAt": "2026-11-02T19:53:36.530Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 80,
+          "turns": [
+            {
+              "prompt": "Greet only.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.557Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 23,
+            "agentMs": 0,
+            "diffMs": 18,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-alone-only-36f851/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-alone-only-36f851/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "9f974fdef27227994ed3474874419dc29b3b410daa6fb0e55eb5fd5c1ddeb048",
+              "bytes": 405
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-alone-only-36f851/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "only"
+        }
+      ],
+      "source": {
+        "body": "dc1c349083003b099d8ce4794c8e8f8d99ded2afd2cb1d948739d93de8c825c2",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "cases": [
+        {
+          "key": "only",
+          "index": 0,
+          "hash": "c67679b3d00124ec167588721929982d2111cad05b1352fdb833058e9559a175",
+          "outcome": "pass",
+          "passRate": 1,
+          "fingerprint": "8d6852076b80da324686ed710b26e3da5d1eaa1830a341dc4042746473785ed3",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "958b52d504243e9a564e14c7aa70df801cddb1b49bde34235424a9493805b901",
+              "fingerprintParts": {
+                "sources": "ba0006a57fa3415fdbfe0882fdeaf9de306d4c5f5d2e4c94ae607f0ad214a524",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "all",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass"
+            }
+          ]
+        }
+      ],
+      "caseCount": 1
+    },
+    {
+      "id": "evals/cases.eval.ts › picks",
+      "key": "evals/cases.eval.ts › picks",
+      "slug": "evals-cases-eval-ts-picks-c4e4db",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "picks",
+      "tags": [],
+      "fingerprint": "fcf84a3b597237fea4168c2780ca5bdcf429b17908ad7404d4ffa3962537866c",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "5facaff99c443c8dc51c67e2f953e24741c161e62ec16faa9ecca86c216fad54"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "504a5ab82db7484e64e100ae1234f146c310594f2650df5a7435e74654a22d9f",
+          "fingerprintParts": {
+            "sources": "b965b6cb722cb6ae41a79df5818e3825d6af98af1fc89bc3e73490e79bb410f3",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "none"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 2,
+          "pass": 2,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "rate": {
+            "cases": 2,
+            "pass": 2,
+            "counted": 2,
+            "rate": 1,
+            "interval": {
+              "lo": 0.342,
+              "hi": 1,
+              "level": 0.95,
+              "method": "wilson"
+            }
+          }
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › picks [p1] # fake/fake/fake#1",
+          "id": "fake/fake/fake#p1#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 15,
+          "startedAt": "2026-11-02T19:53:36.539Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 71,
+          "turns": [
+            {
+              "prompt": "Pick for p1.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.574Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 20,
+            "agentMs": 0,
+            "diffMs": 26,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-picks-p1-ceb45b/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "observations": [
+            {
+              "name": "pick",
+              "value": "drizzle",
+              "turn": 1
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-picks-p1-ceb45b/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "4d96d80ec2418c1af067d224564014023b5e8b40e1de800dde176c32170efbc9",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-picks-p1-ceb45b/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "p1"
+        },
+        {
+          "key": "evals/cases.eval.ts › picks [p2] # fake/fake/fake#1",
+          "id": "fake/fake/fake#p2#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 16,
+          "startedAt": "2026-11-02T19:53:36.540Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 80,
+          "turns": [
+            {
+              "prompt": "Pick for p2.",
+              "status": "completed",
+              "startedAt": "2026-11-02T19:53:36.579Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 26,
+            "agentMs": 0,
+            "diffMs": 27,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-cases-eval-ts-picks-p2-834bea/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "observations": [
+            {
+              "name": "pick",
+              "value": "prisma",
+              "turn": 1
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-picks-p2-834bea/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "eea73f27696bff047f689b4c3e316e342ebf4588aac6bf56063d3294060c696d",
+              "bytes": 407
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-picks-p2-834bea/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "case": "p2"
+        }
+      ],
+      "source": {
+        "body": "ea47bffbc144b259c08b43271959fa132ea169db3a84da82217d9f9cd0878c47",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "cases": [
+        {
+          "key": "p1",
+          "index": 0,
+          "hash": "9e5264d410a977c82c64ce0b6e9b3acf66a30bda6c186494cc90a74583b57036",
+          "outcome": "pass",
+          "passRate": null,
+          "fingerprint": "330bf32fc8648da781163fc2a7e4b02f4df7d7b19b52ae83dd37f2824ddbbedf",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "45088261542555adfda3b8912533dfea29cca11f01fc962352b05b4a2b6cbb3b",
+              "fingerprintParts": {
+                "sources": "50adce7604d825a99752c061a4d72b410817f5554bfa6cf2b72071e27f9898a0",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "none"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "none",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass"
+            }
+          ]
+        },
+        {
+          "key": "p2",
+          "index": 1,
+          "hash": "829a7fd574414cb9d628fa267d8689f5a961886e53b0ee311998548224b34278",
+          "outcome": "pass",
+          "passRate": null,
+          "fingerprint": "a4495e3ec2f2e52ee15fd97ba7eb3bf88c15c30747d75d1a2329cf6e98d1d6a1",
+          "cells": [
+            {
+              "key": "fake/fake/fake",
+              "harness": "fake",
+              "environment": "fake",
+              "sandbox": "fake",
+              "role": "control",
+              "fingerprint": "835d05e5152435648470db395ab001c7cbdf86a4fd448ef63f51df847e2cfaaf",
+              "fingerprintParts": {
+                "sources": "aa176091e01c5df8d35bbd7a0623c4b4552538cd1c733da30c33d0eecf1d2ff5",
+                "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+                "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+                "image": null,
+                "agentCli": null,
+                "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+                "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "gate": "none"
+              },
+              "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+              "harnessKind": "fake",
+              "model": null,
+              "effort": null,
+              "gate": "none",
+              "overrides": [],
+              "runs": 1,
+              "pass": 1,
+              "fail": 0,
+              "infraError": 0,
+              "skipped": 0,
+              "passRate": 1,
+              "outcome": "pass"
+            }
+          ]
+        }
+      ],
+      "caseCount": 2
+    }
+  ]
+}

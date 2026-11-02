@@ -579,6 +579,10 @@ function rateText(c: Colors, r: PooledRate): Text {
   return t(text, r.outcome === 'fail' ? c.red : c.dim)
 }
 
+/** `-v`: a variant's paired lift over the cases and its interval. */
+export const pairedStats = (p: PooledArm) =>
+  `paired over ${plural(p.pairs, 'case')}, 95% interval ${signedPoints(p.interval.low)}…${signedPoints(p.interval.high)} points`
+
 function pooledStats(p: PooledArm, label: string) {
   return `${label}: ${p.pairs} paired cases, 95% interval ${signedPoints(p.interval.low)}…${signedPoints(p.interval.high)}`
 }

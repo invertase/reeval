@@ -1,8 +1,10 @@
 base             20261020T230147Z_958e309_cursor-agent_aamj
 head             20261020T230148Z_958e309_cursor-agent_qghb
 
-fixed            adds a double button that builds
-  build            fail → pass
-  types            not run → pass
+fixed            adds a $name button that builds
+  fixed            double
+    build            fail → pass
+    types            not run → pass
+  +2 same
 
 1 fixed

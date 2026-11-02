@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { unfoldCases } from '../src/history/cases.ts'
 import { familiesOf } from '../src/history/families.ts'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
 import { readRemarks } from '../src/remarks/files.ts'
@@ -140,7 +141,7 @@ const withHistory = (h: {
 })
 
 const raise = (record: RunRecord, ctx: RemarkContext) =>
-  deterministicRemarks(suiteResult(record), record, ctx)
+  deterministicRemarks(suiteResult(record), unfoldCases(record), ctx)
 const kinds = (record: RunRecord, ctx: RemarkContext) => raise(record, ctx).map((r) => r.kind)
 
 /** The record cut to the eval named `name`. */
@@ -440,10 +441,7 @@ describe('remark thresholds', () => {
       two?.fix?.edit,
       'set runs: 4 or more, so a split this wide is less likely by chance',
     )
-    const family = (template: string): RunRecord => ({
-      ...structuredClone(record),
-      evals: structuredClone(record.evals.filter((e) => e.family?.name === template)),
-    })
+    const family = (name: string): RunRecord => only(record, name)
     assert.deepEqual(
       kinds(family('tft family'), NO_HISTORY),
       [],
@@ -452,15 +450,15 @@ describe('remark thresholds', () => {
     const [few] = raise(family('tft few cases'), NO_HISTORY)
     assert.equal(
       few?.text,
-      'The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold.',
+      'The marked variant, paired over 2 cases: better, but a paired lift needs 6 cases that differ between the arms to hold.',
     )
-    assert.equal(few?.fix?.edit, 'add cases, so the pooled lift has 6 to hold on')
+    assert.equal(few?.fix?.edit, 'add cases, so 6 or more can differ between the arms')
     assert.deepEqual(
       kinds(family('tft agree'), NO_HISTORY),
       ['cant-tell-apart'],
       '30 cases that all pass on both sides are a ceiling, not a small sample',
     )
-    const quicker = family('tft agree')
+    const quicker = unfoldCases(family('tft agree'))
     for (const e of quicker.evals)
       for (const a of e.attempts)
         a.timings.agentMs = e.cells.find((c) => c.key === a.cell)?.lift ? 10 : 1000
@@ -478,7 +476,7 @@ describe('remark thresholds', () => {
     const [agreeFew] = raise(family('tft agree few'), NO_HISTORY)
     assert.equal(
       agreeFew?.text,
-      'The marked variant, pooled over 2 cases: the same, but the pooled lift needs 6 to hold.',
+      'The marked variant, paired over 2 cases: the same, but a paired lift needs 6 cases that differ between the arms to hold.',
       'two cases are too few to say every case always passes',
     )
   })
@@ -724,7 +722,7 @@ evaluate(
     )
     assert.ok(
       first.includes(
-        'fixes: The marked variant, pooled over 2 cases: better, but the pooled lift needs 6 to hold. Fix at evals/fam.eval.ts:5: add cases, so the pooled lift has 6 to hold on.',
+        'fixes: The marked variant, paired over 2 cases: better, but a paired lift needs 6 cases that differ between the arms to hold. Fix at evals/fam.eval.ts:5: add cases, so 6 or more can differ between the arms.',
       ),
       first,
     )
@@ -890,6 +888,33 @@ evaluate('coin', { runs: 3 }, async (c) => {
     )
     const seventh = await runCli(p.dir, ['run', '-v'])
     assert.equal(remarksBlock(seventh.stdout), null)
+  })
+
+  test('flaky-check on a case after the first: its cell is looked up by the eval cell over every case', async () => {
+    const p = await project('remarks-cases', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig(),
+      'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('coin', { cases: ['heads', 'tails'], runs: 3 }, async (c, side) => {
+  await c.send('go')
+  expect(side === 'heads' || c.attempt.n === 1, 'lands').toBe(true)
+})
+`,
+    })
+    sh(p.dir, 'init', '-q', '-b', 'main')
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'init')
+    const blocks: Array<string | null> = []
+    for (let i = 0; i < 3; i++) {
+      const r = await runCli(p.dir, ['run', '--record', '-v'])
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      blocks.push(remarksBlock(r.stdout))
+    }
+    assert.deepEqual(blocks.map(namedIn), [[], [], ['coin']], blocks.join('\n'))
+    assert.match(
+      blocks[2] ?? '',
+      /^coin: "lands" passed 2 of 6 tries over 2 runs with nothing changed/m,
+    )
   })
 
   test("the default branch: origin's HEAD, a local main, then in CI a pull request's base", async () => {

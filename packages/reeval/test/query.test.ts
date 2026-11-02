@@ -89,7 +89,7 @@ evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 3 }
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
-  test('eval_trend marks a case its family’s passRate gates', async () => {
+  test('an eval with cases is one eval_trend row, its cases in cases with verdict family', async () => {
     const p = await project('query-trend-verdict', {
       'reeval.config.ts': fakeConfig(),
       'evals/r.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -101,13 +101,31 @@ evaluate('plain', {}, async () => {})
     })
     const r = await runCli(p.dir, ['run'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const trend = await query(p.dir, 'SELECT eval_key, outcome, verdict FROM eval_trend')
-    assert.deepEqual(trend.map((t) => [t.eval_key, t.outcome, t.verdict]).sort(), [
+    const trend = await query(p.dir, 'SELECT eval_key, outcome, cases FROM eval_trend')
+    assert.deepEqual(trend.map((t) => [t.eval_key, t.outcome, t.cases]).sort(), [
       ['evals/r.eval.ts › plain', 'pass', null],
-      ['evals/r.eval.ts › rated [a]', 'pass', 'family'],
-      ['evals/r.eval.ts › rated [b]', 'pass', 'family'],
-      ['evals/r.eval.ts › rated [c]', 'fail', 'family'],
+      ['evals/r.eval.ts › rated', 'pass', 3],
     ])
+    const cases = await query(
+      p.dir,
+      'SELECT case_key, outcome, verdict FROM cases ORDER BY case_index',
+    )
+    assert.deepEqual(
+      cases.map((c) => [c.case_key, c.outcome, c.verdict]),
+      [
+        ['a', 'pass', 'family'],
+        ['b', 'pass', 'family'],
+        ['c', 'fail', 'family'],
+      ],
+    )
+    const attempts = await query(
+      p.dir,
+      'SELECT case_key FROM attempts WHERE case_key IS NOT NULL ORDER BY case_key',
+    )
+    assert.deepEqual(
+      attempts.map((a) => a.case_key),
+      ['a', 'b', 'c'],
+    )
   })
 
   test('evals.declared names a todo and a declared skip, apart from an eval that ran', async () => {
@@ -440,7 +458,7 @@ evaluate('steady', { runs: 2 }, async (c) => {
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: attempt_answers, attempt_values, check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_answers_m, attempt_context, attempt_values_m, attempts, cell_checks, cells,/,
+        /no view or table named "nope"\. Views: attempt_answers, attempt_values, case_lift, check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_answers_m, attempt_context, attempt_values_m, attempts, case_checks, case_rates, cases, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {

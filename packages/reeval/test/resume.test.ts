@@ -5,6 +5,7 @@ import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
+import { unfoldCases } from '../src/history/cases.ts'
 import type {
   AttemptRecord,
   CellRecord,
@@ -667,7 +668,7 @@ evaluate('fam', {
     })
     const u = await project('resume-filter-cases-u', files)
     assert.equal((await runCli(u.dir, ['run', '--ui', 'plain'])).code, 1)
-    const whole = shape(readRun(u.dir).run)
+    const whole = shape(unfoldCases(readRun(u.dir).run))
     assert.equal(whole.families?.[0]?.ran, 3)
 
     const p = await project('resume-filter-cases', files)
@@ -680,7 +681,7 @@ evaluate('fam', {
     writeFileSync(scratch, JSON.stringify({ ...started, status: 'interrupted' }))
     const r = await runCli(p.dir, ['run', '--resume', started.runId, '[next]', '[both]'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    const part = readRun(p.dir).run
+    const part = unfoldCases(readRun(p.dir).run)
     assert.equal(part.status, 'interrupted')
     const vite = part.evals.find((e) => e.name === 'fam [vite]')
     assert.deepEqual(
@@ -699,7 +700,7 @@ evaluate('fam', {
       ],
     )
     assert.equal((await runCli(p.dir, ['run', '--resume', started.runId])).code, 1)
-    assert.deepEqual(shape(readRun(p.dir).run), whole)
+    assert.deepEqual(shape(unfoldCases(readRun(p.dir).run)), whole)
   })
 
   test('a resume without --trait plans with the run’s saved --trait', async () => {
