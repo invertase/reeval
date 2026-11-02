@@ -4,12 +4,13 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
 import { type ExecTransport, type Gateway, startGateway } from '@reeval/sandbox-docker'
-import { shellQuote as q, run } from '@reeval/sandbox-docker/process'
+import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
+import { untraced } from '../debug/docker.ts'
 import { gatewayPolicy } from '../egress.ts'
 import type { TartSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
-import { tartCli, tartNames, tartOk } from './tart-cli.ts'
+import { tartCli, tartNames, tartOk, tracedRun } from './tart-cli.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
 /** How long a clone has to boot until a command runs in it. */
@@ -61,13 +62,14 @@ const runIn = (
   options: { input?: string | Uint8Array; signal?: AbortSignal } = {},
 ) => {
   const [bin = '', ...args] = guest.argv(argv)
-  return run(bin, args, { input: options.input ?? '', signal: options.signal })
+  return tracedRun(bin, args, { input: options.input ?? '', signal: options.signal })
 }
 
 /**
  * The gateway's commands run as root through `sudo -n`, which the image's user needs without a
- * password, so the agent can't stop or replace the forwarder. Killing `tart exec` or `ssh` can
- * leave them running in the VM, so the gateway stops its forwarder itself.
+ * password. The agent runs as that same user, so it could stop or replace the forwarder: only
+ * the real credentials, which never leave the host, are out of its reach. Killing `tart exec` or
+ * `ssh` can leave them running in the VM, so the gateway stops its forwarder itself.
  */
 export const rootTransport = (guest: Guest): ExecTransport => ({
   argv: (command) =>
@@ -152,17 +154,27 @@ export async function createTartSandbox(
   options: SandboxOptions,
 ): Promise<Sandbox> {
   const { signal } = options
+  // Planning refuses every other policy; a VM on Tart's network can't be held to one.
+  if (options.egress.policy !== 'allow-all') {
+    throw new InfraError(
+      `tart() runs under egress 'allow-all' only, and this attempt asked for ${JSON.stringify(options.egress.policy)}`,
+    )
+  }
   const debug = attemptDebug()
   const vm = `${vmPrefix(options.runId)}${randomBytes(3).toString('hex')}`
   const started = performance.now()
   let booted: ChildProcess | undefined
+  let ended: Promise<unknown> = Promise.resolve()
   let gateway: Gateway | undefined
   let removed: Promise<void> | undefined
   const destroy = () => {
     removed ??= (async () => {
       await gateway?.close()
-      await removeVm(vm)
+      await tartCli(['stop', '--timeout', '5', vm]).catch(() => {})
+      // A VM is deleted only once `tart run` no longer holds it.
       booted?.kill('SIGKILL')
+      await ended
+      await tartCli(['delete', vm]).catch(() => {})
       debug?.log('container', `deleted ${vm}`)
     })()
     return removed
@@ -192,6 +204,11 @@ export async function createTartSandbox(
       stdio: ['ignore', 'ignore', 'pipe'],
       detached: true,
     })
+    const run = booted
+    ended = new Promise((resolve) => {
+      run.once('exit', resolve)
+      run.once('error', resolve)
+    })
     booted.stderr?.on('data', (d) => {
       stderr = `${stderr}${d}`.slice(-2000)
     })
@@ -216,7 +233,7 @@ export async function createTartSandbox(
     const deadline = Date.now() + BOOT_TIMEOUT_MS
     for (;;) {
       if (exited) throw new InfraError(`${vm} didn't boot: ${exited}`)
-      const reached = await reach()
+      const reached = await untraced(reach)
       if (reached) {
         guest = reached
         break

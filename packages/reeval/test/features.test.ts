@@ -5,7 +5,7 @@
 // REEVAL_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
 // test/features/README.md for adding one.
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createSocket } from 'node:dgram'
 import {
@@ -43,6 +43,7 @@ import type { RunRecord } from '../src/history/types.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
+import { fakeTart } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -371,6 +372,9 @@ const egressEnv = () => ({
   REEVAL_EGRESS_DNS: `${egressTarget.host}:${dnsResponder.address().port}`,
   REEVAL_EGRESS_DNS_ANSWER: DNS_ANSWER.join('.'),
 })
+
+/** Each fixture project's fake `tart` directory, for a row run under `tart()`. */
+const fakeTarts = new Map<string, string>()
 
 /** The `lands` eval's first attempt. */
 const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
@@ -2940,6 +2944,41 @@ export const features: Feature[] = [
       assert.equal(serve.port, 5173)
       assert.notEqual(serve.portEnv, 5173)
       assert.equal(landed(run)?.files.artifacts?.[0]?.capture?.port, serve.port)
+    },
+  },
+  {
+    // tart() on the fake `tart` (test/support/fake-tart.ts), whose VMs list only their own listeners.
+    dir: 'ui/serve-tart-own-port',
+    tiers: ['fake'],
+    env: 'ui',
+    sandbox: 'tart:macos-sequoia-base:latest',
+    posixModes: true,
+    canary: /expected 'own port' to be 'reads PORT'/,
+    hostEnv: (dir) => {
+      const fake = fakeTart()
+      fakeTarts.set(dir, fake.dir)
+      return { ...fake.env, REEVAL_TEST_TART_ANY_HOST: '1' }
+    },
+    record: ({ run, project }) => {
+      const [serve, ...more] = landed(run)?.serves ?? []
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.deepEqual(more, [])
+      assert.equal(serve.detected, true)
+      assert.equal(serve.address, '127.0.0.1')
+      assert.notEqual(serve.port, serve.portEnv)
+      const vms = join(fakeTarts.get(project) ?? '', 'vms')
+      assert.deepEqual(readdirSync(vms), [], 'every VM is deleted')
+      const left = spawnSync('pgrep', ['-f', 'own-port.mjs'], { encoding: 'utf8' }).stdout.trim()
+      assert.equal(left, '', 'and c.serve stopped its server in the VM')
+      const traces = filesUnder(join(project, '.reeval', 'debug')).filter((f) =>
+        f.endsWith('trace.ndjson'),
+      )
+      const traced = traces.map((f) => readFileSync(f, 'utf8')).join('\n')
+      assert.match(
+        traced,
+        /"bin":"tart","args":\["clone"/,
+        "the failed attempt's trace has its tart commands",
+      )
     },
   },
   {

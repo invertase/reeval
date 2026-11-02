@@ -3,6 +3,7 @@
 // kind's name, so a new kind is one more entry.
 import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
+import type { ListenerSource } from '../attempt/serve.ts'
 import { TART_MAX_CONCURRENT } from '../contract/tart.ts'
 import type {
   DockerSandboxDescriptor,
@@ -34,10 +35,12 @@ export type SandboxCapabilities = {
    */
   isolated: boolean
   /**
-   * Has a Linux `/proc` for the agent's processes, and bash: what `leftRunning`, `c.serve`'s port
-   * probe and the background-exec kill-tree read.
+   * Has a Linux `/proc` for the agent's processes, and bash: what `leftRunning` and the
+   * background-exec kill-tree read.
    */
   processTable: boolean
+  /** How `c.serve` lists what listens in the sandbox. */
+  listeners: ListenerSource
   /** Starts from an image preflight prepares before the run, which the record names. */
   images: boolean
   /** Has its provider checked, and what it starts from prepared, before the run. */
@@ -106,6 +109,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     harnessSession: true,
     isolated: true,
     processTable: true,
+    listeners: 'proc',
     images: true,
     preflight: true,
     pluginBuilds: true,
@@ -151,6 +155,7 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
     harnessSession: false,
     isolated: false,
     processTable: false,
+    listeners: 'host',
     images: false,
     preflight: false,
     pluginBuilds: false,
@@ -178,6 +183,7 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     harnessSession: false,
     isolated: true,
     processTable: false,
+    listeners: 'lsof',
     images: false,
     preflight: true,
     pluginBuilds: false,

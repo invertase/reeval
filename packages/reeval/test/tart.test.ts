@@ -186,6 +186,29 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     assert.deepEqual(vms(), [])
   })
 
+  test("a second VM's gateway leaves the first VM's forwarder running", async () => {
+    const first = await createTartSandbox(vm(), options())
+    const second = await createTartSandbox(vm(), options())
+    try {
+      assert.match(
+        (await first.getPortEndpoint?.({ port: 3000 }))?.url ?? '',
+        /^http:\/\/127\.0\.0\.1:(?!3000$)\d+$/,
+        'the first still tunnels through its gateway',
+      )
+    } finally {
+      await first.destroy()
+      await second.destroy()
+    }
+  })
+
+  test('refuses an attempt under any egress but allow-all, before cloning', async () => {
+    await assert.rejects(
+      createTartSandbox(vm(), options({ egress: { policy: 'proxy', auto: [] } })),
+      /^InfraError: tart\(\) runs under egress 'allow-all' only/,
+    )
+    assert.deepEqual(vms(), [])
+  })
+
   test("cleanup deletes the run's leftover clones, and no other run's", async () => {
     const mine = await createTartSandbox(vm(), options())
     const theirs = await createTartSandbox(vm(), options({ runId: 'run2' }))

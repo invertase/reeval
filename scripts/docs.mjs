@@ -121,6 +121,9 @@ const INTERNAL_VARIABLES = [
   'REEVAL_RUNNER_PROTOCOL',
 ]
 
+/** Read only by reeval's own test suite. */
+const TEST_VARIABLES = ['REEVAL_TEST_TART_ANY_HOST']
+
 function reevalVariables() {
   const found = new Set()
   const walk = (dir) => {
@@ -146,6 +149,7 @@ function reevalVariables() {
   found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
   found.delete('REEVAL_PYTHON_MODULE') // python -m target, not an env var
   for (const name of INTERNAL_VARIABLES) found.delete(name)
+  for (const name of TEST_VARIABLES) found.delete(name)
   return [...found].sort()
 }
 

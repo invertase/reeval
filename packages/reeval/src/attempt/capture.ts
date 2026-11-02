@@ -167,8 +167,9 @@ async function launch(
     : process.platform === 'win32'
       ? msysTreeKill(pid, group)
       : // The fake sandbox spawns each exec detached, so its shell (`$$`) leads a process group
-        // the command and all it started belong to. dash's kill takes no `--`.
-        `kill -9 -${group} 2>/dev/null`
+        // the command and all it started belong to. dash's kill takes no `--`. A VM's shell leads
+        // none, so the tree is walked from the command's shell too, stopping each first.
+        `kill -9 -${group} 2>/dev/null; tree() { kill -STOP "$1" 2>/dev/null; for c in $(pgrep -P "$1" 2>/dev/null); do tree "$c"; done; kill -9 "$1" 2>/dev/null; }; tree ${pid}`
   let killed = false
   const handle: BackgroundHandle = {
     async kill() {
@@ -193,16 +194,17 @@ export async function serveCommand(
   port?: number,
 ): Promise<ServeHandle> {
   const box = await sandboxFor(a, 'c.serve()')
-  const tables = capabilitiesOf(a.spec.sandbox).processTable
+  const source = capabilitiesOf(a.spec.sandbox).listeners
+  const onHost = source === 'host'
   const look = (pid?: string) =>
-    untraced(() => box.exec(probeScript(pid, tables), { signal: a.signal })).then((r) =>
+    untraced(() => box.exec(probeScript(pid, source), { signal: a.signal })).then((r) =>
       parseProbe(r.stdout),
     )
   const first = await look()
   const before = new Set(first.proc ? first.listeners.map((l) => l.port) : [])
-  // The fake sandbox shares the host's network; a container with no /proc can't tell.
+  // The fake sandbox shares the host's network; a sandbox that can't list its listeners can't tell.
   const taken = async (p: number) =>
-    first.proc ? before.has(p) : !tables && (await hostListening(p)) !== undefined
+    first.proc ? before.has(p) : onHost && (await hostListening(p)) !== undefined
   const want = await servePort(command, port, allocatePort, taken)
   const { handle, pid, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
   const found = await awaitListening(command, {
@@ -212,7 +214,7 @@ export async function serveCommand(
     signal: a.signal,
     probe: () => look(pid),
     output: async () => (await box.exec(`tail -c 65536 ${log} 2>/dev/null`)).stdout,
-    ...(tables ? { hostListening: async () => '' } : {}),
+    ...(onHost ? {} : { hostListening: async () => '' }),
   }).catch(async (error: Error) => {
     await handle.kill()
     throw error
