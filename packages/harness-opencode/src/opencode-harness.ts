@@ -207,6 +207,9 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     version: 'v1',
     harnessId: OPENCODE_HARNESS_ID,
     builtinTools: OPENCODE_BUILTIN_TOOLS,
+    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+    resolveHostToolCall: () => undefined,
+    isMcpToolCall: () => false,
     source: {
       type: 'npm-locked',
       packageJson: OPENCODE_PACKAGE_JSON,

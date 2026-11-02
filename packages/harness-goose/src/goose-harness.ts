@@ -215,6 +215,9 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     version: 'v1',
     harnessId: GOOSE_HARNESS_ID,
     builtinTools: GOOSE_BUILTIN_TOOLS,
+    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+    resolveHostToolCall: () => undefined,
+    isMcpToolCall: () => false,
     source: { type: 'install-command', command: GOOSE_INSTALL_COMMAND },
     // The launcher, which runs `goose acp` (see GOOSE_LAUNCHER).
     executable: GOOSE_LAUNCHER_EXECUTABLE,

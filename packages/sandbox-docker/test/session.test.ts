@@ -255,6 +255,51 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
     assert.equal(sizes.stdout.trim(), '50')
   })
 
+  test('stat, listDirectory and deleteFile: types, sizes, odd names, symlinks and missing paths', async () => {
+    const s = await open()
+    await s.run({
+      command: [
+        'mkdir -p tree/sub',
+        'printf 12345 > tree/five.txt',
+        "printf x > 'tree/sp ace'",
+        'printf y > "$(printf \'tree/new\\nline\')"',
+        ': > tree/.hidden',
+        'ln -s five.txt tree/link',
+        'ln -s sub tree/dirlink',
+      ].join(' && '),
+    })
+    assert.deepEqual(await s.stat({ path: 'tree/five.txt' }), { type: 'file', size: 5 })
+    assert.equal((await s.stat({ path: 'tree/sub' }))?.type, 'directory')
+    assert.deepEqual(await s.stat({ path: 'tree/link' }), { type: 'file', size: 5 })
+    assert.deepEqual(await s.stat({ path: '/dev/null' }), { type: 'other', size: 0 })
+    assert.equal(await s.stat({ path: 'tree/nope' }), null)
+
+    const entries = await s.listDirectory({ path: 'tree' })
+    assert.deepEqual(
+      entries?.sort((a, b) => a.name.localeCompare(b.name)),
+      [
+        { name: '.hidden', type: 'file' },
+        { name: 'dirlink', type: 'symlink' },
+        { name: 'five.txt', type: 'file' },
+        { name: 'link', type: 'symlink' },
+        { name: 'new\nline', type: 'file' },
+        { name: 'sp ace', type: 'file' },
+        { name: 'sub', type: 'directory' },
+      ],
+    )
+    assert.deepEqual(await s.listDirectory({ path: 'tree/sub' }), [])
+    assert.equal(await s.listDirectory({ path: 'tree/nope' }), null)
+    await assert.rejects(s.listDirectory({ path: 'tree/five.txt' }), /not a directory/)
+
+    assert.equal(await s.deleteFile({ path: 'tree/link' }), true)
+    assert.deepEqual(await s.stat({ path: 'tree/five.txt' }), { type: 'file', size: 5 })
+    assert.equal(await s.deleteFile({ path: 'tree/dirlink' }), true)
+    assert.equal((await s.stat({ path: 'tree/sub' }))?.type, 'directory')
+    assert.equal(await s.deleteFile({ path: 'tree/sp ace' }), true)
+    assert.equal(await s.deleteFile({ path: 'tree/sp ace' }), false)
+    await assert.rejects(s.deleteFile({ path: 'tree/sub' }), /is a directory/)
+  })
+
   test('the process check sees a running command (twin: it can fail)', async () => {
     const s = await open()
     const command = longCommand()

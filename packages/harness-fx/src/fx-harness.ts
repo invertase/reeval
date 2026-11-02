@@ -301,6 +301,9 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     version: 'v1',
     harnessId: FX_HARNESS_ID,
     builtinTools: FX_BUILTIN_TOOLS,
+    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+    resolveHostToolCall: () => undefined,
+    isMcpToolCall: () => false,
     source: { type: 'install-command', command: FX_INSTALL_COMMAND },
     executable: 'fx-acp',
     args: [],

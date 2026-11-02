@@ -235,6 +235,26 @@ const EXEC_MARKER = 'REEVAL_EXEC_ID'
  */
 const EXEC_UMASK = 'umask 022'
 
+/** The exit code of the path scripts below when the path doesn't exist. */
+const MISSING = 3
+/** POSIX `sh` and `stat -L -c` (coreutils and BusyBox both have it), for any image an eval brings. */
+const STAT = `[ -e "$1" ] || exit ${MISSING}
+if [ -d "$1" ]; then t=directory; elif [ -f "$1" ]; then t=file; else t=other; fi
+printf '%s %s' "$t" "$(stat -L -c %s -- "$1")"`
+/** One `<type>\\t<name>` per entry, NUL-separated, since a name can hold a newline. */
+const LIST = `[ -e "$1" ] || exit ${MISSING}
+[ -d "$1" ] || { echo "not a directory" >&2; exit 1; }
+for f in "$1"/* "$1"/.*; do
+  n=\${f##*/}
+  [ "$n" = . ] || [ "$n" = .. ] && continue
+  [ -e "$f" ] || [ -L "$f" ] || continue
+  if [ -L "$f" ]; then t=symlink; elif [ -d "$f" ]; then t=directory; elif [ -f "$f" ]; then t=file; else t=other; fi
+  printf '%s\\t%s\\0' "$t" "$n"
+done`
+const DELETE = `[ -e "$1" ] || [ -L "$1" ] || exit ${MISSING}
+[ -d "$1" ] && [ ! -L "$1" ] && { echo "is a directory" >&2; exit 1; }
+rm -f -- "$1"`
+
 /**
  * The container's cgroup counts every process the kernel killed at its memory limit: cgroup v2's
  * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
@@ -490,6 +510,21 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     return r.exitCode === 0 ? new Uint8Array(r.stdout) : null
   }
 
+  /**
+   * `script` run by `sh` with the resolved path as `$1`: its stdout, or `null` when it exits
+   * {@link MISSING} (no such path). Any other failure rejects with its stderr.
+   */
+  const onPath = async (script: string, o: { path: string; abortSignal?: AbortSignal }) => {
+    const path = posix.resolve(SANDBOX_ROOT, o.path)
+    const r = await docker(['exec', ...user, id, 'sh', '-c', script, 'sh', path], {
+      signal: o.abortSignal,
+      engine,
+    })
+    if (r.exitCode === MISSING) return null
+    if (r.exitCode !== 0) throw new Error(`${path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`)
+    return r.stdout.toString('utf8')
+  }
+
   const writeBinaryFile = async (o: {
     path: string
     content: Uint8Array
@@ -601,6 +636,29 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         .slice((o.startLine ?? 1) - 1, o.endLine)
         .join('\n')
     },
+    async stat(o) {
+      const out = await onPath(STAT, o)
+      if (out === null) return null
+      const [type, size] = out.trim().split(' ')
+      return { type: type as 'file' | 'directory' | 'other', size: Number(size) }
+    },
+    async listDirectory(o) {
+      const out = await onPath(LIST, o)
+      if (out === null) return null
+      return out
+        .split('\0')
+        .filter(Boolean)
+        .map((line) => {
+          const tab = line.indexOf('\t')
+          return {
+            type: line.slice(0, tab) as 'file' | 'directory' | 'symlink' | 'other',
+            name: line.slice(tab + 1),
+          }
+        })
+    },
+    async deleteFile(o) {
+      return (await onPath(DELETE, o)) !== null
+    },
     writeBinaryFile,
     writeTextFile: (o) => writeBinaryFile({ ...o, content: Buffer.from(o.content, 'utf8') }),
     async writeFile(o) {
@@ -633,7 +691,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     destroy: remove,
     restricted: () => {
       const { description, readFile, readBinaryFile, readTextFile, writeFile } = session
-      const { writeBinaryFile, writeTextFile, spawn, run } = session
+      const { writeBinaryFile, writeTextFile, stat, listDirectory, deleteFile, spawn, run } =
+        session
       return {
         description,
         readFile,
@@ -642,6 +701,9 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         writeFile,
         writeBinaryFile,
         writeTextFile,
+        stat,
+        listDirectory,
+        deleteFile,
         spawn,
         run,
       }
