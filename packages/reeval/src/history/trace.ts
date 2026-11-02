@@ -38,8 +38,10 @@ type Span = {
   args?: Record<string, unknown>
 }
 
-const PID = 1
-const RUN_TID = 0
+/** The run's own track, a process of its own: Perfetto names a thread after its id too. */
+const RUN = { pid: 1, tid: 1 }
+/** The lanes' process; lane `n` is thread `n`, named `lane`, so its track reads `lane n`. */
+const LANES = 2
 
 /** The attempt's transcript lines, by its key; an attempt without one gets no tool slices. */
 export type Transcripts = ReadonlyMap<string, readonly TranscriptLine[]>
@@ -71,9 +73,14 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
   }
   const laneEnds = lanes.map((l) => l.end)
 
+  const meta = (name: string, pid: number, tid: number, args: Record<string, unknown>) =>
+    ({ name, ph: 'M', ts: 0, pid, tid, args }) as const
   const events: TraceEvent[] = [
-    { name: 'process_name', ph: 'M', ts: 0, pid: PID, tid: RUN_TID, args: { name: run.runId } },
-    { name: 'thread_name', ph: 'M', ts: 0, pid: PID, tid: RUN_TID, args: { name: 'run' } },
+    meta('process_name', RUN.pid, RUN.tid, { name: `run ${run.runId}` }),
+    meta('process_sort_index', RUN.pid, RUN.tid, { sort_index: 0 }),
+    meta('thread_name', RUN.pid, RUN.tid, { name: 'run' }),
+    meta('process_name', LANES, 0, { name: 'attempts' }),
+    meta('process_sort_index', LANES, 0, { sort_index: 1 }),
   ]
   const runEnd = Math.max(Date.parse(run.endedAt), ...laneEnds)
   const runSpans: Span[] = [
@@ -95,27 +102,23 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
       rank: 1,
       cat: 'run',
     })
-  events.push(...nest(runSpans).map((s) => slice(s, RUN_TID, us)))
+  events.push(...nest(runSpans).map((s) => slice(s, RUN.pid, RUN.tid, us)))
   for (const [i, { spans }] of lanes.entries()) {
     const tid = i + 1
-    events.push({
-      name: 'thread_name',
-      ph: 'M',
-      ts: 0,
-      pid: PID,
-      tid,
-      args: { name: `lane ${tid}` },
-    })
+    events.push(
+      meta('thread_name', LANES, tid, { name: 'lane' }),
+      meta('thread_sort_index', LANES, tid, { sort_index: tid }),
+    )
     for (const s of nest(spans)) {
       events.push(
         s.end > s.start
-          ? slice(s, tid, us)
+          ? slice(s, LANES, tid, us)
           : {
               name: s.name,
               ph: 'i',
               s: 't',
               ts: us(s.start),
-              pid: PID,
+              pid: LANES,
               tid,
               cat: s.cat,
               ...(s.args ? { args: s.args } : {}),
@@ -133,11 +136,10 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
   for (const c of changes) {
     running += c.d
     events.push({
-      name: 'attempts running',
+      name: 'attempts',
       ph: 'C',
       ts: us(c.at),
-      pid: PID,
-      tid: RUN_TID,
+      ...RUN,
       args: { running },
     })
   }
@@ -148,12 +150,12 @@ export function runTrace(run: RunRecord, transcripts: Transcripts = new Map()): 
   }
 }
 
-const slice = (s: Span, tid: number, us: (ms: number) => number): TraceEvent => ({
+const slice = (s: Span, pid: number, tid: number, us: (ms: number) => number): TraceEvent => ({
   name: s.name,
   ph: 'X',
   ts: us(s.start),
   dur: Math.max(0, us(s.end) - us(s.start)),
-  pid: PID,
+  pid,
   tid,
   cat: s.cat,
   ...(s.args ? { args: s.args } : {}),

@@ -38,9 +38,10 @@ const record = (attempts: AttemptRecord[], durationMs = 60_000) =>
     evals: [{ name: 'a', attempts }],
   }) as unknown as RunRecord
 
-const slices = (trace: RunTrace, tid?: number) =>
+/** The slices of lane `lane`, or of the run's own track. */
+const slices = (trace: RunTrace, lane: number | 'run') =>
   trace.traceEvents
-    .filter((e) => e.ph === 'X' && (tid === undefined || e.tid === tid))
+    .filter((e) => e.ph === 'X' && (lane === 'run' ? e.pid === 1 : e.pid === 2 && e.tid === lane))
     .map((e) => `${e.name} ${e.ts / 1e6}+${(e.dur as number) / 1e6}`)
 
 describe('reeval show --trace', () => {
@@ -57,7 +58,7 @@ describe('reeval show --trace', () => {
     assert.deepEqual(trace.otherData, { runId: 'run-1', lanes: 2, attempts: 3 })
     assert.deepEqual(slices(trace, 1), ['a x#1 1+10', 'a x#3 11+10'])
     assert.deepEqual(slices(trace, 2), ['a x#2 5+10'])
-    assert.deepEqual(slices(trace, 0), [
+    assert.deepEqual(slices(trace, 'run'), [
       'run complete 0+60',
       'before the first attempt (plan, preflight) 0+1',
     ])
@@ -151,10 +152,9 @@ evaluate('a', async (c) => {
     const trace = JSON.parse(readFileSync(file, 'utf8')) as RunTrace
     assert.deepEqual(traceProblems(trace), [])
     assert.equal(trace.otherData.attempts, 2)
-    const names = new Set(
-      trace.traceEvents.map((e) => (e.ph === 'M' ? (e.args?.name as string) : e.name)),
-    )
-    for (const name of ['turn 1', 'check cat hello.txt', 'lane 1']) assert.ok(names.has(name), name)
+    const names = new Set(trace.traceEvents.map((e) => e.name))
+    for (const name of ['turn 1', 'check cat hello.txt', 'attempts'])
+      assert.ok(names.has(name), name)
     const out = join(tempDir('trace-out'), 'nested', 'run.json')
     assert.equal((await runCli(p.dir, ['show', run.runId, '--trace', '--out', out])).code, 0)
     assert.ok(existsSync(out))
