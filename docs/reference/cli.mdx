@@ -100,7 +100,7 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                               container, environment, brokering, turns and tool calls, checks,
                               judge calls, gateway requests and teardown
-  -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+  -vv                         Also raw payloads, docker commands, headers and DNS decisions, and
                               keep every attempt's trace.ndjson (else only failing attempts')
                               Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
   --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
@@ -217,9 +217,21 @@ The `reeval show` command prints one run. An omitted run is `latest`.
 
 ```text
 reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
+  --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
+                              attempts in lanes, with setup, turns, tool calls, checks and judge
+  --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)
 ```
 
 [//]: # (/generated:cli-help:show)
+
+`--trace` writes the run's timeline as [Chrome Trace Event](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU) JSON, which [Perfetto](https://ui.perfetto.dev) and `chrome://tracing` open. It works on any finished run, recorded or scratch, from any reeval version. A run still in progress has no record yet, so `reeval show` refuses its id; `reeval studio` shows it live:
+
+| Track | What it holds |
+|---|---|
+| `run <run id>` | The whole run, the time before its first attempt started (planning and preflight), and an `attempts running` counter |
+| `attempts`, `lane <n>` | Attempts that didn't overlap, in start order: reeval puts each attempt on the first lane free when it started, so there are as many lanes as attempts ever ran at once |
+
+Under each attempt, each `turn <n>` sits at the time it started, with the transcript's text, reasoning and tool calls nested under it when the run kept the transcript. A call that overlaps the one it started in is cut at that call's end and carries `clippedMs`. The record holds only the totals of `setup`, the `diff`, each `check <command>` and the `judge`, so `setup` is placed from the attempt's start and the rest one after another after the last turn, and each carries `placed: estimated` in its arguments. An estimated phase may really have run elsewhere: an eval's body can call `c.exec` or `c.judge` before or between turns, and the diff is taken around each turn. Every slice's arguments hold its record fields, such as the attempt's key, outcome and phase timings.
 
 For more information about reading one run, see [Show one run](/results/output#show-one-run).
 
@@ -410,7 +422,7 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 `reeval doctor` exits 1 when a check fails. A warning alone exits 0.
 
-`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled. A case that its family's `passRate` gates is left to the family's `(all cases)` row.
+`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled. An evaluation with `cases` is one row, with a row per case inside it; under a pooled `passRate` or `minLift` gate, the evaluation's rate over its cases decides, not a case that flipped.
 
 `reeval image build` exits 2 when every failed image is a usage error, else 3.
 

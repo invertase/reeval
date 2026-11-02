@@ -23,7 +23,7 @@ export const declaredModeSchema = z.enum(['run', 'skip', 'only'])
 export const declaredFamilySchema = z.strictObject({
   name: z.string(),
   case: z.number().int().min(0),
-  cases: z.number().int().min(2),
+  cases: z.number().int().min(1),
 })
 
 export const declaredTodoSchema = z.strictObject({

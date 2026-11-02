@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { biome } from '../scripts/schema/check.ts'
+import { unfoldCases } from '../src/history/cases.ts'
 import type { CheckTally, RunRecord } from '../src/history/types.ts'
 import { render } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
@@ -344,7 +345,7 @@ describe('outcomes the record alone has', () => {
   const family = 'greets %s in the house style'
 
   test("a family's first case with no counted attempt lists the checks its other cases ran", () => {
-    const record = read(raw)
+    const record = unfoldCases(read(raw))
     const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
     assert.ok(first)
     for (const a of first.attempts) {
@@ -367,7 +368,7 @@ describe('outcomes the record alone has', () => {
   })
 
   test("a family's case that hasn't run in a stopped run says not run; a declared skip doesn't", () => {
-    const record = read(raw)
+    const record = unfoldCases(read(raw))
     record.status = 'budget'
     const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
     assert.ok(first)
@@ -382,7 +383,7 @@ describe('outcomes the record alone has', () => {
   })
 
   test("a family's pooled arm and columns come from any case, not only the first", () => {
-    const record = read(raw)
+    const record = unfoldCases(read(raw))
     const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
     assert.ok(first)
     const variant = 'fake/with-skill/fake'
@@ -408,7 +409,7 @@ describe('outcomes the record alone has', () => {
       (x) => x.name === 'writes a greeting',
     )?.answers
     assert.ok(asked?.length)
-    const record = read(raw)
+    const record = unfoldCases(read(raw))
     const cases = record.evals.filter((e) => e.family?.id.endsWith(family))
     for (const c of cases.filter((x) => (x.family?.case ?? 0) >= 2)) c.answers = asked
     const [question] = evalOf(suiteResult(record), family)?.questions ?? []

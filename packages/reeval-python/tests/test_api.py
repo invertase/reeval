@@ -158,7 +158,7 @@ def test_bad_cases_are_refused_where_they_are_declared(opts: Any, message: str) 
         collect_module_tree_sync(load)
 
 
-def test_cases_key_their_evals_and_pool_when_there_are_several() -> None:
+def test_cases_key_their_evals_and_name_their_eval() -> None:
     def load() -> None:
         evaluate("e", {"cases": ["users", 2, {"id": "x"}, {"name": "y"}]})(lambda c, case: None)
         evaluate("one", {"cases": [{"slug": "s"}], "case_key": lambda c: c["slug"]})(
@@ -169,7 +169,7 @@ def test_cases_key_their_evals_and_pool_when_there_are_several() -> None:
     names = [child["name"] for child in tree["children"]]
     assert names == ["e [users]", "e [2]", "e [x]", "e [y]", "one [s]"]
     assert tree["children"][1]["family"] == {"name": "e", "case": 1, "cases": 4}
-    assert "family" not in tree["children"][4]
+    assert tree["children"][4]["family"] == {"name": "one", "case": 0, "cases": 1}
 
 
 def test_cases_refuse_a_body_without_the_case_where_it_is_declared() -> None:

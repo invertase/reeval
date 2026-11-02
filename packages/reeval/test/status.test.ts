@@ -69,13 +69,16 @@ const PLAIN = `evals/s.eval.ts
 │    ✗ uses the marker  failed on the control · expected
 │      expected false to be true // Object.is equality · evals/s.eval.ts:23
 │    Worth knowing: 1 run per side; set runs: 4 at evals/s.eval.ts:21 to confirm this difference.
-└─ ✗ colors           1 of 3 runs passed
-     Passed 1 of 3 on fake.
-     Failed cases: red, blue.
-     ✗ is green  failed 2 of 3 runs
+└─ ✗ colors           1 of 3 runs passed · 3 cases
+     Failed on red, blue; 1 of 3 cases passed.
+       case   fake
+     ✗ red    0 of 1
+     ✓ green  1 of 1
+     ✗ blue   0 of 1
+     ✗ is green  failed on red, blue
        expected 'red' to be 'green' // Object.is equality · evals/s.eval.ts:28
 
-Done in <time> · 4 failed · 3 passed`
+Done in <time> · 3 failed · 2 passed`
 
 test('the status list: one line a pass, and a sentence for each way an eval went', async () => {
   const p = await project('status-list', {

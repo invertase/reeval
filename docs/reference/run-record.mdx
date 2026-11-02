@@ -107,7 +107,7 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 <Property name="evals" type="EvalEntry[]"></Property>
 
 <Property name="families" type="FamilyRecord[]" optional>
-  Each eval with `cases` that ran; unset when none did.
+  In records from before an eval with `cases` was one entry, each eval with `cases` that ran. Never written now; reading such a record folds it into its eval.
 </Property>
 
 <Property name="errors" type="string[]" optional>
@@ -301,11 +301,11 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="outcome" type="Outcome">
-  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.
+  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. With `cases`, a cell's outcome is over every case.
 </Property>
 
 <Property name="verdict" type="'family'" optional>
-  `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.
+  In records from before an eval with `cases` was one entry, `family` on a case whose `gate: { passRate }` its family held over the mean of its cases. Never written now: see `CaseRecord.verdict`.
 </Property>
 
 <Property name="todo" type="boolean">
@@ -329,11 +329,23 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
-  Set on each case of an eval with `cases`; `RunRecord.families` has the suite.
+  In records from before an eval with `cases` was one entry, set on each case, which was an entry of its own. Never written now; reading such a record folds the cases into one entry.
 </Property>
 
 <Property name="excluded" type="ExcludedPair[]" optional>
-  The environments (and harnesses) `where` left this case out of; unset when none.
+  The environments (and harnesses) `where` left out, one entry per case and environment, including those of a case it left out everywhere; unset when none.
+</Property>
+
+<Property name="cases" type="CaseRecord[]" optional>
+  An eval with `cases`: each case that has attempts in this run, in list order, with its own cells. `cells` and `attempts` are over every case. Unset without cases.
+</Property>
+
+<Property name="caseCount" type="number" optional>
+  With `cases`: how many the list has, `cases` holding those with attempts in this run.
+</Property>
+
+<Property name="lifts" type="FamilyLift[]" optional>
+  With `cases` and `compare`: each variant cell against its control, paired by case. Its `minLift` gates the lift's lower bound, and a lift below it fails the variant cell.
 </Property>
 
 ### `CellRecord`
@@ -396,7 +408,13 @@ Also has every field of `Cell`.
   By `gate`. `'all'` (pass^k: every counted attempt passes) matches `{ passRate: 1 }`; `{ passRate }` is a pass@1 threshold. Infra only when nothing counted; `'none'` reports the worst outcome. A variant below its `minLift` fails too.
 </Property>
 
-<Property name="lift" type="Lift" optional></Property>
+<Property name="lift" type="Lift" optional>
+  Unset on an eval with several `cases`, whose variants have `EvalEntry.lifts`.
+</Property>
+
+<Property name="rate" type="CellRate" optional>
+  On an eval with several `cases`: the cell's pass@1 over them. A `gate: { passRate }` gates `rate.rate`, the mean of the cases' pass@1, and sets `rate.outcome`.
+</Property>
 
 <Property name="checks" type="CellCheck[]" optional>
   Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
@@ -434,7 +452,7 @@ A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
 ### `FamilyRecord`
 
-An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.
+In records from before an eval with `cases` was one entry: the eval over its cases, each case an entry of its own. Reading such a record folds it into the eval's `cases`, `lifts` and each cell's `rate`.
 
 <Property name="id" type="string">
   `file › group › … › template`.
@@ -474,7 +492,7 @@ An eval with `cases`: its cases as samples of one suite. Each case is also an ev
 
 ### `FamilyRate`
 
-One cell's pass@1 over a family's cases.
+One cell's pass@1 over an eval's cases.
 
 <Property name="cell" type="string">
   The cell's key, the same in every case.
@@ -497,7 +515,7 @@ One cell's pass@1 over a family's cases.
 <Property name="interval" type="FamilyInterval"></Property>
 
 <Property name="passRate" type="number" optional>
-  The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.
+  The cell's `gate: { passRate }`: with cases it gates `rate`, not each case's pass@1.
 </Property>
 
 <Property name="outcome" type="'pass' | 'fail'" optional>
@@ -506,7 +524,7 @@ One cell's pass@1 over a family's cases.
 
 ### `FamilyLift`
 
-A variant cell against its control over a family's cases, paired by case.
+A variant cell against its control over an eval's cases, paired by case.
 
 <Property name="variant" type="string">
   The variant cell's key.
@@ -547,7 +565,7 @@ A variant cell against its control over a family's cases, paired by case.
 <Property name="verdict" type="FamilyVerdict"></Property>
 
 <Property name="minLift" type="number" optional>
-  The compare's `minLift`: on a family it gates this lower bound, not each case's.
+  The compare's `minLift`: with cases it gates this lower bound, not each case's.
 </Property>
 
 <Property name="outcome" type="'pass' | 'fail'">
@@ -584,7 +602,7 @@ The variant's effort against the control's, paired by case.
 
 ### `FamilyEffortMetric`
 
-One effort metric over a family's paired cases.
+One effort metric over an eval's paired cases.
 
 <Property name="pairs" type="number">
   Cases with a value on both sides.
@@ -639,15 +657,19 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 ### `AttemptRecord`
 
 <Property name="key" type="string">
-  `<eval key> # <cell key>#<n>`: unique in the run.
+  `<eval key> # <cell key>#<n>`, or `<eval key> [<case>] # <cell key>#<n>` on an eval with `cases`: unique in the run.
 </Property>
 
 <Property name="id" type="string">
-  `<cell key>#<n>`: unique in its evaluation.
+  `<cell key>#<n>`, or `<cell key>#<case>#<n>` on an eval with `cases`: unique in its evaluation.
 </Property>
 
 <Property name="cell" type="string">
   The cell's key; see `EvalEntry.cells`.
+</Property>
+
+<Property name="case" type="string" optional>
+  The case's key, on an eval with `cases`; see `EvalEntry.cases`.
 </Property>
 
 <Property name="n" type="number">

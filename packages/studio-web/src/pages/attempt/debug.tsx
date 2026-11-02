@@ -263,7 +263,7 @@ export function Debug({
         ) : (
           <p className="text-sm text-muted-foreground">
             No trace.ndjson: it's kept when an attempt fails, or with{' '}
-            <code className="font-mono">reeval run --trace</code>.
+            <code className="font-mono">reeval run -vv</code>.
           </p>
         )}
       </section>

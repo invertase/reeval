@@ -24,4 +24,4 @@ fail             greets in Spanish
   spanish greeting  failed
     expected command to succeed, exit code 1
 
-8 new evals (4 fail · 4 pass)
+6 new evals (4 fail · 2 pass)

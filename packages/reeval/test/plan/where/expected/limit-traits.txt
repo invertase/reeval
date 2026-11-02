@@ -1,15 +1,14 @@
-profile vite (--profile) · 4 evals (4 skipped) · 7 cells · 7 attempts
-evals/where.eval.ts › stack questions [q1]  a/vite-app/docker  control  gated  ×1  family stack questions case 1/3 · profiles.vite.limit.traits.stack leaves out next-app · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"vite"}
-                                            b/vite-app/docker  control  gated  ×1  traits {"stack":"vite"}
-evals/where.eval.ts › stack questions [q2]  skipped: no cell left: profiles.vite.limit.traits.stack leaves out next-app
-evals/where.eval.ts › stack questions [q3]  a/vite-app/docker  control  gated  ×1  family stack questions case 3/3 · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"vite"}
-                                            b/vite-app/docker  control  gated  ×1  traits {"stack":"vite"}
-evals/where.eval.ts › per harness [x]       a/vite-app/docker  control  gated  ×1  family per harness case 1/2 · profiles.vite.limit.traits.stack leaves out next-app · where excludes 2 pairs · excluded on next-app for b: y · excluded on vite-app for b: y · traits {"stack":"vite"}
-                                            b/vite-app/docker  control  gated  ×1  traits {"stack":"vite"}
-evals/where.eval.ts › per harness [y]       a/vite-app/docker  control  gated  ×1  family per harness case 2/2 · profiles.vite.limit.traits.stack leaves out next-app · where excludes 2 pairs · excluded on next-app for b: y · excluded on vite-app for b: y · traits {"stack":"vite"}
-evals/where.eval.ts › with the skill [q1]   skipped: no cell left: profiles.vite.limit.traits.stack matches none of next-app
-evals/where.eval.ts › with the skill [q2]   skipped: no cell left: profiles.vite.limit.traits.stack matches none of next-app
-evals/where.eval.ts › with the skill [q3]   skipped: no cell left: profiles.vite.limit.traits.stack matches none of next-app
+profile vite (--profile) · 2 evals (1 skipped) · 4 cells · 7 attempts
+evals/where.eval.ts › stack questions  a/vite-app/docker  control  gated  ×2  3 cases · profiles.vite.limit.traits.stack leaves out next-app · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"vite"}
+                                       b/vite-app/docker  control  gated  ×2  traits {"stack":"vite"}
+                                       case q1            a/vite-app/docker ×1, b/vite-app/docker ×1
+                                       case q2            skipped: no cell left: profiles.vite.limit.traits.stack leaves out next-app  where excludes vite-app
+                                       case q3            a/vite-app/docker ×1, b/vite-app/docker ×1  where excludes next-app
+evals/where.eval.ts › per harness      a/vite-app/docker  control  gated  ×2  2 cases · profiles.vite.limit.traits.stack leaves out next-app · where excludes 2 pairs · excluded on next-app for b: y · excluded on vite-app for b: y · traits {"stack":"vite"}
+                                       b/vite-app/docker  control  gated  ×1  traits {"stack":"vite"}
+                                       case x             a/vite-app/docker ×1, b/vite-app/docker ×1
+                                       case y             a/vite-app/docker ×1  where excludes next-app/b, vite-app/b
+evals/where.eval.ts › with the skill   skipped: no cell left: profiles.vite.limit.traits.stack matches none of next-app
 excluded: —
-image docker · cursor · 4 evals
+image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

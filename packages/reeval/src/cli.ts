@@ -280,9 +280,8 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
 
 type QuestionRunner = ReturnType<typeof questionRunner>
 
-/** `-v` is 1 and `-vv` (or `--trace`) is 2. */
+/** `-v` is 1 and `-vv` is 2. */
 function verbosityOf(flags: Flags): 0 | 1 | 2 {
-  if (flags.trace) return 2
   return Math.min(2, flags.verbose?.length ?? 0) as 0 | 1 | 2
 }
 
@@ -771,6 +770,8 @@ async function startRun({
         await cleanupRun(target.runId)
       } catch {}
     }
+    const { unfoldCases } = await import('./history/cases.ts')
+    const previous = aside.record ?? target.previous
     return {
       runId: target.runId,
       stagingDir: stagingDir(config.root, target.runId),
@@ -787,7 +788,8 @@ async function startRun({
       worktreePatch: patch,
       author: who,
       scratch,
-      previous: aside.record ?? target.previous,
+      // Resume matches attempts by the entry each case ran as, so it reads the record that way.
+      previous: previous && unfoldCases(previous),
       previousArtifacts: aside.artifacts ?? target.previousArtifacts,
       ...(retry === undefined ? {} : { retryTarget: target }),
       ...(retry !== undefined || continuesRetry(aside.record ?? target.previous)
@@ -1090,7 +1092,7 @@ async function executeRun(
       skipped
         .filter((p) => !p.attempt.plan.skip)
         .map((p) => ({
-          id: p.id,
+          id: p.attempt.family?.id ?? p.id,
           harness: p.attempt.harness,
           sandbox: p.attempt.sandbox,
           plugins: p.attempt.pluginBuilds ?? [],

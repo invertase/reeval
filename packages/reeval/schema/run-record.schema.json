@@ -361,6 +361,10 @@
           },
           "required": ["model", "moves", "usage"]
         },
+        "case": {
+          "description": "The case's key, on an eval with `cases`; see `EvalEntry.cases`.",
+          "type": "string"
+        },
         "cell": {
           "description": "The cell's key; see `EvalEntry.cells`.",
           "type": "string"
@@ -488,7 +492,7 @@
           "$ref": "#/$defs/AttemptFiles"
         },
         "id": {
-          "description": "`<cell key>#<n>`: unique in its evaluation.",
+          "description": "`<cell key>#<n>`, or `<cell key>#<case>#<n>` on an eval with `cases`: unique in its evaluation.",
           "type": "string"
         },
         "imageId": {
@@ -509,7 +513,7 @@
           }
         },
         "key": {
-          "description": "`<eval key> # <cell key>#<n>`: unique in the run.",
+          "description": "`<eval key> # <cell key>#<n>`, or `<eval key> [<case>] # <cell key>#<n>` on an eval with `cases`: unique in the run.",
           "type": "string"
         },
         "n": {
@@ -803,6 +807,72 @@
       },
       "required": ["ended", "index", "instruction", "moves", "ms", "of"]
     },
+    "CaseRecord": {
+      "description": "One case of an eval with `cases`, and how its attempts went.",
+      "type": "object",
+      "properties": {
+        "answers": {
+          "description": "The eval's pairwise questions, answered over this case's attempts; unset without any.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompareAnswer"
+          }
+        },
+        "cells": {
+          "description": "Its own cells: their attempts are those with this `case`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CellRecord"
+          }
+        },
+        "excluded": {
+          "description": "The environments (and harnesses) `where` left this case out of; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "hash": {
+          "description": "`EvalEntry.source.case`: the hash of the case's data.",
+          "type": "string"
+        },
+        "index": {
+          "description": "Its place in the case list, from 0.",
+          "type": "number"
+        },
+        "key": {
+          "description": "The case's key: `nextjs` for the case keyed `nextjs`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name it ran under in a record from before an eval with `cases` was one entry, when that isn't `<eval name> [<key>]` (a name template's, `fixes GH-101` for `fixes $id`).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "What the case did, over its own cells by each cell's gate. Under a `gate: { passRate }`, the eval's cell gates on the mean over the cases, so `verdict` says this outcome decides nothing.",
+          "$ref": "#/$defs/Outcome"
+        },
+        "passRate": {
+          "description": "pass@1 over its gated cells' attempts.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "verdict": {
+          "description": "`family` when a cell's `gate: { passRate }` gates the mean over the cases, not this case.",
+          "const": "family"
+        }
+      },
+      "required": ["cells", "fingerprint", "index", "key", "outcome", "passRate"]
+    },
     "CellCheck": {
       "description": "One check over a cell's counted attempts. `verdict` (variant cells) is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.",
       "type": "object",
@@ -847,6 +917,39 @@
           "required": ["passRate"]
         }
       ]
+    },
+    "CellRate": {
+      "description": "A cell's pass@1 over an eval's cases.",
+      "type": "object",
+      "properties": {
+        "cases": {
+          "description": "Cases with at least one counted attempt in this cell.",
+          "type": "number"
+        },
+        "counted": {
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/FamilyInterval"
+        },
+        "outcome": {
+          "description": "Set with `passRate`: `fail` when `rate` is below it.",
+          "enum": ["fail", "pass"]
+        },
+        "pass": {
+          "description": "Passes and counted attempts over those cases.",
+          "type": "number"
+        },
+        "passRate": {
+          "description": "The cell's `gate: { passRate }`: with cases it gates `rate`, not each case's pass@1.",
+          "type": "number"
+        },
+        "rate": {
+          "description": "The mean of the cases' pass@1; at one attempt a case, `pass / counted`.",
+          "type": "number"
+        }
+      },
+      "required": ["cases", "counted", "interval", "pass", "rate"]
     },
     "CellRecord": {
       "description": "One harness and environment of an evaluation, and how its attempts went.",
@@ -922,6 +1025,7 @@
           "type": "string"
         },
         "lift": {
+          "description": "Unset on an eval with several `cases`, whose variants have `EvalEntry.lifts`.",
           "$ref": "#/$defs/Lift"
         },
         "model": {
@@ -959,6 +1063,10 @@
               "type": "number"
             }
           ]
+        },
+        "rate": {
+          "description": "On an eval with several `cases`: the cell's pass@1 over them. A `gate: { passRate }` gates `rate.rate`, the mean of the cases' pass@1, and sets `rate.outcome`.",
+          "$ref": "#/$defs/CellRate"
         },
         "role": {
           "description": "`variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.",
@@ -1548,6 +1656,17 @@
             "$ref": "#/$defs/AttemptRecord"
           }
         },
+        "caseCount": {
+          "description": "With `cases`: how many the list has, `cases` holding those with attempts in this run.",
+          "type": "number"
+        },
+        "cases": {
+          "description": "An eval with `cases`: each case that has attempts in this run, in list order, with its own cells. `cells` and `attempts` are over every case. Unset without cases.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaseRecord"
+          }
+        },
         "cells": {
           "type": "array",
           "items": {
@@ -1559,14 +1678,14 @@
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "excluded": {
-          "description": "The environments (and harnesses) `where` left this case out of; unset when none.",
+          "description": "The environments (and harnesses) `where` left out, one entry per case and environment, including those of a case it left out everywhere; unset when none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ExcludedPair"
           }
         },
         "family": {
-          "description": "Set on each case of an eval with `cases`; `RunRecord.families` has the suite.",
+          "description": "In records from before an eval with `cases` was one entry, set on each case, which was an entry of its own. Never written now; reading such a record folds the cases into one entry.",
           "type": "object",
           "properties": {
             "case": {
@@ -1605,11 +1724,18 @@
           "description": "Used to match an evaluation across runs; equal to `id`.",
           "type": "string"
         },
+        "lifts": {
+          "description": "With `cases` and `compare`: each variant cell against its control, paired by case. Its `minLift` gates the lift's lower bound, and a lift below it fails the variant cell.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FamilyLift"
+          }
+        },
         "name": {
           "type": "string"
         },
         "outcome": {
-          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.",
+          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. With `cases`, a cell's outcome is over every case.",
           "$ref": "#/$defs/Outcome"
         },
         "passRate": {
@@ -1673,7 +1799,7 @@
           "type": "boolean"
         },
         "verdict": {
-          "description": "`family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.",
+          "description": "In records from before an eval with `cases` was one entry, `family` on a case whose `gate: { passRate }` its family held over the mean of its cases. Never written now: see `CaseRecord.verdict`.",
           "const": "family"
         }
       },
@@ -1762,7 +1888,7 @@
       "required": ["agentMs", "tools"]
     },
     "FamilyEffortMetric": {
-      "description": "One effort metric over a family's paired cases.",
+      "description": "One effort metric over an eval's paired cases.",
       "type": "object",
       "properties": {
         "p": {
@@ -1819,7 +1945,7 @@
       "required": ["hi", "level", "lo", "method"]
     },
     "FamilyLift": {
-      "description": "A variant cell against its control over a family's cases, paired by case.",
+      "description": "A variant cell against its control over an eval's cases, paired by case.",
       "type": "object",
       "properties": {
         "controlRate": {
@@ -1845,7 +1971,7 @@
           "$ref": "#/$defs/FamilyInterval"
         },
         "minLift": {
-          "description": "The compare's `minLift`: on a family it gates this lower bound, not each case's.",
+          "description": "The compare's `minLift`: with cases it gates this lower bound, not each case's.",
           "type": "number"
         },
         "outcome": {
@@ -1906,7 +2032,7 @@
       ]
     },
     "FamilyRate": {
-      "description": "One cell's pass@1 over a family's cases.",
+      "description": "One cell's pass@1 over an eval's cases.",
       "type": "object",
       "properties": {
         "cases": {
@@ -1932,7 +2058,7 @@
           "type": "number"
         },
         "passRate": {
-          "description": "The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.",
+          "description": "The cell's `gate: { passRate }`: with cases it gates `rate`, not each case's pass@1.",
           "type": "number"
         },
         "rate": {
@@ -1943,7 +2069,7 @@
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
-      "description": "An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.",
+      "description": "In records from before an eval with `cases` was one entry: the eval over its cases, each case an entry of its own. Reading such a record folds it into the eval's `cases`, `lifts` and each cell's `rate`.",
       "type": "object",
       "properties": {
         "cases": {
@@ -3069,7 +3195,7 @@
           }
         },
         "families": {
-          "description": "Each eval with `cases` that ran; unset when none did.",
+          "description": "In records from before an eval with `cases` was one entry, each eval with `cases` that ran. Never written now; reading such a record folds it into its eval.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyRecord"

@@ -24,17 +24,15 @@ import {
   artifactPath,
   attemptAnswerRows,
   type CellRow,
-  caseLabel,
   cellRows,
   collapsedJudges,
   type EvalEntry,
   effortSummary,
   evalTree,
-  type FamilyRecord,
-  familyCases,
   familyEffortLabel,
   familyHeadLabel,
   familyLiftLabel,
+  familyOf,
   familyRateLabel,
   filesChanged,
   formatDuration,
@@ -149,17 +147,19 @@ function SandboxWarnings({ warnings }: { warnings: SandboxWarning[] }) {
 }
 
 /**
- * Each eval with `cases`: its name, a mark per case (click to open that case), and its
+ * Each eval with two cases or more: its name, a mark per case (click to open the eval), and its
  * pooled pass rate or paired lift, the suite's one verdict.
  */
 function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: string) => void }) {
-  const families: FamilyRecord[] = record.families ?? []
+  const families = record.evals.flatMap((e) => {
+    const f = (e.caseCount ?? 0) >= 2 ? familyOf(e) : undefined
+    return f ? [{ e, f }] : []
+  })
   if (families.length === 0) return null
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4" data-testid="families">
       <h2 className="text-sm font-medium">Evals with cases</h2>
-      {families.map((f) => {
-        const cases = familyCases(f, record.evals)
+      {families.map(({ e: entry, f }) => {
         return (
           <div key={f.id} className="space-y-2 border-t pt-3 first-of-type:border-t-0">
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -168,15 +168,15 @@ function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: st
               <span className="text-muted-foreground">{familyHeadLabel(f)}</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {cases.map((e) => (
+              {(entry.cases ?? []).map((k) => (
                 <button
-                  key={e.slug}
+                  key={k.key}
                   type="button"
-                  onClick={() => onSelect(e.slug)}
+                  onClick={() => onSelect(entry.slug)}
                   className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs hover:bg-muted"
                 >
-                  <OutcomeIcon outcome={e.outcome} className="size-3" />
-                  {caseLabel(f.name, e.name)}
+                  <OutcomeIcon outcome={k.outcome} className="size-3" />
+                  {k.key}
                 </button>
               ))}
             </div>

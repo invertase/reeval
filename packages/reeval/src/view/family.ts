@@ -91,9 +91,3 @@ export function caseLabel(template: string, name: string): string {
   const label = name.slice(prefix.length, name.length - suffix.length)
   return label || name
 }
-
-/** The family's cases in list order. */
-export const familyCases = (family: Pick<FamilyRecord, 'id'>, evals: readonly EvalEntry[]) =>
-  evals
-    .filter((e) => e.family?.id === family.id)
-    .sort((a, b) => (a.family?.case ?? 0) - (b.family?.case ?? 0))

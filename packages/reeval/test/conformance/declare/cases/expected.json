@@ -297,6 +297,11 @@
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
         "caseJson": "\"only\""
+      },
+      "family": {
+        "name": "one case is not pooled",
+        "case": 0,
+        "cases": 1
       }
     }
   ]

@@ -3,6 +3,7 @@
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
 
+import { foldCases } from '../history/cases.ts'
 import type { RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CliInvocation } from '../report/types.ts'
@@ -135,10 +136,13 @@ function upgrade<T>(shape: keyof typeof SCHEMA_VERSIONS, value: T, what: string)
 /**
  * A record as every reader sees it: migrated to this reeval's schemaVersion, with each field added
  * after it was written read as its default, so older runs keep loading in `reeval show`, `reeval query`,
- * compare, history and the studio. A record from a newer reeval throws a `NewerSchemaError`.
+ * compare, history and the studio, and an eval with `cases` recorded as one entry per case reads
+ * as one eval (`foldCases`). A record from a newer reeval throws a `NewerSchemaError`.
  */
 export function readableRecord(record: RunRecord, what = `Run ${record.runId}`): RunRecord {
-  return unmeasuredReasoning(fillDefaults('run-record', upgrade('run-record', record, what)))
+  return foldCases(
+    unmeasuredReasoning(fillDefaults('run-record', upgrade('run-record', record, what))),
+  )
 }
 
 /**

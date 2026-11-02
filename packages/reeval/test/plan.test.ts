@@ -440,19 +440,28 @@ const vite = defineEnvironment('vite-app', { traits: { stack: 'vite' } })
       const r = await runCli(fits.dir, ['run', '--dry-run', '--json', ...args])
       assert.equal(r.code, 0, r.stdout + r.stderr)
       const plan = JSON.parse(r.stdout) as {
-        evals: Array<{ name: string; skip: string | null; whereExcluded?: unknown }>
+        evals: Array<{
+          name: string
+          skip: string | null
+          whereExcluded?: unknown
+          cases?: Array<{ whereExcluded?: unknown }>
+        }>
       }
-      return plan.evals.map((e) => [e.name, e.skip === null, e.whereExcluded])
+      return plan.evals.map((e) => ({
+        name: e.name,
+        ran: e.skip === null,
+        where: [e.whereExcluded, e.cases?.map((c) => c.whereExcluded)],
+      }))
     }
     const skipped = await excluded(['--trait', 'stack=astro'])
     assert.deepEqual(
-      skipped.map(([, ran]) => ran),
-      [false, false],
-      'every case is skipped',
+      skipped.map((e) => e.ran),
+      [false],
+      'the eval is skipped',
     )
     assert.deepEqual(
-      skipped.map(([n, , w]) => [n, w]),
-      (await excluded([])).map(([n, , w]) => [n, w]),
+      skipped.map(({ name, where }) => [name, where]),
+      (await excluded([])).map(({ name, where }) => [name, where]),
     )
   })
 

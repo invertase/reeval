@@ -1,0 +1,225 @@
+# The key-free drift checks, nightly: nothing here runs an agent or holds an API key. Each job fails
+# naming what drifted:
+#   versions             the newest agy, @cursor/sdk, OpenCode, Goose, pi, Codex, fx and Grok Build,
+#                        and the AI SDK harness adapters, against their pins (scripts/drift/versions.mjs)
+#   claude-code patch    whether the newest @ai-sdk/harness-claude-code still needs reeval's patch,
+#                        and whether the patch still applies (scripts/drift/claude-code-patch.mjs)
+#   opencode providers   the newest @opencode/cli probed per provider, against the committed table
+#                        (scripts/drift/opencode-providers.mjs; the probe's proxy answers every request)
+#   cursor-sdk shape     the newest @cursor/sdk still declares the stored-conversation fields the
+#                        Cursor harness recovers web calls from (scripts/drift/cursor-sdk-shape.mjs)
+# What only a real agent can tell (an output format, the stored conversation's contents, behavior)
+# stays in real.yml's latest leg. When a scheduled run finds an agent CLI release newer than its pin
+# that the last scheduled run hadn't seen, `latest leg` dispatches real.yml's latest leg on main on
+# that CLI's contract rows, and dispatches it again each night until the last one it dispatched
+# passes. `summary` puts every check's result in one table. PRs that change these checks or their
+# inputs run them too, without the dispatch.
+name: drift
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/drift.yml
+      - scripts/drift/**
+      - patches/**
+      - packages/harness-opencode/src/opencode-provider-table.ts
+      - packages/harness-opencode/src/opencode-install.ts
+      - packages/harness-antigravity/src/antigravity-bootstrap.ts
+      - packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts
+      - packages/harness-opencode/src/opencode-harness.ts
+      - packages/harness-goose/src/goose-harness.ts
+      - packages/harness-pi/src/pi-bootstrap.ts
+      - packages/harness-codex/src/codex-bootstrap.ts
+      - packages/harness-fx/src/fx-harness.ts
+      - packages/harness-grok-build/src/grok-build-harness.ts
+      - packages/reeval/package.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  versions:
+    name: versions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: { contents: read, actions: read }
+    outputs:
+      moved: ${{ steps.check.outputs.moved }}
+      new_agents: ${{ steps.check.outputs.new_agents }}
+      new_rows: ${{ steps.check.outputs.new_rows }}
+      moved_rows: ${{ steps.check.outputs.moved_rows }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: package.json, package-manager-cache: false }
+      # The newest snapshot of the last few scheduled runs (one whose lookup failed or that was
+      # canceled has none), to tell a release that came out since from one that was already there.
+      - name: the last scheduled run's versions
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          for run in $(gh run list -R "$GITHUB_REPOSITORY" -w drift.yml -e schedule -b main -s completed -L 5 --json databaseId --jq '.[].databaseId' || true); do
+            gh run download "$run" -R "$GITHUB_REPOSITORY" -n upstream-versions -D "$RUNNER_TEMP/previous" 2>/dev/null &&
+              { echo "Compared with run $run's snapshot"; exit 0; }
+          done
+          echo "No snapshot in the last 5 scheduled runs: every newest version counts as new"
+      - id: check
+        name: newest versions against the pins
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          set +e
+          node scripts/drift/versions.mjs --previous "$RUNNER_TEMP/previous/upstream-versions.json" --out "$RUNNER_TEMP/upstream-versions.json"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-versions
+          path: ${{ runner.temp }}/upstream-versions.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - if: steps.check.outputs.status != '0'
+        env: { STATUS: '${{ steps.check.outputs.status }}' }
+        run: exit "$STATUS"
+
+  claude-code-patch:
+    name: claude-code patch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      line: ${{ steps.check.outputs.line }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - id: check
+        name: whether the newest @ai-sdk/harness-claude-code still needs reeval's patch
+        run: |
+          set +o pipefail
+          node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs | tee "$RUNNER_TEMP/out.txt"
+          status=${PIPESTATUS[0]}
+          echo "line=$(grep -m1 -v '^::' "$RUNNER_TEMP/out.txt")" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  opencode-providers:
+    name: opencode providers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      line: ${{ steps.check.outputs.line }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - id: check
+        name: whether the newest @opencode/cli sends each provider's key where the table says
+        run: |
+          set +o pipefail
+          node --experimental-strip-types --no-warnings scripts/drift/opencode-providers.mjs | tee "$RUNNER_TEMP/out.txt"
+          status=${PIPESTATUS[0]}
+          echo "line=$(grep -m1 '^OpenCode providers:' "$RUNNER_TEMP/out.txt")" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  cursor-sdk-shape:
+    name: cursor-sdk shape
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      line: ${{ steps.check.outputs.line }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: package.json, package-manager-cache: false }
+      - id: check
+        name: the stored conversation the newest @cursor/sdk declares
+        run: |
+          cd "$RUNNER_TEMP"
+          tar -xzf "$(npm pack @cursor/sdk@latest --silent)"
+          set +o pipefail
+          node "$GITHUB_WORKSPACE/scripts/drift/cursor-sdk-shape.mjs" package 2>&1 | tee out.txt
+          status=${PIPESTATUS[0]}
+          echo "line=$(head -1 out.txt)" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  latest-leg:
+    name: latest leg
+    needs: versions
+    if: >-
+      !cancelled() && github.event_name == 'schedule' && github.repository == 'invertase/reeval' &&
+      needs.versions.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: { contents: read, actions: write }
+    outputs:
+      line: ${{ steps.dispatch.outputs.line }}
+    steps:
+      # A release counts as seen once the snapshot has it, so a latest leg this workflow dispatched
+      # that didn't pass is dispatched again each night until one does, on every CLI still behind
+      # its pin (which rows the last one ran isn't recorded). A first dispatch runs only the rows
+      # of the CLIs that released.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ needs.versions.outputs.new_agents }}
+          NEW_ROWS: ${{ needs.versions.outputs.new_rows }}
+          MOVED_ROWS: ${{ needs.versions.outputs.moved_rows }}
+        id: dispatch
+        run: |
+          last=$(gh run list -R "$GITHUB_REPOSITORY" -w real.yml -e workflow_dispatch -u 'github-actions[bot]' -L 1 \
+            --json status,conclusion --jq '.[0] | select(.) | "\(.status) \(.conclusion)"' || true)
+          case "$last" in
+            'completed success' | '' | queued* | in_progress* | waiting* | pending* | requested*) redo= ;;
+            *) redo="the last dispatched latest leg ended ${last#completed }" ;;
+          esac
+          rows=$NEW_ROWS
+          [ -z "$redo" ] || rows=$MOVED_ROWS
+          [ -n "$rows" ] || { echo "line=nothing to dispatch" >> "$GITHUB_OUTPUT"; echo "No new agent CLI release${redo:+, and none behind its pin to retry}"; exit 0; }
+          line="real.yml's latest leg on $rows: ${NEW:+new upstream releases: $NEW}${NEW:+${redo:+; }}$redo"
+          echo "line=$line" >> "$GITHUB_OUTPUT"
+          echo "Dispatching $line" | tee -a "$GITHUB_STEP_SUMMARY"
+          for attempt in 1 2 3; do
+            gh workflow run real.yml -R "$GITHUB_REPOSITORY" --ref main -f pinned=false -f latest=true -f latest_harnesses="$rows" && exit 0
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+  summary:
+    name: summary
+    needs: [versions, claude-code-patch, opencode-providers, cursor-sdk-shape, latest-leg]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - env:
+          VERSIONS: ${{ needs.versions.result }}
+          MOVED: ${{ needs.versions.outputs.moved }}
+          NEW: ${{ needs.versions.outputs.new_agents }}
+          PATCH: ${{ needs.claude-code-patch.result }}
+          PATCH_LINE: ${{ needs.claude-code-patch.outputs.line }}
+          OPENCODE: ${{ needs.opencode-providers.result }}
+          OPENCODE_LINE: ${{ needs.opencode-providers.outputs.line }}
+          CURSOR: ${{ needs.cursor-sdk-shape.result }}
+          CURSOR_LINE: ${{ needs.cursor-sdk-shape.outputs.line }}
+          LATEST: ${{ needs.latest-leg.result }}
+          LATEST_LINE: ${{ needs.latest-leg.outputs.line }}
+        run: |
+          mark() { case "$1" in success) echo ok ;; failure) echo "${2:-**drift**}" ;; *) echo "$1" ;; esac; }
+          {
+            echo '### Drift'
+            echo
+            echo '| check | | what it found |'
+            echo '|---|---|---|'
+            echo "| versions | $(mark "$VERSIONS") | ${MOVED:+behind: ${MOVED//,/, }}${NEW:+; new since last night: ${NEW//,/, }} |"
+            echo "| claude-code patch | $(mark "$PATCH") | $PATCH_LINE |"
+            echo "| opencode providers | $(mark "$OPENCODE") | $OPENCODE_LINE |"
+            echo "| cursor-sdk shape | $(mark "$CURSOR") | $CURSOR_LINE |"
+            hint=
+            [ "$LATEST" != failure ] || hint=' (the releases are in the snapshot now, so dispatch real.yml with latest=true by hand)'
+            [ "$LATEST" = skipped ] || echo "| latest leg | $(mark "$LATEST" '**dispatch failed**') | $LATEST_LINE$hint |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"

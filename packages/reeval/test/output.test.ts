@@ -226,7 +226,7 @@ describe('catch regressions (reeval compare)', () => {
     const full = comparedText(compareGolden('compare'))
     assert.equal(
       full.at(-1),
-      "1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same",
+      "1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 2 same",
     )
     for (const g of COMPARE_GOLDENS.filter((x) => !x.verbose)) {
       assert.doesNotMatch(comparedText(g).join('\n'), /\d%|lift|interval|noise|×/, g.name)
@@ -249,9 +249,14 @@ describe('catch regressions (reeval compare)', () => {
       ...row(status),
       verdict: 'family' as const,
     })
+    const rated = {
+      ...row('same'),
+      cases: [flipped('regressed'), flipped('fixed'), flipped('fixed')],
+    }
     assert.equal(
-      compareTally(c, [row('regressed'), flipped('regressed'), flipped('fixed'), flipped('fixed')]),
-      '1 regressed · 1 case now fails · 2 cases now pass',
+      compareTally(c, [row('regressed'), rated]),
+      '1 regressed · 1 case now fails · 2 cases now pass · 1 same',
+      'an eval with cases counts once, its flipped cases after the verdicts',
     )
   })
 
@@ -261,8 +266,8 @@ describe('catch regressions (reeval compare)', () => {
     assert.match(regressed, /^ {2}sign-off {9}not run$/m)
     assert.doesNotMatch(regressed, /sign-off +(pass → )?fail/, 'canary: not printed as fail')
     const fixed = comparedText(compareGolden('compare-fixed')).join('\n')
-    assert.match(fixed, /^ {2}build {12}fail → pass$/m)
-    assert.match(fixed, /^ {2}types {12}not run → pass$/m)
+    assert.match(fixed, /^ {2}fixed {12}double\n {4}build {12}fail → pass$/m)
+    assert.match(fixed, /^ {4}types {12}not run → pass$/m)
     assert.doesNotMatch(fixed, /types +fail → pass/, 'canary: not run is not fail')
   })
 
@@ -302,7 +307,7 @@ describe('catch regressions (reeval compare)', () => {
 
   test('unchanged evals collapse to +N same in place, and the runs print once when no block names them', () => {
     const text = comparedText(compareGolden('compare-same-collapsed'))
-    assert.deepEqual(text.slice(2), ['', '+4 same', '', '4 same'])
+    assert.deepEqual(text.slice(2), ['', '+2 same', '', '2 same'])
     assert.match(text[0] ?? '', /^base {13}\S+$/)
     const full = comparedText(compareGolden('compare')).join('\n')
     assert.doesNotMatch(full, /^base /m, 'a regressed block names them')
@@ -383,7 +388,7 @@ describe('catch regressions (reeval compare)', () => {
     assert.ok(first)
     input.rows = [{ ...first, head: 'infra_error' }, ...rest]
     const last = comparedText(g, input).at(-1) ?? ''
-    assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
+    assert.match(last, /^6 new evals \(\d fail · 1 infra error · \d pass\)$/)
   })
 
   test('a side the interrupt canceled reads canceled, not fail', () => {
@@ -410,7 +415,7 @@ describe('catch regressions (reeval compare)', () => {
     assert.ok(added)
     none.rows = [{ ...added, head: 'fail', canceled: ['head'] }, ...others]
     const last = renderCompare(none, { color: false, verbose: false }).at(-1) ?? ''
-    assert.match(last, /^8 new evals \((\d fail · )?1 canceled · \d pass\)$/)
+    assert.match(last, /^6 new evals \((\d fail · )?1 canceled · \d pass\)$/)
   })
 
   test('color is the only difference color makes', () => {

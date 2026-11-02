@@ -6,16 +6,16 @@ can't compare    bills in minor units with the billing doc
   amount in minor units  failed
     expected command to succeed, exit code 1
 
-same             adds a reset button that builds
+fixed            adds a $name button that builds
   fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
-
-fixed            adds a double button that builds
-  build            fail → pass
-  types            not run → pass
-  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
-
-same             adds a clear button that builds
-  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
+  same             reset
+    fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
+  fixed            double
+    build            fail → pass
+    types            not run → pass
+    fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
+  same             clear
+    fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 regressed        greets in the house style
   base             20261020T230147Z_958e309_cursor-agent_aamj
@@ -41,4 +41,4 @@ new              greets in Spanish
     expected command to succeed, exit code 1
 
 stack changed: environments with-doc@007345e67fac → with-doc@26d7ac38e3f5
-1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 2 same

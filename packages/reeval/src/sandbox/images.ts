@@ -54,6 +54,7 @@ export type ImageTarget = {
 }
 
 export type ImageUse = {
+  /** The eval it plans for: an eval with cases is one. */
   id: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
@@ -86,7 +87,7 @@ export async function plannedImageUses(
   })
   return planned.length
     ? planned.map((p) => ({
-        id: p.id,
+        id: p.attempt.family?.id ?? p.id,
         harness: p.attempt.harness,
         sandbox: p.attempt.sandbox,
         plugins: p.attempt.pluginBuilds ?? [],

@@ -1,0 +1,5 @@
+{"ts":"2026-11-01T08:41:56.770Z","atMs":0,"turn":0,"type":"prompt","text":"Greet x."}
+{"turn":0,"ts":"2026-11-01T08:41:56.770Z","atMs":0,"type":"text","text":"Working on: Greet x.","durationMs":0}
+{"turn":0,"ts":"2026-11-01T08:41:56.770Z","atMs":0,"type":"file-edit","toolCallId":"call_1","path":"greet.js","kind":"create","added":1,"removed":0,"durationMs":24}
+{"turn":0,"ts":"2026-11-01T08:41:56.794Z","atMs":24,"type":"text","text":"I wrote greet.js.","durationMs":0}
+{"ts":"2026-11-01T08:41:56.794Z","atMs":24,"turn":0,"type":"turn-end","status":"completed","durationMs":24}

@@ -99,8 +99,8 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
         [
           c.effort && !c.key.includes('[effort=') ? `effort ${c.effort}` : '',
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
-          i === 0 && e.family
-            ? `family ${e.family.name} case ${e.family.case + 1}/${e.family.cases}`
+          i === 0 && e.cases
+            ? `${e.cases.length === e.caseCount ? '' : `${e.cases.length} of `}${e.caseCount} ${e.caseCount === 1 ? 'case' : 'cases'}`
             : '',
           ...(i === 0 ? e.notes : []),
           c.brokered.length ? `brokered: ${c.brokered.join('; ')}` : '',
@@ -118,6 +118,18 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
           .join(' · '),
       ])
     })
+    for (const k of e.cases ?? []) {
+      rows.push([
+        '',
+        `case ${k.key}`,
+        k.skip
+          ? `skipped: ${k.skip}`
+          : k.cells.map((c) => `${c.key} ×${c.runs}`).join(', ') || 'no cells',
+        k.whereExcluded?.length
+          ? `where excludes ${k.whereExcluded.map((x) => x.environment + (x.harness ? `/${x.harness}` : '')).join(', ')}`
+          : '',
+      ])
+    }
     for (const q of e.questions ?? []) {
       const n = (count: number, one: string) => `${count} ${count === 1 ? one : `${one}s`}`
       const asks = q.across

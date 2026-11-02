@@ -105,7 +105,6 @@ const RUN_FLAGS: FlagName[] = [
   'log-prefix',
   'output-logs',
   'verbose',
-  'trace',
   'resume',
   'retry-errors',
 ]
@@ -169,7 +168,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown
-    -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+    -vv                         Also raw payloads, docker commands, headers and DNS decisions, and
                                 keep every attempt's trace.ndjson (else only failing attempts')
                                 Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
@@ -205,10 +204,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 --limit <n> --all (include unrecorded runs) --json`,
   },
   show: {
-    flags: ['json', 'md'],
+    flags: ['json', 'md', 'trace', 'out'],
     positionals: 1,
     help: `
-  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
+    --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
+                                attempts in lanes, with setup, turns, tool calls, checks and judge
+    --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)`,
   },
   compare: {
     flags: ['md', 'json', 'fail-on-regression', 'verbose'],

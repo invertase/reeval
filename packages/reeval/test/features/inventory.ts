@@ -170,10 +170,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cases',
     area: 'Config and selection',
-    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates',
+    name: '`cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape',
     plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
     fixtures: ['run/cases', 'run/cases-rate'],
-    unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
+    unit: [
+      'reeval/test/options.test.ts',
+      'reeval/test/results.test.ts',
+      'reeval/test/cases.test.ts',
+      'reeval/test/query.test.ts',
+      'reeval/test/history.test.ts',
+      'reeval/test/remarks.test.ts',
+    ],
   },
   {
     id: 'compare.harnesses',
@@ -1595,6 +1602,12 @@ export const inventory: InventoryFeature[] = [
     real: ['e2e › a second identical run', 'e2e › reeval history and reeval show'],
   },
   {
+    id: 'history.trace',
+    area: 'Records and studio',
+    name: "`reeval show --trace`: a run's timeline as Chrome Trace Event JSON for Perfetto, attempts in lanes by overlap with their setup, turns, tool calls, checks and judge, from any record",
+    unit: ['reeval/test/trace.test.ts', 'reeval/test/corpus.test.ts'],
+  },
+  {
     id: 'history.revision',
     area: 'Records and studio',
     name: "`revision` and the `sources` fingerprint part: an eval's body, options, case data and revision, named by `reeval compare`",
@@ -1623,7 +1636,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.family-gate',
     area: 'Records and studio',
-    name: "An eval's pooled `minLift` gate over its cases is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
+    name: "An eval's pooled `minLift` gate over its cases gates its one row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
     unit: ['reeval/test/history.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
@@ -1992,7 +2005,7 @@ export const inventory: InventoryFeature[] = [
     id: 'output.layouts',
     area: 'CLI and runner',
     name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases',
-    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
+    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/cases'],
     unit: ['reeval/test/output.test.ts'],
   },
   {
@@ -2037,13 +2050,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'trace',
     area: 'CLI and runner',
-    name: '`-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
+    name: '`-vv`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
     unit: ['reeval/test/debug.test.ts', 'reeval/test/docker.test.ts'],
   },
   {
     id: 'debug.files',
     area: 'CLI and runner',
-    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
+    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `-vv`, never in the history folder',
     unit: ['reeval/test/debug.test.ts'],
     real: ['e2e › reeval run --record -v'],
   },

@@ -410,8 +410,9 @@ const defineEval =
   }
 
 /**
- * An eval with `cases`: each case plans as a member of a pooled family named for the eval, so its
- * cases pool into one pass rate and, with `compare`, one lift paired by case.
+ * An eval with `cases`: each case plans as an entry of its own named for the eval, which the
+ * record folds back into the eval. Two or more cases pool into one pass rate and, with
+ * `compare`, one lift paired by case.
  */
 function registerCases(
   mode: DeclaredMode,
@@ -452,10 +453,9 @@ function registerCases(
   const own = withPaths(rest as EvalOptions, where)
   const file = collectingFile()
   const body = bodyHash(fn, where, file)
-  const pooled = cases.length >= 2
   const prepared = cases.map((item, i) => {
     const key = shownKeys[i] as string
-    const family = pooled ? { name, case: i, cases: cases.length } : undefined
+    const family = { name, case: i, cases: cases.length }
     const source = { body, caseJson: caseJson(item, `${where} case "${key}"`, file) }
     const run: EvalFn = (c) => (fn as CaseFn<unknown>)(c, item)
     const picks = pick ? { label: where, key, item, where: pick } : undefined

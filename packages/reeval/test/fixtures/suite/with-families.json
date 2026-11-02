@@ -9,7 +9,7 @@
       "pass": 0,
       "notGated": 0,
       "fail": 3,
-      "infraError": 7,
+      "infraError": 5,
       "canceled": 0,
       "skipped": 2
     },

@@ -39,8 +39,9 @@ Each built-in view returns one kind of row.
 
 | Name | Columns |
 |---|---|
-| `attempt_answers` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `harness`, `environment`, `role`, `started_at`, `branch` |
-| `attempt_values` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `name`, `value`, `kind`, `num`, `text`, `turn`, `harness`, `environment`, `role`, `variant`, `started_at`, `branch` |
+| `attempt_answers` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `case_key`, `harness`, `environment`, `role`, `started_at`, `branch` |
+| `attempt_values` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `name`, `value`, `kind`, `num`, `text`, `turn`, `case_key`, `harness`, `environment`, `role`, `variant`, `started_at`, `branch` |
+| `case_lift` | `run_id`, `eval_key`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
 | `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
 | `check_streaks` | `eval_key`, `cell_key`, `label`, `fingerprint`, `branch`, `runs`, `fails`, `streak_runs`, `streak_tries`, `streak_since`, `last_run`, `ended_by` |
@@ -48,14 +49,13 @@ Each built-in view returns one kind of row.
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `small_sample`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
 | `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `files_changed_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `time_separated`, `tokens_separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note`, `context_calls_median`, `dependency_calls_median`, `web_calls_median`, `verify_calls_median`, `workspace_calls_median` |
-| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `verdict`, `pass_at_1`, `fingerprint` |
+| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `cases`, `pass_at_1`, `fingerprint` |
 | `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `small_sample`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
 | `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills`, `first_failed_check` |
-| `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
-| `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
+| `flaky_cells` | `eval_key`, `cell_key`, `case_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
-| `measure_effects` | `run_id`, `eval_key`, `family`, `harness`, `variant`, `cell_key`, `control`, `measure`, `label`, `variant_value`, `control_value`, `estimate`, `lo`, `hi`, `p`, `verdict`, `leaning`, `text`, `needed`, `unit`, `started_at`, `branch` |
-| `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
+| `measure_effects` | `run_id`, `eval_key`, `pooled`, `harness`, `variant`, `cell_key`, `control`, `measure`, `label`, `variant_value`, `control_value`, `estimate`, `lo`, `hi`, `p`, `verdict`, `leaning`, `text`, `needed`, `unit`, `started_at`, `branch` |
+| `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first`, `case_key` |
 | `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgment_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
@@ -72,12 +72,12 @@ reeval query "SELECT eval_key, points, lo, hi FROM lift WHERE within_noise = 0"
 
 `within_noise` is 1 when the interval contains zero.
 
-## `family_lift`
+## `case_lift`
 
-`family_lift` lists one row per variant of an evaluation with `cases` in one run.
+`case_lift` lists one row per variant of an evaluation with `cases` in one run: its lift over the cases, paired by case. The evaluation is one row in `evals`, with how many cases it declares in `cases`; each case is a row in the `cases` table, and its passes per cell are in `case_rates`. An attempt's case is its `case_key`.
 
 ```bash title="Query"
-reeval query "SELECT name, variant, points FROM family_lift"
+reeval query "SELECT eval_key, variant, points FROM case_lift"
 ```
 
 ## `effort`
@@ -128,7 +128,7 @@ reeval query "SELECT factor, level, tier, points FROM factor_effects"
 
 ## `measure_effects`
 
-`measure_effects` lists one row per measure of each variant's comparison with its baseline in a run: a variant cell's, or a family's pooled variant's (`family` 1).
+`measure_effects` lists one row per measure of each variant's comparison with its control in a run: a variant cell's or, on an evaluation with several cases, its variant's pooled over them (`pooled` 1).
 
 ```bash title="Query"
 reeval query "SELECT variant, measure, label, verdict, text, needed FROM measure_effects"
@@ -196,7 +196,7 @@ With no placed skill, `skill` is null.
 
 ## `eval_trend`
 
-`eval_trend` lists one row per evaluation per run. `verdict` is `family` on a case whose family's `passRate` gates it, so its `outcome` doesn't fail the run on its own.
+`eval_trend` lists one row per evaluation per run. An evaluation with `cases` is one row, with its case count in `cases`; each case's own outcome is in the `cases` table.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, outcome, pass_at_1 FROM eval_trend"
@@ -242,7 +242,7 @@ On a variant, the streak counts a run only when the variant and the control both
 
 ## Tables
 
-These tables store the projected rows. `reeval query --schema` lists these columns. That listing omits `meta`, `files`, `family_lift_m`, and the derived `*_m` fact tables; it keeps `question_pairs_m` and `attempt_answers_m`.
+These tables store the projected rows. `reeval query --schema` lists these columns. That listing omits `meta`, `files`, `case_lift_m`, and the derived `*_m` fact tables; it keeps `question_pairs_m` and `attempt_answers_m`.
 
 In `tool_calls`, `ok` is 1 or 0, or null for a call whose result the harness never reported. Count failures with `ok = 0`.
 
@@ -254,22 +254,24 @@ In `evals`, `declared` is `todo` for an `evaluate.todo`, `skip` for an eval decl
 |---|---|
 | `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
 | `assertions` | `run_id`, `attempt_key`, `eval_key`, `cell_key`, `seq`, `label`, `labelled`, `matcher`, `status`, `soft`, `message`, `duration_ms` |
-| `attempt_answers_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path` |
+| `attempt_answers_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `case_key` |
 | `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime`, `declared` |
-| `attempt_values_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `name`, `value`, `kind`, `num`, `text`, `turn` |
-| `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort`, `files_changed`, `reasoning_ms` |
+| `attempt_values_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `name`, `value`, `kind`, `num`, `text`, `turn`, `case_key` |
+| `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort`, `files_changed`, `reasoning_ms`, `case_key` |
+| `case_checks` | `run_id`, `eval_key`, `cell_key`, `case_key`, `label`, `pass`, `fail`, `error`, `not_run` |
+| `case_rates` | `run_id`, `eval_key`, `cell_key`, `case_key`, `case_index`, `pass`, `counted`, `pass_at_1`, `outcome` |
+| `cases` | `run_id`, `eval_key`, `case_key`, `case_index`, `name`, `outcome`, `verdict`, `pass_at_1`, `fingerprint`, `excluded` |
 | `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |
-| `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `reasoning_effort`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `fp_gateway`, `fp_gate`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_at_1`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable` |
+| `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `reasoning_effort`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `fp_gateway`, `fp_gate`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_at_1`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable`, `cases`, `rate_lo`, `rate_hi`, `rate_method` |
 | `context_reads` | `run_id`, `attempt_key`, `line`, `path` |
 | `env_skills` | `run_id`, `environment`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
-| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index`, `verdict`, `declared` |
-| `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
+| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `cases`, `declared` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |
-| `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
+| `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first`, `case_key` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
-| `votes` | `run_id`, `eval_key`, `question`, `cut`, `held`, `pair_run`, `a`, `b`, `winner`, `swapped`, `reason` |
+| `votes` | `run_id`, `eval_key`, `question`, `cut`, `held`, `pair_run`, `a`, `b`, `winner`, `swapped`, `reason`, `case_key` |
 
 [//]: # (/generated:query-tables)

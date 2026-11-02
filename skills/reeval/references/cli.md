@@ -30,6 +30,8 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
 - `reeval run`'s status list names each failed check with its message and line, and `reeval show` prints the result blocks. Then `.reeval/runs/<run>/summary.md` and each attempt's
   directory (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`,
   `setup.log`). `reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
+- For a slow run, `reeval show <run> --trace` writes `.reeval/traces/<run>.json`, a Perfetto
+  timeline: attempts in lanes with their setup, turns, tool calls, checks and judge.
 - Each attempt's directory in `.reeval/runs/<run>/` has `snapshots/final/`: its whole final
   workspace after the checks (the app the agent built, not only its diff), to read or run. A failed
   attempt's result block in `reeval show` prints its path. `snapshot: 'turns'` on an eval also keeps
@@ -153,8 +155,8 @@ A check head never reached reads `not run`, not a failure. `can't compare` names
 (eval, config or profile `defaults`) keeps the eval comparable: base's attempts are re-scored
 under head's gate, so a flip the gate alone explains is `gate changed`, not a regression, and
 one base would still have passed under the new gate is `regressed`. An eval Ctrl-C
-canceled is `can't compare` with that side `canceled`. A pooled family with a `minLift` gets
-its own `<template> (all cases)` row for its pooled gate, which can regress while every case passes
-(`kind: "family"` in `--json`). `--fail-on-regression` exits 1 on a regressed eval or family gate,
-or on a new or can't-compare one that fails, unless head was canceled. `-v` adds each cell's
+canceled is `can't compare` with that side `canceled`. An eval with `cases` is one row
+with its cases' rows inside it (`cases` in `--json`); its pooled `minLift` or `passRate` gate
+decides the row, so it can regress while every case passes. `--fail-on-regression` exits 1 on a
+regressed eval, or on a new or can't-compare one that fails, unless head was canceled. `-v` adds each cell's
 lift and effort, base → head.

@@ -141,7 +141,7 @@ export const COMPARE_GOLDENS: CompareGolden[] = [
   {
     name: 'compare-fixed',
     entry: 'with-compare',
-    evals: compared('buttons.eval.ts › adds a double button that builds'),
+    evals: compared('buttons.eval.ts › adds a $name button that builds'),
   },
   {
     name: 'compare-cant-compare',
@@ -156,12 +156,7 @@ export const COMPARE_GOLDENS: CompareGolden[] = [
   {
     name: 'compare-same-collapsed',
     entry: 'with-compare',
-    evals: compared(
-      'buttons.eval.ts › adds a reset button that builds',
-      'buttons.eval.ts › adds a clear button that builds',
-      'greet.eval.ts › writes greet.js',
-      'greet.eval.ts › greets in French',
-    ),
+    evals: compared('greet.eval.ts › writes greet.js', 'greet.eval.ts › greets in French'),
   },
   { name: 'compare-no-baseline', entry: 'with-compare', noBaseline: true },
   { name: 'compare', entry: 'with-compare' },

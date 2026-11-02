@@ -7,6 +7,7 @@ import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
 import { noDefaultEffort } from './harness/default-effort.ts'
 import { harnessEffort } from './harness/effort.ts'
+import { caseKeyOf } from './history/cases.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import { majorityOf } from './options.ts'
@@ -59,7 +60,10 @@ export type PlanRow = {
 export type RunPlan = {
   profile: ResolvedProfile | null
   rows: PlanRow[]
+  /** Evals that run; an eval with cases is one, however many of its cases run. */
   evals: number
+  /** Evals none of whose rows run. */
+  skipped: number
   cells: number
   /** Every attempt the plan may start: with `runs: { bestOf }`, its upper bound. */
   attempts: number
@@ -197,7 +201,7 @@ export async function buildPlan(options: {
     }
     attempts++
     if (attempt.bestOf === undefined || attempt.n <= majorityOf(attempt.bestOf)) fewest++
-    cells.add(`${id}\0${attempt.cell.key}`)
+    cells.add(`${attempt.family?.id ?? id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
     const provider = sandboxKind(attempt.sandbox).provider(attempt.sandbox)
     const limit = providerLimit(attempt.sandbox)
@@ -254,10 +258,13 @@ export async function buildPlan(options: {
     const c = counted.get(r.id)
     return !r.plan.skip && !!c && [...c.variantSides].some((s) => c.controls.has(s))
   }
+  const units = evalUnits([...rows.values()])
+  const running = units.filter((u) => u.some((r) => !r.plan.skip)).length
   return {
     profile: options.profile,
     rows: [...rows.values()],
-    evals: [...rows.values()].filter((r) => !r.plan.skip).length,
+    evals: running,
+    skipped: units.length - running,
     cells: cells.size,
     attempts,
     fewest,
@@ -280,7 +287,7 @@ export async function buildPlan(options: {
       (a, b) => Number(a.kind !== 'root') - Number(b.kind !== 'root'),
     ),
     hints: [
-      ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
+      ...gateHint(units.filter((u) => u.some((r) => counted.get(r.id)?.gated))),
       ...verdictHint([...rows.values()].filter(lifted)),
       ...familyHints([...rows.values()].filter(lifted)),
       ...gatewayHints(planned),
@@ -364,12 +371,27 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
   )
 }
 
+/** A case of an eval with two cases or more, which pools them. */
+const pooledCase = (r: Pick<PlanRow, 'family'>) => (r.family?.cases ?? 0) >= 2
+
+/** The plan's rows by eval: an eval with cases is its cases' rows, the rest a row each. */
+function evalUnits(rows: PlanRow[]): PlanRow[][] {
+  const units = new Map<string, PlanRow[]>()
+  for (const row of rows) {
+    const id = row.family?.id ?? row.id
+    units.set(id, [...(units.get(id) ?? []), row])
+  }
+  return [...units.values()]
+}
+
 /**
  * One line when evals run several times under the default gate, which every attempt must pass.
- * `rows` are those with a gated cell; a study whose cells are all `'none'` has none.
+ * `units` are the evals with a gated cell; a study whose cells are all `'none'` has none.
  */
-function gateHint(rows: PlanRow[]): string[] {
-  const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
+function gateHint(units: PlanRow[][]): string[] {
+  const n = units.filter((u) =>
+    u.some((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined),
+  ).length
   if (n === 0) return []
   return [
     `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead`,
@@ -385,7 +407,7 @@ const VERDICT_MIN_RUNS = Math.max(COMPARE_RUNS, EFFORT_MIN_RUNS)
  * plan a lift.
  */
 function verdictHint(rows: PlanRow[]): string[] {
-  const few = rows.filter((r) => !r.family && r.plan.runs < VERDICT_MIN_RUNS)
+  const few = rows.filter((r) => !pooledCase(r) && r.plan.runs < VERDICT_MIN_RUNS)
   if (few.length === 0) return []
   const counts = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b)
   const runs = counts.length === 1 && counts[0] === 1 ? 'once' : `${counts.join(' or ')} times`
@@ -413,7 +435,7 @@ const cappedBy = (note: string): string | undefined =>
 function familyHints(rows: PlanRow[]): string[] {
   const cases = new Map<string, { n: number; of: number }>()
   for (const r of rows) {
-    if (!r.family) continue
+    if (!r.family || !pooledCase(r)) continue
     const c = cases.get(r.family.id) ?? { n: 0, of: r.family.cases }
     cases.set(r.family.id, { ...c, n: c.n + 1 })
   }
@@ -448,7 +470,7 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   if (plan.resume) parts.push('resume')
   if (plan.resume?.retried) parts.push(`retry ${plural(plan.resume.retried, 'errored attempt')}`)
   if (plan.profile) parts.push(`profile ${plan.profile.name} (${plan.profile.reason})`)
-  const skipped = plan.rows.length - plan.evals
+  const { skipped } = plan
   parts.push(plural(plan.evals, 'eval') + (skipped ? ` (${skipped} skipped)` : ''))
   parts.push(
     plural(plan.cells, 'cell'),
@@ -518,7 +540,7 @@ export function runHeader(
     judges: [...judges],
     files: new Set(live.map((p) => p.file)).size,
     evals: plan.evals,
-    skipped: plan.rows.length - plan.evals,
+    skipped: plan.skipped,
     cells: plan.cells,
     attempts: plan.attempts,
     fewest: plan.fewest,
@@ -539,18 +561,15 @@ function bestOfRange(p: EvalPlan, attempts: number): string {
 }
 
 /**
- * The `--dry-run` table: one row per planned eval, then one per placeholder in `todos`. A pooled
- * family's cases are one row, under its template.
+ * The `--dry-run` table: one row per planned eval, then one per placeholder in `todos`. An eval
+ * with cases is one row, its cases counted in its notes.
  */
 export function planTable(plan: RunPlan, todos: readonly string[] = []): string[] {
   const header = ['eval', 'harnesses', 'variants', 'runs', 'attempts', 'notes']
-  const groups: Array<{ id: string; members: PlanRow[] }> = []
-  for (const row of plan.rows) {
-    const family = row.family?.id
-    const group = family && groups.find((g) => g.id === family)
-    if (group) group.members.push(row)
-    else groups.push({ id: family ?? row.id, members: [row] })
-  }
+  const groups = evalUnits(plan.rows).map((members) => ({
+    id: (members[0] as PlanRow).family?.id ?? (members[0] as PlanRow).id,
+    members,
+  }))
   const rows = groups.map(({ id, members }) => {
     const p = (members.find((m) => !m.plan.skip) ?? (members[0] as PlanRow)).plan
     const family = members[0]?.family
@@ -558,11 +577,14 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
     const attempts = live.reduce((sum, m) => sum + m.plan.attempts, 0)
     // `where` can leave a case off some harnesses, so the eval runs on as many as its widest case.
     const harnesses = Math.max(p.harnesses, ...live.map((m) => m.plan.harnesses))
-    const pooled = family
-      ? [
-          `${live.length === family.cases ? family.cases : `${live.length} of ${family.cases}`} cases · ${p.variants === null ? 'pooled pass rate' : 'paired lift'}`,
-        ]
-      : []
+    const ran = live.length === family?.cases ? family.cases : `${live.length} of ${family?.cases}`
+    const decides =
+      p.variants !== null
+        ? ' · paired lift'
+        : typeof p.gate === 'object'
+          ? ' · pass rate over the cases'
+          : ''
+    const pooled = family && family.cases >= 2 ? [`${ran} cases${decides}`] : []
     return [
       clip(id, 64),
       String(harnesses),
@@ -641,12 +663,29 @@ export type PlanEval = {
   cells: PlanCell[]
   /** Its questions: pairwise ones answered after the run, the rest after each attempt; unset without any. */
   questions?: PlanQuestion[]
-  /** Set on each case of an eval with `cases`. */
-  family?: FamilyMeta
   /**
-   * The environments (and harnesses) `where` left this case out of; unset when none. The plan's
-   * own `excluded` is the evals a filter or `.skip` left out.
+   * On an eval with `cases`, each case: its key, the cells it runs and why it doesn't run.
+   * `cells` above are the eval's over every case, `runs` summed.
    */
+  cases?: PlanCase[]
+  /** With `cases`, how many the eval declares: more than `cases` when a filter or `where` left some out. */
+  caseCount?: number
+  /**
+   * The environments (and harnesses) `where` left the eval's cases out of; unset when none. The
+   * plan's own `excluded` is the evals a filter or `.skip` left out.
+   */
+  whereExcluded?: ExcludedPair[]
+}
+
+/** One case of an eval with `cases` in `reeval run --dry-run --json`. */
+export type PlanCase = {
+  key: string
+  /** Its place in the eval's `cases`, from 0. */
+  index: number
+  /** Why the case doesn't run (a filter, `.skip`), else null. */
+  skip: string | null
+  cells: PlanCell[]
+  /** The environments (and harnesses) `where` left this case out of; unset when none. */
   whereExcluded?: ExcludedPair[]
   /** The environments `--trait` or a profile's `limit.traits` left this eval's cells out of; unset when none. */
   traitExcluded?: string[]
@@ -693,7 +732,7 @@ export function planDocument(
   excluded: ExcludedEval[],
   images: PlanImage[],
 ): PlanDocument {
-  const evals = new Map<string, PlanEval>()
+  const evals = new Map<string, PlanEval & { family?: FamilyMeta }>()
   for (const { id, file, attempt } of planned) {
     let e = evals.get(id)
     if (!e) {
@@ -753,7 +792,7 @@ export function planDocument(
     ...(plan.resume ? { resume: plan.resume } : {}),
     totals: {
       evals: plan.evals,
-      skipped: plan.rows.length - plan.evals,
+      skipped: plan.skipped,
       cells: plan.cells,
       attempts: plan.attempts,
       fewest: plan.fewest,
@@ -769,10 +808,60 @@ export function planDocument(
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,
-    evals: [...evals.values()],
+    evals: foldPlanCases([...evals.values()], planned),
     excluded,
     images,
   }
+}
+
+/** Each eval with `cases` as one entry, at its first case's place, its cases inside it. */
+function foldPlanCases(
+  evals: Array<PlanEval & { family?: FamilyMeta }>,
+  planned: PlannedItem[],
+): PlanEval[] {
+  const pooledExcluded = new Map<string, ExcludedPair[]>()
+  for (const { attempt } of planned) {
+    const f = attempt.family
+    if (f && attempt.plan.familyExcluded) pooledExcluded.set(f.id, attempt.plan.familyExcluded)
+  }
+  const out: PlanEval[] = []
+  const folded = new Map<string, PlanEval>()
+  for (const { family, ...e } of evals) {
+    if (!family) {
+      out.push(e)
+      continue
+    }
+    let into = folded.get(family.id)
+    if (!into) {
+      const excluded = pooledExcluded.get(family.id)
+      into = {
+        ...e,
+        id: family.id,
+        name: family.name,
+        cells: [],
+        cases: [],
+        caseCount: family.cases,
+        ...(excluded?.length ? { whereExcluded: excluded } : {}),
+      }
+      if (!excluded?.length) delete into.whereExcluded
+      folded.set(family.id, into)
+      out.push(into)
+    }
+    into.cases?.push({
+      key: caseKeyOf(family.name, e.name),
+      index: family.case,
+      skip: e.skip,
+      cells: e.cells,
+      ...(e.whereExcluded ? { whereExcluded: e.whereExcluded } : {}),
+    })
+    if (!e.skip) into.skip = null
+    for (const c of e.cells) {
+      const cell = into.cells.find((x) => x.key === c.key)
+      if (cell) cell.runs += c.runs
+      else into.cells.push({ ...c })
+    }
+  }
+  return out
 }
 
 /** Exit 2 before anything starts when the plan is over `budget.attempts` (unless `--force`). */
