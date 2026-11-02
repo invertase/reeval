@@ -782,7 +782,7 @@ importers:
         specifier: workspace:0.1.8
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.13
+        specifier: workspace:0.2.14
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.9
@@ -838,7 +838,7 @@ importers:
         specifier: workspace:0.1.8
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.13
+        specifier: workspace:0.2.14
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.9

@@ -46,7 +46,7 @@
     "@reeval/harness-fx": "workspace:0.1.5",
     "@reeval/harness-goose": "workspace:0.1.10",
     "@reeval/harness-grok-build": "workspace:0.1.8",
-    "@reeval/harness-opencode": "workspace:0.2.13",
+    "@reeval/harness-opencode": "workspace:0.2.14",
     "@reeval/harness-pi": "workspace:0.2.9",
     "ws": "8.22.0",
     "zod": "4.6.7"
