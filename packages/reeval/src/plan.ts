@@ -554,10 +554,13 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
     // `where` can leave a case off some harnesses, so the eval runs on as many as its widest case.
     const harnesses = Math.max(p.harnesses, ...live.map((m) => m.plan.harnesses))
     const ran = live.length === family?.cases ? family.cases : `${live.length} of ${family?.cases}`
-    const pooled =
-      family && family.cases >= 2
-        ? [`${ran} cases · ${p.variants === null ? 'pooled pass rate' : 'paired lift'}`]
-        : []
+    const decides =
+      p.variants !== null
+        ? ' · paired lift'
+        : typeof p.gate === 'object'
+          ? ' · pass rate over the cases'
+          : ''
+    const pooled = family && family.cases >= 2 ? [`${ran} cases${decides}`] : []
     return [
       clip(id, 64),
       String(harnesses),

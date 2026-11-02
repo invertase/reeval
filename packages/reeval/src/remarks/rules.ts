@@ -399,11 +399,16 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
   const few = arm.verdict === 'insufficient'
   const reach = Math.round(Math.max(-arm.interval.low, arm.interval.high) * 100)
   const why = few
-    ? `the pooled lift needs ${PAIRED_MIN} to hold`
+    ? `a paired lift needs ${PAIRED_MIN} cases that differ between the arms to hold`
     : arm.effect === 'same'
       ? `it can't rule out a difference of up to ${reach} points`
       : "the difference doesn't hold"
-  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${shortLeans(arm.measures)}${more}`
+  const name = variant ? armOf(variant) : arm.key
+  const text = `The ${name} variant${on}, paired over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${shortLeans(arm.measures)}${more}`
+  const at = ctx.locate(entry, null)
+  const brief = few
+    ? `Too few cases differ between the arms for the paired lift to hold; add cases at ${location(at)} to confirm it.`
+    : `Over ${arm.pairs} cases the difference doesn't hold; add cases or set runs: ${COMPARE_RUNS} a case at ${location(at)} to confirm it.`
   return [
     ...apart,
     {
@@ -412,13 +417,14 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
       kind: 'too-few-tries',
       severity: 'concern',
       text,
+      brief: `${brief}${briefLeans(name, arm.measures)}`,
       evidence: [arm.path],
       fix: {
-        at: ctx.locate(entry, null),
+        at,
         edit: few
-          ? `add cases, so the pooled lift has ${PAIRED_MIN} to hold on`
+          ? `add cases, so ${PAIRED_MIN} or more can differ between the arms`
           : arm.effect === 'same'
-            ? `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the pooled interval narrows`
+            ? `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the paired interval narrows`
             : `add cases, or set runs: ${COMPARE_RUNS} or more a case, so the difference can hold`,
       },
     },

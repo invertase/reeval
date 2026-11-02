@@ -28,6 +28,7 @@
 //   on the `Worth knowing:` line itself.
 //
 // Only the cells that decide the outcome count: the gated ones, or every cell of a study.
+import stringWidth from 'string-width'
 import type { RunRecord } from '../history/types.ts'
 import { clip, formatDuration, plural } from '../text.ts'
 import type { ErrorKind } from '../types.ts'
@@ -36,6 +37,7 @@ import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
 import {
   type AttemptQuestionResult,
+  type CaseResult,
   type CellResult,
   type CheckResult,
   countedOf,
@@ -99,6 +101,8 @@ export type StatusRow = {
   remarks: number
   /** A compare, whose detail (the control and its variants) a list printed once always shows. */
   compare: boolean
+  /** An eval nothing gates with answers (questions, `c.observe`), its result, which a list printed once shows. */
+  answers?: boolean
 }
 
 export type StatusFile = { path: string; rows: StatusRow[] }
@@ -240,12 +244,16 @@ function measureSets(
   })
 }
 
-/** Rows of cells padded to one column each, two spaces apart. */
+const padColumns = (text: string, width: number) =>
+  `${text}${' '.repeat(Math.max(0, width - stringWidth(text)))}`
+
+/** Rows of cells padded to one column each, two spaces apart, measured in terminal columns. */
 function columns(rows: string[][]): string[] {
-  const widths = rows[0]?.map((_, i) => Math.max(...rows.map((r) => (r[i] ?? '').length))) ?? []
+  const widths =
+    rows[0]?.map((_, i) => Math.max(...rows.map((r) => stringWidth(r[i] ?? '')))) ?? []
   return rows.map((r) =>
     r
-      .map((cell, i) => cell.padEnd(widths[i] ?? 0))
+      .map((cell, i) => padColumns(cell, widths[i] ?? 0))
       .join('  ')
       .trimEnd(),
   )
@@ -397,18 +405,20 @@ function failedChecks(cells: CellResult[], groupOf: (c: CellResult) => string): 
       f.gated ||= cell.gated
       const g = f.byGroup.get(groupOf(cell)) ?? { failed: 0, ran: 0 }
       g.failed += n
-      g.ran += ranOf(k)
       f.byGroup.set(groupOf(cell), g)
       if (f.first.outcome.status === 'ran' && !f.first.outcome.assertion) f.first = k
       by.set(k.label, f)
     }
   }
-  // The runs that reached each check, where it failed or not.
+  // The runs that reached each check, where it failed or not, in all and in each group it failed in.
   for (const f of by.values()) {
-    f.ran = cells.reduce(
-      (n, c) => n + c.checks.filter((k) => k.label === f.label).reduce((m, k) => m + ranOf(k), 0),
-      0,
-    )
+    f.ran = 0
+    for (const c of cells) {
+      const ran = c.checks.filter((k) => k.label === f.label).reduce((m, k) => m + ranOf(k), 0)
+      f.ran += ran
+      const g = f.byGroup.get(groupOf(c))
+      if (g) g.ran += ran
+    }
   }
   return [...by.values()].sort((a, b) => b.failed - a.failed || a.first.order - b.first.order)
 }
@@ -456,12 +466,12 @@ const LABEL_COLUMN = 40
 function checkLines(
   cells: CellResult[],
   groupOf: (c: CellResult) => string,
-  o: { failedEval: boolean; compare: boolean },
+  o: { failedEval: boolean; compare: boolean; cases: boolean },
 ): DetailLine[] {
   const failed = failedChecks(cells, groupOf)
   if (!failed.length) return []
   const groups = new Set(cells.map(groupOf)).size
-  const several = cells.some((c) => countedOf(c) > 1)
+  const several = o.cases || cells.some((c) => countedOf(c) > 1)
   const baselineGated = cells.some((c) => c.baseline && c.gated)
   const width = Math.max(...failed.map((f) => clip(checkLabel(f.label), LABEL_COLUMN).length))
   const lines: DetailLine[] = []
@@ -484,6 +494,11 @@ function checkLines(
         text = `${label}  failed on ${baseText}`
         if (expected) note = 'expected'
       }
+    } else if (o.cases) {
+      const shown = [...f.byGroup].slice(0, CASES_NAMED)
+      const named = shown.map(([k, t]) => (t.ran > 1 ? `${k} ${t.failed} of ${t.ran}` : k))
+      const more = f.byGroup.size - shown.length
+      text = `${label}  failed on ${named.join(', ')}${more ? ` and ${more} more` : ''}`
     } else {
       text = `${label}  failed ${f.failed} of ${plural(f.ran, 'run')}${where(f, groups)}`
     }
@@ -518,11 +533,41 @@ function stderrHead(message: string): string | undefined {
 const ranOf = (k: CheckResult) =>
   k.outcome.status === 'ran' ? k.outcome.passed + k.outcome.failed + k.outcome.errored : 0
 
+/** Cases a sentence or a failed check names before `and N more`. */
 const CASES_NAMED = 8
+/** Cases the compact case table lists, the failed ones; the full detail lists every case. */
+const CASES_SHOWN = 8
 
-function caseLines(e: EvalResult): DetailLine[] {
+const ranCase = (k: CaseResult) => !k.notRun && k.outcome !== 'skipped' && k.outcome !== 'canceled'
+const failedCase = (k: CaseResult) => ranCase(k) && k.outcome !== 'pass'
+
+const namedCases = (cases: CaseResult[]) => {
+  const shown = cases.slice(0, CASES_NAMED).map((k) => k.label)
+  const more = cases.length - shown.length
+  return `${shown.join(', ')}${more ? ` and ${more} more` : ''}`
+}
+
+/**
+ * `Failed on power; 2 of 3 cases passed.`: which cases failed and how many passed, or
+ * `Passed all 3 cases.`, `Ran 3 cases.` when nothing gates it.
+ */
+function casesHeadline(e: EvalResult, cells: CellResult[]): string {
+  const cases = (e.cases ?? []).filter(ranCase)
+  if (!cases.length) return 'No case finished.'
+  const all = plural(cases.length, 'case')
+  if (!cells.some((c) => c.gated)) return `Ran ${all}.`
+  const failed = cases.filter(failedCase)
+  if (!failed.length) return cases.length === 1 ? 'Passed its case.' : `Passed all ${all}.`
+  const passed = `${cases.length - failed.length} of ${all} passed`
+  return iconOf(e) === 'fail'
+    ? `Failed on ${namedCases(failed)}; ${passed}.`
+    : `${upper(passed)}; ${namedCases(failed)} failed.`
+}
+
+/** `Pass rate over the cases: 67%, below passRate 0.7.`, per cell gated on its rate. */
+function rateLines(e: EvalResult): DetailLine[] {
   const rates = e.rates ?? []
-  const rateLines = rates.map((r): DetailLine => {
+  return rates.map((r): DetailLine => {
     const on = rates.length > 1 ? ` on ${r.key}` : ''
     const short = r.outcome === 'fail' ? 'below' : 'clearing'
     return {
@@ -531,11 +576,82 @@ function caseLines(e: EvalResult): DetailLine[] {
       ...(r.outcome === 'fail' ? { tone: 'red' as const } : {}),
     }
   })
-  const failed = (e.cases ?? []).filter((k) => k.outcome !== 'pass' && k.outcome !== 'skipped')
-  if (!failed.length) return rateLines
-  const named = failed.slice(0, CASES_NAMED).map((k) => k.label)
-  const more = failed.length > CASES_NAMED ? ` and ${failed.length - CASES_NAMED} more` : ''
-  return [...rateLines, { depth: 0, text: `Failed cases: ${named.join(', ')}${more}.` }]
+}
+
+/**
+ * The cases as a table: a row per case, marked with its outcome, and a column per cell (on a
+ * compare, the control and then each variant) with the case's passes there. A cell where
+ * `where` left the case out reads `–`. The compact detail lists every case up to `CASES_SHOWN`,
+ * else only the failed ones and a count of the rest.
+ */
+function caseTable(
+  record: RunRecord,
+  e: EvalResult,
+  cells: CellResult[],
+  o: { compare: boolean; failedEval: boolean },
+): DetailLine[] {
+  const cases = e.cases ?? []
+  if (!cases.length) return []
+  const byKey = new Map<string, CellResult>()
+  for (const c of cells) if (!byKey.has(c.key)) byKey.set(c.key, c)
+  const heads = [...byKey.values()].sort(
+    (a, b) => Number(b.baseline) - Number(a.baseline) || a.order - b.order,
+  )
+  const harnesses = new Set(heads.map((c) => c.harness)).size > 1
+  const own = labeler(record, heads)
+  const label = o.compare
+    ? (c: CellResult) =>
+        [
+          c.baseline ? `${c.environment} (control)` : (c.variant ?? c.environment),
+          harnesses ? harnessLabel(record, c) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+    : own
+  const marked = cells.some((c) => c.gated)
+  const table = columns([
+    ['case', ...heads.map(label)],
+    ...cases.map((k) => [
+      k.label,
+      ...heads.map((h) => {
+        const cell = k.cells.find((c) => c.key === h.key)
+        return cell && countedOf(cell) > 0 ? `${cell.passed} of ${countedOf(cell)}` : '–'
+      }),
+    ]),
+  ])
+  const compact = cases.length <= CASES_SHOWN ? cases : cases.filter(failedCase).slice(0, CASES_SHOWN)
+  const shown = new Set(compact)
+  const lines: DetailLine[] = [
+    {
+      depth: 0,
+      text: `${marked ? '  ' : ''}${table[0] ?? ''}`,
+      tone: 'dim',
+      ...(compact.length ? {} : { only: 'full' as const }),
+    },
+  ]
+  for (const [i, k] of cases.entries()) {
+    const mark: DetailMark = !ranCase(k)
+      ? 'skipped'
+      : k.outcome === 'pass'
+        ? 'pass'
+        : o.failedEval
+          ? 'fail'
+          : 'miss'
+    lines.push({
+      depth: 0,
+      text: table[i + 1] ?? '',
+      ...(marked ? { mark } : {}),
+      ...(shown.has(k) ? {} : { only: 'full' as const }),
+    })
+  }
+  const hidden = cases.filter((k) => !shown.has(k))
+  if (hidden.length) {
+    const word = hidden.length === 1 ? 'case' : 'cases'
+    const passed = hidden.every((k) => k.outcome === 'pass') ? ' passed' : ''
+    const count = compact.length ? `+${hidden.length} more ${word}` : `${hidden.length} ${word}`
+    lines.push({ depth: 0, text: `${count}${passed} (-v)`, tone: 'dim', only: 'compact' })
+  }
+  return lines
 }
 
 /**
@@ -654,8 +770,16 @@ export function evalRow(
           ? 'canceled'
           : 'skipped'
         : `${passed} of ${plural(ran, counted)} passed`
+  const cases = e.cases ?? []
   const failedEval = iconOf(e) === 'fail'
   const notes = ran ? [...retriedLines(decide), ...pageErrorNotes(decide)] : []
+  const caseOf = new Map(cases.flatMap((k) => k.cells.map((c) => [c, k.label] as const)))
+  const answers = [
+    ...questionLines(e.questions ?? []),
+    ...observedLines(e.observations ?? [], cells, (c) =>
+      compare ? armOf(c) : harnessLabel(record, c),
+    ),
+  ]
   const detail = ran
     ? [
         ...(compare
@@ -663,19 +787,29 @@ export function evalRow(
           : [
               {
                 depth: 0,
-                text: outcomeSentence(tallyBy(decide, labeler(record, decide))),
+                text: cases.length
+                  ? casesHeadline(e, decide)
+                  : outcomeSentence(tallyBy(decide, labeler(record, decide))),
               } as const,
             ]),
-        ...caseLines(e),
+        ...rateLines(e),
+        ...caseTable(record, e, compare ? cells : decide, { compare, failedEval }),
         ...(compare
-          ? checkLines(cells, armOf, { failedEval, compare })
-          : checkLines(decide, (c) => harnessLabel(record, c), { failedEval, compare })),
+          ? checkLines(cells, armOf, { failedEval, compare, cases: false })
+          : cases.length
+            ? checkLines(decide, (c) => caseOf.get(c) ?? c.key, {
+                failedEval,
+                compare,
+                cases: true,
+              })
+            : checkLines(decide, (c) => harnessLabel(record, c), {
+                failedEval,
+                compare,
+                cases: false,
+              })),
         ...errorLines(compare ? cells : decide, failedEval),
         ...(failedEval ? snapshotLines(cells) : []),
-        ...questionLines(e.questions ?? []),
-        ...observedLines(e.observations ?? [], cells, (c) =>
-          compare ? armOf(c) : harnessLabel(record, c),
-        ),
+        ...answers,
         ...remarkLines(remarks, notes),
       ]
     : remarkLines(remarks, [])
@@ -683,10 +817,11 @@ export function evalRow(
     id: e.id,
     name: nameOf(e),
     icon: iconOf(e),
-    summary,
+    summary: ran && cases.length ? `${summary} · ${plural(cases.length, 'case')}` : summary,
     detail,
     remarks: remarks.length + notes.length,
     compare,
+    ...(ran && answers.length && iconOf(e) === 'observe' ? { answers: true } : {}),
   }
 }
 

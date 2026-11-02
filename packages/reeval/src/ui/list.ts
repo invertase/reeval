@@ -3,6 +3,7 @@
 // rows a run in progress shows from its events, before the record exists.
 import { formatDuration, plural } from '../text.ts'
 import type { CellGate } from '../types.ts'
+import { caseLabel } from '../view/family.ts'
 import type { Colors } from './colors.ts'
 import type { AttemptRef, CollectedEval, EvalResult, Progress } from './events.ts'
 import { attemptAxes, failureReason, outcomeOf, phaseOf } from './format.ts'
@@ -143,7 +144,12 @@ export function listLines(
 ): string[] {
   const expand = (row: StatusRow) =>
     row.detail.length > 0 &&
-    (verbose || row.compare || row.remarks > 0 || row.icon === 'fail' || row.icon === 'canceled')
+    (verbose ||
+      row.compare ||
+      row.answers ||
+      row.remarks > 0 ||
+      row.icon === 'fail' ||
+      row.icon === 'canceled')
   return [
     ...list.errors.flatMap((e) => [c.red(`error: ${e.split('\n')[0] ?? ''}`)]),
     ...(list.errors.length ? [''] : []),
@@ -167,6 +173,8 @@ type LiveAttempt = {
   gate?: CellGate
   phase: string
   error?: string
+  /** Its case's key, on an eval with `cases`. */
+  case?: string
 }
 
 /**
@@ -206,10 +214,12 @@ export class LiveList {
   collected(file: string, evals: CollectedEval[]) {
     for (const x of evals) {
       if (x.skipped) continue
-      const e = this.#evals.get(x.id) ?? {
-        id: x.id,
+      // A case's attempts are its eval's: one row, each attempt naming its case.
+      const id = x.family?.id ?? x.id
+      const e = this.#evals.get(id) ?? {
+        id,
         file,
-        name: [...x.group, x.name].join(' › '),
+        name: [...x.group, x.family?.name ?? x.name].join(' › '),
         attempts: [],
       }
       const a: LiveAttempt = {
@@ -219,10 +229,11 @@ export class LiveList {
         state: 'queued',
         gated: true,
         phase: '',
+        ...(x.family ? { case: caseLabel(x.family.name, x.name) } : {}),
       }
       e.attempts.push(a)
       this.#byKey.set(x.key, a)
-      this.#evals.set(x.id, e)
+      this.#evals.set(id, e)
     }
   }
 
@@ -318,12 +329,18 @@ export class LiveList {
           ? 'observe'
           : 'pass'
     const passed = decide.filter((a) => a.state === 'pass').length
-    const summary = done
-      ? `${passed} of ${plural(decide.length, 'run')} passed`
-      : `${ended.length} of ${plural(e.attempts.length, 'run')} done`
+    const cases = new Set(e.attempts.flatMap((a) => (a.case === undefined ? [] : [a.case]))).size
+    const summary = [
+      done
+        ? `${passed} of ${plural(decide.length, 'run')} passed`
+        : `${ended.length} of ${plural(e.attempts.length, 'run')} done`,
+      cases ? plural(cases, 'case') : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
     // A failed check is a fail, its message dim; only an error (a timeout, infra) is red.
     const detail: DetailLine[] = e.attempts.map((a): DetailLine => {
-      const who = `${a.axes || this.#harness} #${a.n}`
+      const who = `${a.axes || this.#harness}${a.case ? ` · ${a.case}` : ''} #${a.n}`
       if (a.state === 'running') return { depth: 0, mark: 'spin', text: `${who} ${a.phase}` }
       if (a.state === 'queued')
         return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
