@@ -309,9 +309,10 @@ evaluate(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    // The family is one row, its arms pooled over the cases.
+    // The family is one row, its arms pooled over the cases. Agent time can hold either way on a
+    // slow runner, so the vs control cell may lead with it.
     const pooled =
-      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts\n/
+      /✓ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict {2}vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
     assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
@@ -406,7 +407,7 @@ evaluate(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}"toHaveFile ok\.txt" \+100 pts\n/,
+      /✗ writes ok\.txt {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs control\n[│ ]+base \(control\) {2}0 of 6\n[│ ]+skilled +6 of 6 {2}helped, not by minLift 60 {2}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
@@ -442,7 +443,10 @@ evaluate(
     ])
     assert.deepEqual(JSON.parse(paired.stdout), [{ small_sample: 1 }], 'three cases are too few')
     // Three pairs are too few for the lift to hold, however one-sided they are: it shows the direction.
-    assert.match(r.stdout, /^[│ ]+skilled +6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts$/m)
+    assert.match(
+      r.stdout,
+      /^[│ ]+skilled +6 of 6 {2}helped {3}(?:(?:\d+(?:\.\d)?× |\d+% )?(?:slower|faster) · )?"toHaveFile ok\.txt" \+100 pts$/m,
+    )
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
