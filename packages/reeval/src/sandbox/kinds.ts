@@ -13,7 +13,7 @@ import type {
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
 import type { SandboxOptions } from './index.ts'
-import { InfraError, type Sandbox } from './types.ts'
+import type { Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
 export type SandboxCapabilities = {
@@ -188,10 +188,13 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
   buildsAtStart: () => true,
   hostLimit: { max: TART_MAX_CONCURRENT, why: 'macOS runs two macOS VMs at a time' },
   privileges: () => ({ root: false, capabilities: [] }),
-  async create() {
-    throw new InfraError(
-      "tart() sandboxes can be planned and prepared, but this reeval can't start one yet",
-    )
+  async create(sandbox, options) {
+    const { createTartSandbox } = await import('./tart.ts')
+    return createTartSandbox(sandbox, options)
+  },
+  async cleanupRun(runId) {
+    const { removeRunVms } = await import('./tart.ts')
+    await removeRunVms(runId)
   },
 }
 

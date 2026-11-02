@@ -939,7 +939,12 @@ export const inventory: InventoryFeature[] = [
     area: 'Sandbox',
     name: "`tart({ … })`: a macOS VM per attempt on Apple Silicon, under `egress: 'allow-all'`, at most two at once",
     plan: ['tart/two-vms'],
-    unit: ['reeval/test/sandbox-kinds.test.ts', 'reeval/test/refusals.test.ts'],
+    unit: [
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/refusals.test.ts',
+      'reeval/test/tart.test.ts',
+      'reeval/test/sandbox-contract.test.ts',
+    ],
   },
   {
     id: 'docker.privilege-warnings',
