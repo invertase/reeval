@@ -13,7 +13,7 @@ extend-ignore-re = [
   "\\blabelled INTEGER\\b",
   "attempts, judgements, tool_calls",
   # Upstream names: GitHub Actions' `cancelled()` and job results, asyncio, ACP's stop reason, the
-  # Cursor SDK's statuses, Antigravity's states, and OpenCode's own output.
+  # Cursor SDK's statuses, Antigravity's and Boat's states, and OpenCode's own output.
   "\\bcancelled\\(\\)",
   "\\bCancelledError\\b",
   "\\bCANCELLED\\b",

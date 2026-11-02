@@ -180,7 +180,7 @@ export const runPrefix = (sandbox: Pick<BoatSandboxDescriptor, 'prefix'>, runId:
 const READY_TIMEOUT_MS = 120_000
 /** How long a check of the account may wait on Boat, so an unreachable API can't stall a plan. */
 const LIMITS_TIMEOUT_MS = 15_000
-/** Boat's states a sandbox never leaves for `ready`; `cancelled` answers 404 after it's reported. */
+/** Boat's states a sandbox never leaves for `ready`; 'cancelled' answers 404 after it's reported. */
 const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
 const TTL_MARGIN_S = 600
