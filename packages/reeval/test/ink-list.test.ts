@@ -8,7 +8,7 @@ import { endText, startText } from '../src/ui/header.ts'
 import { CONFIRM_MS, doneLine, frameLines, ListApp, wrap } from '../src/ui/ink-list.ts'
 import { LiveList, SPINNER } from '../src/ui/list.ts'
 import type { StatusFile, StatusRow } from '../src/ui/status.ts'
-import { ListStore, StepSpinner } from '../src/ui/tty.ts'
+import { ListStore, rowsOf, StepSpinner } from '../src/ui/tty.ts'
 
 const c = colors(false)
 const KEY = { up: '\u001B[A', down: '\u001B[B', right: '\u001B[C', left: '\u001B[D' }
@@ -481,7 +481,7 @@ test('the prepare step counts wide characters by their columns', (t) => {
   )
 })
 
-test('after a resize the prepare step measures again, and stops once the step is out of reach', (t) => {
+test('the prepare step stops without drawing once the width changes or the step is out of reach', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] })
   const out: string[] = []
   let size = { rows: 24, columns: 80 }
@@ -495,15 +495,28 @@ test('after a resize the prepare step measures again, and stops once the step is
   t.mock.timers.tick(80)
   assert.equal(out.at(-1), `\x1b[2A\r\x1b[2C${SPINNER[1]}\r\x1b[2B`)
   size = { rows: 24, columns: 30 }
-  t.mock.timers.tick(80)
-  assert.equal(
-    out.at(-1),
-    `\x1b[3A\r\x1b[2C${SPINNER[2]}\r\x1b[3B`,
-    'the 60 columns now wrap to two',
-  )
-  size = { rows: 3, columns: 30 }
   const drawn = out.length
   t.mock.timers.tick(800)
   spinner.reported()
-  assert.equal(out.length, drawn, 'a step line past the top is never drawn on')
+  assert.equal(out.length, drawn, 'a terminal may or may not have reflowed, so the row is unknown')
+  spinner.start('  ◆  Preparing...\n', 1)
+  size = { rows: 1, columns: 30 }
+  const again = out.length
+  t.mock.timers.tick(800)
+  spinner.reported()
+  assert.equal(out.length, again, 'a step line past the top is never drawn on')
+})
+
+test('a line takes the rows a terminal places it on', () => {
+  assert.equal(
+    rowsOf('\t\t\tabcdef', 20),
+    2,
+    'a tab stops at the last column, the text wraps after it',
+  )
+  assert.equal(rowsOf(`${'x'.repeat(15)}\r${'y'.repeat(15)}`, 20), 1, '\\r writes over the row')
+  assert.equal(rowsOf('準'.repeat(21), 21), 3, 'ten to a row, the 21st column left empty')
+  assert.equal(rowsOf('準'.repeat(20), 40), 1)
+  assert.equal(rowsOf(`\x1b[31m${'x'.repeat(20)}\x1b[39m`, 20), 1, 'a full row waits to wrap')
+  assert.equal(rowsOf('\x1b]8;;https://example.com/a/b\x07link\x1b]8;;\x07', 4), 1, 'a hyperlink')
+  assert.equal(rowsOf('', 20), 1)
 })

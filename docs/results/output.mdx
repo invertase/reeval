@@ -20,7 +20,7 @@ Browse it: reeval studio · summary .reeval/runs/…/summary.md
 
 Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` passed, `✗` failed or hit an infra error, `●` ran (no cell is gated, as under [`gate: 'observe'`](/reference/options#gate)), `–` skipped or todo, and `○` canceled. A passing evaluation is one line. A failed one, a comparison, and one with remarks add lines under it: how each harness did, a table of the arms, the rate over the cases under `gate: { passRate }` and the failed cases, and each failed [assertion](/reference/glossary#assertion) with the runs or arms it failed on, its first message line and its location.
 
-`-v` prints them under every evaluation, with each full message, file excerpt, snapshot, interval and remark. `--ui agent` always prints each failure's full message, excerpt and snapshot.
+`-v` prints them under every evaluation, with each full message, file excerpt, snapshot, interval and remark. `--ui agent` always adds the rest of each failure's message and its snapshot.
 
 `Done in` gives the run's time, then the tally, which omits zeros, as in `2 failed · 1 passed · 1 infra error`. A failure outside any evaluation prints first, as `error:`, and counts as a `run error`. `Browse it:` names the studio and the run's `summary.md` file. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
 

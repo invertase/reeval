@@ -4,6 +4,7 @@
 // `ink-list.ts`, imported only once there's an eval to list; if that import fails, the run prints
 // as a pipe's does, so a broken install costs the list, never the result.
 import stringWidth from 'string-width'
+import { redactSecrets } from '../redact.ts'
 import { suiteResult } from '../view/suite.ts'
 import type { Colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
@@ -57,12 +58,47 @@ export class ListStore {
 
 const FRAME_MS = 80
 
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+/** A CSI sequence (colors, cursor moves) or an OSC one (a hyperlink), which take no columns. */
+const ESCAPE = new RegExp(
+  `${ESC}(?:\\[[0-9;?]*[ -/]*[@-~]|\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\))`,
+  'g',
+)
+const graphemes = new Intl.Segmenter()
+
+/**
+ * Terminal rows one line takes at `columns`, placed as a terminal places it: a wide character that
+ * doesn't fit in the row's last column moves to the next row, `\r` returns to the row's start and
+ * `\t` goes to the next stop of eight without wrapping.
+ */
+export function rowsOf(line: string, columns: number): number {
+  let rows = 1
+  let column = 0
+  for (const { segment } of graphemes.segment(line.replace(ESCAPE, ''))) {
+    if (segment === '\r') column = 0
+    else if (segment === '\t') column = Math.min(columns - 1, (Math.floor(column / 8) + 1) * 8)
+    else if (segment === '\b') column = Math.max(0, column - 1)
+    else {
+      const width = stringWidth(segment)
+      if (!width) continue
+      if (column + width > columns) {
+        rows += 1
+        column = 0
+      }
+      column += width
+    }
+  }
+  return rows
+}
+
 /**
  * Before the list is up, the sandbox prepare step: the glyph of its `◆  Preparing…` line spins in
  * place (the cursor goes up to it and back) until each sandbox is ready or failed, then settles to
- * `◆`. What prints under it is kept and measured again at each frame, in display columns at the
- * terminal's current width, so a wide character or a resize (which terminals reflow) still finds
- * the step line; once it would be out of reach, it stops without drawing.
+ * `◆`. What prints under it is kept and measured in rows as the terminal placed it, so a wide
+ * character still finds the step line. Once the step line would be out of reach, or the width
+ * changes (some terminals reflow what they show, some don't, so its row is unknown), it stops
+ * without drawing.
  */
 export class StepSpinner {
   readonly #write: (text: string) => void
@@ -72,6 +108,8 @@ export class StepSpinner {
   #frame = 0
   /** The step line and everything printed under it since. */
   #text = ''
+  /** The width `#text` was printed at. */
+  #columns = 0
   #pending = 0
 
   constructor(
@@ -84,18 +122,19 @@ export class StepSpinner {
     this.#size = size
   }
 
-  /** Terminal lines from the step line down to the cursor after `text`, at the width now. */
+  /** Terminal lines from the step line down to the cursor after `text`. */
   #up(text = this.#text): number {
-    const columns = Math.max(1, this.#size().columns)
+    const columns = Math.max(1, this.#columns)
     const lines = text.split('\n')
     if (lines.at(-1) === '') lines.pop()
-    return lines.reduce((n, l) => n + Math.max(1, Math.ceil(stringWidth(l) / columns)), 0)
+    return lines.reduce((n, l) => n + rowsOf(l, columns), 0)
   }
 
   /** The step line was just written as `text`; it spins until `targets` have reported. */
   start(text: string, targets: number) {
     this.settle()
     this.#text = text
+    this.#columns = this.#size().columns
     this.#pending = targets
     this.#timer = setInterval(() => this.#draw(), FRAME_MS)
     this.#timer.unref()
@@ -117,7 +156,8 @@ export class StepSpinner {
   }
 
   #reachable(text = this.#text): boolean {
-    return this.#up(text) < this.#size().rows - 1
+    const { rows, columns } = this.#size()
+    return columns === this.#columns && this.#up(text) < rows - 1
   }
 
   #draw(glyph = SPINNER[this.#frame++ % SPINNER.length] ?? '◆') {
@@ -178,7 +218,8 @@ export class InteractiveRenderer implements Renderer {
     const out: OutputStream = {
       write: (text) => {
         if (!this.#app || this.#fallback) {
-          this.#spinner.before(String(text))
+          // Measured as the terminal shows it, after the masking the stream below applies.
+          this.#spinner.before(redactSecrets(String(text)))
           this.#written += String(text)
           return options.out.write(text)
         }

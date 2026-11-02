@@ -13,6 +13,7 @@ import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
 import { InteractiveRenderer } from '../src/ui/tty.ts'
 import { readableRecord } from '../src/view/record.ts'
+import type { RunRemarks } from '../src/view/remarks.ts'
 import { pkgRoot } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
 
@@ -1023,13 +1024,35 @@ describe('interactive renderer', () => {
       ({
         mountList: () => ({ waitUntilExit: async () => {}, unmount: () => {} }),
       }) as never
+    const suggestion =
+      'The greet.js check passes on every run, so it tells the arms apart on nothing.'
+    const remarks: RunRemarks = {
+      kind: 'reeval-remarks',
+      schemaVersion: 1,
+      runId: record.runId,
+      createdAt: new Date(T0).toISOString(),
+      remarks: [
+        {
+          id: 'never-fails',
+          evalId: 'evals%2Fresults.eval.ts › writes greet.js',
+          kind: 'check-never-fails',
+          severity: 'suggestion',
+          text: suggestion,
+          evidence: [],
+          fix: { at: 'source:evals/results.eval.ts#L4', edit: 'make the check stricter' },
+          firstSeenRun: record.runId,
+        },
+      ],
+    }
+    const events = withLongMessage.map((e) => (e.type === 'run-end' ? { ...e, remarks } : e))
     const { renderer, text } = interactive(mount, 1)
-    for (const e of withLongMessage) renderer.onEvent(e)
+    for (const e of events) renderer.onEvent(e)
     renderer.close()
     await renderer.wait()
-    const piped = render(withLongMessage, options({ outputLogs: 'none' }), false, 1)
+    const piped = render(events, options({ outputLogs: 'none' }), false, 1)
     const list = (out: string) => out.slice(out.indexOf('evals/results.eval.ts'))
     assert.match(text(), /^│ {6}the clone found no commits$/m)
+    assert.ok(text().includes(suggestion), 'a suggestion prints only under -v')
     assert.match(text(), /^ {2}◆ {2}Finished\.\n\nevals\/results\.eval\.ts/)
     assert.equal(list(text()), list(piped))
   })

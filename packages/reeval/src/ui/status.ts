@@ -9,7 +9,7 @@
 // - A compare reads a headline (`Failed on react; 2 of 3 variants helped.`, `The marked variant
 //   helped.`), then one table: the control and each variant, highest pass rate first, with its
 //   pass rate, effect (`, not by minLift N` when its lift missed it) and, when some measure besides
-//   pass rate holds, a `vs control` column (`5× faster`; with `-v`, `looks …` for the leans too).
+//   pass rate holds, a `vs control` column (`5× faster`; with `-v`, the leans too, each marked `(leans)`).
 //   On several harnesses that comparison is a `H: …` line under the variant instead. With `-v`,
 //   each cell's difference and 95% interval follows its row.
 // - An eval with `cases` under `gate: { passRate }` gives each gated cell's rate over the cases:
