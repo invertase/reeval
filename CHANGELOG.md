@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.18.0](https://github.com/invertase/reeval/compare/v0.17.2...v0.18.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** print reeval run's results as a per-eval status list ([#765](https://github.com/invertase/reeval/issues/765))
+* **results:** show a lift's direction at any number of runs ([#762](https://github.com/invertase/reeval/issues/762))
+
+### Features
+
+* **judge:** show c.observe values to judges and questions, in compare and the studio ([#743](https://github.com/invertase/reeval/issues/743)) ([99af246](https://github.com/invertase/reeval/commit/99af24666ab272aefa2f9fb13b6d7d23cf0c1a5a))
+* record non-gating attempt values with c.observe ([#741](https://github.com/invertase/reeval/issues/741)) ([cdb582f](https://github.com/invertase/reeval/commit/cdb582f6b58b229f56e8a7b3e9eab7ebf01590a1))
+* **results:** compare each variant with its baseline on every measure ([#764](https://github.com/invertase/reeval/issues/764)) ([a82029b](https://github.com/invertase/reeval/commit/a82029b9e569bcb41ca3f69e8cfa5146349947a8))
+* **results:** show a lift's direction at any number of runs ([#762](https://github.com/invertase/reeval/issues/762)) ([74eb5e9](https://github.com/invertase/reeval/commit/74eb5e9b5cd0ea9721870608be544a211c1c5d00))
+* **ui:** print reeval run's results as a per-eval status list ([#765](https://github.com/invertase/reeval/issues/765)) ([b9af22c](https://github.com/invertase/reeval/commit/b9af22cd9dadb9805399b66d76ed1fdcf37adde1))
+
+
+### Bug Fixes
+
+* **analysis:** default maxOutputTokens to 32000 and name the option on a cut-off ([#747](https://github.com/invertase/reeval/issues/747)) ([8ed883b](https://github.com/invertase/reeval/commit/8ed883bd21b53caebe61cf50935004b70c5d7ecc))
+* **assert:** back toHaveEdited with the files each turn changed ([#763](https://github.com/invertase/reeval/issues/763)) ([9e05dcf](https://github.com/invertase/reeval/commit/9e05dcfc61d182294c132be8a0256a1aa85c56e0))
+* **capture:** give the date format hint only while a date or time field has focus ([#744](https://github.com/invertase/reeval/issues/744)) ([862741a](https://github.com/invertase/reeval/commit/862741a902705c2c429257cb0800e9db7dae4477))
+* **capture:** make vision journeys hold up on scrolled pages, frames and late content ([#740](https://github.com/invertase/reeval/issues/740)) ([fd66d32](https://github.com/invertase/reeval/commit/fd66d325063d60c013bffb675fa79c44b480d69a))
+* **ci:** drop retired Claude 4.0 ids and fail docs:check on retired Claude models ([#754](https://github.com/invertase/reeval/issues/754)) ([321fcd1](https://github.com/invertase/reeval/commit/321fcd12ece30042790790772055292684197235))
+* **ci:** retire claude-sonnet-4-5 and refuse claude code's sonnet alias on vertex ([#761](https://github.com/invertase/reeval/issues/761)) ([c90e09d](https://github.com/invertase/reeval/commit/c90e09d1db646a7359c86889ce53d1fa6bd7d18e))
+* **ci:** run claude code's contract rows on claude-haiku-5-5 and the plan cases on claude-sonnet-5-5 ([#757](https://github.com/invertase/reeval/issues/757)) ([e432bd5](https://github.com/invertase/reeval/commit/e432bd5891210eb58959609b883f29a849e5ded5))
+* **cli:** keep the attempts a filtered resume leaves out, and the run incomplete ([#753](https://github.com/invertase/reeval/issues/753)) ([eb077b3](https://github.com/invertase/reeval/commit/eb077b3368b3f03c7973645bccbc0bb3efe6ab88))
+* **cli:** make --resume plan with the run's own --runs, profile, filters and concurrency ([#749](https://github.com/invertase/reeval/issues/749)) ([416df31](https://github.com/invertase/reeval/commit/416df315c2bf2f11697d2f4213b62d4e878aaf50))
+* **docs:** skip changelog and captured data in the retired-model guard and catch Bedrock and claude-4-sonnet forms ([#755](https://github.com/invertase/reeval/issues/755)) ([29c0aef](https://github.com/invertase/reeval/commit/29c0aefa5d3d76d5af88f0df4af01cfa8c02401c))
+* **evaluate:** mask secrets in eval, group and todo names, and refuse names that mask alike ([#752](https://github.com/invertase/reeval/issues/752)) ([d491f0d](https://github.com/invertase/reeval/commit/d491f0d72c8f1bca57d4f9141e9bbfef0a15d60e))
+* **history:** hash evaluate.each case data with its secrets masked ([#756](https://github.com/invertase/reeval/issues/756)) ([d711952](https://github.com/invertase/reeval/commit/d711952a52568f39e68a7f5803abc5840669dfc7))
+* **history:** mark declared skips in the record so a filtered resume counts them as done ([#758](https://github.com/invertase/reeval/issues/758)) ([0b82b71](https://github.com/invertase/reeval/commit/0b82b71a11a2e758d1a7bf349136190bd5d596ce))
+* **observe:** mask observation names and refuse two that mask the same ([#748](https://github.com/invertase/reeval/issues/748)) ([8f414d8](https://github.com/invertase/reeval/commit/8f414d83898ebb6d64adb11f1dfe4291663bb27d))
+* **sandbox:** turn off npm's and pnpm's update checks in the container ([#760](https://github.com/invertase/reeval/issues/760)) ([f846a1d](https://github.com/invertase/reeval/commit/f846a1d3513e374b6e0c1bee4938b1d7de05a799))
+* **serve:** refuse a given port that was already in use before c.serve started ([#746](https://github.com/invertase/reeval/issues/746)) ([36c1707](https://github.com/invertase/reeval/commit/36c1707e2ca5d7beb9797266243178b7855bf0d5))
+
 ## [0.17.2](https://github.com/invertase/reeval/compare/v0.17.1...v0.17.2) (2026-10-30)
 
 
