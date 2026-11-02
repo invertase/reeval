@@ -32,6 +32,7 @@
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
         "@balena/dockerignore",
+        "@boatdev/sdk",
         "studio-web"
       ]
     },

@@ -2,6 +2,7 @@
 // each a Zod schema that validates it and gives its JSON Schema, described by the TSDoc of the
 // hand-written type of the same name.
 import type { z } from 'zod'
+import { boatSandboxSchema } from './boat.ts'
 import {
   analysisConfigDataSchema,
   budgetSchema,
@@ -25,7 +26,6 @@ import {
   declaredTodoSchema,
   evalOptionsDataSchema,
 } from './declaration.ts'
-import { boatSandboxSchema } from './boat.ts'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
 import {
   environmentDataSchema,

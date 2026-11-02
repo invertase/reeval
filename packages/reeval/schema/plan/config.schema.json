@@ -77,6 +77,67 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "BoatApiKey": {
+      "description": "The host variable holding a Boat API key, made by `secret.fromEnv`.",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "secret"
+        }
+      },
+      "required": ["from", "kind"]
+    },
+    "BoatSandboxDescriptor": {
+      "description": "A boat.dev VM per attempt, made by `boat()` from `reeval/sandbox/boat`.",
+      "type": "object",
+      "properties": {
+        "apiKey": {
+          "description": "The host variable with the Boat API key, read on the host only.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "kind": {
+              "type": "string",
+              "const": "secret"
+            }
+          },
+          "required": ["from", "kind"],
+          "additionalProperties": false
+        },
+        "id": {
+          "description": "Cell id; defaults to `boat`, or `boat:<type>` with a `type`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "boat"
+        },
+        "maxConcurrent": {
+          "description": "The most Boat sandboxes at once, across the run.",
+          "type": "number"
+        },
+        "prefix": {
+          "description": "The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own: lowercase letters, digits and dashes.",
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+        },
+        "type": {
+          "description": "The machine size. Default `small`.",
+          "type": "string",
+          "enum": ["small", "default", "large", "xlarge"]
+        }
+      },
+      "required": ["apiKey", "kind", "prefix"],
+      "additionalProperties": false
+    },
     "Budget": {
       "description": "Run-level caps. `attempts` is checked against the plan; `duration` while running.",
       "type": "object",
@@ -2471,6 +2532,9 @@
         },
         {
           "$ref": "#/$defs/TartSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/BoatSandboxDescriptor"
         }
       ]
     },

@@ -20,7 +20,9 @@ const isOptions = (value: unknown) =>
  * key (`secret.fromEnv('BOAT_API_KEY')` by default), and `prefix` starts every sandbox name
  * reeval gives Boat (`reeval` by default), so a run's cleanup deletes only its own.
  */
-export function createBoat(options: CreateBoatOptions = {}): (options?: BoatOptions) => BoatSandboxDescriptor {
+export function createBoat(
+  options: CreateBoatOptions = {},
+): (options?: BoatOptions) => BoatSandboxDescriptor {
   if (!isOptions(options)) {
     throw new UsageError(`createBoat() takes an options object (got ${JSON.stringify(options)})`)
   }

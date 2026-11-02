@@ -6,7 +6,7 @@ import { type Gateway, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import { type SshTarget, sshArgv, sshTransport } from './egress/transport.ts'
 import { BRIDGE_PORT, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_STATE, SANDBOX_USER } from './image.ts'
-import { run as runHost, shellQuote as q } from './process.ts'
+import { shellQuote as q, run as runHost } from './process.ts'
 import {
   type DockerSession,
   type EgressOptions,
@@ -179,7 +179,11 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     const marker = nextMarker()
     const env = { ...envFor(o.env), [EXEC_MARKER]: marker }
     try {
-      const r = await ssh(asUser(cwdOf(o.workingDirectory), o.command), envStream(env), o.abortSignal)
+      const r = await ssh(
+        asUser(cwdOf(o.workingDirectory), o.command),
+        envStream(env),
+        o.abortSignal,
+      )
       return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
     } catch (error) {
       if (o.abortSignal?.aborted) await killExec(marker)

@@ -210,7 +210,17 @@ async function deleteSandbox(api: BoatClient, id: string): Promise<void> {
 /** A fresh ed25519 key pair in `dir`, made by the host's OpenSSH. */
 async function newKey(dir: string): Promise<{ file: string; pub: string }> {
   const file = join(dir, 'id_ed25519')
-  const made = await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'reeval', '-f', file])
+  const made = await run('ssh-keygen', [
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-C',
+    'reeval',
+    '-f',
+    file,
+  ])
   if (made.exitCode !== 0) {
     throw new InfraError(
       `Couldn't make an SSH key for the Boat sandbox: ssh-keygen failed: ${made.stderr.trim()}`,
@@ -270,7 +280,9 @@ export async function createBoatSandbox(
     const ssh = await api
       .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
       .catch(async (error: unknown) => {
-        throw new InfraError(`Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`)
+        throw new InfraError(
+          `Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`,
+        )
       })
     const endpoint = /^(.+):(\d+)$/.exec(ssh.sshEndpoint ?? '')
     if (!endpoint || !ssh.hostKey) {
@@ -376,11 +388,22 @@ export async function boatCapacity(sandbox: BoatSandboxDescriptor): Promise<numb
 export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: string) {
   const api = await boatClient(sandbox, projectRoot)
   const refuse = (message: string, usage: boolean) =>
-    new PrepareError({ class: 'config', stage: 'boat', ref: null, cause: null, log: null, usage, message })
+    new PrepareError({
+      class: 'config',
+      stage: 'boat',
+      ref: null,
+      cause: null,
+      log: null,
+      usage,
+      message,
+    })
   const limits = await api.limits().catch(async (error: unknown) => {
     const code = status(error)
     if (code === 401 || code === 403) {
-      throw refuse(`Boat refused the API key in ${sandbox.apiKey.from}: ${await boatError(error)}`, true)
+      throw refuse(
+        `Boat refused the API key in ${sandbox.apiKey.from}: ${await boatError(error)}`,
+        true,
+      )
     }
     throw new PrepareError({
       class: 'transient',
@@ -394,9 +417,15 @@ export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: str
   const type = sandbox.type ?? 'small'
   const machine = limits.machineTypes?.find((m) => m.type === type)
   if (machine && !machine.available) {
-    throw refuse(`Boat won't start a ${type} machine on this account: ${machine.reason ?? 'unavailable'}`, true)
+    throw refuse(
+      `Boat won't start a ${type} machine on this account: ${machine.reason ?? 'unavailable'}`,
+      true,
+    )
   }
   if (!limits.canStart) {
-    throw refuse(`Boat won't start sandboxes on this account: ${limits.startBlockedReason ?? 'no reason given'}`, false)
+    throw refuse(
+      `Boat won't start sandboxes on this account: ${limits.startBlockedReason ?? 'no reason given'}`,
+      false,
+    )
   }
 }

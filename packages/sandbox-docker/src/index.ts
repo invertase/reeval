@@ -86,7 +86,12 @@ export {
 } from './egress/rules.ts'
 export { placeholder, type SubstituteIn, type Substitution } from './egress/substitution.ts'
 export type { DerivedTokens } from './egress/tokens.ts'
-export type { ExecTransport } from './egress/transport.ts'
+export {
+  type ExecTransport,
+  type SshTarget,
+  sshArgv,
+  sshTransport,
+} from './egress/transport.ts'
 export {
   dockerSeccompFile,
   ENGINES,
@@ -127,10 +132,5 @@ export {
   type SandboxLimits,
   type SessionOptions,
 } from './session.ts'
-export {
-  type SshTarget,
-  sshArgv,
-  sshTransport,
-} from './egress/transport.ts'
 export { createSshSession, type SshSessionOptions } from './ssh-session.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'
