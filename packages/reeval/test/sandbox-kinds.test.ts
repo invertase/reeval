@@ -21,13 +21,14 @@ import {
 } from '../src/sandbox/kinds.ts'
 import { classifyTart, createProviders, tartHostProblem } from '../src/sandbox/providers.ts'
 import { docker, fakeSandbox, podman, tart } from '../src/sandbox.ts'
+import { boat } from '../src/sandbox-boat.ts'
 import type { SandboxDescriptor } from '../src/types.ts'
 
 const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
 describe('sandbox kinds', () => {
   test('every kind is in the table, and nothing else is a kind', () => {
-    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['docker', 'fake', 'tart'])
+    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['boat', 'docker', 'fake', 'tart'])
     assert.ok(isSandboxKind('docker'))
     assert.ok(isSandboxKind('tart'))
     assert.ok(!isSandboxKind('vm'))
@@ -36,7 +37,7 @@ describe('sandbox kinds', () => {
   })
 
   test('each kind names its helpers, and messages list them all', () => {
-    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox() or tart()')
+    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart() or boat()')
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),
       'docker()',
@@ -49,7 +50,7 @@ describe('sandbox kinds', () => {
 
   test('every provider a kind names has a prepare provider', () => {
     const providers = createProviders()
-    for (const sandbox of [docker(), podman(), fakeSandbox(), tart({ image: IMAGE })]) {
+    for (const sandbox of [docker(), podman(), fakeSandbox(), tart({ image: IMAGE }), boat()]) {
       const name = sandboxKind(sandbox).provider(sandbox)
       assert.equal(providers[name]?.kind, name)
     }
@@ -111,6 +112,21 @@ describe('sandbox kinds', () => {
     assert.equal(sandboxKind(tart({ image: 'mine' })).provider(tart({ image: 'mine' })), 'tart')
   })
 
+  test("Boat is an isolated Linux VM that brokers, with no image and egress it can't hold", () => {
+    assert.deepEqual(capabilitiesOf(boat()), {
+      platform: 'linux',
+      egress: { enforce: 'none', record: true },
+      brokers: true,
+      harnessSession: true,
+      isolated: true,
+      processTable: true,
+      listeners: 'proc',
+      images: false,
+      preflight: true,
+      pluginBuilds: false,
+    })
+  })
+
   test('what a Docker sandbox widens is its own privileges; the fake one widens none', () => {
     assert.deepEqual(sandboxKind(docker()).privileges(docker({ root: true })), {
       root: true,
@@ -136,7 +152,7 @@ describe('which sandbox a real harness runs in', () => {
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
       agentSandboxProblem(AGENTS.cursor, fakeSandbox()),
-      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()",
+      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
     )
   })
 

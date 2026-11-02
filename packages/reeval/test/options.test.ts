@@ -1417,14 +1417,14 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /Unknown option "reuse" in profiles\.pr in reeval\.config\.ts\. Reusing control results from \.history isn’t built yet/,
       ],
       [
-        'a sandbox that is not docker() or fakeSandbox() on defineConfig',
+        'a sandbox that is not one of the sandbox helpers on defineConfig',
         { sandbox: { kind: 'vm' } },
-        /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\) or tart\(\)/,
+        /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\) or boat\(\)/,
       ],
       [
-        'a sandbox that is not docker() or fakeSandbox() on profile defaults',
+        'a sandbox that is not one of the sandbox helpers on profile defaults',
         { profiles: { pr: { defaults: { sandbox: { kind: 'vm' } } } } },
-        /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\) or tart\(\)/,
+        /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\) or boat\(\)/,
       ],
     ]
     for (const [what, extra, message] of configCases) {
