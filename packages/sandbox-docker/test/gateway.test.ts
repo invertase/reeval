@@ -1,12 +1,13 @@
 // The egress gateway over an exec transport, without Docker: the forwarder runs as a local `node`
 // child, so its 127.0.0.1 is the host's, and a fake `run` stands in for the CA install.
 import assert from 'node:assert/strict'
+import { spawn, spawnSync } from 'node:child_process'
 import { X509Certificate } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { PROXY_PORT, startGateway } from '../src/egress/gateway.ts'
 import {
@@ -149,9 +150,93 @@ describe('the gateway over an exec transport', { timeout: 30_000 }, () => {
       assert.match(gateway.stopped ?? '', /^the forwarder exited/)
       await assert.rejects(gateway.portUrl(1234, 'http'), /the egress gateway stopped/)
     } finally {
-      gateway.close()
+      await gateway.close()
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+/** Whether `pid` runs: a killed process its parent hasn't reaped yet is a zombie, not alive. */
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+  } catch {
+    return false
+  }
+  const stat = existsSync(`/proc/${pid}/stat`) ? readFileSync(`/proc/${pid}/stat`, 'utf8') : ''
+  return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z'
+}
+
+/** The forwarders' pid files on the host, which the orphaning transport's sandbox is. */
+const pidFiles = () =>
+  readdirSync('/tmp').filter((f) => /^reeval-egress-forwarder-.+\.pid$/.test(f))
+
+describe('a transport that orphans its processes', { timeout: 30_000 }, () => {
+  // Killing the host's `sh` leaves the forwarder it started in the background running, as killing
+  // `tart exec` or `ssh` can leave it in the VM; `run` runs the gateway's own commands for real.
+  // dash gives a background job /dev/null as stdin, so the forwarder reads its own through fd 3.
+  const orphaning: ExecTransport = {
+    argv: (command) => ['sh', '-c', 'exec 3<&0; "$@" <&3 & wait', 'sh', ...command],
+    env: { PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}` },
+    run: async (command, { input }) => {
+      if (command.join(' ').includes('ca-certificates')) {
+        return { exitCode: 0, stdout: Buffer.alloc(0), stderr: '' }
+      }
+      const r = spawnSync(command[0] ?? '', command.slice(1), { input })
+      return { exitCode: r.status ?? 1, stdout: r.stdout, stderr: r.stderr.toString() }
+    },
+    orphans: true,
+  }
+
+  test('stops a forwarder an earlier gateway left, then its own once it closes', async () => {
+    const stale = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    })
+    const staleFile = '/tmp/reeval-egress-forwarder-stale.pid'
+    writeFileSync(staleFile, String(stale.pid))
+    let gateway: Awaited<ReturnType<typeof startGateway>> | undefined
+    let own = 0
+    try {
+      gateway = await startGateway(orphaning, { policy: { mode: 'allow-all' } })
+      await eventually('the stale forwarder was stopped', () => !alive(stale.pid ?? 0))
+      const [file, ...more] = pidFiles()
+      assert.deepEqual(more, [], 'one forwarder runs')
+      own = Number(readFileSync(join('/tmp', file ?? ''), 'utf8'))
+      assert.ok(alive(own), 'its own forwarder runs')
+    } finally {
+      stale.kill('SIGKILL')
+      rmSync(staleFile, { force: true })
+      await gateway?.close()
+    }
+    await eventually('closing stopped its forwarder', () => !alive(own))
+    assert.deepEqual(pidFiles(), [], 'and removed its pid file')
+  })
+
+  test('a pid file whose pid is no longer a forwarder kills nothing', async () => {
+    const other = spawn('sleep', ['30'], { stdio: 'ignore' })
+    const files = {
+      '/tmp/reeval-egress-forwarder-reused.pid': String(other.pid),
+      '/tmp/reeval-egress-forwarder-group.pid': '-1',
+      '/tmp/reeval-egress-forwarder-empty.pid': '',
+    }
+    for (const [file, content] of Object.entries(files)) writeFileSync(file, content)
+    let gateway: Awaited<ReturnType<typeof startGateway>> | undefined
+    try {
+      gateway = await startGateway(orphaning, { policy: { mode: 'allow-all' } })
+      assert.ok(alive(other.pid ?? 0), 'the process that took the pid still runs')
+      for (const file of Object.keys(files)) assert.ok(!existsSync(file), `${file} is removed`)
+    } finally {
+      other.kill('SIGKILL')
+      for (const file of Object.keys(files)) rmSync(file, { force: true })
+      await gateway?.close()
+    }
+  })
+
+  test('a transport that does not orphan has its forwarder left to it', async () => {
+    const { transport, runs } = localTransport({ exitCode: 0 })
+    const gateway = await startGateway(transport, { policy: { mode: 'allow-all' } })
+    await gateway.close()
+    assert.equal(runs.length, 1, 'only the CA install ran in the sandbox')
   })
 })
 

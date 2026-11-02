@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { createCertificateAuthority } from './cert.ts'
@@ -33,8 +34,46 @@ export type Gateway = {
   portUrl(port: number, protocol: 'ws' | 'http'): Promise<string>
   /** Why the gateway stopped on its own (the forwarder exited), once it has. */
   readonly stopped: string | undefined
-  close(): void
+  /** Settles once the forwarder is stopped in the sandbox too, for a transport that orphans it. */
+  close(): Promise<void>
 }
+
+/**
+ * Where a forwarder a transport could orphan records its pid, one file per gateway: `ps` can't
+ * find it by its command line, which Linux cuts short of a long script.
+ */
+const PID_FILE = '/tmp/reeval-egress-forwarder'
+/** How long `close()` waits for the sandbox to stop a forwarder a transport could orphan. */
+const CLOSE_TIMEOUT_MS = 10_000
+
+/** Runs the forwarder; under a transport that orphans it, as the shell that wrote its pid file. */
+function forwarderCommand(transport: ExecTransport, tag: string): string[] {
+  const node = ['node', '-e', forwarderScript(PROXY_PORT)]
+  if (!transport.orphans) return node
+  return ['sh', '-c', `echo $$ > ${PID_FILE}-${tag}.pid && exec "$@"`, 'sh', ...node]
+}
+
+/**
+ * Kills the forwarders whose pid files match `glob`, and removes the files. A pid is killed only
+ * while it's still a `node -e`: a forwarder that exited on its own leaves its file, and its pid
+ * may since be another process's.
+ */
+const killForwarders = (transport: ExecTransport, glob: string, signal?: AbortSignal) =>
+  execRun(
+    transport,
+    [
+      'sh',
+      '-c',
+      `for f in ${PID_FILE}-${glob}.pid; do [ -f "$f" ] || continue; p=$(cat "$f"); rm -f "$f"
+case $p in ''|0|1|*[!0-9]*) continue ;; esac
+case $(ps -p "$p" -o command= 2>/dev/null) in *'node -e'*) kill -9 "$p" 2>/dev/null ;; esac
+done; true`,
+    ],
+    { input: '', signal },
+  ).then(
+    () => {},
+    () => {},
+  )
 
 const installCa = (transport: ExecTransport, cert: string, signal?: AbortSignal) =>
   execRun(
@@ -62,8 +101,12 @@ export async function startGateway(
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
+  // One forwarder holds PROXY_PORT in the sandbox, so an orphaned one would refuse this one.
+  if (transport.orphans) await killForwarders(transport, '*', signal)
+  signal?.throwIfAborted()
+  const tag = randomBytes(6).toString('hex')
   const proxy = createEgressProxy({ ...options, ca })
-  const child = execSpawn(transport, ['node', '-e', forwarderScript(PROXY_PORT)])
+  const child = execSpawn(transport, forwarderCommand(transport, tag))
   let stderr = ''
   child.stderr.on('data', (d) => {
     stderr += d
@@ -122,17 +165,24 @@ export async function startGateway(
   const onAbort = () => ready.reject(signal?.reason)
   signal?.addEventListener('abort', onAbort, { once: true })
 
+  let teardown: Promise<void> | undefined
   const close = () => {
+    if (teardown) return teardown
     closed = true
     child.kill('SIGKILL')
     mux.destroy()
     proxy.close()
     for (const l of listeners.values()) void l.then((s) => s.close())
+    // Bounded: a sandbox that no longer answers would otherwise hold its teardown forever.
+    teardown = transport.orphans
+      ? killForwarders(transport, tag, AbortSignal.timeout(CLOSE_TIMEOUT_MS))
+      : Promise.resolve()
+    return teardown
   }
   try {
     await ready.promise
   } catch (error) {
-    close()
+    await close()
     throw error
   } finally {
     clearTimeout(timer)

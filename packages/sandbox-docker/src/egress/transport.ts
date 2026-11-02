@@ -26,6 +26,13 @@ export type ExecTransport = {
   ): Promise<RunResult<Buffer>>
   /** Called as each host command this transport started ends, for debug traces. */
   trace?(argv: readonly string[], startedAt: number, end: ExecEnd): void
+  /**
+   * Killing the host program can leave its process running in the sandbox, where the sandbox
+   * outlives it (`tart exec`, `ssh`), so the gateway stops its forwarder there itself: any left
+   * from an earlier gateway before it starts one, and its own when it closes. A container's
+   * forwarder goes with the container.
+   */
+  orphans?: boolean
 }
 
 /** Runs `command` in the sandbox to its end. */
