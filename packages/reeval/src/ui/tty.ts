@@ -3,8 +3,10 @@
 // it. Quitting leaves the whole list in the scrollback, as a pipe prints it. The list is drawn by
 // `ink-list.ts`, imported only once there's an eval to list; if that import fails, the run prints
 // as a pipe's does, so a broken install costs the list, never the result.
+import stringWidth from 'string-width'
+import { redactSecrets } from '../redact.ts'
 import { suiteResult } from '../view/suite.ts'
-import { type Colors, stripAnsi } from './colors.ts'
+import type { Colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
 import { endText, startText } from './header.ts'
 import { LiveList, listLines, SPINNER } from './list.ts'
@@ -56,10 +58,47 @@ export class ListStore {
 
 const FRAME_MS = 80
 
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+/** A CSI sequence (colors, cursor moves) or an OSC one (a hyperlink), which take no columns. */
+const ESCAPE = new RegExp(
+  `${ESC}(?:\\[[0-9;?]*[ -/]*[@-~]|\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\))`,
+  'g',
+)
+const graphemes = new Intl.Segmenter()
+
+/**
+ * Terminal rows one line takes at `columns`, placed as a terminal places it: a wide character that
+ * doesn't fit in the row's last column moves to the next row, `\r` returns to the row's start and
+ * `\t` goes to the next stop of eight without wrapping.
+ */
+export function rowsOf(line: string, columns: number): number {
+  let rows = 1
+  let column = 0
+  for (const { segment } of graphemes.segment(line.replace(ESCAPE, ''))) {
+    if (segment === '\r') column = 0
+    else if (segment === '\t') column = Math.min(columns - 1, (Math.floor(column / 8) + 1) * 8)
+    else if (segment === '\b') column = Math.max(0, column - 1)
+    else {
+      const width = stringWidth(segment)
+      if (!width) continue
+      if (column + width > columns) {
+        rows += 1
+        column = 0
+      }
+      column += width
+    }
+  }
+  return rows
+}
+
 /**
  * Before the list is up, the sandbox prepare step: the glyph of its `◆  Preparing…` line spins in
  * place (the cursor goes up to it and back) until each sandbox is ready or failed, then settles to
- * `◆`. Lines printed under it are counted, so it stops before it would scroll out of reach.
+ * `◆`. What prints under it is kept and measured in rows as the terminal placed it, so a wide
+ * character still finds the step line. Once the step line would be out of reach, or the width
+ * changes (some terminals reflow what they show, some don't, so its row is unknown), it stops
+ * without drawing.
  */
 export class StepSpinner {
   readonly #write: (text: string) => void
@@ -67,8 +106,10 @@ export class StepSpinner {
   readonly #size: () => { rows: number; columns: number }
   #timer: NodeJS.Timeout | undefined
   #frame = 0
-  /** Terminal lines from the step line down to the cursor. */
-  #up = 0
+  /** The step line and everything printed under it since. */
+  #text = ''
+  /** The width `#text` was printed at. */
+  #columns = 0
   #pending = 0
 
   constructor(
@@ -81,30 +122,31 @@ export class StepSpinner {
     this.#size = size
   }
 
-  /** Terminal lines `text` takes. */
-  #height(text: string): number {
-    const { columns } = this.#size()
+  /** Terminal lines from the step line down to the cursor after `text`. */
+  #up(text = this.#text): number {
+    const columns = Math.max(1, this.#columns)
     const lines = text.split('\n')
     if (lines.at(-1) === '') lines.pop()
-    return lines.reduce((n, l) => n + Math.max(1, Math.ceil(stripAnsi(l).length / columns)), 0)
+    return lines.reduce((n, l) => n + rowsOf(l, columns), 0)
   }
 
   /** The step line was just written as `text`; it spins until `targets` have reported. */
   start(text: string, targets: number) {
     this.settle()
-    this.#up = this.#height(text)
+    this.#text = text
+    this.#columns = this.#size().columns
     this.#pending = targets
-    this.#draw()
     this.#timer = setInterval(() => this.#draw(), FRAME_MS)
     this.#timer.unref()
+    this.#draw()
   }
 
   /** Before `text` prints under it; settles first if the step line would scroll out of reach. */
   before(text: string) {
     if (!this.#timer) return
-    const up = this.#up + this.#height(text)
-    if (up >= this.#size().rows - 1) this.settle()
-    else this.#up = up
+    const next = this.#text + text
+    if (!this.#reachable(next)) this.settle()
+    this.#text = next
   }
 
   /** One sandbox reported; the last settles it. */
@@ -113,15 +155,26 @@ export class StepSpinner {
     if (this.#pending <= 0) this.settle()
   }
 
+  #reachable(text = this.#text): boolean {
+    const { rows, columns } = this.#size()
+    return columns === this.#columns && this.#up(text) < rows - 1
+  }
+
   #draw(glyph = SPINNER[this.#frame++ % SPINNER.length] ?? '◆') {
-    this.#write(`\x1b[${this.#up}A\r\x1b[2C${this.#c.teal(glyph)}\r\x1b[${this.#up}B`)
+    if (!this.#reachable()) {
+      clearInterval(this.#timer)
+      this.#timer = undefined
+      return
+    }
+    const up = this.#up()
+    this.#write(`\x1b[${up}A\r\x1b[2C${this.#c.teal(glyph)}\r\x1b[${up}B`)
   }
 
   settle() {
     if (!this.#timer) return
+    this.#draw('◆')
     clearInterval(this.#timer)
     this.#timer = undefined
-    this.#draw('◆')
   }
 }
 
@@ -135,7 +188,7 @@ export type InteractiveOptions = RendererOptions & {
 }
 
 type Mounted = { waitUntilExit: () => Promise<unknown>; unmount: () => void }
-type Ended = { list: StatusList; pointer: string; event: ReevalEvent }
+type Ended = { scrollback: StatusList; verbose: boolean; pointer: string; event: ReevalEvent }
 
 export class InteractiveRenderer implements Renderer {
   readonly #o: InteractiveOptions
@@ -165,7 +218,8 @@ export class InteractiveRenderer implements Renderer {
     const out: OutputStream = {
       write: (text) => {
         if (!this.#app || this.#fallback) {
-          this.#spinner.before(String(text))
+          // Measured as the terminal shows it, after the masking the stream below applies.
+          this.#spinner.before(redactSecrets(String(text)))
           this.#written += String(text)
           return options.out.write(text)
         }
@@ -265,19 +319,27 @@ export class InteractiveRenderer implements Renderer {
       case 'debug':
         return
       case 'run-end': {
-        const list = statusList({
-          record: e.record,
-          suite: suiteResult(e.record),
-          remarks: e.remarks ?? null,
-          verbose: false,
-          ...(e.notRun ? { notRun: e.notRun } : {}),
-        })
+        const listOf = (verbose: boolean) =>
+          statusList({
+            record: e.record,
+            suite: suiteResult(e.record),
+            remarks: e.remarks ?? null,
+            verbose,
+            ...(e.notRun ? { notRun: e.notRun } : {}),
+          })
+        const list = listOf(false)
+        const verbose = (this.#o.verbosity ?? 0) > 0
         if (!this.#app) {
           // Nothing was listed (every eval skipped), so there's nothing to browse.
           this.#plain.onEvent(e)
           return
         }
-        this.#ended = { list, pointer: pointerLine(e.summaryPath), event: e }
+        this.#ended = {
+          scrollback: verbose ? listOf(true) : list,
+          verbose,
+          pointer: pointerLine(e.summaryPath),
+          event: e,
+        }
         this.#store.set({
           files: list.files,
           ...(this.#store.get().phase ? { phase: endText(e.record.status) } : {}),
@@ -312,9 +374,9 @@ export class InteractiveRenderer implements Renderer {
     if (!app || !this.#ended) return
     await app.waitUntilExit()
     const { phase } = this.#store.get()
-    const { list, pointer } = this.#ended
+    const { scrollback, verbose, pointer } = this.#ended
     const head = phase ? [`  ${this.#c.teal('◆')}  ${phase}`, ''] : []
-    const text = [...head, ...listLines(list, this.#c, true, pointer)]
+    const text = [...head, ...listLines(scrollback, this.#c, true, pointer, verbose)]
     this.#o.out.write(`${text.join('\n')}\n`)
   }
 }

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { evalRow } from '../src/ui/status.ts'
+import { suiteResult } from '../src/view/suite.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 import { copyOut } from './support/examples.ts'
 
@@ -83,11 +85,21 @@ test('the status list: one line a pass, and a sentence for each way an eval went
   const plain = await runCli(p.dir, ['run', '--ui', 'plain'])
   assert.equal(plain.code, 1, plain.stdout + plain.stderr)
   assert.equal(listOf(plain.stdout), PLAIN)
-  // An agent reads the same sentences, without the tree's glyphs.
+  // An agent reads the same sentences without the tree's glyphs, with the detail -v adds to them:
+  // each failure's snapshot and each remark's whole sentence.
   const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
   assert.equal(agent.code, 1, agent.stdout + agent.stderr)
+  const agentList = listOf(agent.stdout)
+  assert.match(agentList, /^ {4}Snapshot: <path> \(\+1 more in summary\.md\)$/m)
+  assert.match(agentList, /^ {4}Snapshot: <path>$/m)
+  const remark = 'Worth knowing: 1 run per side; set runs: 4 at evals/s.eval.ts:21'
+  const whole =
+    'Worth knowing: The marked variant passed 1 of 1 run and the control 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at evals/s.eval.ts:21: set runs: 4, where a difference this size would hold.'
+  assert.ok(agentList.includes(`    ${whole}\n`), agentList)
   assert.equal(
-    listOf(agent.stdout),
+    agentList
+      .replace(/^ {4}Snapshot: .*\n/gm, '')
+      .replace(whole, `${remark} to confirm this difference.`),
     PLAIN.replace(/^[├└]─ /gm, '  ').replace(/^[│ ] {4}/gm, '    '),
   )
 })
@@ -200,5 +212,86 @@ test('with-effort at runs: 3, too few for a rank test, still names its speedup',
   assert.match(
     run.stdout,
     /^ {5}Worth knowing: 3 runs per side; set runs: \d+ at with-effort\.eval\.ts:\d+ to rule out a difference\. So far, \S+ (.+ and )?runs [\d.]+× faster\.$/m,
+  )
+  const verbose = await runCli(dir, ['run', '--ui', 'plain', '-v'], { timeoutMs: 300_000 })
+  assert.match(verbose.stdout, /^ {5}\S+ +3 of 3 {2}same +(.+ · )?[\d.]+× faster \(leans\)/m)
+  assert.doesNotMatch(verbose.stdout, /\blooks [\d.]+×/, 'a lean is marked after it, not before')
+})
+
+test("a compare's control line names the harnesses when they disagree, with or without variants", async () => {
+  const p = await project('status-control-disagrees', {
+    'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  include: ['evals/*.eval.ts'],
+  harnesses: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  sandbox: fakeSandbox(),
+})
+`,
+    'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+evaluate('compares', { runs: 1, compare: { control: plain, variants: [marked] } }, async (c) => {
+  await c.send('go')
+  expect(c.attempt.cell.key.startsWith('left/'), 'on left').toBe(true)
+})
+`,
+  })
+  await runCli(p.dir, ['run', '--ui', 'plain'])
+  const { run } = readRun(p.dir)
+  const [e] = suiteResult(run).files.flatMap((f) => f.evals)
+  assert.ok(e?.cells)
+  const text = (row: { detail: { text: string }[] }) => row.detail.map((d) => d.text).join('\n')
+  assert.match(
+    text(evalRow(run, e, [])),
+    /^plain \(control\) {2}1 of 2 \(left 1 of 1, right 0 of 1\)$/m,
+  )
+  const alone = { ...e, cells: e.cells.filter((c) => c.variant === null) }
+  assert.match(
+    text(evalRow(run, alone, [])),
+    /^Control plain passed 1 of 2 \(left 1 of 1, right 0 of 1\)\.$/m,
+  )
+})
+
+test('under -v a judged check reads as its judge score, marked (leans), not again as its pass rate', async () => {
+  const p = await project('status-judged-lean', {
+    'reeval.config.ts': fakeConfig(),
+    'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+evaluate('compares', { runs: 1, compare: { control: plain, variants: [marked] } }, async (c) => {
+  await c.send('go')
+  expect(c.attempt.cell.role === 'variant', 'tidy').toBe(true)
+})
+`,
+  })
+  await runCli(p.dir, ['run', '--ui', 'plain'])
+  const { run } = readRun(p.dir)
+  const [e] = suiteResult(run).files.flatMap((f) => f.evals)
+  assert.ok(e?.cells)
+  const lean = {
+    variant: 1,
+    control: 0,
+    lo: null,
+    hi: null,
+    p: 0.3,
+    verdict: 'leans',
+    leaning: 'better',
+    needed: 4,
+    unit: 'runs',
+    short: { now: 1, at: 4 },
+  } as const
+  const measures = [
+    { ...lean, measure: 'judge', label: 'tidy', estimate: 0.97, text: 'judge "tidy" +0.97' },
+    { ...lean, measure: 'check', label: 'tidy', estimate: 1, text: '"tidy" +100 pts' },
+    { ...lean, measure: 'check', label: 'builds', estimate: 1, text: '"builds" +100 pts' },
+  ]
+  const cells = e.cells.map((c) => (c.variant ? { ...c, measures } : c))
+  const row = evalRow(run, { ...e, cells, pooled: [] }, [], true)
+  const variant = row.detail.map((d) => d.text).find((t) => t.startsWith('marked'))
+  assert.match(
+    variant ?? '',
+    /helped +judge "tidy" \+0\.97 \(leans\) · "builds" \+100 pts \(leans\)$/,
   )
 })
