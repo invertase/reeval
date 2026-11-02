@@ -160,6 +160,7 @@ export default defineConfig({
 `fakeHarness` also takes `withSkill: { files, text }` (used when the environment gives the agent
 a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 'server/tool' }`
 steps per turn), `layout` (an agent's id, such as `'claude-code'`), `failWith`, `delayMs`,
+`turnMs` (each turn's agent time, exactly: effort comparisons without scheduling jitter),
 `flakeRate`, `reasoning`, `tools` and `id`.
 
 `fakeSandbox()` is for testing configs and reeval itself without Docker. It runs commands on

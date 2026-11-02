@@ -87,7 +87,7 @@ Done in <time> · 4 failed · 3 passed`
 
 test('the status list: one line a pass, and a sentence for each way an eval went', async () => {
   const p = await project('status-list', {
-    'reeval.config.ts': fakeConfig(),
+    'reeval.config.ts': fakeConfig({ harness: '{ turnMs: 1000 }' }),
     'evals/s.eval.ts': EVALS,
   })
   const plain = await runCli(p.dir, ['run', '--ui', 'plain'])

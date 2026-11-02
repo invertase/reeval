@@ -604,7 +604,7 @@ describe('remarks in reeval run', () => {
   test('the cap holds back a concern for the next -v run; each prints once', async () => {
     const coins = ['coin one', 'coin two', 'coin three', 'coin four']
     const p = await project('remarks-print', {
-      'reeval.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig({ harness: '{ turnMs: 1000 }' }),
       'evals/well.eval.ts': compareEval(4, 4, 0, 'well written'),
       'evals/coin.eval.ts': coinEvals(coins),
     })
@@ -639,7 +639,7 @@ describe('remarks in reeval run', () => {
 
   test('a fix points at its line, a family at its name template; too-few-tries prints every run, and an edit gives only its eval a new remark', async () => {
     const p = await project('remarks-once', {
-      'reeval.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig({ harness: '{ turnMs: 1000 }' }),
       'evals/skill.eval.ts': compareEval(2, 2, 1),
       'evals/fam.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
