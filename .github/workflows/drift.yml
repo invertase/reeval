@@ -27,6 +27,15 @@ on:
       - patches/**
       - packages/harness-opencode/src/opencode-provider-table.ts
       - packages/harness-opencode/src/opencode-install.ts
+      - packages/harness-antigravity/src/antigravity-bootstrap.ts
+      - packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts
+      - packages/harness-opencode/src/opencode-harness.ts
+      - packages/harness-goose/src/goose-harness.ts
+      - packages/harness-pi/src/pi-bootstrap.ts
+      - packages/harness-codex/src/codex-bootstrap.ts
+      - packages/harness-fx/src/fx-harness.ts
+      - packages/harness-grok-build/src/grok-build-harness.ts
+      - packages/reeval/package.json
 
 permissions:
   contents: read
@@ -91,6 +100,7 @@ jobs:
       - id: check
         name: whether the newest @ai-sdk/harness-claude-code still needs reeval's patch
         run: |
+          set +o pipefail
           node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs | tee "$RUNNER_TEMP/out.txt"
           status=${PIPESTATUS[0]}
           echo "line=$(grep -m1 -v '^::' "$RUNNER_TEMP/out.txt")" >> "$GITHUB_OUTPUT"
@@ -109,6 +119,7 @@ jobs:
       - id: check
         name: whether the newest @opencode/cli sends each provider's key where the table says
         run: |
+          set +o pipefail
           node --experimental-strip-types --no-warnings scripts/drift/opencode-providers.mjs | tee "$RUNNER_TEMP/out.txt"
           status=${PIPESTATUS[0]}
           echo "line=$(grep -m1 '^OpenCode providers:' "$RUNNER_TEMP/out.txt")" >> "$GITHUB_OUTPUT"
@@ -130,6 +141,7 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           tar -xzf "$(npm pack @cursor/sdk@latest --silent)"
+          set +o pipefail
           node "$GITHUB_WORKSPACE/scripts/drift/cursor-sdk-shape.mjs" package 2>&1 | tee out.txt
           status=${PIPESTATUS[0]}
           echo "line=$(head -1 out.txt)" >> "$GITHUB_OUTPUT"
@@ -144,6 +156,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: { contents: read, actions: write }
+    outputs:
+      line: ${{ steps.dispatch.outputs.line }}
     steps:
       # A release counts as seen once the snapshot has it, so a latest leg this workflow dispatched
       # that didn't pass is dispatched again each night until one does, on every CLI still behind
@@ -154,6 +168,7 @@ jobs:
           NEW: ${{ needs.versions.outputs.new_agents }}
           NEW_ROWS: ${{ needs.versions.outputs.new_rows }}
           MOVED_ROWS: ${{ needs.versions.outputs.moved_rows }}
+        id: dispatch
         run: |
           last=$(gh run list -R "$GITHUB_REPOSITORY" -w real.yml -e workflow_dispatch -u 'github-actions[bot]' -L 1 \
             --json status,conclusion --jq '.[0] | select(.) | "\(.status) \(.conclusion)"' || true)
@@ -163,8 +178,10 @@ jobs:
           esac
           rows=$NEW_ROWS
           [ -z "$redo" ] || rows=$MOVED_ROWS
-          [ -n "$rows" ] || { echo "No new agent CLI release${redo:+, and none behind its pin to retry}"; exit 0; }
-          echo "Dispatching real.yml's latest leg on $rows: ${NEW:+new upstream releases: $NEW}${NEW:+${redo:+; }}$redo" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ -n "$rows" ] || { echo "line=nothing to dispatch" >> "$GITHUB_OUTPUT"; echo "No new agent CLI release${redo:+, and none behind its pin to retry}"; exit 0; }
+          line="real.yml's latest leg on $rows: ${NEW:+new upstream releases: $NEW}${NEW:+${redo:+; }}$redo"
+          echo "line=$line" >> "$GITHUB_OUTPUT"
+          echo "Dispatching $line" | tee -a "$GITHUB_STEP_SUMMARY"
           for attempt in 1 2 3; do
             gh workflow run real.yml -R "$GITHUB_REPOSITORY" --ref main -f pinned=false -f latest=true -f latest_harnesses="$rows" && exit 0
             sleep $((attempt * 10))
@@ -173,7 +190,7 @@ jobs:
 
   summary:
     name: summary
-    needs: [versions, claude-code-patch, opencode-providers, cursor-sdk-shape]
+    needs: [versions, claude-code-patch, opencode-providers, cursor-sdk-shape, latest-leg]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -188,8 +205,10 @@ jobs:
           OPENCODE_LINE: ${{ needs.opencode-providers.outputs.line }}
           CURSOR: ${{ needs.cursor-sdk-shape.result }}
           CURSOR_LINE: ${{ needs.cursor-sdk-shape.outputs.line }}
+          LATEST: ${{ needs.latest-leg.result }}
+          LATEST_LINE: ${{ needs.latest-leg.outputs.line }}
         run: |
-          mark() { case "$1" in success) echo ok ;; failure) echo '**drift**' ;; *) echo "$1" ;; esac; }
+          mark() { case "$1" in success) echo ok ;; failure) echo "${2:-**drift**}" ;; *) echo "$1" ;; esac; }
           {
             echo '### Drift'
             echo
@@ -199,5 +218,8 @@ jobs:
             echo "| claude-code patch | $(mark "$PATCH") | $PATCH_LINE |"
             echo "| opencode providers | $(mark "$OPENCODE") | $OPENCODE_LINE |"
             echo "| cursor-sdk shape | $(mark "$CURSOR") | $CURSOR_LINE |"
+            hint=
+            [ "$LATEST" != failure ] || hint=' (the releases are in the snapshot now, so dispatch real.yml with latest=true by hand)'
+            [ "$LATEST" = skipped ] || echo "| latest leg | $(mark "$LATEST" '**dispatch failed**') | $LATEST_LINE$hint |"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
