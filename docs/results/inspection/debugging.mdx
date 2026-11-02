@@ -94,6 +94,14 @@ The workspace goes when the sandbox stops. reeval keeps what the agent left in i
 | `artifacts/<name>.png` | Screenshots from `c.capture()` |
 | `judge-input.json` | What each `c.judge()` call received |
 
+## See where the time went
+
+```bash
+npx reeval show <run-id> --trace
+```
+
+This writes the run's timeline to `.reeval/traces/<run id>.json`. Open it at [ui.perfetto.dev](https://ui.perfetto.dev) with **Open trace file**. Each lane holds attempts that ran one after another, with each attempt's setup, turns, tool calls, checks and judge. For more information about the tracks, see [`reeval show`](/reference/cli#reeval-show).
+
 ## Reference
 
 For more information about the `debug.keep` and `debug.traceBufferMb` options, see [`debug`](/reference/options#debug). For more information about the variables that change what reeval prints and writes, see [`REEVAL_DEBUG`](/reference/environment-variables#reevaldebug) and [`REEVAL_NO_REPORT_HINT`](/reference/environment-variables#reevalnoreporthint). For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).

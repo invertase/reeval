@@ -189,9 +189,21 @@ The `reeval show` command prints one run. An omitted run is `latest`.
 
 ```text
 reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
+  --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
+                              attempts in lanes, with setup, turns, tool calls, checks and judge
+  --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)
 ```
 
 [//]: # (/generated:cli-help:show)
+
+`--trace` writes the run's timeline as [Chrome Trace Event](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU) JSON, which [Perfetto](https://ui.perfetto.dev) and `chrome://tracing` open. It works on any recorded or scratch run, from any reeval version:
+
+| Track | What it holds |
+|---|---|
+| `run` | The whole run, the time before its first attempt started (planning and preflight), and an `attempts running` counter |
+| `lane <n>` | Attempts that didn't overlap, in start order: reeval puts each attempt on the first lane free when it started, so there are as many lanes as attempts ever ran at once |
+
+Under each attempt, its `setup` runs from the attempt's start, and each `turn <n>` sits at the time it started, with the transcript's text, reasoning and tool calls nested under it when the run kept the transcript. The record holds only the totals of the `diff`, each `check <command>` and the `judge`, so they're placed one after another after the last turn and carry `placed: estimated` in their arguments. Every slice's arguments hold its record fields, such as the attempt's key, outcome and phase timings.
 
 For more information about reading one run, see [Show one run](/results/output#show-one-run).
 

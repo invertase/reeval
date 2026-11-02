@@ -1,7 +1,7 @@
 // The run-history commands: record, history, show, compare, checkout.
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -24,6 +24,7 @@ import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
 import type { LiveRun } from './view/live.ts'
+import type { TranscriptLine } from './view/model.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -36,6 +37,8 @@ export type HistoryFlags = {
   limit?: string
   'fail-on-regression'?: boolean
   verbose?: boolean[]
+  trace?: boolean
+  out?: string
 }
 
 export class CommandError extends Error {
@@ -244,6 +247,22 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
   const entry = resolveRun(await allRuns(config), refs[0])
   const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
   const run = await readRecord(join(dir, `${entry.runId}.json`))
+  if (ctx.flags.trace) {
+    const { runTrace } = await import('./history/trace.ts')
+    const { transcriptLines } = await import('./mcp/files.ts')
+    const transcripts = new Map<string, TranscriptLine[]>()
+    for (const a of run.evals.flatMap((e) => e.attempts)) {
+      const lines = a.startedAt ? await transcriptLines(config, run, a) : null
+      if (lines) transcripts.set(a.key, lines)
+    }
+    const file = resolve(
+      ctx.flags.out ?? join(config.root, '.reeval', 'traces', `${run.runId}.json`),
+    )
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, `${JSON.stringify(runTrace(run, transcripts))}\n`)
+    ctx.out(`Wrote ${fromCwd(file)}: open it at https://ui.perfetto.dev (Open trace file)`)
+    return 0
+  }
   if (ctx.flags.json) {
     ctx.out(JSON.stringify(run, null, 2))
     return 0

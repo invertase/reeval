@@ -199,10 +199,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 --limit <n> --all (include unrecorded runs) --json`,
   },
   show: {
-    flags: ['json', 'md'],
+    flags: ['json', 'md', 'trace', 'out'],
     positionals: 1,
     help: `
-  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
+    --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
+                                attempts in lanes, with setup, turns, tool calls, checks and judge
+    --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)`,
   },
   compare: {
     flags: ['md', 'json', 'fail-on-regression', 'verbose'],
