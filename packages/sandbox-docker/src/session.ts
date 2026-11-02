@@ -240,10 +240,15 @@ const MISSING = 3
 /** POSIX `sh` and `stat -L -c` (coreutils and BusyBox both have it), for any image an eval brings. */
 const STAT = `[ -e "$1" ] || exit ${MISSING}
 if [ -d "$1" ]; then t=directory; elif [ -f "$1" ]; then t=file; else t=other; fi
-printf '%s %s' "$t" "$(stat -L -c %s -- "$1")"`
-/** One `<type>\\t<name>` per entry, NUL-separated, since a name can hold a newline. */
+s=$(stat -L -c %s -- "$1") || exit 1
+printf '%s %s' "$t" "$s"`
+/**
+ * One `<type>\\t<name>` per entry, NUL-separated, since a name can hold a newline. An unreadable
+ * directory's glob matches nothing, so it's refused rather than listed as empty.
+ */
 const LIST = `[ -e "$1" ] || exit ${MISSING}
 [ -d "$1" ] || { echo "not a directory" >&2; exit 1; }
+ls -a -- "$1" > /dev/null || exit 1
 for f in "$1"/* "$1"/.*; do
   n=\${f##*/}
   [ "$n" = . ] || [ "$n" = .. ] && continue

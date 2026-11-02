@@ -290,6 +290,9 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
     assert.deepEqual(await s.listDirectory({ path: 'tree/sub' }), [])
     assert.equal(await s.listDirectory({ path: 'tree/nope' }), null)
     await assert.rejects(s.listDirectory({ path: 'tree/five.txt' }), /not a directory/)
+    await s.run({ command: 'mkdir tree/locked && : > tree/locked/secret && chmod 000 tree/locked' })
+    await assert.rejects(s.listDirectory({ path: 'tree/locked' }), /Permission denied/)
+    await s.run({ command: 'chmod 755 tree/locked' })
 
     assert.equal(await s.deleteFile({ path: 'tree/link' }), true)
     assert.deepEqual(await s.stat({ path: 'tree/five.txt' }), { type: 'file', size: 5 })
