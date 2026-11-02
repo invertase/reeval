@@ -171,7 +171,7 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
       name,
       env: key,
       ...(vars.length ? { vars } : {}),
-      headers: [...headers.values()],
+      headers: [...headers.values()].sort((a, b) => a.name.localeCompare(b.name)),
       endpoints: [...endpoints.values()].sort(byEndpoint),
     })
   }

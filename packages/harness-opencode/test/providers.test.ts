@@ -114,6 +114,15 @@ test("the main providers' keys go where OpenCode sends them", () => {
       headers: bearer,
       posts: ['ai-gateway.vercel.sh/v1/messages'],
     },
+    agentrouter: {
+      env: 'AGENTROUTER_API_KEY',
+      headers: ['authorization:bearer', 'x-api-key:raw'],
+      posts: [
+        'agentrouter.org/v1/chat/completions',
+        'agentrouter.org/v1/messages',
+        'agentrouter.org/v1/responses',
+      ],
+    },
   }
   for (const [id, want] of Object.entries(expected)) assert.deepEqual(where(id), want, id)
 })
@@ -200,6 +209,56 @@ test("a refusal's reason names no OpenCode version, so a bump alone doesn't move
   )
 })
 
+test("a Responses API call names the served model and its effort, as AgentRouter's do", () => {
+  const agentrouter = openCodeProvider('agentrouter/gpt-5.6-sol')
+  const call = { method: 'POST', host: 'agentrouter.org', path: '/v1/responses' }
+  assert.equal(
+    providerServedModel(agentrouter, {
+      ...call,
+      responseModel: 'gpt-5.6-sol',
+      responseEffort: 'medium',
+    }),
+    'gpt-5.6-sol[effort=medium]',
+  )
+  assert.equal(
+    providerServedModel(agentrouter, {
+      ...call,
+      path: '/v2/responses',
+      responseModel: 'gpt-5.6-sol',
+    }),
+    undefined,
+  )
+})
+
+test("a provider's headers are in name order, whatever order the probe saw them in", () => {
+  const seen = (path: string, key: string, format: string) => ({
+    variant: path,
+    model: 'm',
+    exit: 1,
+    error: '',
+    requests: [{ method: 'POST', host: 'api.p.test', path, key: [key], format }],
+  })
+  const probe = {
+    p: {
+      name: 'P',
+      env: ['P_API_KEY'],
+      variants: [
+        seen('/v1/messages', 'x-api-key', 'raw'),
+        seen('/v1/responses', 'authorization', 'bearer'),
+      ],
+    },
+  }
+  assert.deepEqual(
+    buildTable(probe, { p: { models: { m: {} } } }).supported.map((p) => p.headers),
+    [
+      [
+        { name: 'authorization', scheme: 'bearer' },
+        { name: 'x-api-key', scheme: 'raw' },
+      ],
+    ],
+  )
+})
+
 test('the gateway swaps the key into each header the provider uses, on each of its hosts', () => {
   const rules = providerTransformations(openCodeProvider('opencode/m'), {
     key: 'real',
@@ -214,13 +273,13 @@ test('the gateway swaps the key into each header the provider uses, on each of i
     },
     {
       matchUrl: 'https://opencode.ai',
-      matchHeaders: { 'x-goog-api-key': 'ph' },
-      transformHeaders: { 'x-extra': '1', 'x-goog-api-key': 'real' },
+      matchHeaders: { 'x-api-key': 'ph' },
+      transformHeaders: { 'x-extra': '1', 'x-api-key': 'real' },
     },
     {
       matchUrl: 'https://opencode.ai',
-      matchHeaders: { 'x-api-key': 'ph' },
-      transformHeaders: { 'x-extra': '1', 'x-api-key': 'real' },
+      matchHeaders: { 'x-goog-api-key': 'ph' },
+      transformHeaders: { 'x-extra': '1', 'x-goog-api-key': 'real' },
     },
   ])
 })
