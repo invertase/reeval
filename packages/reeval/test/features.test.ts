@@ -2615,7 +2615,10 @@ export const features: Feature[] = [
       assert.equal(canary?.exitCode, 1)
       assert.equal(canary?.retries, undefined, 'a check without retries records no tries')
       assert.equal(canary?.tries, undefined)
-      assert.match(entryOf(stdout, 'lands'), /^ +"flaky passes" passed on try 2 of 3\.$/m)
+      assert.match(
+        entryOf(stdout, 'lands'),
+        /^ +Worth knowing: "flaky passes" passed on try 2 of 3\.$/m,
+      )
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
       assert.match(summary, /- Check flaky passes exit 0 \(passed on try 2 of 3\): `test -f/)
     },
@@ -2811,7 +2814,7 @@ export const features: Feature[] = [
       assert.match(
         entryOf(stdout, 'lands'),
         new RegExp(
-          `^ +2 page errors in capture "home" → \\.reeval/runs/${run.runId}/.+/artifacts/home\\.capture\\.json$`,
+          `^ +Worth knowing: 2 page errors in capture "home" → \\.reeval/runs/${run.runId}/.+/artifacts/home\\.capture\\.json$`,
           'm',
         ),
       )
