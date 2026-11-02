@@ -1,7 +1,9 @@
-// The interactive status list, drawn with Ink: ↑↓ move, → or enter expands one eval, ← or esc
-// folds it. While the run goes, Ctrl-C cancels it and so does q pressed twice; once it has ended,
-// q quits, taking the frame down so `tty.ts` can print the whole list into the scrollback. Only
-// `tty.ts` imports this module, and only on an interactive terminal, so nothing else loads React.
+// The interactive status list, drawn with Ink: ↑↓ move, → or enter expands one eval (an eval
+// with cases shows `CASES_OPEN` of them, failed and running first, → again all of them), ← steps
+// back and esc folds it. While the run goes, Ctrl-C cancels it and so does q pressed twice; once
+// it has ended, q quits, taking the frame down so `tty.ts` can print the whole list into the
+// scrollback. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
+// else loads React.
 import { Box, render, Static, Text, useApp, useInput, useStdout } from 'ink'
 import {
   createElement as h,
@@ -12,7 +14,7 @@ import {
 } from 'react'
 import { type Colors, stripAnsi } from './colors.ts'
 import { detailSegments, nameWidth, paintIcon, type Segment, SPINNER } from './list.ts'
-import { type StatusRow, shownDetail } from './status.ts'
+import { type DetailLine, type StatusRow, shownDetail } from './status.ts'
 import type { ListState, ListStore } from './tty.ts'
 
 const FRAME_MS = 80
@@ -20,6 +22,49 @@ const FRAME_MS = 80
 export const CONFIRM_MS = 3000
 
 type Line = { text: string; row: number }
+
+/** Case rows an open eval shows before → shows them all. */
+export const CASES_OPEN = 5
+
+/** Which case rows the compact detail keeps first: the failed, then the running, then the rest. */
+const caseRank = (l: DetailLine) =>
+  l.mark === 'fail' || l.mark === 'miss' || l.mark === 'error' ? 0 : l.mark === 'spin' ? 1 : 2
+
+/**
+ * The open eval's detail: compact, with `CASES_OPEN` of its case table's cases (failed and running
+ * ones first, in the table's order) and how many it hides, whatever the compact detail of a
+ * printed list would show; `full`, everything.
+ */
+export function openDetail(lines: DetailLine[], full: boolean): DetailLine[] {
+  if (full || !lines.some((l) => l.cases === 'row')) return shownDetail(lines, full)
+  const rows = lines.filter((l) => l.cases === 'row')
+  const shown = new Set(
+    rows
+      .map((l, i) => [l, i] as const)
+      .sort(([a, i], [b, j]) => caseRank(a) - caseRank(b) || i - j)
+      .slice(0, CASES_OPEN)
+      .map(([l]) => l),
+  )
+  const hidden = rows.length - shown.size
+  const out: DetailLine[] = []
+  for (const l of lines) {
+    if (l.cases === 'more') continue
+    if (l.cases === 'head' || shown.has(l)) out.push(l)
+    else if (l.cases !== 'row' && l.only !== 'full') out.push(l)
+    if (hidden && l === rows.at(-1)) {
+      const text = `${hidden} ${hidden === 1 ? 'case' : 'cases'} hidden, → to show`
+      out.push({ depth: l.depth, text: `${l.mark ? '  ' : ''}${text}`, tone: 'dim' })
+    }
+  }
+  return out
+}
+
+/** Whether → on the open eval shows more than it does now. */
+const hasMore = (lines: DetailLine[]) => {
+  const open = openDetail(lines, false)
+  const full = openDetail(lines, true)
+  return open.length !== full.length || open.some((l, i) => l !== full[i])
+}
 
 /** Where `text` breaks into lines of at most `width` characters, at spaces where it can. */
 function wrapRanges(text: string, width: number): Array<[number, number]> {
@@ -90,7 +135,7 @@ export function frameLines(
       })
       if (expanded === row.id) {
         const spinner = SPINNER[frame % SPINNER.length]
-        for (const line of shownDetail(row.detail, full)) {
+        for (const line of openDetail(row.detail, full)) {
           const indent = 6 + line.depth * 2
           const parts = wrapSegments(
             detailSegments(c, line, spinner),
@@ -227,10 +272,7 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   const { rows: rowsTall, columns } = size
   const here = rows[selected]
   const open = here && here.id === expanded ? here : undefined
-  const more =
-    open &&
-    !full &&
-    shownDetail(open.detail, true).length !== shownDetail(open.detail, false).length
+  const more = open && !full && hasMore(open.detail)
   const step = more ? '→ more' : '→ open'
   const keys = finished ? `↑↓ move · ${step} · ← close · q quit` : `↑↓ move · ${step} · q cancel`
   // The phase spins while reeval waits on the run, and settles once it ends.

@@ -1,14 +1,14 @@
 // The status list as text, for every surface that prints it line by line: CI and pipes (with
 // tree glyphs), coding agents (without), and the interactive list's rows. `LiveList` builds the
 // rows a run in progress shows from its events, before the record exists.
-import { parseAttemptKey } from '../debug/files.ts'
 import { formatDuration, plural } from '../text.ts'
-import type { CellGate } from '../types.ts'
+import type { Cell, CellGate } from '../types.ts'
 import { caseLabel } from '../view/family.ts'
 import type { Colors } from './colors.ts'
 import type { AttemptRef, CollectedEval, EvalResult, Progress } from './events.ts'
 import { attemptAxes, failureReason, outcomeOf, phaseOf } from './format.ts'
 import {
+  columns,
   type DetailLine,
   type DetailMark,
   type StatusFile,
@@ -169,9 +169,11 @@ type LiveAttempt = {
   n: number
   state: 'queued' | 'running' | 'pass' | 'fail' | 'error' | 'skipped' | 'canceled'
   gated: boolean
-  /** Its cell's key and gate, once it starts; a cell's attempts decide it together. */
+  /** Its cell's key and gate, as planned; a cell's attempts decide it together. */
   cell?: string
   gate?: CellGate
+  /** Its cell as planned, which heads its case table column as the finished table does. */
+  place?: Cell
   phase: string
   error?: string
   /** Its case's key, on an eval with `cases`. */
@@ -202,6 +204,93 @@ function gateMissed(attempts: LiveAttempt[]): boolean {
 
 type LiveEval = { id: string; file: string; name: string; attempts: LiveAttempt[] }
 
+const ended = (a: LiveAttempt) => a.state !== 'queued' && a.state !== 'running'
+const counted = (a: LiveAttempt) => a.state !== 'skipped' && a.state !== 'canceled'
+
+/** A case's attempts in one cell: `2 of 2` once they've ended, else how far they've got. */
+function liveCell(own: LiveAttempt[]): string {
+  if (!own.length) return '–'
+  const passed = own.filter((a) => a.state === 'pass').length
+  const total = own.filter(counted).length
+  if (own.every(ended)) return total ? `${passed} of ${total}` : '–'
+  if (!own.some(ended)) return own.some((a) => a.state === 'running') ? 'running' : 'queued'
+  return `${passed} of ${own.length} so far`
+}
+
+/** A case's mark: spinning while an attempt runs, then its outcome once every attempt ended. */
+function liveMark(own: LiveAttempt[], failedEval: boolean): DetailMark {
+  if (own.some((a) => a.state === 'running')) return 'spin'
+  if (!own.every(ended)) return 'queued'
+  if (!own.some(counted)) return 'skipped'
+  const missed = own.some((a) => a.gated && (a.state === 'fail' || a.state === 'error'))
+  return !missed ? 'pass' : failedEval ? 'fail' : 'miss'
+}
+
+/**
+ * The case table while an eval with cases runs, shaped as the finished one: a row per case and a
+ * column per cell, the control first, each filling in as its attempts end.
+ */
+function caseLines(attempts: LiveAttempt[], failedEval: boolean): DetailLine[] {
+  const places = new Map<string, Cell>()
+  for (const a of attempts)
+    if (a.cell && a.place && !places.has(a.cell)) places.set(a.cell, a.place)
+  const label = heading([...places.values()])
+  const heads = new Map<string, string>()
+  const control = (a: LiveAttempt) => Number(a.place?.role === 'control')
+  for (const a of [...attempts].sort((x, y) => control(y) - control(x))) {
+    if (a.cell && !heads.has(a.cell)) heads.set(a.cell, a.place ? label(a.place) : a.axes)
+  }
+  const cases = [...new Set(attempts.flatMap((a) => (a.case === undefined ? [] : [a.case])))]
+  const of = (name: string) => attempts.filter((a) => a.case === name)
+  const table = columns([
+    ['case', ...heads.values()],
+    ...cases.map((name) => [
+      name,
+      ...[...heads.keys()].map((cell) => liveCell(of(name).filter((a) => a.cell === cell))),
+    ]),
+  ])
+  return [
+    { depth: 0, text: `  ${table[0] ?? ''}`, tone: 'dim', cases: 'head' },
+    ...cases.map((name, i): DetailLine => {
+      const failures = of(name).filter((a) => a.state === 'fail' || a.state === 'error')
+      const first = failures.find((a) => a.error)?.error
+      const more = failures.length > 1 ? ` (+${failures.length - 1} more)` : ''
+      return {
+        depth: 0,
+        text: table[i + 1] ?? '',
+        mark: liveMark(of(name), failedEval),
+        cases: 'row',
+        ...(first ? { note: `${first}${more}` } : {}),
+      }
+    }),
+  ]
+}
+
+/**
+ * A cell's column heading, as the finished case table words it: on a compare the control's
+ * environment or the variant, with the harness when there are several; else the harness, with the
+ * environment and sandbox where the cells differ in them.
+ */
+function heading(cells: Cell[]): (c: Cell) => string {
+  const several = (part: (c: Cell) => string) => new Set(cells.map(part)).size > 1
+  const harnesses = several((c) => c.harness)
+  const envs = several((c) => c.environment)
+  const sandboxes = several((c) => c.sandbox)
+  if (cells.some((c) => c.role === 'variant')) {
+    return (c) =>
+      [
+        c.role === 'control' ? `${c.environment} (control)` : (c.variant ?? c.environment),
+        harnesses ? c.harness : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+  }
+  return (c) =>
+    [c.harness, envs ? `in ${c.environment}` : '', sandboxes ? `on ${c.sandbox}` : '']
+      .filter(Boolean)
+      .join(' ')
+}
+
 /** The list while a run goes, from its events: each eval's attempts and where they are. */
 export class LiveList {
   readonly #evals = new Map<string, LiveEval>()
@@ -216,23 +305,30 @@ export class LiveList {
     for (const x of evals) {
       if (x.skipped) continue
       // A case's attempts are its eval's: one row, each attempt naming its case.
-      const id = x.family?.id ?? x.id
+      const family = x.attempt?.family
+      const id = family?.id ?? x.id
       const e = this.#evals.get(id) ?? {
         id,
         file,
-        name: [...x.group, x.family?.name ?? x.name].join(' › '),
+        name: [...x.group, family?.name ?? x.name].join(' › '),
         attempts: [],
       }
-      // Until it starts, its key names its cell (the harness first) and its run.
-      const planned = parseAttemptKey(x.key)
+      const planned = x.attempt
       const a: LiveAttempt = {
         key: x.key,
-        axes: planned?.cell.split('/')[0] ?? '',
+        axes: planned ? attemptAxes(planned, this.#harness) : '',
         n: planned?.n ?? e.attempts.length + 1,
         state: 'queued',
-        gated: true,
+        gated: planned?.gate !== 'none',
         phase: '',
-        ...(x.family ? { case: caseLabel(x.family.name, x.name) } : {}),
+        ...(planned
+          ? {
+              cell: planned.cell.key,
+              gate: planned.gate,
+              place: planned.cell,
+            }
+          : {}),
+        ...(family ? { case: caseLabel(family.name, x.name) } : {}),
       }
       e.attempts.push(a)
       this.#byKey.set(x.key, a)
@@ -250,6 +346,7 @@ export class LiveList {
     if (ref.attempt) {
       a.cell = ref.attempt.cell.key
       a.gate = ref.attempt.gate
+      a.place ??= ref.attempt.cell
     }
     a.phase = phaseOf(undefined)
   }
@@ -267,6 +364,7 @@ export class LiveList {
     if (result.attempt) {
       a.cell = result.attempt.cell.key
       a.gate = result.attempt.gate
+      a.place ??= result.attempt.cell
     }
     a.state =
       outcome === 'pass'
@@ -341,28 +439,33 @@ export class LiveList {
     ]
       .filter(Boolean)
       .join(' · ')
-    // A failed check is a fail, its message dim; only an error (a timeout, infra) is red.
-    const detail: DetailLine[] = e.attempts.map((a): DetailLine => {
-      const who = `${a.axes || this.#harness}${a.case ? ` · ${a.case}` : ''} #${a.n}`
-      if (a.state === 'running') return { depth: 0, mark: 'spin', text: `${who} ${a.phase}` }
-      if (a.state === 'queued')
-        return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
-      if (a.state === 'pass') return { depth: 0, mark: 'pass', text: `${who} passed` }
-      if (a.state === 'skipped' || a.state === 'canceled') {
-        return { depth: 0, mark: 'skipped', text: `${who} ${a.state}`, tone: 'dim' }
-      }
-      if (a.state === 'fail') {
-        return {
-          depth: 0,
-          mark: a.gated ? 'fail' : 'miss',
-          text: `${who} failed`,
-          ...(a.error ? { note: a.error } : {}),
-        }
-      }
-      const error = a.error ? `: ${a.error}` : ''
-      return { depth: 0, mark: 'error', text: `${who} errored${error}`, tone: 'red' }
-    })
+    // With cases, a failed attempt's message is its case row's note.
+    const detail = cases
+      ? caseLines(e.attempts, failed)
+      : e.attempts.map((a) => this.#attemptLine(a))
     return { id: e.id, name: e.name, icon, summary, detail, remarks: 0, compare: false }
+  }
+
+  /** An attempt as a detail line. A failed check is a fail, its message dim; only an error (a timeout, infra) is red. */
+  #attemptLine(a: LiveAttempt): DetailLine {
+    const who = `${a.axes || this.#harness}${a.case ? ` · ${a.case}` : ''} #${a.n}`
+    if (a.state === 'running') return { depth: 0, mark: 'spin', text: `${who} ${a.phase}` }
+    if (a.state === 'queued')
+      return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
+    if (a.state === 'pass') return { depth: 0, mark: 'pass', text: `${who} passed` }
+    if (a.state === 'skipped' || a.state === 'canceled') {
+      return { depth: 0, mark: 'skipped', text: `${who} ${a.state}`, tone: 'dim' }
+    }
+    if (a.state === 'fail') {
+      return {
+        depth: 0,
+        mark: a.gated ? 'fail' : 'miss',
+        text: `${who} failed`,
+        ...(a.error ? { note: a.error } : {}),
+      }
+    }
+    const error = a.error ? `: ${a.error}` : ''
+    return { depth: 0, mark: 'error', text: `${who} errored${error}`, tone: 'red' }
   }
 }
 

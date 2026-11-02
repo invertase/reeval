@@ -88,6 +88,11 @@ export type DetailLine = {
    * form).
    */
   only?: 'compact' | 'full'
+  /**
+   * Its part in a case table: the heading, a case's row, or the count of the cases the compact
+   * detail leaves out. The interactive list shows its own number of case rows and no count.
+   */
+  cases?: 'head' | 'row' | 'more'
 }
 
 /** The lines a detail shows, compact or `full`. */
@@ -253,7 +258,7 @@ const padColumns = (text: string, width: number) =>
   `${text}${' '.repeat(Math.max(0, width - stringWidth(text)))}`
 
 /** Rows of cells padded to one column each, two spaces apart, measured in terminal columns. */
-function columns(rows: string[][]): string[] {
+export function columns(rows: string[][]): string[] {
   const widths = rows[0]?.map((_, i) => Math.max(...rows.map((r) => stringWidth(r[i] ?? '')))) ?? []
   return rows.map((r) =>
     r
@@ -641,6 +646,7 @@ function caseTable(
       depth: 0,
       text: `${marked ? '  ' : ''}${table[0] ?? ''}`,
       tone: 'dim',
+      cases: 'head',
       ...(compact.length ? {} : { only: 'full' as const }),
     },
   ]
@@ -655,6 +661,7 @@ function caseTable(
     lines.push({
       depth: 0,
       text: table[i + 1] ?? '',
+      cases: 'row',
       ...(marked ? { mark } : {}),
       ...(shown.has(k) ? {} : { only: 'full' as const }),
     })
@@ -671,7 +678,13 @@ function caseTable(
           ? `: ${failedHidden} failed, ${passedHidden} passed`
           : ''
     const count = compact.length ? `+${hidden.length} more ${word}` : `${hidden.length} ${word}`
-    lines.push({ depth: 0, text: `${count}${passed} (-v)`, tone: 'dim', only: 'compact' })
+    lines.push({
+      depth: 0,
+      text: `${count}${passed} (-v)`,
+      tone: 'dim',
+      only: 'compact',
+      cases: 'more',
+    })
   }
   return lines
 }
