@@ -1,0 +1,25 @@
+{
+  "kind": "reeval-remarks",
+  "schemaVersion": 1,
+  "runId": "20261102T195335Z_f81fd99_cursor-agent_ah0s",
+  "createdAt": "2026-11-02T19:53:36.764Z",
+  "remarks": [
+    {
+      "id": "e0b887ae023acd56ecfb9423690034091bd6fb71b7046e94dd61cc6758b6ba0a",
+      "evalId": "evals%2Fcases.eval.ts › lifted",
+      "kind": "too-few-tries",
+      "severity": "concern",
+      "text": "The with-skill variant, paired over 3 cases: better, but a paired lift needs 6 cases that differ between the arms to hold.",
+      "brief": "Too few cases differ between the arms for the paired lift to hold; add cases at evals/cases.eval.ts:46 to confirm it.",
+      "evidence": [
+        "evals%2Fcases.eval.ts › lifted/fake+with-skill+fake"
+      ],
+      "fix": {
+        "at": "source:evals/cases.eval.ts#L46",
+        "edit": "add cases, so 6 or more can differ between the arms"
+      },
+      "firstSeenRun": "20261102T195258Z_f81fd99_cursor-agent_m8e2",
+      "printed": true
+    }
+  ]
+}
