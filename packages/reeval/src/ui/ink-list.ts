@@ -11,8 +11,8 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { type Colors, stripAnsi } from './colors.ts'
-import { nameWidth, paintDetail, paintIcon, SPINNER } from './list.ts'
-import type { StatusRow } from './status.ts'
+import { detailSegments, nameWidth, paintIcon, type Segment, SPINNER } from './list.ts'
+import { type StatusRow, shownDetail } from './status.ts'
 import type { ListState, ListStore } from './tty.ts'
 
 const FRAME_MS = 80
@@ -21,18 +21,42 @@ export const CONFIRM_MS = 3000
 
 type Line = { text: string; row: number }
 
+/** Where `text` breaks into lines of at most `width` characters, at spaces where it can. */
+function wrapRanges(text: string, width: number): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  let start = 0
+  while (text.length - start > width) {
+    const space = text.lastIndexOf(' ', start + width)
+    const cut = space > start + width / 3 ? space : start + width
+    let end = cut
+    while (end > start && text[end - 1] === ' ') end--
+    out.push([start, end])
+    start = cut
+    while (text[start] === ' ') start++
+  }
+  out.push([start, text.length])
+  return out
+}
+
 /** `text` in lines of at most `width` characters, broken at spaces where it can be. */
 export function wrap(text: string, width: number): string[] {
-  const out: string[] = []
-  let rest = text
-  while (rest.length > width) {
-    const space = rest.lastIndexOf(' ', width)
-    const cut = space > width / 3 ? space : width
-    out.push(rest.slice(0, cut).trimEnd())
-    rest = rest.slice(cut).trimStart()
-  }
-  out.push(rest)
-  return out
+  return wrapRanges(text, width).map(([a, b]) => text.slice(a, b))
+}
+
+/** Segments wrapped as their text would be, each piece in its own segment's paint. */
+export function wrapSegments(segments: Segment[], width: number): string[] {
+  const text = segments.map((s) => s.text).join('')
+  return wrapRanges(text, width).map(([a, b]) => {
+    let at = 0
+    let out = ''
+    for (const s of segments) {
+      const from = Math.max(a, at)
+      const to = Math.min(b, at + s.text.length)
+      if (to > from) out += s.paint(s.text.slice(from - at, to - at))
+      at += s.text.length
+    }
+    return out
+  })
 }
 
 /** The list's lines, each tagged with the index of the row it belongs to (-1 for a file heading). */
@@ -43,6 +67,8 @@ export function frameLines(
   expanded: string | null,
   frame: number,
   columns = 80,
+  /** The open eval's full detail: file excerpts, snapshots, remarks' whole sentences. */
+  full = false,
 ): Line[] {
   const out: Line[] = []
   let i = 0
@@ -52,7 +78,8 @@ export function frameLines(
     const width = nameWidth(file.rows)
     for (const row of file.rows) {
       const here = i === selected
-      const glyph = row.icon === 'running' ? SPINNER[frame % SPINNER.length] : undefined
+      const spins = row.icon === 'running' || row.icon === 'failing'
+      const glyph = spins ? SPINNER[frame % SPINNER.length] : undefined
       const name =
         row.name.length > width ? `${row.name.slice(0, width - 1)}…` : row.name.padEnd(width)
       const pointer = here ? c.blue('❯') : ' '
@@ -62,10 +89,17 @@ export function frameLines(
         row: i,
       })
       if (expanded === row.id) {
-        for (const line of row.detail) {
+        const spinner = SPINNER[frame % SPINNER.length]
+        for (const line of shownDetail(row.detail, full)) {
           const indent = 6 + line.depth * 2
-          for (const part of wrap(line.text, Math.max(20, columns - indent))) {
-            out.push({ text: `      ${paintDetail(c, { ...line, text: part })}`, row: i })
+          const parts = wrapSegments(
+            detailSegments(c, line, spinner),
+            Math.max(20, columns - indent),
+          )
+          // A wrapped line's continuation starts under its text, past the mark.
+          const under = ' '.repeat(indent + (line.mark ? 2 : 0))
+          for (const [k, part] of parts.entries()) {
+            out.push({ text: k === 0 ? `${' '.repeat(indent)}${part}` : `${under}${part}`, row: i })
           }
         }
       }
@@ -104,6 +138,7 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   const { stdout } = useStdout()
   const [selected, setSelected] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [full, setFull] = useState(false)
   const [frame, setFrame] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [quitting, setQuitting] = useState(false)
@@ -145,6 +180,7 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
     if (first < 0) return
     setSelected(first)
     setExpanded(all[first]?.id ?? null)
+    setFull(false)
   }, [finished, store])
 
   useInput((input, key) => {
@@ -158,12 +194,26 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
       setConfirming(!confirming)
       return
     }
+    const id = rows[selected]?.id ?? null
+    // → opens an eval, and on an open one shows its full detail; ← steps back the same way.
     if (key.upArrow) setSelected((s) => Math.max(0, s - 1))
     else if (key.downArrow) setSelected((s) => Math.min(rows.length - 1, s + 1))
-    else if (key.rightArrow || key.return) {
-      const id = rows[selected]?.id ?? null
-      setExpanded((e) => (key.return && e === id ? null : id))
-    } else if (key.leftArrow || key.escape) setExpanded(null)
+    else if (key.rightArrow) {
+      if (expanded === id) setFull(true)
+      else {
+        setExpanded(id)
+        setFull(false)
+      }
+    } else if (key.return) {
+      setExpanded(expanded === id ? null : id)
+      setFull(false)
+    } else if (key.leftArrow || key.escape) {
+      if (full && !key.escape) setFull(false)
+      else {
+        setExpanded(null)
+        setFull(false)
+      }
+    }
   })
 
   const logs = h(Static<string>, {
@@ -175,8 +225,16 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   if (quitting) return h(Box, { flexDirection: 'column' }, logs)
 
   const { rows: rowsTall, columns } = size
-  const keys = finished ? '↑↓ move · → open · ← close · q quit' : '↑↓ move · → open · q cancel'
-  const head = state.phase ? [state.phase, ' '] : []
+  const open = rows.find((r) => r.id === expanded)
+  const more =
+    open && !full && shownDetail(open.detail, true).length !== shownDetail(open.detail, false).length
+  const step = more ? '→ more' : '→ open'
+  const keys = finished
+    ? `↑↓ move · ${step} · ← close · q quit`
+    : `↑↓ move · ${step} · q cancel`
+  // The phase spins while reeval waits on the run, and settles once it ends.
+  const glyph = finished ? c.teal('◆') : c.teal(SPINNER[frame % SPINNER.length] ?? '◆')
+  const head = state.phase ? [`  ${glyph}  ${state.phase}`, ' '] : []
   const footer = [
     ' ',
     ...(finished
@@ -186,12 +244,16 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
           finished.done,
           c.dim(finished.pointer),
         ]
-      : [c.dim(`${state.counts.done} of ${state.counts.total} evals done`)]),
+      : [progressLine(c, state.counts)]),
     confirming && !finished ? c.yellow('Press q again to cancel the run.') : c.dim(keys),
   ]
   // One line spare, so Ink never draws a frame as tall as the terminal (it clears the screen then).
   const height = Math.max(3, rowsTall - tall(head, columns) - tall(footer, columns) - 1)
-  const lines = windowOf(frameLines(state, c, selected, expanded, frame, columns), selected, height)
+  const lines = windowOf(
+    frameLines(state, c, selected, expanded, frame, columns, full),
+    selected,
+    height,
+  )
   return h(
     Box,
     { flexDirection: 'column' },
@@ -200,6 +262,19 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
     ...lines.map((l, i) => h(Text, { key: `l${i}`, wrap: 'truncate-end' }, l.text || ' ')),
     ...footer.map((line, i) => h(Text, { key: `f${i}` }, line)),
   )
+}
+
+/**
+ * `9 of 10 evals done · 1 failed · 1 failing`: the evals that ended failed, and those still going
+ * with a run that already failed, which a red spinner marks.
+ */
+export function progressLine(c: Colors, counts: ListState['counts']): string {
+  const { done, total, failed = 0, failing = 0 } = counts
+  return [
+    c.dim(`${done} of ${total} evals done`),
+    ...(failed ? [c.red(`${failed} failed`)] : []),
+    ...(failing ? [c.red(`${failing} failing`)] : []),
+  ].join(c.dim(' · '))
 }
 
 const sizeOf = (stdout: NodeJS.WritableStream) => {

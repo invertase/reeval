@@ -3,10 +3,12 @@ import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
 import { triesNote } from '../view/judgments.ts'
 import type { Colors } from './colors.ts'
-import { stripAnsi } from './colors.ts'
+import { colors, stripAnsi } from './colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from './events.ts'
 
 export { formatDuration }
+
+const plainColors = colors(false)
 
 /** Most detail lines a `-vv` payload prints under its line. */
 const DEBUG_DETAIL_LINES = 40
@@ -117,16 +119,16 @@ export function phaseOf(p: Progress | undefined): string {
     case undefined:
       return 'starting'
     case 'sandbox':
-      return 'sandbox'
+      return 'preparing sandbox'
     case 'sandbox-ready':
       return 'sandbox ready'
     case 'turn-start':
-      return `turn ${p.turn}`
+      return `agent turn ${p.turn}`
     case 'turn-end':
       return `turn ${p.turn} done`
     case 'check-start':
     case 'check-end':
-      return 'checks'
+      return 'running checks'
     case 'judge-start':
     case 'judge-end':
       return 'judging'
@@ -183,19 +185,34 @@ export function errorCheck(e: EvalResult): FailedCheck | undefined {
   )
 }
 
+/** `✗ failed  label: why  evals/a.eval.ts:7`: a failed check, which is a fail, not an error. */
+function checkLine(c: Colors, x: FailedCheck): string {
+  const why = x.message.startsWith(`${x.label}: `) ? x.message.slice(x.label.length + 2) : x.message
+  const what = why ? `${x.label}: ${c.dim(why)}` : x.label
+  return [c.red('✗ failed'), what, x.at && c.dim(x.at)].filter(Boolean).join('  ')
+}
+
 /** The failed checks the error isn't, each with its line: an `expect` failure doesn't end the body. */
 function otherChecks(c: Colors, e: EvalResult): string[] {
   const shown = errorCheck(e)
-  return (e.meta?.failedChecks ?? [])
-    .filter((x) => x !== shown)
-    .map((x) => {
-      const why = x.message.startsWith(`${x.label}: `)
-        ? x.message.slice(x.label.length + 2)
-        : x.message
-      return [c.red(`✗ ${x.label}`), x.at && c.dim(x.at), why && c.dim(why)]
-        .filter(Boolean)
-        .join('  ')
-    })
+  return (e.meta?.failedChecks ?? []).filter((x) => x !== shown).map((x) => checkLine(c, x))
+}
+
+/** An error's class before its message, `Error: ` or `AssertionError: `, which a fail doesn't print. */
+const ERROR_NAME = /^[\w.$]*Error: /
+
+/**
+ * A failed attempt's reason on one line, as the live list prints it after `failed` or `errored`:
+ * the message without its error's class, the judge's verdict, or `canceled`.
+ */
+export function failureReason(e: EvalResult): string {
+  if (outcomeOf(e) === 'canceled') return 'canceled'
+  const failed = (e.meta?.judgements ?? []).find((j) => j.verdict !== 'pass')
+  if (e.meta?.errorKind === 'judge' && failed) {
+    return stripAnsi(judgeLine(plainColors, failed)).replace(/\s+/g, ' ').trim()
+  }
+  const [first = ''] = (e.errors[0] ?? '').split('\n').filter((l) => l.trim())
+  return first.trim().replace(ERROR_NAME, '')
 }
 
 function failureBody(
@@ -225,7 +242,16 @@ function failureBody(
   const formatted = e.formattedErrors[0]
   const body = formatted && e.meta?.errorKind !== 'timeout' ? formatted : message
   const text = c.enabled ? body : stripAnsi(body)
-  return capLines(text.replace(/^\n+/, ''), options.max).map((l) =>
-    c.enabled && body === message ? c.red(l) : l,
-  )
+  const lines = capLines(text.replace(/^\n+/, ''), options.max)
+  // A failed check (or an assertion) is a fail: `✗ failed` and its message, without the error's
+  // class, and its diff or code frame as they are.
+  const check = errorCheck(e)
+  if (outcome === 'fail' && (check || e.errorName === 'AssertionError')) {
+    const [, ...rest] = lines
+    const head = check
+      ? checkLine(c, check)
+      : `${c.red('✗ failed')}  ${c.dim(stripAnsi(lines[0] ?? '').replace(ERROR_NAME, ''))}`
+    return [head, ...rest.map((l) => (body === message ? c.dim(l) : l))]
+  }
+  return lines.map((l) => (c.enabled && body === message ? c.red(l) : l))
 }

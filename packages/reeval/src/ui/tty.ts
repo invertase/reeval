@@ -4,10 +4,10 @@
 // `ink-list.ts`, imported only once there's an eval to list; if that import fails, the run prints
 // as a pipe's does, so a broken install costs the list, never the result.
 import { suiteResult } from '../view/suite.ts'
-import type { Colors } from './colors.ts'
+import { type Colors, stripAnsi } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
-import { endLine, startLine } from './header.ts'
-import { LiveList, listLines } from './list.ts'
+import { endText, startText } from './header.ts'
+import { LiveList, listLines, SPINNER } from './list.ts'
 import { PlainRenderer, type RendererOptions } from './plain.ts'
 import { pointerLine, type StatusFile, type StatusList, statusList } from './status.ts'
 
@@ -15,8 +15,11 @@ export type ListState = {
   files: StatusFile[]
   /** Lines printed above the list while it's up: notices, sandbox preparation. */
   logs: string[]
-  counts: { done: number; total: number }
-  /** The run header's last line, `◆  Running...`, drawn above the list so it can say how it ended. */
+  counts: { done: number; total: number; failed?: number; failing?: number }
+  /**
+   * The run header's last line's text, `Running...`, drawn above the list (spinning while the run
+   * goes) so it can say how it ended.
+   */
   phase: string | null
   /** Set once the run ends. */
   finished: {
@@ -51,6 +54,77 @@ export class ListStore {
   }
 }
 
+const FRAME_MS = 80
+
+/**
+ * Before the list is up, the sandbox prepare step: the glyph of its `◆  Preparing…` line spins in
+ * place (the cursor goes up to it and back) until each sandbox is ready or failed, then settles to
+ * `◆`. Lines printed under it are counted, so it stops before it would scroll out of reach.
+ */
+class StepSpinner {
+  readonly #write: (text: string) => void
+  readonly #c: Colors
+  readonly #size: () => { rows: number; columns: number }
+  #timer: NodeJS.Timeout | undefined
+  #frame = 0
+  /** Terminal lines from the step line down to the cursor. */
+  #up = 0
+  #pending = 0
+
+  constructor(
+    write: (text: string) => void,
+    c: Colors,
+    size: () => { rows: number; columns: number },
+  ) {
+    this.#write = write
+    this.#c = c
+    this.#size = size
+  }
+
+  /** Terminal lines `text` takes. */
+  #height(text: string): number {
+    const { columns } = this.#size()
+    const lines = text.split('\n')
+    if (lines.at(-1) === '') lines.pop()
+    return lines.reduce((n, l) => n + Math.max(1, Math.ceil(stripAnsi(l).length / columns)), 0)
+  }
+
+  /** The step line was just written as `text`; it spins until `targets` have reported. */
+  start(text: string, targets: number) {
+    this.settle()
+    this.#up = this.#height(text)
+    this.#pending = targets
+    this.#draw()
+    this.#timer = setInterval(() => this.#draw(), FRAME_MS)
+    this.#timer.unref()
+  }
+
+  /** Before `text` prints under it; settles first if the step line would scroll out of reach. */
+  before(text: string) {
+    if (!this.#timer) return
+    const up = this.#up + this.#height(text)
+    if (up >= this.#size().rows - 1) this.settle()
+    else this.#up = up
+  }
+
+  /** One sandbox reported; the last settles it. */
+  reported() {
+    this.#pending -= 1
+    if (this.#pending <= 0) this.settle()
+  }
+
+  #draw(glyph = SPINNER[this.#frame++ % SPINNER.length] ?? '◆') {
+    this.#write(`\x1b[${this.#up}A\r\x1b[2C${this.#c.teal(glyph)}\r\x1b[${this.#up}B`)
+  }
+
+  settle() {
+    if (!this.#timer) return
+    clearInterval(this.#timer)
+    this.#timer = undefined
+    this.#draw('◆')
+  }
+}
+
 export type InteractiveOptions = RendererOptions & {
   stdout: NodeJS.WriteStream
   stdin: NodeJS.ReadStream
@@ -75,14 +149,26 @@ export class InteractiveRenderer implements Renderer {
   #fallback: PlainRenderer | undefined
   #ended: Ended | undefined
   #closed = false
+  readonly #spinner: StepSpinner
+  /** What the plain renderer wrote since `#written` was reset, while the list isn't up. */
+  #written = ''
 
   constructor(options: InteractiveOptions) {
     this.#o = options
     this.#c = options.colors
     this.#list = new LiveList(options.harness)
+    this.#spinner = new StepSpinner(
+      (text) => options.out.write(text),
+      options.colors,
+      () => sizeOf(options.stdout),
+    )
     const out: OutputStream = {
       write: (text) => {
-        if (!this.#app || this.#fallback) return options.out.write(text)
+        if (!this.#app || this.#fallback) {
+          this.#spinner.before(String(text))
+          this.#written += String(text)
+          return options.out.write(text)
+        }
         const lines = String(text).replace(/\n$/, '').split('\n')
         this.#store.set({ logs: [...this.#store.get().logs, ...lines] })
         return true
@@ -122,7 +208,7 @@ export class InteractiveRenderer implements Renderer {
     for (const line of logs) out.write(`${line}\n`)
     const reason = error instanceof Error ? error.message : String(error)
     out.write(`${this.#c.yellow(`Couldn't draw the interactive list (${reason}).`)}\n`)
-    if (phase) out.write(`${phase}\n`)
+    if (phase) out.write(`  ${this.#c.teal('◆')}  ${phase}\n`)
     this.#fallback = new PlainRenderer({
       ...this.#o,
       timers: false,
@@ -132,8 +218,8 @@ export class InteractiveRenderer implements Renderer {
   }
 
   #update() {
-    const { done, total } = this.#list.counts()
-    this.#store.set({ files: this.#list.files(), counts: { done, total } })
+    const { done, total, failed, failing } = this.#list.counts()
+    this.#store.set({ files: this.#list.files(), counts: { done, total, failed, failing } })
   }
 
   onEvent(e: ReevalEvent): void {
@@ -143,9 +229,18 @@ export class InteractiveRenderer implements Renderer {
     }
     switch (e.type) {
       case 'run-start':
-        this.#store.set({ phase: startLine(this.#c, this.#o.output) })
+        this.#spinner.settle()
+        this.#store.set({ phase: startText(this.#o.output) })
+        return
+      case 'prepare':
+        this.#written = ''
+        this.#plain.onEvent(e)
+        if (this.#app || this.#o.timers === false) return
+        if (e.state === 'start') this.#spinner.start(this.#written, e.targets.length)
+        else this.#spinner.reported()
         return
       case 'collected':
+        this.#spinner.settle()
         this.#list.collected(e.file, e.evals)
         this.#mount()
         this.#update()
@@ -183,7 +278,7 @@ export class InteractiveRenderer implements Renderer {
         this.#ended = { list, pointer: pointerLine(e.summaryPath), event: e }
         this.#store.set({
           files: list.files,
-          ...(this.#store.get().phase ? { phase: endLine(this.#c, e.record.status) } : {}),
+          ...(this.#store.get().phase ? { phase: endText(e.record.status) } : {}),
           finished: {
             done: list.done,
             notes: list.notes,
@@ -199,6 +294,7 @@ export class InteractiveRenderer implements Renderer {
   }
 
   close(): void {
+    this.#spinner.settle()
     this.#plain.close()
     this.#fallback?.close()
     // Without a run-end the run failed: take the list down so the error prints below it.
@@ -215,7 +311,13 @@ export class InteractiveRenderer implements Renderer {
     await app.waitUntilExit()
     const { phase } = this.#store.get()
     const { list, pointer } = this.#ended
-    const text = [...(phase ? [phase, ''] : []), ...listLines(list, this.#c, true, pointer)]
+    const head = phase ? [`  ${this.#c.teal('◆')}  ${phase}`, ''] : []
+    const text = [...head, ...listLines(list, this.#c, true, pointer)]
     this.#o.out.write(`${text.join('\n')}\n`)
   }
+}
+
+const sizeOf = (stdout: NodeJS.WriteStream | undefined) => {
+  const { rows, columns } = (stdout ?? {}) as { rows?: number; columns?: number }
+  return { rows: rows || 24, columns: columns || 80 }
 }

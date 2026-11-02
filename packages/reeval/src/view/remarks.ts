@@ -51,6 +51,12 @@ export type Remark = {
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */
   text: string
+  /**
+   * The remark as one short line, with its fix and where (`1 run per side; set runs: 4 at
+   * evals/a.eval.ts:12 to confirm these differences.`), which `reeval run`'s list prints without
+   * `-v`; absent when the kind has none.
+   */
+  brief?: string
   /** Facts from this run (or history facts) showing it mattered now. */
   evidence: string[]
   /** An edit at a source location (`source:<file>#L<n>`) in the eval. */

@@ -101,6 +101,9 @@ function units(e: EvalResult): Array<{ id: string; cells: CellResult[] }> {
 
 const armOf = (c: CellResult) => c.variant ?? (c.environment === '-' ? 'baseline' : c.environment)
 
+/** `evals/a.eval.ts:12` from `source:evals/a.eval.ts#L12`. */
+const location = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, ':$1')
+
 const runs = (n: number) => `${n} ${n === 1 ? 'run' : 'runs'}`
 
 /** Whether a variant's difference from its baseline holds: its interval excludes 0. */
@@ -172,6 +175,11 @@ function looksDifferent(
       : unit === 'cases'
         ? `add cases, to ${needed}, where the soonest of these would hold`
         : `set runs: ${needed}${cases ? ' a case' : ''}, where the soonest of these would hold`
+  const at = ctx.locate(entry, null)
+  const brief =
+    needed === null
+      ? undefined
+      : `Both passed every run, but the variant looks different; ${unit === 'cases' ? `add cases, to ${needed},` : `set runs: ${needed}${cases ? ' a case' : ''}`} at ${location(at)} to confirm it.`
   return [
     {
       id: remarkId('too-few-tries', e.path, entry, 'looks'),
@@ -179,8 +187,9 @@ function looksDifferent(
       kind: 'too-few-tries',
       severity: 'concern',
       text,
+      ...(brief ? { brief } : {}),
       evidence: [variant.path, base.path],
-      fix: { at: ctx.locate(entry, null), edit },
+      fix: { at, edit },
     },
   ]
 }
@@ -306,6 +315,16 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       : needed
         ? `set runs: ${needed}, where a difference this size would hold`
         : `a difference this size doesn't hold even at runs: ${RUNS_TO_HOLD_MAX}`
+  const at = ctx.locate(entry, null)
+  const these = others || also ? 'these differences' : 'this difference'
+  const per = `${fewest} per side; set runs:`
+  const brief = held
+    ? `${per} ${COMPARE_RUNS} at ${location(at)}, so a split this wide is less likely chance.`
+    : !gap
+      ? `${per} ${needed} at ${location(at)} to rule out a difference.`
+      : needed
+        ? `${per} ${needed} at ${location(at)} to confirm ${these}.`
+        : undefined
   return [
     ...apart,
     {
@@ -314,8 +333,9 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
       kind: 'too-few-tries',
       severity: 'concern',
       text,
+      ...(brief ? { brief } : {}),
       evidence: [variant.path, base.path],
-      fix: { at: ctx.locate(entry, null), edit },
+      fix: { at, edit },
     },
   ]
 }
