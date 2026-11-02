@@ -163,7 +163,13 @@ const alive = (pid: number) => {
   } catch {
     return false
   }
-  const stat = existsSync(`/proc/${pid}/stat`) ? readFileSync(`/proc/${pid}/stat`, 'utf8') : ''
+  let stat: string
+  try {
+    stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+  } catch {
+    // Reaped since the signal, unless there's no /proc to ask (macOS).
+    return !existsSync('/proc')
+  }
   return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z'
 }
 

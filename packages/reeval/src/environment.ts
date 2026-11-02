@@ -24,7 +24,12 @@ import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plu
 import { isObjectLike } from './object.ts'
 import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
-import { isSandboxKind, SANDBOX_KINDS, sandboxHelpers } from './sandbox/kinds.ts'
+import {
+  isSandboxKind,
+  maxConcurrentProblem,
+  SANDBOX_KINDS,
+  sandboxHelpers,
+} from './sandbox/kinds.ts'
 import type {
   EgressPolicy,
   Environment,
@@ -1281,7 +1286,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
 
 /** Throws for a file, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
-export type MissingDockerfile = (field: string, full: string) => never
+export type MissingHostFile = (field: string, full: string) => never
 
 /**
  * A sandbox descriptor written as data with its kind's host paths made absolute against `base`, as
@@ -1292,18 +1297,24 @@ export function sandboxPaths(
   value: unknown,
   base: string,
   field: string,
-  missing: MissingDockerfile,
+  missing: MissingHostFile,
 ): unknown {
   if (!isRecord(value) || !isSandboxKind(value.kind)) return value
   let out = value
   for (const [key, kind] of Object.entries(SANDBOX_KINDS[value.kind].hostPaths)) {
-    const path = value[key]
+    // `ssh.key` is `key` in the descriptor's `ssh`.
+    const [outer = '', inner] = key.split('.')
+    const holder = inner === undefined ? out : out[outer]
+    const path = isRecord(holder) ? holder[inner ?? outer] : undefined
     if (!isPath(path)) continue
     const full = toPath(path, base)
     if (kind === 'file' && !statSync(full, { throwIfNoEntry: false })?.isFile()) {
       missing(`${field}.${key}`, full)
     }
-    out = { ...out, [key]: full }
+    out =
+      inner === undefined
+        ? { ...out, [key]: full }
+        : { ...out, [outer]: { ...(holder as Record<string, unknown>), [inner]: full } }
   }
   return out
 }
@@ -1318,7 +1329,7 @@ export function specPaths(
   value: unknown,
   base: string,
   field: string,
-  missing: MissingDockerfile,
+  missing: MissingHostFile,
 ): unknown {
   if (!isRecord(value)) return value
   const hostFile = (v: unknown) =>
@@ -1364,7 +1375,7 @@ export function environmentPaths(
   value: unknown,
   base: string,
   field: string,
-  missing: MissingDockerfile,
+  missing: MissingHostFile,
 ): unknown {
   if (!isRecord(value) || !Array.isArray(value.layers)) return value
   return {
@@ -1384,7 +1395,7 @@ function buildSpec(input: EnvironmentInput, where: string, base: string): Enviro
       `${where} returned a Promise. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead.`,
     )
   }
-  const missing: MissingDockerfile = (field, full) => {
+  const missing: MissingHostFile = (field, full) => {
     throw new DefinitionError(
       `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that defines the environment.`,
     )
@@ -1481,12 +1492,8 @@ function checkSandbox(value: unknown, where: string): asserts value is SandboxDe
       `sandbox in ${where} must come from ${sandboxHelpers()} (got ${JSON.stringify(value)})`,
     )
   }
-  const max = value.maxConcurrent
-  if (max !== undefined && !(typeof max === 'number' && Number.isInteger(max) && max >= 1)) {
-    throw new DefinitionError(
-      `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
-    )
-  }
+  const limit = maxConcurrentProblem(value as SandboxDescriptor, where)
+  if (limit) throw new DefinitionError(limit)
   const problem = sandboxProblem(value as SandboxDescriptor)
   if (problem) throw new DefinitionError(`sandbox in ${where}: ${problem}`)
 }

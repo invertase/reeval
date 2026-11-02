@@ -10,11 +10,13 @@ from reeval_python.environment import (
     FakeJudge,
     Plugin,
     PluginBuild,
+    TartSandbox,
     define_environment,
     docker,
     fake_harness,
     fake_judge,
     plugin,
+    tart,
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import Expectation, expect
@@ -49,6 +51,7 @@ __all__ = [
     "ReevalAssertionError",
     "ReevalCallError",
     "SyncAttemptContext",
+    "TartSandbox",
     "Turn",
     "Verdict",
     "define_environment",
@@ -59,5 +62,6 @@ __all__ = [
     "fake_judge",
     "group",
     "plugin",
+    "tart",
     "todo",
 ]

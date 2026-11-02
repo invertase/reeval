@@ -45,7 +45,7 @@
   "podman: a memory size podman does not take": "UsageError: podman({ memory }) takes a size such as '4g' or '512m', or bytes (got \"4GB\")",
   "podman: an unknown key": "UsageError: Unknown podman() option \"color\".",
   "podman: a good one": null,
-  "data: not docker() or fakeSandbox()": "UsageError: sandbox in evals/a.eval.ts › e must come from docker(), podman() or fakeSandbox() (got an object with \"kind\")",
+  "data: not docker() or fakeSandbox()": "UsageError: sandbox in evals/a.eval.ts › e must come from docker(), podman(), fakeSandbox() or tart() (got an object with \"kind\")",
   "data: podman with a bad memory": "UsageError: sandbox in evals/a.eval.ts › e: podman({ memory }) takes a size such as '4g' or '512m', or bytes (got \"4GB\")",
   "data: an unknown engine": "UsageError: sandbox in evals/a.eval.ts › e: a Docker sandbox's engine is \"docker\" or \"podman\" (got \"lxc\")",
   "data: maxConcurrent 0": "UsageError: sandbox.maxConcurrent in evals/a.eval.ts › e must be a whole number of at least 1 (got 0)",

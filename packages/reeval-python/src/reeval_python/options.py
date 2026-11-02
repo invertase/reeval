@@ -10,7 +10,13 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from typing import Any, Generic, Literal, Required, TypedDict, TypeVar
 
-from reeval_python.environment import DockerSandbox, Environment, FakeHarness, FakeJudge
+from reeval_python.environment import (
+    DockerSandbox,
+    Environment,
+    FakeHarness,
+    FakeJudge,
+    TartSandbox,
+)
 
 Harness = str | FakeHarness | Mapping[str, Any]
 T = TypeVar("T")
@@ -86,7 +92,7 @@ class EvalOptions(TypedDict, total=False):
     questions: Sequence[Mapping[str, Any]]
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's. Each
     names what it's shown: `{"question": …, "diff": True}`, at least one input."""
-    sandbox: DockerSandbox | Mapping[str, Any]
+    sandbox: DockerSandbox | TartSandbox | Mapping[str, Any]
     snapshot: bool | Literal["turns"] | Mapping[str, Any]
     """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after
     the checks, `"turns"` after each `send` too, `False` never, or `{"when": …, "compress": True}`

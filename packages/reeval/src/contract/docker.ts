@@ -9,6 +9,7 @@ import type {
   Duration,
   FakeSandboxDescriptor,
   InstallStep,
+  SandboxDescriptor,
 } from '../types.ts'
 import {
   type Assert,
@@ -21,6 +22,7 @@ import {
   refusal,
   type Same,
 } from './shared.ts'
+import { tartProblem } from './tart.ts'
 
 /** Docker's memory size: bytes, or a number with `b`, `k`, `m` or `g`. */
 const MEMORY = /^\d+(\.\d+)?[bkmg]?$/i
@@ -232,7 +234,8 @@ export function checkDockerOptions(options: DockerOptions, engine?: 'docker' | '
  * What's wrong with a sandbox descriptor of a known kind from any source (a declaration tree, a
  * config), or undefined. `maxConcurrent` is left to the check that names where it was set.
  */
-export function sandboxProblem(value: DockerSandboxDescriptor | FakeSandboxDescriptor) {
+export function sandboxProblem(value: SandboxDescriptor) {
+  if (value.kind === 'tart') return tartProblem(value)
   return value.kind === 'docker'
     ? named(
         refusal(dockerSandboxSchema, value, explainDocker, {

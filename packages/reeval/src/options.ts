@@ -46,6 +46,7 @@ import {
   capabilitiesOf,
   idPart,
   isSandboxKind,
+  maxConcurrentProblem,
   sandboxHelpers,
   sandboxKind,
 } from './sandbox/kinds.ts'
@@ -320,12 +321,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `sandbox in ${where} must come from ${sandboxHelpers()} (got ${describe(o.sandbox)})`,
       )
     }
-    const max = o.sandbox.maxConcurrent
-    if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
-      throw new UsageError(
-        `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
-      )
-    }
+    const limit = maxConcurrentProblem(o.sandbox, where)
+    if (limit) throw new UsageError(limit)
     const problem = sandboxProblem(o.sandbox)
     if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
   }

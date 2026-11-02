@@ -22,6 +22,7 @@ from reeval_python import (
     fake_harness,
     group,
     plugin,
+    tart,
 )
 from reeval_python.declare import collect_module_tree_sync
 from reeval_python.wire import options_to_wire
@@ -65,6 +66,19 @@ def test_a_duration_is_seconds_or_a_timedelta(given: Any, wire: str) -> None:
     assert options_to_wire({"timeout": given}) == {"timeout": wire}
     sandbox = options_to_wire({"sandbox": docker(start_timeout=given)})
     assert sandbox == {"sandbox": {"kind": "docker", "startTimeout": wire}}
+
+
+def test_tart_names_its_image_and_camel_cases_its_options() -> None:
+    sandbox = options_to_wire(
+        {"sandbox": tart("ghcr.io/cirruslabs/macos-sequoia-base:latest", max_concurrent=1)}
+    )
+    assert sandbox == {
+        "sandbox": {
+            "kind": "tart",
+            "image": "ghcr.io/cirruslabs/macos-sequoia-base:latest",
+            "maxConcurrent": 1,
+        }
+    }
 
 
 @pytest.mark.parametrize("given", ["1s", True, None, float("nan"), float("inf")])

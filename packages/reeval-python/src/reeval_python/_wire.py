@@ -874,7 +874,7 @@ class EvalOptionsDataCompare(TypedDict):
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
+    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -950,7 +950,7 @@ class EvalOptionsData2(TypedDict):
     runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
+    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1645,7 +1645,7 @@ class QuestionOptions(TypedDict):
     model: NotRequired[str]
 
 
-SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor"
+SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor"
 
 
 # A host environment variable, redacted everywhere reeval writes and recorded by name only. Made
@@ -1769,6 +1769,36 @@ class SnapshotOptions(TypedDict):
 
 # `header` values, the `query` string, or the request `body`.
 SubstituteIn: TypeAlias = "Literal[\"header\", \"query\", \"body\"]"
+
+
+# Reach the VM over SSH when its Tart Guest Agent doesn't answer `tart exec`: as `user` (`admin`
+# when unset), with `key`, a private key the image trusts, absolute or relative to the file it's
+# written in.
+class TartSandboxDescriptorSsh(TypedDict):
+    key: str
+    user: NotRequired[str]
+
+
+# A macOS VM on this Mac, cloned from `image` for each attempt by Tart, made by `tart()`.
+class TartSandboxDescriptor(TypedDict):
+    # CPUs each clone gets; the image's when unset.
+    cpus: NotRequired[int]
+    # Cell id; defaults to `tart:<image>`, the image's last path segment.
+    id: NotRequired[str]
+    # The VM each attempt clones: an OCI image such as
+    # `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls, or a local VM's
+    # name.
+    image: str
+    kind: Literal["tart"]
+    # The most Tart VMs at once, across the run: 1 or 2, and 2 when unset, since macOS runs at
+    # most two macOS VMs at a time.
+    maxConcurrent: NotRequired[float]
+    # Memory each clone gets: `'8g'`, `'4096m'`, or bytes; the image's when unset.
+    memory: NotRequired[str | int]
+    # Reach the VM over SSH when its Tart Guest Agent doesn't answer `tart exec`: as `user`
+    # (`admin` when unset), with `key`, a private key the image trusts, absolute or relative to
+    # the file it's written in.
+    ssh: NotRequired[TartSandboxDescriptorSsh]
 
 
 # The tokens one turn used, as its harness reported them. `input` excludes cache reads and

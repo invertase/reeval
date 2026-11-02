@@ -52,6 +52,7 @@ import {
   unbrokered,
   unbrokeredError,
 } from './options.ts'
+import { providerLimit } from './sandbox/kinds.ts'
 import type { Limits } from './scheduler/core.ts'
 import { controlTraitKeys, filtersLabel, pickTraits, traitFilters } from './traits.ts'
 import type {
@@ -504,7 +505,8 @@ function planPlugins(
 function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
   const limits: Limits = { attempts: concurrency }
   const { sandbox, harness } = planned
-  if (sandbox.maxConcurrent) limits[`sandbox:${sandboxProvider(sandbox)}`] = sandbox.maxConcurrent
+  const cap = providerLimit(sandbox)
+  if (cap) limits[`sandbox:${sandboxProvider(sandbox)}`] = cap
   if (harness.maxConcurrent) limits[`harness:${harness.kind}`] = harness.maxConcurrent
   return limits
 }
