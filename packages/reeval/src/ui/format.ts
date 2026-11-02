@@ -4,7 +4,7 @@ import { type DebugLine, debugTime } from '../view/debug.ts'
 import { triesNote } from '../view/judgments.ts'
 import type { Colors } from './colors.ts'
 import { colors, stripAnsi } from './colors.ts'
-import type { EvalResult, Progress, ReevalEvent } from './events.ts'
+import type { EvalResult, Progress } from './events.ts'
 
 export { formatDuration }
 

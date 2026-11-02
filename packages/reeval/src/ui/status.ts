@@ -127,8 +127,6 @@ const ERROR_VERB: Record<ErrorKind | 'turn', string> = {
 const MESSAGE_LINES = 4
 const LINE_MAX = 160
 
-const times = (n: number) => (n === 1 ? 'once' : `${n} times`)
-
 /** `cursor (composer-2.5)`, from the record's cell. */
 function harnessLabel(record: RunRecord, cell: CellResult): string {
   const model = record.evals
