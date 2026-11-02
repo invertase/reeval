@@ -345,7 +345,11 @@ test('an eval still going with a failed run spins, red, and only gets its ✗ on
   }))
   live.collected('evals/a.eval.ts', evals)
   const [one, two] = evals.map(
-    (e) => ({ key: e.key, attempt: { n: 1, gate: 'all', label: 'fake #1' } }) as never,
+    (e) =>
+      ({
+        key: e.key,
+        attempt: { n: 1, gate: 'all', label: 'fake #1', cell: { key: 'fake/-/fake' } },
+      }) as never,
   )
   live.start(one)
   live.start(two)
@@ -372,6 +376,41 @@ test('an eval still going with a failed run spins, red, and only gets its ✗ on
   live.end({ key: evals[1]?.key, state: 'passed', errors: [] } as never)
   assert.equal(live.files()[0]?.rows[0]?.icon, 'fail')
   assert.deepEqual(live.counts(), { done: 1, total: 1, running: 0, failed: 1, failing: 0 })
+})
+
+test('under a passRate gate, a failed run marks the eval only once its cell can no longer pass', () => {
+  const live = new LiveList('fake')
+  const evals = ['1', '2', '3', '4'].map((n) => ({
+    id: 'flaky',
+    key: `evals/a.eval.ts::flaky::${n}`,
+    group: [],
+    name: 'flaky',
+    skipped: false,
+  }))
+  live.collected('evals/a.eval.ts', evals)
+  const ref = (key: string) =>
+    ({
+      key,
+      attempt: { n: 1, gate: { passRate: 0.5 }, label: 'fake', cell: { key: 'fake/-/fake' } },
+    }) as never
+  const end = (key: string, state: 'passed' | 'failed') =>
+    live.end({ ...(ref(key) as object), state, errors: state === 'failed' ? ['no'] : [] } as never)
+  const [a, b, c, d] = evals.map((e) => e.key) as [string, string, string, string]
+  live.start(ref(a))
+  end(a, 'failed')
+  assert.equal(live.files()[0]?.rows[0]?.icon, 'running', '1 fail of 4 can still pass at 0.5')
+  for (const k of [b, c, d]) {
+    live.start(ref(k))
+    end(k, 'passed')
+  }
+  assert.equal(live.files()[0]?.rows[0]?.icon, 'pass', '3 of 4 meets passRate 0.5')
+  const strict = new LiveList('fake')
+  strict.collected('evals/a.eval.ts', evals)
+  for (const k of [a, b, c]) {
+    strict.start(ref(k))
+    strict.end({ ...(ref(k) as object), state: 'failed', errors: ['no'] } as never)
+  }
+  assert.equal(strict.files()[0]?.rows[0]?.icon, 'failing', '3 fails of 4 can no longer reach 0.5')
 })
 
 test('the footer counts the evals done, then those failed and those failing', () => {

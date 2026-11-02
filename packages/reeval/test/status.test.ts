@@ -60,7 +60,7 @@ const PLAIN = `evals/s.eval.ts
 │    ✗ 1 run failed
 │      the fixture is missing
 ├─ ✓ compares         1 of 1 variant run passed
-│    Marked helped.
+│    The marked variant helped.
 │    arm               passed  verdict
 │    plain (baseline)  0 of 1
 │    marked            1 of 1  helped
@@ -199,6 +199,6 @@ test('with-effort at runs: 3, too few for a rank test, still names its speedup',
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     run.stdout,
-    /^ {5}Worth knowing: 3 runs per side; set runs: \d+ at with-effort\.eval\.ts:\d+ to rule out a difference\. It looks (.+ and )?[\d.]+× faster\.$/m,
+    /^ {5}Worth knowing: 3 runs per side; set runs: \d+ at with-effort\.eval\.ts:\d+ to rule out a difference\. So far, \S+ (.+ and )?runs [\d.]+× faster\.$/m,
   )
 })

@@ -2,6 +2,7 @@
 // tree glyphs), coding agents (without), and the interactive list's rows. `LiveList` builds the
 // rows a run in progress shows from its events, before the record exists.
 import { formatDuration, plural } from '../text.ts'
+import type { CellGate } from '../types.ts'
 import type { Colors } from './colors.ts'
 import type { AttemptRef, CollectedEval, EvalResult, Progress } from './events.ts'
 import { attemptAxes, failureReason, outcomeOf, phaseOf } from './format.ts'
@@ -159,8 +160,33 @@ type LiveAttempt = {
   n: number
   state: 'queued' | 'running' | 'pass' | 'fail' | 'error' | 'skipped' | 'canceled'
   gated: boolean
+  /** Its cell's key and gate, once it starts; a cell's attempts decide it together. */
+  cell?: string
+  gate?: CellGate
   phase: string
   error?: string
+}
+
+/**
+ * Whether some cell's ended attempts already miss its gate, whatever its other attempts do: under
+ * `all` any fail or error, under `{ passRate }` once the passes it can still reach fall short. A
+ * `minLift` is decided only from the record.
+ */
+function gateMissed(attempts: LiveAttempt[]): boolean {
+  // An attempt not yet started has no cell yet; it may be any cell's, so each counts it as left.
+  const unplaced = attempts.filter((a) => !a.cell).length
+  const cells = new Map<string, LiveAttempt[]>()
+  for (const a of attempts) if (a.cell) cells.set(a.cell, [...(cells.get(a.cell) ?? []), a])
+  return [...cells.values()].some((own) => {
+    const gate = own[0]?.gate ?? 'all'
+    const failed = own.filter((a) => a.state === 'fail').length
+    const errored = own.filter((a) => a.state === 'error').length
+    if (gate === 'all' || gate === 'none') return failed + errored > 0
+    const passed = own.filter((a) => a.state === 'pass').length
+    const left = own.filter((a) => a.state === 'running').length + unplaced
+    const best = passed + left + failed
+    return best > 0 ? (passed + left) / best < gate.passRate : errored > 0
+  })
 }
 
 type LiveEval = { id: string; file: string; name: string; attempts: LiveAttempt[] }
@@ -205,6 +231,10 @@ export class LiveList {
     a.n = ref.attempt?.n ?? a.n
     a.axes = attemptAxes(ref.attempt, this.#harness)
     a.gated = ref.attempt?.gate !== 'none'
+    if (ref.attempt) {
+      a.cell = ref.attempt.cell.key
+      a.gate = ref.attempt.gate
+    }
     a.phase = phaseOf(undefined)
   }
 
@@ -218,6 +248,10 @@ export class LiveList {
     if (!a) return
     const outcome = outcomeOf(result)
     a.gated = result.attempt?.gate !== 'none'
+    if (result.attempt) {
+      a.cell = result.attempt.cell.key
+      a.gate = result.attempt.gate
+    }
     a.state =
       outcome === 'pass'
         ? 'pass'
@@ -266,7 +300,7 @@ export class LiveList {
     const ended = e.attempts.filter((a) => a.state !== 'queued' && a.state !== 'running')
     const running = e.attempts.some((a) => a.state === 'running')
     const decide = e.attempts.some((a) => a.gated) ? e.attempts.filter((a) => a.gated) : e.attempts
-    const failed = decide.some((a) => a.state === 'fail' || a.state === 'error')
+    const failed = gateMissed(decide)
     const done = ended.length === e.attempts.length
     // Only an eval whose every run ended gets its ✓ or ✗; one still going with a failed run
     // spins red, so the failure shows without reading as the outcome.

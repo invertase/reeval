@@ -3437,7 +3437,7 @@ export const features: Feature[] = [
     record: ({ stdout }) => {
       assert.match(
         entryOf(stdout, 'lands'),
-        /✓ lands {2}1 of 1 variant run passed\n +Marked helped\.\n +arm +passed {2}verdict\n +plain \(baseline\) {2}0 of 1\n +marked +1 of 1 {2}helped\n +✗ has the marker {2}failed on the baseline · expected\n/,
+        /✓ lands {2}1 of 1 variant run passed\n +The marked variant helped\.\n +arm +passed {2}verdict\n +plain \(baseline\) {2}0 of 1\n +marked +1 of 1 {2}helped\n +✗ has the marker {2}failed on the baseline · expected\n/,
       )
       assert.match(
         entryOf(stdout, 'lands'),
@@ -3501,7 +3501,7 @@ export const features: Feature[] = [
       const lands = entryOf(stdout, 'lands')
       assert.match(
         lands,
-        /✓ lands {2}2 of 2 variant runs passed\n +Marked helped\.\n +arm +passed {2}verdict\n +plain \(baseline\) {2}0 of 2\n +marked +2 of 2 {2}helped\n/,
+        /✓ lands {2}2 of 2 variant runs passed\n +The marked variant helped\.\n +arm +passed {2}verdict\n +plain \(baseline\) {2}0 of 2\n +marked +2 of 2 {2}helped\n/,
       )
       assert.match(lands, /^ +✗ has the marker {2}failed on the baseline · expected$/m)
       assert.match(

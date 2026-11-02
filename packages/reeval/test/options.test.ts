@@ -304,7 +304,7 @@ evaluate.each(${cases}${options})(
     assert.equal(r.code, 0, r.stdout + r.stderr)
     // The family is one row, its arms pooled over the cases.
     const pooled =
-      /✓ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Skilled helped\.\n[│ ]+arm {14}passed {2}verdict {2}vs baseline\n[│ ]+base \(baseline\) {2}0 of 6\n[│ ]+skilled {10}6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts\n/
+      /✓ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm {14}passed {2}verdict {2}vs baseline\n[│ ]+base \(baseline\) {2}0 of 6\n[│ ]+skilled {10}6 of 6 {2}helped {3}"toHaveFile ok\.txt" \+100 pts\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
     assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
@@ -399,7 +399,7 @@ evaluate.each(${cases}${options})(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Skilled helped\.\n[│ ]+arm +passed {2}verdict +vs baseline\n[│ ]+base \(baseline\) {2}0 of 6\n[│ ]+skilled {10}6 of 6 {2}helped, not by minLift 60 {2}"toHaveFile ok\.txt" \+100 pts\n/,
+      /✗ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm +passed {2}verdict +vs baseline\n[│ ]+base \(baseline\) {2}0 of 6\n[│ ]+skilled {10}6 of 6 {2}helped, not by minLift 60 {2}"toHaveFile ok\.txt" \+100 pts\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
@@ -476,7 +476,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     // A successful compare reads as one: the control's expected misses aren't failures.
     const block =
-      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+Skilled helped\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}0 of 2\n[│ ]+skilled {10}2 of 2 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the baseline 2 of 2 · expected\n/
+      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+The skilled variant helped\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}0 of 2\n[│ ]+skilled {10}2 of 2 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the baseline 2 of 2 · expected\n/
     assert.match(r.stdout, block)
     assert.match(r.stdout, /^Done in \S+ · 1 passed · 2 not gated$|^Done in \S+ · 1 passed$/m)
 
@@ -559,11 +559,11 @@ evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], 
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
     assert.match(
       r.stdout,
-      /✗ all gated {2}1 of 2 runs passed\n[│ ]+Failed on the baseline; skilled helped\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}0 of 1\n[│ ]+skilled {10}1 of 1 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the baseline\n/,
+      /✗ all gated {2}1 of 2 runs passed\n[│ ]+Failed on the baseline; the skilled variant helped\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}0 of 1\n[│ ]+skilled {10}1 of 1 {2}helped\n[│ ]+✗ toHaveFile ok\.txt {2}failed on the baseline\n/,
     )
     assert.match(
       r.stdout,
-      /● no worse +1 of 2 runs passed\n[│ ]+Skilled made it worse\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}1 of 1\n[│ ]+skilled {10}0 of 1 {2}made it worse, not by minLift 50\n(?:[│ ]+.+\n)*?[│ ]+the variant is worse\n/,
+      /● no worse +1 of 2 runs passed\n[│ ]+The skilled variant made it worse\.\n[│ ]+arm {14}passed {2}verdict\n[│ ]+base \(baseline\) {2}1 of 1\n[│ ]+skilled {10}0 of 1 {2}made it worse, not by minLift 50\n(?:[│ ]+.+\n)*?[│ ]+the variant is worse\n/,
     )
     assert.match(r.stdout, /^Done in \S+ · 1 failed · 1 not gated$/m)
   })

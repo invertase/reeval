@@ -145,6 +145,29 @@ export function leanText(m: Measure): string {
   return `${m.text}, but ${has} can't confirm it; ${at} is the least that can`
 }
 
+/**
+ * A measure as what the variant does, to follow its name or `It`: `runs 5× faster`, `uses 2.3×
+ * more tokens`, `scores 0.97 higher on judge "tidy"`, `passes "builds" 50 points more often`.
+ */
+export function measurePhrase(m: Measure): string {
+  if (m.verdict === 'same' || m.estimate === null) return m.text
+  const label = m.label === null ? '' : `"${clip(m.label, LABEL_CHARS)}" `
+  switch (m.measure) {
+    case 'agentMs':
+      return `runs ${m.text}`
+    case 'tools':
+    case 'tokens':
+      return `uses ${m.text}`
+    case 'judge':
+      return `scores ${Math.abs(m.estimate).toFixed(2)} ${m.estimate > 0 ? 'higher' : 'lower'} on judge ${label.trimEnd()}`
+    case 'pass':
+    case 'check':
+      return `passes ${label}${Math.round(Math.abs(m.estimate) * 100)} points ${m.estimate > 0 ? 'more' : 'less'} often`
+    default:
+      return m.text
+  }
+}
+
 /** Two-sided p of a pooled two-proportion z test: it screens a rate's lean, never its verdict. */
 function proportionP(v: Side, c: Side): number {
   const pooled = (v.pass + c.pass) / (v.counted + c.counted)

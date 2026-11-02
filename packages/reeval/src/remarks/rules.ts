@@ -17,7 +17,14 @@ import {
   smallSample,
 } from '../stats.ts'
 import { clip } from '../text.ts'
-import { boundOf, leanText, type Measure, type Reading, tieOf } from '../view/measures.ts'
+import {
+  boundOf,
+  leanText,
+  type Measure,
+  measurePhrase,
+  type Reading,
+  tieOf,
+} from '../view/measures.ts'
 import type { Remark } from '../view/remarks.ts'
 import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
@@ -136,15 +143,17 @@ const shortLeans = (measures: readonly Measure[] | null | undefined) => {
   const short = (measures ?? []).filter(
     (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
   )
-  return short.length ? ` It looks ${listed(short.map(leanText))}.` : ''
+  return short.length
+    ? ` It ${listed(short.map((m) => leanText({ ...m, text: measurePhrase(m) })))}.`
+    : ''
 }
 
-/** ` It looks 12× faster.`: `shortLeans` without the runs, for a remark's brief. */
-const briefLeans = (measures: readonly Measure[] | null | undefined) => {
+/** ` So far, marked runs 12× faster.`: `shortLeans` without the runs, for a remark's brief. */
+const briefLeans = (variant: string, measures: readonly Measure[] | null | undefined) => {
   const short = (measures ?? []).filter(
     (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
   )
-  return short.length ? ` It looks ${listed(short.map((m) => m.text))}.` : ''
+  return short.length ? ` So far, ${variant} ${listed(short.map(measurePhrase))}.` : ''
 }
 
 /**
@@ -327,13 +336,13 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const these = others || also ? 'these differences' : 'this difference'
   const per = `${fewest} per side; set runs:`
   const lead = held
-    ? `${per} ${COMPARE_RUNS} at ${location(at)}, so a split this wide is less likely chance.`
+    ? `${per} ${COMPARE_RUNS} at ${location(at)}, so a split this wide is less likely by chance.`
     : !gap
       ? `${per} ${needed} at ${location(at)} to rule out a difference.`
       : needed
         ? `${per} ${needed} at ${location(at)} to confirm ${these}.`
         : undefined
-  const brief = lead && `${lead}${briefLeans(variant.measures)}`
+  const brief = lead && `${lead}${briefLeans(armOf(variant), variant.measures)}`
   return [
     ...apart,
     {

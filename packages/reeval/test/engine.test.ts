@@ -1926,13 +1926,13 @@ evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'no
     // The control's two failures don't fail it: only the gated variant's 2 of 2 gate.
     assert.match(
       r.stdout,
-      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}Skilled helped\.\n│ {4}arm {15}passed {2}verdict\n│ {4}plain \(baseline\) {2}0 of 2\n/m,
+      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}The skilled variant helped\.\n│ {4}arm {15}passed {2}verdict\n│ {4}plain \(baseline\) {2}0 of 2\n/m,
     )
     assert.match(r.stdout, /^├─ ✗ repeated {2}3 of 4 runs passed\n│ {4}Passed 3 of 4 on fake\.\n/m)
     // Nothing gates a study, so it reads ●, never ✓ beside 0 of 4.
     assert.match(
       r.stdout,
-      /^└─ ● studied {3}0 of 4 runs passed\n {5}Skilled passed as often as the baseline\.\n {5}arm {15}passed {2}verdict\n {5}plain \(baseline\) {2}0 of 2\n/m,
+      /^└─ ● studied {3}0 of 4 runs passed\n {5}The skilled variant passed as often as the baseline\.\n {5}arm {15}passed {2}verdict\n {5}plain \(baseline\) {2}0 of 2\n/m,
     )
   })
 

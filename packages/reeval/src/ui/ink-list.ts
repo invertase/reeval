@@ -225,7 +225,8 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   if (quitting) return h(Box, { flexDirection: 'column' }, logs)
 
   const { rows: rowsTall, columns } = size
-  const open = rows.find((r) => r.id === expanded)
+  const here = rows[selected]
+  const open = here && here.id === expanded ? here : undefined
   const more =
     open &&
     !full &&

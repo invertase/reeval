@@ -259,9 +259,9 @@ function compareHeadline(
   const found =
     rows.length === 1 && one
       ? one.effect === 'better' || one.effect === 'worse'
-        ? `${one.v} ${EFFECT[one.effect]}`
+        ? `the ${one.v} variant ${EFFECT[one.effect]}`
         : one.effect === 'same'
-          ? `${one.v} passed as often as the baseline`
+          ? `the ${one.v} variant passed as often as the baseline`
           : ''
       : [
           helped ? `${helped} of ${rows.length} variants helped` : '',
@@ -490,7 +490,8 @@ function checkLines(
     if (shown) lines.push({ depth: 1, text: shown, tone: 'dim' })
     const stderr = stderrHead(message)
     if (stderr) lines.push({ depth: 1, text: `stderr: ${clip(stderr, LINE_MAX)}`, tone: 'dim' })
-    for (const line of rest) lines.push({ depth: 1, text: line, tone: 'dim', only: 'full' })
+    const after = stderr ? rest.filter((l) => l.trim() !== stderr) : rest
+    for (const line of after) lines.push({ depth: 1, text: line, tone: 'dim', only: 'full' })
   }
   return lines
 }
