@@ -219,7 +219,10 @@ evaluate('serves', { runs: 2, environment: server }, async (c) => {
     })
     const r = await runCli(p.dir, ['run'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    return readRun(p.dir).run
+    const { run } = readRun(p.dir)
+    // A fake turn's agent time is scheduling jitter, which four runs a side can separate.
+    for (const e of run.evals) for (const a of e.attempts) a.timings.agentMs = 1000
+    return run
   })()
   return rulesRecord
 }

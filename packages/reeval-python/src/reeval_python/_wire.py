@@ -1105,6 +1105,9 @@ class FakeHarnessDescriptor(TypedDict):
     # Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to
     # true; null reports a call whose result never came.
     tools: NotRequired[list[FakeHarnessDescriptorToolsItem]]
+    # Each turn's recorded agent time, exactly, whatever the wall clock says: a test can compare
+    # agent time without scheduling jitter, which four runs a side can tell apart.
+    turnMs: NotRequired[float]
     # Files and message used instead when the environment gives the agent a skill.
     withSkill: NotRequired[FakeHarnessDescriptorWithSkill]
 
@@ -2044,6 +2047,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "startTimeout",
         "startedAt",
         "toolCallId",
+        "turnMs",
         "withSkill",
     }
 )

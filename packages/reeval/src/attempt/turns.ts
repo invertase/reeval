@@ -149,7 +149,8 @@ export function turnSender(
         durationMs: Date.now() - sendStarted,
       }
     })
-    const { raw, rejectedKey, reasoningMs, ...sent } = await a
+    const timedBefore = a.record.timings.agentMs
+    const { raw, rejectedKey, reasoningMs, agentMs, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
@@ -161,7 +162,8 @@ export function turnSender(
         cancel()
         watch?.close()
       })
-    const sendWallMs = Date.now() - sendStarted
+    const sendWallMs = agentMs ?? Date.now() - sendStarted
+    if (agentMs !== undefined) a.record.timings.agentMs = timedBefore + agentMs
     const startup = await watch?.end()
     const timedOut = startup?.timedOut && mcpTimeoutMessage(startup.timedOut)
     const seenAt = startup?.at ?? Date.now()
