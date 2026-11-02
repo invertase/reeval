@@ -1182,10 +1182,32 @@ export type TartSandboxDescriptor = {
    */
   ssh?: { user?: string; key: string }
 }
+/** A boat.dev machine size: `small` is 2 vCPUs and 4 GB. */
+export type BoatMachineType = 'small' | 'default' | 'large' | 'xlarge'
+/** The host variable holding a Boat API key, made by `secret.fromEnv`. */
+export type BoatApiKey = { kind: 'secret'; from: string }
+/** A boat.dev VM per attempt, made by `boat()` from `reeval/sandbox/boat`. */
+export type BoatSandboxDescriptor = {
+  kind: 'boat'
+  /** Cell id; defaults to `boat`, or `boat:<type>` with a `type`. */
+  id?: string
+  /** The host variable with the Boat API key, read on the host only. */
+  apiKey: BoatApiKey
+  /**
+   * The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own:
+   * lowercase letters, digits and dashes.
+   */
+  prefix: string
+  /** The machine size. Default `small`. */
+  type?: BoatMachineType
+  /** The most Boat sandboxes at once, across the run. */
+  maxConcurrent?: number
+}
 export type SandboxDescriptor =
   | FakeSandboxDescriptor
   | DockerSandboxDescriptor
   | TartSandboxDescriptor
+  | BoatSandboxDescriptor
 
 /**
  * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by

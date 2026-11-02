@@ -25,6 +25,7 @@ import {
   declaredTodoSchema,
   evalOptionsDataSchema,
 } from './declaration.ts'
+import { boatSandboxSchema } from './boat.ts'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
 import {
   environmentDataSchema,
@@ -89,6 +90,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DockerSandboxDescriptor: dockerSandboxSchema,
   FakeSandboxDescriptor: fakeSandboxSchema,
   TartSandboxDescriptor: tartSandboxSchema,
+  BoatSandboxDescriptor: boatSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

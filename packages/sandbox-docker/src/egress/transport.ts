@@ -1,7 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { docker } from '../docker-cli.ts'
 import { type Engine, engineEnv, engineSpec } from '../engine.ts'
-import { type RunResult, run } from '../process.ts'
+import { type RunResult, run, shellQuote } from '../process.ts'
 import { traceDocker } from '../trace.ts'
 
 /** How a host command ended, as a debug trace records it. */
@@ -74,6 +74,81 @@ export function execSpawn(
   })
   child.once('close', (code) => transport.trace?.(argv, startedAt, { exitCode: code, stderr }))
   return child
+}
+
+/** A VM reached over SSH with a per-sandbox key and a pinned host key. */
+export type SshTarget = {
+  host: string
+  port: number
+  /** The login user, who has passwordless `sudo`. */
+  user: string
+  /** The private key `ssh -i` takes. */
+  identityFile: string
+  /** A known_hosts file whose one line names {@link hostKeyAlias}. */
+  knownHostsFile: string
+  /** The name the host key is pinned under, since several VMs share one NAT host. */
+  hostKeyAlias: string
+  /** Where the connection's control socket lives, so every command shares one connection. */
+  controlPath?: string
+}
+
+/**
+ * The host argv that runs `remote`, one shell command line, on `target`. ssh joins its remote
+ * arguments into one line for the login shell, so the caller quotes it. No user config applies.
+ */
+export function sshArgv(target: SshTarget, remote: string): string[] {
+  const shared =
+    target.controlPath && process.platform !== 'win32'
+      ? [
+          '-o',
+          'ControlMaster=auto',
+          '-o',
+          `ControlPath=${target.controlPath}`,
+          '-o',
+          'ControlPersist=300',
+        ]
+      : []
+  return [
+    'ssh',
+    '-T',
+    '-F',
+    'none',
+    '-i',
+    target.identityFile,
+    '-p',
+    String(target.port),
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    'IdentitiesOnly=yes',
+    '-o',
+    'StrictHostKeyChecking=yes',
+    '-o',
+    `UserKnownHostsFile=${target.knownHostsFile}`,
+    '-o',
+    'GlobalKnownHostsFile=none',
+    '-o',
+    `HostKeyAlias=${target.hostKeyAlias}`,
+    '-o',
+    'ConnectTimeout=20',
+    '-o',
+    'ServerAliveInterval=15',
+    '-o',
+    'ServerAliveCountMax=4',
+    '-o',
+    'LogLevel=ERROR',
+    ...shared,
+    `${target.user}@${target.host}`,
+    remote,
+  ]
+}
+
+/** `ssh -T` into a VM, as root through `sudo -n`, with sudo's own `secure_path`. */
+export function sshTransport(target: SshTarget): ExecTransport {
+  return {
+    argv: (command) => sshArgv(target, `sudo -n -- ${command.map(shellQuote).join(' ')}`),
+    trace: (argv, startedAt, end) => traceDocker(argv.slice(1), startedAt, end, 'ssh'),
+  }
 }
 
 /** `docker exec` (or `podman exec`) into a running container, as root. */

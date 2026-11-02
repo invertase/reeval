@@ -127,4 +127,10 @@ export {
   type SandboxLimits,
   type SessionOptions,
 } from './session.ts'
+export {
+  type SshTarget,
+  sshArgv,
+  sshTransport,
+} from './egress/transport.ts'
+export { createSshSession, type SshSessionOptions } from './ssh-session.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'

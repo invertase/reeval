@@ -202,7 +202,7 @@ describe('what a sandbox can enforce', () => {
     assert.equal(unenforceable({ policy: 'allow-all', auto: [] }, vm, 'e'), undefined)
     assert.match(
       unenforceable({ policy: 'proxy', auto: [] }, vm, 'e') ?? '',
-      /^e runs under egress 'proxy', .* the tart sandbox keeps its own network, .* Set egress: 'allow-all'\.$/,
+      /^e runs under egress 'proxy', .* the tart sandbox enforces no egress policy: .* Set egress: 'allow-all' to run it there, or run it in docker\(\)\.$/,
     )
     assert.match(
       unenforceable({ policy: 'deny-all', auto: [] }, vm, 'e') ?? '',

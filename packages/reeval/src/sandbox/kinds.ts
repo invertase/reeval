@@ -6,6 +6,7 @@ import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
 import { TART_MAX_CONCURRENT } from '../contract/tart.ts'
 import type {
+  BoatSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   InstallStep,
@@ -204,11 +205,56 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
   },
 }
 
+/**
+ * Enforces nothing yet: the VM keeps its own network, so only `allow-all` plans on it. The gateway
+ * still brokers credentials and records what goes through it.
+ */
+const BOAT_EGRESS: EgressCapabilities = { enforce: 'none', record: true }
+
+const BOAT: SandboxKind<BoatSandboxDescriptor> = {
+  helpers: ['boat'],
+  capabilities: {
+    platform: 'linux',
+    egress: BOAT_EGRESS,
+    brokers: true,
+    harnessSession: true,
+    isolated: true,
+    processTable: true,
+    listeners: 'proc',
+    images: false,
+    preflight: true,
+    pluginBuilds: false,
+  },
+  provider: () => 'boat',
+  id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
+  hostPaths: {},
+  buildsAtStart: () => false,
+  privileges: () => ({ root: false, capabilities: [] }),
+  async create(sandbox, options) {
+    const { createBoatSandbox } = await import('./boat.ts')
+    return createBoatSandbox(sandbox, options)
+  },
+  async capacity(sandbox) {
+    const { boatCapacity } = await import('./boat.ts')
+    const free = await boatCapacity(sandbox)
+    if (free === null) return null
+    const machines = Math.max(1, free)
+    return { cpus: machines, memoryBytes: machines * 1e9 }
+  },
+  async cleanupRun(runId, sandboxes) {
+    // Without the run's descriptors there's no key or prefix to look under; each sandbox's TTL
+    // is the backstop.
+    if (!sandboxes?.length) return
+    const { removeRunSandboxes } = await import('./boat.ts')
+    await removeRunSandboxes(runId, sandboxes)
+  },
+}
+
 type Kinds = {
   [K in SandboxDescriptor['kind']]: SandboxKind<Extract<SandboxDescriptor, { kind: K }>>
 }
 
-export const SANDBOX_KINDS: Kinds = { docker: DOCKER, fake: FAKE, tart: TART }
+export const SANDBOX_KINDS: Kinds = { docker: DOCKER, fake: FAKE, tart: TART, boat: BOAT }
 
 export type SandboxKindName = keyof Kinds
 

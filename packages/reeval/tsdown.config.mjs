@@ -157,6 +157,7 @@ export default defineConfig({
     index: 'src/index.ts',
     harness: 'src/harness.ts',
     sandbox: 'src/sandbox.ts',
+    'sandbox/boat': 'src/sandbox-boat.ts',
     judge: 'src/judge.ts',
     gateway: 'src/gateway.ts',
     'view/index': 'src/view/index.ts',
@@ -173,7 +174,8 @@ export default defineConfig({
   deps: {
     alwaysBundle: [/^@reeval\//, ...patched],
     onlyBundle: false,
-    onlyImport: Object.keys(pkg.dependencies),
+    // An optional peer is imported only where reeval uses it (src/sandbox/boat.ts), never bundled.
+    onlyImport: [...Object.keys(pkg.dependencies), ...Object.keys(pkg.peerDependencies)],
   },
   plugins: [
     {
@@ -225,6 +227,12 @@ export default defineConfig({
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
         if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//.test(code))
           throw new Error(`dist/${file} imports an @reeval/* package`)
+        // A static import of an optional peer would fail to load wherever it isn't installed.
+        for (const peer of Object.keys(pkg.peerDependencies)) {
+          const name = peer.replace(/[/.]/g, '\\$&')
+          if (new RegExp(`(?:\\bfrom\\s*|\\bimport\\s+|require\\()['"]${name}['"]`).test(code))
+            throw new Error(`dist/${file} imports ${peer} statically: import() it where it's used`)
+        }
       }
       const thirdParty = [...bundled]
       for (const name of patched) {

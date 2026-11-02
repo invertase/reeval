@@ -1185,6 +1185,7 @@ async function executeRun(
     }
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
+      sandboxes: plan.sandboxes,
       profile,
       questionModels: [...questionModels],
       judges: [...judges.values()],

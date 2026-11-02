@@ -85,6 +85,11 @@ export async function prepareEnvironment(
       `${from ?? 'none recorded'} · ${kind.helpers[0]}() prepared it before the run and starts each attempt from it`,
     )
   } else {
-    debugLog('image', `none: the ${spec.sandbox.kind} sandbox runs on the host`)
+    debugLog(
+      'image',
+      kind.capabilities.isolated
+        ? `none: the ${spec.sandbox.kind} sandbox starts from its provider's base`
+        : `none: the ${spec.sandbox.kind} sandbox runs on the host`,
+    )
   }
 }
