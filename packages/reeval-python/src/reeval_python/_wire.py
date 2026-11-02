@@ -405,6 +405,42 @@ class AttemptStart(TypedDict):
     type: Literal["start"]
 
 
+# The host variable holding a Boat API key, made by `secret.fromEnv`.
+BoatApiKey = TypedDict(
+    "BoatApiKey",
+    {
+        "from": "str",
+        "kind": "Literal[\"secret\"]",
+    },
+)
+
+
+# The host variable with the Boat API key, read on the host only.
+BoatSandboxDescriptorApiKey = TypedDict(
+    "BoatSandboxDescriptorApiKey",
+    {
+        "from": "str",
+        "kind": "Literal[\"secret\"]",
+    },
+)
+
+
+# A boat.dev VM per attempt, made by `boat()` from `reeval/sandbox/boat`.
+class BoatSandboxDescriptor(TypedDict):
+    # The host variable with the Boat API key, read on the host only.
+    apiKey: BoatSandboxDescriptorApiKey
+    # Cell id; defaults to `boat`, or `boat:<type>` with a `type`.
+    id: NotRequired[str]
+    kind: Literal["boat"]
+    # The most Boat sandboxes at once, across the run.
+    maxConcurrent: NotRequired[float]
+    # The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own:
+    # lowercase letters, digits and dashes.
+    prefix: str
+    # The machine size. Default `small`.
+    type: NotRequired[Literal["small", "default", "large", "xlarge"]]
+
+
 class CaptureConsoleItem(TypedDict):
     level: Literal["error", "warning", "info", "log", "debug"]
     source: str
@@ -874,7 +910,7 @@ class EvalOptionsDataCompare(TypedDict):
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -950,7 +986,7 @@ class EvalOptionsData2(TypedDict):
     runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1645,7 +1681,7 @@ class QuestionOptions(TypedDict):
     model: NotRequired[str]
 
 
-SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor"
+SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor | BoatSandboxDescriptor"
 
 
 # A host environment variable, redacted everywhere reeval writes and recorded by name only. Made
@@ -1996,6 +2032,7 @@ WebEventType: TypeAlias = "Literal[\"web-search\", \"web-fetch\"]"
 # reeval's camelCase keys: the SDK takes each in snake_case too.
 CAMEL_KEYS: frozenset[str] = frozenset(
     {
+        "apiKey",
         "atMs",
         "bestOf",
         "cacheRead",

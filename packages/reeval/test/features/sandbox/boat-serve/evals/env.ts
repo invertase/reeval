@@ -7,4 +7,4 @@ export const vm = defineEnvironment('vm', { sandbox: boat(), egress: 'allow-all'
 export const server = `node -e "require('http').createServer((q, s) => s.end('ok')).listen(process.env.PORT)"`
 
 /** How many of the server's processes are left, after kill(). */
-export const left = `pgrep -u reeval -f "[c]reateServer" | wc -l`
+export const left = `pgrep -u reeval -f "create[S]erver" | wc -l`
