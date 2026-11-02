@@ -263,8 +263,8 @@
 | An error outside any attempt: printed first, `N run error` in the tally, `errors` in the record, and `outcome: fail` with exit 1 | ✓ 1 | — | ● 1 | — | — | — |
 | An eval with cases' block reads every case: its columns, pooled arms and summed compare questions | ✓ 1 | — | — | — | — | — |
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 4 | — | — | — | — | ◐ 1 (1 without a canary) |
-| `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — | — |
-| Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
+| `-vv`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — | — |
+| Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `-vv`, never in the history folder | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `reeval clean` | ✓ 2 | — | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 1 | — | — | — | — | — |

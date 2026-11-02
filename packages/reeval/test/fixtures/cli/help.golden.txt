@@ -45,7 +45,7 @@ Usage:
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown
-    -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+    -vv                         Also raw payloads, docker commands, headers and DNS decisions, and
                                 keep every attempt's trace.ndjson (else only failing attempts')
                                 Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,

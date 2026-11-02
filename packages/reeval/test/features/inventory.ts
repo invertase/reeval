@@ -2043,13 +2043,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'trace',
     area: 'CLI and runner',
-    name: '`-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
+    name: '`-vv`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
     unit: ['reeval/test/debug.test.ts', 'reeval/test/docker.test.ts'],
   },
   {
     id: 'debug.files',
     area: 'CLI and runner',
-    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
+    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `-vv`, never in the history folder',
     unit: ['reeval/test/debug.test.ts'],
     real: ['e2e › reeval run --record -v'],
   },

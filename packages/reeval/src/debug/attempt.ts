@@ -1,6 +1,6 @@
 // One attempt's debug trace, on the worker. `-v` lines go to debug.log (always) and, with -v,
 // to the terminal. Raw payloads go to a size-capped buffer, like a flight recorder, which is
-// written to trace.ndjson only when the attempt fails or with --trace. Everything is redacted.
+// written to trace.ndjson only when the attempt fails or with -vv. Everything is redacted.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs'
 import { writeFile } from 'node:fs/promises'

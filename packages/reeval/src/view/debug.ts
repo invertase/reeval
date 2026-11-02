@@ -4,7 +4,7 @@
  *
  *   debug.log        the `-v` trace, one line per event, always written
  *   requests.ndjson  one line per egress gateway request, always written
- *   trace.ndjson     raw payloads (`-vv`), written when the attempt fails or with `--trace`
+ *   trace.ndjson     raw payloads (`-vv`), written when the attempt fails or with `-vv`
  */
 
 export const DEBUG_LOG = 'debug.log'

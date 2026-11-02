@@ -273,9 +273,8 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
 
 type QuestionRunner = ReturnType<typeof questionRunner>
 
-/** `-v` is 1 and `-vv` (or `--trace`) is 2. */
+/** `-v` is 1 and `-vv` is 2. */
 function verbosityOf(flags: Flags): 0 | 1 | 2 {
-  if (flags.trace) return 2
   return Math.min(2, flags.verbose?.length ?? 0) as 0 | 1 | 2
 }
 
