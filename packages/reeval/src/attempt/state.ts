@@ -3,6 +3,7 @@ import type { ResolvedEnvironment } from '../environment/resolve.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import type { PlannedAttempt } from '../options.ts'
 import type { Sandbox } from '../sandbox/index.ts'
+import { sandboxKind } from '../sandbox/kinds.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
 import type {
   BackgroundHandle,
@@ -183,8 +184,7 @@ export function setupAllowance(planned: PlannedAttempt): number {
     0,
   )
   const { sandbox } = planned
-  const building =
-    sandbox.kind === 'docker' && !!(sandbox.from || sandbox.dockerfile || sandbox.install?.length)
+  const building = sandboxKind(sandbox).buildsAtStart(sandbox)
   return setupMs + (building ? SETUP_BUDGET_MS : 0) + 2 * startTimeoutMs(planned.harness)
 }
 

@@ -24,6 +24,7 @@ import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plu
 import { isObjectLike } from './object.ts'
 import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
+import { isSandboxKind, SANDBOX_KINDS, sandboxHelpers } from './sandbox/kinds.ts'
 import type {
   EgressPolicy,
   Environment,
@@ -1279,13 +1280,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
 
-/** Throws for a Dockerfile, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
+/** Throws for a file, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
 export type MissingDockerfile = (field: string, full: string) => never
 
 /**
- * A sandbox descriptor written as data with its host paths made absolute against `base`, as
- * `docker({ dockerfile })` and `fakeSandbox({ dir })` resolve theirs: a Dockerfile, which must be
- * a file, and a fake sandbox's `dir`. Any other value is left for the checks to name.
+ * A sandbox descriptor written as data with its kind's host paths made absolute against `base`, as
+ * `docker({ dockerfile })` and `fakeSandbox({ dir })` resolve theirs; a `file` path must be a
+ * file. Any other value is left for the checks to name.
  */
 export function sandboxPaths(
   value: unknown,
@@ -1293,15 +1294,18 @@ export function sandboxPaths(
   field: string,
   missing: MissingDockerfile,
 ): unknown {
-  if (!isRecord(value)) return value
-  if (value.kind === 'docker' && isPath(value.dockerfile)) {
-    const full = toPath(value.dockerfile, base)
-    if (!statSync(full, { throwIfNoEntry: false })?.isFile()) missing(`${field}.dockerfile`, full)
-    return { ...value, dockerfile: full }
+  if (!isRecord(value) || !isSandboxKind(value.kind)) return value
+  let out = value
+  for (const [key, kind] of Object.entries(SANDBOX_KINDS[value.kind].hostPaths)) {
+    const path = value[key]
+    if (!isPath(path)) continue
+    const full = toPath(path, base)
+    if (kind === 'file' && !statSync(full, { throwIfNoEntry: false })?.isFile()) {
+      missing(`${field}.${key}`, full)
+    }
+    out = { ...out, [key]: full }
   }
-  return value.kind === 'fake' && isPath(value.dir)
-    ? { ...value, dir: toPath(value.dir, base) }
-    : value
+  return out
 }
 
 /**
@@ -1472,10 +1476,9 @@ export const profileSandbox = (
   )
 
 function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
-  const kind = isObjectLike(value) ? value.kind : undefined
-  if (!isObjectLike(value) || (kind !== 'docker' && kind !== 'fake')) {
+  if (!isObjectLike(value) || !isSandboxKind(value.kind)) {
     throw new DefinitionError(
-      `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${JSON.stringify(value)})`,
+      `sandbox in ${where} must come from ${sandboxHelpers()} (got ${JSON.stringify(value)})`,
     )
   }
   const max = value.maxConcurrent

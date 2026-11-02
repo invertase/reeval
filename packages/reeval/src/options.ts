@@ -1,6 +1,5 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { pairFactors } from './compare/pairs.ts'
 import { mergeQuestion, withQuestionDefaults } from './compare/state.ts'
@@ -43,6 +42,13 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import {
+  capabilitiesOf,
+  idPart,
+  isSandboxKind,
+  sandboxHelpers,
+  sandboxKind,
+} from './sandbox/kinds.ts'
 import { COMPARE_RUNS } from './stats.ts'
 import type {
   CaptureOptions,
@@ -61,7 +67,6 @@ import type {
   GatePolicy,
   HarnessDescriptor,
   HarnessEdit,
-  InstallStep,
   JudgeOptions,
   PairFactor,
   PinnableKey,
@@ -153,44 +158,19 @@ const PINNABLE: PinnableKey[] = ['harnesses', 'runs', 'compare']
 
 const ID = /^[A-Za-z0-9._:@+\-=[\]]+$/
 
-const sanitize = (text: string) =>
-  (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
-
 export function harnessId(h: HarnessDescriptor): string {
   if (h.id) return h.id
   const effort = harnessEffort(h)
-  const suffix = effort ? `[effort=${sanitize(effort)}]` : ''
+  const suffix = effort ? `[effort=${idPart(effort)}]` : ''
   if (h.kind === 'fake') return `fake${suffix}`
-  const base = h.model ? `${h.kind}:${sanitize(h.model)}` : h.kind
+  const base = h.model ? `${h.kind}:${idPart(h.model)}` : h.kind
   return `${base}${suffix}`
 }
 
-function installId(install: readonly InstallStep[] | undefined): string {
-  if (!install?.length) return ''
-  const key = JSON.stringify(
-    install.map((step) =>
-      typeof step === 'string' ? step : { run: step.run, timeout: step.timeout },
-    ),
-  )
-  return `+${createHash('sha256').update(key).digest('hex').slice(0, 8)}`
-}
-
 /** The provider a sandbox runs on: its kind, or `podman` for a Docker sandbox on Podman. */
-export const sandboxProvider = (s: SandboxDescriptor): 'docker' | 'podman' | 'fake' =>
-  s.kind === 'docker' && s.engine === 'podman' ? 'podman' : s.kind
+export const sandboxProvider = (s: SandboxDescriptor): string => sandboxKind(s).provider(s)
 
-export function sandboxId(s: SandboxDescriptor): string {
-  if (s.id) return s.id
-  if (s.kind === 'fake') return 'fake'
-  const install = s.kind === 'docker' ? installId(s.install) : ''
-  const engine = s.engine ?? 'docker'
-  if (s.dockerfile) {
-    const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
-    return `${engine}:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
-  }
-  const image = s.image ?? s.from
-  return image ? `${engine}:${sanitize(image)}${install}` : `${engine}${install}`
-}
+export const sandboxId = (s: SandboxDescriptor): string => s.id ?? sandboxKind(s).id(s)
 
 /** The planned attempts' sandboxes by id, once each, or `fallback`'s when none is planned. */
 export function plannedSandboxIds(
@@ -335,10 +315,9 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   const judgeIssue = o.judge !== undefined && judgeProblem(o.judge, { at: 'options', where })
   if (judgeIssue) throw new UsageError(judgeIssue)
   if (o.sandbox !== undefined) {
-    const kind = (o.sandbox as { kind?: string }).kind
-    if (kind !== 'docker' && kind !== 'fake') {
+    if (!isSandboxKind((o.sandbox as { kind?: unknown }).kind)) {
       throw new UsageError(
-        `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${describe(o.sandbox)})`,
+        `sandbox in ${where} must come from ${sandboxHelpers()} (got ${describe(o.sandbox)})`,
       )
     }
     const max = o.sandbox.maxConcurrent
@@ -1231,11 +1210,11 @@ export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
   return [...out]
 }
 
-/** Secrets a Docker attempt would get as real values, because they have no `hosts`. */
+/** Secrets an isolated sandbox's attempt would get as real values, because they have no `hosts`. */
 export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): UnbrokeredSecret[] {
   const out = new Map<string, UnbrokeredSecret>()
   for (const a of attempts) {
-    if (a.sandbox.kind !== 'docker') continue
+    if (!capabilitiesOf(a.sandbox).isolated) continue
     for (const s of unbrokeredSecrets(env, a.environment.layers)) out.set(s.label, s)
   }
   return [...out.values()]
@@ -1253,16 +1232,26 @@ const withHosts = (env: EnvVars, attempt: PlannedAttempt): string[] => [
   ),
 ]
 
-/** The secrets an attempt brokers: only Docker's egress gateway swaps a placeholder for its value. */
+/** The secrets an attempt brokers: only a sandbox that brokers swaps a placeholder for its value. */
 export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
-  attempt.sandbox.kind === 'docker' ? withHosts(env, attempt) : []
+  capabilitiesOf(attempt.sandbox).brokers ? withHosts(env, attempt) : []
 
-/** The plan's note for secrets with `hosts` on the fake sandbox, which only ever has their placeholder. */
-function unbrokeredOnFake(env: EnvVars, attempts: PlannedAttempt[]): string[] {
-  const names = [
-    ...new Set(attempts.flatMap((a) => (a.sandbox.kind === 'fake' ? withHosts(env, a) : []))),
-  ]
-  return names.length ? [`not brokered (fake sandbox, placeholder only): ${names.join('; ')}`] : []
+/** The plan's note for secrets with `hosts` on a sandbox that can't broker them, which only ever has their placeholder. */
+function unbrokeredHere(env: EnvVars, attempts: PlannedAttempt[]): string[] {
+  const byProvider = new Map<string, Set<string>>()
+  for (const a of attempts) {
+    if (capabilitiesOf(a.sandbox).brokers) continue
+    const names = withHosts(env, a)
+    if (!names.length) continue
+    const provider = sandboxProvider(a.sandbox)
+    const seen = byProvider.get(provider) ?? new Set()
+    for (const name of names) seen.add(name)
+    byProvider.set(provider, seen)
+  }
+  return [...byProvider].map(
+    ([provider, names]) =>
+      `not brokered (${provider} sandbox, placeholder only): ${[...names].join('; ')}`,
+  )
 }
 
 /** The host variables an attempt's secrets read, brokered or not. */
@@ -1322,11 +1311,12 @@ export function sandboxWarnings(
   const out: SandboxWarning[] = []
   const seen = new Set<string>()
   for (const a of attempts) {
-    if (a.sandbox.kind !== 'docker') continue
+    const privileges = sandboxKind(a.sandbox).privileges(a.sandbox)
+    if (!privileges.root && !privileges.capabilities.length) continue
     const where = sandboxSetBy(a, resolved, origin.configFile)
     const level = levelOf(where)
     const file = level === 'eval' || level === 'group' ? origin.file : null
-    if (a.sandbox.root) {
+    if (privileges.root) {
       const message = `running as root in the sandbox: ${where} (docker({ root: true }))`
       const key = `${file}\0${message}`
       if (!seen.has(key)) {
@@ -1334,8 +1324,8 @@ export function sandboxWarnings(
         out.push({ kind: 'root', level, where, file, message })
       }
     }
-    if (a.sandbox.capabilities?.length) {
-      const list = a.sandbox.capabilities.map((c) => `'${c}'`).join(', ')
+    if (privileges.capabilities.length) {
+      const list = privileges.capabilities.map((c) => `'${c}'`).join(', ')
       const message = `extra capabilities in the sandbox: ${where} (docker({ capabilities: [${list}] }))`
       const key = `${file}\0${message}`
       if (!seen.has(key)) {
@@ -1345,7 +1335,7 @@ export function sandboxWarnings(
           level,
           where,
           file,
-          capabilities: [...a.sandbox.capabilities],
+          capabilities: [...privileges.capabilities],
           message,
         })
       }
@@ -1365,7 +1355,7 @@ export function evalPlan(
   const notes = [
     ...r.notes,
     ...(capture ? [capture] : []),
-    ...unbrokeredOnFake(resolved.env, attempts),
+    ...unbrokeredHere(resolved.env, attempts),
   ]
   return {
     harnesses: skip ? 0 : resolved.harness.length,

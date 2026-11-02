@@ -2,6 +2,7 @@ import { imageInfo, LABEL } from '@reeval/sandbox-docker'
 import { pluginBuildsLabel } from './environment/plugins.ts'
 import { UsageError } from './errors.ts'
 import { sandboxId } from './options.ts'
+import { capabilitiesOf } from './sandbox/kinds.ts'
 import {
   type PrepareEvent,
   type PrepareUse,
@@ -32,9 +33,9 @@ export function prepareLabel({
   harness,
   plugins,
 }: Pick<PrepareUse, 'sandbox' | 'harness' | 'plugins'>) {
-  if (sandbox.kind !== 'docker') return sandboxId(sandbox)
+  if (!capabilitiesOf(sandbox).images) return sandboxId(sandbox)
+  const install = sandbox.kind === 'docker' && sandbox.install?.length ? ' + install' : ''
   const baked = imageHarness(harness)
-  const install = sandbox.install?.length ? ' + install' : ''
   return `${sandboxId(sandbox)}${install}${pluginBuildsLabel(plugins)}${baked === 'cursor' ? '' : ` · ${baked}`}`
 }
 
@@ -62,7 +63,7 @@ export async function preflight(
 ): Promise<SandboxVersions> {
   const providers = options.providers ?? createProviders()
   const targets = prepareTargets(uses, providers, prepareLabel)
-  if (!targets.some((t) => t.kind !== 'fake')) return { images: [] }
+  if (!targets.some((t) => capabilitiesOf(t.sandbox).images)) return { images: [] }
   let outcomes: Awaited<ReturnType<typeof prepareAll>>
   try {
     outcomes = await prepareAll(targets, {
