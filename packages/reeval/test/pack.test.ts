@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url'
 import { VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
+import { fakeBoat, unreachableMachines } from './support/boat.ts'
 
 const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
   spawnTool(cmd, args, { cwd, env: baseEnv, encoding: 'utf8', timeout })
@@ -62,12 +63,14 @@ evaluate('hello', async (c) => {
 }
 
 // Yarn doesn't install peer dependencies, and neither does pnpm without auto-install-peers, so
-// everything reeval loads must be one of the package's own dependencies. Strict peers also fails
-// the install when a dependency's required peer isn't met.
+// everything reeval loads must be one of the package's own dependencies, except the optional Boat
+// SDK, which only boat() loads and the project installs itself. Strict peers also fails the
+// install when a dependency's required peer isn't met.
 const installers = [
   {
     name: 'yarn',
     cmd: 'yarn',
+    addSdk: ['add', '--non-interactive', '--no-progress', '--cache-folder', '../yarn-cache'],
     // CI's runners have Yarn 1, so there a missing one fails.
     skip: !hasYarn && !process.env.CI && 'needs yarn',
     // Yarn caches a file: tarball by name and version, so a fresh cache installs this one.
@@ -84,6 +87,12 @@ const installers = [
     name: 'pnpm, strict about peers',
     cmd: 'pnpm',
     skip: false,
+    addSdk: [
+      'add',
+      '--ignore-workspace',
+      '--config.auto-install-peers=false',
+      '--config.strict-peer-dependencies=true',
+    ],
     args: (tarball: string) => [
       'add',
       '--ignore-workspace',
@@ -108,7 +117,68 @@ for (const installer of installers) {
     const run = cli('run')
     assert.equal(run.status, 0, run.stdout + run.stderr)
     assert.match(run.stdout, /^└─ ✓ hello {2}1 of 1 run passed$/m)
+    await boatInApp(app, pkg, () => {
+      const sdk = sh(installer.cmd, app, [...installer.addSdk, `${BOAT_SDK}@${boatPeer(manifest)}`], 240_000)
+      assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
+    })
   })
+}
+
+const BOAT_SDK = '@boatdev/sdk'
+/** The lowest version the package's peer range takes. */
+const boatPeer = (manifest: { peerDependencies: Record<string, string> }) =>
+  (manifest.peerDependencies[BOAT_SDK] ?? '').replace(/^\^/, '')
+
+/** The installed CLI, run without blocking this process, which serves the fake Boat API. */
+const cliAsync = (app: string, args: string[], env: NodeJS.ProcessEnv) =>
+  new Promise<{ status: number | null; out: string }>((resolve) => {
+    const child = spawn(join(app, 'node_modules/.bin/reeval'), args, {
+      cwd: app,
+      env: { ...baseEnv, ...env },
+      shell: process.platform === 'win32',
+    })
+    let out = ''
+    child.stdout.on('data', (d) => {
+      out += d
+    })
+    child.stderr.on('data', (d) => {
+      out += d
+    })
+    child.on('close', (status) => resolve({ status, out }))
+  })
+
+/**
+ * boat() in a packed install: without the optional Boat SDK, core never loads it and a run stops
+ * on its absence with the install sentence; with it, `doctor --online` loads it from the project
+ * and reaches the (fake) Boat API.
+ */
+async function boatInApp(app: string, pkg: string, addSdk: () => void) {
+  await writeFile(
+    join(app, 'reeval.boat.config.ts'),
+    `import { defineConfig } from '${pkg}'
+import { fakeHarness } from '${pkg}/harness'
+import { boat } from '${pkg}/sandbox/boat'
+export default defineConfig({ harnesses: fakeHarness(), sandbox: boat(), egress: 'allow-all' })
+`,
+  )
+  const api = await fakeBoat(unreachableMachines)
+  try {
+    const env = { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key }
+    const config = ['--config', 'reeval.boat.config.ts']
+    const planned = await cliAsync(app, ['run', '--dry-run', ...config], {})
+    assert.equal(planned.status, 0, planned.out)
+    const refused = await cliAsync(app, ['run', ...config], env)
+    assert.equal(refused.status, 2, refused.out)
+    assert.match(refused.out, /Install the Boat SDK in this project: npm i @boatdev\/sdk/)
+    assert.deepEqual(api.live(), [])
+    addSdk()
+    const doctor = await cliAsync(app, ['doctor', '--online', '--json', ...config], env)
+    const row = JSON.parse(doctor.out).checks.find((c: { id: string }) => c.id === 'boat')
+    assert.equal(row?.status, 'ok', doctor.out)
+    assert.ok(api.requests.some((q) => q.call === 'GET /limits'), 'doctor reached Boat')
+  } finally {
+    await api.close()
+  }
 }
 
 // A project's own Vitest, another major for its own unit tests, is never loaded or run by reeval.
@@ -190,7 +260,7 @@ test('the packed package installs into a clean project and runs reeval', {
   )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.doesNotMatch(listing, /^package\/dist\/studio-app\//m, 'the studio app is in a chunk')
-  for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {
+  for (const entry of ['index', 'harness', 'sandbox', 'sandbox/boat', 'judge', 'view/index']) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))
   }
@@ -209,6 +279,9 @@ test('the packed package installs into a clean project and runs reeval', {
   assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@reeval/')))
+  // The Boat SDK is the one optional peer: boat() loads it, and nothing else ever does.
+  assert.deepEqual(Object.keys(manifest.peerDependencies), [BOAT_SDK])
+  assert.deepEqual(manifest.peerDependenciesMeta, { [BOAT_SDK]: { optional: true } })
 
   // THIRD_PARTY_NOTICES.md: the third-party code inlined into the tarball, each package with
   // its license text, and none of the dependencies npm installs.
@@ -288,8 +361,10 @@ test('the packed package installs into a clean project and runs reeval', {
     appPaths.some((f) => /^assets\/.+\.js$/.test(f)),
     appPaths.join(', '),
   )
-  for (const file of code)
+  for (const file of code) {
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
+    assert.doesNotMatch(source(file), /\bfrom\s*['"]@boatdev\//, `${file} imports the Boat SDK`)
+  }
   const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
     (m) => m[1] as string,
   )
