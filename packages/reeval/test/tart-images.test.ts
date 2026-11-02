@@ -2,7 +2,14 @@
 // `reeval image build` pulls it (with progress, room for it checked first, and no Docker), on a
 // fake `tart` and a fake registry that answers as ghcr.io does, with a token.
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { isAbsolute, join } from 'node:path'
@@ -84,12 +91,20 @@ describe('Tart image names', () => {
       tag: null,
       digest: 'sha256:abc',
     })
+    assert.deepEqual(parseTartRef('ghcr.io/a/b:latest@sha256:abc'), {
+      oci: true,
+      host: 'ghcr.io',
+      repo: 'a/b',
+      tag: null,
+      digest: 'sha256:abc',
+    })
     assert.deepEqual(parseTartRef('sequoia'), { oci: false, name: 'sequoia' })
   })
 
   test('warns of :latest and of no tag, not of a version, a digest or a local VM', () => {
     assert.match(tartTagWarning('ghcr.io/a/b:latest') ?? '', /uses the moving tag "latest"/)
     assert.match(tartTagWarning('ghcr.io/a/b') ?? '', /uses no tag \(so "latest"\)/)
+    assert.match(tartTagWarning('ghcr.io/a/b') ?? '', /Pin a digest \(ghcr\.io\/a\/b@sha256:…\)/)
     assert.equal(tartTagWarning('ghcr.io/a/b:15.6'), null)
     assert.equal(tartTagWarning('ghcr.io/a/b@sha256:abc'), null)
     assert.equal(tartTagWarning('sequoia'), null)
@@ -213,8 +228,8 @@ describe('tart() images before the run', {
     const built = await cli(['image', 'build'])
     assert.equal(built.code, 0, built.stdout + built.stderr)
     assert.match(built.stdout, new RegExp(`^tart pull ${image.replace(/\./g, '\\.')}$`, 'm'))
-    assert.match(built.stdout, /^50%$/m, 'its progress')
-    assert.doesNotMatch(built.stdout, /^3%$/m, 'once every ten points')
+    assert.match(built.stdout, /^tart:small:15\.6: 50%$/m, 'its progress, labeled')
+    assert.doesNotMatch(built.stdout, /: 3%$/m, 'once every ten points')
     const digest = fakeDigest(image)
     assert.match(built.stdout, new RegExp(`^✓ tart:small:15\\.6: .+ ${digest.slice(7, 19)}$`, 'm'))
     assert.match(built.stdout, /^1 image ready$/m)
@@ -234,19 +249,72 @@ describe('tart() images before the run', {
     assert.deepEqual(dockerCalls(), [], 'no Docker, from any of them')
   })
 
-  test("reeval image build refuses before pulling when the disk hasn't room", async () => {
+  test("reeval image build refuses before pulling when the disk hasn't room, exit 3", async () => {
     const image = `${host}/cirruslabs/huge:1`
     const { cli, pulls, dockerCalls, fake } = await setup(image)
+    const plan = await cli(['image', 'build', '--dry-run'])
+    assert.equal(plan.code, 0, plan.stdout + plan.stderr)
+    assert.match(
+      plan.stdout,
+      /^ {2}disk {2}needs about 900000000 GB in .+; \d+(\.\d)? [GM]B free: reeval image build refuses to pull$/m,
+      'the dry run says so too',
+    )
     const r = await cli(['image', 'build'])
-    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
     assert.match(
       r.stdout + r.stderr,
       new RegExp(
-        `Not enough disk space to pull the image tart\\(\\) clones: Tart needs about 900000000 GB free in ${fake.env.TART_HOME} and there is \\d+(\\.\\d)? [GM]B\\.\\n  ${image.replace(/\./g, '\\.')} \\(about 30 GB to download, 900000000 GB on disk\\)\\nFree some space`,
+        `Not enough disk space to pull the image tart\\(\\) clones: Tart needs about 900000000 GB free in ${fake.env.TART_HOME}; there is \\d+(\\.\\d)? [GM]B\\.\\n  ${image.replace(/\./g, '\\.')} \\(about 30 GB to download, 900000000 GB on disk\\)\\nFree some space`,
       ),
     )
     assert.deepEqual(pulls(), [])
     assert.deepEqual(dockerCalls(), [])
+  })
+
+  test('a pull that fits once Tart prunes its cache warns and pulls', async () => {
+    const image = `${host}/cirruslabs/small:15.6`
+    const needs = 50e9 + 4e3 + 134_217_728
+    const { cli, pulls, fake } = await setup(image, {
+      REEVAL_TEST_TART_FREE_BYTES: String(needs - 1e6),
+    })
+    const old = join(fake.env.TART_HOME ?? '', 'cache', 'OCIs', 'ghcr.io', 'a', 'old', 'sha256:0')
+    mkdirSync(old, { recursive: true })
+    writeFileSync(join(old, 'disk.img'), Buffer.alloc(4e6, 1))
+
+    const plan = await cli(['image', 'build', '--dry-run'])
+    assert.match(
+      plan.stdout,
+      /^ {2}disk {2}needs about 50 GB in .+; 50 GB free, and Tart prunes its cache \(4 MB in Tart's cache\) to make room$/m,
+      plan.stdout,
+    )
+    const r = await cli(['image', 'build'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /^warning: pulling needs about 50 GB in .+ and 50 GB is free: tart pull will prune images it cached \(4 MB\) to make room\.$/m,
+    )
+    assert.deepEqual(pulls(), [`pull ${image}`])
+  })
+
+  test("an image its registry won't size is pulled, flagged, and left out of the disk check", async () => {
+    const image = `${host}/cirruslabs/gone:1`
+    const { cli, pulls } = await setup(image)
+    const plan = await cli(['image', 'build', '--dry-run'])
+    assert.match(plan.stdout, /\(to pull: size unknown\)$/m, plan.stdout)
+    assert.match(
+      plan.stdout,
+      /^ {2}disk {2}.+ free in .+; the registry didn't size the image to pull, so the disk check can't count it$/m,
+      plan.stdout,
+    )
+    const r = await cli(['image', 'build'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.ok(
+      r.stdout.includes(
+        `${image}: its registry didn't give its size, so the disk check doesn't count it`,
+      ),
+      r.stdout,
+    )
+    assert.deepEqual(pulls(), [`pull ${image}`])
   })
 
   test('a pull that fails fails its image, exit 3, naming what tart said', async () => {

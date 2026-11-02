@@ -1,5 +1,5 @@
 no profile · 2 evals · 2 cells · 5 attempts
-warning: tart(ghcr.io/cirruslabs/macos-sequoia-base:latest) uses the moving tag "latest": the image can change between runs, so results aren't comparable over time. Pin a version tag or a digest (the digest each attempt cloned is recorded either way).
+warning: tart(ghcr.io/cirruslabs/macos-sequoia-base:latest) uses the moving tag "latest": the image can change between runs, so results aren't comparable over time. Pin a digest (ghcr.io/cirruslabs/macos-sequoia-base@sha256:…), or a version tag the registry publishes; each attempt records the digest it cloned either way.
 hint: 2 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/t.eval.ts › builds the app   fake/mac/tart:macos-sequoia-base:latest  control  gated  ×3  egress "allow-all"
 evals/t.eval.ts › builds it small  fake/small/tart:macos-sequoia-base:15.6  control  gated  ×2  egress "allow-all"

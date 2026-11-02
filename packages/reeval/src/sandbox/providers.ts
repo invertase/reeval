@@ -267,12 +267,12 @@ export const vmImage = (handle: PreparedHandle): VmImage | null => {
   return { ref: h.image, digest: typeof h.digest === 'string' ? h.digest : null }
 }
 
-const tartRefusal = (message: string, cause: PrepareFailure['cause'] = null): PrepareError =>
+const tartRefusal = (message: string): PrepareError =>
   new PrepareError({
-    class: cause ? 'resource' : 'config',
+    class: 'config',
     stage: 'tart',
     ref: null,
-    cause,
+    cause: null,
     log: null,
     usage: true,
     message,
@@ -280,7 +280,8 @@ const tartRefusal = (message: string, cause: PrepareFailure['cause'] = null): Pr
 
 /**
  * Tart: a run starts only from images `tart list` has, and refuses the rest; with `pull`
- * (`reeval image build`), it pulls them, once the disk has room for all of them.
+ * (`reeval image build`), it pulls them, once the disk has room for all of them (counting what
+ * Tart prunes from its cache).
  */
 export const tartProvider = (
   options: { pull?: boolean } = {},
@@ -323,10 +324,23 @@ export const tartProvider = (
     if (!options.pull || local.length) {
       throw tartRefusal(images.missingImagesMessage(options.pull ? local : missing))
     }
-    const needs = missing.reduce((n, m) => n + (m.size ? images.pullNeeds(m.size) : 0), 0)
-    const free = await images.tartFreeBytes()
-    if (free !== null && needs > free) {
-      throw tartRefusal(images.pullSpaceMessage(missing, free, images.tartHome()), 'enospc')
+    for (const image of missing.filter((m) => !m.size)) {
+      ctx.log(
+        `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
+      )
+    }
+    const space = await images.pullSpace(missing)
+    if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
+    // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
+    if (space?.verdict === 'short') {
+      throw new PrepareError({
+        class: 'resource',
+        stage: 'tart',
+        ref: null,
+        cause: 'enospc',
+        log: null,
+        message: images.pullSpaceMessage(missing, space),
+      })
     }
   },
   async prepare(sandbox, _harness, ctx) {
@@ -334,8 +348,16 @@ export const tartProvider = (
     const { tartDigest, tartPull } = await import('./tart-images.ts')
     const { tartListed } = await import('./tart-ref.ts')
     if (options.pull && !tartListed(await tartNames(ctx.signal), sandbox.image)) {
+      const { sandboxId } = await import('../options.ts')
+      // Up to three pull at once: each line says whose it is.
+      const id = sandboxId(sandbox)
       ctx.log(`tart pull ${sandbox.image}`)
-      await ctx.retry(() => tartPull(sandbox.image, { signal: ctx.signal, onLine: ctx.log }))
+      await ctx.retry(() =>
+        tartPull(sandbox.image, {
+          signal: ctx.signal,
+          onLine: (line) => ctx.log(`${id}: ${line}`),
+        }),
+      )
     }
     return { image: sandbox.image, digest: await tartDigest(sandbox.image) }
   },

@@ -147,8 +147,10 @@ on an Apple Silicon Mac, at most two at once. It needs `egress: 'allow-all'`: un
 `proxy` or a restricted policy the plan exits 2. Only `fakeHarness()` runs in it so far.
 `reeval run` never pulls the image: one `tart list` doesn't show exits 2, naming `tart pull
 <image>`. Run `npx reeval image build` first, which pulls every `tart()` image the plan needs (and
-refuses, exit 2, when the disk can't hold them). Pin a version tag: `:latest` or no tag warns, and
-each attempt records the digest it cloned in `vmImage`.
+refuses, exit 3, when the disk can't hold them even once Tart prunes its cache). Pin a digest
+(`ghcr.io/cirruslabs/macos-sequoia-base@sha256:…`): Cirrus Labs publishes only `latest`, so a
+version tag isn't there to pin. `:latest` or no tag warns, and each attempt records the digest it
+cloned in `vmImage`.
 
 ```ts
 import { boat, createBoat } from 'reeval/sandbox/boat'

@@ -3,7 +3,7 @@
 // pulls: `reeval image build` (or `tart pull`) does, first.
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readlink, statfs } from 'node:fs/promises'
+import { lstat, readdir, readlink, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parseTartRef } from './tart-ref.ts'
@@ -13,8 +13,9 @@ export const tartHome = () => process.env.TART_HOME || join(homedir(), '.tart')
 
 /**
  * The digest of the pulled image `image` names: its own, or the one its tag points to in Tart's
- * cache (`cache/OCIs/<host>/<repo>/<tag>`, a link to the `sha256:…` directory by absolute path). Null for a local
- * VM, which has none, or when the cache doesn't say.
+ * cache (`cache/OCIs/<host>/<repo>/<tag>`, a link to the `sha256:…` directory by absolute path).
+ * Null for a local VM, which has none, or when the cache doesn't say. Read at preflight, so a
+ * `tart pull` of the same tag between then and the clone isn't seen.
  */
 export async function tartDigest(image: string): Promise<string | null> {
   const ref = parseTartRef(image)
@@ -93,19 +94,97 @@ export function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1e6))} MB`
 }
 
-/** What Tart needs free for a pull: the unpacked disk, and the 128 MB it keeps besides. */
-export const pullNeeds = (size: TartSize) => (size.disk ?? size.download) + 128e6
+/** What Tart needs free for a pull: the unpacked disk, and the 128 MiB it keeps besides. */
+export const pullNeeds = (size: TartSize) => (size.disk ?? size.download) + 134_217_728
 
-/** The bytes free for Tart on the volume its home is on (or will be on). */
+/**
+ * The bytes free for Tart on the volume its home is on (or will be on). The test suite sets
+ * REEVAL_TEST_TART_FREE_BYTES to put a disk's edge where it wants one.
+ */
 export async function tartFreeBytes(): Promise<number | null> {
+  const stand = process.env.REEVAL_TEST_TART_FREE_BYTES
+  if (stand) return Number(stand)
   let dir = tartHome()
   while (!existsSync(dir) && dirname(dir) !== dir) dir = dirname(dir)
   const stats = await statfs(dir).catch(() => null)
   return stats ? stats.bavail * stats.bsize : null
 }
 
+/**
+ * The bytes Tart's cache (`cache/`: pulled images and IPSWs) takes on disk, which `tart pull`
+ * prunes to make room unless `TART_NO_AUTO_PRUNE` is set.
+ */
+export async function tartPrunableBytes(): Promise<number> {
+  if (process.env.TART_NO_AUTO_PRUNE) return 0
+  const walk = async (dir: string): Promise<number> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    let n = 0
+    for (const e of entries) {
+      const path = join(dir, e.name)
+      if (e.isDirectory()) n += await walk(path)
+      // Disks are sparse: what a file holds, not its length.
+      else if (e.isFile())
+        n += await lstat(path).then(
+          (s) => s.blocks * 512,
+          () => 0,
+        )
+    }
+    return n
+  }
+  return walk(join(tartHome(), 'cache'))
+}
+
 /** An image the plan needs and Tart doesn't have, with what it weighs when the registry says. */
 export type MissingImage = { image: string; size: TartSize | null }
+
+/**
+ * Whether the images to pull fit: what they need (the ones the registry sized), what's free in
+ * Tart's home, and what Tart would prune from its cache to make room.
+ */
+export type PullSpace = {
+  needs: number
+  free: number
+  prunable: number
+  dir: string
+  unsized: string[]
+  /** `fits` in what's free; `prunes`, once Tart prunes its cache; `short` either way. */
+  verdict: 'fits' | 'prunes' | 'short'
+}
+
+/** The disk check for pulling `missing`; null when the free space can't be read. */
+export async function pullSpace(missing: MissingImage[]): Promise<PullSpace | null> {
+  const free = await tartFreeBytes()
+  if (free === null) return null
+  const needs = missing.reduce((n, m) => n + (m.size ? pullNeeds(m.size) : 0), 0)
+  const prunable = needs > free ? await tartPrunableBytes() : 0
+  const verdict = needs <= free ? 'fits' : needs <= free + prunable ? 'prunes' : 'short'
+  const unsized = missing.filter((m) => !m.size).map((m) => m.image)
+  return { needs, free, prunable, dir: tartHome(), unsized, verdict }
+}
+
+const uncounted = (unsized: string[]) =>
+  unsized.length
+    ? `, not counting ${unsized.length === 1 ? 'one image' : `${unsized.length} images`} the registry didn't size`
+    : ''
+
+/** `reeval image build --dry-run`'s line for the disk check. */
+export function pullSpaceLine(space: PullSpace): string {
+  if (!space.needs) {
+    const one = space.unsized.length === 1
+    return `disk  ${formatSize(space.free)} free in ${space.dir}; the registry didn't size ${one ? 'the image' : 'the images'} to pull, so the disk check can't count ${one ? 'it' : 'them'}`
+  }
+  const head = `disk  needs about ${formatSize(space.needs)} in ${space.dir}${uncounted(space.unsized)}; ${formatSize(space.free)} free`
+  if (space.verdict === 'fits') return head
+  const cache = `${formatSize(space.prunable)} in Tart's cache`
+  return space.verdict === 'prunes'
+    ? `${head}, and Tart prunes its cache (${cache}) to make room`
+    : `${head}${space.prunable ? ` and ${cache}` : ''}: reeval image build refuses to pull`
+}
+
+/** The warning when a pull fits only once Tart prunes images it cached. */
+export function pullPruneWarning(space: PullSpace): string {
+  return `warning: pulling needs about ${formatSize(space.needs)} in ${space.dir} and ${formatSize(space.free)} is free: tart pull will prune images it cached (${formatSize(space.prunable)}) to make room.`
+}
 
 const sized = ({ size }: MissingImage) =>
   size ? ` (about ${formatSize(size.download)} to download)` : ''
@@ -136,17 +215,22 @@ export function missingImagesMessage(missing: MissingImage[]): string {
   return lines.join('\n')
 }
 
-/** Why `reeval image build` won't pull: the images' unpacked disks don't fit in what's free. */
-export function pullSpaceMessage(missing: MissingImage[], free: number, dir: string): string {
-  const needs = missing.reduce((n, m) => n + (m.size ? pullNeeds(m.size) : 0), 0)
+/**
+ * Why `reeval image build` won't pull: the images' unpacked disks don't fit in what's free, even
+ * once Tart prunes its cache.
+ */
+export function pullSpaceMessage(missing: MissingImage[], space: PullSpace): string {
   const one = missing.length === 1
+  const cache = space.prunable
+    ? `, plus ${formatSize(space.prunable)} of images Tart cached and would prune`
+    : ''
   return [
-    `Not enough disk space to pull ${one ? 'the image' : `${missing.length} images`} tart() clones: Tart needs about ${formatSize(needs)} free in ${dir} and there is ${formatSize(free)}.`,
+    `Not enough disk space to pull ${one ? 'the image' : `${missing.length} images`} tart() clones: Tart needs about ${formatSize(space.needs)} free in ${space.dir}${uncounted(space.unsized)}; there is ${formatSize(space.free)}${cache}.`,
     ...missing.map(
       (m) =>
-        `  ${m.image}${m.size ? ` (about ${formatSize(m.size.download)} to download, ${formatSize(pullNeeds(m.size))} on disk)` : ''}`,
+        `  ${m.image} (${m.size ? `about ${formatSize(m.size.download)} to download, ${formatSize(pullNeeds(m.size))} on disk` : 'size unknown, not counted'})`,
     ),
-    'Free some space (tart prune --older-than 7 removes the images Tart cached and no clone has used for a week), or set TART_HOME to a bigger volume, then run reeval image build again.',
+    'Free some space, or set TART_HOME to a bigger volume, then run reeval image build again.',
   ].join('\n')
 }
 

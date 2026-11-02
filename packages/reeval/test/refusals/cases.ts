@@ -45,6 +45,7 @@ import {
 } from '../../src/harness.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
+import { PrepareError } from '../../src/sandbox/provider.ts'
 import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-images.ts'
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
@@ -115,10 +116,32 @@ const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
 const SEQUOIA = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 /** What ghcr.io says the Sequoia base weighs: compressed layers, and the unpacked disk. */
 const SIZE = { download: 25_458_766_500, disk: 50_033_579_673 }
-/** A message reeval builds, refused as preflight refuses it. */
+/**
+ * A message reeval builds, refused as preflight refuses it. This pins the wording only:
+ * `test/tart-images.test.ts` drives the path to each, and its exit code, end to end.
+ */
 const refuse = (message: string) => () => {
   throw new UsageError(message)
 }
+/** As {@link refuse}, for a refusal that's the machine's state, not the config: exit 3. */
+const refuseInfra = (message: string) => () => {
+  throw new PrepareError({
+    class: 'resource',
+    stage: 'tart',
+    ref: null,
+    cause: 'enospc',
+    log: null,
+    message,
+  })
+}
+const SPACE = {
+  needs: 50_167_797_401,
+  free: 31e9,
+  prunable: 0,
+  dir: '/Users/me/.tart',
+  unsized: [],
+  verdict: 'short',
+} as const
 
 /** A config's `gateway` list as the plan walks it: `direct()` at the end unless placed or off. */
 const listed = (gateways: GatewayDescriptor[]) =>
@@ -463,7 +486,19 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'image build: no room to pull',
-      refuse(pullSpaceMessage([{ image: SEQUOIA, size: SIZE }], 31e9, '/Users/me/.tart')),
+      refuseInfra(pullSpaceMessage([{ image: SEQUOIA, size: SIZE }], SPACE)),
+    ],
+    [
+      'image build: no room to pull, even pruning the cache, one image unsized',
+      refuseInfra(
+        pullSpaceMessage(
+          [
+            { image: SEQUOIA, size: SIZE },
+            { image: 'ghcr.io/me/private:1', size: null },
+          ],
+          { ...SPACE, prunable: 12e9, unsized: ['ghcr.io/me/private:1'] },
+        ),
+      ),
     ],
   ],
   harness: [

@@ -42,6 +42,7 @@ import {
 } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
 import { attemptImage, classifyTart, createProviders, dockerKey, vmImage } from './providers.ts'
+import type { MissingImage } from './tart-images.ts'
 
 /**
  * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, the
@@ -498,12 +499,15 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
 /** `reeval image build --dry-run`: whether Tart has each image, and what a missing one weighs. */
 export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
   const { tartNames } = await import('./tart-cli.ts')
-  const { formatSize, tartDigest, tartImageSize } = await import('./tart-images.ts')
-  const { tartListed } = await import('./tart-ref.ts')
+  const { formatSize, pullSpace, pullSpaceLine, tartDigest, tartImageSize } = await import(
+    './tart-images.ts'
+  )
+  const { parseTartRef, tartListed } = await import('./tart-ref.ts')
   const have = await tartNames().catch((error: Error) => error)
   const lines = [
     `tart  ${targets.length} image${targets.length === 1 ? '' : 's'} (nothing pulled: --dry-run)`,
   ]
+  const missing: MissingImage[] = []
   for (const t of targets) {
     const uses = t.evals ? ` · ${t.evals} eval${t.evals === 1 ? '' : 's'}` : ''
     const { image } = t.sandbox
@@ -514,10 +518,13 @@ export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
       lines.push(`  ✓ ${t.id}${uses}  ${image}  (ready${digest ? `: ${short(digest)}` : ''})`)
     } else {
       const size = await tartImageSize(image, AbortSignal.timeout(10_000))
-      const weighs = size ? `: about ${formatSize(size.download)} to download` : ''
+      const weighs = size ? `: about ${formatSize(size.download)} to download` : ': size unknown'
       lines.push(`  + ${t.id}${uses}  ${image}  (to pull${weighs})`)
+      if (parseTartRef(image).oci) missing.push({ image, size })
     }
   }
+  const space = missing.length ? await pullSpace(missing) : null
+  if (space) lines.push(`  ${pullSpaceLine(space)}`)
   return lines
 }
 

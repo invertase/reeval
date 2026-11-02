@@ -12,8 +12,13 @@ export function parseTartRef(image: string): TartRef {
   const host = image.slice(0, slash)
   const path = image.slice(slash + 1)
   const at = path.indexOf('@')
-  if (at >= 0)
-    return { oci: true, host, repo: path.slice(0, at), tag: null, digest: path.slice(at + 1) }
+  if (at >= 0) {
+    // A digest pins the image: a tag beside it (`repo:tag@sha256:…`) names nothing more.
+    const named = path.slice(0, at)
+    const colon = named.lastIndexOf(':')
+    const repo = colon > named.lastIndexOf('/') ? named.slice(0, colon) : named
+    return { oci: true, host, repo, tag: null, digest: path.slice(at + 1) }
+  }
   const colon = path.lastIndexOf(':')
   return colon > path.lastIndexOf('/')
     ? { oci: true, host, repo: path.slice(0, colon), tag: path.slice(colon + 1), digest: null }
@@ -35,5 +40,5 @@ export function tartTagWarning(image: string): string | null {
   const ref = parseTartRef(image)
   if (!ref.oci || ref.digest || (ref.tag !== null && ref.tag !== 'latest')) return null
   const which = ref.tag ? 'the moving tag "latest"' : 'no tag (so "latest")'
-  return `tart(${image}) uses ${which}: the image can change between runs, so results aren't comparable over time. Pin a version tag or a digest (the digest each attempt cloned is recorded either way).`
+  return `tart(${image}) uses ${which}: the image can change between runs, so results aren't comparable over time. Pin a digest (${ref.host}/${ref.repo}@sha256:…), or a version tag the registry publishes; each attempt records the digest it cloned either way.`
 }

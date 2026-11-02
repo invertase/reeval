@@ -123,14 +123,14 @@ Usage:
                                 Builds what's missing or stale (a from tag that moved upstream), three
                                 at a time, and reports every failure; exit 3 if any image failed.
                                 Pulls the tart() images Tart doesn't have, with tart pull, once the
-                                disk has room for them (exit 2 if not); runs no Docker without a
-                                Docker sandbox
+                                disk has room for them, counting what Tart prunes from its cache
+                                (exit 3 if not); runs no Docker without a Docker sandbox
     --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
     --force                     Rebuild every image, pulling each base again
     --dry-run                   List the images, how each is made and how each stands, building
                                 and pulling nothing (a from tag or tart() image is looked up in its
-                                registry, not pulled)
+                                registry, not pulled), and whether the tart() pulls fit the disk
   reeval --version
   reeval --help
 

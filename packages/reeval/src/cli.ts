@@ -347,18 +347,18 @@ async function imageBuildCommand(
   try {
     // Tart refusing the host, the images or the disk stops its pulls, not the Docker builds.
     const pulled = vms.length
-      ? await pullTartImages(vms, root, { log: (line) => console.log(dim(line)) }).catch(
-          (error: unknown) => {
-            if (!targets.length || !(error instanceof PrepareError)) throw error
-            outcomes.push({
-              id: 'tart',
-              evals: vms.reduce((n, t) => n + t.evals, 0),
-              ok: false,
-              failure: error.failure,
-            })
-            return []
-          },
-        )
+      ? await pullTartImages(vms, root, {
+          log: (line) => console.log(line.startsWith('warning: ') ? yellow(line) : dim(line)),
+        }).catch((error: unknown) => {
+          if (!targets.length || !(error instanceof PrepareError)) throw error
+          outcomes.push({
+            id: 'tart',
+            evals: vms.reduce((n, t) => n + t.evals, 0),
+            ok: false,
+            failure: error.failure,
+          })
+          return []
+        })
       : []
     for (const p of pulled) {
       outcomes.push(
@@ -387,8 +387,10 @@ async function imageBuildCommand(
       }
     }
   } catch (error) {
-    if (error instanceof PrepareError && error.failure.usage) throw new UsageError(error.message)
-    throw error
+    if (!(error instanceof PrepareError)) throw error
+    if (error.failure.usage) throw new UsageError(error.message)
+    const { PreflightInfraError } = await import('./preflight.ts')
+    throw new PreflightInfraError(error.message)
   }
   // Every image, failed or not, so one broken image doesn't hide the state of the others.
   for (const o of outcomes) {
