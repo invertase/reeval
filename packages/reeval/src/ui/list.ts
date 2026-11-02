@@ -32,6 +32,7 @@ export const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export function paintIcon(c: Colors, icon: StatusIcon, glyph = ICON[icon]): string {
   if (icon === 'pass') return c.green(glyph)
   if (icon === 'fail' || icon === 'failing') return c.red(glyph)
+  if (icon === 'running') return c.teal(glyph)
   if (icon === 'canceled') return c.yellow(glyph)
   if (icon === 'observe') return c.blue(glyph)
   return c.dim(glyph)
