@@ -52,6 +52,7 @@ import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
 import { plural } from './text.ts'
 import type {
+  BoatSandboxDescriptor,
   EgressPolicy,
   FakeJudgeModel,
   GatewayName,
@@ -66,8 +67,8 @@ type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
   /**
-   * The area: runtime, config, docker, image, key, judge, analysis, gateway, vertex, egress, gitignore
-   * or env-files.
+   * The area: runtime, config, docker, image, ssh, boat, key, judge, analysis, gateway, vertex,
+   * egress, gitignore or env-files.
    */
   id: string
   status: CheckStatus
@@ -102,6 +103,13 @@ export type DoctorDeps = {
   cloudHost: () => Promise<string | null>
   /** An access token from Application Default Credentials, as attempts on Vertex AI mint one. */
   vertexToken: () => Promise<string>
+  /** Whether an OpenSSH client is on PATH. */
+  sshClient: () => Promise<boolean>
+  /**
+   * Loads the Boat SDK for `root` and, `online`, asks Boat whether the account takes the key and
+   * starts the machine size; throws with why not.
+   */
+  boatAccount: (sandbox: BoatSandboxDescriptor, root: string, online: boolean) => Promise<void>
 }
 
 const run = (command: string, args: string[], cwd?: string) =>
@@ -171,6 +179,12 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     vertexToken: async () => {
       const { adcTokenSource } = await import('./gateway/vertex.ts')
       return (await adcTokenSource()()).token
+    },
+    sshClient: async () => (await run('ssh', ['-V'])).code === 0,
+    boatAccount: async (sandbox, root, online) => {
+      const boat = await import('./sandbox/boat.ts')
+      if (online) await boat.checkBoat(sandbox, root)
+      else await boat.loadBoatSdk(root)
     },
   }
 }
@@ -270,6 +284,62 @@ const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
     : configuredUses(config)
         .filter((u) => !u.profile)
         .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox }))
+
+/** The OpenSSH client and each Boat account the planned evals use, when any uses `boat()`. */
+export async function checkBoat(
+  config: ResolvedConfig,
+  deps: DoctorDeps,
+  online: boolean,
+  planned: Planned,
+  envFile: string,
+): Promise<Check[]> {
+  const accounts = new Map<string, BoatSandboxDescriptor>()
+  for (const { sandbox } of usesOf(config, planned)) {
+    if (sandbox.kind !== 'boat') continue
+    accounts.set(`${sandbox.apiKey.from}\0${sandbox.type ?? 'small'}`, sandbox)
+  }
+  if (!accounts.size) return []
+  const checks: Check[] = [
+    (await deps.sshClient())
+      ? { id: 'ssh', status: 'ok', summary: 'an OpenSSH client for boat()' }
+      : {
+          id: 'ssh',
+          status: 'fail',
+          summary: "boat() runs every command over SSH, and there's no ssh on PATH",
+          fix: 'install an OpenSSH client (openssh-client on Debian and Ubuntu)',
+        },
+  ]
+  for (const sandbox of accounts.values()) {
+    const key = sandbox.apiKey.from
+    const type = sandbox.type ?? 'small'
+    if (!deps.env[key]) {
+      checks.push({
+        id: 'boat',
+        status: 'fail',
+        summary: `boat() needs a Boat API key in ${key}, which isn't set`,
+        fix: `set ${key} in ${envFile}`,
+      })
+      continue
+    }
+    try {
+      await deps.boatAccount(sandbox, config.root, online)
+      checks.push({
+        id: 'boat',
+        status: 'ok',
+        summary: online
+          ? `Boat takes the key in ${key} and starts ${type} machines`
+          : `the Boat SDK loads, and ${key} is set (--online asks Boat whether it takes the key)`,
+      })
+    } catch (error) {
+      checks.push({
+        id: 'boat',
+        status: 'fail',
+        summary: redactSecrets((error as Error).message),
+      })
+    }
+  }
+  return checks
+}
 
 export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
@@ -1310,6 +1380,7 @@ export async function doctor(
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
+    checks.push(...(await checkBoat(config, deps, online, planned, envFile)))
     checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
