@@ -270,4 +270,41 @@ describe('tart() images before the run', {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.ok(r.stdout.includes(`warning: tart(${image}) uses no tag (so "latest")`), r.stdout)
   })
+
+  test("a host without Tart still builds the plan's Docker images", async () => {
+    const fake = fakeTart()
+    const dockerCalls = noDocker(join(fake.dir, 'bin'))
+    const p = await project('tart-images-mixed', {
+      'reeval.config.ts': CONFIG,
+      'evals/vm.eval.ts': EVAL,
+      'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
+
+evaluate('in docker', { sandbox: docker() }, async () => {
+  expect(1).toBe(1)
+})
+`,
+    })
+    const env = { PATH: fake.env.PATH, TART_IMAGE: `${host}/cirruslabs/small:15.6` }
+    const r = await runCli(p.dir, ['image', 'build'], { env, timeoutMs: 120_000 })
+    // Past Tart's refusal of this host, to Docker: here, the shim that says it isn't running.
+    assert.ok(dockerCalls().length > 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stderr, /needs a Mac with Apple Silicon/, 'not stopped by Tart')
+  })
+
+  test('an image with no tag, which Tart lists as :latest, is pulled once and then runs', async () => {
+    const image = `${host}/cirruslabs/small`
+    const { p, cli, pulls } = await setup(image)
+    const built = await cli(['image', 'build'])
+    assert.equal(built.code, 0, built.stdout + built.stderr)
+    const again = await cli(['image', 'build', '--dry-run'])
+    assert.match(again.stdout, /\(ready: [0-9a-f]{12}\)$/m, again.stdout)
+    const run = await cli(['run'])
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    assert.deepEqual(readRun(p.dir).evals[0]?.trial.vmImage, {
+      ref: image,
+      digest: fakeDigest(image),
+    })
+    assert.deepEqual(pulls(), [`pull ${image}`])
+  })
 })

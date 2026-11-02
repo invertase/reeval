@@ -17,11 +17,12 @@ const TART = `#!/bin/bash
 root="$FAKE_TART_DIR"
 echo "$*" >> "$root/log"
 # As Tart caches an OCI image: a sha256: directory, and its tag a link to it by absolute path.
+# As Tart lists one pulled with no tag: by its :latest name.
 pulled() {
-  echo "$1" >> "$root/pulled"
-  case $1 in */*) ;; *) return ;; esac
-  repo=\${1%:*}; tag=\${1##*:}
-  [ "$repo" = "$1" ] || [ "\${tag#*/}" != "$tag" ] && { repo=$1; tag=latest; }
+  case $1 in */*) ;; *) echo "$1" >> "$root/pulled"; return ;; esac
+  repo=\${1%:*}; tag=\${1##*:}; name=$1
+  [ "$repo" = "$1" ] || [ "\${tag#*/}" != "$tag" ] && { repo=$1; tag=latest; name=$1:latest; }
+  echo "$name" >> "$root/pulled"
   sum=$(printf %s "$1" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64)
   dir="$TART_HOME/cache/OCIs/$repo"
   mkdir -p "$dir/sha256:$sum" && ln -sfn "$dir/sha256:$sum" "$dir/$tag"

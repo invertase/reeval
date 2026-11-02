@@ -310,15 +310,15 @@ export const tartProvider = (
   async checkTargets(sandboxes, ctx) {
     const { tartNames } = await import('./tart-cli.ts')
     const images = await import('./tart-images.ts')
+    const { parseTartRef, tartListed } = await import('./tart-ref.ts')
     const have = await tartNames(ctx.signal)
-    const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !have.has(i))
+    const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !tartListed(have, i))
     if (!wanted.length) return
     // A registry that doesn't answer soon leaves the size unsaid, not the refusal unmade.
     const lookup = AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)])
     const missing = await Promise.all(
       wanted.map(async (image) => ({ image, size: await images.tartImageSize(image, lookup) })),
     )
-    const { parseTartRef } = await import('./tart-ref.ts')
     const local = missing.filter((m) => !parseTartRef(m.image).oci)
     if (!options.pull || local.length) {
       throw tartRefusal(images.missingImagesMessage(options.pull ? local : missing))
@@ -332,7 +332,8 @@ export const tartProvider = (
   async prepare(sandbox, _harness, ctx) {
     const { tartNames } = await import('./tart-cli.ts')
     const { tartDigest, tartPull } = await import('./tart-images.ts')
-    if (options.pull && !(await tartNames(ctx.signal)).has(sandbox.image)) {
+    const { tartListed } = await import('./tart-ref.ts')
+    if (options.pull && !tartListed(await tartNames(ctx.signal), sandbox.image)) {
       ctx.log(`tart pull ${sandbox.image}`)
       await ctx.retry(() => tartPull(sandbox.image, { signal: ctx.signal, onLine: ctx.log }))
     }

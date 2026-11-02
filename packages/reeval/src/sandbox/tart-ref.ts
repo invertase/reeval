@@ -20,6 +20,16 @@ export function parseTartRef(image: string): TartRef {
     : { oci: true, host, repo: path, tag: null, digest: null }
 }
 
+/**
+ * Whether `tart list`'s names include `image`. Tart lists an OCI image pulled with no tag only
+ * by its `:latest` name.
+ */
+export function tartListed(names: Set<string>, image: string): boolean {
+  if (names.has(image)) return true
+  const ref = parseTartRef(image)
+  return ref.oci && ref.tag === null && ref.digest === null && names.has(`${image}:latest`)
+}
+
 /** The plan's warning for an OCI image that names `:latest` or no tag, which can move under it. */
 export function tartTagWarning(image: string): string | null {
   const ref = parseTartRef(image)

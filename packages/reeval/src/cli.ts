@@ -345,20 +345,33 @@ async function imageBuildCommand(
       }
   const outcomes: Outcome[] = []
   try {
-    if (vms.length) {
-      for (const p of await pullTartImages(vms, root, { log: (line) => console.log(dim(line)) })) {
-        outcomes.push(
-          p.ok
-            ? {
-                id: p.id,
-                evals: p.evals,
-                ok: true,
-                ref: p.image.ref,
-                id12: p.image.digest ? short12(p.image.digest) : 'local VM',
-              }
-            : { id: p.id, evals: p.evals, ok: false, failure: p.failure },
+    // Tart refusing the host, the images or the disk stops its pulls, not the Docker builds.
+    const pulled = vms.length
+      ? await pullTartImages(vms, root, { log: (line) => console.log(dim(line)) }).catch(
+          (error: unknown) => {
+            if (!targets.length || !(error instanceof PrepareError)) throw error
+            outcomes.push({
+              id: 'tart',
+              evals: vms.reduce((n, t) => n + t.evals, 0),
+              ok: false,
+              failure: error.failure,
+            })
+            return []
+          },
         )
-      }
+      : []
+    for (const p of pulled) {
+      outcomes.push(
+        p.ok
+          ? {
+              id: p.id,
+              evals: p.evals,
+              ok: true,
+              ref: p.image.ref,
+              id12: p.image.digest ? short12(p.image.digest) : 'local VM',
+            }
+          : { id: p.id, evals: p.evals, ok: false, failure: p.failure },
+      )
     }
     if (targets.length) {
       const built = await buildImages(targets, root, {

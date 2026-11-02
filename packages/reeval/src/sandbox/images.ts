@@ -499,6 +499,7 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
 export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
   const { tartNames } = await import('./tart-cli.ts')
   const { formatSize, tartDigest, tartImageSize } = await import('./tart-images.ts')
+  const { tartListed } = await import('./tart-ref.ts')
   const have = await tartNames().catch((error: Error) => error)
   const lines = [
     `tart  ${targets.length} image${targets.length === 1 ? '' : 's'} (nothing pulled: --dry-run)`,
@@ -508,7 +509,7 @@ export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
     const { image } = t.sandbox
     if (have instanceof Error) {
       lines.push(`  ? ${t.id}${uses}  ${image}  (unchecked: ${have.message.split('\n')[0]})`)
-    } else if (have.has(image)) {
+    } else if (tartListed(have, image)) {
       const digest = await tartDigest(image)
       lines.push(`  ✓ ${t.id}${uses}  ${image}  (ready${digest ? `: ${short(digest)}` : ''})`)
     } else {
