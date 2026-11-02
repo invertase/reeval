@@ -76,7 +76,7 @@ plugin: {
   agent's own copy for one that installs the plugin itself (Antigravity's `agy plugin install`).
 - `copy`, for such an agent, is where its copy lives (`~/.gemini/config/plugins/probe/`): the
   hermetic check allows the plugin items under it.
-- The row then runs 22 attempts instead of 12 (fewer if it leaves hooks, agents or rules out): raise
+- The row then runs 23 attempts instead of 13 (fewer if it leaves hooks, agents or rules out): raise
   `REEVAL_REAL_ATTEMPT_BUDGET` in `contract.yml` by the difference.
 
 ## Running it
@@ -91,7 +91,7 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, or up to 22 with a
+picks rows. Each real row is 13 attempts (12 without an `effort`), 6 of them with one short agent turn, or up to 23 with a
 `plugin` field, at `--concurrency 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
