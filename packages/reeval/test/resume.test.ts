@@ -25,10 +25,12 @@ import {
   readCurrent,
   resolveResume,
   resolveRetry,
+  restoreRetry,
   resumeSettings,
   savedFilters,
   writeCurrent,
 } from '../src/resume.ts'
+import { retryCounts, retryLine } from '../src/retry.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 import { SEEDED_RUN_ID, writeScratch, writeStoppedStaging } from './support/resume.ts'
 
@@ -93,6 +95,20 @@ describe('resolveRetry', () => {
     )
     await assert.rejects(() => resolveRetry(p.dir, 'latest~2'), RefError)
     await assert.rejects(() => resolveRetry(p.dir, 'nope'), RefError)
+  })
+
+  test('a live run says when to retry it', async () => {
+    const p = await project('retry-live', { 'reeval.config.ts': fakeConfig() })
+    const live = '20260101T000000Z_nogit_live_aaaa'
+    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    await assert.rejects(
+      () => resolveRetry(p.dir, live),
+      (e: unknown) =>
+        e instanceof UsageError &&
+        /still running\. Wait for it to finish, then reeval run --retry-errors /.test(
+          (e as Error).message,
+        ),
+    )
   })
 
   test('no finished run is a usage error', async () => {
@@ -198,6 +214,37 @@ describe('resolveResume', () => {
     await assert.rejects(
       () => resolveResume(p.dir),
       (e: unknown) => e instanceof UsageError && /No resumable run/.test((e as Error).message),
+    )
+  })
+})
+
+describe('retryCounts', () => {
+  const record = (attempts: Array<Partial<AttemptRecord>>) =>
+    ({ evals: [{ attempts }] }) as unknown as RunRecord
+  const down = { kind: 'infra', message: 'down' }
+  test('an attempt a cancel stopped or aborted counts as not finished, not as an error', () => {
+    const before = record([
+      { key: 'a', outcome: 'infra_error', error: down, startedAt: 't0' },
+      { key: 'b', outcome: 'infra_error', error: down, startedAt: 't0' },
+      { key: 'c', outcome: 'infra_error', error: down, startedAt: 't0' },
+      { key: 'd', outcome: 'infra_error', error: down, startedAt: 't0' },
+    ])
+    const after = record([
+      { key: 'a', outcome: 'infra_error', error: down, startedAt: 't0' },
+      {
+        key: 'b',
+        outcome: 'infra_error',
+        error: { kind: 'aborted', message: 'x' },
+        startedAt: 't1',
+      },
+      { key: 'c', outcome: 'infra_error', error: down, startedAt: 't1' },
+      { key: 'd', outcome: 'pass', error: null, startedAt: 't1' },
+    ])
+    const counts = retryCounts(after, new Set(['a', 'b', 'c', 'd']), before)
+    assert.deepEqual(counts, { retried: 4, skipped: 2, infra_error: 1, pass: 1 })
+    assert.equal(
+      retryLine(counts),
+      "retried 4 errored attempts: 1 now passes, 0 fail, 1 still errors, 2 didn't finish",
     )
   })
 })
@@ -1207,8 +1254,12 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     const shown = await runCli(p.dir, ['query', 'runs', '--json'])
     assert.match(shown.stdout, /"pass": 1/)
     const again = await runCli(p.dir, ['run', '--retry-errors', run.runId])
-    assert.equal(again.code, 0, again.stdout + again.stderr)
+    assert.equal(again.code, 1, again.stdout + again.stderr)
     assert.match(again.stdout, /has no infra errors, so --retry-errors has nothing to run again/)
+    const json = await runCli(p.dir, ['run', '--retry-errors', '--json'])
+    assert.equal(json.code, 1, json.stdout + json.stderr)
+    assert.match(json.stderr, /nothing to run again/)
+    assert.equal((JSON.parse(json.stdout) as { outcome: string }).outcome, 'fail')
   })
 
   test('leaves a pass and a fail as they were', async () => {
@@ -1220,11 +1271,29 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     const failed = run.evals.find((e) => e.name === 'fails')?.attempts[0]
     assert.ok(passed && failed)
     Object.assign(passed, { outcome: 'infra_error', error: { kind: 'infra', message: 'down' } })
+    // An hour between the run and its retry, which the run's duration doesn't count.
+    run.startedAt = new Date(Date.parse(run.startedAt) - 3_600_000).toISOString()
+    run.git = {
+      sha: 'a'.repeat(40),
+      branch: 'then',
+      dirty: false,
+      diffHash: null,
+      worktreePatch: null,
+      worktreePatchNote: null,
+      commitTime: '2026-01-01T00:00:00Z',
+      shallow: false,
+      remote: null,
+    }
     writeFileSync(scratchOf(p.dir, run.runId), JSON.stringify(run))
     const r = await runCli(p.dir, ['run', '--retry-errors', '--ui', 'plain'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /retried 1 errored attempt: 1 now passes, 0 fail, 0 still error/)
     const { run: after } = readRun(p.dir)
+    assert.deepEqual(after.plan, run.plan)
+    assert.deepEqual(after.git, run.git)
+    assert.equal(after.stack.reeval, run.stack.reeval)
+    assert.ok(after.durationMs >= run.durationMs, `${after.durationMs}`)
+    assert.ok(after.durationMs < run.durationMs + 600_000, `${after.durationMs}`)
     const kept = after.evals.find((e) => e.name === 'fails')?.attempts[0]
     assert.equal(kept?.startedAt, failed.startedAt)
     assert.equal(kept?.retries, undefined)
@@ -1250,6 +1319,19 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     )
     assert.deepEqual(readFileSync(scratchOf(p.dir, run.runId)), bytes)
     assert.equal(existsSync(join(p.dir, '.reeval', 'staging', run.runId)), false)
+  })
+
+  test('another reeval than the run ran on is refused', async () => {
+    const p = await project('retry-reeval', failing)
+    await runCli(p.dir, ['run'], outage)
+    const { run } = readRun(p.dir)
+    writeFileSync(
+      scratchOf(p.dir, run.runId),
+      JSON.stringify({ ...run, stack: { ...run.stack, reeval: '0.0.1' } }),
+    )
+    const r = await runCli(p.dir, ['run', '--retry-errors'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /plan changed since it ran: it ran on reeval 0\.0\.1, and this is /)
   })
 
   test('another eval in the plan is refused', async () => {
@@ -1312,4 +1394,98 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
       ['fails', 'fail', ['agent start refused']],
     ])
   })
+
+  test('a best-of attempt the run skipped stays skipped', async () => {
+    const p = await project('retry-best-of', {
+      ...failing,
+      'evals/best.eval.ts': `
+import { evaluate } from 'reeval'
+evaluate('best', { runs: { bestOf: 3 } }, async (c) => { await c.send('hi') })
+`,
+    })
+    const first = await runCli(p.dir, ['run', '--concurrency', '1'])
+    assert.equal(first.code, 1, first.stdout + first.stderr)
+    const { run } = readRun(p.dir)
+    const best = run.evals.find((e) => e.name === 'best')?.attempts
+    assert.deepEqual(
+      best?.map((a) => a.outcome),
+      ['pass', 'pass', 'skipped'],
+    )
+    const passed = run.evals.find((e) => e.name === 'passes')?.attempts[0]
+    assert.ok(passed)
+    Object.assign(passed, { outcome: 'infra_error', error: { kind: 'infra', message: 'down' } })
+    writeFileSync(scratchOf(p.dir, run.runId), JSON.stringify(run))
+    const r = await runCli(p.dir, ['run', '--retry-errors', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /retried 1 errored attempt: 1 now passes/)
+    const after = readRun(p.dir).run.evals.find((e) => e.name === 'best')?.attempts
+    assert.deepEqual(
+      after?.map((a) => [a.outcome, a.startedAt]),
+      best?.map((a) => [a.outcome, a.startedAt]),
+    )
+  })
+
+  test('a changed judge is refused', async () => {
+    const p = await project('retry-judge', {
+      ...failing,
+      'reeval.config.ts': fakeConfig({
+        harness: "process.env.FAIL ? { failWith: 'agent start refused' } : {}",
+        judge: '{ model: fakeJudge({ score: 0.9 }), threshold: process.env.TH ? 0.2 : 0.7 }',
+      }),
+    })
+    await runCli(p.dir, ['run'], outage)
+    const { run } = readRun(p.dir)
+    const bytes = readFileSync(scratchOf(p.dir, run.runId))
+    const r = await runCli(p.dir, ['run', '--retry-errors'], { env: { TH: '1' } })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /plan changed since it ran: the judge of /)
+    assert.deepEqual(readFileSync(scratchOf(p.dir, run.runId)), bytes)
+  })
+
+  test('a changed environment is refused before the run is written back', async () => {
+    const config = fakeConfig({
+      harness: "process.env.FAIL ? { failWith: 'agent start refused' } : {}",
+    }).replace(
+      "defineEnvironment('fake', {})",
+      "defineEnvironment('fake', { files: { 'm.txt': process.env.M ?? 'a' } })",
+    )
+    const p = await project('retry-environment', { ...failing, 'reeval.config.ts': config })
+    await runCli(p.dir, ['run'], outage)
+    const { run } = readRun(p.dir)
+    const bytes = readFileSync(scratchOf(p.dir, run.runId))
+    const r = await runCli(p.dir, ['run', '--retry-errors'], { env: { M: 'b' } })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /plan changed since it ran: the environment of /)
+    assert.deepEqual(readFileSync(scratchOf(p.dir, run.runId)), bytes)
+    assert.equal(existsSync(join(p.dir, '.reeval', 'staging', run.runId)), false)
+  })
+
+  test('a resume that finishes a recorded run records it again', async () => {
+    const p = await project('retry-resume-recorded', failing)
+    await runCli(p.dir, ['run'], outage)
+    const { run } = readRun(p.dir)
+    const recorded = await runCli(p.dir, ['record', run.runId])
+    assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+    writeFileSync(scratchOf(p.dir, run.runId), JSON.stringify({ ...run, status: 'interrupted' }))
+    const r = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /recorded evals\/\.history\//)
+    const history = JSON.parse(
+      readFileSync(join(p.dir, 'evals', '.history', `${run.runId}.json`), 'utf8'),
+    ) as RunRecord
+    assert.deepEqual(attemptsOf(history), [
+      ['passes', 'pass', ['agent start refused']],
+      ['fails', 'fail', ['agent start refused']],
+    ])
+  })
+})
+
+test("restoreRetry leaves another process's retry alone", async () => {
+  const p = await project('retry-restore-held', { 'reeval.config.ts': fakeConfig() })
+  const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+  writeFileSync(join(staging, HOLDER_FILE), `${process.ppid}\n${hostname()}\n`)
+  writeFileSync(join(staging, 'previous.json'), '{}\n')
+  await restoreRetry(p.dir, SEEDED_RUN_ID)
+  assert.equal(existsSync(join(staging, 'previous.json')), true)
+  assert.equal(existsSync(join(p.dir, '.reeval', 'runs', `${SEEDED_RUN_ID}.json`)), false)
 })

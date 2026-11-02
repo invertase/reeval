@@ -51,9 +51,13 @@ export function writeCurrent(root: string, runId: string): void {
   }
 }
 
-const stillRunning = (runId: string) =>
+type Continue = '--resume' | '--retry-errors'
+
+const stillRunning = (runId: string, flag: Continue = '--resume') =>
   new UsageError(
-    `run ${runId} is still running. Wait for it to finish or stop, then reeval run --resume ${runId}.`,
+    flag === '--resume'
+      ? `run ${runId} is still running. Wait for it to finish or stop, then reeval run --resume ${runId}.`
+      : `run ${runId} is still running. Wait for it to finish, then reeval run --retry-errors ${runId}; if it stops before then, reeval run --resume ${runId} finishes it and retries its infra errors.`,
   )
 
 /** Same host only: `kill(pid, 0)`. Another host cannot be probed. */
@@ -83,7 +87,13 @@ const holderLive = (dir: string) => {
   return holder ? processAlive(holder.pid, holder.host) : false
 }
 
-function acquireHolder(staging: string, runId: string): void {
+/** This process holds the run's staging. */
+const holdsStaging = (staging: string) => {
+  const holder = readHolder(staging)
+  return holder?.pid === process.pid && holder.host === hostname()
+}
+
+function acquireHolder(staging: string, runId: string, flag?: Continue): void {
   const file = join(staging, HOLDER_FILE)
   const body = `${process.pid}\n${hostname()}\n`
   const create = () => writeFileSync(file, body, { flag: 'wx' })
@@ -93,16 +103,16 @@ function acquireHolder(staging: string, runId: string): void {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
   }
-  if (holderLive(staging)) throw stillRunning(runId)
+  if (holderLive(staging)) throw stillRunning(runId, flag)
   try {
     unlinkSync(file)
   } catch {
-    throw stillRunning(runId)
+    throw stillRunning(runId, flag)
   }
   try {
     create()
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw stillRunning(runId)
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw stillRunning(runId, flag)
     throw error
   }
 }
@@ -494,6 +504,12 @@ export async function resolveRetry(root: string, ref?: string): Promise<ResumeTa
   })
   if (ref === undefined || ref === '' || ref === 'latest') {
     const pick = done.at(-1)
+    const running = candidates.filter((c) => c.live && (!pick || c.runId > pick.runId)).at(-1)
+    if (running) {
+      throw new UsageError(
+        `run ${running.runId} is still running, so --retry-errors can't tell which run to retry. Wait for it to finish, or pass the run id.`,
+      )
+    }
     if (!pick) {
       throw new UsageError(
         'No finished run to retry. --retry-errors re-runs the infra errors of a complete run in .reeval/runs; reeval run --resume continues one that stopped.',
@@ -516,7 +532,7 @@ export async function resolveRetry(root: string, ref?: string): Promise<ResumeTa
       `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --retry-errors empty for the newest finished run.`,
     )
   }
-  if (found.live) throw stillRunning(found.runId)
+  if (found.live) throw stillRunning(found.runId, '--retry-errors')
   if (!finished(found)) {
     throw new UsageError(
       `run ${found.runId} didn't finish. reeval run --resume ${found.runId} runs the rest and retries its infra errors.`,
@@ -535,10 +551,15 @@ export const erroredAttempts = (record: Pick<RunRecord, 'evals'>): AttemptRecord
  * For a scratch resume: move the assembled record aside so the continuation can write the same
  * id. Staging already in place is left alone.
  */
-export async function prepareResume(target: ResumeTarget, root: string): Promise<void> {
+export async function prepareResume(
+  target: ResumeTarget,
+  root: string,
+  { held = false }: { held?: boolean } = {},
+): Promise<void> {
   const staging = stagingOf(root, target.runId)
   mkdirSync(join(staging, 'evals'), { recursive: true })
-  acquireHolder(staging, target.runId)
+  // `held`: a retry holds its staging from before it collects ({@link holdRetry}).
+  if (!(held && holdsStaging(staging))) acquireHolder(staging, target.runId)
   if (!target.previous) return
   const scratch = scratchDir(root)
   const recordPath = join(scratch, `${target.runId}.json`)
@@ -570,11 +591,23 @@ export async function prepareResume(target: ResumeTarget, root: string): Promise
 }
 
 /**
+ * Holds a retry's run before it collects, so a second retry or resume of it stops as still
+ * running rather than racing this one to {@link prepareResume}.
+ */
+export function holdRetry(target: ResumeTarget, root: string): void {
+  const staging = stagingOf(root, target.runId)
+  mkdirSync(join(staging, 'evals'), { recursive: true })
+  acquireHolder(staging, target.runId, '--retry-errors')
+}
+
+/**
  * Undoes a retry's {@link prepareResume} when it stops before the engine runs: the finished
  * record and its artifacts go back to `.reeval/runs`, and its staging is removed.
  */
 export async function restoreRetry(root: string, runId: string): Promise<void> {
   const staging = stagingOf(root, runId)
+  // Another process's retry of the run holds its staging: leave that retry alone.
+  if (!holdsStaging(staging)) return
   const scratch = scratchDir(root)
   const aside = join(staging, 'previous.json')
   const recordPath = join(scratch, `${runId}.json`)

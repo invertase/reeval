@@ -1,10 +1,13 @@
 // `reeval run --retry-errors`: what refuses a retry because the plan isn't the run's any more, and
 // how the retried attempts came out.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { PlannedItem } from './engine/types.ts'
 import { evalFile, sourcesPart } from './eval-source.ts'
 import { gatewayPart, harnessPart } from './history/assemble.ts'
 import type { FingerprintParts, RunRecord } from './history/types.ts'
-import type { Outcome } from './types.ts'
+import { recordFileName } from './ids.ts'
+import type { EvalRecord, Outcome } from './types.ts'
 import { gatePart } from './view/gate.ts'
 
 const PARTS: Array<[keyof FingerprintParts, string]> = [
@@ -12,6 +15,7 @@ const PARTS: Array<[keyof FingerprintParts, string]> = [
   ['harness', 'harness'],
   ['gateway', 'gateway'],
   ['gate', 'gate'],
+  ['judge', 'judge'],
 ]
 
 const listed = (names: string[]) =>
@@ -29,6 +33,7 @@ export async function retryChanges(
   planned: readonly PlannedItem[],
   errored: ReadonlySet<string>,
   root: string,
+  judge: { part: string; model: string | null },
 ): Promise<string[]> {
   const had = new Map(previous.evals.flatMap((e) => e.attempts.map((a) => [a.key, e] as const)))
   const now = new Map(planned.map((p) => [p.key, p]))
@@ -50,8 +55,11 @@ export async function retryChanges(
       harness: harnessPart(attempt.harness),
       ...gatewayPart(attempt.gateway),
       ...gatePart(attempt.gate),
+      judge: judge.part,
     }
     for (const [part, name] of PARTS) {
+      // With no judge the part still hashes reeval's version, which alone judges nothing.
+      if (part === 'judge' && judge.model === null) continue
       if (current[part] === cell.fingerprintParts[part]) continue
       parts.set(name, (parts.get(name) ?? new Set()).add(p.id))
     }
@@ -60,15 +68,63 @@ export async function retryChanges(
   return changes
 }
 
+/**
+ * The evals whose retried attempts resolved another environment than their cell had in the run:
+ * the environment's digest is only known once an attempt resolves it, so this is checked after
+ * the retry and before it's written back.
+ */
+export function retryEnvironmentChanges(
+  previous: RunRecord,
+  staging: string,
+  retried: ReadonlySet<string>,
+): string[] {
+  const changed = new Set<string>()
+  for (const e of previous.evals) {
+    for (const a of e.attempts) {
+      if (!retried.has(a.key)) continue
+      const was = e.cells.find((c) => c.key === a.cell)?.environmentDigest
+      if (!was) continue
+      let now: string | undefined
+      try {
+        const text = readFileSync(join(staging, 'evals', recordFileName(a.key)), 'utf8')
+        now = (JSON.parse(text) as EvalRecord).environment?.digest
+      } catch {
+        continue
+      }
+      if (now && now !== was) changed.add(e.id)
+    }
+  }
+  return [...changed].map((id) => `the environment of ${id} changed`)
+}
+
 export type RetryCounts = { retried: number } & Partial<Record<Outcome, number>>
 
-/** How each attempt the run ran again came out, by its outcome in the record. */
-export function retryCounts(record: RunRecord, retried: ReadonlySet<string>): RetryCounts {
+/**
+ * How each attempt the run ran again came out, by its outcome in the record. A cancel either
+ * aborts an attempt or stops it before it ran again, so it still is the earlier try, with its
+ * `startedAt`: both count as not finished (`skipped`), not as an infra error.
+ */
+export function retryCounts(
+  record: RunRecord,
+  retried: ReadonlySet<string>,
+  previous: RunRecord | null,
+): RetryCounts {
+  const before = new Map(
+    (previous?.evals ?? []).flatMap((e) => e.attempts.map((a) => [a.key, a] as const)),
+  )
   const counts: RetryCounts = { retried: 0 }
   for (const a of record.evals.flatMap((e) => e.attempts)) {
     if (!retried.has(a.key)) continue
     counts.retried++
-    counts[a.outcome] = (counts[a.outcome] ?? 0) + 1
+    const was = before.get(a.key)
+    const stale =
+      a.outcome === 'infra_error' &&
+      (a.error?.kind === 'aborted' ||
+        (was !== undefined &&
+          a.startedAt === was.startedAt &&
+          a.error?.message === was.error?.message))
+    const outcome = stale ? 'skipped' : a.outcome
+    counts[outcome] = (counts[outcome] ?? 0) + 1
   }
   return counts
 }

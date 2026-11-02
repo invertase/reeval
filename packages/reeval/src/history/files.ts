@@ -395,7 +395,37 @@ async function writeClaimed(
         await rename(source, target)
       }
     }
-    if (existing) await rm(recordPath, { force: true })
+    if (existing) {
+      // A replaced record never goes missing: the new one is renamed over it, which is atomic,
+      // and the claim keeps every other writer out meanwhile.
+      const old = join(dir, `.tmp-${tmpName()}`)
+      const tmp = join(dir, `.tmp-${tmpName()}.json`)
+      await writeFile(tmp, bytes)
+      let moved = false
+      try {
+        await rename(runDir(dir, runId), old).then(
+          () => {
+            moved = true
+          },
+          (error: NodeJS.ErrnoException) => {
+            if (error.code !== 'ENOENT') throw error
+          },
+        )
+        if (staging && artifactDir) await rename(staging, artifactDir)
+        await rename(tmp, recordPath)
+      } catch (error) {
+        // The old record stays, so its artifacts go back beside it.
+        if (moved) {
+          await rm(runDir(dir, runId), { recursive: true, force: true })
+          await rename(old, runDir(dir, runId))
+        }
+        throw error
+      } finally {
+        await rm(tmp, { force: true })
+      }
+      await rm(old, { recursive: true, force: true })
+      return { recordPath, artifactDir, created: true }
+    }
     // An artifact dir without a record is left over from an interrupted write.
     await rm(runDir(dir, runId), { recursive: true, force: true })
     if (staging && artifactDir) await rename(staging, artifactDir)

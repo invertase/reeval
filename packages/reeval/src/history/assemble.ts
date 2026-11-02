@@ -159,6 +159,11 @@ export type AssembleInput = {
   /** Each eval's pairwise answers by eval id, and each attempt's own answers by its key. */
   answers?: SettledQuestions
   invocation?: RunInvocation
+  /**
+   * `--retry-errors`, and when this process started it: the record keeps the run's plan, git
+   * state and stack, and its duration is the run's plus the retry's.
+   */
+  retry?: { startedAt: Date }
 }
 
 export type AssembledRun = {
@@ -1244,6 +1249,20 @@ function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
   return state
 }
 
+/** A retried run's git state as it ran, with its `worktree.patch` carried over byte-exact. */
+async function keptGit(
+  previous: RunRecord,
+  from: string | null | undefined,
+  out: Artifacts,
+): Promise<GitInfo | null> {
+  const ref = previous.git?.worktreePatch
+  if (ref && from) {
+    const bytes = await readFile(join(from, ...ref.path.split('/'))).catch(() => null)
+    if (bytes) out.files.set(ref.path, bytes)
+  }
+  return previous.git
+}
+
 const byName =
   <T>(key: (x: T) => string) =>
   (a: T, b: T) =>
@@ -1286,6 +1305,25 @@ function stackOf(
   }
 }
 
+/** The judge's part of every cell's fingerprint, and the judge model's name (null for none). */
+export function judgePart(
+  config: RunContext['config'],
+  profile: RunContext['profile'],
+  reeval: string,
+  enginePackages: Record<string, string>,
+): { part: string; model: string | null } {
+  const runJudge = profile ? mergeJudge(config.judge, profileJudge(profile)) : config.judge
+  const model = runJudge.model === undefined ? null : judgeModelName(runJudge.model)
+  const part = sha256(
+    JSON.stringify({
+      model,
+      threshold: runJudge.threshold,
+      version: judgeVersion(reeval, packageVersions(enginePackages), model ?? ''),
+    }),
+  )
+  return { part, model }
+}
+
 export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { ctx, engine } = input
   const { config, runId, profile } = ctx
@@ -1307,13 +1345,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   )
   const seen = new Seen(input.sandbox)
   seen.retries = readRetries(ctx.stagingDir)
-  const judge = sha256(
-    JSON.stringify({
-      model: judgeModel,
-      threshold: runJudge.threshold,
-      version: judgeVersion(input.reeval, packageVersions(input.enginePackages), judgeModel ?? ''),
-    }),
-  )
+  const { part: judge } = judgePart(config, profile, input.reeval, input.enginePackages)
   for (const e of engine.evals)
     await addAttempt(e, ctx, seen, out, judge, input.previous, input.previousArtifacts)
   if (input.previous) {
@@ -1404,6 +1436,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gate === 'none'),
     )
     .filter((a) => a.outcome === 'fail').length
+  const retried = input.retry && input.previous ? input.previous : null
+  const stack = stackOf(input, seen, judgeModel, runJudge.threshold)
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
     list === undefined ? undefined : [list].flat().map(harnessId)
   const record: RunRecord = {
@@ -1421,12 +1455,26 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           : 'complete',
     startedAt: input.startedAt.toISOString(),
     endedAt: input.endedAt.toISOString(),
-    durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
+    durationMs: retried
+      ? retried.durationMs +
+        input.endedAt.getTime() -
+        (input.retry?.startedAt ?? input.endedAt).getTime()
+      : input.endedAt.getTime() - input.startedAt.getTime(),
     author: input.author,
-    git: gitState(input, out),
+    git: retried ? await keptGit(retried, input.previousArtifacts, out) : gitState(input, out),
     runner: input.runner,
-    dependencies: { lockfiles: input.lockfiles },
-    stack: stackOf(input, seen, judgeModel, runJudge.threshold),
+    dependencies: retried ? retried.dependencies : { lockfiles: input.lockfiles },
+    // The images, harnesses and context a retried attempt saw are its cell's, which the retry
+    // refuses to change; what ran them is the run's.
+    stack: retried?.stack
+      ? {
+          ...retried.stack,
+          images: stack.images,
+          harnesses: stack.harnesses,
+          judge: { ...retried.stack.judge, resolvedModels: stack.judge.resolvedModels },
+          context: stack.context,
+        }
+      : stack,
     environments: [...seen.environments.values()].sort(byName((e) => e.name)),
     profile: profile
       ? {
@@ -1453,13 +1501,15 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
         }
       : null,
     ...(input.invocation ? { invocation: input.invocation } : {}),
-    plan: {
-      evals: input.plan.evals,
-      cells: input.plan.cells,
-      attempts: input.plan.attempts,
-      estimateMs: Math.round(input.plan.estimateMs),
-      sandboxWarnings: input.plan.sandboxWarnings,
-    },
+    plan: retried
+      ? retried.plan
+      : {
+          evals: input.plan.evals,
+          cells: input.plan.cells,
+          attempts: input.plan.attempts,
+          estimateMs: Math.round(input.plan.estimateMs),
+          sandboxWarnings: input.plan.sandboxWarnings,
+        },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),

@@ -118,9 +118,11 @@ keeps passes and fails and runs infra errors again.
 
 After an outage (a provider down, Docker out of disk), `reeval run --retry-errors [<id>]` runs a
 finished run's infra-errored attempts again into the same run, with the same attempt ids; passes
-and fails stay. It exits 2 if an eval's source, harness or plan changed since the run (start a
-new run instead), 0 with a note if the run has none. Each retried attempt keeps its earlier
-errors in `retries`, and the run's exit code is its outcome after the retry.
+and fails stay. It exits 2 if an eval's source, harness, judge, environment, the reeval version
+or the plan changed since the run (start a new run instead). A run with no infra errors prints a
+note and exits with its own outcome, so `reeval run || reeval run --retry-errors` stays red
+after a real fail. Each retried attempt keeps its earlier errors in `retries`, and the run's exit
+code is its outcome after the retry.
 
 ## Recording runs
 
