@@ -10,14 +10,16 @@ import { describe, test } from 'node:test'
 import { analyzeCommand } from '../src/analysis/command.ts'
 import { compareCommand, showCommand } from '../src/commands.ts'
 import { loadConfig } from '../src/config.ts'
+import type { RunTrace } from '../src/history/trace.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 import { readableRecord } from '../src/view/record.ts'
-import { project, runCli } from './helpers.ts'
+import { project, runCli, tempDir } from './helpers.ts'
 import { CORPUS_DIR, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
+import { traceProblems } from './support/trace.ts'
 
 const entries = corpusEntries()
 
@@ -261,6 +263,8 @@ describe('the record corpus', { concurrency: 4 }, () => {
       await ok(['show', id])
       await ok(['show', id, '--md'])
       await ok(['show', id, '--json'])
+      await ok(['show', id, '--trace'])
+      readFileSync(join(p.dir, '.reeval/traces', `${id}.json`))
       await ok(['compare', id], [0, 1])
       await ok(['analyze', id, '--dry-run'])
     }
@@ -301,6 +305,7 @@ describe('the record corpus', { concurrency: 4 }, () => {
       test(`${entry.name}: every reader reads every run`, async () => {
         const { config } = await inProcess()
         const ids = entry.runs.map((r) => r.runId)
+        const traces = tempDir(`corpus-traces-${entry.name}`)
         const run = (
           where: string,
           command: (out: Out, err: Out) => Promise<number>,
@@ -323,6 +328,13 @@ describe('the record corpus', { concurrency: 4 }, () => {
             ),
           )
           assert.deepEqual(shown, readableRecord(structuredClone(r.raw) as never))
+          const traceFile = join(traces, `${id}.json`)
+          await run(`reeval show ${id} --trace`, (out) =>
+            showCommand({ config, flags: { trace: true, out: traceFile }, out }, [id]),
+          )
+          const traceText = readFileSync(traceFile, 'utf8')
+          assert.deepEqual(traceProblems(JSON.parse(traceText) as RunTrace), [], `${id}: trace`)
+          assert.equal(countSecrets(traceText, {}), 0, `${entry.name} ${id}: trace secrets`)
           await run(
             `reeval compare ${id}`,
             (out) => compareCommand({ config, flags: {}, out }, [id]),

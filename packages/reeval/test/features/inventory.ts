@@ -1595,6 +1595,12 @@ export const inventory: InventoryFeature[] = [
     real: ['e2e › a second identical run', 'e2e › reeval history and reeval show'],
   },
   {
+    id: 'history.trace',
+    area: 'Records and studio',
+    name: "`reeval show --trace`: a run's timeline as Chrome Trace Event JSON for Perfetto, attempts in lanes by overlap with their setup, turns, tool calls, checks and judge, from any record",
+    unit: ['reeval/test/trace.test.ts', 'reeval/test/corpus.test.ts'],
+  },
+  {
     id: 'history.revision',
     area: 'Records and studio',
     name: "`revision` and the `sources` fingerprint part: an eval's body, options, case data and revision, named by `reeval compare`",
@@ -2037,13 +2043,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'trace',
     area: 'CLI and runner',
-    name: '`-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
+    name: '`-vv`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
     unit: ['reeval/test/debug.test.ts', 'reeval/test/docker.test.ts'],
   },
   {
     id: 'debug.files',
     area: 'CLI and runner',
-    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
+    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `-vv`, never in the history folder',
     unit: ['reeval/test/debug.test.ts'],
     real: ['e2e › reeval run --record -v'],
   },

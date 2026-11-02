@@ -1,6 +1,6 @@
 // Verbosity and local debug data, through the real CLI on the fake sandbox: the `-v` phase trace
 // and `-vv` payloads on screen, debug.log always in .reeval/debug and never in the history folder,
-// trace.ndjson kept like a flight recorder (failures, or --trace), redaction in every output,
+// trace.ndjson kept like a flight recorder (failures, or -vv), redaction in every output,
 // retention and `reeval clean`. The Docker phases (image, container, gateway, docker commands) are
 // in docker.test.ts.
 import assert from 'node:assert/strict'
@@ -152,9 +152,6 @@ describe('verbosity', () => {
     assert.match(r.stdout, / harness {3}transcript tool\n.*"output":"from-the-agent\\n"/)
     assert.match(r.stdout, / judge {5}judge prompt\n.*"question":"Did it write out\.txt\?"/)
     assert.match(r.stdout, / check {5}check output: test -f out\.txt\n/)
-    // --trace is the same level.
-    const traced = await runCli(p.dir, ['run', '--trace'])
-    assert.match(traced.stdout, / plan {6}resolved config\n/)
   })
 })
 
@@ -188,7 +185,7 @@ describe('local debug data', () => {
     }
   })
 
-  test('trace.ndjson is kept for a failing attempt, not a passing one unless --trace', async () => {
+  test('trace.ndjson is kept for a failing attempt, not a passing one unless -vv', async () => {
     const p = await project('debug-trace', {
       'reeval.config.ts': fakeConfig({ harness: script }),
       'evals/a.eval.ts': passing,
@@ -213,7 +210,7 @@ describe('local debug data', () => {
     }
     assert.ok(trace.slice(1).every((e: { ms: unknown }) => Number.isInteger(e.ms)))
 
-    const traced = await runCli(p.dir, ['run', '--trace'])
+    const traced = await runCli(p.dir, ['run', '-vv'])
     assert.equal(traced.code, 1, traced.stdout + traced.stderr)
     assert.ok(existsSync(join(attemptDir(p.dir, 'traces-every-phase'), 'trace.ndjson')))
   })
@@ -369,27 +366,25 @@ evaluate('searches for the tail', async (c) => {
 `,
     })
     const env = { REEVAL_DEBUG_PROVIDER_API_KEY: KEY }
-    for (const flag of ['-v', '-vv']) {
-      const r = await runCli(p.dir, ['run', flag, '--trace'], { env })
-      assert.equal(r.code, 0, r.stdout + r.stderr)
-      const dir = attemptDir(p.dir, 'searches')
-      const { run } = readRun(p.dir)
-      const outputs = {
-        screen: r.stdout + r.stderr,
-        'debug.log': read(join(dir, 'debug.log')),
-        'trace.ndjson': read(join(dir, 'trace.ndjson')),
-        'the record and transcript': JSON.stringify(run),
-      }
-      for (const [where, text] of Object.entries(outputs)) {
-        for (const n of [8, 10, 12]) {
-          const fragment = KEY.slice(-n)
-          assert.equal(text.includes(fragment), false, `${flag}: ${where} has the key's last ${n}`)
-        }
-      }
-      // The canary: the masked command is there, so the check would see the tail if it leaked.
-      assert.match(outputs['debug.log'], /check +\$ echo searching for \[REDACTED\]; grep/)
-      assert.match(outputs['the record and transcript'], /searching for \[REDACTED\]/)
+    const r = await runCli(p.dir, ['run', '-vv'], { env })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const dir = attemptDir(p.dir, 'searches')
+    const { run } = readRun(p.dir)
+    const outputs = {
+      screen: r.stdout + r.stderr,
+      'debug.log': read(join(dir, 'debug.log')),
+      'trace.ndjson': read(join(dir, 'trace.ndjson')),
+      'the record and transcript': JSON.stringify(run),
     }
+    for (const [where, text] of Object.entries(outputs)) {
+      for (const n of [8, 10, 12]) {
+        const fragment = KEY.slice(-n)
+        assert.equal(text.includes(fragment), false, `${where} has the key's last ${n}`)
+      }
+    }
+    // The canary: the masked command is there, so the check would see the tail if it leaked.
+    assert.match(outputs['debug.log'], /check +\$ echo searching for \[REDACTED\]; grep/)
+    assert.match(outputs['the record and transcript'], /searching for \[REDACTED\]/)
   })
 
   test('a credential-like MCP header written as a plain string is masked on screen, in the trace and the record', async () => {
@@ -416,7 +411,7 @@ evaluate('prints its headers', { environments: env }, async (c) => {
 })
 `,
     })
-    const r = await runCli(p.dir, ['run', '-vv', '--trace'])
+    const r = await runCli(p.dir, ['run', '-vv'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const dir = attemptDir(p.dir, 'prints')
     const view = readRun(p.dir)

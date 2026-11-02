@@ -2624,7 +2624,7 @@
           }
         },
         "verbosity": {
-          "description": "`-v` (1) or `-vv`/`--trace` (2) streams the attempts' debug lines; 0 only writes debug.log.",
+          "description": "`-v` (1) or `-vv` (2) streams the attempts' debug lines; 0 only writes debug.log.",
           "enum": [0, 1, 2]
         }
       },
