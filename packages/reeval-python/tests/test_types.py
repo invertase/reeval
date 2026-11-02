@@ -60,7 +60,7 @@ def test_pyright_finds_a_missing_await_and_an_unknown_matcher(tmp_path: Path) ->
 MISUSE = """
 from datetime import timedelta
 
-from reeval_python import AttemptContext, SyncAttemptContext, evaluate, evaluate_each, expect
+from reeval_python import AttemptContext, SyncAttemptContext, evaluate, expect
 from reeval_python import aio
 
 
@@ -70,7 +70,7 @@ async def ok(c: AttemptContext) -> None:
     await aio.expect.poll(lambda: c.read_file("x"), timeout=1.5).to_be("y")
 
 
-@evaluate_each([{"n": 1}], "case $n")
+@evaluate("cases", {"cases": [{"n": 1}], "case_key": lambda c: str(c["n"])})
 def ok_each(c: SyncAttemptContext, case: dict[str, int]) -> None: ...
 
 
@@ -93,7 +93,7 @@ def returns_value(c: SyncAttemptContext) -> bool:
     return True
 
 
-@evaluate_each([1], "case %s")  # flagged
+@evaluate("wrong cases", {"cases": [1]})  # flagged
 async def wrong_each(c: SyncAttemptContext, case: int) -> None: ...
 
 

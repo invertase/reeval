@@ -6,7 +6,7 @@ export default defineConfig({
   // As the agent: send Codex's brokered key to a path on its API that reeval doesn't broker it
   // for. The gateway answers the refusal itself: nothing goes upstream, only the host's name is
   // resolved.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'codex',
     brokers: true,
     script: [

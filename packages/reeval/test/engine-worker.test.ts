@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type FromWorker, PROTOCOL, type ToWorker } from '../src/engine/protocol.ts'
 import {
-  declareHarnesses,
+  declarePlanned,
   getRunContext,
   registerGroup,
   registerTest,
@@ -18,7 +18,7 @@ import { tempDir } from './helpers.ts'
 // Eval files load through jiti, not this process's own module graph, so they reach the runtime
 // the worker installed through a global.
 Object.assign(globalThis, {
-  __es: { registerTest, registerGroup, getRunContext, declareHarnesses },
+  __es: { registerTest, registerGroup, getRunContext, declarePlanned },
 })
 
 /** A channel whose main process closes it once `done` arrives, as forkWorker's does. */
@@ -75,7 +75,7 @@ const until = async (check: () => boolean) => {
 }
 
 describe('startWorker', () => {
-  test('says hello, collects, reports the tests with their attempts and harnesses, and exits', async () => {
+  test('says hello, collects, reports the tests with their attempts, harnesses and trait keys, and exits', async () => {
     const c = fakeChannel()
     startWorker(c.channel)
     assert.deepEqual(c.sent[0], { t: 'hello', protocol: PROTOCOL })
@@ -85,9 +85,9 @@ registerGroup('g', 'run', () => {
   registerTest('a [x#1]', { mode: 'run', attempt: { name: 'a' } }, async () => {})
 })
 registerTest('todo', { mode: 'todo' }, async () => {})
-const { declareHarnesses } = (globalThis as any).__es
-declareHarnesses(['a', 'b'])
-declareHarnesses(['b', 'c'])
+const { declarePlanned } = (globalThis as any).__es
+declarePlanned(['a', 'b'], ['lang'])
+declarePlanned(['b', 'c'], ['lang', 'os'])
 `)
     c.send({ t: 'init', run, file, select: null })
     await c.exit
@@ -99,6 +99,7 @@ declareHarnesses(['b', 'c'])
         { index: 1, name: 'todo', groups: [], mode: 'todo' },
       ],
       harnesses: ['a', 'b', 'c'],
+      traits: ['lang', 'os'],
     })
     assert.deepEqual(c.exits, [0])
   })

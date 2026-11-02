@@ -28,6 +28,7 @@ export const REMARK_KINDS: Record<Remark['kind'], { severity: 'concern' | 'sugge
   'proxy-only-egress': { severity: 'concern' },
   'setup-process-secret': { severity: 'concern' },
   'snapshot-too-large': { severity: 'concern' },
+  'observe-throws': { severity: 'concern' },
 }
 
 /** A remark about the eval's quality, not about the agent. */
@@ -47,6 +48,7 @@ export type Remark = {
     | 'proxy-only-egress'
     | 'setup-process-secret'
     | 'snapshot-too-large'
+    | 'observe-throws'
   /** Fixed by kind (`REMARK_KINDS`). */
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */

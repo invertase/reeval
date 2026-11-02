@@ -11,8 +11,8 @@ const sandbox =
     : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) })
 
 export default defineConfig(({ file }) => ({
-  harness: fakeHarness({}),
-  environment: defineEnvironment('found', {
+  harnesses: fakeHarness({}),
+  environments: defineEnvironment('found', {
     sandbox,
     files: { 'marker.txt': file('marker.txt') },
   }),

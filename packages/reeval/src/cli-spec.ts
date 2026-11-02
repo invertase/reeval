@@ -38,6 +38,7 @@ export const FLAGS = {
   'log-prefix': { type: 'string' },
   'output-logs': { type: 'string' },
   tag: { type: 'string', multiple: true },
+  trait: { type: 'string', multiple: true },
   http: { type: 'boolean' },
   port: { type: 'string' },
   host: { type: 'string' },
@@ -96,6 +97,7 @@ const RUN_FLAGS: FlagName[] = [
   'runs',
   'concurrency',
   'tag',
+  'trait',
   'record',
   'ui',
   'log-order',
@@ -151,6 +153,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
+    --trait <key=value>         Only cells whose environment's trait is value, or lists it (with
+                                compare, the control's); repeat to combine (AND)
     --record                    Also record the run into the history folder (see config.record)
     --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
                                 an eval list you browse with the arrow keys on a terminal outside CI)

@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // image and puts /opt/reeval-fixture/bin on PATH. As the agent, a login shell looks the tool up:
 // `sh -lc` as Cursor runs one, `bash -lc` as others do.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         {

@@ -16,7 +16,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files,
     text: 'I added clamp(n, min, max) to src/math.js, with a test.',
   }),
@@ -28,7 +28,7 @@ export default defineConfig({
     // An agent that does the task right but also adds a dependency, which the guard must catch.
     canary: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           files: { ...files, 'package.json': canary('package.json') },
           text: 'I added clamp(n, min, max), with lodash.clamp in package.json for later.',
         }),

@@ -8,7 +8,7 @@ const github = defineEnvironment('github', ({ secret }) => ({
   },
 }))
 
-evaluate('reads a repo from the GitHub API', { environment: github }, async (c) => {
+evaluate('reads a repo from the GitHub API', { environments: github }, async (c) => {
   await c.send(
     'Write repo.js, a Node script that fetches the nodejs/node repo from the GitHub ' +
       'API with fetch and prints its full_name, sending GITHUB_TOKEN as a bearer token when it is set.',

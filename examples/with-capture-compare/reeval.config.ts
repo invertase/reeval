@@ -13,7 +13,7 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent's files into the workspace: both arms add the
   // button, and only the one with the skill styles it. The fake sandbox saves a 1×1 placeholder
   // for each screenshot.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'index.html': fakeAgent('without-skill/index.html') },
     text: 'I added a Sign up button under the intro paragraph.',
     withSkill: {

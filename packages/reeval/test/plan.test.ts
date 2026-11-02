@@ -86,11 +86,11 @@ export const cases: PlanCase[] = [
   },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
-  { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
+  { dir: 'compare', name: 'control', args: ['evals/control.eval.ts'] },
   {
     dir: 'compare',
-    name: 'baseline-omitted-off',
-    args: ['--profile', 'off', 'evals/omitted.eval.ts'],
+    name: 'control-off',
+    args: ['--profile', 'off', 'evals/control.eval.ts'],
   },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   {
@@ -103,16 +103,22 @@ export const cases: PlanCase[] = [
     name: 'harness-scoped-dropped-pinned',
     args: ['--profile', 'one-lean', 'evals/scoped-pinned.eval.ts'],
   },
-  { dir: 'compare', name: 'each-pooled', args: ['evals/each.eval.ts'] },
-  { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
+  { dir: 'compare', name: 'cases', args: ['evals/cases.eval.ts'] },
+  { dir: 'compare', name: 'cases-filtered', args: ['evals/cases.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
+  { dir: 'observe', name: 'observe', args: [] },
+  { dir: 'where', name: 'where', args: [] },
+  { dir: 'where', name: 'trait', args: ['--trait', 'stack=next'] },
+  { dir: 'where', name: 'trait-list', args: ['--trait', 'auth=clerk', '--trait', 'stack=next'] },
+  { dir: 'where', name: 'trait-none', args: ['--trait', 'auth=clerk', '--trait', 'stack=vite'] },
+  { dir: 'where', name: 'limit-traits', args: ['--profile', 'vite'] },
   { dir: 'compare', name: 'verdicts', args: ['evals/verdicts.eval.ts'] },
   { dir: 'compare', name: 'verdicts-no-control', args: ['evals/verdicts.eval.ts', 'b/skilled'] },
   {
     dir: 'compare',
     name: 'verdicts-some-cases',
-    args: ['evals/verdicts.eval.ts', 'six cases can: a'],
+    args: ['evals/verdicts.eval.ts', 'six cases can [a]'],
   },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
   { dir: 'compare', name: 'off-study', args: ['--profile', 'off', 'evals/study.eval.ts'] },
@@ -291,8 +297,10 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
   { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
-  { dir: 'environments', name: 'config-control', args: ['evals/compare.eval.ts'] },
+  { dir: 'environments', name: 'control-over-config', args: ['evals/compare.eval.ts'] },
   { dir: 'environments', name: 'inherit-config', args: ['evals/inherit.eval.ts'] },
+  { dir: 'environments', name: 'list', args: ['evals/list.eval.ts'] },
+  { dir: 'environments', name: 'traits', args: ['evals/traits.eval.ts'] },
   {
     dir: 'environments',
     name: 'empty-control',
@@ -392,6 +400,49 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     assert.equal(plan.estimateMs, plan.totals.attempts * 1000)
   })
 
+  test("where runs whatever --trait leaves: its refusals and excluded pairs don't depend on the flags", async () => {
+    const env = `import { defineEnvironment, evaluate } from 'reeval'
+const next = defineEnvironment('next-app', { traits: { stack: 'next' } })
+const vite = defineEnvironment('vite-app', { traits: { stack: 'vite' } })
+`
+    const config = { 'reeval.config.ts': fakeConfig() }
+    const typo = await project('where-trait-typo', {
+      ...config,
+      'evals/w.eval.ts': `${env}evaluate('w', { environments: [next, vite], cases: ['a', 'b'],
+  where: ({ environment }) => environment.traits.stak === 'next' }, async () => {})
+`,
+    })
+    for (const args of [[], ['--trait', 'stack=next'], ['--trait', 'stack=astro']]) {
+      const r = await runCli(typo.dir, ['run', '--dry-run', ...args])
+      assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, /reads environment\.traits\.stak, which no environment defines/)
+    }
+    const fits = await project('where-trait-excluded', {
+      ...config,
+      'evals/w.eval.ts': `${env}evaluate('w', { environments: [next, vite], cases: ['next', 'vite'],
+  where: ({ case: c, environment }) => environment.traits.stack === c }, async () => {})
+`,
+    })
+    const excluded = async (args: string[]) => {
+      const r = await runCli(fits.dir, ['run', '--dry-run', '--json', ...args])
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const plan = JSON.parse(r.stdout) as {
+        evals: Array<{ name: string; skip: string | null; whereExcluded?: unknown }>
+      }
+      return plan.evals.map((e) => [e.name, e.skip === null, e.whereExcluded])
+    }
+    const skipped = await excluded(['--trait', 'stack=astro'])
+    assert.deepEqual(
+      skipped.map(([, ran]) => ran),
+      [false, false],
+      'every case is skipped',
+    )
+    assert.deepEqual(
+      skipped.map(([n, , w]) => [n, w]),
+      (await excluded([])).map(([n, , w]) => [n, w]),
+    )
+  })
+
   test('REEVAL_PROFILE picks a profile, as --profile does', async () => {
     const plan = await planJson({ dir: 'profiles', args: [], env: { REEVAL_PROFILE: 'nightly' } })
     assert.deepEqual(plan.profile, { name: 'nightly', reason: 'REEVAL_PROFILE' })
@@ -436,11 +487,11 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
               'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { direct, vercel } from 'reeval/gateway'
 import { cursor } from 'reeval/harness'
-export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), gateway: ${gateway} })
+export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }), gateway: ${gateway} })
 `,
             }
           : {
-              'reeval.yaml': `harness: { kind: cursor, model: composer-2.5 }
+              'reeval.yaml': `harnesses: { kind: cursor, model: composer-2.5 }
 gateway: ${gateway}
 `,
             }),
@@ -494,7 +545,7 @@ evaluate('routed', async () => {})
     const p = await project('cursor-stale-catalog', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
-export default defineConfig({ harness: cursor({ model: 'gpt-5.6-luna' }) })
+export default defineConfig({ harnesses: cursor({ model: 'gpt-5.6-luna' }) })
 `,
       'evals/e.eval.ts': `import { evaluate } from 'reeval'
 evaluate('stale', async () => {})
@@ -514,7 +565,7 @@ evaluate('stale', async () => {})
     const p = await project('gateway-unknown', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-export default defineConfig({ harness: fakeHarness(), gateway: [{ kind: 'vercell' }] })
+export default defineConfig({ harnesses: fakeHarness(), gateway: [{ kind: 'vercell' }] })
 `,
       'evals/g.eval.ts': `import { evaluate } from 'reeval'
 evaluate('unknown', async () => {})
@@ -537,7 +588,7 @@ evaluate('unknown', async () => {})
 import { direct } from 'reeval/gateway'
 import { fakeHarness } from 'reeval/harness'
 export default defineConfig({
-  harness: fakeHarness(),
+  harnesses: fakeHarness(),
   gateway: [direct()],
   judge: { model: 'mistral/large' },
 })
@@ -612,12 +663,12 @@ evaluate('judged', async () => {})
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor, opencode } from 'reeval/harness'
 export default defineConfig({
-  harness: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
+  harnesses: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
 })
 `,
         'evals/r.eval.ts': `import { evaluate } from 'reeval'
 import { opencode } from 'reeval/harness'
-evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async () => {})
+evaluate('refused', ${where === 'eval' ? `{ harnesses: ${harness} }, ` : ''}async () => {})
 `,
       })
       const r = await runCli(p.dir, ['run', '--dry-run'], { env: env ?? {} })
@@ -654,12 +705,12 @@ evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async 
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor, ${factory} } from 'reeval/harness'
 export default defineConfig({
-  harness: [cursor({ model: 'composer-2.5' }), ${factory}({ model: '${model}' })],
+  harnesses: [cursor({ model: 'composer-2.5' }), ${factory}({ model: '${model}' })],
 })
 `,
         'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const events = defineEnvironment('events', ({ mcp }) => ({ mcp: { events: mcp.sse('https://events.example.com/sse') } }))
-evaluate('streams', { environment: events }, async () => {})
+evaluate('streams', { environments: events }, async () => {})
 `,
       })
       for (const args of [
@@ -679,13 +730,13 @@ evaluate('streams', { environment: events }, async () => {})
 const docs = defineEnvironment('docs', ({ mcp }) => ({
   mcp: { docs: mcp.stdio('node', ['srv.js', '{file:/tmp/tok.txt}'], { env: { GREETING: 'Hello {env:USER}' } }) },
 }))
-evaluate('reads docs', { environment: docs }, async () => {})
+evaluate('reads docs', { environments: docs }, async () => {})
 `
     const refused = await project('opencode-substitution', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor, opencode } from 'reeval/harness'
 export default defineConfig({
-  harness: [cursor({ model: 'composer-2.5' }), opencode({ model: 'google/gemini-3.8-flash' })],
+  harnesses: [cursor({ model: 'composer-2.5' }), opencode({ model: 'google/gemini-3.8-flash' })],
 })
 `,
       'evals/d.eval.ts': evals,
@@ -699,7 +750,7 @@ export default defineConfig({
     const elsewhere = await project('opencode-substitution-elsewhere', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
-export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
 `,
       'evals/d.eval.ts': evals,
     })
@@ -710,13 +761,13 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
     const config = (factory: string) => `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }) })
+export default defineConfig({ harnesses: ${factory}({ model: 'gemini-3.8-flash' }) })
 `
     const evals = (local: string) => `import { defineEnvironment, evaluate } from 'reeval'
 const tools = defineEnvironment('tools', ({ mcp }) => ({
   mcp: { '${local}': mcp.stdio('node', ['server.mjs']), remote: mcp.http('https://mcp.example.com/mcp') },
 }))
-evaluate('uses tools', { environment: tools }, async () => {})
+evaluate('uses tools', { environments: tools }, async () => {})
 `
     for (const factory of ['pi', 'goose']) {
       const p = await project(`mcp-${factory}`, {
@@ -767,11 +818,11 @@ evaluate('uses tools', { environment: tools }, async () => {})
         const p = await project(`plugin-namespaced-${factory}-${label}`, {
           'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+export default defineConfig({ harnesses: ${factory}({ model: '${model}' }) })
 `,
           'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('../plugins/review'${only ? `, ${only}` : ''})] }))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
           ...plugin,
         })
@@ -823,11 +874,11 @@ evaluate('reviews', { environment: review }, async () => {})
       const p = await project(`plugin-${factory}-${dir}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+export default defineConfig({ harnesses: ${factory}({ model: '${model}' }) })
 `,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('../plugins/${dir}')] }))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
         ...plugin,
       })
@@ -846,14 +897,14 @@ evaluate('reviews', { environment: review }, async () => {})
       const p = await project(`plugin-server-name-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+export default defineConfig({ harnesses: ${factory}({ model: '${model}' }) })
 `,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ plugin, mcp }) => ({
   mcp: { docs: mcp.stdio('docs-server') },
   plugins: [plugin.local('../plugins/review')],
 }))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
         'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
         'plugins/review/.mcp.json': JSON.stringify({
@@ -883,14 +934,14 @@ evaluate('reviews', { environment: review }, async () => {})
       const p = await project(`plugin-server-key-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+export default defineConfig({ harnesses: ${factory}({ model: '${model}' }) })
 `,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ plugin, mcp }) => ({
   mcp: { review_docs: mcp.stdio('docs-server') },
   plugins: [plugin.local('../plugins/review')],
 }))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
         'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
         'plugins/review/.mcp.json': JSON.stringify({
@@ -950,11 +1001,11 @@ evaluate('reviews', { environment: review }, async () => {})
       const p = await project(`plugin-unpacked-${i}-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+export default defineConfig({ harnesses: ${factory}({ model: '${model}' }) })
 `,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ mcp, plugin }) => (${environment}))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
         ...files,
       })
@@ -1007,11 +1058,11 @@ evaluate('reviews', { environment: review }, async () => {})
       const p = await project(`plugin-cursor-clash-${label}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
-export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
 `,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const review = defineEnvironment('review', ({ plugin, skill }) => (${environment}))
-evaluate('reviews', { environment: review }, async () => {})
+evaluate('reviews', { environments: review }, async () => {})
 `,
         ...files,
       })
@@ -1031,7 +1082,7 @@ evaluate('reviews', { environment: review }, async () => {})
     const config = `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
-export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'node:22-bookworm' }) })
+export default defineConfig({ harnesses: fakeHarness(), sandbox: docker({ from: 'node:22-bookworm' }) })
 `
     for (const [label, call, files, options, refusal] of [
       [
@@ -1071,7 +1122,7 @@ export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'n
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('env', ({ plugin }) => ({ plugins: [${call}] }))
-evaluate('uses it', { environment: env${options ?? ''} }, async () => {})
+evaluate('uses it', { environments: env${options ?? ''} }, async () => {})
 `,
         'plugins/fetcher/.claude-plugin/plugin.json': JSON.stringify({
           name: 'fetcher',

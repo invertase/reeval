@@ -64,7 +64,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'greet.js': 'export const greet = (name) => `Hello, ${name}!`\n' },
   }),
   sandbox: fakeSandbox(),

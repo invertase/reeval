@@ -80,7 +80,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
-    name: '`harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
+    name: '`harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
     plan: [
       'matrix/default',
       'matrix/runs-override',
@@ -121,6 +121,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/engine.test.ts', 'reeval/test/options.test.ts'],
   },
   {
+    id: 'environments-axis',
+    area: 'Config and selection',
+    name: '`environments` as a list: a cell per environment beside each harness, and its edits',
+    plan: ['environments/list'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
     id: 'compare',
     area: 'Config and selection',
     name: '`compare`: control, variants, lift and `minLift`',
@@ -129,30 +136,63 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
-    id: 'evaluate.each',
+    id: 'gate.observe',
     area: 'Config and selection',
-    name: '`evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }`',
-    plan: ['compare/each-pooled', 'compare/each-filtered', 'selection/tags'],
-    fixtures: ['run/each-case'],
+    name: "`gate: 'observe'` and `compare.gate: 'observe'`: every cell ungated, a failed `expect` reads `ran` and fails nothing, and no pass^k hint",
+    plan: ['observe/observe'],
+    fixtures: ['run/observe', 'output/study'],
+    unit: ['reeval/test/output.test.ts'],
+  },
+  {
+    id: 'assert.stay-within',
+    area: 'Judges and matchers',
+    name: '`toStayWithin({ tokens, toolCalls, duration })`: a budget on a turn or on every turn of `c`; a `tokens` limit on a turn with no reported usage is an error, not a failure',
+    plan: [],
+    fixtures: ['assert/stay-within', 'assert/stay-within-unreported'],
+    unit: ['reeval/test/assert.test.ts'],
+  },
+  {
+    id: 'where',
+    area: 'Config and selection',
+    name: "`where`: which case and environment pairs of an eval with `cases` run, decided at plan time from environment `traits` (and the harness when it reads it), listed in `--dry-run` and the record's `excluded`; with `compare`, the control decides for every variant",
+    plan: ['where/where'],
+    fixtures: ['run/where'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
+    id: 'environment-traits',
+    area: 'Environments',
+    name: 'Environment `traits`: filter facts merged by key through `extend`, recorded on each cell and never written to the sandbox, a variable or the prompt',
+    plan: ['environments/traits'],
+    fixtures: ['run/traits-hidden'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
+    id: 'cases',
+    area: 'Config and selection',
+    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates',
+    plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
+    fixtures: ['run/cases', 'run/cases-rate'],
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
-    id: 'compare.harness',
+    id: 'compare.harnesses',
     area: 'Config and selection',
-    name: '`compare.harness`',
+    name: '`compare.harnesses`',
     plan: ['compare/harness-scoped'],
     unit: ['reeval/test/options.test.ts'],
   },
   {
-    id: 'compare.baseline',
+    id: 'compare.control',
     area: 'Config and selection',
-    name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
+    name: '`compare.control`: the control cell, which replaces an inherited `environments`',
     plan: [
-      'compare/baseline-omitted',
-      'compare/baseline-omitted-off',
+      'compare/control',
+      'compare/control-off',
+      'environments/control-over-config',
       'environments/empty-control',
     ],
-    fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
+    fixtures: ['compare/control-empty'],
     unit: ['reeval/test/options.test.ts'],
   },
   {
@@ -210,7 +250,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gate.hint',
     area: 'Config and selection',
-    name: "The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'`",
+    name: 'The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all ungated',
     plan: ['compare/study', 'compare/control-and-variants'],
     unit: ['reeval/test/options.test.ts'],
   },
@@ -338,12 +378,12 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles.compare-off',
     area: 'Config and selection',
     name: '`limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare',
-    plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
+    plan: ['compare/off-study', 'compare/zero-variants', 'compare/control-off'],
   },
   {
     id: 'profiles.limit-harness-drops-compare',
     area: 'Config and selection',
-    name: '`limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare',
+    name: '`limit.harnesses` leaving none of `compare.harnesses`: the compare is off and each control gates like an eval without compare',
     plan: ['compare/harness-scoped-dropped', 'compare/harness-scoped-dropped-pinned'],
   },
   {
@@ -402,6 +442,18 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/engine-node.test.ts',
       'reeval/test/resume.test.ts',
       'reeval/test/query.test.ts',
+    ],
+  },
+  {
+    id: 'selection.traits',
+    area: 'Config and selection',
+    name: "Traits: `--trait key=value` and a profile's `limit.traits` narrow the planned cells after `where` and the cascade by their environment's traits (with `compare`, the control's), listed in `--dry-run` apart from `where`'s pairs; a key no environment defines is refused",
+    plan: ['where/trait', 'where/trait-list', 'where/trait-none', 'where/limit-traits'],
+    fixtures: ['run/trait'],
+    unit: [
+      'reeval/test/refusals.test.ts',
+      'reeval/test/engine-node.test.ts',
+      'reeval/test/engine-worker.test.ts',
     ],
   },
   {
@@ -795,7 +847,7 @@ export const inventory: InventoryFeature[] = [
     plan: [
       'environments/images',
       'environments/extend-replace',
-      'environments/config-control',
+      'environments/control-over-config',
       'environments/inherit-config',
       'environments/empty-control',
     ],
@@ -1557,7 +1609,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.family-gate',
     area: 'Records and studio',
-    name: "A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
+    name: "An eval's pooled `minLift` gate over its cases is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
     unit: ['reeval/test/history.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
@@ -1592,7 +1644,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'summary.study-mark',
     area: 'Records and studio',
-    name: "An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n, and reads `not gated` (○) in the tally, `reeval compare` and `reeval history`, never `pass`",
+    name: 'An eval whose cells are all ungated is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n, and reads `not gated` (○) in the tally, `reeval compare` and `reeval history`, never `pass`',
     fixtures: ['output/study'],
     unit: ['reeval/test/engine.test.ts'],
   },
@@ -1637,12 +1689,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.verdict-hints',
     area: 'Records and studio',
-    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will show only a direction whatever happens; a profile's `limit.runs` cut is named",
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared eval with below 6 cases will show only a direction whatever happens; a profile's `limit.runs` cut is named",
     plan: [
       'compare/verdicts',
       'compare/verdicts-no-control',
       'compare/verdicts-some-cases',
-      'compare/each-pooled',
+      'compare/cases',
       'compare/study',
       'runs-default/profile-limit-capped',
     ],
@@ -1919,7 +1971,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.layouts',
     area: 'CLI and runner',
-    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family',
+    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases',
     fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
     unit: ['reeval/test/output.test.ts'],
   },
@@ -1947,7 +1999,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.family-cases',
     area: 'CLI and runner',
-    name: "A family's block reads every case: its columns, pooled arms and summed compare questions",
+    name: "An eval with cases' block reads every case: its columns, pooled arms and summed compare questions",
     unit: ['reeval/test/suite.test.ts'],
   },
   {

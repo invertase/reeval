@@ -43,7 +43,7 @@ const harness = () => {
 }
 
 export default defineConfig({
-  harness: harness(),
+  harnesses: harness(),
   runs: 1,
   timeout: '4m',
   budget: { attempts: 1 },

@@ -20,7 +20,7 @@ import { tempDir } from './helpers.ts'
 function runIn(root: string): RunContext {
   const config = resolveConfig(
     {
-      harness: [fakeHarness(), cursor({ model: 'composer-2.5' })],
+      harnesses: [fakeHarness(), cursor({ model: 'composer-2.5' })],
       runs: 1,
     },
     root,
@@ -36,7 +36,7 @@ async function collected(root: string, declare: () => void) {
     registerGroup,
     getRunContext: () => run,
     collectingFile,
-    declareHarnesses: () => {},
+    declarePlanned: () => {},
   })
   const file = join(root, 'evals/x.eval.ts')
   const tests = await collect(file, async () => declare())
@@ -56,17 +56,17 @@ const plain = defineEnvironment('plain', {})
 const skill = defineEnvironment('skill', { rules: 'Use the house style.' })
 
 function declarations() {
-  group('outer', { tags: ['smoke'], harness: { only: 'fake' } }, () => {
+  group('outer', { tags: ['smoke'], harnesses: { only: 'fake' } }, () => {
     evaluate('a', { runs: 2 }, async () => {})
     group.skip('skipped', () => {
       evaluate('b', async () => {})
     })
-    group('both', { harness: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
-      evaluate('c', { compare: { baseline: plain, variants: [skill] } }, async () => {})
+    group('both', { harnesses: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
+      evaluate('c', { compare: { control: plain, variants: [skill] } }, async () => {})
     })
   })
-  evaluate('d', { timeout: '2m', egress: 'deny-all', environment: skill }, async () => {})
-  evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})
+  evaluate('d', { timeout: '2m', egress: 'deny-all', environments: skill }, async () => {})
+  evaluate('case', { cases: [1, 2] }, async () => {})
   evaluate.todo('later')
   group.todo('also later')
 }
@@ -89,8 +89,8 @@ test('evaluate and group record the tree they declare, and each body by id', asy
       'run outer': ['run a b4', { 'skip skipped': ['run b b5'] }, { 'run both': ['run c b6'] }],
     },
     'run d b1',
-    'run case 1 b2',
-    'run case 2 b3',
+    'run case [1] b2',
+    'run case [2] b3',
     'todo later',
     'todo also later',
   ])
@@ -157,12 +157,12 @@ function relativeTree(): DeclarationTree['children'] {
       type: 'group',
       name: 'fake',
       mode: 'run',
-      options: { harness: { only: 'fake' }, sandbox: { kind: 'fake', dir: './sandboxes' } },
-      children: [eval_('context', { environment: context })],
+      options: { harnesses: { only: 'fake' }, sandbox: { kind: 'fake', dir: './sandboxes' } },
+      children: [eval_('context', { environments: context })],
     },
     eval_('compare', {
       compare: {
-        baseline: env('plain', { sandbox: docker('./images/Dockerfile') }),
+        control: env('plain', { sandbox: docker('./images/Dockerfile') }),
         variants: [env('built', { sandbox: docker('../docker/Dockerfile') })],
       },
     }),
@@ -217,12 +217,12 @@ test("a tree's relative host paths resolve against the declaring file's director
   const tree = JSON.parse(JSON.stringify(declaredTree(file))) as DeclarationTree
   assert.deepEqual(hostPaths(tree.children), {
     'fake.sandbox.dir': join(evals, 'sandboxes'),
-    'context.environment.layers.0.spec.files.a.txt.path': join(evals, 'fixtures/a.txt'),
-    'context.environment.layers.0.spec.rules.path': join(root, 'RULES.md'),
-    'context.environment.layers.0.spec.skills.0.path': join(evals, 'skills'),
-    'context.environment.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
-    'context.environment.layers.0.spec.workspace.url': join(root, 'app'),
-    'compare.compare.baseline.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
+    'context.environments.layers.0.spec.files.a.txt.path': join(evals, 'fixtures/a.txt'),
+    'context.environments.layers.0.spec.rules.path': join(root, 'RULES.md'),
+    'context.environments.layers.0.spec.skills.0.path': join(evals, 'skills'),
+    'context.environments.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
+    'context.environments.layers.0.spec.workspace.url': join(root, 'app'),
+    'compare.compare.control.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
     'compare.compare.variants.0.layers.0.spec.sandbox.dockerfile': join(root, 'docker/Dockerfile'),
     'case 0.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
     'case 1.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
@@ -266,8 +266,11 @@ test("a tree's missing Dockerfile is refused at its absolute path, naming the fi
   const full = join(root, 'evals', 'Dockerfile')
   for (const [options, field] of [
     [{ sandbox }, 'sandbox.dockerfile'],
-    [{ environment: env }, 'environment.layers[0].spec.sandbox.dockerfile'],
-    [{ compare: { variants: [env] } }, 'compare.variants[0].layers[0].spec.sandbox.dockerfile'],
+    [{ environments: env }, 'environments.layers[0].spec.sandbox.dockerfile'],
+    [
+      { compare: { control: env, variants: [] } },
+      'compare.control.layers[0].spec.sandbox.dockerfile',
+    ],
   ] as const) {
     await assert.rejects(
       () => collected(root, () => declareTree(node(options), () => async () => {})),
@@ -349,8 +352,8 @@ test('planEval is pure: the same declaration and context give the same tests, ga
   })
   assert.deepEqual(
     planEval({ ...declaration, options: { tags: ['x'] } }, { ...ctx, tags: ['y'] }),
-    { tests: null, harnesses },
-    'an eval the tags leave out still names its harnesses',
+    { tests: null, harnesses, traits: [] },
+    'an eval the tags leave out still names its harnesses, and no trait keys',
   )
 })
 
@@ -364,7 +367,7 @@ test("planEval holds the engine's backstop to the longest timer Node can set", (
         name: 'p',
         mode: 'run',
         groups: [],
-        options: { timeout, environment },
+        options: { timeout, environments: environment },
         source: { body: '0'.repeat(64) },
       },
       ctx,

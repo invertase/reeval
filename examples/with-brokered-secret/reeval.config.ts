@@ -10,7 +10,7 @@ const fakeAgent = (path: string) =>
 export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'models.js': fakeAgent('models.js') },
     text: 'I wrote models.js, which lists the Gemini models.',
   }),

@@ -87,7 +87,7 @@ import { ${h.factory} } from '${pkg}/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
+  harnesses: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
   timeout: '15m',
   // For c.judge, add a judge, e.g. judge: { model: '${RECOMMENDED_ANALYSIS_MODEL}' }.
   // reeval analyze explains a run, with ${ANALYSIS_KEY}.
@@ -127,7 +127,7 @@ import { greeter } from './environments.ts'
 const greetsAda = \`node -e "import('./greet.js').then((m) =>
   process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"\`
 
-evaluate('creates greet.js', { environment: greeter }, async (c) => {
+evaluate('creates greet.js', { environments: greeter }, async (c) => {
   const turn = await c.send(
     'Create greet.js, an ES module exporting greet(name) that returns ' +
       '"Hello, <name>!". No dependencies.',

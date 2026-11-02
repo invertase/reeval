@@ -63,8 +63,11 @@ export type Engine = {
   getRunContext(): RunContext
   /** The eval file being collected, while its evals are declared. */
   collectingFile(): string | undefined
-  /** The harness ids a declared eval runs on before a profile's limit, tags or not. */
-  declareHarnesses(ids: readonly string[]): void
+  /**
+   * The harness ids a declared eval runs on before a profile's limit, tags or not, and the trait
+   * keys its control environments define, when the tags select it.
+   */
+  declarePlanned(harnesses: readonly string[], traits: readonly string[]): void
 }
 
 let engine: Engine | undefined
@@ -92,4 +95,5 @@ export const getRunContext = (): RunContext => active().getRunContext()
 
 export const collectingFile = (): string | undefined => active().collectingFile()
 
-export const declareHarnesses: Engine['declareHarnesses'] = (ids) => active().declareHarnesses(ids)
+export const declarePlanned: Engine['declarePlanned'] = (harnesses, traits) =>
+  active().declarePlanned(harnesses, traits)

@@ -5,7 +5,7 @@ import { env } from './env.ts'
 evaluate(
   'canary',
   {
-    environment: env,
+    environments: env,
     questions: [
       {
         question: 'Did it write out.txt?',

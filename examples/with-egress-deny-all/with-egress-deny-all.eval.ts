@@ -4,7 +4,7 @@ const math = defineEnvironment('math', ({ directory }) => ({ files: directory('.
 
 // deny-all still lets through what the attempt needs: the harness's API, brokered secrets'
 // hosts and MCP servers' hosts. Every other request gets a 403 from the gateway and is recorded.
-evaluate('adds multiply with no network', { environment: math, egress: 'deny-all' }, async (c) => {
+evaluate('adds multiply with no network', { environments: math, egress: 'deny-all' }, async (c) => {
   await c.send(
     'Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js. ' +
       'Use no packages from npm.',

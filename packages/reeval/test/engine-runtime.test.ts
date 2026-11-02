@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   collectingFile,
-  declareHarnesses,
+  declarePlanned,
   type Engine,
   getRunContext,
   registerGroup,
@@ -28,13 +28,14 @@ test('outside reeval run, declaring an eval says how to run it; inside, calls re
     registerGroup: (name) => void calls.push(`group ${name}`),
     getRunContext: () => run,
     collectingFile: () => '/f.eval.ts',
-    declareHarnesses: (ids) => void calls.push(`harnesses ${ids.join(' ')}`),
+    declarePlanned: (ids, traits) =>
+      void calls.push(`harnesses ${ids.join(' ')} traits ${traits.join(' ')}`),
   }
   useEngine(engine)
   registerTest('t', { mode: 'run' }, async () => {})
   registerGroup('g', 'run', () => {})
-  declareHarnesses(['a', 'b'])
-  assert.deepEqual(calls, ['test t', 'group g', 'harnesses a b'])
+  declarePlanned(['a', 'b'], ['lang'])
+  assert.deepEqual(calls, ['test t', 'group g', 'harnesses a b traits lang'])
   assert.equal(getRunContext(), run)
   assert.equal(collectingFile(), '/f.eval.ts')
 })

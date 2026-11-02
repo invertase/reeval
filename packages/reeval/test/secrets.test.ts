@@ -347,7 +347,7 @@ const env = defineEnvironment('shared-name', ({ secret, mcp }) => ({
     }),
   },
 }))
-evaluate('shares a name', { environment: env }, async (c) => {
+evaluate('shares a name', { environments: env }, async (c) => {
   await c.send('hi')
 })
 `,

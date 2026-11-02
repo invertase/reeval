@@ -246,7 +246,7 @@ describe('one comparison over every measure', () => {
     assert.equal(four.needed, 6, 'the fewest runs at which 6 of 6 decisive pairs hold (p 0.031)')
     assert.equal(
       asked(['plain', 'plain', 'plain']).text,
-      '"Which is clearer?" picked the baseline in 6 of 6 votes (3 of 3 decisive pairs)',
+      '"Which is clearer?" picked the control in 6 of 6 votes (3 of 3 decisive pairs)',
     )
     assert.equal(asked(['plain', 'marked', 'tie']).verdict, 'same')
     assert.equal(asked(['tie', 'tie']).text, '"Which is clearer?" picked neither')

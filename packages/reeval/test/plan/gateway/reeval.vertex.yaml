@@ -2,7 +2,7 @@
 # effort, which Claude Code sends there only to its catalog's models), and fx with its effort on a
 # Gemini model; Codex, Claude Code's sonnet alias (Sonnet 4.5 on Vertex) and the OpenAI judge fall
 # back to direct.
-harness:
+harnesses:
   - { kind: claude-code, model: claude-sonnet-5-5 }
   - { kind: claude-code, model: sonnet }
   - { kind: claude-code, model: claude-haiku-5-5 }

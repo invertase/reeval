@@ -29,7 +29,7 @@ const hidden = readFileSync(
   'utf8',
 )
 
-evaluate('adds a separators option', { environment: camelcase }, async (c) => {
+evaluate('adds a separators option', { environments: camelcase }, async (c) => {
   await c.send(
     'Add a separators option to camelCase: a string of extra characters ' +
       "that also separate words, so camelCase('foo/bar', {separators: '/'}) " +
@@ -61,7 +61,7 @@ Name the files the task is about, such as `test.js` and `readme.md`. Leave out t
 
 Each `expect` line is an assertion. The label, such as `'the option works'`, names the assertion's row in the result. For more information about every kind of assertion, see [Assertions](/evaluations/grading/assertions).
 
-To measure a change, such as a skill, replace `environment` with `compare`. For more information about the baseline, the variant, and the effect, see [Measure lift against a baseline](/results/compare/lift).
+To measure a change, such as a skill, replace `environment` with `compare`. For more information about the control, the variant, and the effect, see [Measure lift against a control](/results/compare/lift).
 
 </Step>
 <Step title="Verify with the `reeval run --dry-run` command">
@@ -108,7 +108,7 @@ The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock 
 ```ts title="evals/camelcase.eval.ts"
 evaluate(
   'adds a separators option',
-  { environment: camelcase, timeout: '30m' },
+  { environments: camelcase, timeout: '30m' },
   // ...
 ```
 

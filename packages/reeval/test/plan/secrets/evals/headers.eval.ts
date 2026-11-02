@@ -20,5 +20,5 @@ const plain = defineEnvironment('plain-headers', ({ mcp, secret }) => ({
   },
 }))
 
-evaluate('plain MCP headers that look like credentials', { environment: plain }, async () => {})
+evaluate('plain MCP headers that look like credentials', { environments: plain }, async () => {})
 evaluate('a header from the profile environment', async () => {})

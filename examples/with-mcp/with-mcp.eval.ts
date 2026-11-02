@@ -6,7 +6,7 @@ const app = defineEnvironment('acme-cli', ({ directory, file, mcp }) => ({
   mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
 }))
 
-evaluate('bumps to the latest release', { environment: app }, async (c) => {
+evaluate('bumps to the latest release', { environments: app }, async (c) => {
   const turn = await c.send(
     "Set package.json's version to the latest acme-cli release. " +
       "The releases MCP server's latest_version tool knows it.",

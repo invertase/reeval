@@ -21,11 +21,15 @@ const delegated = (turn: Turn) =>
     ? delegatedTo(turn, PLUGIN_AGENT)
     : toolsMentioning(turn, PLUGIN_AGENT)
 
-evaluate('plugin subagent', { environment: plugged, harness: withFakePlugin, tags }, async (c) => {
-  expect(delegated(await c.send(prompts.pluginAgent))).not.toEqual([])
-})
+evaluate(
+  'plugin subagent',
+  { environments: plugged, harnesses: withFakePlugin, tags },
+  async (c) => {
+    expect(delegated(await c.send(prompts.pluginAgent))).not.toEqual([])
+  },
+)
 
 // Must fail: the same turn without the plugin delegates to no such subagent.
-evaluate('plugin subagent canary', { environment: closed, tags }, async (c) => {
+evaluate('plugin subagent canary', { environments: closed, tags }, async (c) => {
   expect(delegated(await c.send(prompts.pluginAgent))).not.toEqual([])
 })

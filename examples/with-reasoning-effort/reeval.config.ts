@@ -15,7 +15,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // One scripted agent at two reasoning efforts, each its own cell. It copies ./fake-agent's
   // files into the workspace, so the checks run without keys or Docker.
-  harness: [
+  harnesses: [
     fakeHarness({ effort: 'low', servedModel: 'fake-1[effort=low]', files }),
     fakeHarness({ effort: 'high', servedModel: 'fake-1[effort=high]', files }),
   ],
@@ -27,7 +27,7 @@ export default defineConfig({
     // Claude Code at two efforts: ANTHROPIC_API_KEY.
     'claude-code-efforts': {
       defaults: {
-        harness: [
+        harnesses: [
           claudeCode({ model: 'claude-sonnet-5', effort: 'low' }),
           claudeCode({ model: 'claude-sonnet-5', effort: 'high' }),
         ],

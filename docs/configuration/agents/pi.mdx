@@ -28,7 +28,7 @@ import { defineConfig } from '{{ pkg }}'
 import { pi } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: pi({
+  harnesses: pi({
     model: 'gemini-3.8-flash',
     effort: 'high',
   }),

@@ -4,7 +4,7 @@ import { house, loaded, shellOutput } from './env.ts'
 // Under Claude Code's layout, the plugin is enabled from a directory marketplace in
 // ~/.claude/settings.json, beside the settings the environment wrote there, and its MCP server is
 // left to Claude Code, not the agent's MCP config.
-evaluate('lands', { environment: house }, async (c) => {
+evaluate('lands', { environments: house }, async (c) => {
   const turn = await c.send('read the plugin settings')
   const settings = JSON.parse(shellOutput(turn, 0) ?? '{}')
   expect(settings.enabledPlugins).toEqual({ 'other@elsewhere': false, 'house@reeval': true })

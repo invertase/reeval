@@ -5,7 +5,7 @@ import { fakeAnalysis } from 'reeval/judge'
 // REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
 // The answer reports what the attempt's question was shown as its text, for the record check.
 export default defineConfig({
-  harness: fakeHarness({ files: { 'out.txt': 'hi\n' }, text: 'REPLY-MARK' }),
+  harnesses: fakeHarness({ files: { 'out.txt': 'hi\n' }, text: 'REPLY-MARK' }),
   analysis: {
     model: fakeAnalysis({
       answer: (q) => ({

@@ -10,7 +10,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace. The environment's
   // Dockerfile sandbox still applies, so even the fake agent runs in Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'report.sql': fakeAgent('report.sql') },
     text: 'I wrote report.sql, which lists the customers by name.',
   }),

@@ -7,7 +7,7 @@ const [host, port] = (process.env.REEVAL_EGRESS_TARGET ?? ':').split(':')
 export default defineConfig({
   // As the agent: a raw TCP connection to the host's listener, as a database driver or SSH makes
   // one, which no proxy variable routes through the gateway.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         {

@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // agent takes OpenCode's layout (and image), so no key is needed. As the agent: read the plugin's
 // skill among OpenCode's own, and follow the subagent reeval unpacked into .opencode/agents.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'opencode',
     script: [
       [

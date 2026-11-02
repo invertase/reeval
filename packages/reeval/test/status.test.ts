@@ -25,12 +25,12 @@ evaluate('throws', async (c) => {
   throw new Error('the fixture is missing')
 })
 
-evaluate('compares', { runs: 1, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('compares', { runs: 1, compare: { control: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
 })
 
-evaluate.each([{ id: 'red' }, { id: 'green' }, { id: 'blue' }])('colors $id', async (c, { id }) => {
+evaluate('colors', { cases: [{ id: 'red' }, { id: 'green' }, { id: 'blue' }] }, async (c, { id }) => {
   await c.send('go')
   expect(id, 'is green').toBe('green')
 })
@@ -65,16 +65,16 @@ const PLAIN = `evals/s.eval.ts
 │      the fixture is missing
 │    Snapshot: <path>
 ├─ ✓ compares         1 of 1 variant run passed
-│    Baseline plain passed 0 of 1.
+│    Control plain passed 0 of 1.
 │    Variants, by pass rate:
 │      marked  1 of 1  helped
 │    Every failure was the same check:
-│      "uses the marker" failed once, on the baseline
+│      "uses the marker" failed once, on the control
 │        expected false to be true // Object.is equality
 │        at evals/s.eval.ts:23
 │    Worth knowing:
-│      The marked variant passed 1 of 1 run and the baseline 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at evals/s.eval.ts:21: set runs: 4, where a difference this size would hold.
-└─ ✗ colors $id       1 of 3 runs passed
+│      The marked variant passed 1 of 1 run and the control 0 of 1: better by 100 points, but on too few runs for the difference to hold. Fix at evals/s.eval.ts:21: set runs: 4, where a difference this size would hold.
+└─ ✗ colors           1 of 3 runs passed
      Passed 1 of 3 on fake.
      Failed cases: red, blue.
      Every failure was the same check:
@@ -106,7 +106,7 @@ const FASTER = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', {})
 
-evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('compares', { runs: 4, compare: { control: plain, variants: [marked] } }, async (c) => {
   for (let i = 0; i < (c.attempt.cell.role === 'variant' ? 1 : 5); i++) await c.send('go')
   expect(1, 'one').toBe(1)
 })
@@ -149,7 +149,7 @@ const IDENTICAL = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
 
-evaluate('compares', { runs: 4, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('compares', { runs: 4, compare: { control: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   expect(1, 'one').toBe(1)
 })
@@ -164,7 +164,7 @@ test('identical arms are a tie: make the task harder', async () => {
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     listOf(run.stdout),
-    /passed every run \(4 of 4 and 4 of 4\): the task can't tell them apart, since both always pass\. Fix at evals\/s\.eval\.ts:\d+: make the task harder, so the baseline can fail\./,
+    /passed every run \(4 of 4 and 4 of 4\): the task can't tell them apart, since both always pass\. Fix at evals\/s\.eval\.ts:\d+: make the task harder, so the control can fail\./,
   )
   const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
   assert.deepEqual(

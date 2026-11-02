@@ -4,6 +4,6 @@ import { notes } from './evals/env.ts'
 
 // As the agent: write one file from the shell, never with an edit tool.
 export default defineConfig({
-  harness: fakeHarness({ script: [[{ exec: "printf 'from the shell\\n' > note.txt" }]] }),
-  environment: notes,
+  harnesses: fakeHarness({ script: [[{ exec: "printf 'from the shell\\n' > note.txt" }]] }),
+  environments: notes,
 })

@@ -45,8 +45,8 @@ const CONFIG = `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: fakeHarness({}),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: fakeHarness({}),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   ANALYSIS
 })
 `
@@ -64,7 +64,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -665,7 +665,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1281,7 +1281,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1298,7 +1298,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go now')
 })
 `,
@@ -1825,13 +1825,13 @@ evaluate('greets', { runs: 1 }, async (c) => {
 async function studyDigest(name: string, options: StudyOptions = {}) {
   const p = await project(name, studyFiles(options))
   const run = await runCli(p.dir)
-  assert.equal(run.code, options.gate === 'none' ? 0 : 1, run.stdout + run.stderr)
+  assert.equal(run.code, options.gate === 'observe' ? 0 : 1, run.stdout + run.stderr)
   return { p, run, ...(await digestOf(p.dir, ['--vs', 'none'])) }
 }
 
 describe('a study: several arms, every cell ungated', () => {
   test('labels and names: judges and checks go by their expect label, and the control by its environment', async () => {
-    const files = studyFiles({ gate: 'none' })
+    const files = studyFiles({ gate: 'observe' })
     const script =
       "node -e \"\\n  const fs = require('fs')\\n  process.exit(fs.statSync('src/App.tsx').size ? 0 : 1)\\n\""
     files['evals/auth.eval.ts'] = (files['evals/auth.eval.ts'] as string).replace(
@@ -1874,7 +1874,7 @@ describe('a study: several arms, every cell ungated', () => {
 
   test('the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm', async () => {
     const { p, digest, text } = await studyDigest('study-digest', {
-      gate: 'none',
+      gate: 'observe',
       instructions: 'Compare both skills against no skill and against each other.',
       output: `(d) => {
         const criteria = d.facts.find((f) => f.kind === 'criteria')
@@ -1984,7 +1984,7 @@ test('the prompt and rules say a study compares arms, and a label no arm meets e
 
 describe('contrasts: each pair of arms, variant against variant too', () => {
   test('show and summary.md set every arm side by side, the run names the arm a check failed on, and reeval query contrasts and the digest every pair', async () => {
-    const p = await project('study-contrasts', studyFiles({ gate: 'none' }))
+    const p = await project('study-contrasts', studyFiles({ gate: 'observe' }))
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
     // Every attempt misses MFA, so pass can't tell the arms apart; the check matrix does.
@@ -2037,7 +2037,7 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
   })
 
   test('canary: with one variant there is no variant-against-variant row', async () => {
-    const p = await project('study-one-variant', studyFiles({ gate: 'none', oneVariant: true }))
+    const p = await project('study-one-variant', studyFiles({ gate: 'observe', oneVariant: true }))
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
     assert.doesNotMatch(run.stdout, /contrasts \(each pair/)

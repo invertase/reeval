@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'summary.js': fakeAgent('summary.js') },
     text: 'I wrote summary.js; it prints the order count and their total.',
   }),

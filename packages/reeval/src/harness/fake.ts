@@ -83,7 +83,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             startedAt: new Date(startedAt).toISOString(),
             durationMs: descriptor.turnMs ?? Date.now() - startedAt,
             transcript,
-            usage: null,
+            usage: descriptor.usage ?? null,
             model: descriptor.servedModel ?? null,
             unreported: [],
             ...(descriptor.turnMs === undefined ? {} : { agentMs: descriptor.turnMs }),

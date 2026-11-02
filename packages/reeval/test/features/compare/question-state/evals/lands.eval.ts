@@ -5,7 +5,7 @@ import { baseline, variant } from './env.ts'
 evaluate(
   'lands',
   {
-    compare: { baseline, variants: [variant] },
+    compare: { control: baseline, variants: [variant] },
     questions: [
       {
         question: 'Which reply is clearer?',

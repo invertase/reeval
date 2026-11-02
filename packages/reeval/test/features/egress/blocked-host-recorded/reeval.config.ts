@@ -5,5 +5,5 @@ import { fakeHarness } from 'reeval/harness'
 export default defineConfig({
   // As the agent: ask for a host the policy doesn't list, over plain HTTP, so the refusal's body
   // is the output. The name never resolves: the gateway refuses it before any lookup.
-  harness: fakeHarness({ script: [[{ exec: 'curl -sS -m 10 http://blocked.invalid/' }]] }),
+  harnesses: fakeHarness({ script: [[{ exec: 'curl -sS -m 10 http://blocked.invalid/' }]] }),
 })

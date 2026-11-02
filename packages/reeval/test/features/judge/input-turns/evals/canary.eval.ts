@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // Must fail: both turns are there, not only the last.
-evaluate('canary', { environment: app }, async (c) => {
+evaluate('canary', { environments: app }, async (c) => {
   await c.send('write the app')
   await c.send('now add tests')
   let state: Record<string, unknown> = {}

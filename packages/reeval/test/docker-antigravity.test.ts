@@ -50,8 +50,8 @@ import { defineConfig, defineEnvironment } from 'reeval'
 import { antigravity } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 export default defineConfig({
-  harness: antigravity({ model: 'gemini-3.8-flash-low' }),
-  environment: defineEnvironment('box', { sandbox: ${sandbox} }),
+  harnesses: antigravity({ model: 'gemini-3.8-flash-low' }),
+  environments: defineEnvironment('box', { sandbox: ${sandbox} }),
   timeout: '90s',
 })
 `
@@ -144,7 +144,7 @@ evaluate('hi', async (c) => {
 import { defineConfig } from 'reeval'
 import { antigravity } from 'reeval/harness'
 export default defineConfig({
-  harness: antigravity({ model: 'gemini-3.8-flash-low' }),
+  harnesses: antigravity({ model: 'gemini-3.8-flash-low' }),
   timeout: '5m',
 })
 `,
@@ -156,7 +156,7 @@ const house = defineEnvironment('house', ({ skill }) => ({
   files: { 'probe.sh': 'printf %s "$GEMINI_API_KEY" | cut -c1-8 > /tmp/probe.txt\\necho probed\\n' },
   skills: [skill.local('../skills/owl-facts')],
 }))
-evaluate('real', { environment: house }, async (c) => {
+evaluate('real', { environments: house }, async (c) => {
   const edit = await c.send('Create hello.js that prints "hi from agy" with console.log, then run it with node and tell me what it printed.')
   expect(edit.status).toBe('completed')
   await expect(edit).toHaveFile('hello.js', /hi from agy/)

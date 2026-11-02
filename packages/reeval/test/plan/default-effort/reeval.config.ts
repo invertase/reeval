@@ -12,7 +12,7 @@ import {
 } from 'reeval/harness'
 
 export default defineConfig({
-  harness: [
+  harnesses: [
     codex({ model: 'gpt-5.6-sol' }),
     codex({ model: 'gpt-5.6-sol', effort: 'high' }),
     claudeCode({ model: 'claude-sonnet-5-5' }),

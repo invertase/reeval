@@ -4,7 +4,7 @@ import { house, prompt, trimmed } from './env.ts'
 // Under Cursor's layout, reeval unpacks the plugin's rule, subagent, command and hooks into the
 // workspace's .cursor/ before the snapshot: the agent follows the rule, and its session ran the
 // hook, with ${CLAUDE_PLUGIN_ROOT} filled in with where the plugin was copied.
-evaluate('lands', { environment: house }, async (c) => {
+evaluate('lands', { environments: house }, async (c) => {
   await c.send(prompt)
   expect(await trimmed(c.readFile, 'codeword.txt')).toBe('SAFFRON-73')
   expect(await trimmed(c.readFile, '~/.reeval/plugins/house/hook-ran.txt')).toBe('house-hook-ran')

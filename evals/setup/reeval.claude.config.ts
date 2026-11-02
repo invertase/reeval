@@ -3,6 +3,6 @@ import { claudeCode } from 'reeval/harness'
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  harness: claudeCode({ model: 'claude-sonnet-5' }),
+  harnesses: claudeCode({ model: 'claude-sonnet-5' }),
   timeout: '15m',
 })

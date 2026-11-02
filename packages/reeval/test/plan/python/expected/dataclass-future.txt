@@ -1,4 +1,4 @@
 no profile · 2 evals · 2 cells · 2 attempts
-evals/dataclass-future.eval.py › case 0  fake/-/fake  control  gated  ×1  family case %# case 1/2
-evals/dataclass-future.eval.py › case 1  fake/-/fake  control  gated  ×1  family case %# case 2/2
+evals/dataclass-future.eval.py › case [a]  fake/-/fake  control  gated  ×1  family case case 1/2
+evals/dataclass-future.eval.py › case [b]  fake/-/fake  control  gated  ×1  family case case 2/2
 excluded: —

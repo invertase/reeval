@@ -14,7 +14,7 @@ const summary = Array.from(
 ).join('\n')
 
 export default defineConfig({
-  harness: fakeHarness({ script: [[{ exec: `node ${write}` }]], text: `Done.\n\n${summary}` }),
+  harnesses: fakeHarness({ script: [[{ exec: `node ${write}` }]], text: `Done.\n\n${summary}` }),
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.9 }) },
 })

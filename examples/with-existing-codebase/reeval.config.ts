@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that applies ./fake-agent's patch to the checkout with git, so the checks
   // run without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         { write: { 'separators.patch': fakeAgent('separators.patch') } },

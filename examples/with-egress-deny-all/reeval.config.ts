@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that tries the npm registry first, as an agent looking for a package
   // might, then writes ./fake-agent's files into the workspace.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         { exec: 'curl -sS https://registry.npmjs.org/left-pad' },

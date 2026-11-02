@@ -8,7 +8,7 @@ const design = plain.extendEnvironment('design', ({ skill }) => ({
 group(
   'landing page',
   {
-    compare: { baseline: plain, variants: [design] },
+    compare: { control: plain, variants: [design] },
     questions: [
       {
         question: 'Which landing page follows the design guidelines more closely?',

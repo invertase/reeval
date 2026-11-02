@@ -5,14 +5,14 @@ skilled = base.extend("skilled", {"env": {"MODE": "skilled"}})
 terse = base.extend("terse", {"env": {"MODE": "terse"}})
 
 
-@evaluate("control and two variants", {"compare": {"baseline": base, "variants": [skilled, terse]}})
+@evaluate("control and two variants", {"compare": {"control": base, "variants": [skilled, terse]}})
 async def control_and_two(c): ...
 
 
 @evaluate(
     "every cell gated, with a minimum lift",
     {
-        "compare": {"baseline": base, "variants": [skilled], "gate": "all", "min_lift": 0.2},
+        "compare": {"control": base, "variants": [skilled], "gate": "all", "min_lift": 0.2},
         "runs": 2,
     },
 )

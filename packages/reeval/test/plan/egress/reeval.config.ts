@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 const fake = defineEnvironment('fake', { sandbox: fakeSandbox() })
 
 export default defineConfig({
-  harness: fakeHarness(),
-  ...(process.env.REEVAL_EGRESS_FAKE === '1' ? { environment: fake } : {}),
+  harnesses: fakeHarness(),
+  ...(process.env.REEVAL_EGRESS_FAKE === '1' ? { environments: fake } : {}),
   egress: { allow: ['config.example.com'] },
   profiles: { locked: { defaults: { egress: 'deny-all' } } },
 })

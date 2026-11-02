@@ -53,6 +53,7 @@ import {
   unbrokeredError,
 } from './options.ts'
 import type { Limits } from './scheduler/core.ts'
+import { controlTraitKeys, filtersLabel, pickTraits, traitFilters } from './traits.ts'
 import type {
   AttemptMeta,
   EnvVars,
@@ -62,7 +63,9 @@ import type {
   ResolvedConfig,
   ResolvedGateway,
   RunContext,
+  TraitFilter,
 } from './types.ts'
+import { type CaseWhere, type PickedPairs, pickPairs } from './where.ts'
 
 /** Lets the attempt's own eval timer fire before the engine's backstop, so the message and cleanup are its own. */
 const GRACE_MS = 5_000
@@ -75,14 +78,16 @@ export type EvalDeclaration = {
   options: EvalOptions
   /** Its body's hash and case data, from whoever declared it. */
   source: DeclaredSource
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: DeclaredFamily
+  /** Set on each case of an eval with `cases` and `where`. */
+  where?: CaseWhere
 }
 
 /** Where the eval is planned: the run, the eval file, and how many evals the file planned before it. */
 export type PlanContext = Pick<
   RunContext,
-  'config' | 'profile' | 'runs' | 'tags' | 'concurrency' | 'completed' | 'cursorEfforts'
+  'config' | 'profile' | 'runs' | 'tags' | 'traits' | 'concurrency' | 'completed' | 'cursorEfforts'
 > & {
   /** The eval file's path, absolute. */
   file: string | undefined
@@ -108,7 +113,7 @@ function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
-    environment: config.environment,
+    environments: config.environments,
     compare: undefined,
     runs,
     bestOf,
@@ -133,6 +138,10 @@ export type PlannedEval = {
   /** `null` when the run's tags leave the eval out (it isn't counted in `order`). */
   tests: PlannedTest[] | null
   harnesses: string[]
+  /** The trait keys its control environments define, for the run-wide `--trait` check. */
+  traits: string[]
+  /** What `where` kept and left out of this case; unset without `where`. */
+  picked?: Omit<PickedPairs, 'kept'>
 }
 
 /** The tests an eval registers. Throws a UsageError for options the plan refuses. */
@@ -151,8 +160,64 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     pooled: declaration.family !== undefined,
   })
   const { harnesses } = resolvedEval
-  if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }
-  return { tests: planTests(declaration, ctx, where, resolvedEval), harnesses }
+  if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) {
+    return { tests: null, harnesses, traits: [] }
+  }
+  const { resolved } = resolvedEval
+  const declared = expand({
+    ...resolved,
+    harness: resolved.harness.map((h) => withDefaultEffort(h, ctx.cursorEfforts)),
+  })
+  const traits = controlTraitKeys(declared)
+  const filters = traitFilters(ctx.traits, ctx.profile)
+  const traitSkip =
+    filters.length > 0 && !resolvedEval.skip && !pickTraits(declared, filters).kept.length
+  const narrowed = traitSkip
+    ? { ...resolvedEval, skip: noCellLeft(declared, filters) }
+    : resolvedEval
+  const picks: PickedPairs[] = []
+  // `where`'s refusals and the pairs it leaves out don't depend on the trait filters.
+  if (traitSkip && declaration.where) picks.push(pickPairs(declaration.where, declared))
+  let traitExcluded: string[] = []
+  const pick = (attempts: PlannedAttempt[]) => {
+    let kept = attempts
+    if (declaration.where) {
+      const picked = pickPairs(declaration.where, attempts)
+      picks.push(picked)
+      kept = picked.kept
+    }
+    if (!filters.length) return kept
+    const byTraits = pickTraits(kept, filters)
+    traitExcluded = byTraits.excluded
+    return byTraits.kept
+  }
+  const leftOut = () =>
+    `${filtersLabel(filters)} ${filters.length === 1 ? 'leaves' : 'leave'} out ${traitExcluded.join(', ')}`
+  let tests = planTests(declaration, ctx, where, narrowed, pick)
+  const allLeftOut = !tests.length && traitExcluded.length > 0
+  // `where` kept this case only where the filters leave it out.
+  if (allLeftOut) {
+    const skip = `no cell left: ${leftOut()}`
+    tests = planTests(declaration, ctx, where, { ...narrowed, skip }, pick)
+  }
+  if (traitExcluded.length) {
+    // A completed attempt's plan is a copy that shares its notes.
+    for (const t of tests) t.attempt.plan.traitExcluded = traitExcluded
+    const notes = new Set(tests.map((t) => t.attempt.plan.notes))
+    if (!allLeftOut) for (const list of notes) list.push(leftOut())
+  }
+  const [picked] = picks
+  if (!picked) return { tests, harnesses, traits }
+  const { excluded, cells, keptCells } = picked
+  return { tests, harnesses, traits, picked: { excluded, cells, keptCells } }
+}
+
+/** Why an eval none of whose control environments the trait filters match doesn't run. */
+function noCellLeft(attempts: readonly PlannedAttempt[], filters: readonly TraitFilter[]): string {
+  const envs = [
+    ...new Set(attempts.filter((a) => a.cell.role === 'control').map((a) => a.cell.environment)),
+  ]
+  return `no cell left: ${filtersLabel(filters)} ${filters.length === 1 ? 'matches' : 'match'} none of ${envs.join(', ')}`
 }
 
 function planTests(
@@ -160,6 +225,7 @@ function planTests(
   ctx: PlanContext,
   where: string,
   resolvedEval: ResolvedEval,
+  pick: (attempts: PlannedAttempt[]) => PlannedAttempt[],
 ): PlannedTest[] {
   const { name, mode, groups: enclosing } = declaration
   const groups = enclosing.map((g) => g.name)
@@ -206,7 +272,9 @@ function planTests(
           return { ...harness, gateway: route.name }
         })
         .map((harness) => withDefaultEffort(harness, ctx.cursorEfforts))
-  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
+  const plannedAttempts = resolvedEval.skip
+    ? []
+    : pick(expand({ ...resolved, harness: routed }, vertex))
   const { caseJson, ...declared } = declaration.source
   const source: EvalSource = {
     ...declared,
@@ -265,7 +333,7 @@ function planTests(
     id: evalId(rankFile, [...groups, declaration.family.name]),
     ...declaration.family,
   }
-  const harnessBy = resolved.sources?.harness ?? ctx.config.file
+  const harnessBy = resolved.sources?.harnesses ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
   // OpenRouter's fallbacks reach only reeval's own calls; the plan says so where they're on.
   if (gatewayNotes.length && openRouterFallbacks(gateways)) {

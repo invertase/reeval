@@ -73,9 +73,13 @@ export function packageManager(
 /** The config's keys and the kinds it uses; no value, model or path from it. */
 export function configShape(config: ResolvedConfig): NonNullable<ReportBundle['config']> {
   const harnesses = new Set(config.harness.map((h) => h.kind))
-  const sandboxes = new Set([environmentSandbox(config.environment, config.sandbox).kind])
+  const sandboxes = new Set(
+    (config.environments.length ? config.environments : [undefined]).map(
+      (e) => environmentSandbox(e, config.sandbox).kind,
+    ),
+  )
   for (const profile of Object.values(config.profiles)) {
-    for (const h of [profile.defaults?.harness ?? []].flat()) harnesses.add(h.kind)
+    for (const h of [profile.defaults?.harnesses ?? []].flat()) harnesses.add(h.kind)
     sandboxes.add(profileSandbox(config, profile.defaults).kind)
   }
   return {

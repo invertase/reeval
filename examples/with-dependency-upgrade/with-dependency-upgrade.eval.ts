@@ -6,7 +6,7 @@ const receipts = defineEnvironment('strfmt-1', ({ directory }) => ({
   files: directory('./project'),
 }))
 
-evaluate('upgrades strfmt across its breaking change', { environment: receipts }, async (c) => {
+evaluate('upgrades strfmt across its breaking change', { environments: receipts }, async (c) => {
   await c.send(
     'Upgrade strfmt from 1.4.0 to 2.0.0, which is vendored in vendor/strfmt-2.0.0 (see its ' +
       'CHANGELOG.md). Keep npm test green.',

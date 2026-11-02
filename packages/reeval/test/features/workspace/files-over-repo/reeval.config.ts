@@ -9,6 +9,6 @@ const sandbox =
     : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) })
 
 export default defineConfig({
-  harness: fakeHarness({}),
+  harnesses: fakeHarness({}),
   sandbox,
 })

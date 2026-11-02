@@ -1,4 +1,4 @@
 profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts
-evals/y.eval.ts › inherits  a/base/fake  control  gated  ×1  files README.md
-evals/y.eval.ts › compared  a/base/fake  control  gated  ×1  compare off (profile pr) · files README.md
+evals/y.eval.ts › inherits  a/base/fake   control  gated  ×1  files README.md
+evals/y.eval.ts › compared  a/plain/fake  control  gated  ×1  compare off (profile pr)
 excluded: —

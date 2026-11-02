@@ -7,7 +7,7 @@ const app = defineEnvironment('acme-math', ({ directory, plugin }) => ({
   plugins: [plugin.local('./plugins/release', { only: ['skills', 'mcp'] })],
 }))
 
-evaluate('prepares the next release', { environment: app }, async (c) => {
+evaluate('prepares the next release', { environments: app }, async (c) => {
   const turn = await c.send('Prepare the next release.')
 
   // A plugin's MCP servers are named <plugin>:<server>.

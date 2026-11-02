@@ -10,7 +10,7 @@ const fakeAgent = (path: string) =>
 export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'banner.sh': fakeAgent('banner.sh') },
     text: "I wrote banner.sh, which prints github.com's SSH banner.",
   }),

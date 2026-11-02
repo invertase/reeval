@@ -12,7 +12,7 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent's page into the workspace with plain/'s guessed
   // colors, or skill/'s brand ones when it has the skill, so the compare shows a lift without
   // keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'index.html': fakeAgent('index.html'), 'styles.css': fakeAgent('plain/styles.css') },
     text: 'styles.css gives the page warm colors and serif body text.',
     withSkill: {

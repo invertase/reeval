@@ -3,5 +3,5 @@ import { fakeHarness } from 'reeval/harness'
 
 // Docker only: the environments set docker() themselves.
 export default defineConfig({
-  harness: fakeHarness({}),
+  harnesses: fakeHarness({}),
 })
