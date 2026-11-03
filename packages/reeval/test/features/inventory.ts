@@ -959,7 +959,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'tart.harness',
     area: 'Sandbox',
-    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway, a pinned pnpm on its `PATH`; Cursor, pi and Codex, the rest refused at plan time",
+    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway, a pinned pnpm on its `PATH`; Cursor, Claude Code, OpenCode, pi and Codex, the rest refused at plan time",
     fixtures: ['sandbox/tart-brokered-agent'],
     unit: [
       'reeval/test/tart.test.ts',

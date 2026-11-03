@@ -197,7 +197,7 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     images: false,
     preflight: true,
     pluginBuilds: false,
-    harnesses: ['cursor', 'pi', 'codex'],
+    harnesses: ['cursor', 'claude-code', 'opencode', 'pi', 'codex'],
   },
   unverifiedHarnesses:
     "reeval bakes a harness's CLI into a copy of the Tart image before the run, and the other harnesses' bootstraps don't install for macOS yet. Run this one in docker().",

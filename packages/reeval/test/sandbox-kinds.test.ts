@@ -96,7 +96,7 @@ describe('sandbox kinds', () => {
     })
   })
 
-  test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs Cursor, pi and Codex', () => {
+  test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs five harnesses', () => {
     assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
       platform: 'darwin',
       egress: { enforce: 'none', record: true },
@@ -108,7 +108,7 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: ['cursor', 'pi', 'codex'],
+      harnesses: ['cursor', 'claude-code', 'opencode', 'pi', 'codex'],
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
@@ -196,22 +196,21 @@ describe('which sandbox a real harness runs in', () => {
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
-  test('Tart runs Cursor, pi and Codex, whose bootstraps install for macOS, and refuses the rest at plan time', () => {
+  test('Tart runs the harnesses whose bootstraps install for macOS, and refuses the rest at plan time', () => {
     const mac = tart({ image: IMAGE })
-    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, mac), undefined)
-    assert.equal(unverifiedHarness(cursor, mac), undefined)
-    for (const kind of ['pi', 'codex'] as const) {
+    for (const kind of ['cursor', 'claude-code', 'opencode', 'pi', 'codex'] as const) {
       const harness = { kind, model: 'm' } as HarnessDescriptor
       assert.equal(agentSandboxProblem(harness, AGENTS[kind], mac), undefined, kind)
       assert.equal(unverifiedHarness(harness, mac), undefined, kind)
     }
     assert.equal(unverifiedHarness({ kind: 'fake' }, mac), undefined)
-    const refused = unverifiedHarness(claude, mac)
+    const goose = { kind: 'goose', model: 'gemini-3.8-flash' } as HarnessDescriptor
+    const refused = unverifiedHarness(goose, mac)
     assert.match(
       refused ?? '',
-      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor, pi and Codex so far\. /,
+      /^The Goose harness doesn't run in the tart sandbox yet: it runs Cursor, Claude Code, OpenCode, pi and Codex so far\. /,
     )
-    assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], mac), refused)
+    assert.equal(agentSandboxProblem(goose, AGENTS.goose, mac), refused)
   })
 
   test("the fake sandbox's platform is the host's, which it never names", () => {

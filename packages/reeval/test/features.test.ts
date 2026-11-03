@@ -39,8 +39,10 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
+import { AGENTS } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
+import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
@@ -485,6 +487,10 @@ const perHarness = (
 ): Feature[] => layouts.map((layout) => ({ ...row(layout), layout, image: layout }))
 
 const BUT_CURSOR = BAKED_HARNESSES.filter((h) => h !== 'cursor')
+/** The harnesses tart() runs. */
+const TART_HARNESSES = BAKED_HARNESSES.filter((h) =>
+  takesHarness(capabilitiesOf({ kind: 'tart', image: 'i' }), h),
+)
 /** A regex for exactly `text`. */
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** The `agentCli` a Dockerfile built on each harness's image records. */
@@ -3038,7 +3044,7 @@ export const features: Feature[] = [
       assert.doesNotMatch(stdout, /moving tag/, 'a pinned tag has no warning')
     },
   },
-  {
+  ...perHarness(TART_HARNESSES, (layout) => ({
     // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers.
     dir: 'sandbox/tart-brokered-agent',
     tiers: ['fake'],
@@ -3053,15 +3059,15 @@ export const features: Feature[] = [
       return {
         ...fake.env,
         REEVAL_TEST_TART_ANY_HOST: '1',
-        CURSOR_API_KEY: 'key_tart_fixture_cursor',
+        [AGENTS[layout].credential]: 'key_tart_fixture',
       }
     },
-    record: ({ run, project, runDir }) => {
-      assert.equal(filesContaining(runDir, 'key_tart_fixture_cursor'), '')
+    record: ({ project, runDir }) => {
+      assert.equal(filesContaining(runDir, 'key_tart_fixture'), '')
       const vms = join(fakeTarts.get(project) ?? '', 'vms')
       assert.deepEqual(readdirSync(vms), [], 'every VM is deleted')
     },
-  },
+  })),
   {
     // tart() on the fake `tart`: preflight bakes the agent's bootstrap into an image of its own,
     // which every attempt clones.
