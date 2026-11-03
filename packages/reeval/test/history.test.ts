@@ -2013,22 +2013,25 @@ group('renamed options', { harnesses: fakeHarness(), pin: ['harnesses'] }, () =>
         }>
       ).map((x) => [x.id, x.status, x.changes, x.cases?.map((k) => k.id)])
     }
-    // The judge's part of the fingerprint holds reeval's version, so every eval differs in it
-    // alone: nothing is removed or new, and neither the options nor a case key changed.
-    assert.deepEqual(await rows(), [
+    // The judge's part of the fingerprint holds reeval's version, and the image's this machine's
+    // Docker, so the evals can differ there; nothing is removed or new, and neither the options
+    // nor a case key changed.
+    const ported = await rows()
+    assert.deepEqual(
+      ported.map(([id, , , cases]) => [id, cases]),
       [
-        'evals/discovery.eval.ts › discovery',
-        'drift',
-        ['judge changed'],
-        ['add user authentication', 'add social login and email/password auth'],
+        [
+          'evals/discovery.eval.ts › discovery',
+          ['add user authentication', 'add social login and email/password auth'],
+        ],
+        ['evals/options.eval.ts › renamed options › writes greet.js', undefined],
       ],
-      [
-        'evals/options.eval.ts › renamed options › writes greet.js',
-        'drift',
-        ['judge changed'],
-        undefined,
-      ],
-    ])
+    )
+    for (const [id, status, changes] of ported) {
+      assert.ok(status === 'drift' || status === 'same', `${id}: ${status}`)
+      assert.ok(!(changes as string[] | undefined)?.includes('options changed'), `${id}: options`)
+      assert.ok((changes as string[] | undefined)?.includes('judge changed'), `${id}: judge`)
+    }
     // Canary: a port under another name is a new eval, and the old one removed.
     const renamed = await rows({ REEVAL_TEST_NAME: 'discovery v2' })
     assert.deepEqual(
