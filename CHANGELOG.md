@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/invertase/reeval/compare/v0.19.0...v0.20.0) (2026-11-03)
+
+
+### Features
+
+* **tart:** run the Cursor harness in tart() on a harness session in the VM ([#790](https://github.com/invertase/reeval/issues/790)) ([b37594a](https://github.com/invertase/reeval/commit/b37594aadef9fd08532203e9563d408126aafb17))
+
 ## [0.19.0](https://github.com/invertase/reeval/compare/v0.18.0...v0.19.0) (2026-11-03)
 
 
