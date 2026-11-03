@@ -21,7 +21,7 @@ evals/verdicts.eval.ts › three cases can never get a verdict        a/base/doc
                                                                     case ada          a/base/docker ×4, a/skilled/docker ×4, b/base/docker ×4, b/skilled/docker ×4
                                                                     case grace        a/base/docker ×4, a/skilled/docker ×4, b/base/docker ×4, b/skilled/docker ×4
                                                                     case linus        a/base/docker ×4, a/skilled/docker ×4, b/base/docker ×4, b/skilled/docker ×4
-evals/verdicts.eval.ts › six cases can                              a/base/docker     control          ungated  ×6   6 cases
+evals/verdicts.eval.ts › six cases can                              a/base/docker     control          ungated  ×6   6 cases · runs 1 a case (compare with cases: the lift pairs cases)
                                                                     a/skilled/docker  variant skilled  gated    ×6
                                                                     b/base/docker     control          ungated  ×6
                                                                     b/skilled/docker  variant skilled  gated    ×6

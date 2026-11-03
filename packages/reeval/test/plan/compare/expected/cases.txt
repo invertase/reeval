@@ -1,14 +1,14 @@
 no profile · 3 evals · 10 cells · 22 attempts
 hint: evals/cases.eval.ts › pooled has 3 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 hint: evals/cases.eval.ts › keyed has 2 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
-evals/cases.eval.ts › pooled                  a/base/docker     control          ungated  ×3  3 cases
+evals/cases.eval.ts › pooled                  a/base/docker     control          ungated  ×3  3 cases · runs 1 a case (compare with cases: the lift pairs cases)
                                               a/skilled/docker  variant skilled  gated    ×3  minLift 0.2
                                               b/base/docker     control          ungated  ×3
                                               b/skilled/docker  variant skilled  gated    ×3  minLift 0.2
                                               case ada          a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
                                               case grace        a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
                                               case linus        a/base/docker ×1, a/skilled/docker ×1, b/base/docker ×1, b/skilled/docker ×1
-evals/cases.eval.ts › keyed                   a/base/docker     control          ungated  ×2  2 cases
+evals/cases.eval.ts › keyed                   a/base/docker     control          ungated  ×2  2 cases · runs 1 a case (compare with cases: the lift pairs cases)
                                               a/skilled/docker  variant skilled  gated    ×2
                                               b/base/docker     control          ungated  ×2
                                               b/skilled/docker  variant skilled  gated    ×2

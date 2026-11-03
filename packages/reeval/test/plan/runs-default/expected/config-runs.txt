@@ -1,6 +1,7 @@
-no profile · 4 evals · 7 cells · 9 attempts
+no profile · 5 evals · 9 cells · 13 attempts
 hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 hint: 3 compares run 1 or 2 times per cell; below 4 runs a side their lift shows only a direction and their effort can't be tested (runs: 4)
+hint: evals/r.eval.ts › compare with cases has 2 cases; its lift needs 6 to hold, so it shows only a direction whatever the runs (add cases)
 evals/r.eval.ts › compare                        a/base/docker     control          ungated  ×1
                                                  a/skilled/docker  variant skilled  gated    ×1
 evals/r.eval.ts › compare with runs 1            a/base/docker     control          ungated  ×1
@@ -8,6 +9,10 @@ evals/r.eval.ts › compare with runs 1            a/base/docker     control    
 evals/r.eval.ts › runs from the group › compare  a/base/docker     control          ungated  ×2
                                                  a/skilled/docker  variant skilled  gated    ×2
 evals/r.eval.ts › no compare                     a/base/docker     control          gated    ×1
+evals/r.eval.ts › compare with cases             a/base/docker     control          ungated  ×2  2 cases
+                                                 a/skilled/docker  variant skilled  gated    ×2
+                                                 case a            a/base/docker ×1, a/skilled/docker ×1
+                                                 case b            a/base/docker ×1, a/skilled/docker ×1
 excluded: —
-image docker · cursor · 4 evals
+image docker · cursor · 5 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

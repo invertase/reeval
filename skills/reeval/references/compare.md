@@ -19,7 +19,9 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
   (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts.
 - With `runs` unset at every level, a compare with variants runs 4 a cell, the fewest tries a
-  side a lift verdict needs (the plan notes `runs 4 (compare default)`); anything else runs once.
+  side a lift verdict needs (the plan notes `runs 4 (compare default)`); anything else runs once,
+  including a compare with two or more `cases`: its lift pairs cases, so add cases rather than
+  runs (the plan notes `runs 1 a case`).
   Any level that sets `runs`, `runs: 1` and `--runs` included, replaces it, and a profile's
   `limit.runs` caps it. A compare with `cases` runs each case once: its lift pools over the cases.
   Don't set `runs: 1` in the config unless you mean every compare to run once.
