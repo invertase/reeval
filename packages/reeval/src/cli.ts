@@ -31,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
-import type { GitInfo, RunInvocation, RunRecord } from './history/types.ts'
+import type { GitInfo, RunInvocation } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -61,6 +61,7 @@ import {
   resumeSettings,
   savedFilters,
   savedInvocation,
+  stoppedRetry,
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
@@ -596,7 +597,7 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   }
   if (
     flags.resume !== undefined &&
-    continuesRetry(target.previous) &&
+    (await stoppedRetry(root, target)) &&
     (filters.length || flags.tag?.length || flags.trait?.length)
   ) {
     throw new UsageError(
@@ -621,9 +622,6 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
   return { nothing: null, saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
 }
-
-/** A run a `--retry-errors` stopped during, which a `--resume` finishes as that retry. */
-const continuesRetry = (previous: RunRecord | null | undefined) => !!previous?.retriedAt?.length
 
 /** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
 const continuedRun = (root: string, flags: Pick<Flags, 'resume' | 'retry-errors'>) =>
@@ -723,9 +721,10 @@ type StartedRun = RunContext & {
   retryTarget?: ResumeTarget
   /**
    * A `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process
-   * started it; `startedAt` is the run's own start.
+   * started it; `startedAt` is the run's own start. `began`: when the retry a resume finishes
+   * started, for one a kill stopped before the record listed it.
    */
-  retry?: { startedAt: Date; resume: boolean }
+  retry?: { startedAt: Date; resume: boolean; began?: Date }
 }
 
 /** What a retry, or a resume that finishes one, does to the run's errors, for its refusals. */
@@ -761,6 +760,7 @@ async function startRun({
     // A retry moves the finished run aside only once its plan is the run's.
     if (!dryRun && retry === undefined) await prepareResume(target, config.root)
     else if (!dryRun) holdRetry(target, config.root)
+    const stopped = retry === undefined ? await stoppedRetry(config.root, target) : null
     await sweepStaging(config.root, target.runId)
     const aside = dryRun
       ? { record: target.previous, artifacts: target.previousArtifacts }
@@ -792,9 +792,17 @@ async function startRun({
       previous: previous && unfoldCases(previous),
       previousArtifacts: aside.artifacts ?? target.previousArtifacts,
       ...(retry === undefined ? {} : { retryTarget: target }),
-      ...(retry !== undefined || continuesRetry(aside.record ?? target.previous)
-        ? { retry: { startedAt, resume: retry === undefined } }
-        : {}),
+      ...(retry !== undefined
+        ? { retry: { startedAt, resume: false } }
+        : stopped
+          ? {
+              retry: {
+                startedAt,
+                resume: true,
+                ...(stopped.began ? { began: stopped.began } : {}),
+              },
+            }
+          : {}),
     }
   }
   // Run ids sort in run order, so a second run in the same second takes the next second's id,

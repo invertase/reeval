@@ -124,7 +124,7 @@ and fails stay. It exits 2 if an eval's source, harness, judge, environment, the
 or the plan changed since the run (start a new run instead). A run with no infra errors prints a
 note and exits with its own outcome, so `reeval run || reeval run --retry-errors` stays red
 after a real fail. Each retried attempt keeps its earlier errors in `retries`, and the run's exit
-code is its outcome after the retry. A Ctrl-C leaves the run `interrupted`; `--resume` finishes
+code is its outcome after the retry. A Ctrl-C or a kill stops the retry; `--resume` finishes
 the retry, with the same refusals.
 
 ## Recording runs

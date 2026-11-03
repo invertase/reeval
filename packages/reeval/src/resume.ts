@@ -601,6 +601,27 @@ export function holdRetry(target: ResumeTarget, root: string): void {
 }
 
 /**
+ * A run a `--retry-errors` stopped during, which a `--resume` finishes as that retry. Its
+ * interrupted record lists the retry in `retriedAt`, or a kill stopped the retry before it
+ * assembled one: then staging still has the finished record the retry moved aside (only a retry
+ * moves a `complete` one), and `began` is when the retry planned, from its `retries.json` (else
+ * now), which that record has no entry for. Null for any other run.
+ */
+export async function stoppedRetry(
+  root: string,
+  target: ResumeTarget,
+): Promise<{ began: Date | null } | null> {
+  if (target.previous?.retriedAt?.length) return { began: null }
+  const staging = stagingOf(root, target.runId)
+  const { record } = await loadPrevious(staging)
+  if (record?.status === 'complete') {
+    const planned = await stat(join(staging, RETRIES_FILE)).catch(() => null)
+    return { began: planned?.mtime ?? new Date() }
+  }
+  return record?.retriedAt?.length ? { began: null } : null
+}
+
+/**
  * Undoes a retry's {@link prepareResume} when it stops before the engine runs: the finished
  * record and its artifacts go back to `.reeval/runs`, and its staging is removed.
  */

@@ -28,7 +28,13 @@ import {
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
-import { isCompletedAttempt, type LeftOut, previousAttempt, readRetries } from '../resume.ts'
+import {
+  isCompletedAttempt,
+  isKeptAttempt,
+  type LeftOut,
+  previousAttempt,
+  readRetries,
+} from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
 import type {
@@ -162,9 +168,10 @@ export type AssembleInput = {
   /**
    * `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process started
    * it: the record keeps the run's plan, git state and stack, and its duration is the run's plus
-   * this process's.
+   * this process's. `began`: when the retry a resume finishes started, for one a kill stopped
+   * before the record listed it in `retriedAt`.
    */
-  retry?: { startedAt: Date; resume: boolean }
+  retry?: { startedAt: Date; resume: boolean; began?: Date }
 }
 
 export type AssembledRun = {
@@ -849,11 +856,21 @@ async function addAttempt(
   const cell = e.attempt?.cell ?? unplanned?.cell ?? UNKNOWN_CELL
   const n = e.attempt?.n ?? unplanned?.n ?? 1
   const kept = previousAttempt(previous, e.key)
-  if (previous && e.state === 'skipped' && kept && isCompletedAttempt(kept.outcome, kept.error)) {
+  const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
+  // A resume or retry that ran an infra error again, then died before it assembled, left the
+  // newer outcome in staging.
+  const rerun =
+    kept?.outcome === 'infra_error' && !!record && isKeptAttempt(record.outcome, record.error)
+  if (
+    previous &&
+    e.state === 'skipped' &&
+    kept &&
+    !rerun &&
+    isCompletedAttempt(kept.outcome, kept.error)
+  ) {
     await addPreviousAttempt(e, kept, seen, out, judge, previous, previousArtifacts)
     return
   }
-  const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
   const { outcome, error } = mergeOutcome(e, record)
   if (!seen.sources.has(e.file)) {
     seen.sources.set(e.file, await evalFile(ctx.config.root, e.file))
@@ -1427,9 +1444,14 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       : input.endedAt.getTime() - input.startedAt.getTime(),
     ...(retried && input.retry
       ? {
-          retriedAt: input.retry.resume
-            ? (retried.retriedAt ?? [])
-            : [...(retried.retriedAt ?? []), input.retry.startedAt.toISOString()],
+          retriedAt: [
+            ...(retried.retriedAt ?? []),
+            ...(!input.retry.resume
+              ? [input.retry.startedAt.toISOString()]
+              : input.retry.began
+                ? [input.retry.began.toISOString()]
+                : []),
+          ],
         }
       : {}),
     author: input.author,
