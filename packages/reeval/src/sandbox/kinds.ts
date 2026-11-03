@@ -200,11 +200,11 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     harnesses: ['cursor', 'pi', 'codex'],
   },
   unverifiedHarnesses:
-    "reeval bakes a harness's CLI into a copy of the Tart image before the run, and only Cursor's, pi's and Codex's bootstraps install for macOS so far. Run this one in docker().",
+    "reeval bakes a harness's CLI into a copy of the Tart image before the run, and the other harnesses' bootstraps don't install for macOS yet. Run this one in docker().",
   provider: () => 'tart',
   id: (s) => `tart:${idPart(s.image)}`,
   hostPaths: { 'ssh.key': 'file' },
-  buildsAtStart: () => false,
+  buildsAtStart: () => true,
   hostLimit: { max: TART_MAX_CONCURRENT, why: 'macOS runs two macOS VMs at a time' },
   privileges: () => ({ root: false, capabilities: [] }),
   async create(sandbox, options) {
