@@ -608,7 +608,9 @@ For more information about environments, see [Define an environment](/configurat
 `runs` is the number of attempts in each cell.
 
 <Property name="runs" type="number | { bestOf: number }" optional>
-  A whole number of at least 1, and 1 by default, or `{ bestOf: n }` with `n` odd and at least 3, which stops each cell once pass or fail has a majority of `n` and gates on that majority. `bestOf` is refused on an evaluation with `compare`. `--runs` replaces it after a profile `limit`, pinned or not.
+  A whole number of at least 1, or `{ bestOf: n }` with `n` odd and at least 3, which stops each cell once pass or fail has a majority of `n` and gates on that majority. `bestOf` is refused on an evaluation with `compare`. `--runs` replaces it after a profile `limit`, pinned or not.
+
+  Unset at every level, an evaluation with `compare` variants runs 4 a cell, the fewest a side a lift verdict needs, and the plan notes `runs 4 (compare default)`. Anything else runs once. That includes an evaluation with two or more `cases` and a `compare`, whose lift pairs cases rather than runs, so more cases add power; the plan notes `runs 1 a case (compare with cases: the lift pairs cases)`.
 </Property>
 
 ## `gate`
@@ -616,7 +618,7 @@ For more information about environments, see [Define an environment](/configurat
 `gate` is how a cell's attempts decide its outcome.
 
 <Property name="gate" type="'all' | { passRate: number } | 'observe'" optional>
-  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case: a case keeps its own outcome, with `verdict: 'family'`, and the family's outcome sets the exit code. `'observe'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. The record writes such a cell's gate as `'none'`. reeval refuses any other value, naming the three forms.
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case: a case keeps its own outcome, with `verdict: 'family'`, and the evaluation's pooled outcome sets the exit code. `'observe'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. The record writes such a cell's gate as `'none'`. reeval refuses any other value, naming the three forms.
 </Property>
 
 ## `env`
@@ -864,11 +866,11 @@ evaluate(
 ```
 
 <Property name="cases" type="T[]" optional>
-  The inputs, each JSON data. The body takes one as its second argument. The cases pool into one pass rate and, with `compare`, one lift paired by case. reeval refuses `runs: { bestOf }` beside it.
+  The inputs, each JSON data. The body takes one as its second argument. The cases pool into one pass rate and, with `compare`, one lift paired by case. reeval refuses `runs: { bestOf }` beside it. Runs recorded with `evaluate.each` line up with the evaluation named for the template without its placeholders, each case keyed by what its placeholder held: `evaluate.each(prompts)('discovery: %s', …)` continues as `evaluate('discovery', { cases: prompts }, …)`.
 </Property>
 
 <Property name="caseKey" type="(item: T) => string" optional>
-  Each case's key, which names it in the output and the record. reeval refuses two cases with one key. Without it, a string or a finite number is its own key, and an object uses its `id`, else its `name`.
+  Each case's key, which names it in the output and the record. A key is trimmed, 1–80 characters, with no `#`, `›` or control characters; a `/` is fine. reeval refuses two cases with one key. Without it, a string or a finite number is its own key, and an object uses its `id`, else its `name`.
 </Property>
 
 <Property name="where" type="(pair: { case, environment, harness }) => boolean" optional>

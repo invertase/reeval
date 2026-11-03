@@ -44,7 +44,7 @@ environment. A fake profile or config puts `sandbox: fakeSandbox()` on `defaults
 `defineConfig` so `plain` and skill variants run without Docker; that's for trying configs, not
 for validating checks (an environment's own `docker()` still wins). Don't put `fakeSandbox()`
 on `plain` itself: real Cursor runs need Docker. An oracle or canary profile sets only
-`defaults.harness`, so each eval keeps its sandbox: see
+`defaults.harnesses`, so each eval keeps its sandbox: see
 [evals.md](evals.md#trustworthy-evals).
 
 ## Harnesses, keys and effort

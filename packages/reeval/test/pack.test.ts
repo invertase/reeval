@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
+import { packageReadme } from '../../../scripts/package-readme.mjs'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
 
@@ -291,11 +292,20 @@ test('the packed package installs into a clean project and runs reeval', {
   const { dir, tarball, manifest, pkg } = pack()
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
   assert.match(listing, /^package\/LICENSE$/m)
-  // The published README is the repo-root README, copied at build.
+  // The published README is the repo-root README with its relative links made absolute, since
+  // the docs they point to don't ship; the CHANGELOG ships as it is.
   assert.match(listing, /^package\/README\.md$/m)
+  const readme = extract(dir, tarball, 'README.md')
   assert.equal(
-    extract(dir, tarball, 'README.md'),
-    readFileSync(join(pkgRoot, '..', '..', 'README.md'), 'utf8'),
+    readme,
+    packageReadme(readFileSync(join(pkgRoot, '..', '..', 'README.md'), 'utf8'), manifest.version),
+  )
+  assert.doesNotMatch(readme, /\]\((?!https?:|mailto:|#)/, 'no relative link')
+  assert.match(readme, /\]\(https:\/\/github\.com\/invertase\/reeval\/blob\/v[^/]+\/docs\//)
+  assert.doesNotMatch(listing, /^package\/docs\//m)
+  assert.equal(
+    extract(dir, tarball, 'CHANGELOG.md'),
+    readFileSync(join(pkgRoot, '..', '..', 'CHANGELOG.md'), 'utf8'),
   )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.doesNotMatch(listing, /^package\/dist\/studio-app\//m, 'the studio app is in a chunk')
@@ -306,11 +316,20 @@ test('the packed package installs into a clean project and runs reeval', {
   // The bundled packages' other files, beside dist/ as in their own packages.
   assert.match(listing, /^package\/docker\/Dockerfile$/m)
   assert.match(listing, /^package\/assets\/pnpm-lock\.yaml$/m)
-  // The eval rubric remarks' fixes point to, copied from the repository's skills/ at build.
-  assert.equal(
-    extract(dir, tarball, 'skills/eval-rubric/SKILL.md'),
-    readFileSync(join(pkgRoot, '..', '..', 'skills', 'eval-rubric', 'SKILL.md'), 'utf8'),
-  )
+  // The consumer skills, copied from the repository's skills/ at build: reeval's, with its
+  // references, and the setup and eval rubric skills it links to.
+  for (const file of [
+    'reeval/SKILL.md',
+    'reeval/references/evals.md',
+    'setup/SKILL.md',
+    'eval-rubric/SKILL.md',
+  ]) {
+    assert.equal(
+      extract(dir, tarball, `skills/${file}`),
+      readFileSync(join(pkgRoot, '..', '..', 'skills', file), 'utf8'),
+      file,
+    )
+  }
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
 
   // The @reeval/* packages are bundled into dist, so nothing in the manifest points at the

@@ -126,10 +126,11 @@ export default defineConfig({
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,
   `DEFAULT_THRESHOLD`). There is no `test`, `describe`, `baseline`, `secret` or `skill` export.
-- `defineConfig`, `group` and `evaluate` take the same options (`harness`, `sandbox`,
-  `environment`, `env`, `judge`, `runs`, `gate`, `timeout`, `tags`, …) and inner levels win;
+- `defineConfig`, `group` and `evaluate` take the same options (`harnesses`, `sandbox`,
+  `environments`, `env`, `judge`, `runs`, `gate`, `timeout`, `tags`, …) and inner levels win;
   `compare` is for groups and evals only. Options are plain objects, never functions. Unknown
-  keys are errors with a hint (`repeat` → "Did you mean runs?").
+  keys are errors with a hint (`repeat` → "Did you mean runs?"), and type errors in a
+  `defineConfig` object.
 - `runs: { bestOf: 5 }` (odd, 3 or more) stops each cell once pass or fail has a majority (3 to 5
   attempts) and gates on it, replacing `gate`. Use it to settle a flaky pass/fail for less than a
   fixed count; not on an eval with `compare` (refused: lift needs equal attempts), and a cell
@@ -218,7 +219,7 @@ group('hello', () => {
   so the eval runs in its real sandbox (its `docker()` image, `install`, egress and brokered
   secrets): an oracle `fakeHarness` that does the task right must pass, and a canary that cheats
   or gets it wrong must fail. A canary that passes means a check isn't checking. Put them in the
-  one config as profiles that set `defaults.harness` (and `defaults.judge`), never
+  one config as profiles that set `defaults.harnesses` (and `defaults.judge`), never
   `defaults.sandbox`, then `reeval image build --profile oracle` and
   `reeval run --profile oracle` / `--profile canary` (needs Docker, no keys); see
   [references/evals.md](references/evals.md#trustworthy-evals). Not `fakeSandbox()`.
@@ -289,7 +290,8 @@ group(
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
   (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts:
-  without `runs`, a compare runs 4 a cell, the fewest whose lift often holds. A `runs` below 4 shows
+  without `runs`, a compare runs 4 a cell, the fewest whose lift often holds (with `cases`, once a
+  case: the lift pairs cases). A `runs` below 4 shows
   only the direction, with a `too-few-tries` remark; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. `control` is

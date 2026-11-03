@@ -22,6 +22,7 @@ import {
 import { createRequire } from 'node:module'
 import { dirname, extname, join, posix, relative, sep } from 'node:path'
 import { defineConfig } from 'tsdown'
+import { packageReadme } from '../../scripts/package-readme.mjs'
 import {
   bundledLicenses,
   markedFiles,
@@ -265,15 +266,16 @@ export default defineConfig({
         cpSync(from, join(here, asset), { recursive: true })
       }
       thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
-      // The published package's README is the repo-root README, copied so the
-      // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
-      cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
-      // The eval rubric is a consumer skill in the repo's skills/ that remarks' fixes point
-      // to, so it ships beside dist/.
+      // The published package's README is the repo-root README, with its links to the docs,
+      // which don't ship, made absolute. It is handwritten; `pnpm docs:gen` does not write it.
+      const readme = readFileSync(join(here, '../..', 'README.md'), 'utf8')
+      writeFileSync(join(here, 'README.md'), packageReadme(readme, pkg.version))
+      cpSync(join(here, '../..', 'CHANGELOG.md'), join(here, 'CHANGELOG.md'))
+      // The consumer skills ship beside dist/: reeval's, for an agent writing evals against
+      // the installed version, and the setup and eval rubric skills it links to (remarks'
+      // fixes point to the rubric).
       rmSync(join(here, 'skills'), { recursive: true, force: true })
-      cpSync(join(here, '../..', 'skills/eval-rubric'), join(here, 'skills/eval-rubric'), {
-        recursive: true,
-      })
+      cpSync(join(here, '../..', 'skills'), join(here, 'skills'), { recursive: true })
       const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
       writeFileSync(
         join(here, 'THIRD_PARTY_NOTICES.md'),
