@@ -24,6 +24,7 @@ import {
   memoryMb,
   removeRunVms,
   sshGuest,
+  tartSession,
   vmPrefix,
 } from '../src/sandbox/tart.ts'
 import {
@@ -233,6 +234,29 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     } finally {
       await box.destroy()
     }
+  })
+
+  test("refuses a port once the gateway has stopped, rather than going to the VM's address", async () => {
+    const stopped = 'the forwarder exited (1)'
+    const gateway = {
+      stopped,
+      portUrl: async () => {
+        throw new Error(`the egress gateway stopped: ${stopped}`)
+      },
+    } as unknown as Parameters<typeof tartSession>[0]['gateway']
+    const session = tartSession({
+      vm: 'reeval-gone',
+      guest: sshGuest('192.0.2.1', '/nonexistent'),
+      home: '/Users/admin',
+      stateDir: '/Users/admin/.reeval-state',
+      env: {},
+      gateway,
+      destroy: async () => {},
+    })
+    await assert.rejects(
+      session.getPortEndpoint({ port: BRIDGE_PORT }),
+      /^Error: the egress gateway stopped: the forwarder exited \(1\)$/,
+    )
   })
 
   test("streams a spawned process's output, and its kill stops what it started in the VM", async () => {

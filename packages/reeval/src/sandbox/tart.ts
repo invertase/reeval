@@ -373,6 +373,7 @@ export async function createTartSandbox(
     debug?.log('container', `egress gateway not running: ${noGateway}`)
   }
   if (gateway) {
+    const trustStarted = Date.now()
     const trusted = await runIn(guest, ['sudo', '-n', ...TRUST_CA], {
       signal: AbortSignal.any([signal, AbortSignal.timeout(TRUST_TIMEOUT_MS)]),
     }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
@@ -380,7 +381,7 @@ export async function createTartSandbox(
       'container',
       trusted.exitCode === 0
         ? 'the gateway CA is trusted in the System keychain'
-        : `the gateway CA isn't in the System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
+        : `the gateway CA isn't in the System keychain after ${((Date.now() - trustStarted) / 1000).toFixed(1)}s (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
     )
     if (signal.aborted) return fail(signal.reason)
     const bundle = posix.join(stateDir, 'ca-bundle.pem')
@@ -630,7 +631,8 @@ export function tartSession(o: TartSessionOptions): DockerSession {
     },
     async getPortEndpoint({ port, protocol = 'ws' }) {
       const scheme = protocol === 'ws' ? 'ws' : 'http'
-      if (gateway && !gateway.stopped) return { url: await gateway.portUrl(port, scheme) }
+      // A stopped gateway is refused, not routed around: the agent's proxy went with it.
+      if (gateway) return { url: await gateway.portUrl(port, scheme) }
       const ip = (await tartOk(['ip', vm])).trim()
       return { url: `${scheme}://${ip}:${port}` }
     },
