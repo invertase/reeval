@@ -17,7 +17,7 @@ import { after, before, describe, test } from 'node:test'
 import { formatSize, pullSpace, tartImageSize, tartPull } from '../src/sandbox/tart-images.ts'
 import { parseTartRef, tartTagWarning } from '../src/sandbox/tart-ref.ts'
 import { project, readRun, runCli } from './helpers.ts'
-import { fakeDigest, fakeTart } from './support/fake-tart.ts'
+import { fakeDigest, fakeTart, holdLoopback } from './support/fake-tart.ts'
 
 const posix = process.platform !== 'win32'
 
@@ -178,6 +178,12 @@ function noDocker(bin: string): () => string[] {
 describe('tart() images before the run', {
   skip: !posix && 'the fake tart is a bash script',
 }, () => {
+  let release = () => {}
+  before(async () => {
+    release = await holdLoopback()
+  })
+  after(() => release())
+
   const setup = async (image: string, extra: NodeJS.ProcessEnv = {}) => {
     const fake = fakeTart()
     const dockerCalls = noDocker(join(fake.dir, 'bin'))

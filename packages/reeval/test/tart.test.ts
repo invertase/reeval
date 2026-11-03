@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { after, describe, test } from 'node:test'
+import { after, before, describe, test } from 'node:test'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import {
   createTartSandbox,
@@ -15,7 +15,7 @@ import {
   vmPrefix,
 } from '../src/sandbox/tart.ts'
 import type { TartSandboxDescriptor } from '../src/types.ts'
-import { installFakeTart } from './support/fake-tart.ts'
+import { holdLoopback, installFakeTart } from './support/fake-tart.ts'
 
 const posix = process.platform !== 'win32'
 const fake = posix ? installFakeTart() : undefined
@@ -60,7 +60,17 @@ const eventually = async (what: string, check: () => boolean) => {
 }
 
 describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' }, () => {
-  after(() => removeRunVms('run1'))
+  let release = () => {}
+  before(async () => {
+    release = await holdLoopback()
+  })
+  after(async () => {
+    try {
+      await removeRunVms('run1')
+    } finally {
+      release()
+    }
+  })
 
   test('clones the image, sizes and boots the clone, works in it, and deletes it', async () => {
     const box = await createTartSandbox(vm({ cpus: 2, memory: '4g' }), options())

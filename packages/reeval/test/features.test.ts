@@ -46,7 +46,7 @@ import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
-import { fakeDigest, fakeTart } from './support/fake-tart.ts'
+import { fakeDigest, fakeTart, holdLoopback } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -100,6 +100,8 @@ type Feature = {
   cwd?: string
   /** Runs on the copied project before `reeval run`. */
   prepare?: (dir: string) => void | Promise<void>
+  /** Boots fake-tart VMs, so it holds the loopback their gateways share ({@link holdLoopback}). */
+  loopback?: true
   /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
   posixModes?: true
   /**
@@ -3020,6 +3022,7 @@ export const features: Feature[] = [
     env: 'mac',
     sandbox: 'tart:macos-sequoia-base:15.6',
     posixModes: true,
+    loopback: true,
     canary:
       /expected 'ghcr\.io\/cirruslabs\/macos-sequoia-base…' to be 'ghcr\.io\/cirruslabs\/macos-sequoia-base…'/,
     hostEnv: (dir) => {
@@ -3042,6 +3045,7 @@ export const features: Feature[] = [
     env: 'ui',
     sandbox: 'tart:macos-sequoia-base:latest',
     posixModes: true,
+    loopback: true,
     canary: /expected 'own port' to be 'reads PORT'/,
     hostEnv: (dir) => {
       const fake = fakeTart(['ghcr.io/cirruslabs/macos-sequoia-base:latest'])
@@ -4252,6 +4256,10 @@ function fixtureTests(tiers: Tier[]) {
         const row = realRowOf(f)
         if (tier === 'real') {
           reserveAttempts(row, 2, `fixture ${rowName(f)}`)
+        }
+        if (f.loopback) {
+          const release = await holdLoopback()
+          t.after(release)
         }
         const p = await fixture(`features/${f.dir}`)
         await f.prepare?.(p.dir)
