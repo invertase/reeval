@@ -58,6 +58,7 @@ import type {
   ReevalConfigData,
   ResolvedConfig,
   ResolvedProfile,
+  SandboxDescriptor,
 } from './types.ts'
 
 export { UsageError }
@@ -893,9 +894,16 @@ export function missingCredentials(
     questionModels?: string[]
     /** The judges the planned attempts resolve, each with the gateway it goes through. */
     judges?: PlannedJudge[]
+    /** The planned attempts' sandboxes, whose accounts some read a key for. */
+    sandboxes?: readonly SandboxDescriptor[]
   } = {},
 ): string[] {
   const missing: string[] = []
+  for (const s of options.sandboxes ?? []) {
+    if (s.kind !== 'boat' || env[s.apiKey.from]) continue
+    const line = `${s.apiKey.from} (for boat())`
+    if (!missing.includes(line)) missing.push(line)
+  }
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)

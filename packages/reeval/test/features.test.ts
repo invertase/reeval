@@ -40,9 +40,12 @@ import {
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { runPrefix } from '../src/sandbox/boat.ts'
+import { boat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
+import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
 import { fakeTart } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
@@ -225,6 +228,34 @@ before(async () => {
   gitHttp = await gitHttpServer(GIT_TOKEN)
 })
 after(() => gitHttp.close())
+
+/** The fake Boat API the `boat-*` fixtures run on, its sandboxes sshd containers. */
+let boatApi: FakeBoat
+before(async () => {
+  boatApi = await fakeBoat(dockerMachines)
+})
+after(() => boatApi.close())
+/** A `boat-*` fixture's host: reeval pointed at the fake API, the VM image built. */
+const onFakeBoat: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
+  sandbox: 'boat',
+  hostEnv: () => ({ BOAT_BASE_URL: boatApi.url, BOAT_API_KEY: boatApi.key }),
+  prepare: () => buildBoatVmImage(),
+}
+/** No sandbox of the run is left on the fake API. */
+const boatCleanedUp = (run: RunRecord) => {
+  const prefix = runPrefix(boat(), run.runId)
+  assert.deepEqual(
+    boatApi.live().filter((name) => name.startsWith(prefix)),
+    [],
+    'every Boat sandbox of the run is deleted',
+  )
+  assert.ok(
+    boatApi.requests.some(
+      (q) => q.call === 'POST /sandboxes' && String(q.body?.name).startsWith(prefix),
+    ),
+    'the run created its sandboxes on the fake API',
+  )
+}
 
 /** Every file under `dir`, for a check that a value was written to none of them. */
 const filesUnder = (dir: string): string[] =>
@@ -1027,6 +1058,39 @@ export const features: Feature[] = [
       assert.equal(filesContaining(runDir, TOKEN), '')
       assert.notEqual(filesContaining(runDir, 'API_KEY'), '', 'twin: the search finds the name')
     },
+  },
+  {
+    dir: 'sandbox/boat-session',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected 'reeval' to be 'user'/,
+    record: ({ run }) => boatCleanedUp(run),
+  },
+  {
+    dir: 'sandbox/boat-brokered',
+    tiers: ['docker'],
+    env: 'keys',
+    ...onFakeBoat,
+    hostEnv: () => ({
+      BOAT_BASE_URL: boatApi.url,
+      BOAT_API_KEY: boatApi.key,
+      REEVAL_FIXTURE_TOKEN: TOKEN,
+    }),
+    canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    record: ({ run, runDir }) => {
+      assert.deepEqual(landed(run)?.env.brokered, ['API_KEY'])
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/boat-serve',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected '\d+' to be '0'/,
+    record: ({ run }) => boatCleanedUp(run),
   },
   {
     dir: 'secrets/brokered-checks-see-placeholder',

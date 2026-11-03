@@ -129,14 +129,14 @@ export function unenforceable(
   sandbox: SandboxDescriptor,
   where: string,
 ): string | undefined {
-  const needs = egressNeeds(planned)
   const capabilities = capabilitiesOf(sandbox)
   const can = capabilities.egress.enforce
-  // `proxy` sends everything through the gateway, which only a sandbox that can be cut off from
-  // every other route makes true; the fake sandbox makes no such promise.
-  if (planned.policy === 'proxy' && can === 'none' && capabilities.isolated) {
-    return `${where} runs under egress 'proxy', where the egress gateway is the sandbox's only way out, but the ${sandbox.kind} sandbox keeps its own network, so what ignores the proxy would go out around it. Set egress: 'allow-all'.`
+  // `proxy` promises the gateway is the only way out, which a sandbox of its own that enforces
+  // nothing can't keep; on the host (the fake sandbox) there's no way out to close.
+  if (planned.policy === 'proxy' && capabilities.isolated && can === 'none') {
+    return `${where} runs under egress 'proxy', where the egress gateway is the only way out, but the ${sandbox.kind} sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in ${suggestedSandbox((c) => c.isolated && c.egress.enforce !== 'none')}.`
   }
+  const needs = egressNeeds(planned)
   if (LEVELS.indexOf(can) >= LEVELS.indexOf(needs)) return undefined
   const hosts = allowedHosts(planned)?.join(', ')
   const what =

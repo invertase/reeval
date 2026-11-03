@@ -760,6 +760,9 @@ importers:
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.174
         version: 1.0.174(patch_hash=ad4864bbc97398644552b24af6cc0106a75fae3e7759340bf0046ebf4f0977e5)(zod@4.6.7)
+      '@boatdev/sdk':
+        specifier: 1.13.0
+        version: 1.13.0
       '@modelcontextprotocol/client':
         specifier: 2.4.0
         version: 2.4.0
@@ -1062,6 +1065,9 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@boatdev/sdk@1.13.0':
+    resolution: {integrity: sha512-wSmCyFLDL0QTCLF5NfQR4JTdTccFIvlqBBtCMDLPk61hLj48ZPEH/0nF91j4aiMLBkr+kvmkedfqkyFuokn5dw==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -3970,6 +3976,8 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.6.3':
     optional: true
+
+  '@boatdev/sdk@1.13.0': {}
 
   '@emnapi/core@1.11.2':
     dependencies:

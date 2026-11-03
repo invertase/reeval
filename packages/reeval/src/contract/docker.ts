@@ -11,6 +11,7 @@ import type {
   InstallStep,
   SandboxDescriptor,
 } from '../types.ts'
+import { boatProblem } from './boat.ts'
 import {
   type Assert,
   closest,
@@ -236,6 +237,7 @@ export function checkDockerOptions(options: DockerOptions, engine?: 'docker' | '
  */
 export function sandboxProblem(value: SandboxDescriptor) {
   if (value.kind === 'tart') return tartProblem(value)
+  if (value.kind === 'boat') return boatProblem(value)
   return value.kind === 'docker'
     ? named(
         refusal(dockerSandboxSchema, value, explainDocker, {

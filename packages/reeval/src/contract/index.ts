@@ -2,6 +2,7 @@
 // each a Zod schema that validates it and gives its JSON Schema, described by the TSDoc of the
 // hand-written type of the same name.
 import type { z } from 'zod'
+import { boatSandboxSchema } from './boat.ts'
 import {
   analysisConfigDataSchema,
   budgetSchema,
@@ -89,6 +90,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DockerSandboxDescriptor: dockerSandboxSchema,
   FakeSandboxDescriptor: fakeSandboxSchema,
   TartSandboxDescriptor: tartSandboxSchema,
+  BoatSandboxDescriptor: boatSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

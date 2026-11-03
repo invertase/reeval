@@ -1,5 +1,6 @@
 // The sandbox providers reeval has, each meeting the prepare contract (provider.ts). Docker and
-// Podman build images, Tart pulls them, and the fake sandbox needs nothing.
+// Podman build images, Tart pulls them, Boat checks its account, and the fake sandbox needs
+// nothing.
 import {
   type DockerState,
   dockerState,
@@ -12,6 +13,7 @@ import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
+  BoatSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
@@ -291,6 +293,32 @@ export const tartProvider = (): SandboxProvider<TartSandboxDescriptor> => ({
   classify: classifyTart,
 })
 
+/**
+ * Boat has nothing to build yet (each attempt's VM installs the harness as it starts): `prepare`
+ * checks each account and machine size the run uses, once.
+ */
+export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
+  kind: 'boat',
+  check: async () => {},
+  key: (sandbox) => JSON.stringify({ apiKey: sandbox.apiKey.from, type: sandbox.type ?? 'small' }),
+  async prepare(sandbox, _harness, ctx) {
+    const { checkBoat } = await import('./boat.ts')
+    await checkBoat(sandbox, ctx.root)
+    return null
+  },
+  classify: (error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      class: isTransient(message) ? 'transient' : 'config',
+      stage: 'boat',
+      ref: null,
+      cause: null,
+      log: null,
+      message,
+    }
+  },
+})
+
 /** A fresh set of providers, one per run: each keeps the run's builds. */
 export const createProviders = (
   options: { refresh?: Refresh } = {},
@@ -299,4 +327,5 @@ export const createProviders = (
   podman: dockerProvider({ ...options, engine: 'podman' }),
   fake: fakeProvider(),
   tart: tartProvider(),
+  boat: boatProvider(),
 })

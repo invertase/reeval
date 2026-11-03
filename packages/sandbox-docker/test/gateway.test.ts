@@ -15,6 +15,8 @@ import {
   type ExecEnd,
   type ExecTransport,
   execRun,
+  sshArgv,
+  sshTransport,
 } from '../src/egress/transport.ts'
 
 type Traced = { argv: readonly string[]; end: ExecEnd }
@@ -281,5 +283,47 @@ describe('containerTransport', () => {
       'x',
     ])
     assert.equal(containerTransport('abc', 'podman').argv(command)[0], 'podman')
+  })
+})
+
+describe('sshTransport', () => {
+  const target = {
+    host: 'ssh.boat.dev',
+    port: 2222,
+    user: 'user',
+    identityFile: '/tmp/k/id_ed25519',
+    knownHostsFile: '/tmp/k/known_hosts',
+    hostKeyAlias: 'bx_1',
+  }
+
+  test('pins the host key under its alias, with no user config, agent or prompt', () => {
+    const argv = sshArgv(target, 'true')
+    assert.deepEqual(argv.slice(0, 6), ['ssh', '-T', '-F', 'none', '-i', '/tmp/k/id_ed25519'])
+    for (const option of [
+      'BatchMode=yes',
+      'IdentitiesOnly=yes',
+      'StrictHostKeyChecking=yes',
+      'UserKnownHostsFile=/tmp/k/known_hosts',
+      'GlobalKnownHostsFile=none',
+      'HostKeyAlias=bx_1',
+    ]) {
+      assert.equal(argv[argv.indexOf(option) - 1], '-o', option)
+    }
+    assert.deepEqual(argv.slice(-2), ['user@ssh.boat.dev', 'true'])
+    assert.equal(argv[argv.indexOf('-p') + 1], '2222')
+    assert.ok(!argv.some((a) => a.startsWith('ControlPath=')), 'no control socket unless asked')
+  })
+
+  test('shares one connection through a control socket when given one', {
+    skip: process.platform === 'win32' && 'Windows OpenSSH has no ControlMaster',
+  }, () => {
+    const argv = sshArgv({ ...target, controlPath: '/tmp/k/cm' }, 'true')
+    assert.ok(argv.includes('ControlMaster=auto'))
+    assert.ok(argv.includes('ControlPath=/tmp/k/cm'))
+  })
+
+  test('runs the command as root through sudo, quoted as one remote line', () => {
+    const argv = sshTransport(target).argv(['node', '-e', "console.log('a b')"])
+    assert.equal(argv.at(-1), `sudo -n -- 'node' '-e' 'console.log('\\''a b'\\'')'`)
   })
 })

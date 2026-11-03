@@ -166,8 +166,9 @@ describe('automatic hosts', () => {
 })
 
 describe('what a sandbox can enforce', () => {
-  test('each provider declares it: Docker all of it and recording, Tart recording, the fake nothing', () => {
+  test('each provider declares it: Docker all of it and recording, Tart and Boat recording, the fake nothing', () => {
     assert.deepEqual(SANDBOX_EGRESS, {
+      boat: { enforce: 'none', record: true },
       docker: { enforce: 'allowlist', record: true },
       fake: { enforce: 'none', record: false },
       tart: { enforce: 'none', record: true },
@@ -202,7 +203,7 @@ describe('what a sandbox can enforce', () => {
     assert.equal(unenforceable({ policy: 'allow-all', auto: [] }, vm, 'e'), undefined)
     assert.match(
       unenforceable({ policy: 'proxy', auto: [] }, vm, 'e') ?? '',
-      /^e runs under egress 'proxy', .* the tart sandbox keeps its own network, .* Set egress: 'allow-all'\.$/,
+      /^e runs under egress 'proxy', .* the tart sandbox enforces no egress policy: .* Set egress: 'allow-all' to run it there, or run it in docker\(\)\.$/,
     )
     assert.match(
       unenforceable({ policy: 'deny-all', auto: [] }, vm, 'e') ?? '',

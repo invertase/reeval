@@ -146,6 +146,17 @@ option and confines the container the same way (bridge network, Docker's seccomp
 on an Apple Silicon Mac, at most two at once. It needs `egress: 'allow-all'`: under the default
 `proxy` or a restricted policy the plan exits 2. Only `fakeHarness()` runs in it so far.
 
+```ts
+import { boat, createBoat } from 'reeval/sandbox/boat'
+// one boat.dev VM per attempt, over SSH (cell id `boat`, or `boat:large`)
+defineEnvironment('vm', { sandbox: boat({ type: 'large' }), egress: 'allow-all' })
+```
+
+`boat()` needs `npm i @boatdev/sdk`, `BOAT_API_KEY` (or `createBoat({ apiKey, prefix })` for
+another account) and an OpenSSH client, and plans only under `egress: 'allow-all'` and on the
+Cursor harness so far; reeval refuses the others at plan time. It takes no image options: put the
+toolchain's installs in the environment's `setup`.
+
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds
 run as root. `root: true` or `capabilities` print a warning at the start of every run, so prefer
 `install`. A process killed at the memory limit makes the attempt an infra error

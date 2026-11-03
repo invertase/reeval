@@ -5,9 +5,9 @@ description: "Run each attempt in a fresh container on the host."
 
 Choose the container each attempt runs in. For the definition, see [Sandbox](/reference/glossary#sandbox). reeval starts one container per attempt, runs the harness, the setup commands, and the assertions in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
 
-## Choose Docker or Podman
+## Choose Docker, Podman, Tart, or Boat
 
-reeval uses `docker()` by default. For more information about using `podman()`, see [Podman sandbox](/configuration/sandboxes/podman). To run in a macOS VM on an Apple Silicon Mac, see [Tart sandbox](/configuration/sandboxes/tart).
+reeval uses `docker()` by default. For more information about using `podman()`, see [Podman sandbox](/configuration/sandboxes/podman). To run in a macOS VM on an Apple Silicon Mac, see [Tart sandbox](/configuration/sandboxes/tart). To run each attempt in a boat.dev VM instead of a local container, see [Run on Boat](/configuration/sandboxes/boat).
 
 ## Set the sandbox
 

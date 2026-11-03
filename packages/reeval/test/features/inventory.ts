@@ -956,6 +956,20 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'boat.sandbox',
+    area: 'Sandbox',
+    name: '`boat()` and `createBoat({ apiKey, prefix })`: a boat.dev VM per attempt over SSH, under `allow-all`, on the harnesses verified there',
+    fixtures: ['sandbox/boat-session', 'sandbox/boat-brokered', 'sandbox/boat-serve'],
+    plan: ['environments/boat'],
+    unit: [
+      'reeval/test/boat.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/doctor.test.ts',
+      'reeval/test/refusals.test.ts',
+      'sandbox-docker/test/gateway.test.ts',
+    ],
+  },
+  {
     id: 'docker.privilege-warnings',
     area: 'Sandbox',
     name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',

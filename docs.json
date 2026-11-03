@@ -434,6 +434,10 @@
             {
               "title": "Tart",
               "href": "/configuration/sandboxes/tart"
+            },
+            {
+              "title": "Boat",
+              "href": "/configuration/sandboxes/boat"
             }
           ]
         },

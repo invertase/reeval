@@ -3,8 +3,10 @@ import {
   createDockerSession,
   DEFAULT_IMAGE,
   DEFAULT_LIMITS,
+  type DockerSession,
   docker,
   type EgressEvent,
+  type EgressOptions,
   EgressUnavailableError,
   ENGINES,
   type Engine,
@@ -80,16 +82,11 @@ function gatewayEvents(
   }
 }
 
-export async function createDockerSandbox(
-  descriptor: DockerSandboxDescriptor,
-  options: SandboxOptions,
-): Promise<NetworkSandbox> {
-  const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
-  const engine = descriptor.engine ?? 'docker'
-  const spec = engineSpec(engine)
-  if (!(await imageInfo(image, engine))) {
-    throw new InfraError(`${spec.name} image ${image} not found. Build it with: reeval image build`)
-  }
+/**
+ * What every sandbox behind the egress gateway shares: the gateway's options (policy, brokering,
+ * event and warning glue) and the record fields its events fill in.
+ */
+export function gatewayGlue(options: SandboxOptions) {
   const { brokering, substitutions = [] } = options
   const brokered = [
     ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
@@ -143,6 +140,107 @@ export async function createDockerSandbox(
     if (options.onWarning) options.onWarning(shown)
     else console.warn(`warning: ${shown}`)
   }
+  const egress = {
+    policy,
+    log: process.env.REEVAL_DEBUG ? (line: string) => console.error(line) : undefined,
+    onEvent,
+    onUnsubstituted: ({ name, where, in: places, method, url }: UnsubstitutedEvent) =>
+      warn(
+        `the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
+      ),
+    ...(brokering && {
+      endpoints: brokering.endpoints,
+      ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
+      ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
+      ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
+      onRefused: ({ method, url }: { method: string; url: string }) =>
+        warn(
+          `the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,
+        ),
+    }),
+  }
+  /** The record fields the gateway's events fill in, for a sandbox on `network`. */
+  const recorded = (network: DockerSession): Partial<Sandbox> => ({
+    ...(network.traffic && network.egress?.active && { traffic: network.traffic }),
+    ...(servedModel && {
+      servedModels: () => [...new Set(served)],
+      servedRequests: () => [...served],
+    }),
+    ...(askedModel && { askedModels: () => [...new Set(asked)] }),
+    ...(upstream && {
+      upstreams: () => [...upstreams].map(([provider, calls]) => ({ provider, calls })),
+      reportedCostUsd: () => cost,
+    }),
+    ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
+    ...(network.setSubstitutions && {
+      setSubstitutions: (subs: readonly Substitution[]) =>
+        network.setSubstitutions?.(subs) ?? Promise.resolve(),
+    }),
+  })
+  return { brokered, debug, egress, recorded }
+}
+
+type UnsubstitutedEvent = Parameters<NonNullable<EgressOptions['onUnsubstituted']>>[0]
+
+/**
+ * A sandbox on a harness session: the workspace under {@link SANDBOX_ROOT}, the agent's home, and
+ * reeval's own privileged execs in {@link SANDBOX_STATE}.
+ */
+export async function sessionSandbox(
+  network: DockerSession,
+  glue: ReturnType<typeof gatewayGlue>,
+  options: { root?: boolean; oomKills: Sandbox['oomKills'] },
+): Promise<NetworkSandbox> {
+  const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
+  await network.run({ command: `mkdir -p ${workdir}` })
+  const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
+  const resolve = (path: string) =>
+    path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
+  // A root sandbox's agent is root too, and could swap the binaries a privileged exec runs.
+  const execOwn: Sandbox['execOwn'] = async (command, opts) =>
+    options.root
+      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      : network.runPrivileged({ command, abortSignal: opts?.signal })
+  return {
+    workdir,
+    home,
+    stateDir: SANDBOX_STATE,
+    execOwn,
+    network,
+    exec: async (command, opts) =>
+      network.run({
+        command,
+        workingDirectory: opts?.cwd ? posix.resolve(workdir, opts.cwd) : workdir,
+        ...(opts?.env ? { env: opts.env } : {}),
+        abortSignal: opts?.signal,
+      }),
+    readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
+    ...glue.recorded(network),
+    writeFile: async (path, content) =>
+      typeof content === 'string'
+        ? network.writeTextFile({ path: resolve(path), content })
+        : network.writeBinaryFile({ path: resolve(path), content }),
+    getPortEndpoint: async ({ port, protocol = 'http' }) =>
+      network.getPortEndpoint({ port, protocol }),
+    oomKills: options.oomKills,
+    destroy: async () => {
+      await Promise.resolve(network.destroy()).catch(() => {})
+    },
+  }
+}
+
+export async function createDockerSandbox(
+  descriptor: DockerSandboxDescriptor,
+  options: SandboxOptions,
+): Promise<NetworkSandbox> {
+  const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
+  const engine = descriptor.engine ?? 'docker'
+  const spec = engineSpec(engine)
+  if (!(await imageInfo(image, engine))) {
+    throw new InfraError(`${spec.name} image ${image} not found. Build it with: reeval image build`)
+  }
+  const glue = gatewayGlue(options)
+  const { brokered, debug } = glue
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
   const needsNode = (reason: string) =>
@@ -165,26 +263,7 @@ export async function createDockerSandbox(
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
     // Always, so every attempt's egress is recorded; a detached container can't start without it.
-    egress: {
-      policy,
-      direct: isDirect(options.egress.policy),
-      log: process.env.REEVAL_DEBUG ? (line) => console.error(line) : undefined,
-      onEvent,
-      onUnsubstituted: ({ name, where, in: places, method, url }) =>
-        warn(
-          `the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
-        ),
-      ...(brokering && {
-        endpoints: brokering.endpoints,
-        ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
-        ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
-        ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
-        onRefused: ({ method, url }) =>
-          warn(
-            `the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,
-          ),
-      }),
-    },
+    egress: { ...glue.egress, direct: isDirect(options.egress.policy) },
   }).catch((error: unknown) => {
     throw error instanceof EgressUnavailableError ? new InfraError(needsNode(error.reason)) : error
   })
@@ -207,52 +286,8 @@ export async function createDockerSandbox(
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(needsNode(network.egress.reason))
   }
-  const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
-  await network.run({ command: `mkdir -p ${workdir}` })
-  const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
-  const resolve = (path: string) =>
-    path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
-  // A root container's agent is root too, and could swap the binaries a privileged exec runs.
-  const execOwn: Sandbox['execOwn'] = async (command, opts) =>
-    root
-      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
-      : network.runPrivileged({ command, abortSignal: opts?.signal })
-
-  return {
-    workdir,
-    home,
-    stateDir: SANDBOX_STATE,
-    execOwn,
-    network,
-    exec: async (command, opts) =>
-      network.run({
-        command,
-        workingDirectory: opts?.cwd ? posix.resolve(workdir, opts.cwd) : workdir,
-        ...(opts?.env ? { env: opts.env } : {}),
-        abortSignal: opts?.signal,
-      }),
-    readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
-    ...(network.traffic && network.egress?.active && { traffic: network.traffic }),
-    ...(servedModel && {
-      servedModels: () => [...new Set(served)],
-      servedRequests: () => [...served],
-    }),
-    ...(askedModel && { askedModels: () => [...new Set(asked)] }),
-    ...(upstream && {
-      upstreams: () => [...upstreams].map(([provider, calls]) => ({ provider, calls })),
-      reportedCostUsd: () => cost,
-    }),
-    ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
-    ...(network.setSubstitutions && {
-      setSubstitutions: (subs: readonly Substitution[]) =>
-        network.setSubstitutions?.(subs) ?? Promise.resolve(),
-    }),
-    writeFile: async (path, content) =>
-      typeof content === 'string'
-        ? network.writeTextFile({ path: resolve(path), content })
-        : network.writeBinaryFile({ path: resolve(path), content }),
-    getPortEndpoint: async ({ port, protocol = 'http' }) =>
-      network.getPortEndpoint({ port, protocol }),
+  return sessionSandbox(network, glue, {
+    ...(root !== undefined && { root }),
     oomKills: async () => {
       const kills = await network.oomKills()
       if (kills === null) return null
@@ -261,8 +296,5 @@ export async function createDockerSandbox(
       const onTop = swap === undefined ? limit : String(swap)
       return { kills, limit, swap: /^0+(\.0+)?[bkmg]?$/i.test(onTop) ? null : onTop }
     },
-    destroy: async () => {
-      await Promise.resolve(network.destroy()).catch(() => {})
-    },
-  }
+  })
 }

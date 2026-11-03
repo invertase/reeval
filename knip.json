@@ -20,7 +20,7 @@
     },
     "packages/reeval": {
       "entry": [
-        "src/{index,harness,sandbox,judge,testing,bin}.ts",
+        "src/{index,harness,sandbox,sandbox-boat,judge,testing,bin}.ts",
         "src/studio/index.ts",
         "test/**/*.{ts,mjs}",
         "scripts/**/*.ts"
@@ -32,6 +32,7 @@
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
         "@balena/dockerignore",
+        "@boatdev/sdk",
         "studio-web"
       ]
     },

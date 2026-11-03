@@ -6,7 +6,7 @@ import { describe, test } from 'node:test'
 import { resolveConfig } from '../src/config.ts'
 import { SANDBOX_EGRESS } from '../src/egress.ts'
 import { agentSandboxProblem } from '../src/harness/agent.ts'
-import { AGENTS } from '../src/harness/agents.ts'
+import { AGENTS, unverifiedHarness } from '../src/harness/agents.ts'
 import { fakeHarness } from '../src/harness.ts'
 import { planEval } from '../src/plan-eval.ts'
 import {
@@ -21,13 +21,14 @@ import {
 } from '../src/sandbox/kinds.ts'
 import { classifyTart, createProviders, tartHostProblem } from '../src/sandbox/providers.ts'
 import { docker, fakeSandbox, podman, tart } from '../src/sandbox.ts'
+import { boat } from '../src/sandbox-boat.ts'
 import type { SandboxDescriptor } from '../src/types.ts'
 
 const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
 describe('sandbox kinds', () => {
   test('every kind is in the table, and nothing else is a kind', () => {
-    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['docker', 'fake', 'tart'])
+    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['boat', 'docker', 'fake', 'tart'])
     assert.ok(isSandboxKind('docker'))
     assert.ok(isSandboxKind('tart'))
     assert.ok(!isSandboxKind('vm'))
@@ -36,7 +37,7 @@ describe('sandbox kinds', () => {
   })
 
   test('each kind names its helpers, and messages list them all', () => {
-    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox() or tart()')
+    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart() or boat()')
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),
       'docker()',
@@ -49,7 +50,7 @@ describe('sandbox kinds', () => {
 
   test('every provider a kind names has a prepare provider', () => {
     const providers = createProviders()
-    for (const sandbox of [docker(), podman(), fakeSandbox(), tart({ image: IMAGE })]) {
+    for (const sandbox of [docker(), podman(), fakeSandbox(), tart({ image: IMAGE }), boat()]) {
       const name = sandboxKind(sandbox).provider(sandbox)
       assert.equal(providers[name]?.kind, name)
     }
@@ -76,6 +77,7 @@ describe('sandbox kinds', () => {
       images: true,
       preflight: true,
       pluginBuilds: true,
+      harnesses: 'all',
     })
     assert.deepEqual(capabilitiesOf(fakeSandbox()), {
       platform: process.platform,
@@ -88,6 +90,7 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: false,
       pluginBuilds: false,
+      harnesses: 'all',
     })
   })
 
@@ -103,12 +106,29 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
+      harnesses: 'all',
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
       'tart:macos-sequoia-base:latest',
     )
     assert.equal(sandboxKind(tart({ image: 'mine' })).provider(tart({ image: 'mine' })), 'tart')
+  })
+
+  test("Boat is an isolated Linux VM that brokers, with no image and egress it can't hold", () => {
+    assert.deepEqual(capabilitiesOf(boat()), {
+      platform: 'linux',
+      egress: { enforce: 'none', record: true },
+      brokers: true,
+      harnessSession: true,
+      isolated: true,
+      processTable: true,
+      listeners: 'proc',
+      images: false,
+      preflight: true,
+      pluginBuilds: false,
+      harnesses: ['cursor'],
+    })
   })
 
   test('what a Docker sandbox widens is its own privileges; the fake one widens none', () => {
@@ -128,27 +148,46 @@ describe('sandbox kinds', () => {
 })
 
 describe('which sandbox a real harness runs in', () => {
+  const cursor = { kind: 'cursor', model: 'composer-2.5' } as const
+  const claude = { kind: 'claude-code', model: 'claude-haiku-5-5' } as const
+
   test('one with a harness session that brokers, on a platform its bootstrap installs', () => {
-    assert.equal(agentSandboxProblem(AGENTS.cursor, docker()), undefined)
-    assert.equal(agentSandboxProblem(AGENTS.codex, podman()), undefined)
+    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, docker()), undefined)
+    assert.equal(
+      agentSandboxProblem({ kind: 'codex', model: 'gpt-5' }, AGENTS.codex, podman()),
+      undefined,
+    )
   })
 
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
-      agentSandboxProblem(AGENTS.cursor, fakeSandbox()),
-      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()",
+      agentSandboxProblem(cursor, AGENTS.cursor, fakeSandbox()),
+      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
     )
+  })
+
+  test('Boat runs the harnesses verified on it, and refuses the rest naming the bake', () => {
+    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, boat()), undefined)
+    assert.equal(unverifiedHarness(cursor, boat()), undefined)
+    assert.equal(unverifiedHarness(claude, docker()), undefined)
+    assert.equal(unverifiedHarness({ kind: 'fake' }, boat()), undefined)
+    const refused = unverifiedHarness(claude, boat())
+    assert.equal(
+      refused,
+      "The Claude Code harness doesn't run in the boat sandbox yet: it runs Cursor so far. Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
+    )
+    assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
   test("the fake sandbox's platform is the host's, which it never names", () => {
     const aixOnly = { ...AGENTS.cursor, platforms: ['aix'] as const }
-    assert.doesNotMatch(agentSandboxProblem(aixOnly, fakeSandbox()) ?? '', /runs /)
+    assert.doesNotMatch(agentSandboxProblem(cursor, aixOnly, fakeSandbox()) ?? '', /runs /)
   })
 
   test('a platform no sandbox runs leaves only the fake harness', () => {
     const darwinOnly = { ...AGENTS.cursor, platforms: ['darwin'] as const }
     assert.equal(
-      agentSandboxProblem(darwinOnly, docker()),
+      agentSandboxProblem(cursor, darwinOnly, docker()),
       "The Cursor harness can't run in the docker sandbox, which runs linux, not darwin: use fakeHarness() with fakeSandbox()",
     )
   })

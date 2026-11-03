@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config.ts'
 import {
   type Check,
   checkAnalysis,
+  checkBoat,
   checkDocker,
   checkEgress,
   checkEnvFiles,
@@ -54,6 +55,8 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   fetch: async () => new Response('{}', { status: 200 }),
   cloudHost: async () => null,
   vertexToken: async () => SECRET,
+  missingSshTool: async () => null,
+  boatAccount: async () => {},
   ...over,
 })
 
@@ -76,6 +79,74 @@ const noSecret = (checks: Check[]) =>
   assert.doesNotMatch(JSON.stringify(checks), new RegExp(SECRET.slice(8)))
 
 describe('reeval doctor checks', () => {
+  test('boat(): the OpenSSH client, then each account by its key, offline or online', async () => {
+    const p = await project('doctor-boat', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { boat, createBoat } from 'reeval/sandbox/boat'
+export default defineConfig({
+  harnesses: cursor({ model: 'composer-2.5' }),
+  sandbox: boat(),
+  egress: 'allow-all',
+  profiles: { team: { defaults: { sandbox: createBoat({ apiKey: { kind: 'secret', from: 'TEAM_BOAT_KEY' } })() } } },
+})
+`,
+    })
+    const config = await loadConfig(join(p.dir, 'reeval.config.ts'))
+    const uses = configuredUses(config).map((u) => ({
+      id: '',
+      harness: u.harness,
+      sandbox: u.sandbox,
+    }))
+    const rows = (over: Partial<DoctorDeps>, online = false) =>
+      checkBoat(config, deps(over), online, { uses }, '.env.local')
+    const asked: Array<[string, boolean]> = []
+    const ok = await rows(
+      {
+        env: { BOAT_API_KEY: SECRET, TEAM_BOAT_KEY: SECRET },
+        boatAccount: async (sandbox, _root, online) => {
+          asked.push([sandbox.apiKey.from, online])
+        },
+      },
+      true,
+    )
+    assert.deepEqual(
+      ok.map((c) => `${c.id} ${c.status} ${c.summary}`),
+      [
+        'ssh ok an OpenSSH client for boat()',
+        'boat ok Boat takes the key in BOAT_API_KEY and starts small machines',
+        'boat ok Boat takes the key in TEAM_BOAT_KEY and starts small machines',
+      ],
+    )
+    assert.deepEqual(asked, [
+      ['BOAT_API_KEY', true],
+      ['TEAM_BOAT_KEY', true],
+    ])
+    const failing = await rows({
+      env: { BOAT_API_KEY: SECRET },
+      missingSshTool: async () => 'ssh-keygen',
+      boatAccount: async () => {
+        throw new Error(`boat() needs the Boat SDK, which isn't installed (${SECRET})`)
+      },
+    })
+    assert.deepEqual(statuses(failing), ['fail', 'fail', 'fail'])
+    assert.match(failing[0]?.fix ?? '', /OpenSSH/)
+    assert.match(failing[1]?.summary ?? '', /needs the Boat SDK/)
+    assert.equal(
+      failing[2]?.summary,
+      "boat() needs a Boat API key in TEAM_BOAT_KEY, which isn't set",
+    )
+    noSecret(failing)
+    const docker = await checkBoat(
+      await configOf('no-boat', `{ harnesses: fakeHarness(), sandbox: docker() }`),
+      deps(),
+      false,
+      { error: 'x' },
+      '.env.local',
+    )
+    assert.deepEqual(docker, [], 'no rows without boat()')
+  })
+
   test('a run stops on Docker it cannot use, naming the fix for the platform', () => {
     assert.equal(dockerProblem('running'), null)
     assert.equal(

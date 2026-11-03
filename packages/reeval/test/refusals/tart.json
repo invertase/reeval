@@ -16,7 +16,7 @@
   "data: three at once": "UsageError: sandbox.maxConcurrent in evals/a.eval.ts › e is 3, but tart() runs at most 2 at once: macOS runs two macOS VMs at a time",
   "data: a typo": "UsageError: sandbox in evals/a.eval.ts › e: Unknown tart() option \"cpu\". Did you mean \"cpus\"?",
   "data: no image": "UsageError: sandbox in evals/a.eval.ts › e: tart({ image }) takes an OCI image or a local VM name with no spaces, e.g. image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' (got undefined)",
-  "plan: under the default proxy": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the sandbox's only way out, but the tart sandbox keeps its own network, so what ignores the proxy would go out around it. Set egress: 'allow-all'.",
+  "plan: under the default proxy": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the only way out, but the tart sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in docker().",
   "plan: under deny-all": "UsageError: evaluate(\"e\") runs under egress 'deny-all', which needs turning egress off, but the tart sandbox enforces no egress policy.",
   "plan: under allow-all": null,
   "plan: three at once": "UsageError: sandbox.maxConcurrent in evaluate(\"e\") is 3, but tart() runs at most 2 at once: macOS runs two macOS VMs at a time"

@@ -1,0 +1,5 @@
+no profile · 3 evals · 3 cells · 3 attempts
+evals/boat.eval.ts › boat                   fake/small/boat        control  gated  ×1  egress "allow-all"
+evals/boat.eval.ts › boat large             fake/large/boat:large  control  gated  ×1  egress "allow-all"
+evals/boat.eval.ts › boat on a team prefix  fake/team/boat         control  gated  ×1  egress "allow-all"
+excluded: —

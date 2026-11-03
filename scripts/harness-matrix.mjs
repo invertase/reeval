@@ -99,7 +99,7 @@ export async function harnessFacts() {
       )
     }
     if (excluded) continue
-    const sandbox = suggestedSandbox(runsAgent(agent.platforms))
+    const sandbox = suggestedSandbox(runsAgent(kind, agent.platforms))
     if (!sandbox)
       problems.push(`${kind}: no sandbox kind runs it on ${agent.platforms.join(' or ')}`)
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
@@ -163,7 +163,7 @@ export function renderMatrix(facts, { href }) {
     h.row.servedModel && !h.row.servedModelGap ? '✓' : h.row.wireModel ? 'partial' : '✗',
     yes(h.web.search),
     yes(h.web.fetch),
-    code(h.sandbox),
+    h.sandbox.split(' or ').map(code).join(' or '),
   ])
   const line = (cells) => `| ${cells.join(' | ')} |`
   return [line(head), `|${head.map(() => '---').join('|')}|`, ...rows.map(line)].join('\n')
