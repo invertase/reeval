@@ -153,7 +153,8 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
   })
 
   test("gives a real harness the VM as its session, in the image user's home", async () => {
-    const box = await createTartSandbox(vm(), options({ env: { A: 'eval' } }))
+    const env = { A: 'eval', HTTPS_PROXY: 'http://eval.example:1' }
+    const box = await createTartSandbox(vm(), options({ env }))
     try {
       const net = box.network
       assert.equal(net.defaultWorkingDirectory, box.home)
@@ -164,6 +165,19 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
         workingDirectory: 'workspace',
       })
       assert.equal(r.stdout, `${box.workdir}\neval:http://127.0.0.1:43128`)
+      const bundle = await net.run({ command: 'printf %s "$SSL_CERT_FILE:$GIT_SSL_CAINFO"' })
+      const ca = join(box.stateDir, 'ca-bundle.pem')
+      assert.equal(bundle.stdout, `${ca}:${ca}`)
+      const pem = readFileSync(ca, 'utf8')
+      assert.ok(pem.length > readFileSync(join(fake?.dir ?? '', 'ca', 'reeval-egress.crt')).length)
+      assert.ok(
+        pem
+          .trimEnd()
+          .endsWith(
+            readFileSync(join(fake?.dir ?? '', 'ca', 'reeval-egress.crt'), 'utf8').trimEnd(),
+          ),
+        'the gateway CA after the system bundle',
+      )
       await net.writeTextFile({ path: 'workspace/a.txt', content: 'hi' })
       assert.equal(await box.readFile('a.txt'), 'hi')
       assert.deepEqual(await net.stat({ path: 'workspace/a.txt' }), { type: 'file', size: 2 })

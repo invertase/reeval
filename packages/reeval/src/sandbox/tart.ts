@@ -306,6 +306,7 @@ export async function createTartSandbox(
   const glue = gatewayGlue(options)
   const { brokered } = glue
   let noGateway: string | undefined
+  let caBundle: string | undefined
   try {
     gateway = await startGateway(rootTransport(guest), glue.egress, signal)
     debug?.log('container', `egress gateway started · brokers ${brokered.join(', ') || 'nothing'}`)
@@ -330,8 +331,20 @@ export async function createTartSandbox(
       'container',
       trusted.exitCode === 0
         ? 'the gateway CA is trusted in the System keychain'
-        : `the gateway CA isn't in the System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): only Node clients trust the proxy`,
+        : `the gateway CA isn't in the System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
     )
+    if (signal.aborted) return fail(signal.reason)
+    const bundle = posix.join(stateDir, 'ca-bundle.pem')
+    const bundled = await runIn(guest, ['/bin/sh', '-c', CA_BUNDLE_SCRIPT, 'sh', bundle], {
+      signal,
+    }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
+    if (signal.aborted) return fail(signal.reason)
+    if (bundled.exitCode === 0) caBundle = bundle
+    else
+      debug?.log(
+        'container',
+        `no CA bundle for the gateway: ${bundled.stderr.trim() || `exit ${bundled.exitCode}`}`,
+      )
   }
 
   try {
@@ -343,6 +356,7 @@ export async function createTartSandbox(
       env: options.env,
       gateway,
       noGateway,
+      caBundle,
       destroy,
     })
     return await sessionSandbox(network, glue, { stateDir, oomKills: async () => null })
@@ -368,6 +382,17 @@ const TRUST_CA = [
   CA_PATH,
 ]
 
+/**
+ * Writes `$1`: the system's CA bundle (macOS's `/etc/ssl/cert.pem`) with the gateway's CA after
+ * it, for clients that read a bundle file rather than the keychain (Homebrew's `curl` and `git`,
+ * Python). The CA is root's, so it's read with `sudo`.
+ */
+const CA_BUNDLE_SCRIPT = `s=
+for f in /etc/ssl/cert.pem /etc/ssl/certs/ca-certificates.crt; do [ -s "$f" ] && { s=$f; break; }; done
+[ -n "$s" ] || { echo "no system CA bundle" >&2; exit 1; }
+umask 022
+{ cat "$s" && echo && sudo -n /bin/cat ${CA_PATH}; } > "$1.tmp" && mv "$1.tmp" "$1"`
+
 export type TartSessionOptions = {
   vm: string
   guest: Guest
@@ -379,6 +404,8 @@ export type TartSessionOptions = {
   gateway: Gateway | undefined
   /** Why the gateway isn't running, when it isn't. */
   noGateway?: string
+  /** The system's CA bundle with the gateway's CA in it, when one was written. */
+  caBundle?: string
   /** Stops the gateway and deletes the VM. */
   destroy: () => Promise<void>
 }
@@ -397,8 +424,14 @@ export function tartSession(o: TartSessionOptions): DockerSession {
   const at = (path?: string) => (path ? posix.resolve(home, path) : home)
   const envFor = (env?: Record<string, string>) => ({
     NPM_CONFIG_UPDATE_NOTIFIER: 'false',
-    ...gateway?.env,
     ...o.env,
+    ...gateway?.env,
+    ...(o.caBundle && {
+      SSL_CERT_FILE: o.caBundle,
+      REQUESTS_CA_BUNDLE: o.caBundle,
+      CURL_CA_BUNDLE: o.caBundle,
+      GIT_SSL_CAINFO: o.caBundle,
+    }),
     ...env,
   })
   const killExec = (pidFile: string) =>

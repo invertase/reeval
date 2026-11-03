@@ -13,7 +13,7 @@ Of the real harnesses, only `cursor()` runs in `tart()` so far: reeval refuses t
 
 - **A Mac with Apple Silicon.** On any other machine, reeval exits with code 2 before the run.
 - **Tart on `PATH`.** Install it with `brew install cirruslabs/cli/tart`.
-- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, add Node with `brew install node`. Without them, an attempt runs without the gateway, unrecorded, unless it brokers a secret or runs a real harness, which fails it. `cursor()` needs Node 22.21 or later.
+- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, add Node with `brew install node`. Without them, an attempt runs unrecorded, or fails if it brokers a key. `cursor()` needs Node 22.21 or later.
 
 ## `tart()`
 
@@ -52,7 +52,7 @@ evaluate('swift-version', {
 })
 ```
 
-Each attempt installs the Cursor SDK with npm as it starts. reeval trusts the gateway's CA in the VM's keychain too, for `curl` and `git`.
+Each attempt installs the Cursor SDK with npm as it starts. Clients other than Node get the system's CA bundle plus the gateway's CA in `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`. reeval also tries the System keychain, and logs a failure.
 
 ## Images
 
@@ -93,7 +93,7 @@ Under `allow-all` too, brokered secrets and harness keys stay on the host: the a
 
 ## Concurrency
 
-macOS runs at most two macOS VMs at a time, so reeval runs at most two `tart()` attempts at once, whatever `concurrency` says. VMs you run outside reeval take the same slots: an attempt that finds none free fails as an infrastructure error, naming the VMs that hold them. To run fewer, set `maxConcurrent`:
+macOS runs at most two macOS VMs at a time, so reeval runs at most two `tart()` attempts at once, whatever `concurrency` says. VMs you run outside reeval take the same slots: an attempt that finds none free fails as an infrastructure error, naming them. To run fewer, set `maxConcurrent`:
 
 ```ts title="reeval.config.ts"
   sandbox: tart({ image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest', maxConcurrent: 1 }),

@@ -200,7 +200,7 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
     harnesses: ['cursor'],
   },
   unverifiedHarnesses:
-    "A Tart VM starts from its image as is, so a harness's CLI installs as the attempt starts, for macOS, and only Cursor's (an npm package with a macOS build) has been verified to start that way. Run this one in docker().",
+    "A Tart VM starts from its image as is, so a harness's CLI installs as the attempt starts, for macOS, and only Cursor's bootstrap (an npm package with a macOS build) is written to install that way. Run this one in docker().",
   provider: () => 'tart',
   id: (s) => `tart:${idPart(s.image)}`,
   hostPaths: { 'ssh.key': 'file' },

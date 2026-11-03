@@ -19,6 +19,7 @@ import {
   type Substitution,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
+import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
@@ -194,7 +195,7 @@ export async function sessionSandbox(
 ): Promise<NetworkSandbox> {
   const workdir = posix.join(network.defaultWorkingDirectory, WORKSPACE_DIR)
   const stateDir = options.stateDir ?? SANDBOX_STATE
-  await network.run({ command: `mkdir -p ${workdir}` })
+  await network.run({ command: `mkdir -p ${q(workdir)}` })
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
     path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
