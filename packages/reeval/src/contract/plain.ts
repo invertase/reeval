@@ -6,6 +6,7 @@
 import { isIP } from 'node:net'
 import { z } from 'zod'
 import type {
+  Egress,
   EgressPolicy,
   EnvValue,
   EnvVars,
@@ -13,6 +14,7 @@ import type {
   GitWorkspace,
   HostFile,
   McpServer,
+  PhasedEgress,
   PluginMarketplace,
   PluginPart,
   PluginSource,
@@ -112,6 +114,15 @@ export const egressPolicySchema = z.union([
   z.literal('deny-all'),
   z.strictObject({ allow: z.array(host).readonly() }),
 ])
+
+export const phasedEgressSchema = z
+  .strictObject({
+    setup: egressPolicySchema.optional(),
+    agent: egressPolicySchema.optional(),
+  })
+  .refine((v) => v.setup !== undefined || v.agent !== undefined, 'names no phase')
+
+export const egressSchema = z.union([egressPolicySchema, phasedEgressSchema])
 
 export const substituteInSchema = z.enum(['header', 'query', 'body'])
 
@@ -289,6 +300,8 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof gatePolicySchema>, GatePolicy>>,
   Assert<Same<z.infer<typeof snapshotOptionSchema>, SnapshotOption>>,
   Assert<Same<z.infer<typeof egressPolicySchema>, EgressPolicy>>,
+  Assert<Same<z.infer<typeof phasedEgressSchema>, PhasedEgress>>,
+  Assert<Same<z.infer<typeof egressSchema>, Egress>>,
   Assert<Same<z.infer<typeof substituteInSchema>, SubstituteIn>>,
   Assert<Same<z.infer<typeof secretSchema>, Secret>>,
   Assert<Same<keyof z.infer<typeof secretSchema>, keyof Secret>>,
@@ -373,27 +386,68 @@ export function snapshotProblem(value: unknown, where: string): string | undefin
   })
 }
 
-const EGRESS_SHAPE = `is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
+const EGRESS_SHAPE = `is 'proxy' (the default), 'allow-all', 'deny-all', { allow: ['api.example.com', '*.example.org'] }, or one per phase: { setup: 'allow-all', agent: 'deny-all' }`
 
-/** reeval's sentence for an egress policy that isn't one, or undefined. */
+const PHASES = ['setup', 'agent']
+
+/** reeval's sentence for an egress setting that isn't one, or undefined. */
 export function egressProblem(value: unknown, where: string): string | undefined {
+  return refusal(egressSchema, value, () => {
+    const shape = `egress in ${where} ${EGRESS_SHAPE} (got ${got(value)})`
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return policyProblem(value, where, 'egress') ?? shape
+    }
+    const keys = Object.keys(value)
+    const phased = keys.filter((k) => PHASES.includes(k))
+    if (keys.includes('allow') && phased.length) {
+      return `egress in ${where} is one policy ({ allow }) or one per phase ({ setup, agent }), not both`
+    }
+    if (keys.includes('allow')) return policyProblem(value, where, 'egress') ?? shape
+    if (!keys.length) return `egress {} in ${where} names no phase: set setup, agent, or both`
+    const key = keys.find((k) => !PHASES.includes(k))
+    if (key === 'checks') {
+      return `Unknown egress key "checks" in ${where}: checks run under the agent's policy (egress.agent). Move what a check fetches into a setup step.`
+    }
+    if (key === 'install' || key === 'build') {
+      return `Unknown egress key "${key}" in ${where}: image layers (install, from, dockerfile and plugin builds) build before the run, outside any attempt's egress. egress.setup covers the setup steps.`
+    }
+    if (key !== undefined && !phased.length) return policyProblem(value, where, 'egress') ?? shape
+    if (key !== undefined) {
+      const near = closest(key, PHASES)
+      return `Unknown egress key "${key}" in ${where}.${near ? ` Did you mean "${near}"?` : ''} A policy per phase is { setup, agent }.`
+    }
+    for (const phase of PHASES) {
+      const policy = (value as Record<string, unknown>)[phase]
+      const problem =
+        policy === undefined ? undefined : policyProblem(policy, where, `egress.${phase}`)
+      if (problem) return problem
+    }
+    return shape
+  })
+}
+
+const POLICY_SHAPE = `is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
+
+/** reeval's sentence for one policy that isn't one, or undefined. */
+function policyProblem(value: unknown, where: string, key: string): string | undefined {
   return refusal(egressPolicySchema, value, () => {
+    const shape = key === 'egress' ? EGRESS_SHAPE : POLICY_SHAPE
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       const list = Array.isArray(value) ? ` For a list of hosts, use { allow: ${got(value)} }.` : ''
-      return `egress in ${where} ${EGRESS_SHAPE} (got ${got(value)}).${list}`
+      return `${key} in ${where} ${shape} (got ${got(value)}).${list}`
     }
-    const key = Object.keys(value).find((k) => k !== 'allow')
-    if (key !== undefined) {
+    const other = Object.keys(value).find((k) => k !== 'allow')
+    if (other !== undefined) {
       const hint =
-        key === 'deny'
+        other === 'deny'
           ? " A policy lists what's allowed; everything else is refused."
-          : key === 'hosts' || key === 'allowedHosts'
+          : other === 'hosts' || other === 'allowedHosts'
             ? ' Did you mean "allow"?'
             : " A policy is { allow: ['api.example.com'] }."
-      return `Unknown egress key "${key}" in ${where}.${hint}`
+      return `Unknown ${key} key "${other}" in ${where}.${hint}`
     }
     const allow = (value as { allow?: unknown }).allow
-    if (!Array.isArray(allow)) return `egress in ${where} ${EGRESS_SHAPE} (got ${got(value)})`
-    return `egress.allow in ${where}: ${allow.map(badHost).find(Boolean)}`
+    if (!Array.isArray(allow)) return `${key} in ${where} ${shape} (got ${got(value)})`
+    return `${key}.allow in ${where}: ${allow.map(badHost).find(Boolean)}`
   })
 }

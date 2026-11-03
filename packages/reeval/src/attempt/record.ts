@@ -100,6 +100,10 @@ export async function recordOom(
   return new InfraError(message)
 }
 
+/** The gateway tags entries with the phase it was switched to, which is always one of the attempt's. */
+const phased = <T extends { phase?: string }>(entry: T): T & { phase?: 'setup' | 'agent' } =>
+  entry as T & { phase?: 'setup' | 'agent' }
+
 /**
  * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
  * Refused hosts the harness always tries (in a session like this one) are `expectedBlocked`,
@@ -113,17 +117,22 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     a.spec.vertex,
   )
   const refused = traffic?.blocked ?? []
-  const isExpected = (h: { host: string }) => !!expected?.hosts.includes(h.host)
+  // The harness runs only in the agent phase, so a refusal setup met is never its own.
+  const isExpected = (h: { host: string; phase?: string }) =>
+    h.phase !== 'setup' && !!expected?.hosts.includes(h.host)
   const expectedBlocked = refused.filter(isExpected)
+  const { setup } = a.spec.egress
+  const direct = isDirect(a.spec.egress.policy) || (!!setup && isDirect(setup.policy))
   a.record.egress = {
     policy: a.spec.egress.policy,
     allowed: allowedHosts(a.spec.egress),
+    ...(setup ? { setup: { policy: setup.policy, allowed: allowedHosts(setup) } } : {}),
     recorded: !!traffic,
-    ...(traffic && isDirect(a.spec.egress.policy) ? { partial: true as const } : {}),
-    contacted: traffic?.contacted ?? [],
-    blocked: refused.filter((h) => !isExpected(h)),
-    expectedBlocked,
-    unresolved: traffic?.unresolved ?? [],
+    ...(traffic && direct ? { partial: true as const } : {}),
+    contacted: (traffic?.contacted ?? []).map(phased),
+    blocked: refused.filter((h) => !isExpected(h)).map(phased),
+    expectedBlocked: expectedBlocked.map(phased),
+    unresolved: (traffic?.unresolved ?? []).map(phased),
   }
   if (expected && expectedBlocked.length) {
     const hosts = expectedBlocked.map((h) => `${h.host}:${h.port} ×${h.connections}`).join(', ')

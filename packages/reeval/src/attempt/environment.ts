@@ -30,7 +30,11 @@ export async function prepareEnvironment(
     layoutOf(spec.harness).rulesFile,
     spec.egress.policy,
     (w) => preparedWorkspace(root, runId, w),
-    { harness: spec.harness, allowed: allowedHosts(spec.egress) },
+    {
+      harness: spec.harness,
+      allowed: allowedHosts(spec.egress),
+      ...(spec.egress.setup ? { setupEgress: spec.egress.setup.policy } : {}),
+    },
   )
   a.env = env
   record.environment = env.record

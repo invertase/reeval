@@ -22,7 +22,7 @@ import {
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
-import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
+import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
@@ -93,7 +93,7 @@ export function gatewayGlue(options: SandboxOptions) {
     ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
   ]
   const debug = attemptDebug()
-  const policy = gatewayPolicy(options.egress)
+  const policy = gatewayPolicy(setupEgress(options.egress))
   const served: string[] = []
   const asked: string[] = []
   const brokeredStatuses: number[] = []
@@ -177,6 +177,22 @@ export function gatewayGlue(options: SandboxOptions) {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),
     }),
+    ...(network.setEgress &&
+      network.egress?.active && {
+        setEgress: async (o: Parameters<NonNullable<Sandbox['setEgress']>>[0]) => {
+          debug?.log(
+            'container',
+            o.direct
+              ? `the ${o.phase} phase keeps the container's network`
+              : `the ${o.phase} phase has the gateway as its only way out`,
+          )
+          await network.setEgress?.(o).catch((error: unknown) => {
+            throw new InfraError(
+              `Couldn't start the ${o.phase} phase's egress: ${(error as Error).message}`,
+            )
+          })
+        },
+      }),
   })
   return { brokered, debug, egress, recorded }
 }
@@ -266,9 +282,18 @@ export async function createDockerSandbox(
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
     // Always, so every attempt's egress is recorded; a detached container can't start without it.
-    egress: { ...glue.egress, direct: isDirect(options.egress.policy) },
+    egress: {
+      ...glue.egress,
+      direct: isDirect(setupEgress(options.egress).policy),
+      detachLater: !isDirect(options.egress.policy),
+    },
   }).catch((error: unknown) => {
-    throw error instanceof EgressUnavailableError ? new InfraError(needsNode(error.reason)) : error
+    if (!(error instanceof EgressUnavailableError)) throw error
+    throw new InfraError(
+      error.network
+        ? `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: ${error.reason}.`
+        : needsNode(error.reason),
+    )
   })
   debug?.log(
     'container',
@@ -276,7 +301,7 @@ export async function createDockerSandbox(
   )
   debug?.log(
     'container',
-    `network policy ${egressLabel(options.egress) || 'proxy'}${isDirect(options.egress.policy) ? ` · keeps its ${spec.name} network, so traffic that ignores the proxy goes out directly, unrecorded` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
+    `network policy ${egressLabel(options.egress) || 'proxy'}${isDirect(setupEgress(options.egress).policy) ? ` · keeps its ${spec.name} network, so traffic that ignores the proxy goes out directly, unrecorded` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
   )
   debug?.log(
     'container',

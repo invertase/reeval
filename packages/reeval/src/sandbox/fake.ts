@@ -11,8 +11,11 @@ import { UsageError } from '../errors.ts'
 import type { FakeSandboxDescriptor } from '../types.ts'
 import type { Sandbox } from './types.ts'
 
-/** Commands run on the host's own network, so the fake sandbox can neither restrict nor see it. */
-export const FAKE_EGRESS: EgressCapabilities = { enforce: 'none', record: false }
+/**
+ * Commands run on the host's own network, so the fake sandbox can neither restrict nor see it.
+ * A phased policy it plans (`proxy` and `allow-all` only) has nothing to switch, so it accepts one.
+ */
+export const FAKE_EGRESS: EgressCapabilities = { enforce: 'none', record: false, switches: true }
 
 /**
  * The POSIX shell commands run in: `sh`, which Windows lacks, so there the `sh.exe` on PATH or
@@ -154,6 +157,8 @@ export async function createFakeSandbox(
       }).finally(() => signal?.removeEventListener('abort', stop))
     },
     home: base,
+    // On the host there's nothing to enforce: only `proxy` and `allow-all` plan here.
+    setEgress: async () => {},
     readFile: (path) => readFile(resolve(path), 'utf8').catch(() => null),
     // A server bound to `::1` alone (Vite's `localhost` on some hosts) isn't on 127.0.0.1.
     getPortEndpoint: async ({ port, protocol = 'http' }) => ({

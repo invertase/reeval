@@ -37,6 +37,8 @@ export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
    * Otherwise the container is detached from every network and the gateway is its only way out.
    */
   direct?: boolean
+  /** A later `setEgress` detaches it: refuse a network mode no disconnect takes away now. */
+  detachLater?: boolean
 }
 
 /** A container's resource limits. */
@@ -188,13 +190,18 @@ const userEnv = (options: SessionOptions): Record<string, string> => ({
 /** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
 export type EgressStatus = { active: true } | { active: false; reason: string }
 
-/** The gateway didn't start for a detached container, which then has no way out: `reason` says why. */
+/**
+ * The gateway didn't start for a detached container, which then has no way out, or the container
+ * has a route out no disconnect takes away (`network`): `reason` says why.
+ */
 export class EgressUnavailableError extends Error {
   readonly reason: string
-  constructor(reason: string) {
+  readonly network: boolean
+  constructor(reason: string, o: { network?: boolean } = {}) {
     super(`Can't enforce the egress policy: ${reason}`)
     this.name = 'EgressUnavailableError'
     this.reason = reason
+    this.network = !!o.network
   }
 }
 
@@ -205,6 +212,12 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
   /** With the gateway: the hosts the sandbox contacted and was refused so far. */
   traffic?(): EgressTraffic
+  /**
+   * With the gateway: starts the attempt's next phase under `policy`, tagging later traffic with
+   * `phase` and closing open tunnels it refuses. `direct` says whether the container keeps its
+   * networks, which `allow-all` and `proxy` both leave to it.
+   */
+  setEgress?(o: { policy: NetworkPolicy; direct: boolean; phase: string }): Promise<void>
   /** Processes the kernel killed at the memory limit so far; `null` when Docker can't say. */
   oomKills(): Promise<number | null>
   /**
@@ -434,20 +447,32 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
 
   const egressOptions = options.egress === true ? {} : options.egress || undefined
   let egress: EgressStatus | undefined
-  const direct = (policy: NetworkPolicy) => !!egressOptions?.direct && !isRestricted(policy)
+  let directNow = !!egressOptions?.direct
+  const direct = (policy: NetworkPolicy) => directNow && !isRestricted(policy)
   // Networks the container was detached from, to reattach if the policy opens up again.
   let detached: string[] = []
+  /**
+   * Its networks, or a throw when it has a route out that no disconnect can take away: the host's
+   * network (Docker lists it as one, Podman as a mode) or rootless Podman's slirp4netns or pasta.
+   */
+  const detachable = async () => {
+    const networks = await networksOf(id, engine)
+    const mode = networks.includes('host')
+      ? 'host'
+      : networks.length === 0
+        ? await networkMode(id, engine)
+        : 'none'
+    if (mode !== 'none') {
+      throw new EgressUnavailableError(
+        `the container's network is ${mode}, which ${spec.name} can't detach it from, so traffic around the gateway would still have a route out`,
+        { network: true },
+      )
+    }
+    return networks
+  }
   const attach = async (policy: NetworkPolicy) => {
     if (!direct(policy) && detached.length === 0) {
-      detached = await networksOf(id, engine)
-      // A container on no network has a route out only in a network mode (`host`, rootless
-      // Podman's slirp4netns or pasta) no disconnect can take away.
-      const mode = detached.length === 0 ? await networkMode(id, engine) : 'none'
-      if (detached.length === 0 && mode !== 'none') {
-        throw new Error(
-          `the container's network is ${mode}, which ${spec.name} can't detach it from, so traffic around the gateway would still have a route out`,
-        )
-      }
+      detached = await detachable()
       for (const n of detached) {
         await dockerOk(['network', 'disconnect', '--force', n, id], { engine })
       }
@@ -457,17 +482,19 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     }
   }
   if (egressOptions) {
-    const { policy = { mode: 'allow-all' }, direct: _, ...rest } = egressOptions
+    const { policy = { mode: 'allow-all' }, direct: _, detachLater, ...rest } = egressOptions
     try {
       // Before anything but `sleep` runs, so a detached container never has a route out.
       await attach(policy)
+      if (detachLater && direct(policy)) await detachable()
       gateway = await startGateway(containerTransport(id, engine), { ...rest, policy }, signal)
       egress = { active: true }
     } catch (error) {
-      // Only a direct container has a way out without the gateway.
-      if (signal?.aborted || !direct(policy)) {
+      // Only a direct container no later phase detaches has a way out without the gateway.
+      if (signal?.aborted || !direct(policy) || detachLater) {
         await remove()
         if (signal?.aborted) throw signal.reason
+        if (error instanceof EgressUnavailableError) throw error
         throw new EgressUnavailableError((error as Error).message)
       }
       egress = { active: false, reason: (error as Error).message }
@@ -616,10 +643,17 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         },
       }
     : {}
-  const substituting: Pick<DockerSession, 'setSubstitutions' | 'traffic'> = gateway
+  const substituting: Pick<DockerSession, 'setSubstitutions' | 'traffic' | 'setEgress'> = gateway
     ? {
         async setSubstitutions(subs) {
           gateway?.setSubstitutions(subs)
+        },
+        async setEgress({ policy, direct: keeps, phase }) {
+          directNow = keeps
+          // Off the networks before the gateway lets anything new through under the next policy.
+          if (!direct(policy)) await attach(policy)
+          await gateway?.switchPolicy(policy, phase)
+          if (direct(policy)) await attach(policy)
         },
         traffic: () => (gateway as Gateway).traffic(),
       }

@@ -1164,6 +1164,60 @@ describe('egress policy through the proxy', () => {
     }
   })
 
+  test('switchPolicy tags traffic with its phase and closes the tunnels the next policy refuses', async () => {
+    const gw = await startProxy({ mode: 'custom', allowedHosts: [HOST, OTHER] })
+    try {
+      await gw.proxy.switchPolicy({ mode: 'custom', allowedHosts: [HOST, OTHER] }, 'setup')
+      const doomed = await connect(gw, HOST, h1.port)
+      const kept = await connect(gw, OTHER, h1.port)
+      assert.ok(doomed.ok && kept.ok)
+      const ended = new Promise<void>((r) => doomed.socket.once('close', () => r()))
+      await gw.proxy.switchPolicy({ mode: 'custom', allowedHosts: [OTHER] }, 'agent')
+      await ended
+      assert.equal(kept.socket.destroyed, false, 'a tunnel the next policy allows stays open')
+      const refused = await connect(gw, HOST, h1.port)
+      assert.equal(!refused.ok && refused.status, 403)
+      const { contacted, blocked } = gw.proxy.traffic()
+      assert.deepEqual(
+        contacted.map((c) => [c.host, c.connections, c.phase]),
+        [
+          [HOST, 1, 'setup'],
+          [OTHER, 1, 'setup'],
+        ],
+      )
+      assert.deepEqual(blocked, [
+        {
+          host: HOST,
+          port: h1.port,
+          connections: 1,
+          reason: `a tunnel opened before the agent phase, closed: ${HOST} isn't in the allowlist`,
+          phase: 'agent',
+          closed: true,
+        },
+        {
+          host: HOST,
+          port: h1.port,
+          connections: 1,
+          reason: `${HOST} isn't in the allowlist`,
+          phase: 'agent',
+        },
+      ])
+      kept.socket.destroy()
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('twin: without a phase, traffic carries none', async () => {
+    const gw = await startProxy({ mode: 'deny-all' })
+    try {
+      await connect(gw, HOST, h1.port)
+      assert.equal(gw.proxy.traffic().blocked[0]?.phase, undefined)
+    } finally {
+      gw.close()
+    }
+  })
+
   test('an allowlist lets listed hosts through and refuses the rest', async () => {
     const gw = await startProxy({ mode: 'custom', allowedHosts: [HOST] })
     try {

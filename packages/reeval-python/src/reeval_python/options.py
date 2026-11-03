@@ -77,7 +77,9 @@ class EvalOptions(TypedDict, total=False):
 
     capture: Mapping[str, Any]
     compare: Mapping[str, Any]
-    egress: Literal["allow-all", "deny-all", "proxy"] | Mapping[str, Sequence[str]]
+    egress: Literal["allow-all", "deny-all", "proxy"] | Mapping[str, Any]
+    """A policy (`"proxy"`, `"allow-all"`, `"deny-all"` or `{"allow": [hosts]}`), or one per
+    phase: `{"setup": "allow-all", "agent": "deny-all"}`."""
     env: Mapping[str, Any]
     environments: Environment | Sequence[Environment] | Mapping[str, Any]
     """One environment, or a list, each its own cell beside each harness; `{"add": …}` and

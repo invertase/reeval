@@ -15,7 +15,17 @@ import {
   selectProfile,
   UsageError,
 } from './config.ts'
-import { ciRunner, DEFAULT_EGRESS, directOnCloud, isDirect, unenforceable } from './egress.ts'
+import {
+  bareEgress,
+  ciRunner,
+  DEFAULT_EGRESS,
+  directOnCloud,
+  isDirect,
+  isPhased,
+  layerEgress,
+  phasePolicies,
+  unenforceable,
+} from './egress.ts'
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox } from './environment.ts'
@@ -53,6 +63,7 @@ import type { ImageTarget, ImageUse } from './sandbox/images.ts'
 import { plural } from './text.ts'
 import type {
   BoatSandboxDescriptor,
+  Egress,
   EgressPolicy,
   FakeJudgeModel,
   GatewayName,
@@ -1171,7 +1182,13 @@ async function probeVertexModel(
 
 // ---- Egress and git ------------------------------------------------------------------------
 
-const policyText = (policy: EgressPolicy) =>
+const policyText = (egress: Egress): string => {
+  if (!isPhased(egress)) return onePolicyText(egress)
+  const { setup, agent } = phasePolicies(egress)
+  return `setup ${onePolicyText(setup)}; agent ${onePolicyText(agent)}`
+}
+
+const onePolicyText = (policy: EgressPolicy) =>
   policy === 'proxy'
     ? 'proxy: the agents reach any host over HTTP(S) through the egress gateway, which records it; nothing else leaves the sandbox'
     : policy === 'allow-all'
@@ -1181,10 +1198,11 @@ const policyText = (policy: EgressPolicy) =>
         : `allow ${policy.allow.join(', ') || 'none'}, plus each harness's own hosts`
 
 /** Every policy the config and its profiles set, the config's own first; the default when it sets none. */
-const configuredEgress = (config: ResolvedConfig): EgressPolicy[] => [
-  config.egress ?? DEFAULT_EGRESS,
-  ...Object.values(config.profiles).flatMap((p) => p.defaults?.egress ?? []),
-]
+const configuredEgress = (config: ResolvedConfig): EgressPolicy[] =>
+  [
+    config.egress ?? DEFAULT_EGRESS,
+    ...Object.values(config.profiles).flatMap((p) => p.defaults?.egress ?? []),
+  ].flatMap((e) => Object.values(phasePolicies(e)))
 
 /** `cloud` is the cloud VM or CI runner this machine looks like, which `allow-all` exposes. */
 export function checkEgress(config: ResolvedConfig, cloud: string | null = null): Check[] {
@@ -1202,10 +1220,10 @@ export function checkEgress(config: ResolvedConfig, cloud: string | null = null)
     }
   }
   for (const use of configuredUses(config)) {
-    const policy =
-      (use.profile ? config.profiles[use.profile]?.defaults?.egress : undefined) ?? inherited
+    const own = use.profile ? config.profiles[use.profile]?.defaults?.egress : undefined
+    const policy = own === undefined ? inherited : layerEgress(inherited, own)
     const where = use.profile ? `profile ${use.profile}` : 'the config'
-    const problem = unenforceable({ policy, auto: [] }, use.sandbox, where)
+    const problem = unenforceable(bareEgress(policy), use.sandbox, where)
     if (problem && !checks.some((c) => c.summary === problem)) {
       checks.push({ id: 'egress', status: 'fail', summary: problem })
     }

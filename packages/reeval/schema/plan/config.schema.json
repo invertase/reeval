@@ -522,6 +522,17 @@
         }
       ]
     },
+    "Egress": {
+      "description": "One policy for the whole attempt, or one per phase.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EgressPolicy"
+        },
+        {
+          "$ref": "#/$defs/PhasedEgress"
+        }
+      ]
+    },
     "EgressPolicy": {
       "description": "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
@@ -600,8 +611,8 @@
       "type": "object",
       "properties": {
         "egress": {
-          "description": "Replaces the inherited policy; an `extend` child's replaces its parent's.",
-          "$ref": "#/$defs/EgressPolicy"
+          "description": "Replaces the inherited policy, per phase: a plain policy sets both, `{ setup, agent }` the phases it names. An `extend` child's replaces its parent's the same way.",
+          "$ref": "#/$defs/Egress"
         },
         "env": {
           "description": "Variables and secrets for the sandbox, merged by name over the parent's.",
@@ -1651,6 +1662,19 @@
       "required": ["kind"],
       "additionalProperties": false
     },
+    "PhasedEgress": {
+      "description": "An egress policy per phase of the attempt: `setup` covers its files and setup steps, `agent` the harness's start, every turn and every check after them. A phase it leaves unset keeps the policy it inherits.",
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/EgressPolicy"
+        },
+        "setup": {
+          "$ref": "#/$defs/EgressPolicy"
+        }
+      },
+      "additionalProperties": false
+    },
     "PiHarnessDescriptor": {
       "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs Google models on a Gemini API key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
       "type": "object",
@@ -2121,8 +2145,8 @@
           "$ref": "#/$defs/CaptureOptions"
         },
         "egress": {
-          "description": "Where the sandbox may connect; replaces the config's policy.",
-          "$ref": "#/$defs/EgressPolicy"
+          "description": "Where the sandbox may connect; replaces the config's policy, per phase.",
+          "$ref": "#/$defs/Egress"
         },
         "env": {
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
@@ -2364,8 +2388,8 @@
           "additionalProperties": false
         },
         "egress": {
-          "description": "Where the sandbox may connect; default `'proxy'`.",
-          "$ref": "#/$defs/EgressPolicy"
+          "description": "Where the sandbox may connect; default `'proxy'` in both phases.",
+          "$ref": "#/$defs/Egress"
         },
         "env": {
           "description": "Variables and secrets for the sandbox, merged by name down the cascade.",

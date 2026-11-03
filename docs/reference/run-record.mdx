@@ -1019,7 +1019,11 @@ An environment as it was applied, without secret values.
 </Property>
 
 <Property name="egress" type="EgressPolicy">
-  The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`.
+  The policy the attempt's agent phase ran under (the harness's start, its turns and the checks), from the options and the environment; in the digest unless `proxy`.
+</Property>
+
+<Property name="setupEgress" type="EgressPolicy" optional>
+  The policy the setup phase (files and setup steps) ran under, when it wasn't the agent's; in the digest when set.
 </Property>
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
@@ -1060,11 +1064,17 @@ A plugin as an attempt placed it.
 
 ### `EgressRecord`
 
-An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals. A request that carries the harness's brokered key off the endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked` once per method and path, its `reason` names them, and `connections` counts its requests. Past the first 20 pairs, the rest share one entry per host.
+An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals. A request that carries the harness's brokered key off the endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked` once per method and path, its `reason` names them, and `connections` counts its requests. Past the first 20 pairs, the rest share one entry per host. With a setup policy of its own, every entry names the `phase` it happened in.
 
-<Property name="policy" type="EgressPolicy"></Property>
+<Property name="policy" type="EgressPolicy">
+  The agent phase's policy: the harness's start, its turns and the checks.
+</Property>
 
 <Property name="allowed" type="string[] | null"></Property>
+
+<Property name="setup" type="{policy: EgressPolicy; allowed: string[] | null}" optional>
+  The setup phase's policy (files and setup steps) and the hosts it allowed, when it wasn't the agent's.
+</Property>
 
 <Property name="recorded" type="boolean"></Property>
 
@@ -1072,15 +1082,15 @@ An attempt's network traffic. `allowed` is every host a restricted policy let th
   True when traffic could leave around the gateway (`allow-all` in a container that kept its network): `contacted` lists only what went through the gateway, and anything that ignored the proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.
 </Property>
 
-<Property name="contacted" type="Array<{host: string; port: number; connections: number; sent: number; received: number}>"></Property>
+<Property name="contacted" type="Array<{host: string; port: number; connections: number; sent: number; received: number; phase?: 'setup' | 'agent'}>"></Property>
 
-<Property name="blocked" type="Array<{host: string; port: number; connections: number; reason: string}>">
-  Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints reeval brokers it for (one entry per method and path), each with why. A name that didn't resolve is in `unresolved` instead.
+<Property name="blocked" type="Array<{host: string; port: number; connections: number; reason: string; phase?: 'setup' | 'agent'; closed?: true}>">
+  Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints reeval brokers it for (one entry per method and path), each with why. A name that didn't resolve is in `unresolved` instead. A tunnel setup opened to a host the agent's policy refuses is closed as the agent phase starts, and is here with `closed: true`.
 </Property>
 
-<Property name="expectedBlocked" type="Array<{host: string; port: number; connections: number; reason: string}>"></Property>
+<Property name="expectedBlocked" type="Array<{host: string; port: number; connections: number; reason: string; phase?: 'setup' | 'agent'}>"></Property>
 
-<Property name="unresolved" type="Array<{host: string; port: number; connections: number; reason: string}>">
+<Property name="unresolved" type="Array<{host: string; port: number; connections: number; reason: string; phase?: 'setup' | 'agent'}>">
   Hosts the policy let through whose names didn't resolve (`metadata.google.internal` outside GCP, say), so the gateway answered 502 with the lookup's error. No policy refused them, so they're never in `blocked`. A record from an older reeval reads it as empty and has them in `blocked`, with a `can't resolve …` or `… has no addresses` reason.
 </Property>
 

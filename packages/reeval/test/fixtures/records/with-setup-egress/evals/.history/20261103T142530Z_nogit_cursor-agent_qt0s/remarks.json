@@ -1,0 +1,24 @@
+{
+  "kind": "reeval-remarks",
+  "schemaVersion": 1,
+  "runId": "20261103T142530Z_nogit_cursor-agent_qt0s",
+  "createdAt": "2026-11-03T14:25:34.112Z",
+  "remarks": [
+    {
+      "id": "2db66d637f352300abf9bed8d406f7113e71ecea65b866dd81a1eeb92bfc0fbc",
+      "evalId": "evals%2Fphased.eval.ts › phased",
+      "kind": "setup-tunnel-closed",
+      "severity": "concern",
+      "text": "Setup left a connection open to 172.30.0.2:18777, which the agent's egress refuses, so reeval closed it when the agent started: a process setup started was still using it.",
+      "evidence": [
+        "evals%2Fphased.eval.ts › phased/fake+phased+docker#1"
+      ],
+      "fix": {
+        "at": "source:evals/phased.eval.ts",
+        "edit": "stop the process before setup ends, or allow 172.30.0.2 in egress.agent if the agent's work needs it"
+      },
+      "firstSeenRun": "20261103T142530Z_nogit_cursor-agent_qt0s",
+      "printed": true
+    }
+  ]
+}

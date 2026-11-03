@@ -1,0 +1,372 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261103T142530Z_nogit_cursor-agent_qt0s",
+  "status": "complete",
+  "startedAt": "2026-11-03T14:25:30.396Z",
+  "endedAt": "2026-11-03T14:25:34.090Z",
+  "durationMs": 3694,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.20.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.8",
+        "id": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+        "agentCli": "@cursor/sdk 1.0.40",
+        "base": "reeval-sandbox:cursor-0.1.8",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.13",
+      "@reeval/harness-opencode": "0.2.16",
+      "@reeval/harness-goose": "0.1.12",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.8",
+      "@ai-sdk/harness-claude-code": "1.0.176-patch.8c0f3055",
+      "@reeval/harness-codex": "0.1.10",
+      "@reeval/harness-fx": "0.1.7",
+      "@reeval/harness-grok-build": "0.1.10",
+      "ai": "7.0.161",
+      "@ai-sdk/harness": "1.0.172",
+      "@ai-sdk/anthropic": "4.0.95",
+      "@ai-sdk/google": "4.0.110",
+      "@ai-sdk/openai": "4.0.107",
+      "@ai-sdk/typesafe-ai": "3.0.32"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "4ad59c27538d"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "phased",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:983b8d02f25a12b0f720f239c30c7f066d5e29b5edbde0b9a735dfe23966639e",
+      "setup": [
+        "curl -sS -m 10 -o /dev/null http://172.30.0.2:18777/",
+        "setsid nohup node hold.cjs > /dev/null 2>&1 < /dev/null & for i in $(seq 50); do [ -s tunnel.txt ] && break; sleep 0.2; done"
+      ],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "hold.cjs",
+          "sha256": "75e5a245b0cd785c68c3db5e71fc58ab80530f5614da7ae069be2a6cd3947b58"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "deny-all",
+      "setupEgress": {
+        "allow": [
+          "172.30.0.2"
+        ]
+      }
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 30000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "10e1e8f607eb3840926b682f14dd21ae89487aa0c7fd7b4e713ff41219b5666a"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/phased.eval.ts › phased",
+      "key": "evals/phased.eval.ts › phased",
+      "slug": "evals-phased-eval-ts-phased-a1125a",
+      "file": "evals/phased.eval.ts",
+      "group": [],
+      "name": "phased",
+      "tags": [],
+      "fingerprint": "f45c04fef80c5463d9b5fed973f6fffcd948fffc91213deb703f96ea9048253e",
+      "sources": [
+        {
+          "path": "evals/phased.eval.ts",
+          "sha256": "26cb4db2bd74fd36bce5a5b41cb4d66af07147d75d6029b3e70d75a4f562c3e3"
+        }
+      ],
+      "source": {
+        "body": "4ca3e8f845f6dd98a7043dbb3dc4ad90bf742da60e2de44034d512a6bbfebe70",
+        "options": "45ceac4ba2a459a03a06051f43ac4737f1e53a1a76b374124c5bedd4e9f3180a"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/phased/docker",
+          "harness": "fake",
+          "environment": "phased",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "52e7a65d2458489f8edb6d01235d2e7bfd112fd98b240d0e63d137471b71c022",
+          "fingerprintParts": {
+            "sources": "d8e7d39acf685122dd5a77cac9c4ac26e4e0b5ebaa46a24512f2e8bf0b9b75bf",
+            "harness": "8e0cfd65ef75b22c25bcbc46b13b51c5ebdca513d26dd953c6e231a86fca0880",
+            "environment": "sha256:983b8d02f25a12b0f720f239c30c7f066d5e29b5edbde0b9a735dfe23966639e",
+            "image": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "33c495fd597737c0d85e344fe24e6e4181f153c6d1a58a6fd3518715c04e1cea",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:983b8d02f25a12b0f720f239c30c7f066d5e29b5edbde0b9a735dfe23966639e",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe true",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/phased.eval.ts › phased # fake/phased/docker#1",
+          "id": "fake/phased/docker#1",
+          "cell": "fake/phased/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-03T14:25:31.198Z",
+          "imageId": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [],
+            "setup": {
+              "policy": {
+                "allow": [
+                  "172.30.0.2"
+                ]
+              },
+              "allowed": [
+                "172.30.0.2"
+              ]
+            },
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "172.30.0.2",
+                "port": 18777,
+                "connections": 2,
+                "sent": 194,
+                "received": 163,
+                "phase": "setup"
+              }
+            ],
+            "blocked": [
+              {
+                "host": "172.30.0.2",
+                "port": 18777,
+                "connections": 1,
+                "reason": "a tunnel opened before the agent phase, closed: the policy denies all egress",
+                "phase": "agent",
+                "closed": true
+              },
+              {
+                "host": "172.30.0.2",
+                "port": 18777,
+                "connections": 1,
+                "reason": "the policy denies all egress",
+                "phase": "agent"
+              },
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "the policy denies all egress",
+                "phase": "agent"
+              }
+            ],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2876,
+          "turns": [
+            {
+              "prompt": "reach both hosts",
+              "status": "completed",
+              "startedAt": "2026-11-03T14:25:33.359Z",
+              "durationMs": 171,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 2088,
+            "agentMs": 169,
+            "diffMs": 192,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 92
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-phased-eval-ts-phased-a1125a/fake-phased-docker-63a94c/1/snapshots/final",
+              "bytes": 290,
+              "files": 2,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe true",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/phased.eval.ts:27"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "setupLog": {
+              "path": "evals-phased-eval-ts-phased-a1125a/fake-phased-docker-63a94c/1/setup.log",
+              "sha256": "8d66af2536544079b0cf960f886c45b88d7e5b857e867a5687976f77f02558ce",
+              "bytes": 220
+            },
+            "transcript": {
+              "path": "evals-phased-eval-ts-phased-a1125a/fake-phased-docker-63a94c/1/transcript.jsonl",
+              "sha256": "fa24b493218c3af7fb41da0923eba1280b548c032906d0649c07d177448db258",
+              "bytes": 899
+            },
+            "diff": {
+              "path": "evals-phased-eval-ts-phased-a1125a/fake-phased-docker-63a94c/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

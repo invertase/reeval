@@ -52,14 +52,31 @@ const bytes = (n: number) =>
       ? `${(n / 1024).toFixed(1)} KB`
       : `${(n / 1024 ** 2).toFixed(1)} MB`
 
+type EgressPolicy = NonNullable<AttemptRecord['egress']>['policy']
+
+const policyText = (policy: EgressPolicy) =>
+  typeof policy === 'string' ? policy : `allow ${policy.allow.join(', ') || 'none'}`
+
+/** `setup · ` before an entry of an attempt whose setup ran under a policy of its own. */
+const phaseOf = (h: { phase?: string }) => (h.phase ? `${h.phase} · ` : '')
+
 function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
-  const policy =
-    typeof egress.policy === 'string'
-      ? egress.policy
-      : `allow ${egress.policy.allow.join(', ') || 'none'}`
+  const policy = policyText(egress.policy)
   return (
     <>
+      {egress.setup ? (
+        <div>
+          setup: {policyText(egress.setup.policy)}
+          {egress.setup.allowed ? (
+            <span className="text-muted-foreground">
+              {' '}
+              · allows {egress.setup.allowed.join(', ') || 'nothing'}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div>
+        {egress.setup ? 'agent: ' : ''}
         {policy}
         {egress.allowed ? (
           <span className="text-muted-foreground">
@@ -78,7 +95,8 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
         </div>
       ) : null}
       {egress.contacted.map((h) => (
-        <div key={`${h.host}:${h.port}`}>
+        <div key={`${h.phase ?? ''} ${h.host}:${h.port}`}>
+          {phaseOf(h)}
           {h.host}:{h.port}{' '}
           <span className="text-muted-foreground">
             ×{h.connections} · ↑{bytes(h.sent)} ↓{bytes(h.received)}
@@ -86,15 +104,17 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
         </div>
       ))}
       {egress.blocked.map((h) => (
-        <div key={`blocked ${h.host}:${h.port} ${h.reason}`} className="text-fail">
-          blocked {h.host}:{h.port}{' '}
+        <div key={`blocked ${h.phase ?? ''} ${h.host}:${h.port} ${h.reason}`} className="text-fail">
+          {phaseOf(h)}
+          {h.closed ? 'closed' : 'blocked'} {h.host}:{h.port}{' '}
           <span className="text-muted-foreground">
             ×{h.connections} · {h.reason}
           </span>
         </div>
       ))}
       {egress.unresolved.map((h) => (
-        <div key={`unresolved ${h.host}:${h.port}`} className="text-infra">
+        <div key={`unresolved ${h.phase ?? ''} ${h.host}:${h.port}`} className="text-infra">
+          {phaseOf(h)}
           unresolved {h.host}:{h.port}{' '}
           <span className="text-muted-foreground">
             ×{h.connections} · {h.reason}
@@ -102,7 +122,11 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
         </div>
       ))}
       {egress.expectedBlocked.map((h) => (
-        <div key={`expected ${h.host}:${h.port}`} className="text-muted-foreground">
+        <div
+          key={`expected ${h.phase ?? ''} ${h.host}:${h.port}`}
+          className="text-muted-foreground"
+        >
+          {phaseOf(h)}
           blocked {h.host}:{h.port} ×{h.connections} · expected: the harness always tries it
         </div>
       ))}

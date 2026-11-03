@@ -68,6 +68,7 @@ const KIND_ORDER: Remark['kind'][] = [
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
+  'setup-tunnel-closed',
   'snapshot-too-large',
   'check-never-fails',
 ]
@@ -749,6 +750,43 @@ function setupProcessSecret(e: EvalResult, entries: EvalEntry[], ctx: RemarkCont
 }
 
 /**
+ * setup-tunnel-closed (concern): a connection the setup phase opened under its own egress policy
+ * was still open when the agent phase started, to a host the agent's policy refuses, so reeval
+ * closed it (`egress.blocked`, `closed`). A process setup left running held it. One per eval.
+ */
+function setupTunnelClosed(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+  const cellPaths = new Map<string, string>()
+  for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
+  const hits = entries.flatMap((entry) =>
+    entry.attempts.flatMap((attempt) => {
+      const closed = attempt.egress?.blocked.filter((b) => b.closed) ?? []
+      return closed.length ? [{ entry, attempt, closed }] : []
+    }),
+  )
+  const [first] = hits
+  if (!first) return []
+  const hosts = [...new Set(hits.flatMap((h) => h.closed.map((b) => `${b.host}:${b.port}`)))]
+  const ofTries = hits.length > 1 ? ` in ${hits.length} tries` : ''
+  const list = hosts.join(', ')
+  return [
+    {
+      id: remarkId('setup-tunnel-closed', e.path, first.entry),
+      evalId: e.path,
+      kind: 'setup-tunnel-closed',
+      severity: 'concern',
+      text: `Setup left a connection open to ${list}${ofTries}, which the agent's egress refuses, so reeval closed it when the agent started: a process setup started was still using it.`,
+      evidence: hits.map(
+        (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
+      ),
+      fix: {
+        at: ctx.locate(first.entry, 'setup'),
+        edit: `stop the process before setup ends, or allow ${hosts[0]?.replace(/:\d+$/, '')} in egress.agent if the agent's work needs it`,
+      },
+    },
+  ]
+}
+
+/**
  * snapshot-too-large (concern): an attempt's workspace was over its snapshot form's cap, without
  * its dependency and cache directories, so reeval took no snapshot of it. One per eval.
  */
@@ -847,6 +885,7 @@ export function deterministicRemarks(
         ...slowMcpStart(e, own, ctx),
         ...proxyOnlyEgress(e, own, ctx),
         ...setupProcessSecret(e, own, ctx),
+        ...setupTunnelClosed(e, own, ctx),
         ...snapshotTooLarge(e, own, ctx),
         ...observeThrows(e, own, ctx),
         ...tooFewTries(e, first, ctx),

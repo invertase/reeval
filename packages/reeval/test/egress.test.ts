@@ -3,6 +3,7 @@
 // feature fixtures and sandbox-docker's tests.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import { recordEgress } from '../src/attempt/record.ts'
 import {
   allowedHosts,
   DEFAULT_EGRESS_ALLOW,
@@ -10,6 +11,8 @@ import {
   egressNeeds,
   gatewayPolicy,
   isDirect,
+  layerEgress,
+  phasePolicies,
   plannedEgress,
   SANDBOX_EGRESS,
   unenforceable,
@@ -17,10 +20,12 @@ import {
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
 import { cascade, expand, type Resolved } from '../src/options.ts'
-import type { EgressPolicy, HarnessDescriptor } from '../src/types.ts'
+import { gatewayGlue } from '../src/sandbox/docker.ts'
+import { InfraError } from '../src/sandbox/types.ts'
+import type { Egress, EgressPolicy, EvalRecord, HarnessDescriptor } from '../src/types.ts'
 
 const fake: HarnessDescriptor = { kind: 'fake' }
-const layers = (...specs: Array<EgressPolicy | undefined>) =>
+const layers = (...specs: Array<Egress | undefined>) =>
   specs.map((egress, i) => ({ name: `l${i}`, spec: egress === undefined ? {} : { egress } }))
 
 describe('the egress cascade', () => {
@@ -73,6 +78,165 @@ describe('the egress cascade', () => {
     assert.equal(policyOf([group, { options: { egress: 'allow-all' }, where: 'e' }]), 'allow-all')
     const open = cascade({ ...base, environments: [] }, [], 'e', { profile })
     assert.deepEqual(open.resolved.egress, { inherited: { allow: ['profile.example.com'] } })
+  })
+})
+
+describe('egress per phase', () => {
+  const phases = (own?: Egress, ...env: Array<Egress | undefined>) => {
+    const p = plannedEgress(
+      { inherited: { allow: ['config.example.com'] }, ...(own ? { own } : {}) },
+      fake,
+      {},
+      layers(...env),
+    )
+    return { setup: (p.setup ?? p).policy, agent: p.policy, split: !!p.setup }
+  }
+
+  test('each phase cascades on its own; a plain policy sets both', () => {
+    const config = { allow: ['config.example.com'] }
+    assert.deepEqual(phases(undefined, { setup: 'allow-all', agent: 'deny-all' }), {
+      setup: 'allow-all',
+      agent: 'deny-all',
+      split: true,
+    })
+    assert.deepEqual(
+      phases(undefined, { setup: 'allow-all' }),
+      { setup: 'allow-all', agent: config, split: true },
+      'an unset phase keeps what is under it',
+    )
+    assert.deepEqual(
+      phases('deny-all', { setup: 'allow-all' }),
+      { setup: 'deny-all', agent: 'deny-all', split: false },
+      "the eval's plain policy replaces both",
+    )
+    assert.deepEqual(
+      phases({ agent: 'deny-all' }, { setup: 'allow-all', agent: 'proxy' }),
+      { setup: 'allow-all', agent: 'deny-all', split: true },
+      "the eval's phase replaces only that phase",
+    )
+    assert.deepEqual(
+      phases(undefined, { setup: 'allow-all' }, 'deny-all'),
+      { setup: 'deny-all', agent: 'deny-all', split: false },
+      'a later plain layer replaces both',
+    )
+  })
+
+  test('equal phases plan as one policy', () => {
+    const one = plannedEgress({ own: { setup: 'deny-all', agent: 'deny-all' } }, fake, {}, [])
+    assert.deepEqual(one, { policy: 'deny-all', auto: [] })
+    assert.equal(egressLabel(one), 'deny-all')
+    const reordered = plannedEgress(
+      { own: { setup: { allow: ['a.test', 'b.test'] }, agent: { allow: ['b.test', 'a.test'] } } },
+      fake,
+      {},
+      [],
+    )
+    assert.equal(reordered.setup, undefined, 'the same hosts in another order are one policy')
+  })
+
+  test("a refusal setup met isn't the harness's expected block", () => {
+    const a = {
+      spec: {
+        harness: { kind: 'fake', layout: 'goose' },
+        egress: { policy: 'deny-all', auto: [], setup: { policy: 'allow-all', auto: [] } },
+      },
+      env: { plugins: [] },
+      record: {},
+    }
+    const refusal = { host: 'models.dev', port: 443, connections: 1, reason: 'deny-all' }
+    const traffic = {
+      contacted: [],
+      blocked: [
+        { ...refusal, phase: 'setup' },
+        { ...refusal, phase: 'agent' },
+      ],
+      unresolved: [],
+    }
+    recordEgress(a as never, { traffic: () => traffic } as never)
+    const egress = (a.record as EvalRecord).egress
+    assert.deepEqual(
+      egress?.blocked.map((b) => b.phase),
+      ['setup'],
+    )
+    assert.deepEqual(
+      egress?.expectedBlocked?.map((b) => b.phase),
+      ['agent'],
+    )
+  })
+
+  test('a failed switch is an infra error', async () => {
+    const glue = gatewayGlue({ egress: { policy: 'deny-all', auto: [] } } as never)
+    const network = {
+      egress: { active: true },
+      setEgress: async () => {
+        throw new Error('network disconnect failed')
+      },
+    }
+    const sandbox = glue.recorded(network as never)
+    await assert.rejects(
+      sandbox.setEgress?.({ policy: { mode: 'deny-all' }, direct: false, phase: 'agent' }) ??
+        Promise.resolve(),
+      (error: unknown) =>
+        error instanceof InfraError &&
+        /^Couldn't start the agent phase's egress: network disconnect failed/.test(error.message),
+    )
+  })
+
+  test('each restricted phase gets the automatic hosts', () => {
+    const p = plannedEgress(
+      { own: { setup: { allow: ['registry.npmjs.org'] }, agent: 'deny-all' } },
+      { kind: 'fake', layout: 'claude-code' },
+      {},
+      [],
+    )
+    const auto = ['api.anthropic.com', '*.anthropic.com']
+    assert.deepEqual(p, {
+      policy: 'deny-all',
+      auto,
+      setup: { policy: { allow: ['registry.npmjs.org'] }, auto },
+    })
+    assert.equal(
+      egressLabel(p),
+      'setup allow registry.npmjs.org + auto: api.anthropic.com, *.anthropic.com · agent deny-all + auto: api.anthropic.com, *.anthropic.com',
+    )
+  })
+
+  test('layerEgress merges phases at one level; a plain policy replaces', () => {
+    assert.deepEqual(layerEgress({ setup: 'allow-all' }, { agent: 'deny-all' }), {
+      setup: 'allow-all',
+      agent: 'deny-all',
+    })
+    assert.deepEqual(layerEgress('proxy', { setup: 'allow-all' }), {
+      setup: 'allow-all',
+      agent: 'proxy',
+    })
+    assert.equal(layerEgress({ setup: 'allow-all' }, 'deny-all'), 'deny-all')
+    assert.deepEqual(layerEgress(undefined, { agent: 'deny-all' }), { agent: 'deny-all' })
+    assert.deepEqual(phasePolicies({ agent: 'deny-all' }), { setup: 'proxy', agent: 'deny-all' })
+  })
+
+  test("a sandbox that can't switch refuses split phases; each phase is checked on its own", () => {
+    const split = (setup: EgressPolicy, agent: EgressPolicy) => ({
+      policy: agent,
+      auto: [],
+      setup: { policy: setup, auto: [] },
+    })
+    const vm = { kind: 'tart', image: 'macos' } as const
+    assert.match(
+      unenforceable(split('allow-all', 'deny-all'), vm, 'e') ?? '',
+      /^e runs under egress 'allow-all' for setup and 'deny-all' for the agent, but the tart sandbox can't change its egress policy during an attempt\./,
+    )
+    assert.match(
+      unenforceable(split('allow-all', 'deny-all'), { kind: 'fake' }, 'e') ?? '',
+      /egress\.agent 'deny-all'.* the fake sandbox enforces no egress policy/,
+    )
+    assert.match(
+      unenforceable(split('deny-all', 'allow-all'), { kind: 'fake' }, 'e') ?? '',
+      /egress\.setup 'deny-all'/,
+    )
+    // Twin: Docker switches and enforces both, and the fake takes two unrestricted phases.
+    assert.equal(unenforceable(split('allow-all', 'deny-all'), { kind: 'docker' }, 'e'), undefined)
+    assert.equal(unenforceable(split('allow-all', 'proxy'), { kind: 'fake' }, 'e'), undefined)
   })
 })
 
@@ -168,10 +332,10 @@ describe('automatic hosts', () => {
 describe('what a sandbox can enforce', () => {
   test('each provider declares it: Docker all of it and recording, Tart and Boat recording, the fake nothing', () => {
     assert.deepEqual(SANDBOX_EGRESS, {
-      boat: { enforce: 'none', record: true },
-      docker: { enforce: 'allowlist', record: true },
-      fake: { enforce: 'none', record: false },
-      tart: { enforce: 'none', record: true },
+      boat: { enforce: 'none', record: true, switches: false },
+      docker: { enforce: 'allowlist', record: true, switches: true },
+      fake: { enforce: 'none', record: false, switches: true },
+      tart: { enforce: 'none', record: true, switches: false },
     })
   })
 
@@ -236,6 +400,27 @@ describe('the environment digest', () => {
     assert.notEqual(ab.digest, (await digest({ allow: ['a.example.com'] })).digest)
     assert.deepEqual(ab.egress, { allow: ['a.example.com', 'b.example.com'] })
     assert.equal(none.egress, 'proxy')
+  })
+
+  test('covers the setup policy only when it has its own', async () => {
+    const at = async (setupEgress?: EgressPolicy) =>
+      (
+        await resolveEnvironment(
+          applied(defineEnvironment('e', {})),
+          {},
+          '/p',
+          'e',
+          'AGENTS.md',
+          'deny-all',
+          undefined,
+          setupEgress === undefined ? {} : { setupEgress },
+        )
+      ).record
+    const one = await at()
+    const split = await at('allow-all')
+    assert.notEqual(split.digest, one.digest)
+    assert.equal(split.setupEgress, 'allow-all')
+    assert.equal(one.setupEgress, undefined)
   })
 
   test("an extend child's policy is an override", async () => {

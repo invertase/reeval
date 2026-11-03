@@ -1306,7 +1306,7 @@
       ]
     },
     "EgressRecord": {
-      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals. A request that carries the harness's brokered key off the endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked` once per method and path, its `reason` names them, and `connections` counts its requests. Past the first 20 pairs, the rest share one entry per host.",
+      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals. A request that carries the harness's brokered key off the endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked` once per method and path, its `reason` names them, and `connections` counts its requests. Past the first 20 pairs, the rest share one entry per host. With a setup policy of its own, every entry names the `phase` it happened in.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -1323,16 +1323,22 @@
           ]
         },
         "blocked": {
-          "description": "Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints reeval brokers it for (one entry per method and path), each with why. A name that didn't resolve is in `unresolved` instead.",
+          "description": "Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints reeval brokers it for (one entry per method and path), each with why. A name that didn't resolve is in `unresolved` instead. A tunnel setup opened to a host the agent's policy refuses is closed as the agent phase starts, and is here with `closed: true`.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
+              "closed": {
+                "const": true
+              },
               "connections": {
                 "type": "number"
               },
               "host": {
                 "type": "string"
+              },
+              "phase": {
+                "enum": ["agent", "setup"]
               },
               "port": {
                 "type": "number"
@@ -1354,6 +1360,10 @@
               },
               "host": {
                 "type": "string"
+              },
+              "phase": {
+                "description": "With a setup policy of its own: the phase the connections were made in.",
+                "enum": ["agent", "setup"]
               },
               "port": {
                 "type": "number"
@@ -1379,6 +1389,9 @@
               "host": {
                 "type": "string"
               },
+              "phase": {
+                "enum": ["agent", "setup"]
+              },
               "port": {
                 "type": "number"
               },
@@ -1394,10 +1407,34 @@
           "const": true
         },
         "policy": {
+          "description": "The agent phase's policy: the harness's start, its turns and the checks.",
           "$ref": "#/$defs/EgressPolicy"
         },
         "recorded": {
           "type": "boolean"
+        },
+        "setup": {
+          "description": "The setup phase's policy (files and setup steps) and the hosts it allowed, when it wasn't the agent's.",
+          "type": "object",
+          "properties": {
+            "allowed": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "policy": {
+              "$ref": "#/$defs/EgressPolicy"
+            }
+          },
+          "required": ["allowed", "policy"]
         },
         "unresolved": {
           "description": "Hosts the policy let through whose names didn't resolve (`metadata.google.internal` outside GCP, say), so the gateway answered 502 with the lookup's error. No policy refused them, so they're never in `blocked`. A record from an older reeval reads it as empty and has them in `blocked`, with a `can't resolve …` or `… has no addresses` reason.",
@@ -1410,6 +1447,9 @@
               },
               "host": {
                 "type": "string"
+              },
+              "phase": {
+                "enum": ["agent", "setup"]
               },
               "port": {
                 "type": "number"
@@ -1448,7 +1488,7 @@
           "type": "string"
         },
         "egress": {
-          "description": "The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`.",
+          "description": "The policy the attempt's agent phase ran under (the harness's start, its turns and the checks), from the options and the environment; in the digest unless `proxy`.",
           "$ref": "#/$defs/EgressPolicy"
         },
         "files": {
@@ -1513,6 +1553,26 @@
           "items": {
             "type": "string"
           }
+        },
+        "setupEgress": {
+          "description": "The policy the setup phase (files and setup steps) ran under, when it wasn't the agent's; in the digest when set.",
+          "anyOf": [
+            {
+              "enum": ["allow-all", "deny-all", "proxy"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["allow"]
+            }
+          ]
         },
         "skills": {
           "type": "array",

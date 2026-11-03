@@ -1110,6 +1110,26 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
   },
   {
+    id: 'egress.phases',
+    area: 'Sandbox',
+    name: "`egress: { setup, agent }`: one policy for the setup steps and another for the agent's turns and the checks, switched in Docker as the agent starts, tunnels setup left open that the agent's policy refuses closed and raised as `setup-tunnel-closed`, each phase's traffic tagged in the record, and refused at plan time on `tart()` and `boat()`",
+    fixtures: [
+      'egress/setup-open-agent-closed',
+      'egress/tunnel-closed-on-switch',
+      'egress/switch-after-setup',
+    ],
+    plan: ['egress/phases', 'egress/profile-setup', 'egress/phased-config'],
+    unit: [
+      'reeval/test/egress.test.ts',
+      'reeval/test/plan.test.ts',
+      'reeval/test/secrets.test.ts',
+      'reeval/test/remarks.test.ts',
+      'sandbox-docker/test/proxy.test.ts',
+      'sandbox-docker/test/proxy-switch.test.ts',
+      'sandbox-docker/test/docker.test.ts',
+    ],
+  },
+  {
     id: 'egress.proxy',
     area: 'Sandbox',
     name: "`egress: 'proxy'` (the default) detaches the container, so only HTTP(S) and WebSockets through the gateway leave it (Node's `fetch`, `http`, `https` and `WebSocket` too, without Node 22's experimental-proxy warning); `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM",

@@ -160,6 +160,15 @@ export async function podmanConfinementProblem(): Promise<{
   return podmanInfoProblem({ version, rootless, controllers })
 }
 
+/** Whether this host's Podman runs rootless; false when `podman info` doesn't answer. */
+export async function podmanRootless(): Promise<boolean> {
+  const { docker } = await import('@reeval/sandbox-docker')
+  const r = await docker(['info', '--format', '{{json .Host.Security.Rootless}}'], {
+    engine: 'podman',
+  }).catch(() => null)
+  return r?.exitCode === 0 && r.stdout.toString('utf8').trim() === 'true'
+}
+
 /** Docker or Podman: one image per key, each sub-image built once per provider (so once per run). */
 export function dockerProvider(
   options: { refresh?: Refresh; engine?: Engine } = {},

@@ -467,6 +467,13 @@ export const CASES: Record<string, Case[]> = {
     ['plan: under deny-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'deny-all' })],
     ['plan: under allow-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'allow-all' })],
     [
+      'plan: egress phases',
+      planned({
+        sandbox: tart({ image: SEQUOIA }),
+        egress: { setup: 'allow-all', agent: 'deny-all' },
+      }),
+    ],
+    [
       'plan: cursor',
       planned(
         {},
@@ -641,6 +648,17 @@ export const CASES: Record<string, Case[]> = {
       planned(
         {},
         { harnesses: cursor({ model: 'composer-2.5' }), sandbox: boat(), egress: 'allow-all' },
+      ),
+    ],
+    [
+      'boat() with egress phases',
+      planned(
+        {},
+        {
+          harnesses: cursor({ model: 'composer-2.5' }),
+          sandbox: boat(),
+          egress: { setup: 'allow-all', agent: 'deny-all' },
+        },
       ),
     ],
     [
@@ -1066,6 +1084,25 @@ export const CASES: Record<string, Case[]> = {
       options({ egress: { allow: ['api.example.com', '*.example.org', '1.2.3.4'] } }),
     ],
     ['egress in an environment', env({ egress: ['x.com'] })],
+    ['egress phases beside allow', options({ egress: { allow: ['x.com'], agent: 'deny-all' } })],
+    ['egress no phase', options({ egress: {} })],
+    ['egress a checks phase', options({ egress: { setup: 'allow-all', checks: 'deny-all' } })],
+    ['egress an install phase', options({ egress: { install: 'allow-all', agent: 'deny-all' } })],
+    ['egress a phase typo', options({ egress: { setup: 'allow-all', agnt: 'deny-all' } })],
+    ['egress a bad setup policy', options({ egress: { setup: 'none', agent: 'deny-all' } })],
+    [
+      'egress a bad agent host',
+      options({ egress: { setup: 'allow-all', agent: { allow: ['x.com:443'] } } }),
+    ],
+    [
+      'egress phases good',
+      options({ egress: { setup: 'allow-all', agent: { allow: ['api.example.com'] } } }),
+    ],
+    ['egress phases in an environment', env({ egress: { setup: ['x.com'] } })],
+    [
+      'plan: egress phases on fakeSandbox() restrict the agent',
+      planned({ egress: { setup: 'allow-all', agent: 'deny-all' } }),
+    ],
     ['env not an object', options({ env: 'A=1' })],
     ['env a bad name', options({ env: { 'A-B': '1' } })],
     ['env a number', options({ env: { A: 1 } })],

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import https from 'node:https'
-import type net from 'node:net'
+import net from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { WebSocketServer } from 'ws'
@@ -967,6 +970,73 @@ describe('egress policy in Docker', {
     assert.equal(r.exitCode, 7, `refused at once, not a timeout: ${r.stderr}`)
     assert.match(r.stderr, /Failed to connect|Connection refused|Couldn't connect/)
     await expectNoDirectRoute(s, 'after the forwarder died')
+  })
+
+  test('setEgress: a direct phase detaches at the switch, and allow-all direct reattaches', async () => {
+    let received = 0
+    const raw = net.createServer((c) => c.on('data', (d) => (received += d.length)))
+    await new Promise<void>((r) => raw.listen(0, '0.0.0.0', r))
+    const rawPort = (raw.address() as net.AddressInfo).port
+    const s = await open(allowAll)
+    const writer = await s.spawn({
+      command: `node -e "const c = require('net').connect(${rawPort}, '${hostAddress}'); c.on('error', () => {}); setInterval(() => c.write('x'), 100)"`,
+    })
+    try {
+      assert.equal((await direct(s)).stdout, '200', 'setup keeps its networks')
+      await retry(async () => assert.ok(received > 0, 'the raw socket reached the host'))
+
+      await s.setEgress?.({ policy: denyAll, direct: false, phase: 'agent' })
+      await expectNoDirectRoute(s, 'deny-all')
+      await new Promise((r) => setTimeout(r, 300))
+      const at = received
+      await new Promise((r) => setTimeout(r, 1000))
+      assert.equal(received, at, 'the socket opened before the switch carries nothing after it')
+      await sh(s, `curl -sS --max-time 5 http://other.test:${upstream.port}/`)
+      assert.deepEqual(
+        s.traffic?.().blocked.map((b) => [b.host, b.phase]),
+        [['other.test', 'agent']],
+      )
+
+      // `proxy` is allow-all with the gateway as the only way out: still detached.
+      await s.setEgress?.({ policy: allowAll, direct: false, phase: 'agent' })
+      await expectNoDirectRoute(s, 'proxy')
+
+      await s.setEgress?.({ policy: allowAll, direct: true, phase: 'agent' })
+      assert.ok((await upInterfaces(s)).some((i) => /^eth\d+$/.test(i)))
+      assert.equal((await retry(() => direct(s))).stdout, '200', 'allow-all direct reattached')
+    } finally {
+      await writer.kill().catch(() => {})
+      raw.close()
+    }
+  })
+
+  test("a container whose network can't be detached fails at creation when a later phase detaches it", async () => {
+    // The engine's CLI, with every container it runs put on the host's network.
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-host-network-'))
+    const real = execFileSync('sh', ['-c', `command -v ${CLI}`], { encoding: 'utf8' }).trim()
+    writeFileSync(
+      join(dir, CLI),
+      `#!/bin/sh\nif [ "$1" = run ]; then\n  shift\n  skip=0\n  for a in "$@"; do\n    shift\n    if [ $skip = 1 ]; then skip=0; continue; fi\n    case "$a" in --network) skip=1 ;; --network=*) ;; *) set -- "$@" "$a" ;; esac\n  done\n  set -- run --network=host "$@"\nfi\nexec ${real} "$@"\n`,
+    )
+    chmodSync(join(dir, CLI), 0o755)
+    const path = process.env.PATH
+    process.env.PATH = `${dir}:${path}`
+    try {
+      const lifted = { image: DEFAULT_IMAGE, labels: { 'ai.reeval.test': 'host-network' } }
+      await assert.rejects(
+        createSession({ ...lifted, egress: egress({ direct: true, detachLater: true }) }).then(
+          (s) => sessions.push(s),
+        ),
+        /the container's network is host, which \w+ can't detach it from/,
+      )
+      // Twin: a direct container no phase detaches starts on the host's network.
+      const kept = await createSession({ ...lifted, egress: egress({ direct: true }) })
+      sessions.push(kept)
+      assert.equal(kept.egress?.active, true)
+    } finally {
+      process.env.PATH = path
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

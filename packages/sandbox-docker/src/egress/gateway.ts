@@ -27,6 +27,8 @@ export type Gateway = {
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
+  /** The next phase's policy, closing open tunnels it refuses (see the proxy's `switchPolicy`). */
+  switchPolicy(policy: NetworkPolicy, phase: string): Promise<void>
   setSubstitutions(subs: readonly Substitution[]): void
   /** The hosts the sandbox contacted and was refused so far. */
   traffic(): EgressTraffic
@@ -217,6 +219,7 @@ export async function startGateway(
     addTransformations: proxy.addTransformations,
     setTransformations: proxy.setTransformations,
     setPolicy: proxy.setPolicy,
+    switchPolicy: proxy.switchPolicy,
     setSubstitutions: proxy.setSubstitutions,
     traffic: proxy.traffic,
     get stopped() {

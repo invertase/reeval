@@ -180,9 +180,9 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
 
 /**
  * A Tart VM keeps Tart's network, so nothing it sends around the gateway's proxy is refused or
- * recorded; what goes through the proxy is.
+ * recorded; what goes through the proxy is. Its one policy holds for the whole attempt.
  */
-export const TART_EGRESS: EgressCapabilities = { enforce: 'none', record: true }
+export const TART_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
 
 const TART: SandboxKind<TartSandboxDescriptor> = {
   helpers: ['tart'],
@@ -218,10 +218,10 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
 }
 
 /**
- * Enforces nothing yet: the VM keeps its own network, so only `allow-all` plans on it. The gateway
- * still brokers credentials and records what goes through it.
+ * Enforces nothing yet: the VM keeps its own network, so only `allow-all` plans on it, for the
+ * whole attempt. The gateway still brokers credentials and records what goes through it.
  */
-const BOAT_EGRESS: EgressCapabilities = { enforce: 'none', record: true }
+const BOAT_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
 
 const BOAT: SandboxKind<BoatSandboxDescriptor> = {
   helpers: ['boat'],

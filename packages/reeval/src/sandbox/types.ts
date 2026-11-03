@@ -1,5 +1,5 @@
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
-import type { EgressTraffic, Substitution } from '@reeval/sandbox-docker'
+import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
 import type { ExecResult } from '../types.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }
@@ -28,6 +28,11 @@ export interface Sandbox {
   writeFile(path: string, content: string | Uint8Array): Promise<void>
   /** With the Docker egress gateway: the brokered secrets it swaps in from now on. */
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
+  /**
+   * Starts the attempt's next phase (`setup`, then `agent`) under `policy`, which the sandbox
+   * enforces from now on; `direct` keeps its own network for traffic that ignores the proxy.
+   */
+  setEgress?(o: { policy: NetworkPolicy; direct: boolean; phase: 'setup' | 'agent' }): Promise<void>
   /** When the sandbox records egress: the hosts contacted and refused so far. */
   traffic?(): EgressTraffic
   /**

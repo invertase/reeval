@@ -56,6 +56,7 @@
   "fakeHarness good": null,
   "claudeCode on boat()": "UsageError: evaluate(\"e\") on claude-code:claude-haiku-5-5: The Claude Code harness doesn't run in the boat sandbox yet: it runs Cursor so far. Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
   "cursor on boat()": null,
+  "boat() with egress phases": "UsageError: evaluate(\"e\") runs under egress 'allow-all' for setup and 'deny-all' for the agent, but the boat sandbox can't change its egress policy during an attempt. Give both phases one policy, or run it in docker().",
   "boat() under egress 'proxy'": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the only way out, but the boat sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in docker().",
   "opencode mcp: {file:} in an arg": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.args[1] as written: take the reference out, or leave OpenCode out of this cell",
   "opencode mcp: {env:} in an env value": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.env.GREETING as written: take the reference out, or leave OpenCode out of this cell",

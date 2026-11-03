@@ -1466,6 +1466,94 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'egress/setup-open-agent-closed',
+    // Not on rootless Podman (4.9, with its netavark): any container leaving the bridge, at
+    // creation or at the switch, can cut the others on it off from the host for seconds, and the
+    // canary's allow-all container needs that route for a whole attempt.
+    tiers: ['docker'],
+    env: 'phased',
+    canaryEnv: 'open',
+    hostEnv: egressEnv,
+    canary: /expected '200 exit=0 · 200 exit=0 · 200 exit=0' to match/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.equal(egress?.policy, 'deny-all')
+      assert.deepEqual(egress?.setup, { policy: 'allow-all', allowed: null })
+      assert.equal(egress?.partial, true)
+      assert.deepEqual(egress?.contacted, [])
+      // Each phase's refusal of the same host is its own entry.
+      assert.deepEqual(egress?.blocked, [
+        {
+          host: egressTarget.host,
+          port: egressTarget.port,
+          connections: 1,
+          reason: `${egressTarget.host} is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it`,
+          phase: 'setup',
+        },
+        {
+          host: egressTarget.host,
+          port: egressTarget.port,
+          connections: 1,
+          reason: 'the policy denies all egress',
+          phase: 'agent',
+        },
+      ])
+      const phased = run.environments.find((e) => e.name === 'phased')
+      assert.equal(phased?.setupEgress, 'allow-all')
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
+      assert.equal(canary?.setup, undefined)
+      assert.ok(canary?.blocked.every((h) => h.phase === undefined))
+    },
+  },
+  {
+    dir: 'egress/tunnel-closed-on-switch',
+    tiers: ['docker'],
+    env: 'closed',
+    canaryEnv: 'kept',
+    hostEnv: egressEnv,
+    canary: /expected 'open' to be 'closed'/,
+    record: ({ run, stdout }) => {
+      const egress = landed(run)?.egress
+      assert.deepEqual(egress?.blocked, [
+        {
+          host: egressTarget.host,
+          port: egressTarget.port,
+          connections: 1,
+          reason: 'a tunnel opened before the agent phase, closed: the policy denies all egress',
+          phase: 'agent',
+          closed: true,
+        },
+      ])
+      const kept = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
+      assert.deepEqual(kept?.blocked, [])
+      assert.match(
+        stdout,
+        /Setup left a connection open to [\d.]+:\d+, which the agent's egress refuses, so reeval closed it/,
+      )
+    },
+  },
+  {
+    dir: 'egress/switch-after-setup',
+    tiers: ['fake', 'docker'],
+    env: 'phased',
+    canary: /expected 'ready' to be ''/,
+    record: ({ project }) => {
+      const logs = debugLogs(project)
+      assert.ok(logs.length > 0, 'no debug.log')
+      for (const log of logs) {
+        const at = (re: RegExp) => log.findIndex((line) => re.test(line))
+        const setup = at(/setup 1\/1 \$ echo ready > ready\.txt/)
+        const toSetup = at(/egress → setup: allow-all/)
+        const toAgent = at(/egress → agent: proxy/)
+        const harness = at(/starting fake: bootstrap and session/)
+        assert.ok(
+          toSetup >= 0 && toSetup < setup && setup < toAgent && toAgent < harness,
+          `setup's policy, its steps, the agent's policy, then the harness:\n${log.join('\n')}`,
+        )
+      }
+    },
+  },
+  {
     dir: 'egress/secret-hosts-allowed',
     tiers: ['docker'],
     env: 'keyed',
@@ -4253,6 +4341,15 @@ function removeProjectContainers(project: string, cli: string): void {
       .filter(Boolean)
     if (ids.length) execFileSync(cli, ['rm', '-f', ...ids], { stdio: 'ignore' })
   }
+}
+
+/** Each attempt's debug.log, as lines. */
+function debugLogs(project: string): string[][] {
+  const root = join(project, '.reeval', 'debug')
+  if (!existsSync(root)) return []
+  return readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('debug.log'))
+    .map((f) => readFileSync(join(root, f), 'utf8').trimEnd().split('\n'))
 }
 
 /** The end of each attempt's debug.log, which says where a stopped run was stuck. */

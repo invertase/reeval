@@ -76,13 +76,13 @@ model), and the one questions without their own model use. `reeval init` sets it
 `AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` lists remarks under `Worth knowing:` beneath an eval that itself needs work, with no model: `flaky-check`,
-`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `snapshot-too-large`, `too-few-tries`,
+`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `setup-tunnel-closed`, `snapshot-too-large`, `too-few-tries`,
 `cant-tell-apart` and `observe-throws` (concerns, at most three), and
 with `-v` `check-never-fails` (a suggestion). They go in `remarks.json` beside
 the run, which `reeval record` copies into the history folder. Each names the source line to change (`Fix at <file:line>: …`).
 Act on them: raise `runs`, make a task both arms always pass harder, tighten or remove the check, bake the MCP server's dependencies into
 the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
-version (`too-few-tries`, `slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `snapshot-too-large`
+version (`too-few-tries`, `slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `setup-tunnel-closed` and `snapshot-too-large`
 every run); an edit
 re-arms it.
 One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.

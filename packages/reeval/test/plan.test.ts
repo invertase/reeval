@@ -3,9 +3,9 @@
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { fakeConfig, project, runCli } from './helpers.ts'
@@ -251,10 +251,27 @@ export const cases: PlanCase[] = [
   { dir: 'secrets', name: 'plain-env', args: ['evals/env.eval.ts'] },
   { dir: 'secrets', name: 'ordinary-env', args: ['evals/ordinary-env.eval.ts'] },
   { dir: 'egress', name: 'cascade', args: ['evals/auto.eval.ts', 'evals/cascade.eval.ts'] },
+  { dir: 'egress', name: 'phases', args: ['evals/phases.eval.ts'] },
   {
     dir: 'egress',
     name: 'profile-defaults',
     args: ['--profile', 'locked', 'evals/cascade.eval.ts'],
+  },
+  {
+    dir: 'egress',
+    name: 'profile-setup',
+    args: ['--profile', 'setup-open', 'evals/cascade.eval.ts'],
+  },
+  {
+    dir: 'egress',
+    name: 'phased-config',
+    args: [
+      '--config',
+      'reeval.phased.config.ts',
+      '--profile',
+      'agent-locked',
+      'evals/cascade.eval.ts',
+    ],
   },
   {
     dir: 'egress',
@@ -657,6 +674,37 @@ evaluate('judged', async () => {})
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+  })
+
+  test('phased egress side by side on rootless Podman warns at plan time', async () => {
+    const p = await project('plan-podman-phases', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { podman } from 'reeval/sandbox'
+export default defineConfig({
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('p', { sandbox: podman() }),
+})
+`,
+      'evals/p.eval.ts': `import { evaluate } from 'reeval'
+evaluate('phased', { egress: { setup: 'allow-all', agent: 'deny-all' } }, async () => {})
+evaluate('one policy', { egress: 'deny-all' }, async () => {})
+`,
+      // A podman CLI that answers only whether it runs rootless.
+      'bin/podman': `#!/bin/sh\n[ "$1 $3" = "info {{json .Host.Security.Rootless}}" ] && echo true && exit 0\nexit 1\n`,
+    })
+    chmodSync(join(p.dir, 'bin/podman'), 0o755)
+    const env = { PATH: `${join(p.dir, 'bin')}${delimiter}${process.env.PATH}` }
+    const r = await runCli(p.dir, ['run', '--dry-run', '--concurrency', '2'], { env })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /Warning: phased egress on rootless Podman: at the switch to the agent's policy an attempt's container leaves Podman's bridge network, .* Under it: evals\/p\.eval\.ts › phased\. Run with --concurrency 1/,
+    )
+    // Twin: one at a time, nothing runs beside the switch.
+    const alone = await runCli(p.dir, ['run', '--dry-run', '--concurrency', '1'], { env })
+    assert.equal(alone.code, 0, alone.stdout + alone.stderr)
+    assert.doesNotMatch(alone.stdout, /rootless Podman/)
   })
 
   test("OpenCode on a provider direct() can't broker exits 2 at plan time, naming it and why", async () => {

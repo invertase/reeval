@@ -60,12 +60,14 @@ import {
 import { configJudgeDataSchema, fakeJudgeDataSchema } from './judge.ts'
 import {
   egressPolicySchema,
+  egressSchema,
   envValueSchema,
   envVarsSchema,
   gatePolicySchema,
   gitWorkspaceSchema,
   hostFileSchema,
   mcpServerSchema,
+  phasedEgressSchema,
   pluginMarketplaceSchema,
   pluginPartSchema,
   pluginSourceSchema,
@@ -116,6 +118,8 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,
   EgressPolicy: egressPolicySchema,
+  PhasedEgress: phasedEgressSchema,
+  Egress: egressSchema,
   Secret: secretSchema,
   SecretTemplate: secretTemplateSchema,
   SubstituteIn: substituteInSchema,
