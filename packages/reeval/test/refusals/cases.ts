@@ -1699,6 +1699,25 @@ export const CASES: Record<string, Case[]> = {
       }),
     ],
     [
+      "unbrokered 'error': a stdio MCP env path named like a credential",
+      strict({
+        environments: defineEnvironment('e', ({ mcp }) => ({
+          mcp: {
+            gcp: mcp.stdio('bq', [], {
+              env: {
+                GOOGLE_APPLICATION_CREDENTIALS: '/secrets/sa.json',
+                TOKEN_ENDPOINT: 'https://oauth2.googleapis.com/token',
+              },
+            }),
+          },
+        })),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain env connection string with a password",
+      strict({ env: { DATABASE_URL: 'postgres://app:hunter2@db:5432/app' } }),
+    ],
+    [
       "unbrokered 'error': an ordinary plain env string",
       strict({ env: { NODE_ENV: 'production' } }),
     ],

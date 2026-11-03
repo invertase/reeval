@@ -351,14 +351,32 @@ export function plainCredentialHeaders(
 }
 
 /**
+ * A value that says where a credential is, not what it is: a path (a plugin's
+ * `${CLAUDE_PLUGIN_ROOT}/…` too), or a URL without a password.
+ */
+const LOCATION =
+  /^(?:~?\.{0,2}\/|\$\{CLAUDE_PLUGIN_ROOT\}|[a-z][a-z0-9+.-]*:\/\/[^/@\s]*(?:[/?#]|$))/i
+/** A URL with a password in it, as a connection string has: `postgres://user:pass@host`. */
+const URL_PASSWORD = /[a-z][a-z0-9+.-]*:\/\/[^/\s:@]*:[^/\s@]+@/i
+
+/**
  * Whether a plain `env` string looks like a credential: named like one with 8 or more characters,
- * as a host variable must be to be masked (so `MAX_TOKENS: '4096'` passes), or shaped like a token.
+ * as a host variable must be to be masked, and not a path or a plain URL (so a stdio MCP server's
+ * `MAX_TOKENS: '4096'` and `GOOGLE_APPLICATION_CREDENTIALS: '/secrets/sa.json'` pass; `checkEnv`
+ * refuses those names in `env` itself); a URL with a password; an `Authorization`-style value; or
+ * shaped like a token. Only the warning uses the URL and `Authorization` rules: masking doesn't.
  */
 export const credentialEnv = (name: string, value: string) =>
-  (SECRET_NAME.test(name) && value.length >= 8) || hasTokenShape(value)
+  (SECRET_NAME.test(name) && value.length >= 8 && !LOCATION.test(value)) ||
+  URL_PASSWORD.test(value) ||
+  AUTH_SCHEME.test(value.trim()) ||
+  hasTokenShape(value)
 
-/** An `env` string that looks like a credential: where it's set, and its variable's name. */
-export type PlainCredentialEnv = { label: string; name: string }
+/**
+ * An `env` string that looks like a credential: where it's set, its variable's name, and whether
+ * it's in a local plugin's `.mcp.json`, where it can't be a `secret()`.
+ */
+export type PlainCredentialEnv = { label: string; name: string; plugin?: true }
 
 /**
  * The `env` strings among `env`, the layers' env and their stdio MCP servers' env that look like
@@ -371,16 +389,17 @@ export function plainCredentialEnv(
   const vars: EnvVars = { ...env }
   for (const { spec } of layers) Object.assign(vars, spec.env)
   const out: PlainCredentialEnv[] = []
-  const fromVars = (values: EnvVars, prefix: string) => {
+  const fromVars = (values: EnvVars, prefix: string, plugin = false) => {
     for (const [name, value] of Object.entries(values)) {
       if (typeof value === 'string' && credentialEnv(name, value)) {
-        out.push({ label: `${prefix}${name}`, name })
+        out.push({ label: `${prefix}${name}`, name, ...(plugin ? { plugin: true as const } : {}) })
       }
     }
   }
   fromVars(vars, '')
+  const plugins = new Set(localPluginServers(layers).keys())
   for (const [server, s] of layeredServers(layers)) {
-    if (s.transport === 'stdio') fromVars(s.env, `mcp.${server}.env.`)
+    if (s.transport === 'stdio') fromVars(s.env, `mcp.${server}.env.`, plugins.has(server))
   }
   return out
 }

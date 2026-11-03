@@ -1306,14 +1306,25 @@ export function plainEnv(env: EnvVars, attempts: PlannedAttempt[]): PlainCredent
   return [...out.values()]
 }
 
-const secretHint = (e: PlainCredentialEnv) =>
-  `read it from a host variable with secret(), e.g. ${e.name}: secret.fromEnv('${e.name}', { hosts: ['api.example.com'] })`
+/** A placeholder only works for a value sent to an HTTPS API: the gateway swaps it in nowhere else. */
+const hostsExample = (e: PlainCredentialEnv) =>
+  `secret.fromEnv('${e.name}', { hosts: ['api.example.com'] })`
+
+const maskHint = (e: PlainCredentialEnv) =>
+  e.plugin
+    ? `write it as "\${${e.name}}" in the plugin's .mcp.json, so reeval reads it from the host variable ${e.name}`
+    : `read it from a host variable with secret.fromEnv('${e.name}'); to give the agent only a placeholder too, add the hosts it's sent to if that's an HTTPS API, e.g. ${hostsExample(e)}`
 
 export const plainEnvWarning = (e: PlainCredentialEnv) =>
-  `${e.label} is a plain string that looks like a credential, so it's in the sandbox as its real value. To give the agent only a placeholder and mask the value in everything reeval writes, ${secretHint(e)}.`
+  `${e.label} is a plain string that looks like a credential, so it's in the sandbox as its real value. To mask it in everything reeval writes, ${maskHint(e)}.`
+
+const brokerEnvHint = (e: PlainCredentialEnv) =>
+  e.plugin
+    ? `declare the server with mcp.stdio() instead of the plugin's .mcp.json, whose host variables can't set hosts, and read it with ${hostsExample(e)}, naming the HTTPS hosts it's sent to`
+    : `read it from a host variable with ${hostsExample(e)}, naming the HTTPS hosts it's sent to`
 
 export const plainEnvError = (e: PlainCredentialEnv, where: string, configFile: string) =>
-  `${e.label} in ${where} is a plain string that looks like a credential, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${secretHint(e)}.`
+  `${e.label} in ${where} is a plain string that looks like a credential, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerEnvHint(e)}.`
 
 export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')

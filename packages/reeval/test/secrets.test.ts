@@ -3,7 +3,7 @@
 // The network-level proof (the upstream gets the value, the container never has it) is in
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -27,7 +27,14 @@ import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/histo
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { PlannedAttempt } from '../src/options.ts'
-import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
+import {
+  brokeredIn,
+  plainEnvError,
+  plainEnvWarning,
+  secretVarsIn,
+  unbrokered,
+  unbrokeredWarning,
+} from '../src/options.ts'
 import {
   countSecrets,
   findSecrets,
@@ -608,6 +615,93 @@ describe('env written as plain strings', () => {
     }))
     assert.equal(plainCredentialEnv({}, parent.layers).length, 1)
     assert.deepEqual(plainCredentialEnv({}, child.layers), [])
+  })
+
+  test('a credential-like name needs 8 or more characters', () => {
+    const env = defineEnvironment('e', ({ mcp }) => ({
+      mcp: { db: mcp.stdio('db', [], { env: { DB_PASSWORD: '1234567', API_TOKEN: '12345678' } }) },
+    }))
+    assert.deepEqual(plainCredentialEnv({}, env.layers), [
+      { label: 'mcp.db.env.API_TOKEN', name: 'API_TOKEN' },
+    ])
+  })
+
+  test('a path or a URL without a password under a credential-like name passes', () => {
+    const env = defineEnvironment('e', ({ mcp }) => ({
+      mcp: {
+        gcp: mcp.stdio('bq', [], {
+          env: {
+            GOOGLE_APPLICATION_CREDENTIALS: '/secrets/sa.json',
+            SSH_KEY_PATH: '~/.ssh/id_ed25519',
+            TOKENIZER_PATH: './models/tokenizer.json',
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: a plugin's root variable
+            KEY_FILE: '${CLAUDE_PLUGIN_ROOT}/key.json',
+            TOKEN_ENDPOINT: 'https://oauth2.googleapis.com/token',
+            AUTH_TOKEN_URL: 'https://auth.example.com',
+            API_KEY: 'abcdef/ghijkl',
+          },
+        }),
+      },
+    }))
+    assert.deepEqual(plainCredentialEnv({}, env.layers), [
+      { label: 'mcp.gcp.env.API_KEY', name: 'API_KEY' },
+    ])
+  })
+
+  test('a URL with a password or an Authorization-style value warns under any name', () => {
+    const vars = {
+      DATABASE_URL: 'postgres://app:hunter2@db:5432/app',
+      CACHE: 'redis://:pw@cache:6379',
+      UPSTREAM_AUTH: 'Bearer 3e1f0a9b8c7d',
+      HOMEPAGE: 'https://user@example.com/docs',
+      NODE_ENV: 'production',
+    }
+    assert.deepEqual(plainCredentialEnv(vars, []), [
+      { label: 'DATABASE_URL', name: 'DATABASE_URL' },
+      { label: 'CACHE', name: 'CACHE' },
+      { label: 'UPSTREAM_AUTH', name: 'UPSTREAM_AUTH' },
+    ])
+  })
+
+  test("a local plugin's server is marked, so its hint is .mcp.json's host variable", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-plain-env-'))
+    mkdirSync(join(dir, '.claude-plugin'))
+    writeFileSync(join(dir, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'gcp' }))
+    writeFileSync(
+      join(dir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: { bq: { command: 'bq', env: { DB_PASSWORD: 'hunter2-hunter2' } } },
+      }),
+    )
+    try {
+      const env = defineEnvironment('e', ({ plugin, mcp }) => ({
+        plugins: [plugin.local(dir)],
+        mcp: { db: mcp.stdio('db', [], { env: { DB_PASSWORD: 'hunter2-hunter2' } }) },
+      }))
+      const found = plainCredentialEnv({}, env.layers)
+      assert.deepEqual(found, [
+        { label: 'mcp.db.env.DB_PASSWORD', name: 'DB_PASSWORD' },
+        { label: 'mcp.gcp:bq.env.DB_PASSWORD', name: 'DB_PASSWORD', plugin: true },
+      ])
+      assert.match(
+        plainEnvWarning(found[1] as (typeof found)[number]),
+        /To mask it in everything reeval writes, write it as "\$\{DB_PASSWORD\}" in the plugin's \.mcp\.json, so reeval reads it from the host variable DB_PASSWORD\.$/,
+      )
+      assert.doesNotMatch(plainEnvWarning(found[1] as (typeof found)[number]), /secret\.fromEnv/)
+      assert.match(
+        plainEnvError(found[1] as (typeof found)[number], 'evaluate("e")', 'reeval.config.ts'),
+        /To broker it, declare the server with mcp\.stdio\(\) instead of the plugin's \.mcp\.json/,
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the hint names hosts only for a value sent to an HTTPS API', () => {
+    assert.equal(
+      plainEnvWarning({ label: 'mcp.db.env.DB_PASSWORD', name: 'DB_PASSWORD' }),
+      "mcp.db.env.DB_PASSWORD is a plain string that looks like a credential, so it's in the sandbox as its real value. To mask it in everything reeval writes, read it from a host variable with secret.fromEnv('DB_PASSWORD'); to give the agent only a placeholder too, add the hosts it's sent to if that's an HTTPS API, e.g. secret.fromEnv('DB_PASSWORD', { hosts: ['api.example.com'] }).",
+    )
   })
 })
 
