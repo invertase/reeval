@@ -293,7 +293,8 @@ CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
 
 -- Whether each attempt read each skill its environment placed, and at which transcript line.
 -- A read is a tool whose target is under skills/<name>/, or a dedicated load
--- (OpenCode skill, Goose load_skill) whose target is the skill name.
+-- (OpenCode skill, Goose load_skill) whose target is the skill name. An attempt whose record has
+-- tool calls but whose transcript wasn't kept (or couldn't be read) is left out: unknown, not unread.
 CREATE VIEW skill_reads AS
   SELECT a.run_id, a.eval_key, a.cell_key, a.key AS attempt_key, a.id AS attempt_id, c.variant,
     s.name AS skill, s.placement,
@@ -306,7 +307,9 @@ CREATE VIEW skill_reads AS
   FROM attempts a
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
-    AND s.digest = c.environment_digest;
+    AND s.digest = c.environment_digest
+  WHERE a.tools = 0
+    OR EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key);
 
 -- Tool calls per attempt by class: context (a placed skill, rules file or other placed file, a
 -- skill load, an MCP tool of the environment), dependency (node_modules, site-packages, vendor,
@@ -324,6 +327,7 @@ CREATE VIEW context_use AS
 
 -- Each file the environment declared (its skills' files, rules), per attempt: how many tool calls
 -- named it, directly or through a glob, and the first one's transcript line (null: never read).
+-- Left out, like skill_reads, for an attempt whose tool calls weren't read from a transcript.
 CREATE VIEW skill_files AS
   SELECT a.run_id, a.eval_key, a.cell_key, c.environment, a.key AS attempt_key,
     a.id AS attempt_id, x.path,
@@ -334,7 +338,8 @@ CREATE VIEW skill_files AS
   FROM attempt_context x
   JOIN attempts a ON a.run_id = x.run_id AND a.key = x.attempt_key
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
-  WHERE x.declared = 1;
+  WHERE x.declared = 1 AND (a.tools = 0
+    OR EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key));
 
 -- Failed attempts and infra errors (an OOM kill among them) with the cell's harness, model, each
 -- of its environment's skills and the label of the first check that failed.

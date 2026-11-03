@@ -640,7 +640,7 @@ async function runCommand(
 
   const { config } = ctx
   const mode = setup.record
-  const { recordFile } = await import('./history/files.ts')
+  const { readRecord, recordFile } = await import('./history/files.ts')
   // A retry or resume writes its outcomes into the history too, when the run was already recorded
   // there: a resume may finish a retry that was interrupted.
   const rerecord =
@@ -653,7 +653,12 @@ async function runCommand(
   if (autoRecord && record.status !== 'interrupted') {
     const { record: recordCmd } = await import('./commands.ts')
     const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
-    const line = await recordCmd(config, record.runId, { ...flags, ...allow })
+    // A re-record keeps the level the run was recorded at, which `reeval record --artifacts` may
+    // have set.
+    const level = rerecord
+      ? { artifacts: (await readRecord(recordFile(config.history.dir, record.runId))).artifacts }
+      : {}
+    const line = await recordCmd(config, record.runId, { ...flags, ...allow, ...level })
     if (setup.json) console.error(line)
     else console.log(line)
   } else if (autoRecord && notRun > 0 && !stopped) {

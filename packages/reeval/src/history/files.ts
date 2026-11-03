@@ -539,9 +539,10 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
         for (const ref of attemptRefs(a)) await keep(ref)
         continue
       }
-      // Kept beside a failed attempt in its cell: `flaky_cells` tells the checks varying from the
-      // agent by whether a failed attempt's diff matches a passing one's.
-      const diff = level !== 'none' && cellFailed ? a.files.diff : undefined
+      // Kept beside a failed attempt of its cell and case: `flaky_cells`, per case, tells the
+      // checks varying from the agent by whether a failed attempt's diff matches a passing one's.
+      const caseFailed = e.attempts.some((b) => b.cell === a.cell && b.case === a.case && failed(b))
+      const diff = level !== 'none' && caseFailed ? a.files.diff : undefined
       const screenshots = (a.files.artifacts ?? []).filter((r) => shown.has(r.path))
       a.files = {
         ...(diff ? { diff } : {}),
@@ -605,11 +606,17 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   await ensureHistoryGitattributes(options.historyDir)
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
-  if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }
-  const writtenPaths = [
-    written.recordPath,
+  const folderFiles = [
     historyGitignorePath(options.historyDir),
     historyGitattributesPath(options.historyDir),
+  ]
+  if (!written.created) {
+    const ignored = await ignoredRecordedFiles(options.root, folderFiles)
+    return { ...written, files: files.size, bytes, droppedPatch, ignored }
+  }
+  const writtenPaths = [
+    written.recordPath,
+    ...folderFiles,
     ...[...files.keys()].map((path) =>
       join(written.artifactDir ?? options.historyDir, ...path.split('/')),
     ),

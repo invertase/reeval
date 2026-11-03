@@ -47,4 +47,6 @@ export default defineConfig({
   runs: 1,
   timeout: '4m',
   budget: { attempts: 1 },
+  // The eval passes, and studio build serves its recorded transcript.
+  history: { artifacts: 'all' },
 })

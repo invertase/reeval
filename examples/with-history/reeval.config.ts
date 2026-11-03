@@ -20,7 +20,7 @@ export default defineConfig({
   }),
   sandbox: fakeSandbox(),
   // Every run is copied into ./history to commit; only failing attempts keep their transcripts,
-  // diffs and logs.
+  // diffs and logs, which is history.artifacts' default.
   record: 'always',
   history: { dir: 'history', artifacts: 'failures' },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own

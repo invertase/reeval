@@ -175,6 +175,11 @@ describe('recording runs into evals/.history', () => {
         'GitHub collapses recorded files in review',
       )
     }
+    assert.equal(
+      sh(p.dir, 'check-attr', 'linguist-generated', '--', `${HISTORY}/notes.md`),
+      `${HISTORY}/notes.md: linguist-generated: unspecified`,
+      'a file that is no run of the history folder stays reviewable',
+    )
     assert.match(
       (await runCli(p.dir, ['record', run.runId, '--artifacts', 'all'])).stdout,
       /already recorded/,
@@ -243,6 +248,30 @@ describe('recording runs into evals/.history', () => {
       /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)$/m,
     )
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    const again = await runCli(p.dir, ['record', '--artifacts', 'all'])
+    assert.equal(again.code, 0, again.stderr)
+    assert.match(
+      again.stdout,
+      /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)\n.* is already recorded$/m,
+      'a run already recorded still names the folder file git drops',
+    )
+  })
+
+  test("an existing .gitattributes keeps its lines and gains the history's", async () => {
+    const p = await gitProject('record-gitattributes', { 'evals/agent.eval.ts': agent() })
+    mkdirSync(join(p.dir, HISTORY), { recursive: true })
+    const own = '*.png binary'
+    await writeFile(join(p.dir, HISTORY, '.gitattributes'), own)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const path = join(p.dir, HISTORY, '.gitattributes')
+    assert.equal(readFileSync(path, 'utf8'), `${own}\n${HISTORY_GITATTRIBUTES}`)
+    const [runId] = recordedRuns(p.dir)
+    assert.equal(
+      sh(p.dir, 'check-attr', 'linguist-generated', '--', `${HISTORY}/${runId}.json`),
+      `${HISTORY}/${runId}.json: linguist-generated: true`,
+    )
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal(readFileSync(path, 'utf8'), `${own}\n${HISTORY_GITATTRIBUTES}`, 'added once')
   })
 
   test('git check-ignore -v lines name the rule and its source', () => {
@@ -404,6 +433,31 @@ evaluate(
     )
     const passDir = run.evals.find((e) => e.name === 'passes')?.slug ?? 'x'
     assert.ok(!existsSync(join(dir, passDir)), 'nothing on disk for the passing eval')
+  })
+
+  test("'failures' keeps a passing attempt's diff beside a failure of its own case only", async () => {
+    const p = await gitProject('record-cases-diff', {
+      'evals/cases.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
+  await c.send(k)
+  expect(k === 'a' && c.attempt.n === 1, 'first a fails').toBe(false)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 1)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir, { history: HISTORY })
+    const kept = run.evals[0]?.attempts.map((a) => [a.case, a.n, a.outcome, Object.keys(a.files)])
+    assert.deepEqual(
+      kept?.map(([k, n, outcome, files]) => [k, n, outcome, (files as string[]).includes('diff')]),
+      [
+        ['a', 1, 'fail', true],
+        ['a', 2, 'pass', true],
+        ['b', 1, 'pass', false],
+        ['b', 2, 'pass', false],
+      ],
+    )
   })
 
   test('artifact levels, and config.record modes', async () => {

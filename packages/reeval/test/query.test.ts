@@ -551,6 +551,11 @@ evaluate('loads', { environments: skilled }, async (c) => {
       'SELECT skill, reads, read_line IS NOT NULL AS opened FROM skill_reads',
     )
     assert.deepEqual(rows, [{ skill: 'house-greeting', reads: 1, opened: 1 }])
+
+    // Recorded with history.artifacts' default, the passing attempt keeps no transcript: its
+    // reads are unknown, so it has no row rather than a row saying it never read the skill.
+    assert.equal((await runCli(p.dir, ['record'])).code, 0)
+    assert.deepEqual(await query(p.dir, 'SELECT skill FROM skill_reads'), [])
   })
 
   test('a shell word with an unbalanced [ is read literally, not as a regex', async () => {
@@ -953,6 +958,44 @@ describe('context_use and skill_files on real runs', () => {
       unclaimed[0]?.n,
       0,
       'a CLI\u2019s own skills and home config are not the environment\u2019s',
+    )
+  })
+
+  test('an attempt whose transcript is gone has no skill_files or skill_reads rows', async () => {
+    const p = await fixture('fixtures/records/real-contract')
+    rmSync(
+      join(
+        p.dir,
+        'evals/.history/20260929T033538Z_nogit_runner_f3z3',
+        'evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/transcript.jsonl',
+      ),
+    )
+    const harnesses = async (sql: string) => {
+      const r = await runCli(p.dir, ['query', sql, '--json'])
+      assert.equal(r.code, 0, r.stderr)
+      const rows = JSON.parse(r.stdout) as Array<{ attempt_id: string }>
+      return rows.map((row) => row.attempt_id.split(':')[0]).sort()
+    }
+    assert.deepEqual(
+      await harnesses(
+        "SELECT attempt_id FROM skill_files WHERE eval_key = 'evals/skill.eval.ts › skill' AND path LIKE '%/contract-probe/SKILL.md'",
+      ),
+      ['codex', 'cursor'],
+      "Claude Code's reads are unknown, not none",
+    )
+    assert.deepEqual(
+      await harnesses(
+        "SELECT attempt_id FROM skill_reads WHERE eval_key = 'evals/skill.eval.ts › skill'",
+      ),
+      ['codex', 'cursor'],
+    )
+    assert.ok(
+      (
+        await harnesses(
+          "SELECT attempt_id FROM skill_reads WHERE eval_key = 'evals/skill.eval.ts › skill canary'",
+        )
+      ).includes('claude-code'),
+      'an attempt with no tool calls read nothing, and says so',
     )
   })
 })

@@ -20,6 +20,9 @@ describe('missingReason', () => {
   test('artifact flags win over a recorded path', () => {
     assert.match(missingReason({ artifacts: 'all' }, true, true), /--no-artifacts/)
     assert.match(missingReason({ artifacts: 'none' }, false, true), /--artifacts none/)
-    assert.match(missingReason({ artifacts: 'failures' }, false, true), /--artifacts failures/)
+    assert.match(
+      missingReason({ artifacts: 'failures' }, false, true),
+      /history\.artifacts' default, failures/,
+    )
   })
 })
