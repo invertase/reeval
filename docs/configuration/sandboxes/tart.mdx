@@ -29,9 +29,15 @@ export default defineConfig({
 })
 ```
 
-Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. When the Tart Guest Agent doesn't answer and `ssh: { key }` is set, it uses SSH instead. The clone is deleted when the attempt ends, and a canceled run's clones when the run does. For each option, see [the `tart()` options](/reference/options#tart).
+Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. Without the Tart Guest Agent, `ssh: { key }` uses SSH instead. Each clone is deleted when its attempt, or a canceled run, ends. For each option, see [the `tart()` options](/reference/options#tart).
 
 ## Real agents
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({})
+```
 
 ```ts title="evals/mac.eval.ts"
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
@@ -52,7 +58,7 @@ evaluate('swift-version', {
 })
 ```
 
-Each attempt installs the Cursor SDK with npm as it starts. Clients other than Node get the system's CA bundle plus the gateway's CA in `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`. reeval also tries the System keychain, and logs a failure.
+Each attempt installs the Cursor SDK with npm as it starts; its setup takes about 40s on a Mac Studio. Clients other than Node get the system's CA bundle plus the gateway's CA in `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`. reeval also tries the System keychain, and logs a failure.
 
 ## Images
 
