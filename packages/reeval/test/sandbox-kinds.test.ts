@@ -3,11 +3,13 @@
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { describe, test } from 'node:test'
+import { setupAllowance } from '../src/attempt/index.ts'
 import { resolveConfig } from '../src/config.ts'
 import { SANDBOX_EGRESS } from '../src/egress.ts'
 import { agentSandboxProblem } from '../src/harness/agent.ts'
 import { AGENTS, unverifiedHarness } from '../src/harness/agents.ts'
 import { fakeHarness } from '../src/harness.ts'
+import type { PlannedAttempt } from '../src/options.ts'
 import { planEval } from '../src/plan-eval.ts'
 import {
   capabilitiesOf,
@@ -129,6 +131,21 @@ describe('sandbox kinds', () => {
       pluginBuilds: false,
       harnesses: ['cursor'],
     })
+  })
+
+  test("a sandbox that boots a VM or builds an image at start widens the attempt's limit", () => {
+    const allowance = (sandbox: SandboxDescriptor) =>
+      setupAllowance({
+        sandbox,
+        harness: fakeHarness(),
+        environment: { layers: [] },
+      } as unknown as PlannedAttempt)
+    const plain = allowance(docker())
+    const booting = [boat(), boat({ type: 'large' }), tart({ image: IMAGE }), docker({ from: 'x' })]
+    for (const sandbox of booting)
+      assert.ok(allowance(sandbox) > plain, sandboxKind(sandbox).id(sandbox))
+    assert.deepEqual(new Set(booting.map(allowance)).size, 1)
+    assert.equal(allowance(fakeSandbox()), plain)
   })
 
   test('what a Docker sandbox widens is its own privileges; the fake one widens none', () => {
