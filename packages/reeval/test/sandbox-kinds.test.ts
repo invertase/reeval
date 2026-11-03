@@ -284,7 +284,10 @@ describe('the Tart provider', () => {
       provider?.key(tart({ image: 'a', cpus: 8 }), { kind: 'fake' }),
       provider?.key(sandbox, { kind: 'fake' }),
     )
-    assert.match(provider?.key(sandbox, { kind: 'pi' }) ?? '', /^\{"image":"a","bake":"pi-\d+\.\d+\.\d+"\}$/)
+    assert.match(
+      provider?.key(sandbox, { kind: 'pi' }) ?? '',
+      /^\{"image":"a","bake":"pi-\d+\.\d+\.\d+"\}$/,
+    )
     assert.match(
       provider?.key(sandbox, { kind: 'fake', bootstrap: 'true' }) ?? '',
       /"bake":"fake-[0-9a-f]{8}"/,

@@ -608,7 +608,7 @@ export async function pullTartImages(
     const image = o.ok ? vmImage(o.handle) : null
     const baked = o.ok ? bakedImage(o.handle) : null
     return image
-      ? { ...t, ok: true, image: baked ? { ref: baked, digest: null } : image, ms: o.ms }
+      ? { ...t, ok: true, image: baked ? { ref: baked, digest: image.digest } : image, ms: o.ms }
       : {
           ...t,
           ok: false,

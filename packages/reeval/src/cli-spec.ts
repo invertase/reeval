@@ -319,7 +319,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 at a time, and reports every failure; exit 3 if any image failed.
                                 Pulls the tart() images Tart doesn't have, with tart pull, once the
                                 disk has room for them, counting what Tart prunes from its cache
-                                (exit 3 if not); runs no Docker without a Docker sandbox
+                                (exit 3 if not), then bakes each real harness's CLI into a local copy
+                                of its image that attempts clone; runs no Docker without a Docker
+                                sandbox
     --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
     --force                     Rebuild every image, pulling each base again

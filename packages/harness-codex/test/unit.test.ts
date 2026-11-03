@@ -43,7 +43,7 @@ test("the bootstrap installs the pinned Codex build for the sandbox's OS and arc
   assert.match(CODEX_INSTALL_COMMAND, /does not match its sha512/)
 })
 
-test("each OS and arch picks its own build, triple and sha512, and any other is refused", () => {
+test('each OS and arch picks its own build, triple and sha512, and any other is refused', () => {
   const picks = CODEX_INSTALL_COMMAND.slice(0, CODEX_INSTALL_COMMAND.indexOf('esac') + 4)
   const pick = (os: string, arch: string) => {
     const bin = mkdtempSync(join(tmpdir(), 'uname-'))

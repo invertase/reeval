@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { adapterVersion } from '@reeval/sandbox-docker'
+import { fakeBootstrapScript } from '../src/harness/fake-bootstrap.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import {
   createTartSandbox,
@@ -14,8 +16,6 @@ import {
   sshGuest,
   vmPrefix,
 } from '../src/sandbox/tart.ts'
-import { adapterVersion } from '@reeval/sandbox-docker'
-import { fakeBootstrapScript } from '../src/harness/fake-bootstrap.ts'
 import { bakedTartImage, bakeTartImage, type TartBake, tartBake } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
 import type { HarnessDescriptor, TartSandboxDescriptor } from '../src/types.ts'

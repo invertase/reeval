@@ -21,7 +21,10 @@ const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 describe('harness bootstraps on macOS', { skip }, () => {
   let fake: ReturnType<typeof installFakeTart>
   before(() => {
-    assert.ok(darwin, `REEVAL_TEST_DARWIN_BOOTSTRAPS=1 needs macOS on arm64 (this is ${process.platform}-${process.arch})`)
+    assert.ok(
+      darwin,
+      `REEVAL_TEST_DARWIN_BOOTSTRAPS=1 needs macOS on arm64 (this is ${process.platform}-${process.arch})`,
+    )
     fake = installFakeTart([IMAGE])
   })
 
@@ -29,11 +32,11 @@ describe('harness bootstraps on macOS', { skip }, () => {
     test(`${kind} bakes with its macOS build`, { timeout: 600_000 }, async () => {
       const bake = tartBake({ kind } as Parameters<typeof tartBake>[0]) as TartBake
       const lines: string[] = []
-      const baked = await bakeTartImage(
-        { kind: 'tart', image: IMAGE },
-        bake,
-        { digest: fakeDigest(IMAGE), signal: new AbortController().signal, log: (l) => lines.push(l) },
-      )
+      const baked = await bakeTartImage({ kind: 'tart', image: IMAGE }, bake, {
+        digest: fakeDigest(IMAGE),
+        signal: new AbortController().signal,
+        log: (l) => lines.push(l),
+      })
       try {
         assert.equal(baked.built, true, lines.join('\n'))
         assert.match(baked.agentVersion ?? '', /\d+\.\d+/, lines.join('\n'))

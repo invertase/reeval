@@ -80,7 +80,11 @@ const slug = (image: string) =>
  * the base's digest (null for a local VM), pnpm and {@link TART_BAKE_REVISION}, so a moved tag or a
  * new adapter bakes anew.
  */
-export const bakedTartImage = (bake: Pick<TartBake, 'label'>, base: string, digest: string | null) =>
+export const bakedTartImage = (
+  bake: Pick<TartBake, 'label'>,
+  base: string,
+  digest: string | null,
+) =>
   `reeval-sandbox-${bake.label}-${slug(base) || 'image'}-${createHash('sha256')
     .update(`${TART_BAKE_REVISION}\0${PNPM_VERSION}\0${base}\0${digest ?? ''}`)
     .digest('hex')
@@ -117,7 +121,9 @@ export async function bakeTartImage(
     const run = async (command: string, what: string) => {
       const r = await session.run({ command, abortSignal: o.signal })
       if (r.exitCode !== 0) {
-        throw new Error(`${what} exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`)
+        throw new Error(
+          `${what} exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
+        )
       }
     }
     await run(`umask 022 && mkdir -p ${q(stateDir)} && chmod 700 ${q(stateDir)}`, 'mkdir')
