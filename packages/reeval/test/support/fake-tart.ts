@@ -10,6 +10,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -137,6 +138,38 @@ export function fakeTart(images: string[] = []): {
     dir,
     env,
     log: () => readFileSync(join(dir, 'log'), 'utf8').split('\n').filter(Boolean),
+  }
+}
+
+/** The loopback port whose listener is {@link holdLoopback}'s lock. */
+const LOOPBACK_LOCK_PORT = 43127
+
+/**
+ * Holds this machine's loopback for one process's fake VMs until the returned release. Every
+ * fake VM's gateway forwarder binds the same port on it, so a fake VM in another test process
+ * would leave this one's VMs without a gateway. The lock is a listener on its own port: taking
+ * it is atomic, and the kernel frees it when its holder dies. Waits up to 120s, under a CI
+ * file's 300s timeout.
+ */
+export async function holdLoopback(): Promise<() => void> {
+  const deadline = Date.now() + 120_000
+  for (;;) {
+    const server = createServer()
+    const error = await new Promise<NodeJS.ErrnoException | undefined>((resolve) => {
+      server.once('error', resolve)
+      server.listen(LOOPBACK_LOCK_PORT, '127.0.0.1', () => resolve(undefined))
+    })
+    if (!error) {
+      server.unref()
+      return () => {
+        server.close()
+      }
+    }
+    if (error.code !== 'EADDRINUSE') throw error
+    if (Date.now() > deadline) {
+      throw new Error(`another process held 127.0.0.1:${LOOPBACK_LOCK_PORT} for 120s`)
+    }
+    await new Promise((r) => setTimeout(r, 100))
   }
 }
 

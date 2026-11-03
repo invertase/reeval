@@ -5,12 +5,12 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { after, describe, test } from 'node:test'
+import { after, before, describe, test } from 'node:test'
 import { DEFAULT_IMAGE } from '@reeval/sandbox-docker'
 import { createSandbox, type Sandbox } from '../src/sandbox/index.ts'
 import type { SandboxDescriptor } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
-import { installFakeTart } from './support/fake-tart.ts'
+import { holdLoopback, installFakeTart } from './support/fake-tart.ts'
 
 const dockerReady = (() => {
   try {
@@ -23,7 +23,12 @@ const dockerReady = (() => {
 const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 
 let fakeTartDir: string | undefined
-const kinds: Array<{ name: string; descriptor: () => SandboxDescriptor; skip: string | false }> = [
+const kinds: Array<{
+  name: string
+  descriptor: () => SandboxDescriptor
+  skip: string | false
+  loopback?: true
+}> = [
   { name: 'fake', descriptor: () => ({ kind: 'fake', dir: tempDir('contract') }), skip: false },
   {
     name: 'docker',
@@ -37,6 +42,7 @@ const kinds: Array<{ name: string; descriptor: () => SandboxDescriptor; skip: st
       return { kind: 'tart', image: 'macos-sequoia-base' }
     },
     skip: process.platform === 'win32' && 'the fake tart is a bash script',
+    loopback: true,
   },
 ]
 
@@ -75,7 +81,17 @@ for (const kind of kinds) {
       })
       return box
     }
-    after(() => box?.destroy())
+    let release = () => {}
+    before(async () => {
+      if (kind.loopback) release = await holdLoopback()
+    })
+    after(async () => {
+      try {
+        await box?.destroy()
+      } finally {
+        release()
+      }
+    })
 
     test('writeFile then exec reads it, in the workspace and in ~/', async () => {
       const s = await sandbox()
