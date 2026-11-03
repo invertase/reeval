@@ -1,8 +1,8 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index 8a4d7c5c37e66b07c0fe2c256e37035dc16bc384..2ed371c0a5f238c57f7d1db56ba9266acac98f95 100644
+index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..fbc55c16a45e3d1d8e7fd0e7b665d0d470917f90 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
-@@ -731,7 +731,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
+@@ -732,7 +732,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
  	let streamStarted = false;
  	return (msg) => {
  		const type = msg.type;

@@ -27,9 +27,9 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.170",
+    "@ai-sdk/harness": "1.0.172",
     "@ai-sdk/provider": "4.0.35",
-    "@ai-sdk/provider-utils": "5.0.72",
+    "@ai-sdk/provider-utils": "5.0.73",
     "zod": "4.6.7"
   }
 }
