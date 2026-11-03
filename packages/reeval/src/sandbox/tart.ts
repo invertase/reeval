@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
 import { Readable } from 'node:stream'
 import {
+  BRIDGE_PORT,
   CA_PATH,
   type DockerSession,
   type EgressStatus,
@@ -557,7 +558,7 @@ export function tartSession(o: TartSessionOptions): DockerSession {
     id: vm,
     description,
     defaultWorkingDirectory: home,
-    ports: [],
+    ports: [BRIDGE_PORT],
     get egress(): EgressStatus | undefined {
       if (!gateway) return o.noGateway ? { active: false, reason: o.noGateway } : undefined
       return gateway.stopped ? { active: false, reason: gateway.stopped } : { active: true }
