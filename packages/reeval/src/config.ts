@@ -636,7 +636,7 @@ export function resolveConfig(
   if (!RECORD.includes(record)) {
     throw new UsageError(`record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(record)})`)
   }
-  const artifacts = user.history?.artifacts ?? 'all'
+  const artifacts = user.history?.artifacts ?? 'failures'
   if (!ARTIFACTS.includes(artifacts)) {
     throw new UsageError(
       `history.artifacts in ${file} is ${oneOf(ARTIFACTS)} (got ${JSON.stringify(artifacts)})`,

@@ -2,7 +2,7 @@
 
 **Shows:** recording runs and comparing two of them. The agent adds `multiply(a, b)` to a small
 package. `record: 'always'` copies every run into `history/` to commit, `history.artifacts` keeps
-the transcripts and diffs of failing attempts only, and `reeval history` and `reeval compare` read
+the transcripts and diffs of failing attempts only (its default), and `reeval history` and `reeval compare` read
 it back.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root

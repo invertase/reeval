@@ -110,6 +110,8 @@ export default defineConfig({
   harnesses: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }) },
+  // Passing attempts keep their files too, so every attempt page has something to show.
+  history: { artifacts: 'all' },
   // Answers the pairwise questions: the attempt whose diff says Ahoy wins, then the one that
   // defaults the name. review.eval.ts's second question fails at the model. The per-attempt
   // question answers yes when the diff defaults the name.

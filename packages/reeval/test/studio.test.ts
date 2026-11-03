@@ -112,15 +112,18 @@ const records = new Map<string, RunRecord>()
 before(async () => {
   const p = await project('studio', {
     '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
-    // The question's model picks whichever attempt it's shown first.
+    // The question's model picks whichever attempt it's shown first. Passing attempts keep their
+    // files, which the studio serves.
     'reeval.config.ts': fakeConfig({
       harness: agent,
-      extra: "analysis: { model: { kind: 'fake-analysis', vote: 'A' } },",
+      extra:
+        "analysis: { model: { kind: 'fake-analysis', vote: 'A' } }, history: { artifacts: 'all' },",
     }),
     'evals/hello.eval.ts': evalFile,
     'reeval.fail.config.ts': fakeConfig({
       harness: agent,
       judge: '{ model: fakeJudge({ score: 0.2 }) }',
+      extra: "history: { artifacts: 'all' },",
     }),
   })
   dir = p.dir

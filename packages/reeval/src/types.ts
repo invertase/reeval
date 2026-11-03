@@ -2097,7 +2097,10 @@ export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
 export type HistoryConfig = {
   /** Committed history folder (default: `.history` in the directory the evals live in). */
   dir?: string
-  /** Artifacts recorded next to each run: every attempt's, failed attempts' only, or none. */
+  /**
+   * Artifacts recorded next to each run: every attempt's, failed attempts' only (the default), or
+   * none. The setup log and each `c.exec` log are an attempt's artifacts too.
+   */
   artifacts?: ArtifactLevel
 }
 

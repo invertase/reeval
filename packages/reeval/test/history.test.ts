@@ -9,7 +9,11 @@ import { defineEnvironment } from '../src/environment.ts'
 import { optionsHash } from '../src/eval-source.ts'
 import { fakeHarness } from '../src/harness.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
-import { HISTORY_GITIGNORE, parseCheckIgnore } from '../src/history/ignore.ts'
+import {
+  HISTORY_GITATTRIBUTES,
+  HISTORY_GITIGNORE,
+  parseCheckIgnore,
+} from '../src/history/ignore.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { sha256 } from '../src/ids.ts'
@@ -56,6 +60,21 @@ const logged = `import { evaluate, expect } from 'reeval'
 evaluate('logged', async (c) => {
   await c.send('write hello.txt')
   await expect(c.exec('echo ok')).toSucceed()
+})
+`
+/** An eval whose environment has a setup step, so its attempt writes setup.log and checks/1.log. */
+const setUp = (
+  name: string,
+  command: string,
+) => `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const environment = defineEnvironment('set-up', {
+  sandbox: fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) }),
+  setup: [{ run: 'echo ready' }],
+})
+evaluate('${name}', { environments: environment }, async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('${command}')).toSucceed()
 })
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
@@ -118,7 +137,7 @@ describe('recording runs into evals/.history', () => {
     assert.match(state, /\n {2}Judge +fake · threshold 0\.8 · version [0-9a-f]{12}\n/)
     assert.match(state, /\n {2}Context +no skills, rules or MCP config found in the sandbox\n/)
 
-    const r = await runCli(p.dir, ['record'])
+    const r = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(r.code, 0, r.stderr)
     assert.match(
       r.stdout,
@@ -145,7 +164,26 @@ describe('recording runs into evals/.history', () => {
     assert.equal(sh(p.dir, 'status', '--porcelain'), '?? evals/.history/', 'plain files for git')
 
     assert.equal(readFileSync(join(p.dir, HISTORY, '.gitignore'), 'utf8'), HISTORY_GITIGNORE)
-    assert.match((await runCli(p.dir, ['record', run.runId])).stdout, /already recorded/)
+    assert.equal(
+      readFileSync(join(p.dir, HISTORY, '.gitattributes'), 'utf8'),
+      HISTORY_GITATTRIBUTES,
+    )
+    for (const file of [`${run.runId}.json`, `${run.runId}/${trial?.files.transcript?.path}`]) {
+      assert.equal(
+        sh(p.dir, 'check-attr', 'linguist-generated', '--', `${HISTORY}/${file}`),
+        `${HISTORY}/${file}: linguist-generated: true`,
+        'GitHub collapses recorded files in review',
+      )
+    }
+    assert.equal(
+      sh(p.dir, 'check-attr', 'linguist-generated', '--', `${HISTORY}/notes.md`),
+      `${HISTORY}/notes.md: linguist-generated: unspecified`,
+      'a file that is no run of the history folder stays reviewable',
+    )
+    assert.match(
+      (await runCli(p.dir, ['record', run.runId, '--artifacts', 'all'])).stdout,
+      /already recorded/,
+    )
 
     // The history folder and .reeval/ never make the next run dirty.
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -167,7 +205,7 @@ describe('recording runs into evals/.history', () => {
       'evals/logged.eval.ts': logged,
     })
     assert.equal((await runCli(p.dir)).code, 0)
-    const r = await runCli(p.dir, ['record'])
+    const r = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(r.code, 0, r.stderr)
     assert.doesNotMatch(r.stdout + r.stderr, /git ignores/)
     assert.equal(readFileSync(join(p.dir, HISTORY, '.gitignore'), 'utf8'), HISTORY_GITIGNORE)
@@ -187,24 +225,53 @@ describe('recording runs into evals/.history', () => {
     sh(p.dir, 'add', HISTORY)
     assert.match(sh(p.dir, 'diff', '--cached', '--name-only'), /checks\/1\.log/)
     assert.match(sh(p.dir, 'diff', '--cached', '--name-only'), /\.gitignore/)
+    assert.match(sh(p.dir, 'diff', '--cached', '--name-only'), /\.gitattributes/)
   })
 
   test('reeval record warns when git still ignores a written file', async () => {
     const p = await gitProject('record-log-ignored', {
-      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n*.log\n',
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n*.log\n.gitattributes\n',
       'evals/logged.eval.ts': logged,
     })
     mkdirSync(join(p.dir, HISTORY), { recursive: true })
     await writeFile(join(p.dir, HISTORY, '.gitignore'), '# local, no un-ignore\n')
     assert.equal((await runCli(p.dir)).code, 0)
-    const r = await runCli(p.dir, ['record'])
+    const r = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(r.code, 0, r.stderr)
     assert.match(
       r.stdout,
       /^warning: git ignores \d+ recorded file\(s\); they won't be committed:$/m,
     )
     assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\.gitignore:\d+\)$/m)
+    assert.match(
+      r.stdout,
+      /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)$/m,
+    )
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    const again = await runCli(p.dir, ['record', '--artifacts', 'all'])
+    assert.equal(again.code, 0, again.stderr)
+    assert.match(
+      again.stdout,
+      /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)\n.* is already recorded$/m,
+      'a run already recorded still names the folder file git drops',
+    )
+  })
+
+  test("an existing .gitattributes keeps its lines and gains the history's", async () => {
+    const p = await gitProject('record-gitattributes', { 'evals/agent.eval.ts': agent() })
+    mkdirSync(join(p.dir, HISTORY), { recursive: true })
+    const own = '*.png binary'
+    await writeFile(join(p.dir, HISTORY, '.gitattributes'), own)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const path = join(p.dir, HISTORY, '.gitattributes')
+    assert.equal(readFileSync(path, 'utf8'), `${own}\n${HISTORY_GITATTRIBUTES}`)
+    const [runId] = recordedRuns(p.dir)
+    assert.equal(
+      sh(p.dir, 'check-attr', 'linguist-generated', '--', `${HISTORY}/${runId}.json`),
+      `${HISTORY}/${runId}.json: linguist-generated: true`,
+    )
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal(readFileSync(path, 'utf8'), `${own}\n${HISTORY_GITATTRIBUTES}`, 'added once')
   })
 
   test('git check-ignore -v lines name the rule and its source', () => {
@@ -336,6 +403,60 @@ evaluate(
         .filter((a) => a.cell === variantCell?.key)
         .every((a) => a.outcome === 'pass' && a.files.transcript),
       "the lift-failed cell keeps its attempts beside the control's failure",
+    )
+  })
+
+  test("history.artifacts defaults to 'failures': a passing attempt keeps no sandbox output", async () => {
+    const p = await gitProject('record-default-level', {
+      'evals/passes.eval.ts': setUp('passes', 'echo ok'),
+      'evals/fails.eval.ts': setUp('fails', 'exit 4'),
+    })
+    const ran = await runCli(p.dir)
+    assert.equal(ran.code, 1, ran.stdout + ran.stderr)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, dir } = readRun(p.dir, { history: HISTORY })
+    assert.equal(run.artifacts, 'failures')
+    const attempt = (name: string) => run.evals.find((e) => e.name === name)?.attempts[0]
+    const fail = attempt('fails')
+    assert.equal(fail?.outcome, 'fail')
+    for (const ref of [fail?.files.setupLog, fail?.files.transcript, fail?.checks[0]?.log]) {
+      assert.ok(ref && existsSync(join(dir, ref.path)), `the failed attempt keeps ${ref?.path}`)
+    }
+    const pass = attempt('passes')
+    assert.equal(pass?.outcome, 'pass')
+    assert.deepEqual(pass?.files, {}, 'no setup.log, transcript or diff for the passing attempt')
+    assert.deepEqual(
+      pass?.checks.map((c) => c.log),
+      [undefined],
+      'no c.exec log for the passing attempt',
+    )
+    const passDir = run.evals.find((e) => e.name === 'passes')?.slug ?? 'x'
+    assert.ok(!existsSync(join(dir, passDir)), 'nothing on disk for the passing eval')
+  })
+
+  test("'failures' keeps a passing attempt's diff beside a failure of its own case only", async () => {
+    const p = await gitProject('record-cases-diff', {
+      'evals/cases.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
+  await c.send(k)
+  expect(k === 'a' && c.attempt.n === 1, 'first a fails').toBe(false)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 1)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir, { history: HISTORY })
+    const kept = run.evals[0]?.attempts.map((a) => [a.case, a.n, a.outcome, Object.keys(a.files)])
+    assert.deepEqual(
+      kept?.map(([k, n, outcome, files]) => [k, n, outcome, (files as string[]).includes('diff')]),
+      [
+        ['a', 1, 'fail', true],
+        ['a', 2, 'pass', true],
+        ['b', 1, 'pass', false],
+        ['b', 2, 'pass', false],
+      ],
     )
   })
 
@@ -533,7 +654,9 @@ evaluate(
     sh(p.dir, 'commit', '-qam', 'config')
     assert.equal((await runCli(p.dir)).code, 0)
     // A token that wasn't in the environment during the run, but is now.
-    const r = await runCli(p.dir, ['record'], { env: { DEPLOY_TOKEN: leaked } })
+    const r = await runCli(p.dir, ['record', '--artifacts', 'all'], {
+      env: { DEPLOY_TOKEN: leaked },
+    })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /Refusing to record .*look like they contain a secret/s)
     assert.match(r.stderr, /\/transcript\.jsonl line \d+: the value of DEPLOY_TOKEN$/m)
@@ -543,7 +666,7 @@ evaluate(
 
     const { dir, evals } = readRun(p.dir)
     await appendFile(join(dir, evals[0]?.trial.files.transcript?.path ?? ''), 'edited\n')
-    const tampered = await runCli(p.dir, ['record'])
+    const tampered = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(tampered.code, 2)
     assert.match(tampered.stderr, /changed since the run wrote it/)
 

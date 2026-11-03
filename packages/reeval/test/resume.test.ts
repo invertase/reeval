@@ -1263,6 +1263,20 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     assert.equal((JSON.parse(json.stdout) as { outcome: string }).outcome, 'fail')
   })
 
+  test('re-records a recorded run at the level it was recorded at', async () => {
+    const p = await project('retry-rerecord-level', failing)
+    assert.equal((await runCli(p.dir, ['run'], outage)).code, 3)
+    const recorded = await runCli(p.dir, ['record', '--artifacts', 'all'])
+    assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+    const r = await runCli(p.dir, ['run', '--retry-errors'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run } = readRun(p.dir, { history: 'evals/.history' })
+    assert.equal(run.artifacts, 'all', "history.artifacts' default doesn't replace --artifacts all")
+    const passed = run.evals.find((e) => e.name === 'passes')?.attempts[0]
+    assert.equal(passed?.outcome, 'pass')
+    assert.ok(passed?.files.transcript, 'the passing retry keeps its transcript')
+  })
+
   test('leaves a pass and a fail as they were', async () => {
     const p = await project('retry-keeps', failing)
     const first = await runCli(p.dir, ['run'])

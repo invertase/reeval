@@ -198,7 +198,7 @@
 | Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates | ✓ 2 | — | ● 2 | ● 1 | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 1 | — | — | — | — | — |
 | `history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did | ✓ 1 | — | ● 1 | — | — | — |
-| History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them | ✓ 2 | — | — | — | — | — |
+| History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them | ✓ 2 | — | — | — | — | — |
 | `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 4 | — | — | — | — | ◐ 2 (2 without a canary) |
 | `reeval show --trace`: a run's timeline as Chrome Trace Event JSON for Perfetto, attempts in lanes by overlap with their setup, turns, tool calls, checks and judge, from any record | ✓ 2 | — | — | — | — | — |
 | `revision` and the `sources` fingerprint part: an eval's body, options, case data and revision, named by `reeval compare` | ✓ 2 | ✓ 1 | — | — | — | — |

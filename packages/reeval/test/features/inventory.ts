@@ -1619,7 +1619,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history.logs',
     area: 'Records and studio',
-    name: 'History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them',
+    name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',
     unit: ['reeval/test/history.test.ts', 'studio-web/test/artifact.test.ts'],
   },
   {

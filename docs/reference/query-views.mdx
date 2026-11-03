@@ -144,7 +144,7 @@ reeval query "SELECT variant, measure, label, verdict, text, needed FROM measure
 reeval query "SELECT skill, reads, read_line FROM skill_reads"
 ```
 
-A read is a tool target containing `skills/<name>/`, or a `skill`, `Skill`, or `load_skill` call whose target is the skill name.
+A read is a tool target containing `skills/<name>/`, or a `skill`, `Skill`, or `load_skill` call whose target is the skill name. An attempt with tool calls but no kept transcript, such as a passing attempt recorded with `history.artifacts: 'failures'`, has no row in `skill_reads`, `skill_files`, or `context_use`.
 
 ## `context_use`
 
