@@ -208,3 +208,11 @@ The default, `'proxy'`, reaches any host over HTTP(S) through the egress gateway
 else: SSH, a database driver or a raw TCP/UDP client gets `Network is unreachable` (and the run's
 `proxy-only-egress` remark). Set `egress: 'allow-all'` on just the evals that need that; it keeps
 the container's network, so such traffic goes out unrecorded (the record's `egress.partial`).
+
+`egress: { setup, agent }` gives each phase its own policy, in `docker()` and `podman()` only:
+`setup` covers the files and setup steps, `agent` the harness's start, every turn and every check.
+`{ setup: 'allow-all', agent: 'deny-all' }` lets setup install dependencies while the agent
+reaches only its API and the automatic hosts. A phase left out keeps the policy it inherits, and
+the record tags each traffic entry with its `phase`. A connection setup leaves open (a background
+process's tunnel) to a host the agent's policy refuses is closed as the agent starts, and the
+`setup-tunnel-closed` remark flags it.

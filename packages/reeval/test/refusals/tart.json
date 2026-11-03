@@ -19,6 +19,7 @@
   "plan: under the default proxy": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the only way out, but the tart sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in docker().",
   "plan: under deny-all": "UsageError: evaluate(\"e\") runs under egress 'deny-all', which needs turning egress off, but the tart sandbox enforces no egress policy.",
   "plan: under allow-all": null,
+  "plan: egress phases": "UsageError: evaluate(\"e\") runs under egress 'allow-all' for setup and 'deny-all' for the agent, but the tart sandbox can't change its egress policy during an attempt. Give both phases one policy, or run it in docker().",
   "plan: cursor": null,
   "plan: pi": null,
   "plan: codex": null,

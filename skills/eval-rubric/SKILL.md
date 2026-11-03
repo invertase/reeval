@@ -88,6 +88,16 @@ about what happened in the run, so it prints in every run it happens.
 **Fix:** broker the secret with the hosts the process sends it to, so it holds a placeholder, or
 start the process from `c.exec` after the agent's turn.
 
+## `setup-tunnel-closed`
+
+Concern. Under `egress: { setup, agent }`, a connection the setup phase opened through the egress
+gateway (a background process's CONNECT tunnel or WebSocket) was still open when the agent phase
+started, and the agent's policy refuses its host, so reeval closed it. The attempt's
+`egress.blocked` has it with `closed: true`. Whatever setup left running lost that connection, so
+a check that relies on it may fail for a reason the agent didn't cause. It's about what happened
+in the run, so it prints in every run it happens. **Fix:** stop the process before setup ends, or
+allow its host in `egress.agent` if the agent's work needs it.
+
 ## `snapshot-too-large`
 
 Concern. An attempt's workspace was over its `snapshot` form's cap (as a directory, 50 MB of

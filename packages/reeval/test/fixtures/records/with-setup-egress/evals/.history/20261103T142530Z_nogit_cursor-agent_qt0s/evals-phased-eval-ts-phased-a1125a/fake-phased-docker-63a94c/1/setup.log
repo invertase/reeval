@@ -1,0 +1,5 @@
+$ curl -sS -m 10 -o /dev/null http://172.30.0.2:18777/
+exit 0 after 80ms
+
+$ setsid nohup node hold.cjs > /dev/null 2>&1 < /dev/null & for i in $(seq 50); do [ -s tunnel.txt ] && break; sleep 0.2; done
+exit 0 after 273ms

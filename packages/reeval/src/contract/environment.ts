@@ -13,7 +13,7 @@ import type {
 import { boatSandboxSchema } from './boat.ts'
 import { dockerSandboxSchema, fakeSandboxSchema } from './docker.ts'
 import {
-  egressPolicySchema,
+  egressSchema,
   envVarsSchema,
   gitWorkspaceSchema,
   hostFileSchema,
@@ -51,7 +51,7 @@ export const environmentSpecSchema = z.strictObject({
   sandbox: sandboxDescriptorSchema.optional(),
   workspace: gitWorkspaceSchema.optional(),
   env: envVarsSchema.optional(),
-  egress: egressPolicySchema.optional(),
+  egress: egressSchema.optional(),
   files: z.record(z.string(), z.union([z.string(), hostFileSchema])).optional(),
   rules: z.union([z.string(), hostFileSchema]).optional(),
   setup: z.array(setupStepSchema).optional(),

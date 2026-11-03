@@ -766,6 +766,10 @@ DockerSandboxDescriptor = TypedDict(
 Duration: TypeAlias = "float | str"
 
 
+# One policy for the whole attempt, or one per phase.
+Egress: TypeAlias = "EgressPolicy | PhasedEgress"
+
+
 class EgressPolicyAllow(TypedDict):
     allow: list[str]
 
@@ -805,8 +809,9 @@ class EnvironmentLayer(TypedDict):
 
 # What an eval runs in: the declarative, phased spec of one environment.
 class EnvironmentSpec(TypedDict):
-    # Replaces the inherited policy; an `extend` child's replaces its parent's.
-    egress: NotRequired[EgressPolicy]
+    # Replaces the inherited policy, per phase: a plain policy sets both, `{ setup, agent }` the
+    # phases it names. An `extend` child's replaces its parent's the same way.
+    egress: NotRequired[Egress]
     # Variables and secrets for the sandbox, merged by name over the parent's.
     env: NotRequired[EnvVars]
     # Workspace-relative, or `~/` for home.
@@ -879,9 +884,9 @@ class EvalOptionsDataCompare(TypedDict):
     capture: NotRequired[CaptureOptions]
     # Environments to run side by side; `control` is what each variant is measured against.
     compare: EvalOptionsDataCompareCompare
-    # Where the sandbox may connect. Replaces the inherited policy: config, profile defaults,
-    # the environment, then groups and the eval.
-    egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsDataCompareEgressAllow]
+    # Where the sandbox may connect. Replaces the inherited policy, per phase: config, profile
+    # defaults, the environment, then groups and the eval.
+    egress: NotRequired[PhasedEgress | Literal["allow-all", "deny-all", "proxy"] | EvalOptionsDataCompareEgressAllow]
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
     # How each cell's attempts decide its outcome; default `'all'`.
@@ -952,9 +957,9 @@ class EvalOptionsData2(TypedDict):
     # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
     # value.
     capture: NotRequired[CaptureOptions]
-    # Where the sandbox may connect. Replaces the inherited policy: config, profile defaults,
-    # the environment, then groups and the eval.
-    egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsData2EgressAllow]
+    # Where the sandbox may connect. Replaces the inherited policy, per phase: config, profile
+    # defaults, the environment, then groups and the eval.
+    egress: NotRequired[PhasedEgress | Literal["allow-all", "deny-all", "proxy"] | EvalOptionsData2EgressAllow]
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
     # What this group or eval runs in: one environment, or a list, each its own cell beside each
@@ -1500,6 +1505,14 @@ class Pattern(TypedDict):
     flags: NotRequired[str]
     # The pattern's source, as `RegExp.prototype.source` gives it.
     regexp: str
+
+
+# An egress policy per phase of the attempt: `setup` covers its files and setup steps, `agent`
+# the harness's start, every turn and every check after them. A phase it leaves unset keeps the
+# policy it inherits.
+class PhasedEgress(TypedDict):
+    agent: NotRequired[EgressPolicy]
+    setup: NotRequired[EgressPolicy]
 
 
 # pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs

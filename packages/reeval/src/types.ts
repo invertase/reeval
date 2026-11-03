@@ -1390,6 +1390,16 @@ export type SetupStep =
 export type EgressPolicy = 'proxy' | 'allow-all' | 'deny-all' | { allow: readonly string[] }
 
 /**
+ * An egress policy per phase of the attempt: `setup` covers its files and setup steps, `agent`
+ * the harness's start, every turn and every check after them. A phase it leaves unset keeps the
+ * policy it inherits.
+ */
+export type PhasedEgress = { setup?: EgressPolicy; agent?: EgressPolicy }
+
+/** One policy for the whole attempt, or one per phase. */
+export type Egress = EgressPolicy | PhasedEgress
+
+/**
  * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
  * is what reeval fetches: the clone URL, or an absolute path for a local repository.
  */
@@ -1425,8 +1435,11 @@ export type EnvironmentSpec = {
   workspace?: GitWorkspace
   /** Variables and secrets for the sandbox, merged by name over the parent's. */
   env?: EnvVars
-  /** Replaces the inherited policy; an `extend` child's replaces its parent's. */
-  egress?: EgressPolicy
+  /**
+   * Replaces the inherited policy, per phase: a plain policy sets both, `{ setup, agent }` the
+   * phases it names. An `extend` child's replaces its parent's the same way.
+   */
+  egress?: Egress
   /** Workspace-relative, or `~/` for home. */
   files?: Record<string, string | HostFile>
   /** Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code. */
@@ -1992,10 +2005,10 @@ type EvalOptionFields<N extends number = number> = {
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
   /**
-   * Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the
-   * environment, then groups and the eval.
+   * Where the sandbox may connect. Replaces the inherited policy, per phase: config, profile
+   * defaults, the environment, then groups and the eval.
    */
-  egress?: EgressPolicy
+  egress?: Egress
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
@@ -2126,8 +2139,8 @@ export type ProfileDefaults = {
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name over the config's. */
   env?: EnvVars
-  /** Where the sandbox may connect; replaces the config's policy. */
-  egress?: EgressPolicy
+  /** Where the sandbox may connect; replaces the config's policy, per phase. */
+  egress?: Egress
   /** Defaults for `c.judge()`, merged field by field over the config's. */
   judge?: ConfigJudgeOptions
   /** Per attempt. */
@@ -2280,8 +2293,8 @@ export type ReevalConfig = {
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
-  /** Where the sandbox may connect; default `'proxy'`. */
-  egress?: EgressPolicy
+  /** Where the sandbox may connect; default `'proxy'` in both phases. */
+  egress?: Egress
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
   /** Per attempt; default `'15m'`. */
@@ -2454,7 +2467,7 @@ export type ResolvedConfig = {
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars
-  egress?: EgressPolicy
+  egress?: Egress
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
   capture: CaptureOptions
@@ -2670,8 +2683,16 @@ export type EnvironmentRecord = {
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
-  /** The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`. */
+  /**
+   * The policy the attempt's agent phase ran under (the harness's start, its turns and the checks),
+   * from the options and the environment; in the digest unless `proxy`.
+   */
   egress: EgressPolicy
+  /**
+   * The policy the setup phase (files and setup steps) ran under, when it wasn't the agent's; in
+   * the digest when set.
+   */
+  setupEgress?: EgressPolicy
   /**
    * This records the Git repository the workspace started as: the repo as written (a local one
    * relative to the project root), the ref and path asked for (null when unset), the commit the
@@ -2697,11 +2718,18 @@ export type EnvironmentRecord = {
  * contains only unexpected refusals. A request that carries the harness's brokered key off the
  * endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked`
  * once per method and path, its `reason` names them, and `connections` counts its requests. Past
- * the first 20 pairs, the rest share one entry per host.
+ * the first 20 pairs, the rest share one entry per host. With a setup policy of its own, every
+ * entry names the `phase` it happened in.
  */
 export type EgressRecord = {
+  /** The agent phase's policy: the harness's start, its turns and the checks. */
   policy: EgressPolicy
   allowed: string[] | null
+  /**
+   * The setup phase's policy (files and setup steps) and the hosts it allowed, when it wasn't the
+   * agent's.
+   */
+  setup?: { policy: EgressPolicy; allowed: string[] | null }
   recorded: boolean
   /**
    * True when traffic could leave around the gateway (`allow-all` in a container that kept its
@@ -2715,21 +2743,43 @@ export type EgressRecord = {
     connections: number
     sent: number
     received: number
+    /** With a setup policy of its own: the phase the connections were made in. */
+    phase?: 'setup' | 'agent'
   }>
   /**
    * Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints
    * reeval brokers it for (one entry per method and path), each with why. A name that didn't
-   * resolve is in `unresolved` instead.
+   * resolve is in `unresolved` instead. A tunnel setup opened to a host the agent's policy refuses
+   * is closed as the agent phase starts, and is here with `closed: true`.
    */
-  blocked: Array<{ host: string; port: number; connections: number; reason: string }>
-  expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
+  blocked: Array<{
+    host: string
+    port: number
+    connections: number
+    reason: string
+    phase?: 'setup' | 'agent'
+    closed?: true
+  }>
+  expectedBlocked: Array<{
+    host: string
+    port: number
+    connections: number
+    reason: string
+    phase?: 'setup' | 'agent'
+  }>
   /**
    * Hosts the policy let through whose names didn't resolve (`metadata.google.internal` outside
    * GCP, say), so the gateway answered 502 with the lookup's error. No policy refused them, so
    * they're never in `blocked`. A record from an older reeval reads it as empty and has them in
    * `blocked`, with a `can't resolve …` or `… has no addresses` reason.
    */
-  unresolved: Array<{ host: string; port: number; connections: number; reason: string }>
+  unresolved: Array<{
+    host: string
+    port: number
+    connections: number
+    reason: string
+    phase?: 'setup' | 'agent'
+  }>
 }
 
 /** The image an attempt's container started from, and how reeval made it. */
@@ -3089,8 +3139,14 @@ export type SandboxWarning = {
   message: string
 }
 
-/** An attempt's egress policy, and the hosts a restricted one allows on top of its own. */
-export type PlannedEgress = { policy: EgressPolicy; auto: string[] }
+/** One phase's egress policy, and the hosts a restricted one allows on top of its own. */
+export type PlannedPhaseEgress = { policy: EgressPolicy; auto: string[] }
+
+/**
+ * An attempt's egress: the agent phase's policy (the harness's start, its turns and the checks),
+ * and `setup`'s when the setup phase (files and setup steps) runs under another.
+ */
+export type PlannedEgress = PlannedPhaseEgress & { setup?: PlannedPhaseEgress }
 
 /** Set when an attempt is registered, so the reporter has it even for skipped attempts. */
 export type AttemptMeta = {

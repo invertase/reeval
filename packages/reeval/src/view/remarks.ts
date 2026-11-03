@@ -27,6 +27,7 @@ export const REMARK_KINDS: Record<Remark['kind'], { severity: 'concern' | 'sugge
   'slow-mcp-start': { severity: 'concern' },
   'proxy-only-egress': { severity: 'concern' },
   'setup-process-secret': { severity: 'concern' },
+  'setup-tunnel-closed': { severity: 'concern' },
   'snapshot-too-large': { severity: 'concern' },
   'observe-throws': { severity: 'concern' },
 }
@@ -47,6 +48,7 @@ export type Remark = {
     | 'slow-mcp-start'
     | 'proxy-only-egress'
     | 'setup-process-secret'
+    | 'setup-tunnel-closed'
     | 'snapshot-too-large'
     | 'observe-throws'
   /** Fixed by kind (`REMARK_KINDS`). */

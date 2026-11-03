@@ -22,7 +22,7 @@ import {
   selectProfile,
   UsageError,
 } from './config.ts'
-import { ciRunner, directOnCloud, isDirect } from './egress.ts'
+import { ciRunner, directOnCloud, isDirect, rootlessPodmanSwitch, setupEgress } from './egress.ts'
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
@@ -1159,7 +1159,11 @@ async function executeRun(
           ...new Set(
             skipped
               .filter((p) => !p.attempt.plan.skip && capabilitiesOf(p.attempt.sandbox).isolated)
-              .filter((p) => isDirect(p.attempt.egress.policy))
+              .filter(
+                (p) =>
+                  isDirect(p.attempt.egress.policy) ||
+                  isDirect(setupEgress(p.attempt.egress).policy),
+              )
               .map((p) => p.id),
           ),
         ]
@@ -1168,6 +1172,26 @@ async function executeRun(
       plan.warnings.push(
         `${directOnCloud(cloud)}. Under it: ${direct.join(', ')}. Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway`,
       )
+    }
+    const switching =
+      concurrency > 1
+        ? [
+            ...new Set(
+              skipped
+                .filter(
+                  ({ attempt }) =>
+                    !attempt.plan.skip &&
+                    !!attempt.egress.setup &&
+                    attempt.sandbox.kind === 'docker' &&
+                    attempt.sandbox.engine === 'podman',
+                )
+                .map((p) => p.id),
+            ),
+          ]
+        : []
+    const { podmanRootless } = await import('./sandbox/providers.ts')
+    if (switching.length && (await podmanRootless())) {
+      plan.warnings.push(rootlessPodmanSwitch(switching))
     }
     plan.warnings.push(...started.notes)
     if (started.narrowed) {

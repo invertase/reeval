@@ -7,7 +7,7 @@ description: An environment spec sets what the agent starts with, built from the
 
 `defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, `plugin`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
 
-A child merges `env`, `files`, and `mcp` by name, `traits` by key, `skills` by skill name, and `plugins` by plugin name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
+A child merges `env`, `files`, and `mcp` by name, `traits` by key, `skills` by skill name, and `plugins` by plugin name, and its value wins. `setup` appends. `sandbox`, `workspace`, and `rules` replace when set, and `egress` replaces each phase it sets. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
 
 For more information about defining an environment, see [Environments](/configuration/environments).
 
@@ -47,8 +47,8 @@ export const chatbot = defineEnvironment('chatbot', ({
   A sandbox string or secret. The name is letters, digits, and `_`, starting with a letter or `_`, and a literal whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, or `CREDENTIAL` stops the run with exit code 2.
 </Property>
 
-<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
-  Where the sandbox may connect. The default is the inherited policy: `'proxy'` permits any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also permits raw TCP and UDP, `'deny-all'` the automatic hosts, and `{ allow }` extra hosts, with `*.example.com` for subdomains.
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] } | { setup?: EgressPolicy; agent?: EgressPolicy }" optional>
+  Where the sandbox may connect. The default is the inherited policy: `'proxy'` permits any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also permits raw TCP and UDP, `'deny-all'` the automatic hosts, and `{ allow }` extra hosts, with `*.example.com` for subdomains. `{ setup, agent }` sets them per phase: `setup` for the files and setup steps, `agent` for the harness's start, its turns and the checks.
 </Property>
 
 <Property name="files" type="Record<string, string | HostFile>" optional>

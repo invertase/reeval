@@ -1,0 +1,2 @@
+$ curl -sS -m 10 -o /dev/null http://172.30.0.2:18777/
+exit 0 after 91ms

@@ -582,6 +582,51 @@ describe('remark thresholds', () => {
     assert.equal(both?.evidence.length, 2)
   })
 
+  test('setup-tunnel-closed: a tunnel setup left open that the switch to the agent closed', async () => {
+    const record = only(await rules(), 'serves')
+    const blocked = (closed?: true) => {
+      const copy = structuredClone(record)
+      const attempt = copy.evals[0]?.attempts[0]
+      if (attempt) {
+        attempt.egress = {
+          policy: 'deny-all',
+          allowed: [],
+          setup: { policy: { allow: ['db.example.com'] }, allowed: ['db.example.com'] },
+          recorded: true,
+          contacted: [],
+          blocked: [
+            {
+              host: 'db.example.com',
+              port: 5432,
+              connections: 1,
+              reason:
+                'a tunnel opened before the agent phase, closed: the policy denies all egress',
+              phase: 'agent',
+              ...(closed ? { closed } : {}),
+            },
+          ],
+          expectedBlocked: [],
+          unresolved: [],
+        }
+      }
+      return copy
+    }
+    const [remark] = raise(blocked(true), NO_HISTORY)
+    assert.equal(remark?.kind, 'setup-tunnel-closed')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      "Setup left a connection open to db.example.com:5432, which the agent's egress refuses, so reeval closed it when the agent started: a process setup started was still using it.",
+    )
+    assert.match(
+      remark?.fix.edit ?? '',
+      /^stop the process before setup ends, or allow db\.example\.com in egress\.agent/,
+    )
+    assert.equal(remark?.evidence.length, 1)
+    // Twin: a refusal that closed no tunnel raises nothing.
+    assert.deepEqual(kinds(blocked(), NO_HISTORY), [])
+  })
+
   test('observe-throws: an observed eval that threw outside an expect in more than half its tries', async () => {
     const record = only(await rules(), 'throws')
     const [remark] = raise(record, NO_HISTORY)

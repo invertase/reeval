@@ -173,6 +173,8 @@ export type ContactedHost = {
   connections: number
   sent: number
   received: number
+  /** The phase it happened in, once a phase is set (see `switchPolicy`). */
+  phase?: string
 }
 /**
  * A host the gateway refused, and why. A request that carries a brokered credential off the
@@ -180,7 +182,16 @@ export type ContactedHost = {
  * own per method and path (past `REFUSED_PATHS` of them, one per host for the rest), and
  * `connections` counts its requests.
  */
-export type BlockedHost = { host: string; port: number; connections: number; reason: string }
+export type BlockedHost = {
+  host: string
+  port: number
+  connections: number
+  reason: string
+  /** The phase it happened in, once a phase is set (see `switchPolicy`). */
+  phase?: string
+  /** A tunnel opened under the policy before, which the new policy refused, so it was closed. */
+  closed?: true
+}
 /**
  * What went through the gateway, sorted by host and port. `blocked` is what the policy refused,
  * and the requests that carry a brokered credential off its endpoints, one entry per method and
@@ -200,6 +211,12 @@ export type EgressProxy = {
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
+  /**
+   * Starts the attempt's next phase under `policy`: later traffic is tagged with `phase`, and each
+   * open tunnel (CONNECT, or a plain WebSocket upgrade) whose host `policy` refuses is closed and
+   * recorded as refused, since a tunnel's host is checked only as it opens.
+   */
+  switchPolicy(policy: NetworkPolicy, phase: string): Promise<void>
   /** Replaces the brokered secrets: each swapped in only on HTTPS to its own hosts. */
   setSubstitutions(subs: readonly Substitution[]): void
   close(): void
@@ -336,8 +353,15 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const locals = options.localResponses ?? []
   const localHosts = locals.map((l) => l.match.host)
   let policyCheck = createPolicyCheck(options.policy, options)
+  /** Bumped by `switchPolicy`: a verdict reached under the policy before it is reached again. */
+  let generation = 0
   const check = async (host: string) => {
-    const verdict = await policyCheck(host)
+    let verdict: Verdict
+    let at: number
+    do {
+      at = generation
+      verdict = await policyCheck(host)
+    } while (at !== generation)
     emit(
       verdict.allowed
         ? { type: 'dns', host, allowed: true, address: verdict.address }
@@ -373,15 +397,25 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const contacted = new Map<string, ContactedHost>()
   const blocked = new Map<string, BlockedHost>()
   const unresolved = new Map<string, BlockedHost>()
+  /** The phase traffic is tagged with; unset until the first `switchPolicy`. */
+  let phase: string | undefined
+  const tagged = () => (phase === undefined ? {} : { phase })
+  const keyed = (key: string) => (phase === undefined ? key : `${phase} ${key}`)
+  /** Each open tunnel's host, which only the policy at its start checked. */
+  const tunnels = new Map<Duplex, { host: string; port: number }>()
+  const holdTunnel = (connection: Duplex, host: string, port: number) => {
+    tunnels.set(connection, { host, port })
+    connection.once('close', () => tunnels.delete(connection))
+  }
   /** The host each sandbox connection's bytes count towards: its latest allowed request's. */
   const counting = new WeakMap<Duplex, ContactedHost>()
   /** Bytes a connection sent before the policy decided whose they are: the request itself. */
   const unclaimed = new WeakMap<Duplex, number>()
   const contact = (connection: Duplex, host: string, port: number) => {
-    const key = `${host}:${port}`
+    const key = keyed(`${host}:${port}`)
     let entry = contacted.get(key)
     if (!entry) {
-      entry = { host, port, connections: 0, sent: 0, received: 0 }
+      entry = { host, port, connections: 0, sent: 0, received: 0, ...tagged() }
       contacted.set(key, entry)
     }
     entry.connections++
@@ -390,9 +424,15 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     counting.set(connection, entry)
   }
   const block = (connection: Duplex, host: string, port: number, verdict: Denied) => {
-    const key = `${host}:${port}`
+    const key = keyed(`${host}:${port}`)
     const into = verdict.status === 502 ? unresolved : blocked
-    const entry = into.get(key) ?? { host, port, connections: 0, reason: verdict.reason }
+    const entry = into.get(key) ?? {
+      host,
+      port,
+      connections: 0,
+      reason: verdict.reason,
+      ...tagged(),
+    }
     entry.connections++
     into.set(key, entry)
     counting.delete(connection)
@@ -408,10 +448,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    */
   const blockRequest = (target: Target, method: string, path: string, reason: string) => {
     const host = `${target.host}:${target.port}`
-    let key = `${host} ${method} ${path}`
+    let key = keyed(`${host} ${method} ${path}`)
     if (!blocked.has(key)) {
       if (refusedPaths >= REFUSED_PATHS) {
-        key = `${host} more`
+        key = keyed(`${host} more`)
         reason = `more requests that carry a brokered credential off the endpoints reeval brokers it for, on paths past the first ${REFUSED_PATHS}`
       } else refusedPaths++
     }
@@ -420,6 +460,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       port: target.port,
       connections: 0,
       reason,
+      ...tagged(),
     }
     entry.connections++
     blocked.set(key, entry)
@@ -540,6 +581,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return reply(socket, verdict.status, refusal(verdict))
       }
       contact(socket, host, port)
+      holdTunnel(socket, host, port)
       const target = { host, port, address: verdict.address }
       if (
         decrypts(rules, host) ||
@@ -639,6 +681,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return res.writeHead(verdict.status).end(`${refusal(verdict)}\n`)
       }
       contact(req.socket, host, port)
+      // Until its response ends, a request (a chunked upload, a streamed download) is a tunnel too.
+      tunnels.set(req.socket, { host, port })
+      res.once('close', () => tunnels.delete(req.socket))
       const target = { host, port, address: verdict.address }
       if (secure) {
         // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
@@ -688,6 +733,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return reply(socket, verdict.status, refusal(verdict))
       }
       contact(socket, host, port)
+      holdTunnel(socket, host, port)
       onPlainUpgrade({ host, port, address: verdict.address }, req, track(socket), head)
     })
   })
@@ -1595,6 +1641,35 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     },
     setPolicy(policy) {
       policyCheck = createPolicyCheck(policy, options)
+    },
+    async switchPolicy(policy, next) {
+      phase = next
+      generation++
+      const recheck = createPolicyCheck(policy, options)
+      policyCheck = recheck
+      // A verdict already reached opens its tunnel in a callback still queued; let those run first.
+      await new Promise((r) => setImmediate(r))
+      await Promise.all(
+        [...tunnels].map(async ([connection, { host, port }]) => {
+          const verdict = await recheck(host)
+          // A name that no longer resolves isn't the policy's refusal: the tunnel already has its peer.
+          if (verdict.allowed || verdict.status === 502 || connection.destroyed) return
+          log(`reeval:egress ${host}:${port} tunnel closed (${verdict.reason})`)
+          tunnels.delete(connection)
+          connection.destroy()
+          const key = keyed(`closed ${host}:${port}`)
+          const entry = blocked.get(key) ?? {
+            host,
+            port,
+            connections: 0,
+            reason: `a tunnel opened before the ${next} phase, closed: ${verdict.reason}`,
+            ...tagged(),
+            closed: true as const,
+          }
+          entry.connections++
+          blocked.set(key, entry)
+        }),
+      )
     },
     setSubstitutions(all) {
       subs = [...all]

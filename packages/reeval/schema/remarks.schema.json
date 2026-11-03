@@ -51,6 +51,7 @@
             "observe-throws",
             "proxy-only-egress",
             "setup-process-secret",
+            "setup-tunnel-closed",
             "slow-mcp-start",
             "snapshot-too-large",
             "too-few-tries"

@@ -13,11 +13,14 @@ import type { VertexSettings } from './gateway/vertex.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
 import { capabilitiesOf, SANDBOX_KINDS, suggestedSandbox } from './sandbox/kinds.ts'
 import type {
+  Egress,
   EgressPolicy,
   EnvironmentLayer,
   EnvVars,
   HarnessDescriptor,
+  PhasedEgress,
   PlannedEgress,
+  PlannedPhaseEgress,
   SandboxDescriptor,
 } from './types.ts'
 import { isCI } from './ui/mode.ts'
@@ -35,6 +38,52 @@ export const SANDBOX_EGRESS = Object.fromEntries(
 
 /** The policy an attempt runs under when nothing sets one. */
 export const DEFAULT_EGRESS: EgressPolicy = 'proxy'
+
+/** The phases an attempt's egress can set a policy for. */
+export type EgressPhase = 'setup' | 'agent'
+
+/** Whether `egress` sets a policy per phase, `{ setup, agent }`, rather than one for both. */
+export const isPhased = (egress: Egress): egress is PhasedEgress =>
+  typeof egress === 'object' && !('allow' in egress)
+
+/** The policy `egress` sets for `phase`: a plain policy sets both; undefined when it sets none. */
+const phaseOf = (egress: Egress | undefined, phase: EgressPhase): EgressPolicy | undefined =>
+  egress === undefined ? undefined : isPhased(egress) ? egress[phase] : egress
+
+/**
+ * `over` set at the same level as `under`, later: a plain policy replaces both phases,
+ * `{ setup, agent }` only the phases it names.
+ */
+export function layerEgress(under: Egress | undefined, over: Egress): Egress {
+  if (!isPhased(over)) return over
+  const setup = over.setup ?? phaseOf(under, 'setup')
+  const agent = over.agent ?? phaseOf(under, 'agent')
+  return {
+    ...(setup !== undefined ? { setup } : {}),
+    ...(agent !== undefined ? { agent } : {}),
+  }
+}
+
+/** Each phase's policy `egress` sets, the default where it sets none. */
+export const phasePolicies = (egress: Egress): Record<EgressPhase, EgressPolicy> => ({
+  setup: phaseOf(egress, 'setup') ?? DEFAULT_EGRESS,
+  agent: phaseOf(egress, 'agent') ?? DEFAULT_EGRESS,
+})
+
+/** `egress` planned with no automatic hosts: what a config-level check can tell of it. */
+export function bareEgress(egress: Egress): PlannedEgress {
+  const { setup, agent } = phasePolicies(egress)
+  return samePolicy(setup, agent)
+    ? { policy: agent, auto: [] }
+    : { policy: agent, auto: [], setup: { policy: setup, auto: [] } }
+}
+
+const policyKey = (p: EgressPolicy) =>
+  typeof p === 'string' ? p : JSON.stringify([...new Set(p.allow)].sort())
+const samePolicy = (a: EgressPolicy, b: EgressPolicy) => policyKey(a) === policyKey(b)
+
+/** The setup phase's planned policy: its own when it differs from the agent's. */
+export const setupEgress = (planned: PlannedEgress): PlannedPhaseEgress => planned.setup ?? planned
 
 /** Whether the policy allows only some hosts: `deny-all` and allowlists. */
 export const isRestricted = (policy: EgressPolicy) => policy !== 'allow-all' && policy !== 'proxy'
@@ -72,31 +121,40 @@ function mcpServerHosts(layers: readonly EnvironmentLayer[]): string[] {
 }
 
 /**
- * The policy an attempt runs under, and the hosts a restricted one allows on its own: the
- * harness's, the brokered secrets' `hosts` and the MCP servers'. The cascade is config and
- * profile defaults (`inherited`), then the environment's layers, then groups and the eval (`own`).
+ * The policy each phase of an attempt runs under, and the hosts a restricted one allows on its
+ * own: the harness's, the brokered secrets' `hosts` and the MCP servers'. Each phase cascades on
+ * its own: config and profile defaults (`inherited`), then the environment's layers, then groups
+ * and the eval (`own`). `setup` is set only when the setup phase's policy differs from the agent's.
  */
 export function plannedEgress(
-  egress: { inherited?: EgressPolicy; own?: EgressPolicy },
+  egress: { inherited?: Egress; own?: Egress },
   harness: HarnessDescriptor,
   env: EnvVars,
   layers: readonly EnvironmentLayer[],
   vertex?: VertexSettings,
 ): PlannedEgress {
-  const fromLayers = layers.findLast((l) => l.spec.egress !== undefined)?.spec.egress
-  const policy = egress.own ?? fromLayers ?? egress.inherited ?? DEFAULT_EGRESS
-  if (!isRestricted(policy)) return { policy, auto: [] }
-  const own = policy === 'deny-all' ? [] : policy.allow
-  const auto = [
-    ...harnessHosts(harness, vertex),
-    ...plannedSecrets(env, layers).flatMap((s) => s.hosts ?? []),
-    ...mcpServerHosts(layers),
-  ]
-  return { policy, auto: [...new Set(auto)].filter((h) => !own.includes(h)) }
+  const pick = (phase: EgressPhase) =>
+    phaseOf(egress.own, phase) ??
+    layers.map((l) => phaseOf(l.spec.egress, phase)).findLast((p) => p !== undefined) ??
+    phaseOf(egress.inherited, phase) ??
+    DEFAULT_EGRESS
+  const phase = (policy: EgressPolicy): PlannedPhaseEgress => {
+    if (!isRestricted(policy)) return { policy, auto: [] }
+    const own = policy === 'deny-all' ? [] : policy.allow
+    const auto = [
+      ...harnessHosts(harness, vertex),
+      ...plannedSecrets(env, layers).flatMap((s) => s.hosts ?? []),
+      ...mcpServerHosts(layers),
+    ]
+    return { policy, auto: [...new Set(auto)].filter((h) => !own.includes(h)) }
+  }
+  const agent = phase(pick('agent'))
+  const setup = pick('setup')
+  return samePolicy(setup, agent.policy) ? agent : { ...agent, setup: phase(setup) }
 }
 
 /** Every host a restricted policy lets through, or null under `proxy` and `allow-all`. */
-export function allowedHosts({ policy, auto }: PlannedEgress): string[] | null {
+export function allowedHosts({ policy, auto }: PlannedPhaseEgress): string[] | null {
   if (!isRestricted(policy)) return null
   return [...new Set([...(policy === 'deny-all' ? [] : policy.allow), ...auto])]
 }
@@ -107,7 +165,7 @@ export function allowedHosts({ policy, auto }: PlannedEgress): string[] | null {
  * restricted policy allows no host at all, else an allowlist. A listed IP address is an allowed
  * range too, since the gateway reaches a private address only through one.
  */
-export function gatewayPolicy(planned: PlannedEgress): NetworkPolicy {
+export function gatewayPolicy(planned: PlannedPhaseEgress): NetworkPolicy {
   const hosts = allowedHosts(planned)
   if (hosts === null) return { mode: 'allow-all' }
   if (!hosts.length) return { mode: 'deny-all' }
@@ -116,25 +174,41 @@ export function gatewayPolicy(planned: PlannedEgress): NetworkPolicy {
 }
 
 /** What enforcing the policy takes: nothing, turning egress off, or a host allowlist. */
-export function egressNeeds(planned: PlannedEgress): EgressCapabilities['enforce'] {
+export function egressNeeds(planned: PlannedPhaseEgress): EgressCapabilities['enforce'] {
   if (!isRestricted(planned.policy)) return 'none'
   return allowedHosts(planned)?.length ? 'allowlist' : 'all-or-nothing'
 }
 
 const LEVELS: EgressCapabilities['enforce'][] = ['none', 'all-or-nothing', 'allowlist']
 
-/** Why the sandbox can't enforce the attempt's policy, or undefined when it can. */
+/** Why the sandbox can't enforce the attempt's policies, or undefined when it can. */
 export function unenforceable(
   planned: PlannedEgress,
   sandbox: SandboxDescriptor,
   where: string,
+): string | undefined {
+  if (!planned.setup) return unenforceablePhase(planned, sandbox, where, 'egress')
+  if (!capabilitiesOf(sandbox).egress.switches) {
+    return `${where} runs under egress ${describeEgress(planned.setup.policy)} for setup and ${describeEgress(planned.policy)} for the agent, but the ${sandbox.kind} sandbox can't change its egress policy during an attempt. Give both phases one policy, or run it in ${suggestedSandbox((c) => c.isolated && c.egress.switches)}.`
+  }
+  return (
+    unenforceablePhase(planned.setup, sandbox, where, 'egress.setup') ??
+    unenforceablePhase(planned, sandbox, where, 'egress.agent')
+  )
+}
+
+function unenforceablePhase(
+  planned: PlannedPhaseEgress,
+  sandbox: SandboxDescriptor,
+  where: string,
+  key: string,
 ): string | undefined {
   const capabilities = capabilitiesOf(sandbox)
   const can = capabilities.egress.enforce
   // `proxy` promises the gateway is the only way out, which a sandbox of its own that enforces
   // nothing can't keep; on the host (the fake sandbox) there's no way out to close.
   if (planned.policy === 'proxy' && capabilities.isolated && can === 'none') {
-    return `${where} runs under egress 'proxy', where the egress gateway is the only way out, but the ${sandbox.kind} sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in ${suggestedSandbox((c) => c.isolated && c.egress.enforce !== 'none')}.`
+    return `${where} runs under ${key} 'proxy', where the egress gateway is the only way out, but the ${sandbox.kind} sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set ${key}: 'allow-all' to run it there, or run it in ${suggestedSandbox((c) => c.isolated && c.egress.enforce !== 'none')}.`
   }
   const needs = egressNeeds(planned)
   if (LEVELS.indexOf(can) >= LEVELS.indexOf(needs)) return undefined
@@ -154,8 +228,8 @@ export function unenforceable(
   )
   const hint = capabilities.isolated
     ? ''
-    : ` (its commands run on the host). ${enforcing ? `Run it in ${enforcing}, or set` : 'Set'} egress: 'allow-all'`
-  return `${where} runs under egress ${describeEgress(planned.policy)}, which needs ${what}, but the ${sandbox.kind} sandbox ${enforces}${hint}.`
+    : ` (its commands run on the host). ${enforcing ? `Run it in ${enforcing}, or set` : 'Set'} ${key}: 'allow-all'`
+  return `${where} runs under ${key} ${describeEgress(planned.policy)}, which needs ${what}, but the ${sandbox.kind} sandbox ${enforces}${hint}.`
 }
 
 const describeEgress = (policy: EgressPolicy) =>
@@ -179,8 +253,25 @@ export function ciRunner(env: NodeJS.ProcessEnv): string | null {
 export const directOnCloud = (where: string) =>
   `egress 'allow-all' on ${where}: anything in the sandbox can reach the cloud metadata service (169.254.169.254, which hands out the machine's credentials), the host's network and its services around the egress gateway, unfiltered and unrecorded`
 
-/** `deny-all + auto: api2.cursor.sh, …` or `allow-all` for the plan; '' under `proxy`, the default. */
-export function egressLabel({ policy, auto }: PlannedEgress): string {
+/**
+ * What running attempts with a setup policy of their own (`ids`) side by side on rootless Podman
+ * risks: a container leaving Podman's bridge, as one does at the switch, can cut the others on it
+ * off from the host for seconds.
+ */
+export const rootlessPodmanSwitch = (ids: readonly string[]) =>
+  `phased egress on rootless Podman: at the switch to the agent's policy an attempt's container leaves Podman's bridge network, which can cut the other containers on it off from the host for seconds, failing their direct connections (allow-all, and setup steps under it). Under it: ${ids.join(', ')}. Run with --concurrency 1, or on docker(), when those connections matter`
+
+/**
+ * `deny-all + auto: api2.cursor.sh, …` or `allow-all` for the plan; '' under `proxy`, the default.
+ * With a setup policy of its own, `setup allow-all · agent deny-all + auto: …`.
+ */
+export function egressLabel(planned: PlannedEgress): string {
+  if (!planned.setup) return phaseLabel(planned)
+  return `setup ${phaseLabel(planned.setup) || 'proxy'} · agent ${phaseLabel(planned) || 'proxy'}`
+}
+
+/** One phase's policy and automatic hosts, or `''` for the default, `proxy`. */
+export function phaseLabel({ policy, auto }: PlannedPhaseEgress): string {
   if (policy === 'proxy') return ''
   if (policy === 'allow-all') return 'allow-all'
   const own =

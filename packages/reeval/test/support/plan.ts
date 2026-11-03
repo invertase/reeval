@@ -110,7 +110,10 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
           c.files ? `files ${c.files.join(', ')}` : '',
           c.plugins ? `plugins ${c.plugins.join('; ')}` : '',
           c.traits ? `traits ${JSON.stringify(c.traits)}` : '',
-          c.egress.policy === 'proxy'
+          c.egress.setup
+            ? `egress.setup ${JSON.stringify(c.egress.setup.policy)}${c.egress.setup.auto.length ? ` + ${c.egress.setup.auto.join(', ')}` : ''}`
+            : '',
+          c.egress.policy === 'proxy' && !c.egress.setup
             ? ''
             : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,
         ]

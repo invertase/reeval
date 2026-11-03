@@ -15,7 +15,7 @@ import {
 } from './contract/questions.ts'
 import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
-import { egressLabel, plannedEgress } from './egress.ts'
+import { egressLabel, layerEgress, plannedEgress } from './egress.ts'
 import {
   type AppliedEnvironment,
   applied,
@@ -61,7 +61,7 @@ import type {
   CompareGate,
   ConfigJudgeOptions,
   Duration,
-  EgressPolicy,
+  Egress,
   Environment,
   EnvironmentEdit,
   EnvironmentsOption,
@@ -677,7 +677,7 @@ export type Resolved = {
   gate: GatePolicy | undefined
   env: EnvVars
   /** From the config and profile defaults, under the environment; from groups and the eval, over it. */
-  egress: { inherited?: EgressPolicy; own?: EgressPolicy }
+  egress: { inherited?: Egress; own?: Egress }
   judge: JudgeOptions
   capture: CaptureOptions
   /** Defaults for every question; applied to the questions once the cascade ends. */
@@ -726,7 +726,9 @@ function applyLevel(
   for (const [key, value] of Object.entries(options)) {
     if (value !== undefined) out.sources = { ...out.sources, [key]: where }
   }
-  if (options.egress !== undefined) out.egress[egress] = options.egress
+  if (options.egress !== undefined) {
+    out.egress[egress] = layerEgress(out.egress[egress], options.egress)
+  }
   out.harness = applyHarness(out.harness, options.harnesses, where)
   if (options.sandbox !== undefined) out.sandbox = options.sandbox
   out.environments = applyEnvironments(out.environments, options.environments, where)

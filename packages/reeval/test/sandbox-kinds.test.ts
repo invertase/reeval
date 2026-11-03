@@ -70,7 +70,7 @@ describe('sandbox kinds', () => {
   test('Docker is an isolated Linux machine that brokers; the fake sandbox is the host', () => {
     assert.deepEqual(capabilitiesOf(docker()), {
       platform: 'linux',
-      egress: { enforce: 'allowlist', record: true },
+      egress: { enforce: 'allowlist', record: true, switches: true },
       brokers: true,
       harnessSession: true,
       isolated: true,
@@ -83,7 +83,7 @@ describe('sandbox kinds', () => {
     })
     assert.deepEqual(capabilitiesOf(fakeSandbox()), {
       platform: process.platform,
-      egress: { enforce: 'none', record: false },
+      egress: { enforce: 'none', record: false, switches: true },
       brokers: false,
       harnessSession: false,
       isolated: false,
@@ -99,7 +99,7 @@ describe('sandbox kinds', () => {
   test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs Cursor, pi and Codex', () => {
     assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
       platform: 'darwin',
-      egress: { enforce: 'none', record: true },
+      egress: { enforce: 'none', record: true, switches: false },
       brokers: true,
       harnessSession: true,
       isolated: true,
@@ -120,7 +120,7 @@ describe('sandbox kinds', () => {
   test("Boat is an isolated Linux VM that brokers, with no image and egress it can't hold", () => {
     assert.deepEqual(capabilitiesOf(boat()), {
       platform: 'linux',
-      egress: { enforce: 'none', record: true },
+      egress: { enforce: 'none', record: true, switches: false },
       brokers: true,
       harnessSession: true,
       isolated: true,

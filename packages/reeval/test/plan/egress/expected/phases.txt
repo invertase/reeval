@@ -1,0 +1,17 @@
+no profile · 9 evals · 10 cells · 16 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/phases.eval.ts › an environment sets each phase                   fake/phased/docker      control           gated    ×1  egress.setup "allow-all" · egress "deny-all"
+evals/phases.eval.ts › an unset phase keeps the config policy           fake/setup-only/docker  control           gated    ×1  egress.setup "allow-all" · egress {"allow":["config.example.com"]}
+evals/phases.eval.ts › a plain policy on the eval replaces both phases  fake/phased/docker      control           gated    ×1  egress "deny-all"
+evals/phases.eval.ts › a phase on the eval replaces only that phase     fake/phased/docker      control           gated    ×1  egress.setup "allow-all" · egress {"allow":["eval.example.com"]}
+evals/phases.eval.ts › a group sets setup › and the eval the agent      fake/-/docker           control           gated    ×1  egress.setup "allow-all" · egress "deny-all"
+evals/phases.eval.ts › an extend child sets setup over its parent       fake/reopened/docker    control           gated    ×1  egress.setup "allow-all" · egress "deny-all"
+evals/phases.eval.ts › equal phases are one policy                      fake/same/docker        control           gated    ×1  egress "deny-all"
+evals/phases.eval.ts › a variant changes only setup                     fake/closed/docker      control           ungated  ×4  runs 4 (compare default) · egress "deny-all"
+                                                                        fake/reopened/docker    variant reopened  gated    ×4  egress.setup "allow-all" · egress "deny-all"
+evals/phases.eval.ts › each restricted phase gets the automatic hosts   fake/closed/docker      control           gated    ×1  egress.setup {"allow":["registry.npmjs.org"]} + api.anthropic.com, *.anthropic.com · egress "deny-all" + api.anthropic.com, *.anthropic.com
+excluded: —
+image docker · cursor · 8 evals
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
+image docker · claude-code · 1 evals
+  base  reeval-sandbox:claude-code-1.0.176-patch.8c0f3055  (reeval's image: built when missing or when its base changed)

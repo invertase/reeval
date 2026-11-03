@@ -18,6 +18,7 @@ const EVERY_RUN: readonly Remark['kind'][] = [
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
+  'setup-tunnel-closed',
   'snapshot-too-large',
 ]
 

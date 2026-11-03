@@ -1,0 +1,344 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261103T142526Z_nogit_cursor-agent_xk93",
+  "status": "complete",
+  "startedAt": "2026-11-03T14:25:26.103Z",
+  "endedAt": "2026-11-03T14:25:29.536Z",
+  "durationMs": 3433,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.20.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.8",
+        "id": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+        "agentCli": "@cursor/sdk 1.0.40",
+        "base": "reeval-sandbox:cursor-0.1.8",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.13",
+      "@reeval/harness-opencode": "0.2.16",
+      "@reeval/harness-goose": "0.1.12",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.8",
+      "@ai-sdk/harness-claude-code": "1.0.176-patch.8c0f3055",
+      "@reeval/harness-codex": "0.1.10",
+      "@reeval/harness-fx": "0.1.7",
+      "@reeval/harness-grok-build": "0.1.10",
+      "ai": "7.0.161",
+      "@ai-sdk/harness": "1.0.172",
+      "@ai-sdk/anthropic": "4.0.95",
+      "@ai-sdk/google": "4.0.110",
+      "@ai-sdk/openai": "4.0.107",
+      "@ai-sdk/typesafe-ai": "3.0.32"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "4ad59c27538d"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "listed",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:794bf4ed30425456aed4f83ef1022df35d8ece5c0d3fe883a9d91cc883bf4bf7",
+      "setup": [
+        "curl -sS -m 10 -o /dev/null http://172.30.0.2:18777/"
+      ],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": {
+        "allow": [
+          "172.30.0.2"
+        ]
+      }
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 30000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "10e1e8f607eb3840926b682f14dd21ae89487aa0c7fd7b4e713ff41219b5666a"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/listed.eval.ts › listed",
+      "key": "evals/listed.eval.ts › listed",
+      "slug": "evals-listed-eval-ts-listed-241a9d",
+      "file": "evals/listed.eval.ts",
+      "group": [],
+      "name": "listed",
+      "tags": [],
+      "fingerprint": "5cd22ef4c7dc6ff6a02874f0f01473e290b2d1b70105bfe670234d742adba214",
+      "sources": [
+        {
+          "path": "evals/listed.eval.ts",
+          "sha256": "34918f6c8616ceb35690c124ef2a881d84ac0d4f0e3f0843257d2ef845978380"
+        }
+      ],
+      "source": {
+        "body": "4ca3e8f845f6dd98a7043dbb3dc4ad90bf742da60e2de44034d512a6bbfebe70",
+        "options": "80c270aa1aa772a37d6c6a155ec1645a110c9295127909e3cc12ef9d967ef1e0"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/listed/docker",
+          "harness": "fake",
+          "environment": "listed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "31c8c81611cf9c2d99835fa5cd696cebe5694d212b08135adc0312697d29bcd5",
+          "fingerprintParts": {
+            "sources": "164caa376722a11a77a936d3b19414d28147200153723cdf5a8741da935c5af5",
+            "harness": "8e0cfd65ef75b22c25bcbc46b13b51c5ebdca513d26dd953c6e231a86fca0880",
+            "environment": "sha256:794bf4ed30425456aed4f83ef1022df35d8ece5c0d3fe883a9d91cc883bf4bf7",
+            "image": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "33c495fd597737c0d85e344fe24e6e4181f153c6d1a58a6fd3518715c04e1cea",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:794bf4ed30425456aed4f83ef1022df35d8ece5c0d3fe883a9d91cc883bf4bf7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe true",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/listed.eval.ts › listed # fake/listed/docker#1",
+          "id": "fake/listed/docker#1",
+          "cell": "fake/listed/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-03T14:25:27.005Z",
+          "imageId": "sha256:c169305ee21064100ef2d364ce3f434422431e4b611d8b962b7c51650a6af116",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": {
+              "allow": [
+                "172.30.0.2"
+              ]
+            },
+            "allowed": [
+              "172.30.0.2"
+            ],
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "172.30.0.2",
+                "port": 18777,
+                "connections": 2,
+                "sent": 266,
+                "received": 248
+              }
+            ],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2521,
+          "turns": [
+            {
+              "prompt": "reach both hosts",
+              "status": "completed",
+              "startedAt": "2026-11-03T14:25:28.791Z",
+              "durationMs": 142,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1719,
+            "agentMs": 140,
+            "diffMs": 207,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 76
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-listed-eval-ts-listed-241a9d/fake-listed-docker-b8667d/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe true",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/listed.eval.ts:13"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "setupLog": {
+              "path": "evals-listed-eval-ts-listed-241a9d/fake-listed-docker-b8667d/1/setup.log",
+              "sha256": "7b0fdd2ec1a927c49f2dd02d401dac8f92cd344b5940071bfc1579b8c6e6647a",
+              "bytes": 73
+            },
+            "transcript": {
+              "path": "evals-listed-eval-ts-listed-241a9d/fake-listed-docker-b8667d/1/transcript.jsonl",
+              "sha256": "fe55f5be0cfdc639cf1d735b47044f8c0c0d8f98f96d70404d67f2ca1d5befc2",
+              "bytes": 834
+            },
+            "diff": {
+              "path": "evals-listed-eval-ts-listed-241a9d/fake-listed-docker-b8667d/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

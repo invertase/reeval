@@ -10,15 +10,24 @@ export type Lookup = (host: string) => Promise<string[]>
 /**
  * What a sandbox provider can do about egress. `enforce`: nothing (`none`), `allow-all` or
  * `deny-all` only (`all-or-nothing`), or a host allowlist too (`allowlist`). `record`: whether
- * it reports the hosts the sandbox contacted and was refused.
+ * it reports the hosts the sandbox contacted and was refused. `switches`: whether it can change
+ * the policy during an attempt, from the setup phase's to the agent's.
  */
 export type EgressCapabilities = {
   enforce: 'none' | 'all-or-nothing' | 'allowlist'
   record: boolean
+  switches: boolean
 }
 
-/** The Docker sandbox enforces every policy through its egress gateway, and records what passes. */
-export const DOCKER_EGRESS: EgressCapabilities = { enforce: 'allowlist', record: true }
+/**
+ * The Docker sandbox enforces every policy through its egress gateway, records what passes, and
+ * switches policy mid-attempt by changing the gateway's and detaching or reattaching networks.
+ */
+export const DOCKER_EGRESS: EgressCapabilities = {
+  enforce: 'allowlist',
+  record: true,
+  switches: true,
+}
 
 /** The hosts each harness's CLI talks to at runtime. */
 export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {

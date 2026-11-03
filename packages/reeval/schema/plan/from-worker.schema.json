@@ -1822,7 +1822,26 @@
       "additionalProperties": false
     },
     "PlannedEgress": {
-      "description": "An attempt's egress policy, and the hosts a restricted one allows on top of its own.",
+      "description": "An attempt's egress: the agent phase's policy (the harness's start, its turns and the checks), and `setup`'s when the setup phase (files and setup steps) runs under another.",
+      "type": "object",
+      "properties": {
+        "auto": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/EgressPolicy"
+        },
+        "setup": {
+          "$ref": "#/$defs/PlannedPhaseEgress"
+        }
+      },
+      "required": ["auto", "policy"]
+    },
+    "PlannedPhaseEgress": {
+      "description": "One phase's egress policy, and the hosts a restricted one allows on top of its own.",
       "type": "object",
       "properties": {
         "auto": {

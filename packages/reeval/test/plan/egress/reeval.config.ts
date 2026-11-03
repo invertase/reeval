@@ -9,5 +9,8 @@ export default defineConfig({
   harnesses: fakeHarness(),
   ...(process.env.REEVAL_EGRESS_FAKE === '1' ? { environments: fake } : {}),
   egress: { allow: ['config.example.com'] },
-  profiles: { locked: { defaults: { egress: 'deny-all' } } },
+  profiles: {
+    locked: { defaults: { egress: 'deny-all' } },
+    'setup-open': { defaults: { egress: { setup: 'allow-all' } } },
+  },
 })

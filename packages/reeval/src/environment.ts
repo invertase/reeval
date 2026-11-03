@@ -31,7 +31,7 @@ import {
   sandboxHelpers,
 } from './sandbox/kinds.ts'
 import type {
-  EgressPolicy,
+  Egress,
   Environment,
   EnvironmentData,
   EnvironmentHelpers,
@@ -152,12 +152,15 @@ export const localNpmSpec = (spec: string, base: string) => {
 
 const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
 
-/** Throws unless `value` is `'proxy'`, `'allow-all'`, `'deny-all'` or `{ allow: [hosts] }`. */
+/**
+ * Throws unless `value` is `'proxy'`, `'allow-all'`, `'deny-all'`, `{ allow: [hosts] }`, or one
+ * of those per phase, `{ setup, agent }`.
+ */
 export function checkEgress(
   value: unknown,
   where: string,
   Err: new (message: string) => Error = DefinitionError,
-): asserts value is EgressPolicy {
+): asserts value is Egress {
   const problem = egressProblem(value, where)
   if (problem) throw new Err(problem)
 }

@@ -123,14 +123,22 @@ export type ResolvedPlugin = {
   built?: { dir: string; tag: string }
 }
 
-/** What else resolving an environment needs: the harness (for its plugin refusals) and the hosts egress allows (null under `proxy` and `allow-all`). */
+/**
+ * What else resolving an environment needs: the harness (for its plugin refusals), the hosts the
+ * agent's egress allows (null under `proxy` and `allow-all`), and the setup phase's policy when
+ * it isn't the agent's.
+ */
 export type ResolveOptions = {
   harness?: HarnessDescriptor
   allowed?: readonly string[] | null
+  setupEgress?: EgressPolicy
 }
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
 export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
+
+const policyDigest = (policy: EgressPolicy) =>
+  typeof policy === 'string' ? policy : [...policy.allow].sort()
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_SETUP_TIMEOUT = '5m'
@@ -910,9 +918,10 @@ export async function resolveEnvironment(
       checks: [...secrets.checks].sort(),
       unset: [...secrets.unset].sort(),
       brokered,
-      ...(egress === DEFAULT_EGRESS
+      ...(egress === DEFAULT_EGRESS ? {} : { egress: policyDigest(egress) }),
+      ...(options.setupEgress === undefined
         ? {}
-        : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
+        : { setupEgress: policyDigest(options.setupEgress) }),
       ...(pluginRecords.length
         ? {
             plugins: pluginRecords.map((p, i) => {
@@ -945,6 +954,7 @@ export async function resolveEnvironment(
       brokered: brokeredNames,
       unset: [...secrets.unset].sort(),
       egress,
+      ...(options.setupEgress === undefined ? {} : { setupEgress: options.setupEgress }),
       ...(workspaceRecord ? { workspace: workspaceRecord } : {}),
     },
     setup,

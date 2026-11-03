@@ -400,7 +400,8 @@ async function startHarness(
 /**
  * Starts the sandbox (with the brokered secrets its gateway swaps in), writes the
  * environment's files, workspace skills and plugins, runs its setup steps, snapshots the workspace for
- * the diff, and starts the harness session with the harness-placed skills and MCP servers.
+ * the diff, switches to the agent's egress, and starts the harness session with the
+ * harness-placed skills and MCP servers.
  */
 export async function startSession(a: Attempt, runId: string): Promise<[Sandbox, HarnessSession]> {
   const startedAt = performance.now()
@@ -425,7 +426,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
       `${sandboxKind(spec.sandbox).provider(spec.sandbox)} sandbox at ${box.workdir}`,
     )
   }
-  a.phases = brokerPhases(box, env.substitutions)
+  a.phases = brokerPhases(box, env.substitutions, spec.egress)
   if (a.signal.aborted) void box.destroy()
   a.signal.throwIfAborted()
   await a.phases.start()
@@ -494,6 +495,8 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   }
   await snapshot(box, a.signal)
   debugLog('env', 'workspace snapshot taken: the diff starts here')
+  // The harness's bootstrap starts its CLI too, so it runs under the agent's policy.
+  await a.phases.agent()
   const timed = await timeMcpServers(box, env.mcp, a.signal)
   if (timed.log) {
     a.mcpStartup = timed.log

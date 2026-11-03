@@ -124,7 +124,8 @@ CI writes the same matrix to the job summary.
   adapter puts them. Whether Cursor itself reads them from there is a question for the Docker
   and real-agent tiers.
 - **Egress fixtures** (`egress/*`) list only `docker` (and `real`): the fake sandbox can't
-  enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
+  enforce a policy, so a restricted one makes its plan exit 2. A per-phase policy of `proxy` and
+  `allow-all` plans there too, so `egress/switch-after-setup` also runs on the fake. For a host to reach,
   `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
   reaches loopback) that answers `reeval-egress-ok`; a row passes `hostEnv: egressEnv` to give the
   fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). Beside it, a

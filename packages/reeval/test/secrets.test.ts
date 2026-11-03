@@ -471,6 +471,44 @@ describe('broker phases', () => {
     await phases.start()
     assert.equal(await phases.checks(async () => 'ran'), 'ran')
   })
+
+  test("a setup policy of its own holds from the start until agent(), and checks keep the agent's", async () => {
+    const switched: string[] = []
+    const box = {
+      async setEgress(o: { policy: { mode: string }; direct: boolean; phase: string }) {
+        switched.push(`${o.phase} ${o.policy.mode}${o.direct ? ' direct' : ''}`)
+      },
+    }
+    const egress = {
+      policy: 'deny-all' as const,
+      auto: [],
+      setup: { policy: 'allow-all' as const, auto: [] },
+    }
+    const phases = brokerPhases(box, [], egress)
+    await phases.start()
+    assert.deepEqual(switched, ['setup allow-all direct'])
+    await phases.agent()
+    await phases.checks(async () => {})
+    assert.deepEqual(switched, ['setup allow-all direct', 'agent deny-all'])
+  })
+
+  test('twin: one policy for both phases switches nothing', async () => {
+    const switched: string[] = []
+    const box = { setEgress: async () => void switched.push('switched') }
+    const phases = brokerPhases(box, [], { policy: 'deny-all', auto: [] })
+    await phases.start()
+    await phases.agent()
+    assert.deepEqual(switched, [])
+  })
+
+  test('split phases on a sandbox without a gateway are an infra error', async () => {
+    const egress = {
+      policy: 'proxy' as const,
+      auto: [],
+      setup: { policy: 'allow-all' as const, auto: [] },
+    }
+    await assert.rejects(brokerPhases({}, [], egress).start(), /its egress gateway isn't running/)
+  })
 })
 
 describe('unbrokered secrets', () => {
