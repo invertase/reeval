@@ -6,14 +6,14 @@ description: "Run each attempt in its own macOS VM on an Apple Silicon Mac."
 `tart()` returns a sandbox that runs each attempt in a fresh macOS VM, cloned from an image with [Tart](https://tart.run) and deleted when the attempt ends.
 
 <Warning>
-Only `fakeHarness()` runs in `tart()` so far: the real agents need a harness session in the VM, which lands in a later release. Each attempt of a real agent fails as an infrastructure error.
+Of the real harnesses, only `cursor()` runs in `tart()` so far: reeval refuses the others at plan time with exit code 2.
 </Warning>
 
 ## Requirements
 
 - **A Mac with Apple Silicon.** On any other machine, reeval exits with code 2 before the run.
 - **Tart on `PATH`.** Install it with `brew install cirruslabs/cli/tart`.
-- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, check, and add Node with `brew install node` if it's missing. Without them, an attempt runs without the gateway, unrecorded, unless it brokers a secret, which fails it.
+- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, add Node with `brew install node`. Without them, an attempt runs without the gateway, unrecorded, unless it brokers a secret or runs a real harness, which fails it. `cursor()` needs Node 22.21 or later.
 
 ## `tart()`
 
@@ -30,6 +30,29 @@ export default defineConfig({
 ```
 
 Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. When the Tart Guest Agent doesn't answer and `ssh: { key }` is set, it uses SSH instead. The clone is deleted when the attempt ends, and a canceled run's clones when the run does. For each option, see [the `tart()` options](/reference/options#tart).
+
+## Real agents
+
+```ts title="evals/mac.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { tart } from '{{ pkg }}/sandbox'
+
+const mac = defineEnvironment('mac', {
+  sandbox: tart({ image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest' }),
+  egress: 'allow-all',
+})
+
+evaluate('swift-version', {
+  harnesses: cursor({ model: 'composer-2.5' }),
+  environments: mac,
+}, async (c) => {
+  await c.send('Write the output of sw_vers -productVersion to version.txt')
+  expect(await c.readFile('version.txt')).toMatch(/^\d+\./)
+})
+```
+
+Each attempt installs the Cursor SDK with npm as it starts. reeval trusts the gateway's CA in the VM's keychain too, for `curl` and `git`.
 
 ## Images
 
@@ -52,7 +75,7 @@ tart pull ghcr.io/cirruslabs/macos-sequoia-base:latest
 | `reeval image build --dry-run` | Each image ready or to pull, and whether the pulls fit |
 | A plan with no `docker()` sandbox | `reeval image build` runs no Docker |
 
-The disk check skips an image its registry won't size, and says so. Make a local VM with `tart clone` or `tart create`.
+The disk check skips, and names, an image its registry won't size. Make a local VM with `tart clone` or `tart create`.
 
 <Warning>
 `:latest` or no tag warns: the tag can move between runs. Cirrus Labs' base images publish only `latest`, so pin one by digest, `…/macos-sequoia-base@sha256:…`. Each attempt records the digest it cloned in [`vmImage`](/reference/run-record).
@@ -66,7 +89,7 @@ The disk check skips an image its registry won't size, and says so. Make a local
 | `proxy`, the default | Refused with exit code 2: the gateway isn't the VM's only way out |
 | `deny-all`, `{ allow }` | Refused with exit code 2: `tart()` enforces no policy yet |
 
-Brokered secrets stay on the host under `allow-all` too: the agent sees a placeholder, and the egress gateway puts the real key on its requests.
+Under `allow-all` too, brokered secrets and harness keys stay on the host: the agent sees placeholders.
 
 ## Concurrency
 
@@ -78,4 +101,4 @@ macOS runs at most two macOS VMs at a time, so reeval runs at most two `tart()` 
 
 `maxConcurrent: 1` runs one at a time; reeval refuses more than `2`.
 
-For more information about the `sandbox` option, see [Choose a sandbox](/configuration/sandboxes). For more information about the `egress` option, see [Restrict sandbox egress](/configuration/environments/egress).
+See also [Choose a sandbox](/configuration/sandboxes) and [Restrict sandbox egress](/configuration/environments/egress).

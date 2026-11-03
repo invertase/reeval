@@ -956,6 +956,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'tart.harness',
+    area: 'Sandbox',
+    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway; Cursor so far, the rest refused at plan time",
+    fixtures: ['sandbox/tart-brokered-agent'],
+    unit: [
+      'reeval/test/tart.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'boat.sandbox',
     area: 'Sandbox',
     name: '`boat()` and `createBoat({ apiKey, prefix })`: a boat.dev VM per attempt over SSH, under `allow-all`, on the harnesses verified there',

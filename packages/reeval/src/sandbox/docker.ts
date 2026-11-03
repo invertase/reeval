@@ -183,15 +183,17 @@ export function gatewayGlue(options: SandboxOptions) {
 type UnsubstitutedEvent = Parameters<NonNullable<EgressOptions['onUnsubstituted']>>[0]
 
 /**
- * A sandbox on a harness session: the workspace under {@link SANDBOX_ROOT}, the agent's home, and
- * reeval's own privileged execs in {@link SANDBOX_STATE}.
+ * A sandbox on a harness session: the workspace under the session's default working directory
+ * ({@link SANDBOX_ROOT} in a container), the agent's home, and reeval's own privileged execs in
+ * `stateDir` ({@link SANDBOX_STATE} unless set).
  */
 export async function sessionSandbox(
   network: DockerSession,
   glue: ReturnType<typeof gatewayGlue>,
-  options: { root?: boolean; oomKills: Sandbox['oomKills'] },
+  options: { root?: boolean; stateDir?: string; oomKills: Sandbox['oomKills'] },
 ): Promise<NetworkSandbox> {
-  const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
+  const workdir = posix.join(network.defaultWorkingDirectory, WORKSPACE_DIR)
+  const stateDir = options.stateDir ?? SANDBOX_STATE
   await network.run({ command: `mkdir -p ${workdir}` })
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
@@ -199,12 +201,12 @@ export async function sessionSandbox(
   // A root sandbox's agent is root too, and could swap the binaries a privileged exec runs.
   const execOwn: Sandbox['execOwn'] = async (command, opts) =>
     options.root
-      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      ? network.run({ command, workingDirectory: stateDir, abortSignal: opts?.signal })
       : network.runPrivileged({ command, abortSignal: opts?.signal })
   return {
     workdir,
     home,
-    stateDir: SANDBOX_STATE,
+    stateDir,
     execOwn,
     network,
     exec: async (command, opts) =>

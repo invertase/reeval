@@ -152,6 +152,64 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     })
   })
 
+  test("gives a real harness the VM as its session, in the image user's home", async () => {
+    const box = await createTartSandbox(vm(), options({ env: { A: 'eval' } }))
+    try {
+      const net = box.network
+      assert.equal(net.defaultWorkingDirectory, box.home)
+      assert.deepEqual(net.egress, { active: true })
+      assert.equal(typeof net.addRequestTransformations, 'function')
+      const r = await net.run({
+        command: 'pwd; printf %s "$A:$HTTPS_PROXY"',
+        workingDirectory: 'workspace',
+      })
+      assert.equal(r.stdout, `${box.workdir}\neval:http://127.0.0.1:43128`)
+      await net.writeTextFile({ path: 'workspace/a.txt', content: 'hi' })
+      assert.equal(await box.readFile('a.txt'), 'hi')
+      assert.deepEqual(await net.stat({ path: 'workspace/a.txt' }), { type: 'file', size: 2 })
+      assert.deepEqual(await net.listDirectory({ path: 'workspace' }), [
+        { type: 'file', name: 'a.txt' },
+      ])
+      assert.equal(await net.deleteFile({ path: 'workspace/a.txt' }), true)
+      assert.equal(await net.stat({ path: 'workspace/a.txt' }), null)
+    } finally {
+      await box.destroy()
+    }
+  })
+
+  test("streams a spawned process's output, and its kill stops what it started in the VM", async () => {
+    const box = await createTartSandbox(vm(), options())
+    try {
+      const child = await box.network.spawn({
+        command: 'echo started; sleep 31 & echo $! > ~/spawned; wait',
+      })
+      const reader = child.stdout.getReader()
+      const first = await reader.read()
+      assert.equal(new TextDecoder().decode(first.value), 'started\n')
+      await eventually('the process started', () => existsSync(join(box.home, 'spawned')))
+      const grandchild = Number(readFileSync(join(box.home, 'spawned'), 'utf8'))
+      assert.ok(alive(grandchild))
+      await child.kill()
+      assert.notEqual((await child.wait()).exitCode, 0)
+      await eventually('what it started was killed', () => !alive(grandchild))
+    } finally {
+      await box.destroy()
+    }
+  })
+
+  test("a harness's brokered key fails the attempt when the gateway can't start", async () => {
+    await withEnv({ FAKE_TART_NO_SUDO: '1' }, async () => {
+      await assert.rejects(
+        createTartSandbox(
+          vm(),
+          options({ brokering: { credential: 'CURSOR_API_KEY', endpoints: [] } }),
+        ),
+        /^InfraError: Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start/,
+      )
+    })
+    assert.deepEqual(vms(), [])
+  })
+
   test('reaches an image without the Guest Agent over SSH, when the eval gave a key', async () => {
     await withEnv({ FAKE_TART_NO_AGENT: '1', FAKE_TART_NO_SUDO: '1' }, async () => {
       const box = await createTartSandbox(vm({ ssh: { key: '/k/id_ed25519' } }), options())

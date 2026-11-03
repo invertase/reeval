@@ -467,6 +467,28 @@ export const CASES: Record<string, Case[]> = {
     ['plan: under deny-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'deny-all' })],
     ['plan: under allow-all', planned({ sandbox: tart({ image: SEQUOIA }), egress: 'allow-all' })],
     [
+      'plan: cursor',
+      planned(
+        {},
+        {
+          harnesses: cursor({ model: 'composer-2.5' }),
+          sandbox: tart({ image: SEQUOIA }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
+      'plan: claudeCode, which runs in docker() only so far',
+      planned(
+        {},
+        {
+          harnesses: claudeCode({ model: 'claude-haiku-5-5' }),
+          sandbox: tart({ image: SEQUOIA }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
       'plan: three at once',
       planned({ sandbox: { kind: 'tart', image: SEQUOIA, maxConcurrent: 3 }, egress: 'allow-all' }),
     ],

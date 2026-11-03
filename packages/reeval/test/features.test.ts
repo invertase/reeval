@@ -3039,6 +3039,30 @@ export const features: Feature[] = [
     },
   },
   {
+    // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers.
+    dir: 'sandbox/tart-brokered-agent',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    loopback: true,
+    canary: /expected 'reeval_fake_[^']*' to be '[^']+'/,
+    hostEnv: (dir) => {
+      const fake = fakeTart(['ghcr.io/cirruslabs/macos-sequoia-base:15.6'])
+      fakeTarts.set(dir, fake.dir)
+      return {
+        ...fake.env,
+        REEVAL_TEST_TART_ANY_HOST: '1',
+        CURSOR_API_KEY: 'key_tart_fixture_cursor',
+      }
+    },
+    record: ({ run, project, runDir }) => {
+      assert.equal(filesContaining(runDir, 'key_tart_fixture_cursor'), '')
+      const vms = join(fakeTarts.get(project) ?? '', 'vms')
+      assert.deepEqual(readdirSync(vms), [], 'every VM is deleted')
+    },
+  },
+  {
     // tart() on the fake `tart` (test/support/fake-tart.ts), whose VMs list only their own listeners.
     dir: 'ui/serve-tart-own-port',
     tiers: ['fake'],

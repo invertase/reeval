@@ -21,6 +21,23 @@ export async function tracedRun(
   }
 }
 
+/** {@link tracedRun}, with stdout as bytes. */
+export async function tracedRunBytes(
+  bin: string,
+  args: string[],
+  options: TartOptions = {},
+): Promise<RunResult<Buffer>> {
+  const started = Date.now()
+  try {
+    const r = await run(bin, args, { ...options, binary: true })
+    traceDocker(args, started, { ...r, stdin: options.input?.length }, bin)
+    return r
+  } catch (error) {
+    traceDocker(args, started, { error }, bin)
+    throw error
+  }
+}
+
 /** Runs `tart <args>`; rejects only when `tart` can't be started. */
 export const tartCli = (args: string[], options: TartOptions = {}): Promise<RunResult> =>
   tracedRun('tart', args, options)

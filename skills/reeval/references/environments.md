@@ -144,7 +144,9 @@ option and confines the container the same way (bridge network, Docker's seccomp
 
 `tart({ image })` (an OCI macOS image or a local Tart VM) runs each attempt in a cloned macOS VM
 on an Apple Silicon Mac, at most two at once. It needs `egress: 'allow-all'`: under the default
-`proxy` or a restricted policy the plan exits 2. Only `fakeHarness()` runs in it so far.
+`proxy` or a restricted policy the plan exits 2. Of the real harnesses only `cursor()` runs in it
+so far (any other exits 2 at plan time), and it needs Node 22.21 or later in the image; the fake
+harness runs too.
 `reeval run` never pulls the image: one `tart list` doesn't show exits 2, naming `tart pull
 <image>`. Run `npx reeval image build` first, which pulls every `tart()` image the plan needs (and
 refuses, exit 3, when the disk can't hold them even once Tart prunes its cache). Pin a digest

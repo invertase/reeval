@@ -3,15 +3,27 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
-import { type ExecTransport, type Gateway, startGateway } from '@reeval/sandbox-docker'
+import { Readable } from 'node:stream'
+import {
+  CA_PATH,
+  type DockerSession,
+  type EgressStatus,
+  type ExecTransport,
+  type Gateway,
+  type NetworkPolicy,
+  pathOperations,
+  startGateway,
+  traceDocker,
+  WORKSPACE_DIR,
+} from '@reeval/sandbox-docker'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
-import { gatewayPolicy } from '../egress.ts'
 import type { TartSandboxDescriptor } from '../types.ts'
+import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
-import { tartCli, tartNames, tartOk, tracedRun } from './tart-cli.ts'
-import { InfraError, type Sandbox } from './types.ts'
+import { tartCli, tartNames, tartOk, tracedRun, tracedRunBytes } from './tart-cli.ts'
+import { InfraError, type NetworkSandbox } from './types.ts'
 
 /** How long a clone has to boot until a command runs in it. */
 const BOOT_TIMEOUT_MS = 180_000
@@ -158,7 +170,7 @@ export async function removeRunVms(runId: string): Promise<void> {
 export async function createTartSandbox(
   descriptor: TartSandboxDescriptor,
   options: SandboxOptions,
-): Promise<Sandbox> {
+): Promise<NetworkSandbox> {
   const { signal } = options
   // Planning refuses every other policy; a VM on Tart's network can't be held to one.
   if (options.egress.policy !== 'allow-all') {
@@ -282,7 +294,7 @@ export async function createTartSandbox(
   } catch (error) {
     return fail(error)
   }
-  const workdir = posix.join(home, 'workspace')
+  const workdir = posix.join(home, WORKSPACE_DIR)
   const stateDir = posix.join(home, '.reeval-state')
   const made = await runIn(guest, [
     '/bin/sh',
@@ -291,83 +303,276 @@ export async function createTartSandbox(
   ]).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
   if (made.exitCode !== 0) return fail(new Error(`Couldn't set up ${vm}: ${made.stderr.trim()}`))
 
-  const brokered = [...new Set((options.substitutions ?? []).map((s) => s.name))]
+  const glue = gatewayGlue(options)
+  const { brokered } = glue
+  let noGateway: string | undefined
   try {
-    gateway = await startGateway(
-      rootTransport(guest),
-      { policy: gatewayPolicy(options.egress) },
-      signal,
-    )
+    gateway = await startGateway(rootTransport(guest), glue.egress, signal)
     debug?.log('container', `egress gateway started · brokers ${brokered.join(', ') || 'nothing'}`)
   } catch (error) {
     if (signal.aborted) return fail(signal.reason)
-    const reason = (error as Error).message
+    noGateway = (error as Error).message
     // Under allow-all the VM keeps its own network, so the gateway only records and brokers.
     if (brokered.length) {
       return fail(
         new InfraError(
-          `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${reason}). The egress gateway needs Node in the image (brew install node) and passwordless sudo for its user.`,
+          `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${noGateway}). The egress gateway needs Node in the image (brew install node) and passwordless sudo for its user.`,
         ),
       )
     }
-    debug?.log('container', `egress gateway not running: ${reason}`)
+    debug?.log('container', `egress gateway not running: ${noGateway}`)
+  }
+  if (gateway) {
+    const trusted = await runIn(guest, ['sudo', '-n', ...TRUST_CA], {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(TRUST_TIMEOUT_MS)]),
+    }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
+    debug?.log(
+      'container',
+      trusted.exitCode === 0
+        ? 'the gateway CA is trusted in the System keychain'
+        : `the gateway CA isn't in the System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): only Node clients trust the proxy`,
+    )
   }
 
+  try {
+    const network = tartSession({
+      vm,
+      guest,
+      home,
+      stateDir,
+      env: options.env,
+      gateway,
+      noGateway,
+      destroy,
+    })
+    return await sessionSandbox(network, glue, { stateDir, oomKills: async () => null })
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** How long adding the gateway's CA to the keychain may take: a prompt would never be answered. */
+const TRUST_TIMEOUT_MS = 15_000
+/**
+ * Trusts the gateway's CA for clients on macOS's own TLS (`curl`, `git`, Swift), which read the
+ * keychain; Node reads `NODE_EXTRA_CA_CERTS`. The VM is a fresh clone, so nothing removes it.
+ */
+const TRUST_CA = [
+  '/usr/bin/security',
+  'add-trusted-cert',
+  '-d',
+  '-r',
+  'trustRoot',
+  '-k',
+  '/Library/Keychains/System.keychain',
+  CA_PATH,
+]
+
+export type TartSessionOptions = {
+  vm: string
+  guest: Guest
+  home: string
+  /** Where reeval's own commands run, and each command's pid file goes. */
+  stateDir: string
+  /** The eval's variables, for every process the agent, setup and checks run. */
+  env: Record<string, string>
+  gateway: Gateway | undefined
+  /** Why the gateway isn't running, when it isn't. */
+  noGateway?: string
+  /** Stops the gateway and deletes the VM. */
+  destroy: () => Promise<void>
+}
+
+/**
+ * The VM as an AI SDK harness session. Every process, reeval's own included, runs as the image's
+ * user: macOS has no `useradd`, and the gateway's forwarder needs that user's `sudo`. Each gets
+ * its variables in a script on stdin ({@link execScript}), and a relative path is under the home
+ * directory, so the session's workspace is `~/workspace`.
+ */
+export function tartSession(o: TartSessionOptions): DockerSession {
+  const { vm, guest, home, stateDir, gateway } = o
+  const description = `tart VM ${vm}`
   let execs = 0
-  const resolve = (path: string) =>
-    path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
+  const nextPidFile = () => posix.join(stateDir, `exec-${++execs}.pid`)
+  const at = (path?: string) => (path ? posix.resolve(home, path) : home)
+  const envFor = (env?: Record<string, string>) => ({
+    NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+    ...gateway?.env,
+    ...o.env,
+    ...env,
+  })
+  const killExec = (pidFile: string) =>
+    runIn(guest, ['/bin/sh', '-c', killTree(pidFile)]).then(
+      () => {},
+      () => {},
+    )
   const execIn = async (
     command: string,
-    o: { cwd: string; env: Record<string, string>; signal?: AbortSignal },
+    cwd: string,
+    env: Record<string, string>,
+    signal?: AbortSignal,
   ) => {
-    const pidFile = posix.join(stateDir, `exec-${++execs}.pid`)
+    const pidFile = nextPidFile()
     try {
       const r = await runIn(guest, RUN_SCRIPT, {
-        input: execScript({ command, cwd: o.cwd, env: o.env, pidFile }),
-        signal: o.signal,
+        input: execScript({ command, cwd, env, pidFile }),
+        ...(signal && { signal }),
       })
       return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr }
     } catch (error) {
-      if (o.signal?.aborted)
-        await runIn(guest, ['/bin/sh', '-c', killTree(pidFile)]).catch(() => {})
+      if (signal?.aborted) await killExec(pidFile)
       throw error
     }
   }
 
-  return {
-    workdir,
-    home,
-    stateDir,
-    exec: (command, opts) =>
-      execIn(command, {
-        cwd: opts?.cwd ? posix.resolve(workdir, opts.cwd) : workdir,
-        env: { ...gateway?.env, ...options.env, ...opts?.env },
-        signal: opts?.signal,
+  const readBinaryFile = async (r: { path: string; abortSignal?: AbortSignal }) => {
+    const [bin = '', ...args] = guest.argv(['/bin/cat', '--', at(r.path)])
+    const read = await tracedRunBytes(bin, args, {
+      ...(r.abortSignal && { signal: r.abortSignal }),
+    }).catch(() => null)
+    return read?.exitCode === 0 ? new Uint8Array(read.stdout) : null
+  }
+  const writeBinaryFile = async (w: {
+    path: string
+    content: Uint8Array
+    abortSignal?: AbortSignal
+  }) => {
+    const target = at(w.path)
+    const r = await runIn(
+      guest,
+      ['/bin/sh', '-c', 'umask 022 && mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', target],
+      { input: w.content, ...(w.abortSignal && { signal: w.abortSignal }) },
+    )
+    if (r.exitCode !== 0) throw new Error(`Couldn't write ${target} in ${vm}: ${r.stderr.trim()}`)
+  }
+  const paths = pathOperations(
+    (script, path, abortSignal) =>
+      runIn(guest, ['/bin/sh', '-c', script, 'sh', path], {
+        ...(abortSignal && { signal: abortSignal }),
       }),
-    execOwn: (command, opts) => execIn(command, { cwd: stateDir, env: {}, signal: opts?.signal }),
-    async readFile(path) {
-      const r = await runIn(guest, ['/bin/cat', '--', resolve(path)]).catch(() => null)
-      return r?.exitCode === 0 ? r.stdout : null
+    home,
+  )
+
+  const brokering: Partial<DockerSession> = gateway
+    ? {
+        async setNetworkPolicy(policy: NetworkPolicy) {
+          gateway.setPolicy(policy)
+        },
+        async addRequestTransformations(rules) {
+          gateway.addTransformations(rules)
+        },
+        async setRequestTransformations(rules) {
+          gateway.setTransformations(rules)
+        },
+        async setSubstitutions(subs) {
+          gateway.setSubstitutions(subs)
+        },
+        traffic: () => gateway.traffic(),
+      }
+    : {}
+
+  const session: DockerSession = {
+    id: vm,
+    description,
+    defaultWorkingDirectory: home,
+    ports: [],
+    get egress(): EgressStatus | undefined {
+      if (!gateway) return o.noGateway ? { active: false, reason: o.noGateway } : undefined
+      return gateway.stopped ? { active: false, reason: gateway.stopped } : { active: true }
     },
-    async writeFile(path, content) {
-      const target = resolve(path)
-      const r = await runIn(
-        guest,
-        ['/bin/sh', '-c', 'umask 022 && mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', target],
-        { input: content },
+    ...brokering,
+    oomKills: async () => null,
+    run: (r) => execIn(r.command, at(r.workingDirectory), envFor(r.env), r.abortSignal),
+    runPrivileged: (r) => execIn(r.command, stateDir, {}, r.abortSignal),
+    spawn: (async (s: Parameters<DockerSession['spawn']>[0]) => {
+      if (s.stdin) throw new Error(`A process in ${description} has no writable stdin`)
+      const pidFile = nextPidFile()
+      const [bin = '', ...args] = guest.argv(RUN_SCRIPT)
+      const startedAt = Date.now()
+      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+      child.stdin.on('error', () => {})
+      child.stdin.end(
+        execScript({
+          command: s.command,
+          cwd: at(s.workingDirectory),
+          env: envFor(s.env),
+          pidFile,
+        }),
       )
-      if (r.exitCode !== 0) throw new Error(`Couldn't write ${target} in ${vm}: ${r.stderr.trim()}`)
+      const exited = new Promise<{ exitCode: number }>((resolve) => {
+        child.once('error', () => resolve({ exitCode: 127 }))
+        child.once('close', (code) => {
+          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, bin)
+          resolve({ exitCode: code ?? 1 })
+        })
+      })
+      const kill = async () => {
+        child.kill('SIGKILL')
+        await killExec(pidFile)
+      }
+      s.abortSignal?.addEventListener('abort', () => void kill(), { once: true })
+      return {
+        pid: child.pid,
+        stdout: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
+        stderr: Readable.toWeb(child.stderr) as ReadableStream<Uint8Array>,
+        wait: () => exited,
+        kill,
+      }
+    }) as unknown as DockerSession['spawn'],
+    readBinaryFile,
+    async readFile(r) {
+      const bytes = await readBinaryFile(r)
+      return bytes === null
+        ? null
+        : (Readable.toWeb(Readable.from([bytes])) as ReadableStream<Uint8Array>)
     },
-    ...(gateway && {
-      setSubstitutions: async (subs) => gateway?.setSubstitutions(subs),
-      traffic: () => (gateway as Gateway).traffic(),
-    }),
-    async getPortEndpoint({ port, protocol = 'http' }) {
+    async readTextFile(r) {
+      const bytes = await readBinaryFile(r)
+      if (bytes === null) return null
+      const text = Buffer.from(bytes).toString('utf8')
+      if (r.startLine === undefined && r.endLine === undefined) return text
+      return text
+        .split('\n')
+        .slice((r.startLine ?? 1) - 1, r.endLine)
+        .join('\n')
+    },
+    ...paths,
+    writeBinaryFile,
+    writeTextFile: (w) => writeBinaryFile({ ...w, content: Buffer.from(w.content, 'utf8') }),
+    async writeFile(w) {
+      const chunks: Uint8Array[] = []
+      for await (const chunk of w.content) chunks.push(chunk)
+      await writeBinaryFile({ ...w, content: Buffer.concat(chunks) })
+    },
+    async getPortEndpoint({ port, protocol = 'ws' }) {
       const scheme = protocol === 'ws' ? 'ws' : 'http'
       if (gateway && !gateway.stopped) return { url: await gateway.portUrl(port, scheme) }
       const ip = (await tartOk(['ip', vm])).trim()
       return { url: `${scheme}://${ip}:${port}` }
     },
-    destroy,
+    async getPortUrl(p) {
+      return (await session.getPortEndpoint(p)).url
+    },
+    stop: o.destroy,
+    destroy: o.destroy,
+    restricted: () => {
+      const { readFile, readTextFile, writeFile, writeTextFile, stat, listDirectory } = session
+      const { deleteFile, run } = session
+      return {
+        description,
+        readFile,
+        readBinaryFile,
+        readTextFile,
+        writeFile,
+        writeBinaryFile,
+        writeTextFile,
+        stat,
+        listDirectory,
+        deleteFile,
+        spawn: session.spawn,
+        run,
+      }
+    },
   }
+  return session
 }
