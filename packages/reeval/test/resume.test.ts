@@ -14,7 +14,7 @@ import type {
   RunRecord,
 } from '../src/history/types.ts'
 import { RefError } from '../src/history/views.ts'
-import { attemptKey, evalId } from '../src/ids.ts'
+import { attemptKey, evalId, recordFileName } from '../src/ids.ts'
 import {
   completedKeysFor,
   HOLDER_FILE,
@@ -1618,5 +1618,100 @@ evaluate('slow', async (c) => {
     const filtered = await runCli(p.dir, ['run', '--resume', '--', 'slow'])
     assert.equal(filtered.code, 2, filtered.stdout + filtered.stderr)
     assert.match(filtered.stderr, /stopped during a --retry-errors/)
+  })
+})
+
+describe('reeval run --resume of a --retry-errors a kill stopped', () => {
+  const scratchOf = (dir: string, runId: string) => join(dir, '.reeval', 'runs', `${runId}.json`)
+  const down = { kind: 'infra', message: 'down' }
+
+  /**
+   * A run whose `passes` and `slow` errored an hour ago, then a retry of it killed once `passes`
+   * passed in staging and while `slow` runs: the retry assembled no record.
+   */
+  const killedRetry = async (name: string) => {
+    const dir = join(tmpdir(), `reeval-${name}-${process.pid}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    const started = join(dir, 'slow.started')
+    const p = await project(name, {
+      'reeval.config.ts': fakeConfig(),
+      'evals/trio.eval.ts': `
+import { writeFileSync } from 'node:fs'
+import { evaluate, expect } from 'reeval'
+evaluate('passes', async (c) => { await c.send('hi') })
+evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
+evaluate('slow', async (c) => {
+  await c.send('hi')
+  if (process.env.REEVAL_TEST_SLOW) {
+    writeFileSync(${JSON.stringify(started)}, '')
+    await new Promise((_, reject) => c.signal.addEventListener('abort', () => reject(c.signal.reason)))
+  }
+})
+`,
+    })
+    const first = await runCli(p.dir, ['run'])
+    assert.equal(first.code, 1, first.stdout + first.stderr)
+    const { run } = readRun(p.dir)
+    for (const e of run.evals) {
+      if (e.name === 'fails') continue
+      for (const a of e.attempts) Object.assign(a, { outcome: 'infra_error', error: down })
+    }
+    run.startedAt = new Date(Date.parse(run.startedAt) - 3_600_000).toISOString()
+    writeFileSync(scratchOf(p.dir, run.runId), JSON.stringify(run))
+    const passKey = run.evals.find((e) => e.name === 'passes')?.attempts[0]?.key ?? ''
+    const staged = join(p.dir, '.reeval', 'staging', run.runId, 'evals', recordFileName(passKey))
+    const passed = () => {
+      try {
+        return (JSON.parse(readFileSync(staged, 'utf8')) as { outcome: string }).outcome === 'pass'
+      } catch {
+        return false
+      }
+    }
+    let pid = 0
+    const retry = runCli(p.dir, ['run', '--retry-errors', '--concurrency', '2'], {
+      env: { REEVAL_TEST_SLOW: '1' },
+      onOutput: (_, id) => {
+        pid = id
+        return true
+      },
+    })
+    while (!existsSync(started) || !passed()) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    process.kill(pid, 'SIGKILL')
+    await retry
+    assert.equal(existsSync(scratchOf(p.dir, run.runId)), false, 'the retry moved the run aside')
+    return { p, run }
+  }
+
+  test('keeps the attempt that passed in staging before the kill', {
+    skip: noSignals,
+  }, async () => {
+    const { p, run } = await killedRetry('retry-kill-staged')
+    const r = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run: done } = readRun(p.dir)
+    assert.equal(done.runId, run.runId)
+    const passes = done.evals.find((e) => e.name === 'passes')?.attempts[0]
+    assert.equal(passes?.outcome, 'pass')
+    assert.deepEqual(
+      passes?.retries?.map((x) => x.error.message),
+      ['down'],
+    )
+  })
+
+  test('finishes it as the retry would', { skip: noSignals }, async () => {
+    const { p, run } = await killedRetry('retry-kill-path')
+    const r = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run: done } = readRun(p.dir)
+    assert.equal(done.status, 'complete')
+    assert.deepEqual(done.plan, run.plan)
+    assert.equal(done.retriedAt?.length, 1)
+    assert.ok(done.durationMs < run.durationMs + 600_000, `${done.durationMs}`)
+    const filtered = await killedRetry('retry-kill-filtered')
+    const refused = await runCli(filtered.p.dir, ['run', '--resume', '--', 'slow'])
+    assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+    assert.match(refused.stderr, /stopped during a --retry-errors/)
   })
 })

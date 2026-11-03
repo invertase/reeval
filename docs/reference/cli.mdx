@@ -164,7 +164,7 @@ reeval run --retry-errors 20261022T172927Z
 
 Each retried attempt keeps the errors it ended with before in its record's [`retries`](/reference/run-record), as `{ error, at }`. A run already recorded into the history folder is recorded again with the new outcomes, also when a `--resume` finishes an interrupted retry. A retry runs only the infra errors: an attempt the run skipped, such as one a best-of cell didn't need, stays skipped.
 
-The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
+The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. It does so after a kill too, when the retry wrote no record, and keeps the attempts that finished before the kill. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
 
 ## `reeval clean`
 
