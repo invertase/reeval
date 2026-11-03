@@ -1,20 +1,20 @@
 {
   "kind": "reeval-run",
   "schemaVersion": 1,
-  "runId": "20261103T114755Z_2d8f3fa_cursor-agent_b8sx",
+  "runId": "20261103T125317Z_8cab9fc_cursor-agent_cpnp",
   "status": "complete",
-  "startedAt": "2026-11-03T11:47:55.679Z",
-  "endedAt": "2026-11-03T11:48:00.867Z",
-  "durationMs": 5188,
+  "startedAt": "2026-11-03T12:53:17.244Z",
+  "endedAt": "2026-11-03T12:53:18.135Z",
+  "durationMs": 891,
   "author": "cursor-agent",
   "git": {
-    "sha": "2d8f3fa88ace34f8d57ba3bbd415af7ec7ed8048",
+    "sha": "8cab9fcb38285db3254b81abba8574e26e05ef6a",
     "branch": "master",
     "dirty": false,
     "diffHash": null,
     "worktreePatch": null,
     "worktreePatchNote": null,
-    "commitTime": "2026-11-03T11:47:54+00:00",
+    "commitTime": "2026-11-03T12:53:16+00:00",
     "shallow": false,
     "remote": null
   },
@@ -37,17 +37,7 @@
     },
     "os": "linux",
     "arch": "x64",
-    "images": [
-      {
-        "ref": "reeval-sandbox:cursor-0.1.8",
-        "id": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-        "agentCli": "@cursor/sdk 1.0.40",
-        "base": "reeval-sandbox:cursor-0.1.8",
-        "install": [],
-        "dockerfile": null,
-        "repoDigests": []
-      }
-    ],
+    "images": [],
     "packages": {
       "@vitest/expect": "5.0.5",
       "jiti": "2.7.0",
@@ -150,12 +140,12 @@
     "evals": 3,
     "cells": 5,
     "attempts": 5,
-    "estimateMs": 150000,
+    "estimateMs": 5000,
     "sandboxWarnings": []
   },
   "budget": null,
   "config": {
-    "sandbox": "docker",
+    "sandbox": "fake",
     "environment": "fake",
     "runs": 1,
     "judgeModel": null,
@@ -201,11 +191,11 @@
         "case": 0,
         "cases": 2
       },
-      "fingerprint": "fb4c46b5089699cc34b38fdd0a65731530ebb661f9fc0ed3957854e887f01b5e",
+      "fingerprint": "c776b922c63a9fc4ab99e8964a12d2fc39fe375bf1f2079e25b308df3245f22c",
       "sources": [
         {
           "path": "evals/discovery.eval.ts",
-          "sha256": "bccdf4d6c2fd45cc3076d8765040139f26357c9e844eb5a9ae92c1d53a48521f"
+          "sha256": "8fc5b52a64f02a78502c85e6684e3c3fefb6b0eac5d24eafeeb5ee4f3b592973"
         }
       ],
       "source": {
@@ -218,18 +208,18 @@
       "passRate": 0,
       "cells": [
         {
-          "key": "fake/plain/docker",
+          "key": "fake/plain/fake",
           "harness": "fake",
           "environment": "plain",
-          "sandbox": "docker",
+          "sandbox": "fake",
           "role": "control",
-          "fingerprint": "bf974dd2e694ab05923f81c3fa6b6378e5dc5f8fc8ffece5f5cc7658b96c47d5",
+          "fingerprint": "fac579541af175cfc7f1c3c65b69dd3bccacc19d108e727ced65085338125359",
           "fingerprintParts": {
             "sources": "9a6794689985a3f79ad4d620c1bfb39e67e11738baf1111378cbdf0ad57169d7",
             "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
             "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
-            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-            "agentCli": "@cursor/sdk 1.0.40",
+            "image": null,
+            "agentCli": null,
             "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
             "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
             "gate": "none"
@@ -258,19 +248,19 @@
           ]
         },
         {
-          "key": "fake/with-skill/docker",
+          "key": "fake/with-skill/fake",
           "harness": "fake",
           "environment": "with-skill",
-          "sandbox": "docker",
+          "sandbox": "fake",
           "role": "variant",
           "variant": "with-skill",
-          "fingerprint": "cb29d5362aed32dfda5b7fbda0a409048df4b685c597e0200a997c68efed3724",
+          "fingerprint": "ac75c586ee428bc9c38c2b12a818ff9896a2d0ae64166eb1950bd749d1eec5d4",
           "fingerprintParts": {
             "sources": "9a6794689985a3f79ad4d620c1bfb39e67e11738baf1111378cbdf0ad57169d7",
             "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
             "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
-            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-            "agentCli": "@cursor/sdk 1.0.40",
+            "image": null,
+            "agentCli": null,
             "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
             "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
           },
@@ -304,7 +294,7 @@
             }
           ],
           "lift": {
-            "vs": "fake/plain/docker",
+            "vs": "fake/plain/fake",
             "control": {
               "pass": 0,
               "counted": 1
@@ -326,13 +316,13 @@
       ],
       "attempts": [
         {
-          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/plain/docker#1",
-          "id": "fake/plain/docker#1",
-          "cell": "fake/plain/docker",
+          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/plain/fake#1",
+          "id": "fake/plain/fake#1",
+          "cell": "fake/plain/fake",
           "n": 1,
           "seq": 1,
-          "startedAt": "2026-11-03T11:47:56.519Z",
-          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "startedAt": "2026-11-03T12:53:17.956Z",
+          "imageId": null,
           "env": {
             "vars": [],
             "secrets": [],
@@ -342,7 +332,7 @@
           "egress": {
             "policy": "proxy",
             "allowed": null,
-            "recorded": true,
+            "recorded": false,
             "contacted": [],
             "blocked": [],
             "expectedBlocked": [],
@@ -356,12 +346,12 @@
             "kind": "assertion",
             "message": "expected file greet.js to exist"
           },
-          "durationMs": 2521,
+          "durationMs": 111,
           "turns": [
             {
               "prompt": "add user authentication",
               "status": "completed",
-              "startedAt": "2026-11-03T11:47:58.447Z",
+              "startedAt": "2026-11-03T12:53:18.000Z",
               "durationMs": 0,
               "usage": null,
               "model": null,
@@ -372,9 +362,9 @@
           ],
           "usage": null,
           "timings": {
-            "setupMs": 1874,
+            "setupMs": 30,
             "agentMs": 0,
-            "diffMs": 183,
+            "diffMs": 33,
             "checksMs": 0,
             "judgeMs": 0
           },
@@ -392,7 +382,7 @@
             {
               "name": "final",
               "form": "dir",
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/snapshots/final",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-fake-57f9db/1/snapshots/final",
               "bytes": 0,
               "files": 0,
               "excluded": [],
@@ -408,34 +398,34 @@
               "matcher": "toHaveFile",
               "status": "fail",
               "soft": true,
-              "at": "evals/discovery.eval.ts:12",
+              "at": "evals/discovery.eval.ts:13",
               "message": "expected file greet.js to exist",
-              "durationMs": 50
+              "durationMs": 1
             }
           ],
           "checks": [],
           "changedFiles": [],
           "files": {
             "transcript": {
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/transcript.jsonl",
-              "sha256": "45a1c19db66c9bc0721b8bb15c280f87a8644370c52690053776f0633f7a59a9",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-fake-57f9db/1/transcript.jsonl",
+              "sha256": "40f0ceab00f7ae5c8e00a98e2e7c131541434e27445e934ae92c1d97a7efab1a",
               "bytes": 429
             },
             "diff": {
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/diff.patch",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-fake-57f9db/1/diff.patch",
               "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "bytes": 0
             }
           }
         },
         {
-          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/with-skill/docker#1",
-          "id": "fake/with-skill/docker#1",
-          "cell": "fake/with-skill/docker",
+          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/with-skill/fake#1",
+          "id": "fake/with-skill/fake#1",
+          "cell": "fake/with-skill/fake",
           "n": 1,
           "seq": 2,
-          "startedAt": "2026-11-03T11:47:56.522Z",
-          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "startedAt": "2026-11-03T12:53:17.959Z",
+          "imageId": null,
           "env": {
             "vars": [],
             "secrets": [],
@@ -445,7 +435,7 @@
           "egress": {
             "policy": "proxy",
             "allowed": null,
-            "recorded": true,
+            "recorded": false,
             "contacted": [],
             "blocked": [],
             "expectedBlocked": [],
@@ -459,13 +449,13 @@
             "kind": "assertion",
             "message": "expected file greet.js to exist"
           },
-          "durationMs": 2343,
+          "durationMs": 104,
           "turns": [
             {
               "prompt": "add user authentication",
               "status": "completed",
-              "startedAt": "2026-11-03T11:47:58.302Z",
-              "durationMs": 1,
+              "startedAt": "2026-11-03T12:53:17.995Z",
+              "durationMs": 0,
               "usage": null,
               "model": null,
               "unreported": [],
@@ -475,9 +465,9 @@
           ],
           "usage": null,
           "timings": {
-            "setupMs": 1720,
+            "setupMs": 29,
             "agentMs": 0,
-            "diffMs": 171,
+            "diffMs": 17,
             "checksMs": 0,
             "judgeMs": 0
           },
@@ -495,7 +485,7 @@
             {
               "name": "final",
               "form": "dir",
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/snapshots/final",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-fake-14b6ac/1/snapshots/final",
               "bytes": 0,
               "files": 0,
               "excluded": [],
@@ -511,21 +501,21 @@
               "matcher": "toHaveFile",
               "status": "fail",
               "soft": true,
-              "at": "evals/discovery.eval.ts:12",
+              "at": "evals/discovery.eval.ts:13",
               "message": "expected file greet.js to exist",
-              "durationMs": 87
+              "durationMs": 4
             }
           ],
           "checks": [],
           "changedFiles": [],
           "files": {
             "transcript": {
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/transcript.jsonl",
-              "sha256": "6570c3579c5bbc05ddbe475f651ae526e648bf3c197712d13bfaa30b6e215592",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-fake-14b6ac/1/transcript.jsonl",
+              "sha256": "27008a138cb520f9fe4ebc1257b2551edcd9577a67dc7702b1e4d2d142b3e614",
               "bytes": 429
             },
             "diff": {
-              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/diff.patch",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-fake-14b6ac/1/diff.patch",
               "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "bytes": 0
             }
@@ -550,11 +540,11 @@
         "case": 1,
         "cases": 2
       },
-      "fingerprint": "3dda37e6f1cef592755339bb57f77d0c4a9dd7e35a306d49584590ab977eccf7",
+      "fingerprint": "95acf12f8de9e9a0a6b91ffa9d9c8a756addb1558f7d7bb48384df5c0fc18571",
       "sources": [
         {
           "path": "evals/discovery.eval.ts",
-          "sha256": "bccdf4d6c2fd45cc3076d8765040139f26357c9e844eb5a9ae92c1d53a48521f"
+          "sha256": "8fc5b52a64f02a78502c85e6684e3c3fefb6b0eac5d24eafeeb5ee4f3b592973"
         }
       ],
       "source": {
@@ -567,18 +557,18 @@
       "passRate": 0,
       "cells": [
         {
-          "key": "fake/plain/docker",
+          "key": "fake/plain/fake",
           "harness": "fake",
           "environment": "plain",
-          "sandbox": "docker",
+          "sandbox": "fake",
           "role": "control",
-          "fingerprint": "c1c287efc8029c7ae94b8bc95b7844e176d54c862e4f50038f8d26208f6fbed9",
+          "fingerprint": "f10b6f8b40c443de01fa592365dc2fbcfd0c208a3d66f96ba2cf747ca2c6e884",
           "fingerprintParts": {
             "sources": "10149f6699f27a237640bdf929795eaba9821efc3157e5a68bb9300c31bac846",
             "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
             "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
-            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-            "agentCli": "@cursor/sdk 1.0.40",
+            "image": null,
+            "agentCli": null,
             "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
             "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
             "gate": "none"
@@ -607,19 +597,19 @@
           ]
         },
         {
-          "key": "fake/with-skill/docker",
+          "key": "fake/with-skill/fake",
           "harness": "fake",
           "environment": "with-skill",
-          "sandbox": "docker",
+          "sandbox": "fake",
           "role": "variant",
           "variant": "with-skill",
-          "fingerprint": "50f8a3411200c5ab1f84e58a5cff9faeab2857086377e8c5f8b24a7e8ef47a86",
+          "fingerprint": "88f4c670c3d90b137597f7437196f29ca7fd3735ed0ebe4f86c096101fbff7f4",
           "fingerprintParts": {
             "sources": "10149f6699f27a237640bdf929795eaba9821efc3157e5a68bb9300c31bac846",
             "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
             "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
-            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-            "agentCli": "@cursor/sdk 1.0.40",
+            "image": null,
+            "agentCli": null,
             "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
             "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
           },
@@ -653,7 +643,7 @@
             }
           ],
           "lift": {
-            "vs": "fake/plain/docker",
+            "vs": "fake/plain/fake",
             "control": {
               "pass": 0,
               "counted": 1
@@ -675,13 +665,13 @@
       ],
       "attempts": [
         {
-          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/plain/docker#1",
-          "id": "fake/plain/docker#1",
-          "cell": "fake/plain/docker",
+          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/plain/fake#1",
+          "id": "fake/plain/fake#1",
+          "cell": "fake/plain/fake",
           "n": 1,
           "seq": 3,
-          "startedAt": "2026-11-03T11:47:56.540Z",
-          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "startedAt": "2026-11-03T12:53:17.964Z",
+          "imageId": null,
           "env": {
             "vars": [],
             "secrets": [],
@@ -691,7 +681,7 @@
           "egress": {
             "policy": "proxy",
             "allowed": null,
-            "recorded": true,
+            "recorded": false,
             "contacted": [],
             "blocked": [],
             "expectedBlocked": [],
@@ -705,13 +695,13 @@
             "kind": "assertion",
             "message": "expected file greet.js to exist"
           },
-          "durationMs": 2602,
+          "durationMs": 103,
           "turns": [
             {
               "prompt": "add social login and email/password auth",
               "status": "completed",
-              "startedAt": "2026-11-03T11:47:58.611Z",
-              "durationMs": 0,
+              "startedAt": "2026-11-03T12:53:18.002Z",
+              "durationMs": 1,
               "usage": null,
               "model": null,
               "unreported": [],
@@ -721,9 +711,9 @@
           ],
           "usage": null,
           "timings": {
-            "setupMs": 2006,
+            "setupMs": 34,
             "agentMs": 0,
-            "diffMs": 177,
+            "diffMs": 22,
             "checksMs": 0,
             "judgeMs": 0
           },
@@ -741,7 +731,7 @@
             {
               "name": "final",
               "form": "dir",
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/snapshots/final",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-fake-57f9db/1/snapshots/final",
               "bytes": 0,
               "files": 0,
               "excluded": [],
@@ -757,34 +747,34 @@
               "matcher": "toHaveFile",
               "status": "fail",
               "soft": true,
-              "at": "evals/discovery.eval.ts:12",
+              "at": "evals/discovery.eval.ts:13",
               "message": "expected file greet.js to exist",
-              "durationMs": 59
+              "durationMs": 5
             }
           ],
           "checks": [],
           "changedFiles": [],
           "files": {
             "transcript": {
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/transcript.jsonl",
-              "sha256": "b1b758c6b74c3adc6a0c68623f51ba8afec2ed6a8864120a759aa1ae5102a876",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-fake-57f9db/1/transcript.jsonl",
+              "sha256": "6b37dc6140c3f6f9d43e9e22f94dd84c78ddcfe4c34de458b244dcff8bddbe65",
               "bytes": 463
             },
             "diff": {
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/diff.patch",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-fake-57f9db/1/diff.patch",
               "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "bytes": 0
             }
           }
         },
         {
-          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/with-skill/docker#1",
-          "id": "fake/with-skill/docker#1",
-          "cell": "fake/with-skill/docker",
+          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/with-skill/fake#1",
+          "id": "fake/with-skill/fake#1",
+          "cell": "fake/with-skill/fake",
           "n": 1,
           "seq": 4,
-          "startedAt": "2026-11-03T11:47:56.541Z",
-          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "startedAt": "2026-11-03T12:53:17.966Z",
+          "imageId": null,
           "env": {
             "vars": [],
             "secrets": [],
@@ -794,7 +784,7 @@
           "egress": {
             "policy": "proxy",
             "allowed": null,
-            "recorded": true,
+            "recorded": false,
             "contacted": [],
             "blocked": [],
             "expectedBlocked": [],
@@ -808,12 +798,12 @@
             "kind": "assertion",
             "message": "expected file greet.js to exist"
           },
-          "durationMs": 2541,
+          "durationMs": 98,
           "turns": [
             {
               "prompt": "add social login and email/password auth",
               "status": "completed",
-              "startedAt": "2026-11-03T11:47:58.549Z",
+              "startedAt": "2026-11-03T12:53:18.006Z",
               "durationMs": 0,
               "usage": null,
               "model": null,
@@ -824,9 +814,9 @@
           ],
           "usage": null,
           "timings": {
-            "setupMs": 1952,
+            "setupMs": 26,
             "agentMs": 0,
-            "diffMs": 165,
+            "diffMs": 32,
             "checksMs": 0,
             "judgeMs": 0
           },
@@ -844,7 +834,7 @@
             {
               "name": "final",
               "form": "dir",
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/snapshots/final",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-fake-14b6ac/1/snapshots/final",
               "bytes": 0,
               "files": 0,
               "excluded": [],
@@ -860,21 +850,21 @@
               "matcher": "toHaveFile",
               "status": "fail",
               "soft": true,
-              "at": "evals/discovery.eval.ts:12",
+              "at": "evals/discovery.eval.ts:13",
               "message": "expected file greet.js to exist",
-              "durationMs": 55
+              "durationMs": 4
             }
           ],
           "checks": [],
           "changedFiles": [],
           "files": {
             "transcript": {
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/transcript.jsonl",
-              "sha256": "c7d4e3bcab206c1fc782e4bbd2401725ae5b95a8e2626ee6776e962fc9ed68cc",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-fake-14b6ac/1/transcript.jsonl",
+              "sha256": "138a73c0a07e7e31fcc819fc8a807916f1ea94710dc2bbc6f25bae3db5ae4428",
               "bytes": 463
             },
             "diff": {
-              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/diff.patch",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-fake-14b6ac/1/diff.patch",
               "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "bytes": 0
             }
@@ -892,11 +882,11 @@
       ],
       "name": "writes greet.js",
       "tags": [],
-      "fingerprint": "1c47584b46c3d8e0c5d631593abb6897593dfc1dd53c8565819e798622a18916",
+      "fingerprint": "c8489a3984019ba559ffdc70e41535e2df3be125426baad0dc080e1875562fdd",
       "sources": [
         {
           "path": "evals/options.eval.ts",
-          "sha256": "4aefc54efa8dfa56f62018ced92c0c8f2b0a858d34bb1c1900707d7a65d8eb92"
+          "sha256": "2a2da29a771226eb82eef043471dfc3f28e52f5b91d7c00569f2689a05f317f8"
         }
       ],
       "source": {
@@ -908,18 +898,18 @@
       "passRate": 0,
       "cells": [
         {
-          "key": "fake/app/docker",
+          "key": "fake/app/fake",
           "harness": "fake",
           "environment": "app",
-          "sandbox": "docker",
+          "sandbox": "fake",
           "role": "control",
-          "fingerprint": "171f4088f571320a9f82548e08f7764865cceba05de4226ff4d8476128520548",
+          "fingerprint": "bac36b9b24a6faf66609ece5440094428addc747506183597a16a6072ecdf8ab",
           "fingerprintParts": {
             "sources": "a1fd64164722b02889d1dd35102455032b59fe71b6c4ca321078e451e81b06f8",
             "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
             "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
-            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
-            "agentCli": "@cursor/sdk 1.0.40",
+            "image": null,
+            "agentCli": null,
             "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
             "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
           },
@@ -949,13 +939,13 @@
       ],
       "attempts": [
         {
-          "key": "evals/options.eval.ts › renamed options › writes greet.js # fake/app/docker#1",
-          "id": "fake/app/docker#1",
-          "cell": "fake/app/docker",
+          "key": "evals/options.eval.ts › renamed options › writes greet.js # fake/app/fake#1",
+          "id": "fake/app/fake#1",
+          "cell": "fake/app/fake",
           "n": 1,
           "seq": 5,
-          "startedAt": "2026-11-03T11:47:58.870Z",
-          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "startedAt": "2026-11-03T12:53:18.067Z",
+          "imageId": null,
           "env": {
             "vars": [],
             "secrets": [],
@@ -965,7 +955,7 @@
           "egress": {
             "policy": "proxy",
             "allowed": null,
-            "recorded": true,
+            "recorded": false,
             "contacted": [],
             "blocked": [],
             "expectedBlocked": [],
@@ -979,13 +969,13 @@
             "kind": "assertion",
             "message": "expected file greet.js to exist"
           },
-          "durationMs": 1989,
+          "durationMs": 63,
           "turns": [
             {
               "prompt": "Write greet.js.",
               "status": "completed",
-              "startedAt": "2026-11-03T11:48:00.333Z",
-              "durationMs": 0,
+              "startedAt": "2026-11-03T12:53:18.090Z",
+              "durationMs": 1,
               "usage": null,
               "model": null,
               "unreported": [],
@@ -995,9 +985,9 @@
           ],
           "usage": null,
           "timings": {
-            "setupMs": 1394,
+            "setupMs": 17,
             "agentMs": 0,
-            "diffMs": 176,
+            "diffMs": 13,
             "checksMs": 0,
             "judgeMs": 0
           },
@@ -1015,7 +1005,7 @@
             {
               "name": "final",
               "form": "dir",
-              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/snapshots/final",
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-fake-e80a19/1/snapshots/final",
               "bytes": 0,
               "files": 0,
               "excluded": [],
@@ -1031,21 +1021,21 @@
               "matcher": "toHaveFile",
               "status": "fail",
               "soft": true,
-              "at": "evals/options.eval.ts:10",
+              "at": "evals/options.eval.ts:11",
               "message": "expected file greet.js to exist",
-              "durationMs": 67
+              "durationMs": 1
             }
           ],
           "checks": [],
           "changedFiles": [],
           "files": {
             "transcript": {
-              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/transcript.jsonl",
-              "sha256": "ac5d800cafae35b315d4e1903733db95573535699ad4ce773d53040c0c50c8e1",
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-fake-e80a19/1/transcript.jsonl",
+              "sha256": "53fc6c86287ebbda0df111965ce4167ae6bd6190bf561f060f0cb94e609b86fd",
               "bytes": 413
             },
             "diff": {
-              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/diff.patch",
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-fake-e80a19/1/diff.patch",
               "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "bytes": 0
             }
@@ -1064,7 +1054,7 @@
       "ran": 2,
       "rates": [
         {
-          "cell": "fake/plain/docker",
+          "cell": "fake/plain/fake",
           "cases": 2,
           "pass": 0,
           "counted": 2,
@@ -1077,7 +1067,7 @@
           }
         },
         {
-          "cell": "fake/with-skill/docker",
+          "cell": "fake/with-skill/fake",
           "cases": 2,
           "pass": 0,
           "counted": 2,
@@ -1092,8 +1082,8 @@
       ],
       "lifts": [
         {
-          "variant": "fake/with-skill/docker",
-          "vs": "fake/plain/docker",
+          "variant": "fake/with-skill/fake",
+          "vs": "fake/plain/fake",
           "pairs": 2,
           "variantRate": 0,
           "controlRate": 0,

@@ -1,7 +1,8 @@
 import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 
-const plain = defineEnvironment('plain', {})
-const withSkill = defineEnvironment('with-skill', {})
+const plain = defineEnvironment('plain', { sandbox: fakeSandbox() })
+const withSkill = defineEnvironment('with-skill', { sandbox: fakeSandbox() })
 
 // A pooled family whose second case holds a slash, compared against a named baseline.
 evaluate.each(['add user authentication', 'add social login and email/password auth'])(

@@ -1,8 +1,8 @@
 {
   "kind": "reeval-remarks",
   "schemaVersion": 1,
-  "runId": "20261103T114755Z_2d8f3fa_cursor-agent_b8sx",
-  "createdAt": "2026-11-03T11:48:00.896Z",
+  "runId": "20261103T125317Z_8cab9fc_cursor-agent_cpnp",
+  "createdAt": "2026-11-03T12:53:18.159Z",
   "remarks": [
     {
       "id": "f3405858d4a006d6750c5a65873bf8aff3972ff1aa7ab1a1c7ea56d10a434b81",
@@ -11,13 +11,13 @@
       "severity": "concern",
       "text": "The with-skill variant, pooled over 2 cases: the same, but a family's lift needs 6 to hold.",
       "evidence": [
-        "evals%2Fdiscovery.eval.ts › discovery: %25s/fake+with-skill+docker"
+        "evals%2Fdiscovery.eval.ts › discovery: %25s/fake+with-skill+fake"
       ],
       "fix": {
-        "at": "source:evals/discovery.eval.ts#L8",
+        "at": "source:evals/discovery.eval.ts#L9",
         "edit": "add cases, so the pooled lift has 6 to hold on"
       },
-      "firstSeenRun": "20261103T114755Z_2d8f3fa_cursor-agent_b8sx",
+      "firstSeenRun": "20261103T125317Z_8cab9fc_cursor-agent_cpnp",
       "printed": true
     }
   ]
