@@ -19,7 +19,9 @@ import { runHeader } from '../view/header.ts'
 import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
 import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import {
+  ensureHistoryGitattributes,
   ensureHistoryGitignore,
+  historyGitattributesPath,
   historyGitignorePath,
   type IgnoredRecorded,
   ignoredRecordedFiles,
@@ -600,12 +602,14 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     }
   }
   await ensureHistoryGitignore(options.historyDir)
+  await ensureHistoryGitattributes(options.historyDir)
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }
   const writtenPaths = [
     written.recordPath,
     historyGitignorePath(options.historyDir),
+    historyGitattributesPath(options.historyDir),
     ...[...files.keys()].map((path) =>
       join(written.artifactDir ?? options.historyDir, ...path.split('/')),
     ),

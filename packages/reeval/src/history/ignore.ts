@@ -18,20 +18,31 @@ export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log dro
 .tmp-*
 `
 
+/** Marks recorded runs generated, so GitHub collapses them in a pull request's diff. */
+export const HISTORY_GITATTRIBUTES = '* linguist-generated=true\n'
+
 export const historyGitignorePath = (historyDir: string) => join(historyDir, '.gitignore')
 
-/** Writes the history-folder `.gitignore` when it's missing; leaves a file that's already there. */
-export async function ensureHistoryGitignore(historyDir: string): Promise<string> {
-  const path = historyGitignorePath(historyDir)
+export const historyGitattributesPath = (historyDir: string) => join(historyDir, '.gitattributes')
+
+async function ensureFile(historyDir: string, path: string, content: string): Promise<string> {
   try {
     await readFile(path)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     await mkdir(historyDir, { recursive: true })
-    await writeFile(path, HISTORY_GITIGNORE)
+    await writeFile(path, content)
   }
   return path
 }
+
+/** Writes the history-folder `.gitignore` when it's missing; leaves a file that's already there. */
+export const ensureHistoryGitignore = (historyDir: string): Promise<string> =>
+  ensureFile(historyDir, historyGitignorePath(historyDir), HISTORY_GITIGNORE)
+
+/** Writes the history-folder `.gitattributes` when it's missing; leaves a file that's already there. */
+export const ensureHistoryGitattributes = (historyDir: string): Promise<string> =>
+  ensureFile(historyDir, historyGitattributesPath(historyDir), HISTORY_GITATTRIBUTES)
 
 export type IgnoredRecorded = { path: string; rule: string; source: string }
 

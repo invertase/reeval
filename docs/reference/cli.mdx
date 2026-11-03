@@ -186,7 +186,7 @@ reeval clean                  Remove local debug data (.reeval/debug) and snapsh
 
 ## `reeval record`
 
-The `reeval record` command copies runs into the history directory. `--artifacts` defaults to the `history.artifacts` option, which is `all` by default. Before it copies a run, it scans the record and text artifacts with the same rules that masked them, and refuses on a match unless you pass `--skip-secret-scan`: the scan rechecks that masking, and a value the rules don't recognize passes it.
+The `reeval record` command copies runs into the history directory. `--artifacts` defaults to the `history.artifacts` option, which is `failures` by default. Before it copies a run, it scans the record and text artifacts with the same rules that masked them, and refuses on a match unless you pass `--skip-secret-scan`: the scan rechecks that masking, and a value the rules don't recognize passes it.
 
 [//]: # (generated:cli-help:record)
 

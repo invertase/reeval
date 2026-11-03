@@ -131,7 +131,7 @@ the retry, with the same refusals.
 
 Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies them to
 `evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores recorded `*.log`
-files; `reeval record` warns if git still ignores a file it wrote.
+files and a `.gitattributes` that marks them `linguist-generated`; `reeval record` warns if git still ignores a file it wrote.
 
 `reeval compare` diffs head (default `latest`) against its nearest recorded ancestor. It prints a
 block per eval that changed, then a tally; unchanged evals collapse to `+N same`:
