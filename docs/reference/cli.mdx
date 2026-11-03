@@ -168,7 +168,7 @@ The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `d
 
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers, and with Tart installed, deletes every Tart image reeval baked a harness into that isn't running.
 
 The command prints `Removed debug data and snapshots for <n> runs (<size>) from <directory> and .reeval/runs`, or `No debug data or snapshots to remove in <directory> or .reeval/runs`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
 
@@ -178,7 +178,8 @@ The command prints `Removed debug data and snapshots for <n> runs (<size>) from 
 reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
                               --keep <n> keeps the newest n runs'
   --images                    Also remove the Docker images reeval built that nothing tags any more,
-                              and the intermediate -base tags of from builds
+                              and the intermediate -base tags of from builds; with Tart, delete
+                              every Tart image reeval baked a harness into that isn't running
 ```
 
 [//]: # (/generated:cli-help:clean)
@@ -394,10 +395,13 @@ reeval image build [filter...]
                               at a time, and reports every failure; exit 3 if any image failed.
                               Pulls the tart() images Tart doesn't have, with tart pull, once the
                               disk has room for them, counting what Tart prunes from its cache
-                              (exit 3 if not); runs no Docker without a Docker sandbox
+                              (exit 3 if not), then bakes each real harness's CLI into a local copy
+                              of its image that attempts clone; runs no Docker without a Docker
+                              sandbox
   --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                               harness, sandbox and tags pick the images (also REEVAL_PROFILE)
-  --force                     Rebuild every image, pulling each base again
+  --force                     Rebuild every image, pulling each base again (and each tart() tag),
+                              and bake each tart() harness image anew
   --dry-run                   List the images, how each is made and how each stands, building
                               and pulling nothing (a from tag or tart() image is looked up in its
                               registry, not pulled), and whether the tart() pulls fit the disk

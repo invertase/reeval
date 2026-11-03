@@ -273,14 +273,30 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
     for (const engine of ['docker', 'podman'] as const) {
       if (await dockerAvailable(engine)) engines.push(engine)
     }
-    if (!engines.length) await requireDocker()
+    const { tartCli } = await import('./sandbox/tart-cli.ts')
+    const tart = await tartCli(['--version']).then(
+      (r) => r.exitCode === 0,
+      () => false,
+    )
+    if (!engines.length && !tart) await requireDocker()
     let removed = 0
     for (const engine of engines) removed += await pruneImages(engine)
-    console.log(
-      removed
-        ? `Removed ${removed} image${removed === 1 ? '' : 's'} reeval built that nothing uses`
-        : 'No leftover images to remove',
-    )
+    if (engines.length) {
+      console.log(
+        removed
+          ? `Removed ${removed} image${removed === 1 ? '' : 's'} reeval built that nothing uses`
+          : 'No leftover images to remove',
+      )
+    }
+    if (tart) {
+      const { deleteBakedImages } = await import('./sandbox/tart-bake.ts')
+      const baked = await deleteBakedImages()
+      console.log(
+        baked.length
+          ? `Deleted ${baked.length} Tart image${baked.length === 1 ? '' : 's'} with a harness baked in (reeval image build bakes them again): ${baked.join(', ')}`
+          : 'No Tart images with a harness baked in to delete',
+      )
+    }
   }
   return EXIT.ok
 }
@@ -365,6 +381,7 @@ async function imageBuildCommand(
     const pulled = vms.length
       ? await pullTartImages(vms, root, {
           log: (line) => console.log(line.startsWith('warning: ') ? yellow(line) : dim(line)),
+          force: !!flags.force,
         }).catch(refusal('tart', vms, targets.length))
       : []
     for (const p of pulled) {

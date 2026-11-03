@@ -6,18 +6,18 @@ description: "Run each attempt in its own macOS VM on an Apple Silicon Mac."
 `tart()` returns a sandbox that runs each attempt in a fresh macOS VM, cloned from an image with [Tart](https://tart.run) and deleted when the attempt ends.
 
 <Warning>
-Of the real harnesses, only `cursor()` runs in `tart()` so far: reeval refuses the others at plan time with exit code 2.
+`tart()` runs `cursor()`, `pi()` and `codex()` so far: reeval refuses the other real harnesses at plan time with exit code 2.
 </Warning>
 
 ## Requirements
 
 - **A Mac with Apple Silicon.** On any other machine, reeval exits with code 2 before the run.
 - **Tart on `PATH`.** Install it with `brew install cirruslabs/cli/tart`.
-- **Node in the image and passwordless `sudo` for its user,** for the egress gateway's forwarder, which runs as root. Cirrus Labs' `macos-sequoia-base` has both, with Node 24. For another image, add Node with `brew install node`. Without them, an attempt runs unrecorded, or fails if it brokers a key. `cursor()` needs Node 22.21 or later.
+- **Node and passwordless `sudo` in the image.** The harness runs on Node, and so does the egress gateway's forwarder, as root. Cirrus Labs' `macos-sequoia-base` has both; for another image, `brew install node`. Without `sudo`, an attempt runs unrecorded, or fails if it brokers a key. `cursor()` needs Node 22.21 or later.
 
 ## `tart()`
 
-`{{ pkg }}/sandbox` exports the function. The `sandbox` option accepts its return value:
+Set `sandbox` to `tart()`, from `{{ pkg }}/sandbox`:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -29,7 +29,7 @@ export default defineConfig({
 })
 ```
 
-Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. Without the Tart Guest Agent, `ssh: { key }` uses SSH instead. Each clone is deleted when its attempt, or a canceled run, ends. For each option, see [the `tart()` options](/reference/options#tart).
+Each attempt clones `image`, boots the clone headless, and runs the harness, the setup commands, and the assertions over `tart exec`, as the image's user, in `~/workspace`. Without the Tart Guest Agent, `ssh: { key }` uses SSH instead. For each option, see [the `tart()` options](/reference/options#tart).
 
 ## Real agents
 
@@ -58,11 +58,11 @@ evaluate('swift-version', {
 })
 ```
 
-Each attempt installs the Cursor SDK with npm as it starts; its setup takes about 40s on a Mac Studio. Clients other than Node get the system's CA bundle plus the gateway's CA in `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`. reeval also tries the System keychain, and logs a failure.
+Each attempt clones a copy of the image with the harness's CLI and pnpm baked in (see [Images](#images)), so it installs nothing. Its `PATH` starts with reeval's pnpm, as in Docker. Other clients get the system's CA bundle plus the gateway's CA in `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`.
 
 ## Images
 
-`reeval run` never pulls an image: a macOS image is about 25 GB. Pull them first with `reeval image build`, which prints Tart's progress:
+`reeval run` never pulls an image: a macOS image is about 25 GB. Pull them first with `reeval image build`:
 
 ```text
 $ npx reeval image build
@@ -73,12 +73,25 @@ tart pull ghcr.io/cirruslabs/macos-sequoia-base:latest
 1 image ready
 ```
 
+For a real harness, the build then bakes its CLI and pnpm into a copy that attempts clone:
+
+```text
+Baking pi onto ghcr.io/cirruslabs/macos-sequoia-base:latest as reeval-sandbox-pi-0.2.9-macos-sequoia-base-latest-6db8ddc6
+Installing pnpm 10.33.3
+Installing pi
+pi 1.4.0
+✓ tart:macos-sequoia-base:latest · pi-0.2.9: reeval-sandbox-pi-0.2.9-macos-sequoia-base-latest-6db8ddc6 f570f6db9e21
+1 image ready
+```
+
+A new adapter, bootstrap or base disk bakes a new copy, and `reeval run` bakes a missing one. `--force` bakes anew, and `reeval clean --images` deletes every baked copy.
+
 | When | What happens |
 | :--- | :--- |
 | `reeval run`, and `tart list` doesn't show an image | Exit code 2, naming the image, its size, and `tart pull <image>` |
 | `reeval image build`, and the pulls fit once Tart prunes its cache | A warning |
 | `reeval image build`, and they don't fit even then | Exit code 3 before any pull |
-| `reeval image build --dry-run` | Each image ready or to pull, and whether the pulls fit |
+| `reeval image build --dry-run` | Each image's state, and whether the pulls fit |
 | A plan with no `docker()` sandbox | `reeval image build` runs no Docker |
 
 The disk check skips, and names, an image its registry won't size. Make a local VM with `tart clone` or `tart create`.
@@ -95,16 +108,16 @@ The disk check skips, and names, an image its registry won't size. Make a local 
 | `proxy`, the default | Refused with exit code 2: the gateway isn't the VM's only way out |
 | `deny-all`, `{ allow }` | Refused with exit code 2: `tart()` enforces no policy yet |
 
-Under `allow-all` too, brokered secrets and harness keys stay on the host: the agent sees placeholders.
+Brokered secrets and harness keys still stay on the host: the agent sees placeholders.
 
 ## Concurrency
 
-macOS runs at most two macOS VMs at a time, so reeval runs at most two `tart()` attempts at once, whatever `concurrency` says. VMs you run outside reeval take the same slots: an attempt that finds none free fails as an infrastructure error, naming them. To run fewer, set `maxConcurrent`:
+macOS runs at most two VMs at a time, so reeval runs at most two `tart()` attempts at once. VMs you run outside reeval take the same slots: an attempt that finds none free fails as an infrastructure error. To run fewer, set `maxConcurrent`:
 
 ```ts title="reeval.config.ts"
   sandbox: tart({ image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest', maxConcurrent: 1 }),
 ```
 
-`maxConcurrent: 1` runs one at a time; reeval refuses more than `2`.
+reeval refuses more than `2`.
 
 See also [Choose a sandbox](/configuration/sandboxes) and [Restrict sandbox egress](/configuration/environments/egress).

@@ -27,7 +27,7 @@ case "$(uname -m)" in
   *) echo "The Antigravity CLI has no Linux build for $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o agy.tar.gz "${RELEASES}/${version}/agy_cli_linux_$arch.tar.gz"
-echo "$sha  agy.tar.gz" | sha256sum -c - >/dev/null
+node -e 'const h = require("crypto").createHash("sha256").update(require("fs").readFileSync("agy.tar.gz")).digest("hex"); if (h !== process.argv[1]) { console.error("agy.tar.gz does not match its sha256"); process.exit(1) }' "$sha"
 rm -rf bin && mkdir bin
 tar -xzf agy.tar.gz -C bin
 mv bin/antigravity bin/agy

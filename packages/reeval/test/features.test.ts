@@ -3063,6 +3063,33 @@ export const features: Feature[] = [
     },
   },
   {
+    // tart() on the fake `tart`: preflight bakes the agent's bootstrap into an image of its own,
+    // which every attempt clones.
+    dir: 'sandbox/tart-baked-harness',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    loopback: true,
+    canary: /expected 'baked' to be 'here'/,
+    hostEnv: (dir) => {
+      const fake = fakeTart(['ghcr.io/cirruslabs/macos-sequoia-base:15.6'])
+      fakeTarts.set(dir, fake.dir)
+      return { ...fake.env, REEVAL_TEST_TART_ANY_HOST: '1' }
+    },
+    record: ({ run, project }) => {
+      const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
+      assert.deepEqual(landed(run)?.vmImage, { ref: image, digest: fakeDigest(image) })
+      const log = readFileSync(join(fakeTarts.get(project) ?? '', 'log'), 'utf8')
+      const baked = /^rename \S+ (reeval-sandbox-fake-\S+)$/m.exec(log)?.[1]
+      assert.ok(baked, `preflight baked an image\n${log}`)
+      assert.equal(log.match(/^rename /gm)?.length, 1, 'once for both attempts')
+      assert.equal(log.match(new RegExp(`^clone ${baked} `, 'gm'))?.length, 2)
+      const vms = readdirSync(join(fakeTarts.get(project) ?? '', 'vms'))
+      assert.deepEqual(vms, [baked], 'the baked image stays, and every clone is deleted')
+    },
+  },
+  {
     // tart() on the fake `tart` (test/support/fake-tart.ts), whose VMs list only their own listeners.
     dir: 'ui/serve-tart-own-port',
     tiers: ['fake'],

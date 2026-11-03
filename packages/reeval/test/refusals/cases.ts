@@ -478,6 +478,28 @@ export const CASES: Record<string, Case[]> = {
       ),
     ],
     [
+      'plan: pi',
+      planned(
+        {},
+        {
+          harnesses: pi({ model: 'gemini-3.8-flash' }),
+          sandbox: tart({ image: SEQUOIA }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
+      'plan: codex',
+      planned(
+        {},
+        {
+          harnesses: codex({ model: 'gpt-5.4-mini' }),
+          sandbox: tart({ image: SEQUOIA }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
       'plan: claudeCode, which runs in docker() only so far',
       planned(
         {},

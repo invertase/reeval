@@ -37,6 +37,8 @@ export const EXEC_PROBE_WITH_SSH_MS = 5_000
 export const DEFAULT_SSH_USER = 'admin'
 /** Before the image's own PATH in every command, so Homebrew's tools (Node among them) are found. */
 export const GUEST_PATH = '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin'
+/** Where a baked image has reeval's pinned pnpm, relative to the image user's home; first on PATH. */
+export const PNPM_DIR = '.reeval-state/pnpm'
 const SSH_OPTIONS = [
   '-o',
   'BatchMode=yes',
@@ -112,6 +114,8 @@ export function execScript(o: {
   cwd: string
   env: Record<string, string>
   pidFile: string
+  /** Before the VM's own PATH; {@link GUEST_PATH} by default. */
+  path?: string
 }): string {
   const exports = Object.entries(o.env)
     .filter(([k]) => NAME.test(k))
@@ -119,7 +123,7 @@ export function execScript(o: {
   return [
     [
       `echo $$ > ${q(o.pidFile)}`,
-      `export PATH=${GUEST_PATH}:"$PATH"`,
+      `export PATH=${q(o.path ?? GUEST_PATH)}:"$PATH"`,
       ...exports,
       'umask 022',
       `cd ${q(o.cwd)} || exit 1`,
@@ -167,47 +171,52 @@ export async function removeRunVms(runId: string): Promise<void> {
   for (const vm of names) if (vm.startsWith(prefix)) await removeVm(vm)
 }
 
-export async function createTartSandbox(
+/** A booted clone: how to reach it, its user's home, and how to shut it down. */
+export type BootedVm = {
+  guest: Guest
+  home: string
+  /** Stops the VM and waits for `tart run` to let it go; idempotent. A clean shutdown gets `timeoutS`. */
+  halt: (timeoutS?: number) => Promise<void>
+}
+
+/**
+ * Clones `image` as `vm`, sizes and boots it headless, and waits until `tart exec` (or SSH, with
+ * the eval's key) runs a command in it. A clone that doesn't boot is stopped and deleted.
+ */
+export async function bootTartVm(
   descriptor: TartSandboxDescriptor,
-  options: SandboxOptions,
-): Promise<NetworkSandbox> {
-  const { signal } = options
-  // Planning refuses every other policy; a VM on Tart's network can't be held to one.
-  if (options.egress.policy !== 'allow-all') {
-    throw new InfraError(
-      `tart() runs under egress 'allow-all' only, and this attempt asked for ${JSON.stringify(options.egress.policy)}`,
-    )
-  }
+  image: string,
+  vm: string,
+  signal: AbortSignal,
+): Promise<BootedVm> {
   const debug = attemptDebug()
-  const vm = `${vmPrefix(options.runId)}${randomBytes(3).toString('hex')}`
   const started = performance.now()
   let booted: ChildProcess | undefined
   let ended: Promise<unknown> = Promise.resolve()
-  let gateway: Gateway | undefined
-  let removed: Promise<void> | undefined
-  const destroy = () => {
-    removed ??= (async () => {
-      await gateway?.close()
-      await tartCli(['stop', '--timeout', '5', vm]).catch(() => {})
+  let halted: Promise<void> | undefined
+  const halt = (timeoutS = 5) => {
+    halted ??= (async () => {
+      await tartCli(['stop', '--timeout', String(timeoutS), vm]).catch(() => {})
       // A VM is deleted only once `tart run` no longer holds it.
       booted?.kill('SIGKILL')
       await ended
-      await tartCli(['delete', vm]).catch(() => {})
-      debug?.log('container', `deleted ${vm}`)
     })()
-    return removed
+    return halted
   }
   const fail = async (error: unknown): Promise<never> => {
-    await destroy()
+    await halt()
+    await tartCli(['delete', vm]).catch(() => {})
     if (signal.aborted) throw signal.reason
     throw error instanceof InfraError ? error : new InfraError((error as Error).message)
   }
 
   try {
-    await tartOk(['clone', descriptor.image, vm], { signal })
+    await tartOk(['clone', image, vm], { signal })
   } catch (error) {
+    // `vm` is a name of this attempt's or bake's own, so whatever the clone left is ours.
+    await tartCli(['delete', vm]).catch(() => {})
     if (signal.aborted) throw signal.reason
-    throw new InfraError(`Couldn't clone ${descriptor.image}: ${(error as Error).message}`)
+    throw new InfraError(`Couldn't clone ${image}: ${(error as Error).message}`)
   }
   let guest: Guest = tartGuest(vm)
   try {
@@ -284,9 +293,8 @@ export async function createTartSandbox(
   }
   debug?.log(
     'container',
-    `booted ${vm} from ${descriptor.image} in ${Math.round(performance.now() - started)}ms, reached over ${guest.argv([])[0] === 'ssh' ? 'SSH' : 'tart exec'}`,
+    `booted ${vm} from ${image} in ${Math.round(performance.now() - started)}ms, reached over ${guest.argv([])[0] === 'ssh' ? 'SSH' : 'tart exec'}`,
   )
-
   let home: string
   try {
     home = (await runIn(guest, ['/bin/sh', '-c', 'printf %s "$HOME"'], { signal })).stdout
@@ -294,6 +302,46 @@ export async function createTartSandbox(
   } catch (error) {
     return fail(error)
   }
+  return { guest, home, halt }
+}
+
+export async function createTartSandbox(
+  descriptor: TartSandboxDescriptor,
+  options: SandboxOptions,
+): Promise<NetworkSandbox> {
+  const { signal } = options
+  // Planning refuses every other policy; a VM on Tart's network can't be held to one.
+  if (options.egress.policy !== 'allow-all') {
+    throw new InfraError(
+      `tart() runs under egress 'allow-all' only, and this attempt asked for ${JSON.stringify(options.egress.policy)}`,
+    )
+  }
+  const debug = attemptDebug()
+  const vm = `${vmPrefix(options.runId)}${randomBytes(3).toString('hex')}`
+  let gateway: Gateway | undefined
+  let removed: Promise<void> | undefined
+  // The image preflight baked the harness into, when it did.
+  const { guest, home, halt } = await bootTartVm(
+    descriptor,
+    options.image ?? descriptor.image,
+    vm,
+    signal,
+  )
+  const destroy = () => {
+    removed ??= (async () => {
+      await gateway?.close()
+      await halt()
+      await tartCli(['delete', vm]).catch(() => {})
+      debug?.log('container', `deleted ${vm}`)
+    })()
+    return removed
+  }
+  const fail = async (error: unknown): Promise<never> => {
+    await destroy()
+    if (signal.aborted) throw signal.reason
+    throw error instanceof InfraError ? error : new InfraError((error as Error).message)
+  }
+
   const workdir = posix.join(home, WORKSPACE_DIR)
   const stateDir = posix.join(home, '.reeval-state')
   const made = await runIn(guest, [
@@ -419,6 +467,7 @@ export type TartSessionOptions = {
 export function tartSession(o: TartSessionOptions): DockerSession {
   const { vm, guest, home, stateDir, gateway } = o
   const description = `tart VM ${vm}`
+  const path = `${posix.join(home, PNPM_DIR, 'bin')}:${GUEST_PATH}`
   let execs = 0
   const nextPidFile = () => posix.join(stateDir, `exec-${++execs}.pid`)
   const at = (path?: string) => (path ? posix.resolve(home, path) : home)
@@ -448,7 +497,7 @@ export function tartSession(o: TartSessionOptions): DockerSession {
     const pidFile = nextPidFile()
     try {
       const r = await runIn(guest, RUN_SCRIPT, {
-        input: execScript({ command, cwd, env, pidFile }),
+        input: execScript({ command, cwd, env, pidFile, path }),
         ...(signal && { signal }),
       })
       return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr }
@@ -530,6 +579,7 @@ export function tartSession(o: TartSessionOptions): DockerSession {
           cwd: at(s.workingDirectory),
           env: envFor(s.env),
           pidFile,
+          path,
         }),
       )
       const exited = new Promise<{ exitCode: number }>((resolve) => {

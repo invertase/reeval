@@ -96,7 +96,7 @@ describe('sandbox kinds', () => {
     })
   })
 
-  test('Tart is an isolated macOS VM that brokers, preflight pulls, and runs Cursor so far', () => {
+  test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs Cursor, pi and Codex', () => {
     assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
       platform: 'darwin',
       egress: { enforce: 'none', record: true },
@@ -108,7 +108,7 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: ['cursor'],
+      harnesses: ['cursor', 'pi', 'codex'],
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
@@ -196,15 +196,20 @@ describe('which sandbox a real harness runs in', () => {
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
-  test('Tart runs Cursor, whose bootstrap installs for macOS, and refuses the rest at plan time', () => {
+  test('Tart runs Cursor, pi and Codex, whose bootstraps install for macOS, and refuses the rest at plan time', () => {
     const mac = tart({ image: IMAGE })
     assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, mac), undefined)
     assert.equal(unverifiedHarness(cursor, mac), undefined)
+    for (const kind of ['pi', 'codex'] as const) {
+      const harness = { kind, model: 'm' } as HarnessDescriptor
+      assert.equal(agentSandboxProblem(harness, AGENTS[kind], mac), undefined, kind)
+      assert.equal(unverifiedHarness(harness, mac), undefined, kind)
+    }
     assert.equal(unverifiedHarness({ kind: 'fake' }, mac), undefined)
     const refused = unverifiedHarness(claude, mac)
     assert.match(
       refused ?? '',
-      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor so far\. /,
+      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor, pi and Codex so far\. /,
     )
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], mac), refused)
   })
@@ -271,9 +276,22 @@ describe('the Tart provider', () => {
     assert.match(tartHostProblem('linux', 'arm64') ?? '', /Apple Silicon.*or in docker\(\)/)
   })
 
-  test('keys on the image alone, and classes a full disk and a network error', () => {
+  test('keys on the image, the user and the harness it bakes, and classes a full disk and a network error', () => {
     const provider = createProviders().tart
-    assert.equal(provider?.key(tart({ image: 'a', cpus: 4 }), { kind: 'fake' }), '{"image":"a"}')
+    const sandbox = tart({ image: 'a', cpus: 4 })
+    assert.equal(provider?.key(sandbox, { kind: 'fake' }), '{"image":"a","user":null,"bake":null}')
+    assert.equal(
+      provider?.key(tart({ image: 'a', cpus: 8 }), { kind: 'fake' }),
+      provider?.key(sandbox, { kind: 'fake' }),
+    )
+    assert.match(
+      provider?.key(sandbox, { kind: 'pi' }) ?? '',
+      /^\{"image":"a","user":null,"bake":"pi-\d+\.\d+\.\d+"\}$/,
+    )
+    assert.match(
+      provider?.key(sandbox, { kind: 'fake', bootstrap: 'true' }) ?? '',
+      /"bake":"fake-[0-9a-f]{8}"/,
+    )
     assert.equal(classifyTart(new Error('No space left on device')).cause, 'enospc')
     assert.equal(classifyTart(new Error('connection reset by peer')).class, 'transient')
     assert.equal(classifyTart(new Error('image not found')).class, 'config')

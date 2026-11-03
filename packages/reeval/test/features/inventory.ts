@@ -959,12 +959,25 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'tart.harness',
     area: 'Sandbox',
-    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway; Cursor so far, the rest refused at plan time",
+    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway, a pinned pnpm on its `PATH`; Cursor, pi and Codex, the rest refused at plan time",
     fixtures: ['sandbox/tart-brokered-agent'],
     unit: [
       'reeval/test/tart.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
+      'reeval/test/tart-darwin.test.ts',
+      'harness-codex/test/unit.test.ts',
+    ],
+  },
+  {
+    id: 'tart.baked-images',
+    area: 'Sandbox',
+    name: "`tart()` harness images: preflight and `reeval image build` boot the base once, install pnpm and the harness's CLI, and save `reeval-sandbox-<harness>-<adapter version>-…` (moved by the base's digest or a local VM's disk, the SSH user, the bootstrap recipe and the adapter's patch); attempts clone it and skip the install; a failed or canceled bake leaves no VM behind, the next bake deletes a killed one's, `--force` bakes anew and `reeval clean --images` deletes baked images",
+    fixtures: ['sandbox/tart-baked-harness'],
+    unit: [
+      'reeval/test/tart.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/tart-darwin.test.ts',
     ],
   },
   {

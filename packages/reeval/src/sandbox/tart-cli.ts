@@ -53,8 +53,18 @@ export async function tartOk(args: string[], options: TartOptions = {}): Promise
 
 /** The VMs and images `tart list` knows, by name: local VMs, and OCI images pulled before. */
 export async function tartNames(signal?: AbortSignal): Promise<Set<string>> {
+  return new Set((await tartVms(signal)).map((vm) => vm.name))
+}
+
+/** What `tart list` shows: each VM or image by name, and whether it's running. */
+export async function tartVms(
+  signal?: AbortSignal,
+): Promise<Array<{ name: string; running: boolean }>> {
   const listed = JSON.parse(await tartOk(['list', '--format', 'json'], { signal })) as Array<{
     Name?: string
+    State?: string
   }>
-  return new Set(listed.flatMap((vm) => (vm.Name ? [vm.Name] : [])))
+  return listed.flatMap((vm) =>
+    vm.Name ? [{ name: vm.Name, running: vm.State === 'running' }] : [],
+  )
 }

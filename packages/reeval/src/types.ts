@@ -663,6 +663,12 @@ export type FakeHarnessDescriptor = {
   failWith?: string
   /** The first this many session starts of an attempt never become ready, even when aborted (`true`: every one). */
   startHangs?: number | true
+  /**
+   * A shell command the fake agent runs as its session starts, once per sandbox, as a real
+   * adapter's bootstrap installs its CLI: `tart()` bakes it into the image it clones, as it does a
+   * real harness's, so an attempt there finds it done.
+   */
+  bootstrap?: string
   /** A reasoning block at the start of every turn. */
   reasoning?: string
   /**

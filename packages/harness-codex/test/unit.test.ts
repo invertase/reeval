@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   CODEX_CLI_INTEGRITY,
@@ -25,19 +28,42 @@ test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
 })
 
-test("the bootstrap installs the pinned Codex build for the sandbox's arch, checked against npm's sha512", async () => {
+test("the bootstrap installs the pinned Codex build for the sandbox's OS and arch, checked against npm's sha512", async () => {
   const b = await getCodexBootstrap()
   assert.deepEqual(b.commands, [{ command: CODEX_INSTALL_COMMAND }])
-  for (const arch of ['x64', 'arm64'] as const) {
+  for (const arch of ['x64', 'arm64', 'darwin-arm64'] as const) {
     assert.ok(CODEX_INSTALL_COMMAND.includes(`sri=${CODEX_CLI_INTEGRITY[arch]}`), arch)
     assert.match(CODEX_CLI_INTEGRITY[arch], /^sha512-[A-Za-z0-9+/]{86}==$/)
   }
   assert.ok(
     CODEX_INSTALL_COMMAND.includes(
-      `https://registry.npmjs.org/@openai/codex/-/codex-${CODEX_CLI_VERSION}-linux-$arch.tgz`,
+      `https://registry.npmjs.org/@openai/codex/-/codex-${CODEX_CLI_VERSION}-$arch.tgz`,
     ),
   )
   assert.match(CODEX_INSTALL_COMMAND, /does not match its sha512/)
+})
+
+test('each OS and arch picks its own build, triple and sha512, and any other is refused', () => {
+  const picks = CODEX_INSTALL_COMMAND.slice(0, CODEX_INSTALL_COMMAND.indexOf('esac') + 4)
+  const pick = (os: string, arch: string) => {
+    const bin = mkdtempSync(join(tmpdir(), 'uname-'))
+    writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)
+    chmodSync(join(bin, 'uname'), 0o755)
+    return spawnSync('bash', ['-c', `${picks}\necho "$arch $triple $sri"`], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      encoding: 'utf8',
+    })
+  }
+  const { x64, arm64 } = CODEX_CLI_INTEGRITY
+  assert.equal(pick('Linux', 'x86_64').stdout, `linux-x64 x86_64-unknown-linux-musl ${x64}\n`)
+  assert.equal(pick('Linux', 'aarch64').stdout, `linux-arm64 aarch64-unknown-linux-musl ${arm64}\n`)
+  assert.equal(
+    pick('Darwin', 'arm64').stdout,
+    `darwin-arm64 aarch64-apple-darwin ${CODEX_CLI_INTEGRITY['darwin-arm64']}\n`,
+  )
+  const intel = pick('Darwin', 'x86_64')
+  assert.equal(intel.status, 1)
+  assert.equal(intel.stderr, 'Codex has no build for Darwin x86_64\n')
 })
 
 test('the first turn starts a thread; later ones resume it, the prompt from its file', () => {

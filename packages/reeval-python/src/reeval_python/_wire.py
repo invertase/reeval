@@ -1032,6 +1032,10 @@ class FakeHarnessDescriptorWithSkill(TypedDict):
 
 # A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.
 class FakeHarnessDescriptor(TypedDict):
+    # A shell command the fake agent runs as its session starts, once per sandbox, as a real
+    # adapter's bootstrap installs its CLI: `tart()` bakes it into the image it clones, as it
+    # does a real harness's, so an attempt there finds it done.
+    bootstrap: NotRequired[str]
     # In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`,
     # Cursor's when unset) on that agent's endpoints, as its adapter does: the key stays on the
     # host, and `exec` steps get a placeholder in its variable, which the egress gateway swaps

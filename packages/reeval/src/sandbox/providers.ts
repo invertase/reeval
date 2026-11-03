@@ -28,6 +28,7 @@ import {
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
+import { tartBake, tartBakeKey } from './tart-bake.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
 export const dockerKey = (
@@ -267,6 +268,12 @@ export const vmImage = (handle: PreparedHandle): VmImage | null => {
   return { ref: h.image, digest: typeof h.digest === 'string' ? h.digest : null }
 }
 
+/** The image with the harness baked in that the Tart provider's `prepare` made, if it made one. */
+export const bakedImage = (handle: PreparedHandle): string | null => {
+  const baked = (handle as { baked?: unknown } | null)?.baked
+  return typeof baked === 'string' ? baked : null
+}
+
 const tartRefusal = (message: string): PrepareError =>
   new PrepareError({
     class: 'config',
@@ -281,90 +288,123 @@ const tartRefusal = (message: string): PrepareError =>
 /**
  * Tart: a run starts only from images `tart list` has, and refuses the rest; with `pull`
  * (`reeval image build`), it pulls them, once the disk has room for all of them (counting what
- * Tart prunes from its cache).
+ * Tart prunes from its cache). Then it bakes each harness the run needs into its own local image
+ * of each, one at a time (each bake boots a VM, and macOS runs two at once), unless Tart has it.
  */
 export const tartProvider = (
-  options: { pull?: boolean } = {},
-): SandboxProvider<TartSandboxDescriptor> => ({
-  kind: 'tart',
-  async check() {
-    const { tartCli } = await import('./tart-cli.ts')
-    const problem =
-      tartHostProblem() ??
-      (await tartCli(['--version']).then(
-        (r) => (r.exitCode === 0 ? null : `tart --version failed: ${r.stderr.trim()}`),
-        () =>
-          "Tart isn't installed: there's no tart command on the PATH. Install it (brew install cirruslabs/cli/tart, see https://tart.run) and try again.",
-      ))
-    if (!problem) return
-    throw new PrepareError({
-      class: 'config',
-      stage: 'tart',
-      ref: null,
-      cause: null,
-      log: null,
-      usage: true,
-      message: problem,
-    })
-  },
-  key: (sandbox) => JSON.stringify({ image: sandbox.image }),
-  async checkTargets(sandboxes, ctx) {
-    const { tartNames } = await import('./tart-cli.ts')
-    const images = await import('./tart-images.ts')
-    const { parseTartRef, tartListed } = await import('./tart-ref.ts')
-    const have = await tartNames(ctx.signal)
-    const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !tartListed(have, i))
-    if (!wanted.length) return
-    // A registry that doesn't answer soon leaves the size unsaid, not the refusal unmade.
-    const lookup = AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)])
-    const missing = await Promise.all(
-      wanted.map(async (image) => ({ image, size: await images.tartImageSize(image, lookup) })),
-    )
-    const local = missing.filter((m) => !parseTartRef(m.image).oci)
-    if (!options.pull || local.length) {
-      throw tartRefusal(images.missingImagesMessage(options.pull ? local : missing))
-    }
-    for (const image of missing.filter((m) => !m.size)) {
-      ctx.log(
-        `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
-      )
-    }
-    const present = [...new Set(sandboxes.map((s) => s.image))].filter((i) => tartListed(have, i))
-    const space = await images.pullSpace(missing, present)
-    if (!space) ctx.log(images.pullSpaceUnknown())
-    if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
-    // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
-    if (space?.verdict === 'short') {
+  options: { pull?: boolean; force?: boolean } = {},
+): SandboxProvider<TartSandboxDescriptor> => {
+  const pulls = new Map<string, Promise<void>>()
+  let bakes: Promise<unknown> = Promise.resolve()
+  const oneAtATime = <T>(step: () => Promise<T>): Promise<T> => {
+    const next = bakes.then(step, step)
+    bakes = next.catch(() => {})
+    return next
+  }
+  return {
+    kind: 'tart',
+    async check() {
+      const { tartCli } = await import('./tart-cli.ts')
+      const problem =
+        tartHostProblem() ??
+        (await tartCli(['--version']).then(
+          (r) => (r.exitCode === 0 ? null : `tart --version failed: ${r.stderr.trim()}`),
+          () =>
+            "Tart isn't installed: there's no tart command on the PATH. Install it (brew install cirruslabs/cli/tart, see https://tart.run) and try again.",
+        ))
+      if (!problem) return
       throw new PrepareError({
-        class: 'resource',
+        class: 'config',
         stage: 'tart',
         ref: null,
-        cause: 'enospc',
+        cause: null,
         log: null,
-        message: images.pullSpaceMessage(missing, space),
+        usage: true,
+        message: problem,
       })
-    }
-  },
-  async prepare(sandbox, _harness, ctx) {
-    const { tartNames } = await import('./tart-cli.ts')
-    const { tartDigest, tartPull } = await import('./tart-images.ts')
-    const { tartListed } = await import('./tart-ref.ts')
-    if (options.pull && !tartListed(await tartNames(ctx.signal), sandbox.image)) {
-      const { sandboxId } = await import('../options.ts')
-      // Up to three pull at once: each line says whose it is.
-      const id = sandboxId(sandbox)
-      ctx.log(`tart pull ${sandbox.image}`)
-      await ctx.retry(() =>
-        tartPull(sandbox.image, {
-          signal: ctx.signal,
-          onLine: (line) => ctx.log(`${id}: ${line}`),
-        }),
+    },
+    key: tartBakeKey,
+    async checkTargets(sandboxes, ctx) {
+      const { tartNames } = await import('./tart-cli.ts')
+      const images = await import('./tart-images.ts')
+      const { parseTartRef, tartListed } = await import('./tart-ref.ts')
+      const have = await tartNames(ctx.signal)
+      const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !tartListed(have, i))
+      if (!wanted.length) return
+      // A registry that doesn't answer soon leaves the size unsaid, not the refusal unmade.
+      const lookup = AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)])
+      const missing = await Promise.all(
+        wanted.map(async (image) => ({ image, size: await images.tartImageSize(image, lookup) })),
       )
-    }
-    return { image: sandbox.image, digest: await tartDigest(sandbox.image) }
-  },
-  classify: classifyTart,
-})
+      const local = missing.filter((m) => !parseTartRef(m.image).oci)
+      if (!options.pull || local.length) {
+        throw tartRefusal(images.missingImagesMessage(options.pull ? local : missing))
+      }
+      for (const image of missing.filter((m) => !m.size)) {
+        ctx.log(
+          `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
+        )
+      }
+      const present = [...new Set(sandboxes.map((s) => s.image))].filter((i) => tartListed(have, i))
+      const space = await images.pullSpace(missing, present)
+      if (!space) ctx.log(images.pullSpaceUnknown())
+      if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
+      // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
+      if (space?.verdict === 'short') {
+        throw new PrepareError({
+          class: 'resource',
+          stage: 'tart',
+          ref: null,
+          cause: 'enospc',
+          log: null,
+          message: images.pullSpaceMessage(missing, space),
+        })
+      }
+    },
+    async prepare(sandbox, harness, ctx) {
+      const { tartNames } = await import('./tart-cli.ts')
+      const { tartDigest, tartPull, tartSource } = await import('./tart-images.ts')
+      const { parseTartRef, tartListed } = await import('./tart-ref.ts')
+      // Each harness on an image is a target of its own, and they share its one pull.
+      const pull = async () => {
+        if (!options.pull) return
+        const listed = tartListed(await tartNames(ctx.signal), sandbox.image)
+        // `--force` pulls a pulled tag again, which moves it to what the registry has now.
+        if (listed && !(options.force && parseTartRef(sandbox.image).oci)) return
+        const { sandboxId } = await import('../options.ts')
+        // Up to three pull at once: each line says whose it is.
+        const id = sandboxId(sandbox)
+        ctx.log(`tart pull ${sandbox.image}`)
+        await ctx.retry(() =>
+          tartPull(sandbox.image, {
+            signal: ctx.signal,
+            onLine: (line) => ctx.log(`${id}: ${line}`),
+          }),
+        )
+      }
+      const pulled = pulls.get(sandbox.image) ?? pull()
+      pulls.set(sandbox.image, pulled)
+      await pulled
+      const digest = await tartDigest(sandbox.image)
+      const bake = tartBake(harness)
+      if (!bake) return { image: sandbox.image, digest }
+      const { bakeTartImage } = await import('./tart-bake.ts')
+      const source = await tartSource(sandbox.image)
+      const baked = await oneAtATime(() =>
+        ctx.retry(() =>
+          bakeTartImage(sandbox, bake, {
+            source,
+            force: !!options.force,
+            signal: ctx.signal,
+            log: ctx.log,
+          }),
+        ),
+      )
+      return { image: sandbox.image, digest, baked: baked.image }
+    },
+    classify: classifyTart,
+  }
+}
 
 /**
  * Boat has nothing to build yet (each attempt's VM installs the harness as it starts): `prepare`
@@ -394,14 +434,15 @@ export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
 
 /**
  * A fresh set of providers, one per run: each keeps the run's builds. `pull` lets Tart pull the
- * images it doesn't have, which only `reeval image build` does.
+ * images it doesn't have, which only `reeval image build` does; with `force` too, it pulls each
+ * tag again and bakes each harness image anew.
  */
 export const createProviders = (
-  options: { refresh?: Refresh; pull?: boolean } = {},
+  options: { refresh?: Refresh; pull?: boolean; force?: boolean } = {},
 ): Record<string, SandboxProvider> => ({
   docker: dockerProvider(options),
   podman: dockerProvider({ ...options, engine: 'podman' }),
   fake: fakeProvider(),
-  tart: tartProvider({ pull: !!options.pull }),
+  tart: tartProvider({ pull: !!options.pull, force: !!options.force }),
   boat: boatProvider(),
 })

@@ -45,9 +45,10 @@ export type _SameAsSchema = [
 
 /** What `docker()` takes that a VM has no use for, and why. */
 const DOCKER_ONLY: Record<string, string> = {
-  from: 'a Tart VM starts from its image as is; reeval bakes nothing onto it',
-  dockerfile: 'a Tart VM starts from its image as is; reeval bakes nothing onto it',
-  install: 'a Tart VM starts from its image as is; put install commands in the environment setup',
+  from: 'a Tart VM starts from its image, and reeval bakes only the harness onto it',
+  dockerfile: 'a Tart VM starts from its image, and reeval bakes only the harness onto it',
+  install:
+    'a Tart VM starts from its image, and reeval bakes only the harness onto it; put install commands in the environment setup',
   root: 'the VM runs everything as the image user',
   capabilities: 'a macOS VM has no Linux capabilities',
   swap: 'macOS manages its own swap',

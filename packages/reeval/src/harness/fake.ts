@@ -6,6 +6,7 @@ import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
+import { fakeBootstrapScript } from './fake-bootstrap.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -22,11 +23,19 @@ const lineCount = (text: string) =>
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => {
   let starts = 0
   return {
-    async start(sandbox, _signal, { skills, workspaceSkills, mcp: all, plugins }) {
+    async start(sandbox, signal, { skills, workspaceSkills, mcp: all, plugins }) {
       if (descriptor.failWith) throw new InfraError(descriptor.failWith)
       const hangs = descriptor.startHangs
       // A start that never settles, abort or not, like an agent stuck in its bootstrap.
       if (hangs === true || starts++ < (hangs ?? 0)) return new Promise<never>(() => {})
+      if (descriptor.bootstrap) {
+        const r = await sandbox.exec(fakeBootstrapScript(descriptor.bootstrap), { signal })
+        if (r.exitCode !== 0) {
+          throw new InfraError(
+            `The fake agent's bootstrap exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
+          )
+        }
+      }
       const layout = layoutOf(descriptor)
       const brokered = descriptor.brokers ? await brokerKey(descriptor, sandbox) : undefined
       const mcp = agentMcp(layout, all, plugins)

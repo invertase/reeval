@@ -15,6 +15,9 @@ export {
 export {
   type BuildOutput,
   bakedAdapter,
+  bakedHarnessName,
+  bakedRecipe,
+  bakeHarness,
   buildDockerfile,
   buildImage,
   buildInstallLayer,
@@ -28,6 +31,7 @@ export {
   installScript,
   PLUGIN_BUILDS_DIR,
   type PluginBuildSpec,
+  PNPM_VERSION,
   pluginBuildDir,
   pluginBuildKey,
   pluginLayerTag,

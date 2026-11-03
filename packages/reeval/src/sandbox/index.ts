@@ -10,7 +10,7 @@ export type SandboxOptions = {
   signal: AbortSignal
   /** Variables for every process in the sandbox. */
   env: Record<string, string>
-  /** The prepared image for Docker (see `prepareImage`). */
+  /** The image preflight prepared: Docker's, or the Tart image with the harness baked in. */
   image?: string
   /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
   brokering?: Brokering

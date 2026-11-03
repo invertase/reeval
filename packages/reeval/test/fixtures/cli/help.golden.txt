@@ -59,7 +59,8 @@ Usage:
   reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
                                 --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
-                                and the intermediate -base tags of from builds
+                                and the intermediate -base tags of from builds; with Tart, delete
+                                every Tart image reeval baked a harness into that isn't running
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
                                 --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   reeval history [filter]       Pass/fail per recorded eval over recent runs
@@ -124,10 +125,13 @@ Usage:
                                 at a time, and reports every failure; exit 3 if any image failed.
                                 Pulls the tart() images Tart doesn't have, with tart pull, once the
                                 disk has room for them, counting what Tart prunes from its cache
-                                (exit 3 if not); runs no Docker without a Docker sandbox
+                                (exit 3 if not), then bakes each real harness's CLI into a local copy
+                                of its image that attempts clone; runs no Docker without a Docker
+                                sandbox
     --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
-    --force                     Rebuild every image, pulling each base again
+    --force                     Rebuild every image, pulling each base again (and each tart() tag),
+                                and bake each tart() harness image anew
     --dry-run                   List the images, how each is made and how each stands, building
                                 and pulling nothing (a from tag or tart() image is looked up in its
                                 registry, not pulled), and whether the tart() pulls fit the disk

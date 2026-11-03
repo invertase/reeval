@@ -3,7 +3,7 @@
 // pulls: `reeval image build` (or `tart pull`) does, first.
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { lstat, readdir, readlink, statfs } from 'node:fs/promises'
+import { lstat, readdir, readlink, stat, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parseTartRef } from './tart-ref.ts'
@@ -25,6 +25,21 @@ export async function tartDigest(image: string): Promise<string | null> {
   const target = await readlink(link).catch(() => null)
   const digest = target && basename(target)
   return digest && /^sha256:[0-9a-f]{64}$/.test(digest) ? digest : null
+}
+
+/**
+ * What a bake of `image` starts from: an OCI image's digest, or for a local VM the size and
+ * modification time of each file of it in `vms/<name>/`, which any change to its disk moves.
+ * Null when neither can be read.
+ */
+export async function tartSource(image: string): Promise<string | null> {
+  if (parseTartRef(image).oci) return tartDigest(image)
+  const dir = join(tartHome(), 'vms', image)
+  const files = await Promise.all(
+    ['config.json', 'disk.img', 'nvram.bin'].map((f) => stat(join(dir, f)).catch(() => null)),
+  )
+  if (!files[1]) return null
+  return `local:${files.map((s) => (s ? `${s.size}:${Math.trunc(s.mtimeMs)}` : '-')).join(',')}`
 }
 
 /** What an image weighs: its layers to download, and what Tart unpacks them to (when it says). */
