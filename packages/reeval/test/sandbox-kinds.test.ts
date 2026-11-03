@@ -96,19 +96,19 @@ describe('sandbox kinds', () => {
     })
   })
 
-  test('Tart is an isolated macOS VM that brokers, preflight pulls, and has no harness session yet', () => {
+  test('Tart is an isolated macOS VM that brokers, preflight pulls, and runs Cursor so far', () => {
     assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
       platform: 'darwin',
       egress: { enforce: 'none', record: true },
       brokers: true,
-      harnessSession: false,
+      harnessSession: true,
       isolated: true,
       processTable: false,
       listeners: 'lsof',
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: 'all',
+      harnesses: ['cursor'],
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
@@ -179,7 +179,7 @@ describe('which sandbox a real harness runs in', () => {
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
       agentSandboxProblem(cursor, AGENTS.cursor, fakeSandbox()),
-      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
+      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
     )
   })
 
@@ -196,16 +196,29 @@ describe('which sandbox a real harness runs in', () => {
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
+  test('Tart runs Cursor, whose bootstrap installs for macOS, and refuses the rest at plan time', () => {
+    const mac = tart({ image: IMAGE })
+    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, mac), undefined)
+    assert.equal(unverifiedHarness(cursor, mac), undefined)
+    assert.equal(unverifiedHarness({ kind: 'fake' }, mac), undefined)
+    const refused = unverifiedHarness(claude, mac)
+    assert.match(
+      refused ?? '',
+      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor so far\. /,
+    )
+    assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], mac), refused)
+  })
+
   test("the fake sandbox's platform is the host's, which it never names", () => {
     const aixOnly = { ...AGENTS.cursor, platforms: ['aix'] as const }
     assert.doesNotMatch(agentSandboxProblem(cursor, aixOnly, fakeSandbox()) ?? '', /runs /)
   })
 
   test('a platform no sandbox runs leaves only the fake harness', () => {
-    const darwinOnly = { ...AGENTS.cursor, platforms: ['darwin'] as const }
+    const windowsOnly = { ...AGENTS.cursor, platforms: ['win32'] as const }
     assert.equal(
-      agentSandboxProblem(cursor, darwinOnly, docker()),
-      "The Cursor harness can't run in the docker sandbox, which runs linux, not darwin: use fakeHarness() with fakeSandbox()",
+      agentSandboxProblem(cursor, windowsOnly, docker()),
+      "The Cursor harness can't run in the docker sandbox, which runs linux, not win32: use fakeHarness() with fakeSandbox()",
     )
   })
 })

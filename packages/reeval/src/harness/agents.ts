@@ -948,7 +948,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: PLUGIN_PARTS,
     name: 'Cursor',
     factory: 'cursor',
-    platforms: ['linux'],
+    // The bootstrap installs `@cursor/sdk` with npm, which picks its build for the platform.
+    platforms: ['linux', 'darwin'],
     reasoning: 'streamed',
     reasoningTokens: false,
     credential: 'CURSOR_API_KEY',

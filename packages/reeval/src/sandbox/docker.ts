@@ -19,6 +19,7 @@ import {
   type Substitution,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
+import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
@@ -183,28 +184,30 @@ export function gatewayGlue(options: SandboxOptions) {
 type UnsubstitutedEvent = Parameters<NonNullable<EgressOptions['onUnsubstituted']>>[0]
 
 /**
- * A sandbox on a harness session: the workspace under {@link SANDBOX_ROOT}, the agent's home, and
- * reeval's own privileged execs in {@link SANDBOX_STATE}.
+ * A sandbox on a harness session: the workspace under the session's default working directory
+ * ({@link SANDBOX_ROOT} in a container), the agent's home, and reeval's own privileged execs in
+ * `stateDir` ({@link SANDBOX_STATE} unless set).
  */
 export async function sessionSandbox(
   network: DockerSession,
   glue: ReturnType<typeof gatewayGlue>,
-  options: { root?: boolean; oomKills: Sandbox['oomKills'] },
+  options: { root?: boolean; stateDir?: string; oomKills: Sandbox['oomKills'] },
 ): Promise<NetworkSandbox> {
-  const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
-  await network.run({ command: `mkdir -p ${workdir}` })
+  const workdir = posix.join(network.defaultWorkingDirectory, WORKSPACE_DIR)
+  const stateDir = options.stateDir ?? SANDBOX_STATE
+  await network.run({ command: `mkdir -p ${q(workdir)}` })
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
     path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
   // A root sandbox's agent is root too, and could swap the binaries a privileged exec runs.
   const execOwn: Sandbox['execOwn'] = async (command, opts) =>
     options.root
-      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      ? network.run({ command, workingDirectory: stateDir, abortSignal: opts?.signal })
       : network.runPrivileged({ command, abortSignal: opts?.signal })
   return {
     workdir,
     home,
-    stateDir: SANDBOX_STATE,
+    stateDir,
     execOwn,
     network,
     exec: async (command, opts) =>

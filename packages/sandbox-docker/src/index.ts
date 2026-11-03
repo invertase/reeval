@@ -128,6 +128,7 @@ export {
   type EgressStatus,
   EgressUnavailableError,
   PRIVILEGED_CAPABILITIES,
+  pathOperations,
   ROOT_CAPABILITIES,
   type SandboxLimits,
   type SessionOptions,

@@ -237,10 +237,13 @@ const EXEC_UMASK = 'umask 022'
 
 /** The exit code of the path scripts below when the path doesn't exist. */
 const MISSING = 3
-/** POSIX `sh` and `stat -L -c` (coreutils and BusyBox both have it), for any image an eval brings. */
+/**
+ * POSIX `sh` and `stat -L -c` (coreutils and BusyBox both have it), for any image an eval brings;
+ * macOS's BSD `stat` takes `-f %z` instead.
+ */
 const STAT = `[ -e "$1" ] || exit ${MISSING}
 if [ -d "$1" ]; then t=directory; elif [ -f "$1" ]; then t=file; else t=other; fi
-s=$(stat -L -c %s -- "$1") || exit 1
+s=$(stat -L -c %s -- "$1" 2>/dev/null || stat -L -f %z -- "$1") || exit 1
 printf '%s %s' "$t" "$s"`
 /**
  * One `<type>\\t<name>` per entry, NUL-separated, since a name can hold a newline. An unreadable
@@ -270,13 +273,14 @@ type PathExec = (
 /**
  * A session's `stat`, `listDirectory` and `deleteFile` from one way to run the path scripts: each
  * gets `null` when the script exits {@link MISSING} (no such path), and any other failure rejects
- * with its stderr.
+ * with its stderr. A relative path is under `root`.
  */
 export function pathOperations(
   exec: PathExec,
+  root = SANDBOX_ROOT,
 ): Pick<DockerSession, 'stat' | 'listDirectory' | 'deleteFile'> {
   const onPath = async (script: string, o: { path: string; abortSignal?: AbortSignal }) => {
-    const path = posix.resolve(SANDBOX_ROOT, o.path)
+    const path = posix.resolve(root, o.path)
     const r = await exec(script, path, o.abortSignal)
     if (r.exitCode === MISSING) return null
     if (r.exitCode !== 0) throw new Error(`${path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`)
