@@ -542,6 +542,23 @@ export async function buildImage(
 export const bakeHarness = (session: DockerSession, harness: BakedHarness) =>
   bake(session, BOOTSTRAPS[harness])
 
+/**
+ * A hash of the bootstrap `harness`'s adapter applies (its files and commands): it changes
+ * whenever what the bootstrap installs does, version bump or not.
+ */
+export async function bakedRecipe(harness: BakedHarness): Promise<string> {
+  const adapter = await BOOTSTRAPS[harness].adapter()
+  const recipe = await adapter.getBootstrap?.({})
+  if (!recipe) return 'none'
+  const files = [...recipe.files]
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .map((f) => [f.path, f.content])
+  return createHash('sha256')
+    .update(JSON.stringify([recipe.harnessId, recipe.bootstrapDir, files, recipe.commands]))
+    .digest('hex')
+    .slice(0, 16)
+}
+
 /** The harness's name, as a bake's progress says it. */
 export const bakedHarnessName = (harness: BakedHarness) => BOOTSTRAPS[harness].name
 

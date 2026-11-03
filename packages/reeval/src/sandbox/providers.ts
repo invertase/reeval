@@ -28,7 +28,7 @@ import {
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
-import { tartBake } from './tart-bake.ts'
+import { tartBake, tartBakeKey } from './tart-bake.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
 export const dockerKey = (
@@ -292,7 +292,7 @@ const tartRefusal = (message: string): PrepareError =>
  * of each, one at a time (each bake boots a VM, and macOS runs two at once), unless Tart has it.
  */
 export const tartProvider = (
-  options: { pull?: boolean } = {},
+  options: { pull?: boolean; force?: boolean } = {},
 ): SandboxProvider<TartSandboxDescriptor> => {
   const pulls = new Map<string, Promise<void>>()
   let bakes: Promise<unknown> = Promise.resolve()
@@ -323,8 +323,7 @@ export const tartProvider = (
         message: problem,
       })
     },
-    key: (sandbox, harness) =>
-      JSON.stringify({ image: sandbox.image, bake: tartBake(harness)?.label ?? null }),
+    key: tartBakeKey,
     async checkTargets(sandboxes, ctx) {
       const { tartNames } = await import('./tart-cli.ts')
       const images = await import('./tart-images.ts')
@@ -364,11 +363,14 @@ export const tartProvider = (
     },
     async prepare(sandbox, harness, ctx) {
       const { tartNames } = await import('./tart-cli.ts')
-      const { tartDigest, tartPull } = await import('./tart-images.ts')
-      const { tartListed } = await import('./tart-ref.ts')
+      const { tartDigest, tartPull, tartSource } = await import('./tart-images.ts')
+      const { parseTartRef, tartListed } = await import('./tart-ref.ts')
       // Each harness on an image is a target of its own, and they share its one pull.
       const pull = async () => {
-        if (!options.pull || tartListed(await tartNames(ctx.signal), sandbox.image)) return
+        if (!options.pull) return
+        const listed = tartListed(await tartNames(ctx.signal), sandbox.image)
+        // `--force` pulls a pulled tag again, which moves it to what the registry has now.
+        if (listed && !(options.force && parseTartRef(sandbox.image).oci)) return
         const { sandboxId } = await import('../options.ts')
         // Up to three pull at once: each line says whose it is.
         const id = sandboxId(sandbox)
@@ -387,15 +389,18 @@ export const tartProvider = (
       const bake = tartBake(harness)
       if (!bake) return { image: sandbox.image, digest }
       const { bakeTartImage } = await import('./tart-bake.ts')
+      const source = await tartSource(sandbox.image)
       const baked = await oneAtATime(() =>
-        ctx.retry(() => bakeTartImage(sandbox, bake, { digest, signal: ctx.signal, log: ctx.log })),
+        ctx.retry(() =>
+          bakeTartImage(sandbox, bake, {
+            source,
+            force: !!options.force,
+            signal: ctx.signal,
+            log: ctx.log,
+          }),
+        ),
       )
-      return {
-        image: sandbox.image,
-        digest,
-        baked: baked.image,
-        ...(baked.agentVersion && { agentVersion: baked.agentVersion }),
-      }
+      return { image: sandbox.image, digest, baked: baked.image }
     },
     classify: classifyTart,
   }
@@ -429,14 +434,15 @@ export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
 
 /**
  * A fresh set of providers, one per run: each keeps the run's builds. `pull` lets Tart pull the
- * images it doesn't have, which only `reeval image build` does.
+ * images it doesn't have, which only `reeval image build` does; with `force` too, it pulls each
+ * tag again and bakes each harness image anew.
  */
 export const createProviders = (
-  options: { refresh?: Refresh; pull?: boolean } = {},
+  options: { refresh?: Refresh; pull?: boolean; force?: boolean } = {},
 ): Record<string, SandboxProvider> => ({
   docker: dockerProvider(options),
   podman: dockerProvider({ ...options, engine: 'podman' }),
   fake: fakeProvider(),
-  tart: tartProvider({ pull: !!options.pull }),
+  tart: tartProvider({ pull: !!options.pull, force: !!options.force }),
   boat: boatProvider(),
 })

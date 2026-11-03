@@ -187,7 +187,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
                                 --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
-                                and the intermediate -base tags of from builds`,
+                                and the intermediate -base tags of from builds; with Tart, delete
+                                every Tart image reeval baked a harness into that isn't running`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],
@@ -324,7 +325,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 sandbox
     --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
-    --force                     Rebuild every image, pulling each base again
+    --force                     Rebuild every image, pulling each base again (and each tart() tag),
+                                and bake each tart() harness image anew
     --dry-run                   List the images, how each is made and how each stands, building
                                 and pulling nothing (a from tag or tart() image is looked up in its
                                 registry, not pulled), and whether the tart() pulls fit the disk`,

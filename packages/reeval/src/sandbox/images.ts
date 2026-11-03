@@ -49,7 +49,7 @@ import {
   dockerKey,
   vmImage,
 } from './providers.ts'
-import { bakedTartImage, type TartBake, tartBake } from './tart-bake.ts'
+import { bakedTartImage, type TartBake, tartBake, tartBakeKey } from './tart-bake.ts'
 import type { MissingImage } from './tart-images.ts'
 
 /**
@@ -501,9 +501,10 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
   for (const { id, sandbox, harness } of uses) {
     if (sandbox.kind !== 'tart') continue
     const bake = tartBake(harness)
-    const key = JSON.stringify({ image: sandbox.image, bake: bake?.label ?? null })
+    const key = tartBakeKey(sandbox, harness)
+    const user = sandbox.ssh?.user ? ` as ${sandbox.ssh.user}` : ''
     const target = targets.get(key) ?? {
-      id: bake ? `${sandboxId(sandbox)} · ${harness.kind}` : sandboxId(sandbox),
+      id: bake ? `${sandboxId(sandbox)} · ${bake.label}${user}` : sandboxId(sandbox),
       sandbox,
       harness,
       bake,
@@ -525,8 +526,15 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
  */
 export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
   const { tartNames } = await import('./tart-cli.ts')
-  const { formatSize, pullSpace, pullSpaceLine, pullSpaceUnknown, tartDigest, tartImageSize } =
-    await import('./tart-images.ts')
+  const {
+    formatSize,
+    pullSpace,
+    pullSpaceLine,
+    pullSpaceUnknown,
+    tartDigest,
+    tartImageSize,
+    tartSource,
+  } = await import('./tart-images.ts')
   const { parseTartRef, tartListed } = await import('./tart-ref.ts')
   const have = await tartNames().catch((error: Error) => error)
   const images = [...new Map(targets.map((t) => [t.sandbox.image, t])).values()]
@@ -557,7 +565,7 @@ export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
         lines.push(`    + ${b.id}  (to bake ${bake.name} onto it once it's pulled)`)
         continue
       }
-      const baked = bakedTartImage(bake, image, await tartDigest(image))
+      const baked = await bakedTartImage(b.sandbox, bake, await tartSource(image))
       lines.push(
         have.has(baked)
           ? `    ✓ ${b.id}  ${baked}  (baked)`
@@ -584,9 +592,9 @@ export type PulledImage = TartTarget &
 export async function pullTartImages(
   targets: TartTarget[],
   root: string,
-  options: { log: (line: string) => void; delays?: number[] },
+  options: { log: (line: string) => void; delays?: number[]; force?: boolean },
 ): Promise<PulledImage[]> {
-  const providers = createProviders({ pull: true })
+  const providers = createProviders({ pull: true, force: !!options.force })
   const prepared = targets.map((t) => ({
     kind: 'tart',
     key: providers.tart?.key(t.sandbox, t.harness) ?? t.sandbox.image,

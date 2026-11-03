@@ -213,6 +213,8 @@ export async function bootTartVm(
   try {
     await tartOk(['clone', image, vm], { signal })
   } catch (error) {
+    // `vm` is a name of this attempt's or bake's own, so whatever the clone left is ours.
+    await tartCli(['delete', vm]).catch(() => {})
     if (signal.aborted) throw signal.reason
     throw new InfraError(`Couldn't clone ${image}: ${(error as Error).message}`)
   }

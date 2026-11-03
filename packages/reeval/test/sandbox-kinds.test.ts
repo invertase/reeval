@@ -209,7 +209,7 @@ describe('which sandbox a real harness runs in', () => {
     const refused = unverifiedHarness(claude, mac)
     assert.match(
       refused ?? '',
-      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor, pi, Codex so far\. /,
+      /^The Claude Code harness doesn't run in the tart sandbox yet: it runs Cursor, pi and Codex so far\. /,
     )
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], mac), refused)
   })
@@ -276,17 +276,17 @@ describe('the Tart provider', () => {
     assert.match(tartHostProblem('linux', 'arm64') ?? '', /Apple Silicon.*or in docker\(\)/)
   })
 
-  test('keys on the image and the harness it bakes, and classes a full disk and a network error', () => {
+  test('keys on the image, the user and the harness it bakes, and classes a full disk and a network error', () => {
     const provider = createProviders().tart
     const sandbox = tart({ image: 'a', cpus: 4 })
-    assert.equal(provider?.key(sandbox, { kind: 'fake' }), '{"image":"a","bake":null}')
+    assert.equal(provider?.key(sandbox, { kind: 'fake' }), '{"image":"a","user":null,"bake":null}')
     assert.equal(
       provider?.key(tart({ image: 'a', cpus: 8 }), { kind: 'fake' }),
       provider?.key(sandbox, { kind: 'fake' }),
     )
     assert.match(
       provider?.key(sandbox, { kind: 'pi' }) ?? '',
-      /^\{"image":"a","bake":"pi-\d+\.\d+\.\d+"\}$/,
+      /^\{"image":"a","user":null,"bake":"pi-\d+\.\d+\.\d+"\}$/,
     )
     assert.match(
       provider?.key(sandbox, { kind: 'fake', bootstrap: 'true' }) ?? '',

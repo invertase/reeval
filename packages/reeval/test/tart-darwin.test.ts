@@ -33,7 +33,7 @@ describe('harness bootstraps on macOS', { skip }, () => {
       const bake = tartBake({ kind } as Parameters<typeof tartBake>[0]) as TartBake
       const lines: string[] = []
       const baked = await bakeTartImage({ kind: 'tart', image: IMAGE }, bake, {
-        digest: fakeDigest(IMAGE),
+        source: fakeDigest(IMAGE),
         signal: new AbortController().signal,
         log: (l) => lines.push(l),
       })

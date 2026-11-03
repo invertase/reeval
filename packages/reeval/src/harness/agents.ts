@@ -1329,7 +1329,7 @@ export function unverifiedHarness(
   const verified = capabilities.harnesses === 'all' ? [] : capabilities.harnesses
   const names = verified.flatMap((k) => (isAgentKind(k) ? [AGENTS[k].name] : []))
   const elsewhere = suggestedSandbox((c) => c.harnessSession && takesHarness(c, harness.kind))
-  return `The ${AGENTS[harness.kind].name} harness doesn't run in the ${kind.provider(sandbox)} sandbox yet: it runs ${names.join(', ') || 'no real harness'} so far. ${kind.unverifiedHarnesses ?? `Run it in ${elsewhere}.`}`
+  return `The ${AGENTS[harness.kind].name} harness doesn't run in the ${kind.provider(sandbox)} sandbox yet: it runs ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0] || 'no real harness'} so far. ${kind.unverifiedHarnesses ?? `Run it in ${elsewhere}.`}`
 }
 
 /**

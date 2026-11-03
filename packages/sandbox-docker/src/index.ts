@@ -16,6 +16,7 @@ export {
   type BuildOutput,
   bakedAdapter,
   bakedHarnessName,
+  bakedRecipe,
   bakeHarness,
   buildDockerfile,
   buildImage,

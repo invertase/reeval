@@ -6,7 +6,8 @@
 // FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent, after blocking for
 // FAKE_TART_EXEC_BLOCKS seconds as tart 2.41 does (about 30). FAKE_TART_NO_SUDO=1: `sudo -n` asks
 // for a password. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it (`1`: out of disk).
-// FAKE_TART_PULL_FAILS: `tart pull` fails, saying it.
+// FAKE_TART_PULL_FAILS: `tart pull` fails, saying it. FAKE_TART_CLONE_FAILS: `tart clone` fails,
+// saying it, after starting the VM's directory.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -38,9 +39,12 @@ case "$cmd" in
     for p in 0 3 9 10 25 50 75 99 100; do echo "$p%"; done
     pulled "$1" ;;
   clone)
+    [ -n "$FAKE_TART_CLONE_FAILS" ] && { mkdir -p "$root/vms/$2"; echo "$FAKE_TART_CLONE_FAILS" >&2; exit 1; }
     mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image"
-    # A local VM's clone has its disk: here, its home.
-    if [ -d "$root/vms/$1/home" ]; then cp -a "$root/vms/$1/home/." "$root/vms/$2/home/"; fi ;;
+    # A local VM's clone has its disk: here, its home and disk.img.
+    if [ -d "$root/vms/$1/home" ]; then
+      cp -a "$root/vms/$1/home/." "$root/vms/$2/home/" && cp -p "$root/vms/$1/disk.img" "$root/vms/$2/disk.img"
+    else echo "$1" > "$root/vms/$2/disk.img"; fi ;;
   rename)
     [ -d "$root/vms/$1" ] && [ ! -e "$root/vms/$2" ] || { echo "can't rename $1 to $2" >&2; exit 1; }
     mv "$root/vms/$1" "$root/vms/$2" ;;
@@ -62,7 +66,10 @@ case "$cmd" in
   delete) rm -rf "$root/vms/$1" ;;
   list)
     printf '['; sep=
-    for d in "$root"/vms/*/; do [ -d "$d" ] || continue; printf '%s{"Name":"%s"}' "$sep" "$(basename "$d")"; sep=,; done
+    for d in "$root"/vms/*/; do
+      [ -d "$d" ] || continue; state=stopped; [ -f "$d/running" ] && state=running
+      printf '%s{"Name":"%s","State":"%s"}' "$sep" "$(basename "$d")" "$state"; sep=,
+    done
     [ -f "$root/pulled" ] && while read -r i; do case $i in */*) src=OCI ;; *) src=local ;; esac; printf '%s{"Name":"%s","Source":"%s"}' "$sep" "$i" "$src"; sep=,; done < "$root/pulled"
     echo ']' ;;
   *) echo "fake tart: no $cmd" >&2; exit 2 ;;
@@ -133,7 +140,7 @@ export function fakeTart(images: string[] = []): {
   }
   const env = {
     FAKE_TART_DIR: dir,
-    TART_HOME: join(dir, 'home'),
+    TART_HOME: dir,
     PATH: `${bin}:${process.env.PATH ?? ''}`,
   }
   for (const image of images) {
