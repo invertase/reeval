@@ -4,6 +4,7 @@
 #   scripts/ci-os.sh unit 2/4    a shard of the unit and plan test files
 #   scripts/ci-os.sh tiers       typecheck, schema check, lint, fixtures (fake tier), studio, the other packages
 #   scripts/ci-os.sh packed      the pack test, then reeval init → run → doctor → studio build from the tarball
+#   scripts/ci-os.sh bootstraps  macOS only: the Cursor, pi and Codex bootstraps tart() bakes, on this host
 #
 # Run after `pnpm install` and `pnpm build`, from anywhere in the repo.
 set -euo pipefail
@@ -13,7 +14,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 node_test() { node --test --test-timeout=300000 --experimental-strip-types --no-warnings "$@"; }
 
-part=${1:?usage: ci-os.sh unit [i/n] | tiers | packed}
+part=${1:?usage: ci-os.sh unit [i/n] | tiers | packed | bootstraps}
 
 # A --dry-run or reeval doctor asks Docker whether it runs Linux containers. On a fresh Windows runner
 # the first `docker info` takes from seconds to over a minute (later ones take 0.1 s), which would
@@ -43,6 +44,10 @@ case $part in
     # The browser test skips without Chrome: count that as a failure here.
     pnpm --filter studio-web test 2>&1 | tee "${RUNNER_TEMP:-/tmp}/studio-web.log"
     grep -Eq '^(ℹ|#) skipped 0' "${RUNNER_TEMP:-/tmp}/studio-web.log"
+    ;;
+
+  bootstraps)
+    (cd packages/reeval && REEVAL_TEST_DARWIN_BOOTSTRAPS=1 node_test test/tart-darwin.test.ts)
     ;;
 
   packed)

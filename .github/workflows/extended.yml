@@ -7,7 +7,8 @@
 # reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
 # have no Docker. Windows starts processes slowly, so its unit files run in six shards, split by
 # each file's running time (scripts/test-shard.mjs) rather than Node's round-robin. macOS
-# splits the same way so unit, tiers and packed overlap.
+# splits the same way so unit, tiers and packed overlap. Its `bootstraps` part installs the
+# Cursor, pi and Codex CLIs' macOS builds the way tart() bakes them (no VM, no key).
 name: extended
 
 on:
@@ -112,7 +113,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [unit, tiers, packed]
+        part: [unit, tiers, packed, bootstraps]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

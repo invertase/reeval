@@ -346,7 +346,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | Workflow | Jobs |
 |---|---|
 | `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `launcher conformance (<sdk>, <os>)` (each SDK's `reeval` launcher against `test/conformance/launcher/` on Linux and macOS), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
-| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `macos (unit, tiers, packed)` (its `windows (unit 1/6 … 6/6, tiers, packed)` jobs are off for now, `if: false`), and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
+| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `macos (unit, tiers, packed, bootstraps)` (its `windows (unit 1/6 … 6/6, tiers, packed)` jobs are off for now, `if: false`), and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
 | `ci-full.yml` | On a PR labeled `ci:full`: `ci.yml`, unscoped, as `full / …` |
 | `cache-cleanup.yml` | After each `ci` run on `main`: deletes stale and non-`main` entries from the caches CI writes |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
@@ -359,7 +359,9 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   Windows; one job on macOS), `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
   its browser test, the other packages) and `packed` (the pack test, then `reeval init` → `reeval run` →
   `reeval doctor` → `reeval studio build` in a fresh project from the tarball, and `reeval doctor`'s Docker
-  fix) as parallel jobs. There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
+  fix) as parallel jobs. macOS also runs `bootstraps`: `test/tart-darwin.test.ts` bakes the
+ Cursor, pi and Codex CLIs' macOS builds on the runner through the fake `tart`, as `tart()` bakes
+ them into an image (no VM and no key). There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
   sandboxes are Linux containers) and its macOS runners have no Docker. Tests that need POSIX
   signals skip on Windows with a reason (`noSignals` in `test/helpers.ts`). Anything reeval writes
   or prints uses posix paths (`relativeFile`), and host commands go through
