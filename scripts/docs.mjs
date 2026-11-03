@@ -122,7 +122,7 @@ const INTERNAL_VARIABLES = [
 ]
 
 /** Read only by reeval's own test suite. */
-const TEST_VARIABLES = ['REEVAL_TEST_TART_ANY_HOST']
+const TEST_VARIABLES = ['REEVAL_TEST_TART_ANY_HOST', 'REEVAL_TEST_TART_FREE_BYTES']
 
 function reevalVariables() {
   const found = new Set()
@@ -303,6 +303,7 @@ const RECORD_TYPES = [
   'PluginRecord',
   'EgressRecord',
   'AttemptImage',
+  'VmImage',
   'PhaseTimings',
   'FileChange',
   'McpStartup',

@@ -125,7 +125,7 @@ const failureOf = (provider: SandboxProvider, error: unknown): PrepareFailure =>
   error instanceof PrepareError ? error.failure : provider.classify(error)
 
 /**
- * Checks each provider, then prepares every target, `limit` at a time. A failed check stops
+ * Checks each provider and the targets it has, then prepares every target, `limit` at a time. A failed check stops
  * everything (a {@link PrepareError}); so does a failed `runWide` target (a
  * {@link RunStopError}), which also cancels the rest. Any other failure is its target's alone.
  */
@@ -150,6 +150,10 @@ export async function prepareAll(
     const provider = providers[kind] as SandboxProvider
     try {
       await provider.check()
+      await provider.checkTargets?.(
+        targets.filter((t) => t.kind === kind).map((t) => t.sandbox),
+        { signal, log: options.log ?? (() => {}) },
+      )
     } catch (error) {
       throw error instanceof PrepareError ? error : new PrepareError(provider.classify(error))
     }

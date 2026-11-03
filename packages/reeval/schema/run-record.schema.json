@@ -728,6 +728,10 @@
               "type": "null"
             }
           ]
+        },
+        "vmImage": {
+          "description": "The image a `tart()` attempt's VM was cloned from, with the digest Tart had for it. Absent in other sandboxes, and in attempts that didn't reach their sandbox.",
+          "$ref": "#/$defs/VmImage"
         }
       },
       "required": [
@@ -2186,6 +2190,7 @@
           "type": "string"
         },
         "image": {
+          "description": "The Docker image's id, or the digest of the image a `tart()` VM was cloned from.",
           "anyOf": [
             {
               "type": "null"
@@ -3939,6 +3944,28 @@
         }
       },
       "required": ["calls", "provider"]
+    },
+    "VmImage": {
+      "description": "The image a `tart()` attempt's VM was cloned from.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "The OCI manifest digest (`sha256:…`) Tart had for it; null for a local VM, which has none.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "ref": {
+          "description": "The image as `tart({ image })` names it.",
+          "type": "string"
+        }
+      },
+      "required": ["digest", "ref"]
     },
     "WebEventType": {
       "description": "The transcript events a harness may be unable to report.",

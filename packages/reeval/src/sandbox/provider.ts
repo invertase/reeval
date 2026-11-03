@@ -63,6 +63,12 @@ export interface SandboxProvider<D extends SandboxDescriptor = SandboxDescriptor
    */
   check(): Promise<void>
   /**
+   * After {@link check}, with every distinct sandbox the plan needs of it: what they start from
+   * is there, or can be made. Throws a {@link PrepareError}, which stops the run before anything
+   * is prepared.
+   */
+  checkTargets?(sandboxes: D[], ctx: Pick<PrepareContext, 'signal' | 'log'>): Promise<void>
+  /**
    * Attempts whose sandbox, harness and built plugins give the same key share one prepared
    * environment.
    */

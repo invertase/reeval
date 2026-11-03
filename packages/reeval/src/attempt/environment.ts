@@ -79,10 +79,16 @@ export async function prepareEnvironment(
       `ready ${ref} (${id.replace(/^sha256:/, '').slice(0, 12)}) · prepared before the run${ref !== base ? ` · on ${base}` : ''}${agentCli ? ` · agent CLI ${agentCli}` : ''}${install.length ? ` · install: ${install.join(' && ')}` : ''}`,
     )
   } else if (kind.capabilities.isolated) {
-    const from = 'image' in spec.sandbox ? spec.sandbox.image : undefined
+    const { preparedFor } = await import('../sandbox/preflight.ts')
+    const { createProviders, vmImage } = await import('../sandbox/providers.ts')
+    const provider = createProviders()[kind.provider(spec.sandbox)]
+    const prepared = provider && preparedFor(root, runId, provider, spec.sandbox, spec.harness)
+    const vm = prepared ? vmImage(prepared) : null
+    if (vm) record.vmImage = vm
+    const from = vm?.ref ?? ('image' in spec.sandbox ? spec.sandbox.image : undefined)
     debugLog(
       'image',
-      `${from ?? 'none recorded'} · ${kind.helpers[0]}() prepared it before the run and starts each attempt from it`,
+      `${from ?? 'none recorded'}${vm?.digest ? ` (${vm.digest})` : ''} · ${kind.helpers[0]}() checked it before the run and starts each attempt from it`,
     )
   } else {
     debugLog(

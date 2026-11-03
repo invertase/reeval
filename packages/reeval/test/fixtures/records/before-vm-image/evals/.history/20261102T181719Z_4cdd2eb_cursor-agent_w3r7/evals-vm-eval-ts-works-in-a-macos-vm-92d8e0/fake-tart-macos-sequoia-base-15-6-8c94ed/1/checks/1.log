@@ -1,0 +1,5 @@
+$ printf hello > hello.txt && cat hello.txt
+exit 0
+--- stdout
+hello
+--- stderr

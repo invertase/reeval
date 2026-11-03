@@ -1,0 +1,308 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261102T181719Z_4cdd2eb_cursor-agent_w3r7",
+  "status": "complete",
+  "startedAt": "2026-11-02T18:17:19.779Z",
+  "endedAt": "2026-11-02T18:17:20.747Z",
+  "durationMs": 968,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "4cdd2eb5df2a557ef4af84ad931741ee3ad2f665",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-11-02T18:17:19+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.18.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.13",
+      "@reeval/harness-opencode": "0.2.13",
+      "@reeval/harness-goose": "0.1.10",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.8",
+      "@ai-sdk/harness-claude-code": "1.0.171-patch.8cc1b324",
+      "@reeval/harness-codex": "0.1.10",
+      "@reeval/harness-fx": "0.1.5",
+      "@reeval/harness-grok-build": "0.1.8",
+      "ai": "7.0.156",
+      "@ai-sdk/harness": "1.0.167",
+      "@ai-sdk/anthropic": "4.0.91",
+      "@ai-sdk/google": "4.0.107",
+      "@ai-sdk/openai": "4.0.104",
+      "@ai-sdk/typesafe-ai": "3.0.29"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "991ce2915785"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 30000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "tart:macos-sequoia-base:15.6",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "978fe52e2588c27745590bc75ad5fb7eaec9b5da0b9eaa12e2f1109d05b544b5"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/vm.eval.ts › works in a macOS VM",
+      "key": "evals/vm.eval.ts › works in a macOS VM",
+      "slug": "evals-vm-eval-ts-works-in-a-macos-vm-92d8e0",
+      "file": "evals/vm.eval.ts",
+      "group": [],
+      "name": "works in a macOS VM",
+      "tags": [],
+      "fingerprint": "1d497d86ab1bb63d7cf1575a7681bffc151c7e5480bcb0da4fcbfeb26110c67f",
+      "sources": [
+        {
+          "path": "evals/vm.eval.ts",
+          "sha256": "85f860cf0d638b760912d06bb90c59830719e9545bec05df06d96ca99afdc1bf"
+        }
+      ],
+      "source": {
+        "body": "feebaa8ed0077de2bce1a6518a3100b9640430a373f74b682a2767b67fef2024",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/tart:macos-sequoia-base:15.6",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "tart:macos-sequoia-base:15.6",
+          "role": "control",
+          "fingerprint": "f4c3e893626d4747fbdb4f3356720389745a254322fc46f9bef30f98da851a2a",
+          "fingerprintParts": {
+            "sources": "6403f2fb0c64161665d7552ee730f8fbd7fa1ad0ed6a27fac4cba5c57d857166",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+            "image": null,
+            "agentCli": null,
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe hello",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/vm.eval.ts › works in a macOS VM # fake/-/tart:macos-sequoia-base:15.6#1",
+          "id": "fake/-/tart:macos-sequoia-base:15.6#1",
+          "cell": "fake/-/tart:macos-sequoia-base:15.6",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-02T18:17:20.478Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "partial": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 261,
+          "turns": [
+            {
+              "prompt": "Say hello",
+              "status": "completed",
+              "startedAt": "2026-11-02T18:17:20.620Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 130,
+            "agentMs": 0,
+            "diffMs": 29,
+            "checksMs": 7,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-vm-eval-ts-works-in-a-macos-vm-92d8e0/fake-tart-macos-sequoia-base-15-6-8c94ed/1/snapshots/final",
+              "bytes": 5,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe hello",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/vm.eval.ts:6"
+            }
+          ],
+          "checks": [
+            {
+              "command": "printf hello > hello.txt && cat hello.txt",
+              "exitCode": 0,
+              "durationMs": 7,
+              "log": {
+                "path": "evals-vm-eval-ts-works-in-a-macos-vm-92d8e0/fake-tart-macos-sequoia-base-15-6-8c94ed/1/checks/1.log",
+                "sha256": "896606b4082070eb3d6eaebf13b812ba6444444ff011a6c70bbc1b6002935c20",
+                "bytes": 79
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-vm-eval-ts-works-in-a-macos-vm-92d8e0/fake-tart-macos-sequoia-base-15-6-8c94ed/1/transcript.jsonl",
+              "sha256": "7ac5ca155fa7e34f91d7eb5c924d0372b3d75020f733c77070fa10fc1d671ae6",
+              "bytes": 401
+            },
+            "diff": {
+              "path": "evals-vm-eval-ts-works-in-a-macos-vm-92d8e0/fake-tart-macos-sequoia-base-15-6-8c94ed/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

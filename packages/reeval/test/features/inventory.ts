@@ -970,6 +970,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'tart.images',
+    area: 'Sandbox',
+    name: "`tart()` images: `reeval run` refuses one `tart list` doesn't show (exit 2, its size and `tart pull`), `reeval image build` pulls them with progress once the disk has room and runs no Docker, each attempt records the digest it cloned (`vmImage`), and `:latest` or no tag warns",
+    fixtures: ['sandbox/tart-clones-image'],
+    plan: ['tart/two-vms'],
+    unit: [
+      'reeval/test/tart-images.test.ts',
+      'reeval/test/refusals.test.ts',
+      'reeval/test/corpus.test.ts',
+    ],
+  },
+  {
     id: 'docker.privilege-warnings',
     area: 'Sandbox',
     name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',

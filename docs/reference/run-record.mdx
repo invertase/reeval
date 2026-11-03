@@ -634,7 +634,9 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="environment" type="string | null"></Property>
 
-<Property name="image" type="string | null"></Property>
+<Property name="image" type="string | null">
+  The Docker image's id, or the digest of the image a `tart()` VM was cloned from.
+</Property>
 
 <Property name="agentCli" type="string | null"></Property>
 
@@ -688,6 +690,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="imageId" type="string | null">
   The image the container started from, in `stack.images`; null when the sandbox doesn't start from an image.
+</Property>
+
+<Property name="vmImage" type="VmImage" optional>
+  The image a `tart()` attempt's VM was cloned from, with the digest Tart had for it. Absent in other sandboxes, and in attempts that didn't reach their sandbox.
 </Property>
 
 <Property name="env" type="{vars: string[]; secrets: string[]; brokered: string[]}">
@@ -1104,6 +1110,18 @@ The image an attempt's container started from, and how reeval made it.
 
 <Property name="from" type="{ref: string; digest: string | null}" optional>
   `docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `reeval image build` rebuilds it when the tag has moved since.
+</Property>
+
+### `VmImage`
+
+The image a `tart()` attempt's VM was cloned from.
+
+<Property name="ref" type="string">
+  The image as `tart({ image })` names it.
+</Property>
+
+<Property name="digest" type="string | null">
+  The OCI manifest digest (`sha256:…`) Tart had for it; null for a local VM, which has none.
 </Property>
 
 ### `PhaseTimings`

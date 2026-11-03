@@ -1,0 +1,4 @@
+{"ts":"2026-11-02T18:17:20.620Z","atMs":0,"turn":0,"type":"prompt","text":"Say hello"}
+{"turn":0,"ts":"2026-11-02T18:17:20.620Z","atMs":0,"type":"text","text":"Working on: Say hello","durationMs":0}
+{"turn":0,"ts":"2026-11-02T18:17:20.620Z","atMs":0,"type":"text","text":"Done.","durationMs":0}
+{"ts":"2026-11-02T18:17:20.620Z","atMs":0,"turn":0,"type":"turn-end","status":"completed","durationMs":0}

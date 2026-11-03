@@ -546,7 +546,7 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 `tart()` takes these options. Each attempt clones `image` into a new macOS VM, so each limit applies to one VM. For more information, see [Tart sandbox](/configuration/sandboxes/tart).
 
 <Property name="tart.image" type="string">
-  The VM to clone: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, which preflight pulls once with `tart pull`, or the name of a local Tart VM. One word, required.
+  The VM to clone: an OCI image such as `ghcr.io/cirruslabs/macos-sequoia-base:latest`, or the name of a local Tart VM. One word, required. Tart must have it before the run: `reeval image build` or `tart pull` pulls it, and `reeval run` exits 2 for one `tart list` doesn't show. `:latest` or no tag prints a warning; pin a digest (`…@sha256:…`), since Cirrus Labs publishes only `latest`, or a version tag your registry publishes.
 </Property>
 
 <Property name="tart.id" type="string" optional>
