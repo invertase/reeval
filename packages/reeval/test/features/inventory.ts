@@ -971,7 +971,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'tart.baked-images',
     area: 'Sandbox',
-    name: "`tart()` harness images: preflight and `reeval image build` boot the base once, install pnpm and the harness's CLI, and save `reeval-sandbox-<harness>-<adapter version>-…` (moved by the base's digest and the adapter's patch); attempts clone it and skip the install, and a failed bake leaves no VM behind",
+    name: "`tart()` harness images: preflight and `reeval image build` boot the base once, install pnpm and the harness's CLI, and save `reeval-sandbox-<harness>-<adapter version>-…` (moved by the base's digest or a local VM's disk, the SSH user, the bootstrap recipe and the adapter's patch); attempts clone it and skip the install; a failed or canceled bake leaves no VM behind, the next bake deletes a killed one's, `--force` bakes anew and `reeval clean --images` deletes baked images",
     fixtures: ['sandbox/tart-baked-harness'],
     unit: [
       'reeval/test/tart.test.ts',
