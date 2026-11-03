@@ -37,7 +37,13 @@ case "$cmd" in
     echo "pulling disk (1.2 GB compressed)..."
     for p in 0 3 9 10 25 50 75 99 100; do echo "$p%"; done
     pulled "$1" ;;
-  clone) mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image" ;;
+  clone)
+    mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image"
+    # A local VM's clone has its disk: here, its home.
+    if [ -d "$root/vms/$1/home" ]; then cp -a "$root/vms/$1/home/." "$root/vms/$2/home/"; fi ;;
+  rename)
+    [ -d "$root/vms/$1" ] && [ ! -e "$root/vms/$2" ] || { echo "can't rename $1 to $2" >&2; exit 1; }
+    mv "$root/vms/$1" "$root/vms/$2" ;;
   set) echo "$*" > "$root/vms/$1/set" ;;
   run)
     if [ "$FAKE_TART_RUN_FAILS" = 1 ]; then echo "no space for $1" >&2; exit 1; fi

@@ -14,8 +14,12 @@ import {
   sshGuest,
   vmPrefix,
 } from '../src/sandbox/tart.ts'
-import type { TartSandboxDescriptor } from '../src/types.ts'
-import { holdLoopback, installFakeTart } from './support/fake-tart.ts'
+import { adapterVersion } from '@reeval/sandbox-docker'
+import { fakeBootstrapScript } from '../src/harness/fake-bootstrap.ts'
+import { bakedTartImage, bakeTartImage, type TartBake, tartBake } from '../src/sandbox/tart-bake.ts'
+import { tartCli } from '../src/sandbox/tart-cli.ts'
+import type { HarnessDescriptor, TartSandboxDescriptor } from '../src/types.ts'
+import { fakeDigest, holdLoopback, installFakeTart } from './support/fake-tart.ts'
 
 const posix = process.platform !== 'win32'
 const fake = posix ? installFakeTart() : undefined
@@ -335,6 +339,86 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
       await mine.destroy()
       await theirs.destroy()
     }
+  })
+})
+
+describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script' }, () => {
+  const bootstrap = 'echo "$HOME" > installed-in'
+  const bake = tartBake({ kind: 'fake', bootstrap }) as TartBake
+  const ctx = (lines: string[] = []) => ({
+    digest: fakeDigest(IMAGE),
+    signal: new AbortController().signal,
+    log: (line: string) => lines.push(line),
+  })
+  let release = () => {}
+  before(async () => {
+    release = await holdLoopback()
+  })
+  after(async () => {
+    try {
+      for (const name of vms()) await tartCli(['delete', name])
+    } finally {
+      release()
+    }
+  })
+
+  test("bakes the harness's bootstrap into a stopped clone named for it, once", async () => {
+    const lines: string[] = []
+    const clones = () => fake?.log().filter((l) => l.startsWith('clone ')).length ?? 0
+    const before = clones()
+    const first = await bakeTartImage(vm(), bake, ctx(lines))
+    assert.equal(first.image, bakedTartImage(bake, IMAGE, fakeDigest(IMAGE)))
+    assert.match(
+      first.image,
+      /^reeval-sandbox-fake-[0-9a-f]{8}-macos-sequoia-base-latest-[0-9a-f]{8}$/,
+    )
+    assert.equal(first.built, true)
+    assert.deepEqual(vms(), [first.image], 'the bake VM is renamed, and nothing else is left')
+    const home = join(fake?.dir ?? '', 'vms', first.image, 'home')
+    assert.match(readFileSync(join(home, 'installed-in'), 'utf8'), /-bake-[0-9a-f]{6}\/home\n$/)
+    assert.ok(!existsSync(join(fake?.dir ?? '', 'vms', first.image, 'running')), 'it is stopped')
+    assert.ok(lines.includes(`Baking the fake agent's bootstrap onto ${IMAGE} as ${first.image}`))
+    assert.ok(!lines.some((l) => l.includes('pnpm')), 'a fake agent gets no pnpm')
+    const again = await bakeTartImage(vm(), bake, ctx())
+    assert.deepEqual(again, { image: first.image, built: false, agentVersion: null })
+    assert.equal(clones() - before, 1)
+  })
+
+  test('an attempt clones the baked image, and its harness finds its bootstrap done', async () => {
+    const { image } = await bakeTartImage(vm(), bake, ctx())
+    const box = await createTartSandbox(vm(), options({ image }))
+    try {
+      const clone = vms().find((n) => n.startsWith(vmPrefix('run1'))) ?? ''
+      assert.equal(readFileSync(join(fake?.dir ?? '', 'vms', clone, 'image'), 'utf8'), `${image}\n`)
+      assert.equal((await box.exec(fakeBootstrapScript(bootstrap))).exitCode, 0)
+      assert.equal((await box.exec(fakeBootstrapScript('echo new >> installed-in'))).exitCode, 0)
+      assert.match((await box.readFile('~/installed-in')) ?? '', /-bake-[0-9a-f]{6}\/home\nnew\n$/)
+    } finally {
+      await box.destroy()
+    }
+  })
+
+  test('a bootstrap that fails leaves no VM behind, and names its exit', async () => {
+    const broken = tartBake({ kind: 'fake', bootstrap: 'echo no network >&2; exit 7' }) as TartBake
+    const before = vms()
+    await assert.rejects(
+      bakeTartImage(vm(), broken, ctx()),
+      /^Error: The fake agent's bootstrap exited 7: no network$/,
+    )
+    assert.deepEqual(vms(), before)
+  })
+
+  test("the image's name moves with the base's digest, the harness's adapter and its patch", () => {
+    const other = bakedTartImage(bake, IMAGE, fakeDigest('other'))
+    assert.notEqual(other, bakedTartImage(bake, IMAGE, fakeDigest(IMAGE)))
+    assert.equal(tartBake({ kind: 'fake' }), null)
+    const cursor = tartBake({ kind: 'cursor' } as HarnessDescriptor)
+    assert.deepEqual([cursor?.label, cursor?.pnpm], [`cursor-${adapterVersion('cursor')}`, true])
+    assert.match(
+      tartBake({ kind: 'claude-code' } as HarnessDescriptor)?.label ?? '',
+      /^claude-code-[\d.]+-patch\.[0-9a-f]{8}$/,
+    )
+    assert.match(bakedTartImage({ label: 'pi-0.2.9' }, 'sequoia-dev', null), /^[\w.-]+$/)
   })
 })
 

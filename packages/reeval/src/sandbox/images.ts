@@ -41,7 +41,15 @@ import {
   usesReevalBase,
 } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
-import { attemptImage, classifyTart, createProviders, dockerKey, vmImage } from './providers.ts'
+import {
+  attemptImage,
+  bakedImage,
+  classifyTart,
+  createProviders,
+  dockerKey,
+  vmImage,
+} from './providers.ts'
+import { bakedTartImage, type TartBake, tartBake } from './tart-bake.ts'
 import type { MissingImage } from './tart-images.ts'
 
 /**
@@ -473,17 +481,32 @@ export async function buildImages(
   })
 }
 
-/** One image `tart()` clones, with how many evals use it and the sandbox the first names it in. */
-export type TartTarget = { id: string; sandbox: TartSandboxDescriptor; evals: number }
+/**
+ * One image `tart()` clones, with how many evals use it, the sandbox the first names it in and the
+ * harness baked into it (none for a fake agent without a bootstrap: it clones the image itself).
+ */
+export type TartTarget = {
+  id: string
+  sandbox: TartSandboxDescriptor
+  harness: HarnessDescriptor
+  bake: TartBake | null
+  evals: number
+  /** The evals that use it. */
+  ids: readonly string[]
+}
 
-/** The distinct `tart()` images, in first-use order, with how many evals use each. */
+/** The distinct `tart()` images and the harnesses baked into each, in first-use order. */
 export function tartTargets(uses: ImageUse[]): TartTarget[] {
-  const targets = new Map<string, TartTarget & { seen: Set<string> }>()
-  for (const { id, sandbox } of uses) {
+  const targets = new Map<string, Omit<TartTarget, 'ids'> & { seen: Set<string> }>()
+  for (const { id, sandbox, harness } of uses) {
     if (sandbox.kind !== 'tart') continue
-    const target = targets.get(sandbox.image) ?? {
-      id: sandboxId(sandbox),
+    const bake = tartBake(harness)
+    const key = JSON.stringify({ image: sandbox.image, bake: bake?.label ?? null })
+    const target = targets.get(key) ?? {
+      id: bake ? `${sandboxId(sandbox)} · ${harness.kind}` : sandboxId(sandbox),
       sandbox,
+      harness,
+      bake,
       evals: 0,
       seen: new Set(),
     }
@@ -491,39 +514,59 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
       target.seen.add(id)
       target.evals++
     }
-    targets.set(sandbox.image, target)
+    targets.set(key, target)
   }
-  return [...targets.values()].map(({ seen: _, ...t }) => t)
+  return [...targets.values()].map(({ seen, ...t }) => ({ ...t, ids: [...seen] }))
 }
 
-/** `reeval image build --dry-run`: whether Tart has each image, and what a missing one weighs. */
+/**
+ * `reeval image build --dry-run`: whether Tart has each image, what a missing one weighs, and
+ * whether each harness is baked into it yet.
+ */
 export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
   const { tartNames } = await import('./tart-cli.ts')
   const { formatSize, pullSpace, pullSpaceLine, pullSpaceUnknown, tartDigest, tartImageSize } =
     await import('./tart-images.ts')
   const { parseTartRef, tartListed } = await import('./tart-ref.ts')
   const have = await tartNames().catch((error: Error) => error)
+  const images = [...new Map(targets.map((t) => [t.sandbox.image, t])).values()]
   const lines = [
-    `tart  ${targets.length} image${targets.length === 1 ? '' : 's'} (nothing pulled: --dry-run)`,
+    `tart  ${images.length} image${images.length === 1 ? '' : 's'} (nothing pulled or baked: --dry-run)`,
   ]
   const missing: MissingImage[] = []
-  for (const t of targets) {
-    const uses = t.evals ? ` · ${t.evals} eval${t.evals === 1 ? '' : 's'}` : ''
+  for (const t of images) {
     const { image } = t.sandbox
+    const id = sandboxId(t.sandbox)
+    const evals = new Set(targets.filter((o) => o.sandbox.image === image).flatMap((o) => o.ids))
+    const uses = evals.size ? ` · ${evals.size} eval${evals.size === 1 ? '' : 's'}` : ''
     if (have instanceof Error) {
-      lines.push(`  ? ${t.id}${uses}  ${image}  (unchecked: ${have.message.split('\n')[0]})`)
+      lines.push(`  ? ${id}${uses}  ${image}  (unchecked: ${have.message.split('\n')[0]})`)
     } else if (tartListed(have, image)) {
       const digest = await tartDigest(image)
-      lines.push(`  ✓ ${t.id}${uses}  ${image}  (ready${digest ? `: ${short(digest)}` : ''})`)
+      lines.push(`  ✓ ${id}${uses}  ${image}  (ready${digest ? `: ${short(digest)}` : ''})`)
     } else {
       const size = await tartImageSize(image, AbortSignal.timeout(10_000))
       const weighs = size ? `: about ${formatSize(size.download)} to download` : ': size unknown'
-      lines.push(`  + ${t.id}${uses}  ${image}  (to pull${weighs})`)
+      lines.push(`  + ${id}${uses}  ${image}  (to pull${weighs})`)
       if (parseTartRef(image).oci) missing.push({ image, size })
+    }
+    for (const b of targets.filter((o) => o.sandbox.image === image && o.bake)) {
+      const bake = b.bake as TartBake
+      if (have instanceof Error) continue
+      if (!tartListed(have, image)) {
+        lines.push(`    + ${b.id}  (to bake ${bake.name} onto it once it's pulled)`)
+        continue
+      }
+      const baked = bakedTartImage(bake, image, await tartDigest(image))
+      lines.push(
+        have.has(baked)
+          ? `    ✓ ${b.id}  ${baked}  (baked)`
+          : `    + ${b.id}  ${baked}  (to bake: pnpm and ${bake.name})`,
+      )
     }
   }
   if (missing.length && !(have instanceof Error)) {
-    const present = targets.map((t) => t.sandbox.image).filter((i) => tartListed(have, i))
+    const present = images.map((t) => t.sandbox.image).filter((i) => tartListed(have, i))
     const space = await pullSpace(missing, present)
     lines.push(`  ${space ? pullSpaceLine(space) : pullSpaceUnknown()}`)
   }
@@ -535,7 +578,8 @@ export type PulledImage = TartTarget &
 
 /**
  * `reeval image build`: pulls every image Tart doesn't have, once the disk has room for all of
- * them, and reports each with its digest. Runs no Docker.
+ * them, bakes each harness into its own image of each, and reports each with its digest (a baked
+ * one by its name). Runs no Docker.
  */
 export async function pullTartImages(
   targets: TartTarget[],
@@ -545,10 +589,10 @@ export async function pullTartImages(
   const providers = createProviders({ pull: true })
   const prepared = targets.map((t) => ({
     kind: 'tart',
-    key: providers.tart?.key(t.sandbox, harnessFor('cursor')) ?? t.sandbox.image,
+    key: providers.tart?.key(t.sandbox, t.harness) ?? t.sandbox.image,
     label: t.id,
     sandbox: t.sandbox,
-    harness: harnessFor('cursor'),
+    harness: t.harness,
     plugins: [],
     setBy: [],
     runWide: false,
@@ -562,8 +606,9 @@ export async function pullTartImages(
   return targets.map((t, i) => {
     const o = outcomes[i] as (typeof outcomes)[number]
     const image = o.ok ? vmImage(o.handle) : null
+    const baked = o.ok ? bakedImage(o.handle) : null
     return image
-      ? { ...t, ok: true, image, ms: o.ms }
+      ? { ...t, ok: true, image: baked ? { ref: baked, digest: null } : image, ms: o.ms }
       : {
           ...t,
           ok: false,

@@ -163,6 +163,7 @@ export const fakeHarnessSchema = z.strictObject({
   turnMs: z.number().nonnegative().optional(),
   failWith: z.string().optional(),
   startHangs: z.union([z.number(), z.literal(true)]).optional(),
+  bootstrap: nonEmpty().optional(),
   reasoning: z.string().optional(),
   servedModel: z.string().optional(),
   effort: nonEmpty().optional(),

@@ -1135,7 +1135,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'commands', 'mcp'],
     name: 'pi',
     factory: 'pi',
-    platforms: ['linux'],
+    platforms: ['linux', 'darwin'],
     reasoning: 'streamed',
     reasoningTokens: true,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -1171,7 +1171,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
-    platforms: ['linux'],
+    platforms: ['linux', 'darwin'],
     // codex exec sends a reasoning item only once it's complete, when it sends one at all.
     reasoning: 'whole',
     reasoningTokens: true,

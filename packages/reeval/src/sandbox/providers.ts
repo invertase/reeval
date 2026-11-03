@@ -22,6 +22,7 @@ import type {
   VmImage,
 } from '../types.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
+import { tartBake } from './tart-bake.ts'
 import {
   type PreparedHandle,
   PrepareError,
@@ -267,6 +268,12 @@ export const vmImage = (handle: PreparedHandle): VmImage | null => {
   return { ref: h.image, digest: typeof h.digest === 'string' ? h.digest : null }
 }
 
+/** The image with the harness baked in that the Tart provider's `prepare` made, if it made one. */
+export const bakedImage = (handle: PreparedHandle): string | null => {
+  const baked = (handle as { baked?: unknown } | null)?.baked
+  return typeof baked === 'string' ? baked : null
+}
+
 const tartRefusal = (message: string): PrepareError =>
   new PrepareError({
     class: 'config',
@@ -281,11 +288,20 @@ const tartRefusal = (message: string): PrepareError =>
 /**
  * Tart: a run starts only from images `tart list` has, and refuses the rest; with `pull`
  * (`reeval image build`), it pulls them, once the disk has room for all of them (counting what
- * Tart prunes from its cache).
+ * Tart prunes from its cache). Then it bakes each harness the run needs into its own local image
+ * of each, one at a time (each bake boots a VM, and macOS runs two at once), unless Tart has it.
  */
 export const tartProvider = (
   options: { pull?: boolean } = {},
-): SandboxProvider<TartSandboxDescriptor> => ({
+): SandboxProvider<TartSandboxDescriptor> => {
+  const pulls = new Map<string, Promise<void>>()
+  let bakes: Promise<unknown> = Promise.resolve()
+  const oneAtATime = <T>(step: () => Promise<T>): Promise<T> => {
+    const next = bakes.then(step, step)
+    bakes = next.catch(() => {})
+    return next
+  }
+  return {
   kind: 'tart',
   async check() {
     const { tartCli } = await import('./tart-cli.ts')
@@ -307,7 +323,8 @@ export const tartProvider = (
       message: problem,
     })
   },
-  key: (sandbox) => JSON.stringify({ image: sandbox.image }),
+  key: (sandbox, harness) =>
+    JSON.stringify({ image: sandbox.image, bake: tartBake(harness)?.label ?? null }),
   async checkTargets(sandboxes, ctx) {
     const { tartNames } = await import('./tart-cli.ts')
     const images = await import('./tart-images.ts')
@@ -345,11 +362,13 @@ export const tartProvider = (
       })
     }
   },
-  async prepare(sandbox, _harness, ctx) {
+  async prepare(sandbox, harness, ctx) {
     const { tartNames } = await import('./tart-cli.ts')
     const { tartDigest, tartPull } = await import('./tart-images.ts')
     const { tartListed } = await import('./tart-ref.ts')
-    if (options.pull && !tartListed(await tartNames(ctx.signal), sandbox.image)) {
+    // Each harness on an image is a target of its own, and they share its one pull.
+    const pull = async () => {
+      if (!options.pull || tartListed(await tartNames(ctx.signal), sandbox.image)) return
       const { sandboxId } = await import('../options.ts')
       // Up to three pull at once: each line says whose it is.
       const id = sandboxId(sandbox)
@@ -361,10 +380,26 @@ export const tartProvider = (
         }),
       )
     }
-    return { image: sandbox.image, digest: await tartDigest(sandbox.image) }
+    const pulled = pulls.get(sandbox.image) ?? pull()
+    pulls.set(sandbox.image, pulled)
+    await pulled
+    const digest = await tartDigest(sandbox.image)
+    const bake = tartBake(harness)
+    if (!bake) return { image: sandbox.image, digest }
+    const { bakeTartImage } = await import('./tart-bake.ts')
+    const baked = await oneAtATime(() =>
+      ctx.retry(() => bakeTartImage(sandbox, bake, { digest, signal: ctx.signal, log: ctx.log })),
+    )
+    return {
+      image: sandbox.image,
+      digest,
+      baked: baked.image,
+      ...(baked.agentVersion && { agentVersion: baked.agentVersion }),
+    }
   },
   classify: classifyTart,
-})
+  }
+}
 
 /**
  * Boat has nothing to build yet (each attempt's VM installs the harness as it starts): `prepare`

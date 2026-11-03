@@ -80,15 +80,17 @@ export async function prepareEnvironment(
     )
   } else if (kind.capabilities.isolated) {
     const { preparedFor } = await import('../sandbox/preflight.ts')
-    const { createProviders, vmImage } = await import('../sandbox/providers.ts')
+    const { bakedImage, createProviders, vmImage } = await import('../sandbox/providers.ts')
     const provider = createProviders()[kind.provider(spec.sandbox)]
     const prepared = provider && preparedFor(root, runId, provider, spec.sandbox, spec.harness)
     const vm = prepared ? vmImage(prepared) : null
     if (vm) record.vmImage = vm
+    const baked = prepared ? bakedImage(prepared) : null
+    if (baked) a.image = baked
     const from = vm?.ref ?? ('image' in spec.sandbox ? spec.sandbox.image : undefined)
     debugLog(
       'image',
-      `${from ?? 'none recorded'}${vm?.digest ? ` (${vm.digest})` : ''} · ${kind.helpers[0]}() checked it before the run and starts each attempt from it`,
+      `${from ?? 'none recorded'}${vm?.digest ? ` (${vm.digest})` : ''} · ${kind.helpers[0]}() checked it before the run and starts each attempt from ${baked ? `${baked}, which has the harness baked in` : 'it'}`,
     )
   } else {
     debugLog(

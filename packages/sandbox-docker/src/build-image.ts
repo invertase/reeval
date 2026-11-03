@@ -27,9 +27,10 @@ import {
   WORKSPACE_DIR,
 } from './image.ts'
 import { shellQuote as q, run } from './process.ts'
-import { createDockerSession } from './session.ts'
+import { createDockerSession, type DockerSession } from './session.ts'
 
-const PNPM_VERSION = '10.33.3'
+/** The pnpm every image and baked Tart VM has: the harness bridges install with it. */
+export const PNPM_VERSION = '10.33.3'
 /** Pinned so evals' installs don't move with the Node image's bundled npm. */
 const NPM_VERSION = '11.20.0'
 /**
@@ -534,9 +535,19 @@ export async function buildImage(
   return { image: target, agentVersion }
 }
 
+/**
+ * Runs `harness`'s bootstrap in `session` (a container, or a VM reeval then keeps as an image)
+ * and returns the CLI version it installed.
+ */
+export const bakeHarness = (session: DockerSession, harness: BakedHarness) =>
+  bake(session, BOOTSTRAPS[harness])
+
+/** The harness's name, as a bake's progress says it. */
+export const bakedHarnessName = (harness: BakedHarness) => BOOTSTRAPS[harness].name
+
 /** Runs the harness bootstrap in `session` and returns the CLI version it installed. */
 async function bake(
-  session: Awaited<ReturnType<typeof createDockerSession>>,
+  session: DockerSession,
   bootstrap: (typeof BOOTSTRAPS)[BakedHarness],
 ): Promise<string> {
   const template = await createHarnessSandboxTemplate({
