@@ -1,6 +1,6 @@
 // The pinned @opencode/cli install the bootstrap runs, from a lockfile. pnpm runs only its
-// postinstall, which links the platform binary. The musl builds are left out: reeval images are
-// glibc, and the package marks none of its builds with a libc, so pnpm would install all four
+// postinstall, which links the platform binary. The musl builds are left out: reeval's Linux images
+// are glibc, and the package marks none of its builds with a libc, so pnpm would install all four
 // (about 200 MB each). It replaces @ai-sdk/harness-acp's bridge manifest, so it lists the
 // bridge's dependencies too. On a bump of either, regenerate the lockfile with
 // `pnpm install --lockfile-only` from these files; a test checks the versions agree.
