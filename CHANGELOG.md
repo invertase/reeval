@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.19.0](https://github.com/invertase/reeval/compare/v0.18.0...v0.19.0) (2026-11-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sandbox:** pull tart() images in reeval image build, never in a run ([#784](https://github.com/invertase/reeval/issues/784))
+* **history:** make an eval with cases one eval in records, views and the plan ([#759](https://github.com/invertase/reeval/issues/759))
+* **cli:** add reeval show --trace, a run's timeline for Perfetto, and drop run's --trace alias ([#777](https://github.com/invertase/reeval/issues/777))
+* authoring API groundwork (plural axes, compare.control, cases, where, --trait) ([#745](https://github.com/invertase/reeval/issues/745))
+
+### Features
+
+* authoring API groundwork (plural axes, compare.control, cases, where, --trait) ([#745](https://github.com/invertase/reeval/issues/745)) ([008f984](https://github.com/invertase/reeval/commit/008f984307afb52ae9a2ef8d2eef69ca21fbbb7d))
+* **cli:** add reeval show --trace, a run's timeline for Perfetto, and drop run's --trace alias ([#777](https://github.com/invertase/reeval/issues/777)) ([4fdbb76](https://github.com/invertase/reeval/commit/4fdbb76dd68e7c23b78c9da26522d9a8a2aa5b08))
+* **cli:** rerun a finished run's infra errors with reeval run --retry-errors ([#785](https://github.com/invertase/reeval/issues/785)) ([c93714b](https://github.com/invertase/reeval/commit/c93714b1541621d5be919e5fe4d51a2792c785cf))
+* **history:** make an eval with cases one eval in records, views and the plan ([#759](https://github.com/invertase/reeval/issues/759)) ([c7f6608](https://github.com/invertase/reeval/commit/c7f660806f224f69c9a5faf8ad2e1cd5841997dd))
+* **sandbox:** add a tart() sandbox kind that plans and prepares macOS VMs, at most two at once ([#774](https://github.com/invertase/reeval/issues/774)) ([988a590](https://github.com/invertase/reeval/commit/988a590986c3120a171b77f8ac161c48362b7cc2))
+* **sandbox:** add the boat sandbox provider ([#773](https://github.com/invertase/reeval/issues/773)) ([3ff6bff](https://github.com/invertase/reeval/commit/3ff6bff680d84541482b27f6f3c9ba29d444f3cb))
+* **sandbox:** pull tart() images in reeval image build, never in a run ([#784](https://github.com/invertase/reeval/issues/784)) ([22d8a9f](https://github.com/invertase/reeval/commit/22d8a9f417b22dc7debc4587a16eeacf93802056))
+* **sandbox:** run each tart() attempt in a cloned macOS VM over tart exec, with SSH as the fallback ([#775](https://github.com/invertase/reeval/issues/775)) ([39909ac](https://github.com/invertase/reeval/commit/39909aca7ace1616bab3801e8b367f6903b4b489))
+* **ui:** show an eval's case table live in the interactive list, five cases then all ([#783](https://github.com/invertase/reeval/issues/783)) ([625158e](https://github.com/invertase/reeval/commit/625158e69e924b62ec232175ceec96504073feea))
+* **ui:** spin while waiting, print failed checks as fails and tighten the compare block ([#770](https://github.com/invertase/reeval/issues/770)) ([d3a0961](https://github.com/invertase/reeval/commit/d3a0961dc8d9c7b1ba35cc2923691bf2124afa13))
+
+
+### Bug Fixes
+
+* **cli:** keep a staged rerun and finish a killed --retry-errors on --resume ([#788](https://github.com/invertase/reeval/issues/788)) ([0dafda1](https://github.com/invertase/reeval/commit/0dafda1a82563bf2fcd971cae2b6af9f4c0a8c3f))
+* **sandbox:** give boat attempts the start-up allowance a vm boot needs ([#789](https://github.com/invertase/reeval/issues/789)) ([b03708d](https://github.com/invertase/reeval/commit/b03708d4c29cc167513a2dbdec7937eb0f86760e))
+* **ui:** measure the prepare spinner in columns and finish the run output follow-ups ([#781](https://github.com/invertase/reeval/issues/781)) ([2808b8a](https://github.com/invertase/reeval/commit/2808b8a85ce3eef1bdd8234ad25a4b05420a3d08))
+
 ## [0.18.0](https://github.com/invertase/reeval/compare/v0.17.2...v0.18.0) (2026-11-02)
 
 
