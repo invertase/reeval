@@ -18,6 +18,7 @@ import { type BrokeredSecret, resolveEnvironment } from '../src/environment/reso
 import {
   applied,
   defineEnvironment,
+  plainCredentialEnv,
   plainCredentialHeaders,
   unbrokeredSecrets,
 } from '../src/environment.ts'
@@ -574,6 +575,39 @@ describe('unbrokered secrets', () => {
     assert.deepEqual(unbrokered({}, [attempt('docker'), attempt('docker')]), [
       { label: 'PLAIN', from: 'PLAIN' },
     ])
+  })
+})
+
+describe('env written as plain strings', () => {
+  test('lists those shaped like a token, or named like a credential with 8+ characters', () => {
+    const env = defineEnvironment('e', ({ mcp }) => ({
+      env: { UPSTREAM: 'xoxb-0123456789-abcdefghij', NODE_ENV: 'production' },
+      mcp: {
+        db: mcp.stdio('db', [], {
+          env: { DB_PASSWORD: 'hunter2-hunter2', MAX_TOKENS: '4096', DB_HOST: 'localhost' },
+        }),
+        docs: mcp.http('https://mcp.example.com', { headers: { Accept: 'text/plain' } }),
+      },
+    }))
+    assert.deepEqual(
+      plainCredentialEnv({ GH: 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789' }, env.layers),
+      [
+        { label: 'GH', name: 'GH' },
+        { label: 'UPSTREAM', name: 'UPSTREAM' },
+        { label: 'mcp.db.env.DB_PASSWORD', name: 'DB_PASSWORD' },
+      ],
+    )
+  })
+
+  test('a later layer that makes the variable a secret leaves nothing to warn of', () => {
+    const parent = defineEnvironment('parent', () => ({
+      env: { UPSTREAM: 'xoxb-0123456789-abcdefghij' },
+    }))
+    const child = parent.extendEnvironment('child', ({ secret }) => ({
+      env: { UPSTREAM: secret() },
+    }))
+    assert.equal(plainCredentialEnv({}, parent.layers).length, 1)
+    assert.deepEqual(plainCredentialEnv({}, child.layers), [])
   })
 })
 

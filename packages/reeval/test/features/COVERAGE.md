@@ -92,7 +92,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Processes setup leaves running with a `to: 'checks'` secret without `hosts`: `setupProcesses` and the `setup-process-secret` remark | ✓ 3 | — | — | ● 2 | — | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | ● 1 | — |
-| `secrets: { unbrokered }` and the unbrokered warning | ✓ 2 | ✓ 1 | — | — | — | — |
+| `secrets: { unbrokered }` and the unbrokered warning | ✓ 2 | ✓ 3 | — | — | — | — |
 | Secrets masked in everything reeval writes | ✓ 3 | — | ● 2 | ● 2 | — | — |
 | Secrets masked in eval, group and todo names; names that mask alike refused | ✓ 3 | — | ● 1 | — | — | — |
 | Secrets masked in what the judge is sent | ✓ 1 | — | ● 1 | ● 1 | — | — |

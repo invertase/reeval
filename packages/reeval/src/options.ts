@@ -24,7 +24,9 @@ import {
   environmentDataProblem,
   isEnvironment,
   isMovingRef,
+  type PlainCredentialEnv,
   type PlainCredentialHeader,
+  plainCredentialEnv,
   plainCredentialHeaders,
   plannedSecrets,
   sameWorkspaceOnly,
@@ -1295,6 +1297,24 @@ export const plainHeaderWarning = (h: PlainCredentialHeader) =>
 export const plainHeaderError = (h: PlainCredentialHeader, where: string, configFile: string) =>
   `${h.label} in ${where} is a plain string, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${templateHint(h)}.`
 
+/** The attempts' `env` strings that look like credentials, once each. */
+export function plainEnv(env: EnvVars, attempts: PlannedAttempt[]): PlainCredentialEnv[] {
+  const out = new Map<string, PlainCredentialEnv>()
+  for (const a of attempts) {
+    for (const e of plainCredentialEnv(env, a.environment.layers)) out.set(e.label, e)
+  }
+  return [...out.values()]
+}
+
+const secretHint = (e: PlainCredentialEnv) =>
+  `read it from a host variable with secret(), e.g. ${e.name}: secret.fromEnv('${e.name}', { hosts: ['api.example.com'] })`
+
+export const plainEnvWarning = (e: PlainCredentialEnv) =>
+  `${e.label} is a plain string that looks like a credential, so it's in the sandbox as its real value. To give the agent only a placeholder and mask the value in everything reeval writes, ${secretHint(e)}.`
+
+export const plainEnvError = (e: PlainCredentialEnv, where: string, configFile: string) =>
+  `${e.label} in ${where} is a plain string that looks like a credential, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${secretHint(e)}.`
+
 export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')
     ? 'eval'
@@ -1384,6 +1404,7 @@ export function evalPlan(
       ...(skip ? [] : questionWarnings(resolved)),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
       ...plainHeaders(attempts).map(plainHeaderWarning),
+      ...plainEnv(r.resolved.env, attempts).map(plainEnvWarning),
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],

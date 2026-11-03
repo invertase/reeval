@@ -799,7 +799,7 @@ export const inventory: InventoryFeature[] = [
     id: 'secret.unbrokered',
     area: 'Environments',
     name: '`secrets: { unbrokered }` and the unbrokered warning',
-    plan: ['secrets/plain-headers'],
+    plan: ['secrets/plain-headers', 'secrets/plain-env', 'secrets/ordinary-env'],
     unit: ['reeval/test/options.test.ts', 'reeval/test/secrets.test.ts'],
   },
   {

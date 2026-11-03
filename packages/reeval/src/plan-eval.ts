@@ -42,6 +42,8 @@ import {
   type Level,
   matchesTags,
   type PlannedAttempt,
+  plainEnv,
+  plainEnvError,
   plainHeaderError,
   plainHeaders,
   type ResolvedEval,
@@ -314,6 +316,8 @@ function planTests(
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
     const [plain] = plainHeaders(plannedAttempts)
     if (plain) throw new UsageError(plainHeaderError(plain, where, ctx.config.file))
+    const [plainVar] = plainEnv(resolved.env, plannedAttempts)
+    if (plainVar) throw new UsageError(plainEnvError(plainVar, where, ctx.config.file))
   }
   const pluginNotes: string[] = []
   const pluginLabels = new Map<PlannedAttempt, string[]>()

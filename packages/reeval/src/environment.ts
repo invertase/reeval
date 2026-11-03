@@ -350,6 +350,41 @@ export function plainCredentialHeaders(
   return out
 }
 
+/**
+ * Whether a plain `env` string looks like a credential: named like one with 8 or more characters,
+ * as a host variable must be to be masked (so `MAX_TOKENS: '4096'` passes), or shaped like a token.
+ */
+export const credentialEnv = (name: string, value: string) =>
+  (SECRET_NAME.test(name) && value.length >= 8) || hasTokenShape(value)
+
+/** An `env` string that looks like a credential: where it's set, and its variable's name. */
+export type PlainCredentialEnv = { label: string; name: string }
+
+/**
+ * The `env` strings among `env`, the layers' env and their stdio MCP servers' env that look like
+ * credentials but aren't a `secret()`, layered as the attempt resolves them.
+ */
+export function plainCredentialEnv(
+  env: EnvVars,
+  layers: readonly EnvironmentLayer[],
+): PlainCredentialEnv[] {
+  const vars: EnvVars = { ...env }
+  for (const { spec } of layers) Object.assign(vars, spec.env)
+  const out: PlainCredentialEnv[] = []
+  const fromVars = (values: EnvVars, prefix: string) => {
+    for (const [name, value] of Object.entries(values)) {
+      if (typeof value === 'string' && credentialEnv(name, value)) {
+        out.push({ label: `${prefix}${name}`, name })
+      }
+    }
+  }
+  fromVars(vars, '')
+  for (const [server, s] of layeredServers(layers)) {
+    if (s.transport === 'stdio') fromVars(s.env, `mcp.${server}.env.`)
+  }
+  return out
+}
+
 /** The secrets the sandbox gets as real values: no `hosts`, and none implied by an MCP URL. */
 export const unbrokeredSecrets = (
   env: EnvVars,
