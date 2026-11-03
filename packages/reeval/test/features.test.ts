@@ -48,7 +48,7 @@ import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
-import { fakeDigest, fakeTart, holdLoopback } from './support/fake-tart.ts'
+import { fakeDigest, fakeTart, holdLoopback, LOOPBACK_WAIT_MS } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -4308,7 +4308,8 @@ function fixtureTests(tiers: Tier[]) {
         { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
       test(`${rowName(f)} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
-        timeout,
+        // The run's own deadline starts once it holds the loopback, which it may wait for.
+        timeout: timeout + (f.loopback ? LOOPBACK_WAIT_MS : 0),
       }, async (t) => {
         const row = realRowOf(f)
         if (tier === 'real') {
