@@ -282,7 +282,7 @@ def evaluate(
     return decorator
 
 
-_BAD_KEY = re.compile(r"[#/›\x00-\x1f\x7f]")
+_BAD_KEY = re.compile(r"[#›\x00-\x1f\x7f]")
 CASE_KEY_MAX = 80
 
 
@@ -346,7 +346,7 @@ def case_keys(cases: Sequence[Any], case_key: Callable[[Any], Any] | None, where
         if not key or len(key) > CASE_KEY_MAX or _BAD_KEY.search(key):
             raise ValueError(
                 f"cases[{i}] in {where} has the key {raw!r}: a case key is 1–{CASE_KEY_MAX} "
-                "characters, with no #, /, › or control characters."
+                "characters, with no #, › or control characters."
                 + ("" if case_key else " Pass case_key to give it another.")
             )
         if key in seen:

@@ -135,7 +135,7 @@ def test_cases_must_be_a_list(cases: Any) -> None:
             {"cases": ["a", "a"]},
             r"cases\[0\] and cases\[1\] in evaluate\('e'\) have the same key 'a'",
         ),
-        ({"cases": ["a/b"]}, r"has the key 'a/b': a case key is 1–80 characters"),
+        ({"cases": ["a#b"]}, r"has the key 'a#b': a case key is 1–80 characters"),
         (
             {"cases": [1], "case_key": lambda c: 1},
             r"case_key in evaluate\('e'\) must return a string",

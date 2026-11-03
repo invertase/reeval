@@ -1,0 +1,1134 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261103T114755Z_2d8f3fa_cursor-agent_b8sx",
+  "status": "complete",
+  "startedAt": "2026-11-03T11:47:55.679Z",
+  "endedAt": "2026-11-03T11:48:00.867Z",
+  "durationMs": 5188,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "2d8f3fa88ace34f8d57ba3bbd415af7ec7ed8048",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-11-03T11:47:54+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.18.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.8",
+        "id": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+        "agentCli": "@cursor/sdk 1.0.40",
+        "base": "reeval-sandbox:cursor-0.1.8",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.13",
+      "@reeval/harness-opencode": "0.2.13",
+      "@reeval/harness-goose": "0.1.10",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.8",
+      "@ai-sdk/harness-claude-code": "1.0.171-patch.8cc1b324",
+      "@reeval/harness-codex": "0.1.10",
+      "@reeval/harness-fx": "0.1.5",
+      "@reeval/harness-grok-build": "0.1.8",
+      "ai": "7.0.156",
+      "@ai-sdk/harness": "1.0.167",
+      "@ai-sdk/anthropic": "4.0.91",
+      "@ai-sdk/google": "4.0.107",
+      "@ai-sdk/openai": "4.0.104",
+      "@ai-sdk/typesafe-ai": "3.0.29"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "991ce2915785"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "app",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "plain",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    },
+    {
+      "name": "with-skill",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 3,
+    "cells": 5,
+    "attempts": 5,
+    "estimateMs": 150000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "df20f0887e57f5e559fdde31fe77eae7f05042adae1b7ed46c58bafecee241a6"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 3,
+    "attempts": 5,
+    "pass": 0,
+    "fail": 5,
+    "notGated": 2,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/discovery.eval.ts › discovery: add user authentication",
+      "key": "evals/discovery.eval.ts › discovery: add user authentication",
+      "slug": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58",
+      "file": "evals/discovery.eval.ts",
+      "group": [],
+      "name": "discovery: add user authentication",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "family": {
+        "id": "evals/discovery.eval.ts › discovery: %s",
+        "name": "discovery: %s",
+        "case": 0,
+        "cases": 2
+      },
+      "fingerprint": "fb4c46b5089699cc34b38fdd0a65731530ebb661f9fc0ed3957854e887f01b5e",
+      "sources": [
+        {
+          "path": "evals/discovery.eval.ts",
+          "sha256": "bccdf4d6c2fd45cc3076d8765040139f26357c9e844eb5a9ae92c1d53a48521f"
+        }
+      ],
+      "source": {
+        "body": "ef8d55f8d319f3becf7f43d4b836c84f8024b26d267ad834c6f8e000639b3415",
+        "case": "b1e87c5e95123d71ea37859e9faaa167b90c22e22557bb3e07b1c07aefe9c6ee",
+        "options": "15ffeae09bc901220acee1bb6bbb594b77cb9d77467506f06e2536b2c19ac23a"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "bf974dd2e694ab05923f81c3fa6b6378e5dc5f8fc8ffece5f5cc7658b96c47d5",
+          "fingerprintParts": {
+            "sources": "9a6794689985a3f79ad4d620c1bfb39e67e11738baf1111378cbdf0ad57169d7",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "none"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-skill/docker",
+          "harness": "fake",
+          "environment": "with-skill",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-skill",
+          "fingerprint": "cb29d5362aed32dfda5b7fbda0a409048df4b685c597e0200a997c68efed3724",
+          "fingerprintParts": {
+            "sources": "9a6794689985a3f79ad4d620c1bfb39e67e11738baf1111378cbdf0ad57169d7",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 1,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "both-fail"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 0,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 0,
+              "counted": 1
+            },
+            "points": 0,
+            "interval": {
+              "lo": -0.793,
+              "hi": 0.793,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-03T11:47:56.519Z",
+          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected file greet.js to exist"
+          },
+          "durationMs": 2521,
+          "turns": [
+            {
+              "prompt": "add user authentication",
+              "status": "completed",
+              "startedAt": "2026-11-03T11:47:58.447Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1874,
+            "agentMs": 0,
+            "diffMs": 183,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/discovery.eval.ts:12",
+              "message": "expected file greet.js to exist",
+              "durationMs": 50
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "45a1c19db66c9bc0721b8bb15c280f87a8644370c52690053776f0633f7a59a9",
+              "bytes": 429
+            },
+            "diff": {
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "evals/discovery.eval.ts › discovery: add user authentication # fake/with-skill/docker#1",
+          "id": "fake/with-skill/docker#1",
+          "cell": "fake/with-skill/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-11-03T11:47:56.522Z",
+          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected file greet.js to exist"
+          },
+          "durationMs": 2343,
+          "turns": [
+            {
+              "prompt": "add user authentication",
+              "status": "completed",
+              "startedAt": "2026-11-03T11:47:58.302Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1720,
+            "agentMs": 0,
+            "diffMs": 171,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/discovery.eval.ts:12",
+              "message": "expected file greet.js to exist",
+              "durationMs": 87
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/transcript.jsonl",
+              "sha256": "6570c3579c5bbc05ddbe475f651ae526e648bf3c197712d13bfaa30b6e215592",
+              "bytes": 429
+            },
+            "diff": {
+              "path": "evals-discovery-eval-ts-discovery-add-user-authentication-e8dd58/fake-with-skill-docker-6d80ca/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/discovery.eval.ts › discovery: add social login and email/password auth",
+      "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth",
+      "slug": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace",
+      "file": "evals/discovery.eval.ts",
+      "group": [],
+      "name": "discovery: add social login and email/password auth",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "family": {
+        "id": "evals/discovery.eval.ts › discovery: %s",
+        "name": "discovery: %s",
+        "case": 1,
+        "cases": 2
+      },
+      "fingerprint": "3dda37e6f1cef592755339bb57f77d0c4a9dd7e35a306d49584590ab977eccf7",
+      "sources": [
+        {
+          "path": "evals/discovery.eval.ts",
+          "sha256": "bccdf4d6c2fd45cc3076d8765040139f26357c9e844eb5a9ae92c1d53a48521f"
+        }
+      ],
+      "source": {
+        "body": "ef8d55f8d319f3becf7f43d4b836c84f8024b26d267ad834c6f8e000639b3415",
+        "case": "dd04dce87c0ce7afe6a0fc6e5d84f26bf767282b81ad72b539688937a048e7e6",
+        "options": "15ffeae09bc901220acee1bb6bbb594b77cb9d77467506f06e2536b2c19ac23a"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "c1c287efc8029c7ae94b8bc95b7844e176d54c862e4f50038f8d26208f6fbed9",
+          "fingerprintParts": {
+            "sources": "10149f6699f27a237640bdf929795eaba9821efc3157e5a68bb9300c31bac846",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "none"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-skill/docker",
+          "harness": "fake",
+          "environment": "with-skill",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-skill",
+          "fingerprint": "50f8a3411200c5ab1f84e58a5cff9faeab2857086377e8c5f8b24a7e8ef47a86",
+          "fingerprintParts": {
+            "sources": "10149f6699f27a237640bdf929795eaba9821efc3157e5a68bb9300c31bac846",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 1,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "both-fail"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 0,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 0,
+              "counted": 1
+            },
+            "points": 0,
+            "interval": {
+              "lo": -0.793,
+              "hi": 0.793,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-11-03T11:47:56.540Z",
+          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected file greet.js to exist"
+          },
+          "durationMs": 2602,
+          "turns": [
+            {
+              "prompt": "add social login and email/password auth",
+              "status": "completed",
+              "startedAt": "2026-11-03T11:47:58.611Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 2006,
+            "agentMs": 0,
+            "diffMs": 177,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/discovery.eval.ts:12",
+              "message": "expected file greet.js to exist",
+              "durationMs": 59
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "b1b758c6b74c3adc6a0c68623f51ba8afec2ed6a8864120a759aa1ae5102a876",
+              "bytes": 463
+            },
+            "diff": {
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "evals/discovery.eval.ts › discovery: add social login and email/password auth # fake/with-skill/docker#1",
+          "id": "fake/with-skill/docker#1",
+          "cell": "fake/with-skill/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-11-03T11:47:56.541Z",
+          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected file greet.js to exist"
+          },
+          "durationMs": 2541,
+          "turns": [
+            {
+              "prompt": "add social login and email/password auth",
+              "status": "completed",
+              "startedAt": "2026-11-03T11:47:58.549Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1952,
+            "agentMs": 0,
+            "diffMs": 165,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/discovery.eval.ts:12",
+              "message": "expected file greet.js to exist",
+              "durationMs": 55
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/transcript.jsonl",
+              "sha256": "c7d4e3bcab206c1fc782e4bbd2401725ae5b95a8e2626ee6776e962fc9ed68cc",
+              "bytes": 463
+            },
+            "diff": {
+              "path": "evals-discovery-eval-ts-discovery-add-social-login-and-email-ea6ace/fake-with-skill-docker-6d80ca/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/options.eval.ts › renamed options › writes greet.js",
+      "key": "evals/options.eval.ts › renamed options › writes greet.js",
+      "slug": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0",
+      "file": "evals/options.eval.ts",
+      "group": [
+        "renamed options"
+      ],
+      "name": "writes greet.js",
+      "tags": [],
+      "fingerprint": "1c47584b46c3d8e0c5d631593abb6897593dfc1dd53c8565819e798622a18916",
+      "sources": [
+        {
+          "path": "evals/options.eval.ts",
+          "sha256": "4aefc54efa8dfa56f62018ced92c0c8f2b0a858d34bb1c1900707d7a65d8eb92"
+        }
+      ],
+      "source": {
+        "body": "c0eefc8a5c7a9250d7a564e145b000759ee207b4013853f761fcf81b5c7e4f59",
+        "options": "b9b249baa14f125af862b24d2198f98e0a56b9a9a8991ab8893586e3978600c6"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/app/docker",
+          "harness": "fake",
+          "environment": "app",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "171f4088f571320a9f82548e08f7764865cceba05de4226ff4d8476128520548",
+          "fingerprintParts": {
+            "sources": "a1fd64164722b02889d1dd35102455032b59fe71b6c4ca321078e451e81b06f8",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b1221f1d8653f9a1a123c83b29a98c21999eea095154d2f1cda6658c60b3c668",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/options.eval.ts › renamed options › writes greet.js # fake/app/docker#1",
+          "id": "fake/app/docker#1",
+          "cell": "fake/app/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-11-03T11:47:58.870Z",
+          "imageId": "sha256:1ba4770b253c109e7f5aa2f605ed7a790535a101a9fe65664f4dcb1b90a2a546",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected file greet.js to exist"
+          },
+          "durationMs": 1989,
+          "turns": [
+            {
+              "prompt": "Write greet.js.",
+              "status": "completed",
+              "startedAt": "2026-11-03T11:48:00.333Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1394,
+            "agentMs": 0,
+            "diffMs": 176,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/options.eval.ts:10",
+              "message": "expected file greet.js to exist",
+              "durationMs": 67
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/transcript.jsonl",
+              "sha256": "ac5d800cafae35b315d4e1903733db95573535699ad4ce773d53040c0c50c8e1",
+              "bytes": 413
+            },
+            "diff": {
+              "path": "evals-options-eval-ts-renamed-options-writes-greet-js-b9f9b0/fake-app-docker-ce0867/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "evals/discovery.eval.ts › discovery: %s",
+      "file": "evals/discovery.eval.ts",
+      "group": [],
+      "name": "discovery: %s",
+      "cases": 2,
+      "ran": 2,
+      "rates": [
+        {
+          "cell": "fake/plain/docker",
+          "cases": 2,
+          "pass": 0,
+          "counted": 2,
+          "rate": 0,
+          "interval": {
+            "lo": 0,
+            "hi": 0.658,
+            "level": 0.95,
+            "method": "wilson"
+          }
+        },
+        {
+          "cell": "fake/with-skill/docker",
+          "cases": 2,
+          "pass": 0,
+          "counted": 2,
+          "rate": 0,
+          "interval": {
+            "lo": 0,
+            "hi": 0.658,
+            "level": 0.95,
+            "method": "wilson"
+          }
+        }
+      ],
+      "lifts": [
+        {
+          "variant": "fake/with-skill/docker",
+          "vs": "fake/plain/docker",
+          "pairs": 2,
+          "variantRate": 0,
+          "controlRate": 0,
+          "discordant": {
+            "variantOnly": 0,
+            "controlOnly": 0
+          },
+          "points": 0,
+          "interval": {
+            "lo": -0.658,
+            "hi": 0.658,
+            "level": 0.95,
+            "method": "newcombe-paired"
+          },
+          "p": 1,
+          "withinNoise": true,
+          "verdict": "insufficient",
+          "outcome": "pass",
+          "effort": {
+            "tools": {
+              "pairs": 2,
+              "ratio": null,
+              "p": null,
+              "verdict": "insufficient"
+            },
+            "agentMs": {
+              "pairs": 2,
+              "ratio": null,
+              "p": null,
+              "verdict": "insufficient"
+            }
+          }
+        }
+      ],
+      "outcome": "pass"
+    }
+  ]
+}

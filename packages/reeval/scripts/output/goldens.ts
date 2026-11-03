@@ -51,17 +51,17 @@ export const GOLDENS: Golden[] = [
   {
     name: 'family',
     entry: 'with-layouts',
-    evals: layouts('family.eval.ts › adds a $name button that builds'),
+    evals: layouts('family.eval.ts › adds a button that builds'),
   },
   {
     name: 'family-with-change',
     entry: 'with-layouts',
-    evals: layouts('family.eval.ts › greets %s in the house style'),
+    evals: layouts('family.eval.ts › greets in the house style'),
   },
   {
     name: 'family-with-change-verbose',
     entry: 'with-layouts',
-    evals: layouts('family.eval.ts › greets %s in the house style'),
+    evals: layouts('family.eval.ts › greets in the house style'),
     verbose: true,
   },
   { name: 'suite', entry: 'with-layouts' },
@@ -141,7 +141,7 @@ export const COMPARE_GOLDENS: CompareGolden[] = [
   {
     name: 'compare-fixed',
     entry: 'with-compare',
-    evals: compared('buttons.eval.ts › adds a $name button that builds'),
+    evals: compared('buttons.eval.ts › adds a button that builds'),
   },
   {
     name: 'compare-cant-compare',

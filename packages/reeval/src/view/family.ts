@@ -71,6 +71,9 @@ export function familyHeadLabel(family: FamilyRecord): string {
   return family.lifts.length ? `${cases} · paired` : cases
 }
 
+const PLACEHOLDER = /%#|%s|\$[A-Za-z_][A-Za-z0-9_]*/g
+const EDGE = /^[\s:;,|–—-]+|[\s:;,|–—-]+$/g
+
 /**
  * A case's short label: its key, so `adds a check [nextjs]` under `adds a check` is `nextjs`. A
  * family in an older record named its cases from a template, whose literal text before
@@ -80,8 +83,7 @@ export function caseLabel(template: string, name: string): string {
   if (name.startsWith(`${template} [`) && name.endsWith(']')) {
     return name.slice(template.length + 2, -1) || name
   }
-  const placeholder = /%#|%s|\$[A-Za-z_][A-Za-z0-9_]*/g
-  const matches = [...template.matchAll(placeholder)]
+  const matches = [...template.matchAll(PLACEHOLDER)]
   const first = matches[0]
   const last = matches.at(-1)
   if (!first || !last) return name
@@ -90,4 +92,19 @@ export function caseLabel(template: string, name: string): string {
   if (!name.startsWith(prefix) || !name.endsWith(suffix)) return name
   const label = name.slice(prefix.length, name.length - suffix.length)
   return label || name
+}
+
+/**
+ * The name of the eval with `cases` an older record's template family ports to, whose id it
+ * reads under: the template with its placeholders and the separators at its ends removed
+ * (`discovery: %s` is `discovery`). A template with no placeholder, or nothing else, keeps it.
+ */
+export function templateName(template: string): string {
+  if (template.search(PLACEHOLDER) < 0) return template
+  const name = template
+    .replace(PLACEHOLDER, ' ')
+    .replace(/\(\s*\)|\[\s*\]|"\s*"|'\s*'|`\s*`/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(EDGE, '')
+  return name || template
 }

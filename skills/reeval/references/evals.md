@@ -27,8 +27,12 @@
   `evaluate` once per item, with the item in the name.
 - Each case has a key, which names its row: a string or number is its own key, an object its
   `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
-  80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate`, never a
+  80 characters, with no `#` or `›`. `cases`, `caseKey` and `where` go on `evaluate`, never a
   group or the config.
+- Porting `evaluate.each(items)('name: %s', opts, fn)`: write `evaluate('name', { cases: items,
+  ...opts }, fn)` with the old option names made plural (`harnesses`, `environments`,
+  `compare.control`). The old runs then read as this eval, keyed by what `%s` or `$id` held, so
+  `reeval compare` lines them up; a `caseKey` that changes a key starts that case's history again.
 - `where: ({ case, environment, harness }) => boolean` (TypeScript only) picks which case runs
   on which environment, at plan time, from each environment's `traits` (`defineEnvironment('next',
   { traits: { stack: 'next' } })`; never shown to the agent). Reading a trait no environment
@@ -153,7 +157,7 @@ npx reeval run --profile oracle           # every check passes, exit 0
 npx reeval run --profile canary           # the checks you meant fail, exit 1
 ```
 
-- Set `defaults.harness`, never `defaults.sandbox`: the environment's `docker()` (image,
+- Set `defaults.harnesses`, never `defaults.sandbox`: the environment's `docker()` (image,
   `install`, egress, brokered secrets) stays, so the checks run where they will for real. A
   profile's `sandbox` only fills in for an environment that omits one, and the fake harness
   without `layout` uses Cursor's image; `layout: 'claude-code'` (or another agent id) uses that
