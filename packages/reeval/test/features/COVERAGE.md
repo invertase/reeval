@@ -15,18 +15,18 @@
 
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| `defineConfig` (object or function) and its defaults | ✓ 1 | ✓ 1 | — | — | — | — |
+| `defineConfig` (object or function) and its defaults; an unknown config key is a type error | ✓ 2 | ✓ 1 | — | — | — | — |
 | Config and option mistakes exit 2 with the fix | ✓ 4 | — | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — | — |
 | Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 2 | — | ● 1 | ● 1 | — | — |
-| `harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once | ✓ 2 | ✓ 8 | — | — | — | — |
+| `harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once, a compare over cases included | ✓ 2 | ✓ 8 | — | — | — | — |
 | `runs: { bestOf }`: each cell stops once a majority of its attempts agree, gates on that majority and marks the attempts it added or skipped; refused on a compare and when not odd and 3 or more | ✓ 4 | ✓ 6 | ● 1 | — | — | — |
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — | — |
 | `environments` as a list: a cell per environment beside each harness, and its edits | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
 | `gate: 'observe'` and `compare.gate: 'observe'`: every cell ungated, a failed `expect` reads `ran` and fails nothing, and no pass^k hint | ✓ 1 | ✓ 1 | ● 2 | — | — | — |
 | `where`: which case and environment pairs of an eval with `cases` run, decided at plan time from environment `traits` (and the harness when it reads it), listed in `--dry-run` and the record's `excluded`; with `compare`, the control decides for every variant | ✓ 1 | ✓ 1 | ● 1 | — | — | — |
-| `cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape | ✓ 6 | ✓ 3 | ● 2 | — | — | — |
+| `cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape, an `evaluate.each` family under its template without placeholders, so a port continues its history | ✓ 7 | ✓ 3 | ● 2 | — | — | — |
 | `compare.harnesses` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare.control`: the control cell, which replaces an inherited `environments` | ✓ 1 | ✓ 4 | ● 1 | ● 1 | — | — |
 | `questions` with `across`: pairwise questions in the plan, answered after the run with win rates | ✓ 4 | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
@@ -274,7 +274,7 @@
 | `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 3 | ✓ 1 | ● 1 | — | — | — |
 | `reeval run --retry-errors [<ref>]`: run a finished run's infra-errored attempts again into the same run | ✓ 1 | ✓ 1 | ● 1 | — | — | — |
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 8 | — | — | — | — | — |
-| The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — | — |
+| The packed package installs into a clean project and runs; it ships the CHANGELOG and the consumer skills, and its README links to the docs on GitHub | ✓ 1 | — | — | — | — | — |
 | Python eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 2 | ◐ 3 (3 without a canary) | ◐ 1 (1 without a canary) | — | ◐ 1 (1 without a canary) |
 
 ## Known gaps

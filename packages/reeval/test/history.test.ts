@@ -5,11 +5,16 @@ import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { withUnknownFields } from '../scripts/schema/validate.ts'
+import { defineEnvironment } from '../src/environment.ts'
+import { optionsHash } from '../src/eval-source.ts'
+import { fakeHarness } from '../src/harness.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import { HISTORY_GITIGNORE, parseCheckIgnore } from '../src/history/ignore.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { sha256 } from '../src/ids.ts'
+import { fakeSandbox } from '../src/sandbox.ts'
+import { templateName } from '../src/view/family.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
 import {
@@ -1867,5 +1872,176 @@ describe('caches another reeval wrote', () => {
     const r = await runCli(p.dir, ['history', '--json'])
     assert.equal(r.code, 0, r.stderr)
     assert.doesNotMatch(r.stdout, /from-a-stale-cache/)
+  })
+})
+
+describe('history recorded with evaluate.each by reeval 0.18', () => {
+  const OLD = 'fixtures/records/before-plural-keys'
+  const oldRun = '20261103T125317Z_8cab9fc_cursor-agent_cpnp'
+  const raw = (): RunRecord =>
+    JSON.parse(readFileSync(join(testDir, OLD, HISTORY, `${oldRun}.json`), 'utf8'))
+  const plain = defineEnvironment('plain', { sandbox: fakeSandbox() })
+  const withSkill = defineEnvironment('with-skill', { sandbox: fakeSandbox() })
+  const app = defineEnvironment('app', { sandbox: fakeSandbox() })
+
+  test('the fixture names its family from a template, and a case key holds a slash', () => {
+    const r = raw()
+    assert.deepEqual(
+      r.evals.map((e) => [e.name, e.family?.name]),
+      [
+        ['discovery: add user authentication', 'discovery: %s'],
+        ['discovery: add social login and email/password auth', 'discovery: %s'],
+        ['writes greet.js', undefined],
+      ],
+    )
+  })
+
+  test('a template family reads under the id of the eval with cases its port declares', () => {
+    const [family] = readableRecord(raw()).evals
+    assert.deepEqual(
+      [family?.id, family?.name, family?.cases?.map((c) => c.key)],
+      [
+        'evals/discovery.eval.ts › discovery',
+        'discovery: %s',
+        ['add user authentication', 'add social login and email/password auth'],
+      ],
+    )
+    // Twin: the attempts keep the case they ran as, under the eval's new name.
+    assert.deepEqual(
+      [...new Set(family?.attempts.map((a) => a.case))],
+      ['add user authentication', 'add social login and email/password auth'],
+    )
+  })
+
+  test("a template's name drops its placeholders and the separators at its ends", () => {
+    for (const [template, name] of [
+      ['discovery: %s', 'discovery'],
+      ['greets %s', 'greets'],
+      ['picks a database for $id', 'picks a database for'],
+      ['%# – %s works', 'works'],
+      ['fixes ($id)', 'fixes'],
+      ['no placeholder', 'no placeholder'],
+      ['%s', '%s'],
+    ]) {
+      assert.equal(templateName(template as string), name, template)
+    }
+  })
+
+  test('a template family keeps its template when another eval in the record has the new name', () => {
+    const r = raw()
+    const other = r.evals[2] as RunRecord['evals'][number]
+    r.evals.push({ ...other, id: 'evals/discovery.eval.ts › discovery', name: 'discovery' })
+    const names = readableRecord(r).evals.map((e) => e.id)
+    assert.deepEqual(names, [
+      'evals/discovery.eval.ts › discovery: %s',
+      'evals/options.eval.ts › renamed options › writes greet.js',
+      'evals/discovery.eval.ts › discovery',
+    ])
+  })
+
+  test("the port's options hash as 0.18 hashed its singular keys and compare.baseline", () => {
+    const [discovery, , options] = raw().evals
+    assert.equal(
+      optionsHash([{ compare: { control: plain, variants: [withSkill] } }]),
+      discovery?.source?.options,
+    )
+    assert.equal(
+      optionsHash([{ harnesses: fakeHarness(), pin: ['harnesses'] }, { environments: [app] }]),
+      options?.source?.options,
+    )
+    // Canary: an option that really changed still changes the hash.
+    assert.notEqual(
+      optionsHash([{ compare: { control: plain, variants: [withSkill], minLift: 0.2 } }]),
+      discovery?.source?.options,
+    )
+  })
+
+  test('reeval compare lines a 0.19 port up with the 0.18 run, case by case', async () => {
+    const p = await fixture(OLD)
+    await writeFile(
+      join(p.dir, 'evals/discovery.eval.ts'),
+      `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+
+const plain = defineEnvironment('plain', { sandbox: fakeSandbox() })
+const withSkill = defineEnvironment('with-skill', { sandbox: fakeSandbox() })
+
+evaluate(
+  process.env.REEVAL_TEST_NAME ?? 'discovery',
+  {
+    cases: ['add user authentication', 'add social login and email/password auth'],
+    compare: { control: plain, variants: [withSkill] },
+  },
+  async (c, prompt) => {
+    await c.send(prompt)
+    await expect(c).toHaveFile('greet.js')
+  },
+)
+`,
+    )
+    await writeFile(
+      join(p.dir, 'evals/options.eval.ts'),
+      `import { defineEnvironment, evaluate, expect, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+
+const app = defineEnvironment('app', { sandbox: fakeSandbox() })
+
+group('renamed options', { harnesses: fakeHarness(), pin: ['harnesses'] }, () => {
+  evaluate('writes greet.js', { environments: app }, async (c) => {
+    await c.send('Write greet.js.')
+    await expect(c).toHaveFile('greet.js')
+  })
+})
+`,
+    )
+    await writeFile(join(p.dir, '.gitignore'), '.reeval/\nnode_modules/\n')
+    sh(p.dir, 'init', '-q', '-b', 'main')
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'port to cases')
+    const rows = async (env: Record<string, string> = {}) => {
+      const run = await runCli(p.dir, ['run', '--record'], { env })
+      assert.equal(run.code, 1, run.stdout + run.stderr)
+      const [head] = recordedRuns(p.dir)
+        .filter((id) => id !== oldRun)
+        .slice(-1)
+      const r = await runCli(p.dir, ['compare', oldRun, head as string, '--json'])
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      return (
+        JSON.parse(r.stdout).rows as Array<{
+          id: string
+          status: string
+          changes?: string[]
+          cases?: Array<{ id: string; status: string }>
+        }>
+      ).map((x) => [x.id, x.status, x.changes, x.cases?.map((k) => k.id)])
+    }
+    // The judge's part of the fingerprint holds reeval's version, so every eval differs in it
+    // alone: nothing is removed or new, and neither the options nor a case key changed.
+    assert.deepEqual(await rows(), [
+      [
+        'evals/discovery.eval.ts › discovery',
+        'drift',
+        ['judge changed'],
+        ['add user authentication', 'add social login and email/password auth'],
+      ],
+      [
+        'evals/options.eval.ts › renamed options › writes greet.js',
+        'drift',
+        ['judge changed'],
+        undefined,
+      ],
+    ])
+    // Canary: a port under another name is a new eval, and the old one removed.
+    const renamed = await rows({ REEVAL_TEST_NAME: 'discovery v2' })
+    assert.deepEqual(
+      renamed
+        .filter(([id]) => (id as string).startsWith('evals/discovery'))
+        .map((x) => x.slice(0, 2)),
+      [
+        ['evals/discovery.eval.ts › discovery v2', 'added'],
+        ['evals/discovery.eval.ts › discovery', 'removed'],
+      ],
+    )
   })
 })

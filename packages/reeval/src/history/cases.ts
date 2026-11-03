@@ -7,7 +7,7 @@ import { sha256Hex } from '../sha256.ts'
 import { evalSlug } from '../slug.ts'
 import type { Outcome } from '../types.ts'
 import { checkVerdict } from '../view/contrasts.ts'
-import { caseLabel } from '../view/family.ts'
+import { caseLabel, templateName } from '../view/family.ts'
 import { passRateOf, worstOutcome } from '../view/gate.ts'
 import type {
   CaseRecord,
@@ -145,14 +145,29 @@ function caseOf(member: EvalEntry, template: string): CaseRecord {
   }
 }
 
-/** One eval from its cases' entries, in list order, with what `family` pooled over them. */
-function foldOne(members: EvalEntry[], family: FamilyRecord | undefined): EvalEntry {
+/**
+ * One eval from its cases' entries, in list order, with what `family` pooled over them. A family
+ * whose cases were named from a template keeps the template as its name, which its cases' labels
+ * come from, and takes the id of the eval with `cases` it ports to, named for `templateName`,
+ * unless another eval in the record (`taken`) has that id.
+ */
+function foldOne(
+  members: EvalEntry[],
+  family: FamilyRecord | undefined,
+  taken: ReadonlySet<string>,
+): EvalEntry {
   const sorted = [...members].sort((a, b) => (a.family?.case ?? 0) - (b.family?.case ?? 0))
   const first = sorted[0] as EvalEntry
   const meta = first.family as NonNullable<EvalEntry['family']>
-  const id = family?.id ?? meta.id
-  const name = family?.name ?? meta.name
-  const cases = sorted.map((m) => caseOf(m, name))
+  const template = family?.name ?? meta.name
+  const templated = sorted.some(
+    (m) => !(m.name.startsWith(`${template} [`) && m.name.endsWith(']')),
+  )
+  const renamed = templated ? templateName(template) : template
+  const renamedId = [first.file, ...first.group, renamed].join(' › ')
+  const id = renamed === template || taken.has(renamedId) ? (family?.id ?? meta.id) : renamedId
+  const name = template
+  const cases = sorted.map((m) => caseOf(m, template))
   const attempts = sorted.flatMap((m, i) => {
     const key = (cases[i] as CaseRecord).key
     return m.attempts.map((a) => ({ ...a, case: key, id: `${a.cell}#${key}#${a.n}` }))
@@ -250,6 +265,7 @@ export function foldCases(record: RunRecord): RunRecord {
     if (!e.family) continue
     members.set(e.family.id, [...(members.get(e.family.id) ?? []), e])
   }
+  const taken = new Set(all.flatMap((e) => (e.family ? [e.family.id] : [e.id])))
   const evals: EvalEntry[] = []
   for (const e of all) {
     if (!e.family) {
@@ -259,7 +275,9 @@ export function foldCases(record: RunRecord): RunRecord {
     const group = members.get(e.family.id)
     if (!group) continue
     members.delete(e.family.id)
-    evals.push(foldOne(group, families.get(e.family.id)))
+    const folded = foldOne(group, families.get(e.family.id), taken)
+    taken.add(folded.id)
+    evals.push(folded)
   }
   const { families: _families, ...rest } = record
   return { ...rest, evals, summary: { ...record.summary, evals: evals.length } }

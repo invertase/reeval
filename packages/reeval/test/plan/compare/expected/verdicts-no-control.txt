@@ -7,7 +7,7 @@ evals/verdicts.eval.ts › three cases can never get a verdict        b/skilled/
                                                                     case ada          b/skilled/docker ×4
                                                                     case grace        b/skilled/docker ×4
                                                                     case linus        b/skilled/docker ×4
-evals/verdicts.eval.ts › six cases can                              b/skilled/docker  variant skilled  gated  ×6   6 cases
+evals/verdicts.eval.ts › six cases can                              b/skilled/docker  variant skilled  gated  ×6   6 cases · runs 1 a case (compare with cases: the lift pairs cases)
                                                                     case a            b/skilled/docker ×1
                                                                     case b            b/skilled/docker ×1
                                                                     case c            b/skilled/docker ×1

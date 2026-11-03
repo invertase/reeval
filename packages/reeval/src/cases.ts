@@ -8,9 +8,12 @@ import { redactSecrets } from './redact.ts'
 /** The longest a case key may be. */
 export const CASE_KEY_MAX = 80
 
-/** Characters a case key can't hold: ids and paths split on them, and control characters. */
+/**
+ * Characters a case key can't hold: attempt ids split on `#` and eval ids on `›`, and control
+ * characters. A `/` is allowed: a key is its own path segment wherever it's in one.
+ */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it refuses
-const BAD_KEY = /[#/›\u0000-\u001f\u007f]/
+const BAD_KEY = /[#›\u0000-\u001f\u007f]/
 
 /** The name a case's eval plans under: `adds a health check [nextjs]`. */
 export const caseEvalName = (name: string, key: string) => `${name} [${key}]`
@@ -28,7 +31,7 @@ function defaultKey(item: unknown): string | undefined {
 
 /**
  * Each case's key, in list order: `caseKey(item)` when given, else its default. Trimmed, 1–80
- * characters, with no `#`, `/`, `›` or control characters, and unique within the eval.
+ * characters, with no `#`, `›` or control characters, and unique within the eval.
  */
 export function caseKeys(
   cases: readonly unknown[],
@@ -51,7 +54,7 @@ export function caseKeys(
     const key = raw.trim()
     if (!key || key.length > CASE_KEY_MAX || BAD_KEY.test(key)) {
       throw new UsageError(
-        `cases[${i}] in ${where} has the key ${redactSecrets(JSON.stringify(raw))}: a case key is 1–${CASE_KEY_MAX} characters, with no #, /, › or control characters.${caseKey ? '' : ' Pass caseKey to give it another.'}`,
+        `cases[${i}] in ${where} has the key ${redactSecrets(JSON.stringify(raw))}: a case key is 1–${CASE_KEY_MAX} characters, with no #, › or control characters.${caseKey ? '' : ' Pass caseKey to give it another.'}`,
       )
     }
     const earlier = seen.get(key)

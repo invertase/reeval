@@ -711,7 +711,7 @@ export type Cascading = Omit<Resolved, 'runs'> & { runs: number | undefined }
 
 /**
  * Runs per cell when no level sets `runs`: a compare with variants runs `COMPARE_RUNS` a side;
- * anything else, a pooled family's cases included, runs once.
+ * anything else runs once, two or more cases with a compare included, whose lift pairs cases.
  */
 export const COMPARE_DEFAULT_RUNS = COMPARE_RUNS
 
@@ -998,8 +998,13 @@ function defaultRuns(
   options: { runs?: number; pooled?: boolean },
 ): void {
   if (out.runs !== undefined || options.runs !== undefined) return
-  if (!out.compare?.variants.length || options.pooled) {
+  if (!out.compare?.variants.length) {
     out.runs = 1
+    return
+  }
+  if (options.pooled) {
+    out.runs = 1
+    notes.push('runs 1 a case (compare with cases: the lift pairs cases)')
     return
   }
   out.runs = COMPARE_DEFAULT_RUNS

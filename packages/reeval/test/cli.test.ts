@@ -178,7 +178,14 @@ describe('cli', () => {
     usage(['run', '--json=1'], /^--json doesn't take a value: pass --json on its own\.$/)
     usage(['run', '--port', '3'], /^--port isn't an option of reeval run\. Run reeval --help\.$/)
     usage(['show', '-v'], /^--verbose isn't an option of reeval show/)
-    usage(['run', '--trace'], /^--trace isn't an option of reeval run\. Run reeval --help\.$/)
+    usage(
+      ['run', '--trace'],
+      /^--trace isn't an option of reeval run\. -vv keeps every attempt's trace\.ndjson in \.reeval\/debug, and reeval show --trace writes a run's timeline for ui\.perfetto\.dev\.$/,
+    )
+    usage(
+      ['history', '--trace'],
+      /^--trace isn't an option of reeval history\. Run reeval --help\.$/,
+    )
     usage(['--dry-run', 'run'], /^--dry-run isn't an option of reeval\b/)
     usage(['studio', '--out', 'x'], /^--out isn't an option of reeval studio\b/)
     usage(['studio', 'build', '--port', '1'], /^--port isn't an option of reeval studio build/)

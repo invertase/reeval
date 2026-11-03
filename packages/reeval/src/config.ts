@@ -107,11 +107,23 @@ const LIMIT_KEYS = ['runs', 'compare', 'harnesses', 'traits']
 
 export type ConfigInput = ReevalConfig | ((helpers: ConfigHelpers) => ReevalConfig)
 
+/** `T` with each key `Shape` doesn't have typed `never`. */
+type NoOtherKeys<T, Shape> = T & { [K in Exclude<keyof T, keyof Shape>]: never }
+
 /**
  * The config: a plain object, or a callback that destructures the helpers it needs, e.g.
- * `defineConfig(({ secret }) => ({ env: { KEY: secret.fromEnv('KEY') } }))`.
+ * `defineConfig(({ secret }) => ({ env: { KEY: secret.fromEnv('KEY') } }))`. Typed as the
+ * config rather than as the value passed, so a key it doesn't have is a type error. TypeScript
+ * doesn't check a callback's returned object for keys it doesn't have, so `NoOtherKeys` does,
+ * at the top level.
  */
-export const defineConfig = <T extends ConfigInput>(config: T): T => config
+export function defineConfig(config: ReevalConfig): ReevalConfig
+export function defineConfig<R extends ReevalConfig>(
+  config: (helpers: ConfigHelpers) => NoOtherKeys<R, ReevalConfig>,
+): (helpers: ConfigHelpers) => ReevalConfig
+export function defineConfig(config: ConfigInput): ConfigInput {
+  return config
+}
 
 export { parseDuration }
 

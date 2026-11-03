@@ -1,5 +1,5 @@
 import { Command, type CommanderError, Option } from 'commander'
-import { COMMANDS, FLAGS, type FlagName, type Flags, GLOBAL } from './cli-spec.ts'
+import { COMMANDS, FLAGS, type FlagName, type Flags, GLOBAL, INSTEAD } from './cli-spec.ts'
 import { UsageError } from './config.ts'
 
 /** What `reeval` was asked: the command path and its arguments, then every flag given. */
@@ -154,7 +154,12 @@ function usageError(error: CommanderError, command: string): UsageError {
     if (known && value !== undefined && known.type === 'boolean') {
       return new UsageError(`--${flag} doesn't take a value: pass --${flag} on its own.`)
     }
-    if (known) return new UsageError(`--${long} isn't an option of ${command}. Run reeval --help.`)
+    if (known) {
+      const instead = INSTEAD[`${command} --${long}`]
+      return new UsageError(
+        `--${long} isn't an option of ${command}. ${instead ? `${instead}.` : 'Run reeval --help.'}`,
+      )
+    }
     const shown = arg.replace(/\r/g, '\\r').replace(/\n/g, '\\n')
     return new UsageError(
       `Unknown option '${shown}'. ${suggestion ? `${suggestion} ` : ''}Run reeval --help.`,

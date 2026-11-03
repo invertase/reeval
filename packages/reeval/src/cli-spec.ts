@@ -334,6 +334,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
 /** Flags every command takes; without `--config`, `reeval` finds the nearest config. */
 export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
+/**
+ * What to use instead of a flag on a command that doesn't take it, by `<command> --<flag>`, for
+ * the flags people look for on the wrong command.
+ */
+export const INSTEAD: Record<string, string> = {
+  'reeval run --trace':
+    "-vv keeps every attempt's trace.ndjson in .reeval/debug, and reeval show --trace writes a run's timeline for ui.perfetto.dev",
+}
+
 const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
 or reeval.yaml, in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),

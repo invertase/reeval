@@ -12,6 +12,7 @@ packages/reeval/bin/
 packages/reeval/assets/
 packages/reeval/skills/
 packages/reeval/README.md
+packages/reeval/CHANGELOG.md
 packages/reeval/THIRD_PARTY_NOTICES.md
 packages/reeval/reeval
 packages/reeval/reeval.exe

@@ -49,9 +49,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.define',
     area: 'Config and selection',
-    name: '`defineConfig` (object or function) and its defaults',
+    name: '`defineConfig` (object or function) and its defaults; an unknown config key is a type error',
     plan: ['matrix/default'],
-    unit: ['reeval/test/unit.test.ts'],
+    unit: ['reeval/test/unit.test.ts', 'reeval/test/types.test.ts'],
   },
   {
     id: 'config.mistakes',
@@ -80,7 +80,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
-    name: '`harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
+    name: '`harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once, a compare over cases included',
     plan: [
       'matrix/default',
       'matrix/runs-override',
@@ -170,10 +170,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cases',
     area: 'Config and selection',
-    name: '`cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape',
+    name: '`cases` and `caseKey`: one eval over a list of cases, counted and named once with its cases as rows inside it, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates; older records fold into the same shape, an `evaluate.each` family under its template without placeholders, so a port continues its history',
     plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
     fixtures: ['run/cases', 'run/cases-rate'],
     unit: [
+      'reeval/test/refusals.test.ts',
       'reeval/test/options.test.ts',
       'reeval/test/results.test.ts',
       'reeval/test/cases.test.ts',
@@ -2153,7 +2154,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'pack',
     area: 'CLI and runner',
-    name: 'The packed package installs into a clean project and runs',
+    name: 'The packed package installs into a clean project and runs; it ships the CHANGELOG and the consumer skills, and its README links to the docs on GitHub',
     unit: ['reeval/test/pack.test.ts'],
   },
   {
