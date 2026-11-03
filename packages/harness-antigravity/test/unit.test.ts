@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -20,6 +21,21 @@ import {
   resolveAntigravityCredentials,
   VERSION,
 } from '../src/index.ts'
+
+/** Runs the script's sha256 check on a file, with its digest and with another. */
+function assertChecksSha256(script: string, file: string) {
+  assert.doesNotMatch(script, /sha256sum/)
+  const line = script.split('\n').find((l) => l.startsWith('node -e') && l.includes(file))
+  assert.ok(line, `no Node check of ${file}`)
+  const dir = mkdtempSync(join(tmpdir(), 'sha256-'))
+  writeFileSync(join(dir, file), 'archive')
+  const check = (sha: string) =>
+    spawnSync('bash', ['-c', `sha=${sha}; ${line}`], { cwd: dir, encoding: 'utf8' })
+  assert.equal(check(createHash('sha256').update('archive').digest('hex')).status, 0)
+  const wrong = check('0'.repeat(64))
+  assert.equal(wrong.status, 1)
+  assert.match(wrong.stderr, new RegExp(`${file.replaceAll('.', '\\.')} does not match its sha256`))
+}
 
 describe('auth', () => {
   test("'auto' uses only GEMINI_API_KEY from the host", () => {
@@ -301,7 +317,7 @@ describe('bootstrap', () => {
     assert.match(script, new RegExp(`/download/${ANTIGRAVITY_CLI_VERSION.replace(/\./g, '\\.')}/`))
     assert.ok(script.includes(ANTIGRAVITY_CLI_SHA256.x64))
     assert.ok(script.includes(ANTIGRAVITY_CLI_SHA256.arm64))
-    assert.match(script, /sha256sum -c/)
+    assertChecksSha256(script, 'agy.tar.gz')
     assert.match(script, /mv bin\/antigravity bin\/agy/)
     const bootstrap = await getAntigravityBootstrap()
     assert.deepEqual(

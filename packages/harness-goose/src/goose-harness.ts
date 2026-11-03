@@ -116,7 +116,7 @@ export const GOOSE_INSTALL_COMMAND = `case "$(uname -m)" in
   *) echo "Goose has no release for $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o goose.tar.gz "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_CLI_VERSION}/goose-$arch-unknown-linux-gnu.tar.gz"
-echo "$sha  goose.tar.gz" | sha256sum -c -
+node -e 'const h = require("crypto").createHash("sha256").update(require("fs").readFileSync("goose.tar.gz")).digest("hex"); if (h !== process.argv[1]) { console.error("goose.tar.gz does not match its sha256"); process.exit(1) }' "$sha"
 tar -xzf goose.tar.gz -C "$HOME/.local/bin" ./goose
 rm goose.tar.gz`
 

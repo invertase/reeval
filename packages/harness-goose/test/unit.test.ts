@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,21 @@ import {
 } from '../src/goose-launcher.ts'
 import { VERSION } from '../src/version.ts'
 
+/** Runs the script's sha256 check on a file, with its digest and with another. */
+function assertChecksSha256(script: string, file: string) {
+  assert.doesNotMatch(script, /sha256sum/)
+  const line = script.split('\n').find((l) => l.startsWith('node -e') && l.includes(file))
+  assert.ok(line, `no Node check of ${file}`)
+  const dir = mkdtempSync(join(tmpdir(), 'sha256-'))
+  writeFileSync(join(dir, file), 'archive')
+  const check = (sha: string) =>
+    spawnSync('bash', ['-c', `sha=${sha}; ${line}`], { cwd: dir, encoding: 'utf8' })
+  assert.equal(check(createHash('sha256').update('archive').digest('hex')).status, 0)
+  const wrong = check('0'.repeat(64))
+  assert.equal(wrong.status, 1)
+  assert.match(wrong.stderr, new RegExp(`${file.replaceAll('.', '\\.')} does not match its sha256`))
+}
+
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
 test("VERSION is package.json's", () => {
@@ -35,7 +51,7 @@ test('the install downloads the pinned release and checks its sha256 on both arc
     assert.match(sha, /^[0-9a-f]{64}$/)
     assert.ok(GOOSE_INSTALL_COMMAND.includes(`sha=${sha}`))
   }
-  assert.ok(GOOSE_INSTALL_COMMAND.includes('sha256sum -c'))
+  assertChecksSha256(GOOSE_INSTALL_COMMAND, 'goose.tar.gz')
 })
 
 test('auth is an environment with the Gemini key, or it throws', () => {

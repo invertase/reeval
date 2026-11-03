@@ -165,7 +165,7 @@ export const FX_INSTALL_COMMAND = `case "$(uname -m)" in
   *) echo "fx has no release for $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o fx.tar.gz "https://github.com/vercel-labs/fx/releases/download/v${FX_CLI_VERSION}/fx-linux-$arch.tar.gz"
-echo "$sha  fx.tar.gz" | sha256sum -c -
+node -e 'const h = require("crypto").createHash("sha256").update(require("fs").readFileSync("fx.tar.gz")).digest("hex"); if (h !== process.argv[1]) { console.error("fx.tar.gz does not match its sha256"); process.exit(1) }' "$sha"
 mkdir -p "$HOME/.local/bin"
 tar -xzf fx.tar.gz -C "$HOME/.local/bin" fx
 rm fx.tar.gz
