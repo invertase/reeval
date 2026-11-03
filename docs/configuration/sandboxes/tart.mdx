@@ -6,7 +6,7 @@ description: "Run each attempt in its own macOS VM on an Apple Silicon Mac."
 `tart()` returns a sandbox that runs each attempt in a fresh macOS VM, cloned from an image with [Tart](https://tart.run) and deleted when the attempt ends.
 
 <Warning>
-`tart()` runs `cursor()`, `claudeCode()`, `opencode()`, `pi()` and `codex()` so far: reeval refuses the other real harnesses at plan time with exit code 2.
+`tart()` runs `cursor()`, `claudeCode()`, `opencode()`, `pi()` and `codex()`: reeval refuses the other real harnesses at plan time with exit code 2.
 </Warning>
 
 ## Requirements
