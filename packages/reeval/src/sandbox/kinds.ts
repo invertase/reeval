@@ -242,7 +242,7 @@ const BOAT: SandboxKind<BoatSandboxDescriptor> = {
   provider: () => 'boat',
   id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
   hostPaths: {},
-  buildsAtStart: () => false,
+  buildsAtStart: () => true,
   privileges: () => ({ root: false, capabilities: [] }),
   async create(sandbox, options) {
     const { createBoatSandbox } = await import('./boat.ts')
