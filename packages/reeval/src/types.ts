@@ -733,6 +733,9 @@ export type FakeHarnessDescriptor = {
    * when unset) on that agent's endpoints, as its adapter does: the key stays on the host, and
    * `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those
    * endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request.
+   * For an agent whose bridge is a server in the sandbox (Claude Code, OpenCode, Goose, fx, Grok
+   * Build), it also serves on the session's first exposed port and reaches it from the host, as
+   * that adapter's start does.
    */
   brokers?: true
 }

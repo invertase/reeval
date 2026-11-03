@@ -103,6 +103,11 @@ export type Agent = Layout & {
   /** The platforms its bootstrap installs the agent's CLI for: a sandbox on another can't run it. */
   platforms: readonly NodeJS.Platform[]
   /**
+   * Set when its adapter's bridge is a server in the sandbox that the host connects to on the
+   * session's first exposed port (`resolveBridgePort`): a session exposing none can't start it.
+   */
+  bridgePort?: true
+  /**
    * The host variable the harness authenticates with. It never enters the sandbox. With `token`,
    * what the token is minted from, for messages.
    */
@@ -980,6 +985,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Claude Code',
     factory: 'claudeCode',
+    bridgePort: true,
     platforms: ['linux', 'darwin'],
     reasoning: 'streamed',
     reasoningTokens: false,
@@ -1066,6 +1072,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'agents', 'commands', 'mcp'],
     name: 'OpenCode',
     factory: 'opencode',
+    bridgePort: true,
     platforms: ['linux', 'darwin'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
@@ -1096,6 +1103,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
+    bridgePort: true,
     platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
@@ -1212,6 +1220,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'fx',
     factory: 'fx',
+    bridgePort: true,
     platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
@@ -1242,6 +1251,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
+    bridgePort: true,
     platforms: ['linux'],
     configuredModelOnStart: true,
     reasoning: 'streamed',

@@ -487,10 +487,14 @@ const perHarness = (
 ): Feature[] => layouts.map((layout) => ({ ...row(layout), layout, image: layout }))
 
 const BUT_CURSOR = BAKED_HARNESSES.filter((h) => h !== 'cursor')
-/** The harnesses tart() runs. */
-const TART_HARNESSES = BAKED_HARNESSES.filter((h) =>
-  takesHarness(capabilitiesOf({ kind: 'tart', image: 'i' }), h),
-)
+/** The harnesses tart() runs, listed so one it stops running fails its row rather than losing it. */
+const TART_HARNESSES = [
+  'cursor',
+  'claude-code',
+  'opencode',
+  'pi',
+  'codex',
+] as const satisfies readonly BakedHarness[]
 /** A regex for exactly `text`. */
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** The `agentCli` a Dockerfile built on each harness's image records. */
@@ -3045,7 +3049,8 @@ export const features: Feature[] = [
     },
   },
   ...perHarness(TART_HARNESSES, (layout) => ({
-    // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers.
+    // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers
+    // and, for a harness whose bridge is a server, tunnels the session's port to it.
     dir: 'sandbox/tart-brokered-agent',
     tiers: ['fake'],
     env: 'mac',
@@ -3059,6 +3064,7 @@ export const features: Feature[] = [
       return {
         ...fake.env,
         REEVAL_TEST_TART_ANY_HOST: '1',
+        REEVAL_FIXTURE_CREDENTIAL: AGENTS[layout].credential,
         [AGENTS[layout].credential]: 'key_tart_fixture',
       }
     },
@@ -4397,6 +4403,11 @@ test('every feature fixture is in the table, with one check and a canary', () =>
   assert.deepEqual(dirs, [...new Set(features.map((f) => f.dir))].sort())
   const names = features.map(rowName)
   assert.deepEqual(names, [...new Set(names)], 'every row has its own name')
+  assert.deepEqual(
+    BAKED_HARNESSES.filter((h) => takesHarness(capabilitiesOf({ kind: 'tart', image: 'i' }), h)),
+    TART_HARNESSES,
+    "tart()'s harnesses are the tart-brokered-agent rows",
+  )
   for (const dir of dirs) {
     const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
     const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'
