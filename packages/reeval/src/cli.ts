@@ -347,8 +347,8 @@ async function imageBuildCommand(
     return EXIT.ok
   }
   const { tartTagWarning } = await import('./sandbox/tart-ref.ts')
-  for (const t of vms) {
-    const warning = tartTagWarning(t.sandbox.image)
+  for (const image of new Set(vms.map((t) => t.sandbox.image))) {
+    const warning = tartTagWarning(image)
     if (warning) console.log(yellow(`warning: ${warning}`))
   }
   if (flags['dry-run']) {
