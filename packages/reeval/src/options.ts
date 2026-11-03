@@ -24,7 +24,9 @@ import {
   environmentDataProblem,
   isEnvironment,
   isMovingRef,
+  type PlainCredentialEnv,
   type PlainCredentialHeader,
+  plainCredentialEnv,
   plainCredentialHeaders,
   plannedSecrets,
   sameWorkspaceOnly,
@@ -1295,6 +1297,35 @@ export const plainHeaderWarning = (h: PlainCredentialHeader) =>
 export const plainHeaderError = (h: PlainCredentialHeader, where: string, configFile: string) =>
   `${h.label} in ${where} is a plain string, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${templateHint(h)}.`
 
+/** The attempts' `env` strings that look like credentials, once each. */
+export function plainEnv(env: EnvVars, attempts: PlannedAttempt[]): PlainCredentialEnv[] {
+  const out = new Map<string, PlainCredentialEnv>()
+  for (const a of attempts) {
+    for (const e of plainCredentialEnv(env, a.environment.layers)) out.set(e.label, e)
+  }
+  return [...out.values()]
+}
+
+/** A placeholder only works for a value sent to an HTTPS API: the gateway swaps it in nowhere else. */
+const hostsExample = (e: PlainCredentialEnv) =>
+  `secret.fromEnv('${e.name}', { hosts: ['api.example.com'] })`
+
+const maskHint = (e: PlainCredentialEnv) =>
+  e.plugin
+    ? `write it as "\${${e.name}}" in the plugin's .mcp.json, so reeval reads it from the host variable ${e.name}`
+    : `read it from a host variable with secret.fromEnv('${e.name}'); to give the agent only a placeholder too, add the hosts it's sent to if that's an HTTPS API, e.g. ${hostsExample(e)}`
+
+export const plainEnvWarning = (e: PlainCredentialEnv) =>
+  `${e.label} is a plain string that looks like a credential, so it's in the sandbox as its real value. To mask it in everything reeval writes, ${maskHint(e)}.`
+
+const brokerEnvHint = (e: PlainCredentialEnv) =>
+  e.plugin
+    ? `declare the server with mcp.stdio() instead of the plugin's .mcp.json, whose host variables can't set hosts, and read it with ${hostsExample(e)}, naming the HTTPS hosts it's sent to`
+    : `read it from a host variable with ${hostsExample(e)}, naming the HTTPS hosts it's sent to`
+
+export const plainEnvError = (e: PlainCredentialEnv, where: string, configFile: string) =>
+  `${e.label} in ${where} is a plain string that looks like a credential, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerEnvHint(e)}.`
+
 export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')
     ? 'eval'
@@ -1384,6 +1415,7 @@ export function evalPlan(
       ...(skip ? [] : questionWarnings(resolved)),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
       ...plainHeaders(attempts).map(plainHeaderWarning),
+      ...plainEnv(r.resolved.env, attempts).map(plainEnvWarning),
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],

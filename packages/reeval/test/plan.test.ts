@@ -248,6 +248,8 @@ export const cases: PlanCase[] = [
     name: 'plain-headers',
     args: ['--profile', 'headers', 'evals/headers.eval.ts', 'evals/tree.eval.ts'],
   },
+  { dir: 'secrets', name: 'plain-env', args: ['evals/env.eval.ts'] },
+  { dir: 'secrets', name: 'ordinary-env', args: ['evals/ordinary-env.eval.ts'] },
   { dir: 'egress', name: 'cascade', args: ['evals/auto.eval.ts', 'evals/cascade.eval.ts'] },
   {
     dir: 'egress',

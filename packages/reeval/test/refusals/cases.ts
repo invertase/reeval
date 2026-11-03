@@ -1709,6 +1709,41 @@ export const CASES: Record<string, Case[]> = {
       }),
     ],
     [
+      "unbrokered 'error': a plain env string with a token's shape",
+      strict({ env: { UPSTREAM: 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789' } }),
+    ],
+    [
+      "unbrokered 'error': a plain stdio MCP env string named like a credential",
+      strict({
+        environments: defineEnvironment('e', ({ mcp }) => ({
+          mcp: { db: mcp.stdio('db', [], { env: { DB_PASSWORD: 'hunter2-hunter2' } }) },
+        })),
+      }),
+    ],
+    [
+      "unbrokered 'error': a stdio MCP env path named like a credential",
+      strict({
+        environments: defineEnvironment('e', ({ mcp }) => ({
+          mcp: {
+            gcp: mcp.stdio('bq', [], {
+              env: {
+                GOOGLE_APPLICATION_CREDENTIALS: '/secrets/sa.json',
+                TOKEN_ENDPOINT: 'https://oauth2.googleapis.com/token',
+              },
+            }),
+          },
+        })),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain env connection string with a password",
+      strict({ env: { DATABASE_URL: 'postgres://app:hunter2@db:5432/app' } }),
+    ],
+    [
+      "unbrokered 'error': an ordinary plain env string",
+      strict({ env: { NODE_ENV: 'production' } }),
+    ],
+    [
       "unbrokered 'error': a neutral plain MCP header",
       strict({ environments: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
     ],

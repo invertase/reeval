@@ -782,7 +782,7 @@ For more information about each profile key, see [Profiles reference](/reference
 `secrets` is what reeval does with a secret that has no `hosts`.
 
 <Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }" optional>
-  `'warn'` (the default) warns when an attempt would receive the real value. `'error'` fails the plan.
+  `'warn'` (the default) warns when an attempt would receive the real value, including a plain `env` string or MCP header that looks like a credential. `'error'` fails the plan.
 </Property>
 
 For more information about brokering a secret, see [Secrets](/configuration/environments/secrets#broker-a-secret-to-a-host).
