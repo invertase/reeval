@@ -63,9 +63,10 @@ const unlabeled = (r: RawAssertion) => {
 /**
  * Whether judge calls the provider couldn't answer (a rate limit, a 5xx, overload, the network,
  * after the retries) are all that failed the attempt: every failed call was transient, and every
- * check that didn't hold is a `toPass()` on one of them. A verdict that answered, a non-transient
- * judge error (a bad key or model, an input too big) or any other check makes it the attempt's
- * own failure. By message, since another language's runner hands back its own copy of the error.
+ * check that didn't hold is a `toPass()` on one of them, not polled. A verdict that answered, a
+ * non-transient judge error (a bad key or model, an input over the provider's limit) or any other
+ * check makes it the attempt's own failure. By message, since another language's runner hands back
+ * its own copy of the error.
  */
 function judgeOutage(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
   if (!a.judgeErrors.length || !a.judgeErrors.every((e) => e.transient)) return false
@@ -73,7 +74,12 @@ function judgeOutage(a: Attempt, error: unknown, raw: readonly RawAssertion[]): 
   const message = messageOf(error)
   if (a.judgeThrown.has(message) && message !== judgeErrorsMessage(a)) return false
   const unanswered = new Set(a.judgeErrors.map((e) => e.matcher))
-  return raw.every((r) => r.status === 'pass' || (judged(r) && unanswered.has(unlabeled(r))))
+  // A poll's tries the judge answered "no" to were retried away, so its last outage hides them.
+  return raw.every(
+    (r) =>
+      r.status === 'pass' ||
+      (judged(r) && !r.matcher.startsWith('poll.') && unanswered.has(unlabeled(r))),
+  )
 }
 
 /**

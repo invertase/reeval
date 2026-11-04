@@ -1624,6 +1624,8 @@ evaluate('twice', async (c) => { await c.send('go'); await asked(c); expect(awai
 import { fakeJudge } from 'reeval/judge'
 const outage = ${outage}
 const refused = ${providerError(401, 'invalid x-api-key')}
+const overLimit = ${providerError(429, 'Request too large for gpt-4o on tokens per min (TPM): Limit 30000, Requested 45000')}
+const down = () => { throw Object.assign(new Error('rate limit exceeded'), { statusCode: 429 }) }
 const no = fakeJudge({ score: 0.1 })
 const yes = fakeJudge({ score: 0.9 })
 type C = Parameters<Parameters<typeof evaluate>[1]>[0]
@@ -1633,6 +1635,13 @@ evaluate('refused and down', async (c) => { await c.send('go'); await ask(c, ref
 evaluate('answered no', async (c) => { await c.send('go'); await ask(c, outage); expect(await ask(c, no)).toPass() })
 evaluate('negated yes', async (c) => { await c.send('go'); await ask(c, outage); expect(await ask(c, yes)).not.toPass() })
 evaluate('check failed', async (c) => { await c.send('go'); expect(await ask(c, outage)).toPass(); expect(1).toBe(2) })
+evaluate('over the limit', async (c) => { await c.send('go'); expect(await ask(c, overLimit)).toPass() })
+evaluate('polled no, then down', async (c) => {
+  await c.send('go')
+  let tries = 0
+  const noThenDown = fakeJudge({ score: () => (tries++ < 2 ? 0.1 : down()) })
+  await expect.poll(() => ask(c, noThenDown), { timeout: 400, interval: 100 }).toPass()
+})
 `,
     })
     const r = await runCli(p.dir)
@@ -1649,9 +1658,13 @@ evaluate('check failed', async (c) => { await c.send('go'); expect(await ask(c, 
       'answered no': ['fail', 'judge'],
       'negated yes': ['fail', 'judge'],
       'check failed': ['fail', 'assertion'],
+      'over the limit': ['fail', 'judge'],
+      'polled no, then down': ['fail', 'judge'],
     })
     const refusedError = readRun(p.dir).evals.find((e) => e.name === 'refused')?.error?.message
     assert.match(refusedError ?? '', /invalid x-api-key\nThe judge's input was ~\d+ tokens/)
+    const overError = readRun(p.dir).evals.find((e) => e.name === 'over the limit')?.error?.message
+    assert.match(overError ?? '', /Requested 45000\nThe judge's input was ~\d+ tokens/)
   })
 
   test('c.judge before any turn is an assertion error', async () => {

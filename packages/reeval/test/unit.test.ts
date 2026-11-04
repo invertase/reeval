@@ -85,7 +85,7 @@ import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src
 import { scoreWithModel } from '../src/judge/model.ts'
 import { changedFilesForJudge, judgeDiff, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
-import { withInputSize } from '../src/judge/size.ts'
+import { overTokenLimit, withInputSize } from '../src/judge/size.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
@@ -1549,6 +1549,32 @@ test("a provider's error keeps its wording and adds what fills the judge's input
   assert.ok(isApiError(apiError))
   assert.ok(isApiError({ name: 'AI_RetryError', lastError: apiError }), 'through the SDK wrapper')
   assert.ok(!isApiError(new Error('Judge model "x" needs a provider prefix')))
+})
+
+test("a token limit the judge's input alone is over isn't an outage; a busy key's limit is", () => {
+  const small = { diff: 'x'.repeat(400) }
+  const big = { diff: 'x'.repeat(200_000) }
+  const q = 'Is it done?'
+  assert.ok(
+    overTokenLimit(
+      'Request too large for gpt-4o on tokens per min (TPM): Limit 30000, Requested 45000.',
+      small,
+      q,
+    ),
+  )
+  assert.ok(overTokenLimit('Limit: 30000, Requested: 45000', small, q))
+  const anthropic = 'This request would exceed the rate limit of 30,000 input tokens per minute.'
+  assert.ok(overTokenLimit(anthropic, big, q), "the input alone is over Anthropic's limit")
+  assert.ok(!overTokenLimit(anthropic, small, q), 'other requests used up the minute')
+  assert.ok(
+    !overTokenLimit(
+      'Rate limit reached for gpt-4o on tokens per min (TPM): Limit 30000, Used 25000, Requested 6000.',
+      small,
+      q,
+    ),
+  )
+  assert.ok(!overTokenLimit('of 8,000 output tokens per minute', big, q))
+  assert.ok(!overTokenLimit('rate limit exceeded', big, q))
 })
 
 const entry = (

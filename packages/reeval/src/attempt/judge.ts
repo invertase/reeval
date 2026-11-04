@@ -15,7 +15,7 @@ import {
 import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, isTransient, type RetriedError } from '../judge/retry.ts'
-import { withInputSize } from '../judge/size.ts'
+import { overTokenLimit, withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
@@ -343,7 +343,7 @@ export function judgeCaller(
       if (a.signal.aborted) throw error
       const { retries } = error as Partial<RetriedError>
       const message = error instanceof Error ? error.message : String(error)
-      const transient = isTransient(error)
+      const transient = isTransient(error) && !overTokenLimit(message, state, question)
       // The input's size can explain a request the provider refused, never an outage.
       const explained =
         isApiError(error) && !transient ? withInputSize(message, state, question) : message

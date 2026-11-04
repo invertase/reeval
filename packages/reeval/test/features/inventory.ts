@@ -1484,7 +1484,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.outage-is-infra',
     area: 'Judges and matchers',
-    name: 'A judge call the provider never answered (a rate limit, a 5xx, overload or the network, after its retries) makes the attempt an infra error, asserted with `toPass()` or not and in Python too, so `--retry-errors` runs it again; a refused key or model, an answered verdict or another failed check keeps it a fail',
+    name: "A judge call the provider never answered (a rate limit, a 5xx, overload or the network, after its retries) makes the attempt an infra error, asserted with `toPass()` (Python's `to_pass()` too) or not, so `--retry-errors` runs it again; a refused key or model, an input over the provider's token limit, an answered verdict, a polled `toPass()`, a Python `assert verdict.passed` or another failed check keeps it a fail",
     fixtures: ['judge/outage-is-infra'],
     unit: ['reeval/test/engine.test.ts', 'reeval/test/resume.test.ts'],
   },
