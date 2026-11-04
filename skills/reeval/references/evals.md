@@ -57,7 +57,10 @@
   `transcript`). Call it again for multi-turn;
   `c.judge(q, { on: firstTurn, task: true, output: true })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`
-  starts it without waiting and returns `{ kill() }`. `c.exec(cmd, { retries: 2, interval: 2000 })`
+  starts it without waiting and returns `{ kill() }`. `{ env: { NAME: 'value' } }` sets variables
+  for that command only, over the environment's (in the background too); a value named like a
+  secret (`*_TOKEN`, `*_KEY`, …) is masked in everything reeval writes, and a brokered secret's
+  host value goes in as its placeholder. `c.exec(cmd, { retries: 2, interval: 2000 })`
   runs a command that exits non-zero again, up to 2 more times 2 s apart, and resolves with the
   last try: for a check that can fail on a transient, such as a test calling a model. Any non-zero
   exit retries (reeval doesn't read the output), and a last failed try is a failed check. `await c.serve(cmd, port?)` is that plus a

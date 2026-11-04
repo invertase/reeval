@@ -1560,6 +1560,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/match.test.ts', 'reeval/test/engine.test.ts'],
   },
   {
+    id: 'assert.exec-env',
+    area: 'Judges and matchers',
+    name: "`c.exec(command, { env })`: variables for one command, over the environment's, in the foreground, the background and `expect.poll`; secret-named values masked in everything reeval writes, and a brokered secret's host value sent as its placeholder",
+    fixtures: ['assert/exec-env', 'secrets/exec-env-masked', 'secrets/exec-env-brokered'],
+    unit: ['reeval/test/refusals.test.ts', 'reeval/test/conformance.test.ts'],
+  },
+  {
     id: 'assert.exec-retries',
     area: 'Judges and matchers',
     name: "`c.exec(command, { retries, interval })`: a non-zero exit runs the command again, each try in the check's record and log, and `passed on try 2 of 3` in the output, `summary.md`, `reeval show` and the studio",

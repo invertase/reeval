@@ -105,6 +105,14 @@ export function registerSecret(value: string | undefined): void {
   if (value && value.length >= 4) declaredSecrets.add(value)
 }
 
+/** Variables reeval set in the sandbox itself (`c.exec`'s `env`), masked as host variables are. */
+const sandboxVariables = new Map<string, string>()
+
+/** Masks `value` from now on when `name` looks like a secret's, by the rules a host variable's follows. */
+export function registerVariable(name: string, value: string): void {
+  if (SECRET_NAME.test(name) && value.length >= 8) sandboxVariables.set(value, name)
+}
+
 /** What a found secret is: the variable it's the value of, or the credential shape it has. */
 const DECLARED_RULE = 'a declared secret'
 const valueRule = (name: string) => `the value of ${name}`
@@ -213,6 +221,9 @@ function envSecrets(env: NodeJS.ProcessEnv, also: readonly string[] = []): Secre
     if (SECRET_NAME.test(name) && value && value.length >= 8 && !rules.has(value)) {
       rules.set(value, valueRule(name))
     }
+  }
+  for (const [value, name] of sandboxVariables) {
+    if (!rules.has(value)) rules.set(value, valueRule(name))
   }
   const declared = also.length
     ? new Set([...declaredSecrets, ...also.filter((v) => v.length >= 4)])

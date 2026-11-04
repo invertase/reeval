@@ -122,6 +122,12 @@ export function genericProblem(call: string, issue: Issue, value: unknown): stri
   const path = fieldPath(issue.path)
   const at = call ? `${call}({ ${path} })` : path
   if (issue.code === 'unrecognized_keys') return `${at} has an unknown key "${issue.keys[0]}"`
+  if (issue.code === 'invalid_key') {
+    const parent = fieldPath(issue.path.slice(0, -1))
+    const where = call ? `${call}({ ${parent} })` : parent
+    const why = issue.issues[0]?.message ?? 'is refused'
+    return `${where} has the key ${got(issue.path.at(-1))}, which ${why}`
+  }
   const v = valueAt(value, issue.path)
   if (issue.code === 'invalid_value') return `${at} is ${oneOf(issue.values)} (got ${got(v)})`
   const expected = issue.code === 'invalid_type' ? EXPECTED[issue.expected] : undefined

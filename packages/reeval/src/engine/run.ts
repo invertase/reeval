@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { format } from 'node:util'
 import { processError } from '@vitest/utils/error'
 import { TimeoutError } from '../errors.ts'
+import { redactSecrets, redactValue } from '../redact.ts'
 import { acquire, type Lease } from '../scheduler/client.ts'
 import type { EvalMeta } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
@@ -35,14 +36,17 @@ export type Reporter = {
   meta(index: number, meta: EvalMeta): void
 }
 
-/** An error as it crosses to the main process: its diff computed, then plain data. */
+/**
+ * An error as it crosses to the main process: its diff computed, then plain data, masked here,
+ * where the secrets an attempt registered (`c.exec`'s own `env`) are known.
+ */
 export function serializeError(error: unknown): SerializedError {
   if (error instanceof Error && typeof error.stack === 'string') {
     try {
       error.stack = originalStack(error.stack)
     } catch {}
   }
-  return processError(error) as SerializedError
+  return redactValue(processError(error)) as SerializedError
 }
 
 const CONSOLE = {
@@ -55,7 +59,7 @@ const CONSOLE = {
 
 const currentAttempt = new AsyncLocalStorage<number>()
 
-/** Sends console output to the attempt that wrote it, or to the file when no attempt did. */
+/** Sends console output, masked, to the attempt that wrote it, or to the file when no attempt did. */
 export function routeConsole(reporter: Reporter): void {
   const target = globalThis.console
   for (const [method, stream] of Object.entries(CONSOLE) as [
@@ -63,7 +67,12 @@ export function routeConsole(reporter: Reporter): void {
     'stdout' | 'stderr',
   ][]) {
     target[method] = (...args: unknown[]) =>
-      reporter.log(currentAttempt.getStore(), Date.now(), stream, `${format(...args)}\n`)
+      reporter.log(
+        currentAttempt.getStore(),
+        Date.now(),
+        stream,
+        redactSecrets(`${format(...args)}\n`),
+      )
   }
 }
 

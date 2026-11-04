@@ -26,6 +26,7 @@ For more information about the returned turn's fields, see [`Turn`](#turn). For 
 ```ts
 const result = await c.exec('npm test')
 const worker = await c.exec('npm run worker', { background: true })
+const verify = await c.exec('node verify.mjs', { env: { EXPECTED: '42' } })
 ```
 
 <Property name="command" type="string" required>
@@ -34,6 +35,10 @@ const worker = await c.exec('npm run worker', { background: true })
 
 <Property name="options.background" type="boolean" optional>
   `true` returns a `BackgroundHandle` without waiting (default `false`, an `ExecResult` after exit).
+</Property>
+
+<Property name="options.env" type="Record<string, string>" optional>
+  Variables for this command only, over the environment's. Names are letters, digits and `_`, not starting with a digit. A value whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL` is masked in the record, transcripts, `.reeval/debug` and the output, as a host variable's is. The host value of a secret the environment brokers goes in as that secret's placeholder, which the gateway swaps back on the secret's hosts, so `{ env: { GH_TOKEN: process.env.GITHUB_TOKEN } }` never puts a brokered token's real value in the sandbox.
 </Property>
 
 <Property name="options.retries" type="number" optional>
@@ -456,8 +461,8 @@ const changed = turn.diff.files.map((file) => file.path)
   Workspace changes from the start of the evaluation, each file with a `path` and a `status` of `added`, `modified`, or `deleted`.
 </Property>
 
-<Property name="exec" type="(command: string, options?: ExecRetry) => Promise<ExecResult>" required>
-  Runs a foreground command in the sandbox, as `c.exec()` does, with optional `{ retries, interval }`. It does not take `{ background: true }`.
+<Property name="exec" type="(command: string, options?: ExecRetry & { env?: ExecEnv }) => Promise<ExecResult>" required>
+  Runs a foreground command in the sandbox, as `c.exec()` does, with optional `{ env, retries, interval }`. It does not take `{ background: true }`.
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>" required>

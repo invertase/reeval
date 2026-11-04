@@ -2888,6 +2888,20 @@ environments:
     ['c.exec with retries in the background', execOptions({ background: true, retries: 1 })],
     ['good: c.exec with retries', execOptions({ retries: 3, interval: 250 })],
     ['good: c.exec in the background', execOptions({ background: true })],
+    ['c.exec with an env name that is not a variable', execOptions({ env: { 'NODE-ENV': 'x' } })],
+    ['c.exec with an env value that is not a string', execOptions({ env: { PORT: 3000 } })],
+    ['c.exec with an env value holding a NUL', execOptions({ env: { A: 'a\0b' } })],
+    ['c.exec with env as a string', execOptions({ env: 'CI=1' })],
+    ['good: c.exec with env', execOptions({ env: { CI: '1' }, retries: 1 })],
+    ['good: c.exec in the background with env', execOptions({ background: true, env: { A: '' } })],
+    [
+      'exec request with an env name that is not a variable',
+      request({ op: 'exec', command: 'npm test', env: { '1A': 'x' } }),
+    ],
+    [
+      'good: exec request with env',
+      request({ op: 'exec', command: 'npm test', background: true, env: { CI: '1' } }),
+    ],
     ['readFile with a number', request({ op: 'readFile', path: 3 })],
     [
       'writeFile with a bad encoding',

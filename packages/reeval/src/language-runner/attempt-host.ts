@@ -71,14 +71,16 @@ async function perform(
       return { turn: data }
     }
     case 'exec': {
+      const env = call.env === undefined ? {} : { env: call.env }
       if (call.background) {
-        const handle = await c.exec(call.command, { background: true })
+        const handle = await c.exec(call.command, { background: true, ...env })
         const handleId = `h${handles.size + 1}`
         handles.set(handleId, handle)
         return { result: { handle: handleId } }
       }
       const { retries, interval } = call
       const result = await c.exec(call.command, {
+        ...env,
         ...(retries === undefined ? {} : { retries }),
         ...(interval === undefined ? {} : { interval }),
       })

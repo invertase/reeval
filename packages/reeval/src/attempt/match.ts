@@ -114,7 +114,9 @@ function subjectOf(c: AttemptContext, subject: ExpectCall['subject']): unknown {
   }
   if ('attempt' in subject) return c
   if ('value' in subject) return subject.value
-  if ('exec' in subject) return subject.result ?? c.exec(subject.exec)
+  if ('exec' in subject) {
+    return subject.result ?? c.exec(subject.exec, subject.env ? { env: subject.env } : {})
+  }
   return c.readFile(subject.readFile)
 }
 

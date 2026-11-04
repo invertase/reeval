@@ -18,6 +18,7 @@ import type {
   Cell,
   CellRole,
   Diff,
+  ExecEnv,
   ExecResult,
   ExecRetry,
   FileChange,
@@ -41,6 +42,7 @@ import {
   sharedInputFields,
   turnsSchema,
 } from './judge.ts'
+import { VAR } from './plain.ts'
 import {
   type Assert,
   dataProblem,
@@ -156,6 +158,13 @@ export const execRetrySchema = z.strictObject({
     .optional(),
 })
 
+export const execEnvSchema = z.record(
+  z
+    .string()
+    .regex(VAR, 'must be a variable name: letters, digits and _, not starting with a digit'),
+  z.string().refine((v) => !v.includes('\0'), 'must not hold a NUL character'),
+)
+
 /** A background command has no exit for `retries` to wait on. */
 const noBackgroundRetry = (
   options: { background?: boolean; retries?: number; interval?: number },
@@ -174,7 +183,11 @@ const noBackgroundRetry = (
 }
 
 export const execOptionsSchema = z
-  .strictObject({ background: z.boolean().optional(), ...execRetrySchema.shape })
+  .strictObject({
+    background: z.boolean().optional(),
+    env: execEnvSchema.optional(),
+    ...execRetrySchema.shape,
+  })
   .superRefine(noBackgroundRetry)
 
 /** What's wrong with `c.exec()`'s options, or undefined. */
@@ -286,6 +299,7 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof turnDataSchema>, TurnData>>,
   Assert<Same<z.infer<typeof execResultSchema>, ExecResult>>,
   Assert<Same<z.infer<typeof execRetrySchema>, ExecRetry>>,
+  Assert<Same<z.infer<typeof execEnvSchema>, ExecEnv>>,
   Assert<Same<z.infer<typeof assertionRecordSchema>, AssertionRecord>>,
 ]
 
@@ -348,6 +362,7 @@ export const matcherSubjectSchema = z
         .string()
         .regex(/\S/)
         .describe('A command reeval runs, for its `ExecResult`; again on each try when polled.'),
+      env: execEnvSchema.optional(),
       result: execResultSchema
         .optional()
         .describe(
@@ -465,11 +480,12 @@ export const attemptCallSchema = z
           .boolean()
           .optional()
           .describe('Leave it running and reply with its handle, not its output.'),
+        env: execEnvSchema.optional(),
         ...execRetrySchema.shape,
       })
       .superRefine(noBackgroundRetry)
       .describe(
-        '`c.exec(command, { background?, retries?, interval? })`: a command in the sandbox. Replies with its exit code and output (the last try, with `retries`), or with a handle when it runs in the background.',
+        '`c.exec(command, { background?, env?, retries?, interval? })`: a command in the sandbox. Replies with its exit code and output (the last try, with `retries`), or with a handle when it runs in the background.',
       ),
     z
       .strictObject({
@@ -849,6 +865,7 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   FileChange: fileChangeSchema,
   ExecResult: execResultSchema,
   ExecRetry: execRetrySchema,
+  ExecEnv: execEnvSchema,
   AssertionRecord: assertionRecordSchema,
   JudgeCallData: judgeCallDataSchema,
   FakeJudgeData: fakeJudgeDataSchema,
@@ -880,6 +897,7 @@ export const ATTEMPT_TYPES = [
   'FileChange',
   'ExecResult',
   'ExecRetry',
+  'ExecEnv',
   'AssertionRecord',
   'FakeJudgeData',
   'Verdict',
