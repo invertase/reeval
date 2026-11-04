@@ -85,3 +85,22 @@ export const withInputSize = (
 ) =>
   `${message}\nThe judge's input was ~${k(inputTokens(state, question))} tokens (estimated): ` +
   `${describeSize(state, question)}.${stateHint(state, question)}`
+
+const count = (digits: string) => Number(digits.replaceAll(',', ''))
+
+/**
+ * Whether the provider refused the call on a token limit this input alone is over, which no
+ * retry fixes: a request too large, OpenAI's `Limit 30000, Requested 45000`, or Anthropic's
+ * `of 30,000 input tokens per minute` against the input's estimated size.
+ */
+export function overTokenLimit(
+  message: string,
+  state: Record<string, JSONValue>,
+  question: string,
+): boolean {
+  if (/request too large/i.test(message)) return true
+  const asked = /Limit:? ([\d,]+), Requested:? ([\d,]+)/i.exec(message)
+  if (asked) return count(asked[2] as string) > count(asked[1] as string)
+  const perMinute = /([\d,]+) (?:input )?tokens per minute/i.exec(message)
+  return !!perMinute && inputTokens(state, question) >= count(perMinute[1] as string)
+}

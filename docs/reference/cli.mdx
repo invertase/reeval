@@ -149,7 +149,7 @@ reeval run --retry-errors
 reeval run --retry-errors 20261022T172927Z
 ```
 
-`--retry-errors [ref]` reruns a finished (`complete`) run's attempts whose outcome is `infra_error`, with the run's saved settings, as a resume does, and writes them back into that run under the same attempt ids. Its passes and fails stay as they were. A resume restarts infra-errored attempts too, alongside the ones that never finished.
+`--retry-errors [ref]` reruns a finished (`complete`) run's attempts whose outcome is `infra_error`, a judge call its provider never answered included, with the run's saved settings, as a resume does, and writes them back into that run under the same attempt ids. Its passes and fails stay as they were. A resume restarts infra-errored attempts too, alongside the ones that never finished.
 
 | Case | Exit | What it prints |
 |---|---|---|

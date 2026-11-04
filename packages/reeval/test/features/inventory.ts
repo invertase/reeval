@@ -1482,6 +1482,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/engine.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
+    id: 'judge.outage-is-infra',
+    area: 'Judges and matchers',
+    name: "A judge call the provider never answered (a rate limit, a 5xx, overload or the network, after its retries) makes the attempt an infra error, asserted with `toPass()` (Python's `to_pass()` too) or not, so `--retry-errors` runs it again; a refused key or model, an input over the provider's token limit, an answered verdict, a polled `toPass()`, a Python `assert verdict.passed` or another failed check keeps it a fail",
+    fixtures: ['judge/outage-is-infra'],
+    unit: ['reeval/test/engine.test.ts', 'reeval/test/resume.test.ts'],
+  },
+  {
     id: 'judge.providers',
     area: 'Judges and matchers',
     name: "Model routing for reeval's own calls (judge, analysis, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",

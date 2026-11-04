@@ -2587,6 +2587,27 @@ export const features: Feature[] = [
       ]),
   },
   {
+    dir: 'judge/outage-is-infra',
+    tiers: ['fake'],
+    env: 'app',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message: /^judge failed for "Did the agent write the app\?" \(fake\): rate limit exceeded$/,
+      },
+    },
+    canary: /expected 'error' to be 'pass'/,
+    record: ({ run, runDir }) => {
+      const input = judgeInputOf(run, runDir) as { error?: string }
+      assert.equal(
+        input.error,
+        'rate limit exceeded',
+        "an outage gets no hint about the input's size",
+      )
+    },
+  },
+  {
     dir: 'judge/input-diff',
     tiers: ['fake'],
     env: 'scoped-app',

@@ -45,6 +45,43 @@ function isJudges(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boo
   )
 }
 
+/** The error the attempt's failed judge calls fail it with once its body is done, if any failed. */
+export function judgeErrorsMessage(a: Attempt): string | undefined {
+  const messages = a.judgeErrors.toSorted((x, y) => x.call - y.call).map((e) => e.message)
+  const [only, ...more] = messages
+  if (!only) return undefined
+  return more.length ? `${more.length + 1} judge calls failed:\n${messages.join('\n')}` : only
+}
+
+/** A matcher's message without the `label: ` its `expect` puts first. */
+const unlabeled = (r: RawAssertion) => {
+  const message = messageOf(r.error)
+  const prefix = r.label === undefined ? '' : `${r.label}: `
+  return message.startsWith(prefix) ? message.slice(prefix.length) : message
+}
+
+/**
+ * Whether judge calls the provider couldn't answer (a rate limit, a 5xx, overload, the network,
+ * after the retries) are all that failed the attempt: every failed call was transient, and every
+ * check that didn't hold is a `toPass()` on one of them, not polled. A verdict that answered, a
+ * non-transient judge error (a bad key or model, an input over the provider's limit) or any other
+ * check makes it the attempt's own failure. By message, since another language's runner hands back
+ * its own copy of the error.
+ */
+function judgeOutage(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
+  if (!a.judgeErrors.length || !a.judgeErrors.every((e) => e.transient)) return false
+  // A judge that threw (no model) is the eval's own mistake.
+  const message = messageOf(error)
+  if (a.judgeThrown.has(message) && message !== judgeErrorsMessage(a)) return false
+  const unanswered = new Set(a.judgeErrors.map((e) => e.matcher))
+  // A poll's tries the judge answered "no" to were retried away, so its last outage hides them.
+  return raw.every(
+    (r) =>
+      r.status === 'pass' ||
+      (judged(r) && !r.matcher.startsWith('poll.') && unanswered.has(unlabeled(r))),
+  )
+}
+
 /**
  * The error that fails the attempt: a judge's gives way to the first other check that didn't hold
  * (an `expect`, or an `expect.require` the eval caught), whichever came first, so the attempt
@@ -58,7 +95,8 @@ export function attemptError(a: Attempt, error: unknown, raw: readonly RawAssert
 
 /**
  * Why the attempt failed, into the record: the eval's own timeout, a cancel, an infra error, or an
- * assertion, which is the judge's when `error`, from `attemptError`, is a judge's.
+ * assertion, which is the judge's when `error`, from `attemptError`, is a judge's. A judge's that
+ * only a provider outage caused is an infra error, so `--retry-errors` and `--resume` run it again.
  */
 export function recordFailure(
   a: Attempt,
@@ -76,7 +114,7 @@ export function recordFailure(
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
   }
   if (record.error.kind === 'assertion' && isJudges(a, error, raw)) {
-    record.error.kind = 'judge'
+    record.error.kind = judgeOutage(a, error, raw) ? 'infra' : 'judge'
   }
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
 }
