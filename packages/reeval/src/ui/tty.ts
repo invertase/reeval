@@ -295,6 +295,10 @@ export class InteractiveRenderer implements Renderer {
         if (e.state === 'start') this.#spinner.start(this.#written, e.targets.length)
         else this.#spinner.reported()
         return
+      case 'plan':
+        this.#list.planned(e.header.evals)
+        this.#plain.onEvent(e)
+        return
       case 'collected':
         this.#spinner.settle()
         this.#list.collected(e.file, e.evals)

@@ -2,6 +2,7 @@
 // as the interactive list prints it, a progress line on a timer, then the status list once the
 // run ends, failures expanded. With `--output-logs`, each attempt's logs in Turborepo's stream and
 // grouped log orders too, and on a TTY one status line under them that's rewritten in place.
+import { plural } from '../text.ts'
 import type { SandboxWarning } from '../types.ts'
 import { suiteResult } from '../view/suite.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
@@ -108,9 +109,9 @@ export class PlainRenderer implements Renderer {
   /** On a TTY: the status line is drawn under everything else, and redrawn after each write. */
   readonly #live: boolean
   #status = ''
-  /** Evals and tries collected (not skipped), and the tries that ended. */
-  readonly #evals = new Set<string>()
+  /** Tries collected (not skipped), as many as the plan has, and the tries that ended. */
   readonly #tries = new Set<string>()
+  #plannedTries = 0
   readonly #ended = new Set<string>()
   readonly #list: LiveList
   #lastProgress = 0
@@ -135,11 +136,15 @@ export class PlainRenderer implements Renderer {
     this.#blank = line === '\n'
   }
 
-  /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended. */
+  /**
+   * `7 evals · 12/28 tries`: what the plan runs (or what's collected, when that's more) and how
+   * many tries ended.
+   */
   #drawStatus() {
     if (!this.#live || !this.#tries.size) return
-    const evals = `${this.#evals.size} eval${this.#evals.size === 1 ? '' : 's'}`
-    const status = this.#c.dim(`${evals} · ${this.#ended.size}/${this.#tries.size} tries`)
+    const { total } = this.#list.counts()
+    const tries = Math.max(this.#plannedTries, this.#tries.size)
+    const status = this.#c.dim(`${plural(total, 'eval')} · ${this.#ended.size}/${tries} tries`)
     if (status === this.#status) return
     this.#o.out.write(`${CLEAR}${status}`)
     this.#status = status
@@ -193,6 +198,8 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'plan':
+        this.#list.planned(e.header.evals)
+        this.#plannedTries = e.header.attempts
         for (const line of planLines(c, e, this.#columns)) this.#write(line)
         if (this.#o.output.githubActions) for (const w of e.sandboxWarnings ?? []) this.#annotate(w)
         return
@@ -202,7 +209,6 @@ export class PlainRenderer implements Renderer {
         for (const x of e.evals) {
           if (x.skipped) continue
           this.#queued.add(x.key)
-          this.#evals.add(x.id)
           this.#tries.add(x.key)
         }
         this.#drawStatus()

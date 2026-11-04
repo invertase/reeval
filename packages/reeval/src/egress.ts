@@ -270,6 +270,17 @@ export function egressLabel(planned: PlannedEgress): string {
   return `setup ${phaseLabel(planned.setup) || 'proxy'} · agent ${phaseLabel(planned) || 'proxy'}`
 }
 
+/** {@link egressLabel} without the automatic hosts, which {@link autoHosts} lists. */
+export function ownEgressLabel(planned: PlannedEgress): string {
+  const own = (p: PlannedPhaseEgress) => ({ ...p, auto: [] })
+  return egressLabel({ ...own(planned), ...(planned.setup ? { setup: own(planned.setup) } : {}) })
+}
+
+/** The hosts reeval allows on top of the policy, in either phase. */
+export const autoHosts = (planned: PlannedEgress): string[] => [
+  ...new Set([...(planned.setup?.auto ?? []), ...planned.auto]),
+]
+
 /** One phase's policy and automatic hosts, or `''` for the default, `proxy`. */
 export function phaseLabel({ policy, auto }: PlannedPhaseEgress): string {
   if (policy === 'proxy') return ''

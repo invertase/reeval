@@ -37,10 +37,11 @@ A restricted policy still lets through the hosts an attempt can't run without: t
 npx reeval run --dry-run
 ```
 
-The `notes` column shows each evaluation's policy and its automatic hosts:
+Under the table, the plan shows each environment's policy once:
 
 ```text
-egress: deny-all + auto: api.anthropic.com, *.anthropic.com
+egress  offline  deny-all
+                 + auto: api.anthropic.com, *.anthropic.com
 ```
 
 An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile, phase by phase when it sets `setup` or `agent`. A blocked request never fails the attempt on its own. The agent gets a refusal, and the assertions decide what that means.

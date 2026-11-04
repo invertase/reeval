@@ -1103,7 +1103,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'egress',
     area: 'Sandbox',
-    name: '`egress`: allowlist or deny-all, enforced in Docker and recorded per attempt',
+    name: "`egress`: allowlist or deny-all, enforced in Docker and recorded per attempt; `--dry-run` and `reeval doctor` show each environment's policy",
     fixtures: [
       'egress/allowed-host-reachable',
       'egress/blocked-host-recorded',
@@ -1118,6 +1118,8 @@ export const inventory: InventoryFeature[] = [
       'sandbox-docker/test/docker.test.ts',
       'sandbox-docker/test/proxy.test.ts',
       'sandbox-docker/test/unit.test.ts',
+      'reeval/test/plan.test.ts',
+      'reeval/test/doctor.test.ts',
     ],
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
   },

@@ -120,6 +120,28 @@ describe('reeval init', () => {
     for (const file of BARE) assert.match(again.stdout, new RegExp(`skip +${file}`), file)
   })
 
+  test('Next names an install only when reeval is not installed and listed yet', async () => {
+    const fresh = await empty('init-install-fresh')
+    const first = await runCli(fresh.dir, ['init', '--yes', '--bare'])
+    assert.match(first.stdout, /^Next:\n {2}npm install\n/m, 'init added the devDependency')
+    const installed = await empty('init-install-done')
+    await writeFile(
+      join(installed.dir, 'package.json'),
+      JSON.stringify({ devDependencies: { [pkg]: 'file:../reeval.tgz' } }),
+    )
+    const after = await runCli(installed.dir, ['init', '--yes', '--bare'])
+    assert.equal(after.code, 0, after.stderr)
+    assert.match(after.stdout, /^Next:\n {2}npx reeval image build /m)
+    assert.doesNotMatch(after.stdout, /npm install/)
+    const listed = tempDir('init-install-listed')
+    await writeFile(
+      join(listed, 'package.json'),
+      JSON.stringify({ devDependencies: { [pkg]: '*' } }),
+    )
+    const unpacked = await runCli(listed, ['init', '--yes', '--bare'])
+    assert.match(unpacked.stdout, /^Next:\n {2}npm install\n/m, 'listed, but not in node_modules')
+  })
+
   for (const h of INIT_HARNESSES) {
     test(`--harness ${h.kind} plans ${h.kind} and pr, and names no fake agent`, async () => {
       const p = await empty(`init-${h.kind}`)

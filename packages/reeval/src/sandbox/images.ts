@@ -25,6 +25,7 @@ import type {
   AttemptImage,
   DockerSandboxDescriptor,
   HarnessDescriptor,
+  PlannedEgress,
   PluginBuild,
   PluginSource,
   RunContext,
@@ -71,6 +72,9 @@ export type ImageUse = {
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
   plugins?: readonly PluginSource[]
+  /** Its environment's name and the egress it runs under, when the evals planned it. */
+  environment?: string
+  egress?: PlannedEgress
 }
 
 /**
@@ -103,6 +107,8 @@ export async function plannedImageUses(
         harness: p.attempt.harness,
         sandbox: p.attempt.sandbox,
         plugins: p.attempt.pluginBuilds ?? [],
+        environment: p.attempt.cell.environment,
+        egress: p.attempt.egress,
       }))
     : run.config.harness.map((harness) => ({ id: '', harness, sandbox: run.config.sandbox }))
 }

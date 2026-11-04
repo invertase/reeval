@@ -11,7 +11,7 @@ import { failureReason, phaseOf, progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
-import { InteractiveRenderer } from '../src/ui/tty.ts'
+import { InteractiveRenderer, type ListStore } from '../src/ui/tty.ts'
 import { readableRecord } from '../src/view/record.ts'
 import type { RunRemarks } from '../src/view/remarks.ts'
 import { pkgRoot } from './helpers.ts'
@@ -1197,4 +1197,50 @@ test('ui/ never imports Vitest', () => {
   for (const file of readdirSync(dir)) {
     assert.doesNotMatch(readFileSync(join(dir, file), 'utf8'), /from ['"]vitest/, file)
   }
+})
+
+test('progress counts against the planned total while later files are still to be collected', () => {
+  const planned = planEvent({
+    header: { ...header, evals: 4, attempts: 4 },
+    warnings: [],
+    hints: [],
+  })
+  const events = [interleaved[0] as ReevalEvent, planned, ...interleaved.slice(1)]
+  const beats = render(events, options({ outputLogs: 'none' }))
+    .split('\n')
+    .filter((line) => line.startsWith('…'))
+  assert.equal(beats[0], '… 0 of 4 evals done (1m 00s)')
+  assert.equal(beats.at(-1), '… 1 of 4 evals done (6m 00s)')
+  const status = render(events, options({ statusLine: true, outputLogs: 'none' }))
+  assert.ok(status.includes('\r\x1b[2K4 evals · 0/4 tries'), status)
+  assert.doesNotMatch(status, /2 evals · \d\/2 tries/)
+})
+
+test('the interactive list counts against the planned total too', async () => {
+  let store: ListStore | undefined
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: {} as never,
+    stdin: {} as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    load: async () => ({
+      mountList: (o) => {
+        store = o.store
+        return { waitUntilExit: () => new Promise(() => {}), unmount: () => {} }
+      },
+    }),
+  })
+  const planned = planEvent({
+    header: { ...header, evals: 4, attempts: 4 },
+    warnings: [],
+    hints: [],
+  })
+  const collected = interleaved.find((e) => e.type === 'collected') as ReevalEvent
+  for (const e of [interleaved[0] as ReevalEvent, planned, collected]) renderer.onEvent(e)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(store?.get().counts.total, 4)
 })

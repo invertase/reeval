@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
@@ -25,6 +26,7 @@ import { redactSecrets } from '../redact.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { capabilitiesOf, sandboxKind } from '../sandbox/kinds.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
+import { writeTar } from '../tarball.ts'
 import { clip, formatDuration } from '../text.ts'
 import { asCheck } from './checks.ts'
 import { timeMcpServers } from './mcp-startup.ts'
@@ -191,6 +193,106 @@ async function copyWorkspace(
     'env',
     `workspace ${workspace.label} at ${workspace.commit.slice(0, 12)} (${tar.byteLength} bytes of tar${workspace.init ? ', with a .git' : ''}) in ${formatDuration(performance.now() - start)}`,
   )
+}
+
+/** Bytes per tar: each is built in memory and piped in whole. */
+const TAR_BATCH_BYTES = 64 * 1024 * 1024
+
+type FileToWrite = { path: string; content: string | Uint8Array }
+
+/**
+ * Writes `files` (workspace-relative, or `~/` for the home directory) with one tar per
+ * destination: on a container or VM each `writeFile` is a process of its own, which a vendored
+ * directory of thousands of files turns into minutes. A lone file is written as it is, and a
+ * sandbox where the tar doesn't unpack gets a write per file.
+ */
+export async function writeFiles(
+  box: Sandbox,
+  files: readonly FileToWrite[],
+  signal: AbortSignal,
+): Promise<void> {
+  const home = files.flatMap((f) =>
+    f.path.startsWith('~/') ? [{ ...f, path: f.path.slice(2) }] : [],
+  )
+  const workspace = files.filter((f) => !f.path.startsWith('~/'))
+  await unpackFiles(box, '', workspace, signal)
+  await unpackFiles(box, '~/', home, signal)
+}
+
+async function unpackFiles(
+  box: Sandbox,
+  prefix: '' | '~/',
+  files: readonly FileToWrite[],
+  signal: AbortSignal,
+) {
+  const one = async () => {
+    for (const f of files) await box.writeFile(`${prefix}${f.path}`, f.content)
+  }
+  if (files.length < 2) return one()
+  const entries = files.map((f) => ({
+    type: 'file' as const,
+    path: f.path,
+    mode: 0o644,
+    mtime: 0,
+    data:
+      typeof f.content === 'string'
+        ? Buffer.from(f.content, 'utf8')
+        : Buffer.from(f.content.buffer, f.content.byteOffset, f.content.byteLength),
+  }))
+  const batches: (typeof entries)[] = [[]]
+  let size = 0
+  for (const e of entries) {
+    if (size + e.data.length > TAR_BATCH_BYTES && batches[batches.length - 1]?.length) {
+      batches.push([])
+      size = 0
+    }
+    batches[batches.length - 1]?.push(e)
+    size += e.data.length
+  }
+  const dir = shellQuote(prefix ? box.home : box.workdir)
+  const name = `.reeval-files-${randomUUID()}.tar`
+  // Unpacked into a temporary directory first. A file that exists already, or lies under a
+  // symbolic link to a directory, is then `cat` into place as `writeFile` does, so it keeps its
+  // mode and a link is written through: every tar (and BusyBox's `cp -R`) replaces an existing
+  // file, and bsdtar refuses to extract through a link. The rest go over in one more tar, written
+  // to a file rather than piped so that a name tar can't read back (GNU tar unescapes `-T`'s
+  // backslashes) fails the unpack instead of dropping that file.
+  const unpack = [
+    'unset TAR_OPTIONS',
+    `cd ${dir} || exit 1`,
+    'd=$PWD',
+    `t=$(mktemp -d) || { rm -f ${name}; exit 1; }`,
+    '(',
+    `  tar -xmf "$d/${name}" -C "$t" && cd "$t" && find . -type f > "$t.all" || exit $?`,
+    '  : > "$t.new"',
+    '  while IFS= read -r f; do',
+    '    if [ -e "$d/$f" ] || [ -L "$d/$f" ]; then',
+    '      cat "$f" > "$d/$f" || exit 1',
+    '      continue',
+    '    fi',
+    `    p=\${f%/*}`,
+    `    while [ "$p" != . ] && [ ! -L "$d/$p" ]; do p=\${p%/*}; done`,
+    '    if [ "$p" = . ]; then printf \'%s\\n\' "$f" >> "$t.new"',
+    `    else mkdir -p "$d/\${f%/*}" && cat "$f" > "$d/$f" || exit 1`,
+    '    fi',
+    '  done < "$t.all"',
+    '  [ ! -s "$t.new" ] || { tar -cf "$t.tar" -T "$t.new" && cd "$d" && tar -xf "$t.tar"; }',
+    ')',
+    's=$?',
+    `cd "$d"; rm -rf "$t" "$t.all" "$t.new" "$t.tar" ${name}`,
+    'exit $s',
+  ].join('\n')
+  for (const batch of batches) {
+    await box.writeFile(`${prefix}${name}`, writeTar(batch))
+    const r = await box.exec(unpack, { signal })
+    if (r.exitCode !== 0) {
+      debugLog(
+        'env',
+        `the files' tar didn't unpack (exit ${r.exitCode}: ${tailOf(r.stderr || r.stdout)}): writing ${files.length} files one at a time`,
+      )
+      return one()
+    }
+  }
 }
 
 /**
@@ -436,8 +538,24 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     debugLog('broker', `gateway swaps in ${agent.join(', ') || 'nothing'} for the agent`)
   }
   if (env.workspace) await copyWorkspace(box, env.workspace, a.signal)
+  const skillDir = workspaceSkillDir(spec.harness)
+  const skillFileList = env.workspaceSkills.map((skill) => ({
+    skill,
+    files: skillFiles(skill).map((f) => ({
+      path: `${skillDir}/${skill.name}/${f.path}`,
+      content: f.content,
+    })),
+  }))
+  const toWrite = [...env.files, ...skillFileList.flatMap((s) => s.files)]
+  const filesStart = performance.now()
+  await writeFiles(box, toWrite, a.signal)
+  if (toWrite.length) {
+    debugLog(
+      'env',
+      `${toWrite.length} files written in ${formatDuration(performance.now() - filesStart)}`,
+    )
+  }
   for (const f of env.files) {
-    await box.writeFile(f.path, f.content)
     const size = typeof f.content === 'string' ? Buffer.byteLength(f.content) : f.content.byteLength
     debugLog('env', `file ${f.path} (${size} bytes${f.executable ? ', executable' : ''})`)
   }
@@ -457,12 +575,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
       )
     }
   }
-  const skillDir = workspaceSkillDir(spec.harness)
-  for (const skill of env.workspaceSkills) {
-    const files = skillFiles(skill)
-    for (const f of files) {
-      await box.writeFile(`${skillDir}/${skill.name}/${f.path}`, f.content)
-    }
+  for (const { skill, files } of skillFileList) {
     debugLog(
       'env',
       `skill ${skill.name} → ${skillDir}/${skill.name}/ (${files.length} files, workspace)`,
