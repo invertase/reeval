@@ -75,6 +75,7 @@ import {
   agentAuth,
   agentFor,
   antigravityMcpServers,
+  authHint,
   brokeringFor,
   claudeMcpServers,
   cursorHookMatcher,
@@ -246,7 +247,10 @@ describe('the Claude Code harness', () => {
       config.harness.map((h) => h.kind),
       ['cursor', 'claude-code'],
     )
-    assert.deepEqual(missingCredentials(config, {}), ['CURSOR_API_KEY', 'ANTHROPIC_API_KEY'])
+    assert.deepEqual(missingCredentials(config, {}), [
+      'CURSOR_API_KEY',
+      'ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN',
+    ])
     assert.deepEqual(
       missingCredentials(config, { CURSOR_API_KEY: 'x', ANTHROPIC_API_KEY: 'y' }),
       [],
@@ -257,9 +261,51 @@ describe('the Claude Code harness', () => {
         { CURSOR_API_KEY: 'x' },
         { harnesses: [claudeCode({ model: 'claude-opus-5-5' })] },
       ),
-      ['ANTHROPIC_API_KEY'],
+      ['ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN'],
     )
     assert.deepEqual(missingCredentials(config, {}, { harnesses: [fakeHarness()] }), [])
+  })
+
+  test('claudeCode() runs on a subscription token from claude setup-token, with no API key', async () => {
+    const config = resolveConfig({ harnesses: claudeCode({ model: 'claude-sonnet-5-5' }) }, '/p')
+    assert.deepEqual(missingCredentials(config, { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-x' }), [])
+    // A gateway's Bearer key isn't one api.anthropic.com takes.
+    assert.deepEqual(missingCredentials(config, { ANTHROPIC_AUTH_TOKEN: 'x' }), [
+      'ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN',
+    ])
+    assert.deepEqual(
+      malformedCredentials(config, { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-x\n  y' }),
+      ['CLAUDE_CODE_OAUTH_TOKEN (character 15)'],
+    )
+    // The API key wins when both are set, so only it is checked.
+    assert.deepEqual(
+      malformedCredentials(config, {
+        ANTHROPIC_API_KEY: 'sk-ant-api03-x',
+        CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-x\n  y',
+      }),
+      [],
+    )
+
+    const agent = agentFor(claudeCode({ model: 'claude-sonnet-5-5' }))
+    assert.deepEqual(
+      agentAuth(agent, { CLAUDE_CODE_OAUTH_TOKEN: 'oat', ANTHROPIC_AUTH_TOKEN: 'x' }),
+      {
+        CLAUDE_CODE_OAUTH_TOKEN: 'oat',
+      },
+    )
+    assert.deepEqual(
+      agentAuth(agent, { ANTHROPIC_API_KEY: 'api', CLAUDE_CODE_OAUTH_TOKEN: 'oat' }),
+      {
+        ANTHROPIC_API_KEY: 'api',
+      },
+    )
+    // A refused key names the variable the attempt took it from.
+    assert.equal(
+      await withHostEnv({ CLAUDE_CODE_OAUTH_TOKEN: 'oat' }, async () =>
+        authHint(agent, 'HTTP 401'),
+      ),
+      'The API rejected CLAUDE_CODE_OAUTH_TOKEN: set a valid key in the environment or .env.local',
+    )
   })
 
   test('names agent and judge keys with a line break in them, never other variables', () => {
@@ -1356,6 +1402,13 @@ describe('credential brokering per agent', () => {
       rules: [['api.anthropic.com', { 'x-api-key': 'sk-ant-real-key-for-tests' }]],
     },
     {
+      name: 'Claude Code: with no API key, the subscription token to Anthropic as a Bearer token',
+      kind: 'claude-code',
+      env: { ...everything, ANTHROPIC_API_KEY: '' },
+      credential: 'CLAUDE_CODE_OAUTH_TOKEN',
+      rules: [['api.anthropic.com', { Authorization: 'Bearer host-oauth' }]],
+    },
+    {
       name: 'Cursor: the API key to its exchange',
       kind: 'cursor',
       env: { ...everything, CURSOR_API_KEY: 'crsr_real' },
@@ -1465,7 +1518,11 @@ describe('credential brokering per agent', () => {
   for (const row of ONLY) {
     test(`each adapter brokers only its key, whatever else the host has: ${row.name}`, async () => {
       const descriptor = { kind: row.kind, model: row.model ?? 'm' } as AgentHarnessDescriptor
-      assert.equal(brokeringFor(descriptor)?.credential, row.credential)
+      const credential = await withHostEnv(
+        row.env,
+        async () => brokeringFor(descriptor)?.credential,
+      )
+      assert.equal(credential, row.credential)
       const rules = await adapterRules(row.kind, row.env, descriptor.model)
       assert.deepEqual(
         rules.map((r) => [r.match.host, r.transform.headers]),
@@ -1510,6 +1567,27 @@ describe('credential brokering per agent', () => {
         ['POST', '/api/event_logging/v2/batch'],
         ['GET', '/api/claude_cli/bootstrap'],
         ['POST', '/api/eval/sdk-zAZezfDKGoZuXXKe'],
+      ],
+    },
+    {
+      name: 'Claude Code on a subscription token',
+      kind: 'claude-code',
+      model: 'opus',
+      env: { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-real' },
+      header: 'authorization',
+      real: 'Bearer sk-ant-oat01-real',
+      host: 'api.anthropic.com',
+      swapped: [
+        ['POST', '/v1/messages?beta=true'],
+        ['POST', '/v1/messages/count_tokens'],
+        ['GET', '/api/claude_code/settings'],
+        ['GET', '/api/claude_code/policy_limits'],
+      ],
+      refused: [
+        ['GET', '/v1/models'],
+        ['POST', '/v1/files'],
+        ['POST', '/api/event_logging/v2/batch'],
+        ['GET', '/api/oauth/profile'],
       ],
     },
     {
@@ -1676,8 +1754,11 @@ describe('credential brokering per agent', () => {
 
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
     await assert.rejects(
-      adapterRules('claude-code', { AI_GATEWAY_API_KEY: 'host-gateway' }),
-      /ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate/,
+      adapterRules('claude-code', {
+        AI_GATEWAY_API_KEY: 'host-gateway',
+        ANTHROPIC_AUTH_TOKEN: 'host-token',
+      }),
+      /Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set, so the Claude Code harness can't authenticate\. Set one in the environment or \.env\.local\./,
     )
     await assert.rejects(
       adapterRules('antigravity', { GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge' }),

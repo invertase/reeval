@@ -23,9 +23,9 @@ import { DEFAULT_GATEWAYS, gatewayHelper } from './gateway/resolve.ts'
 import { VERTEX_PROJECT_ENV } from './gateway/vertex.ts'
 import {
   AGENTS,
-  credentialOf,
   DEFAULT_HARNESS,
   HARNESS_EXAMPLE,
+  harnessCredentials,
   isAgentKind,
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
@@ -916,8 +916,15 @@ export function missingCredentials(
     const line = `${s.apiKey.from} (for boat())`
     if (!missing.includes(line)) missing.push(line)
   }
-  const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
-  for (const key of keys) if (!env[key]) missing.push(key)
+  // A harness that takes any one of several keys (Claude Code's API key or subscription token)
+  // names them all.
+  const keys = new Map(
+    (options.harnesses ?? config.harness)
+      .map(harnessCredentials)
+      .filter((names) => names.length > 0)
+      .map((names) => [names.join(' or '), names]),
+  )
+  for (const [line, names] of keys) if (!names.some((k) => env[k])) missing.push(line)
   const judge = runJudgeModel(config, options.profile)
   const models = [
     ...(typeof judge === 'string'
@@ -976,7 +983,10 @@ export function malformedCredentials(
     judges?: PlannedJudge[]
   } = {},
 ): string[] {
-  const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
+  // The key each harness authenticates with: the first of its keys that's set.
+  const names = (options.harnesses ?? config.harness).flatMap(
+    (h) => harnessCredentials(h).find((name) => env[name]) ?? [],
+  )
   const judge = runJudgeModel(config, options.profile)
   if (judge !== undefined) {
     names.push(...judgeCredentials(judge, runModelGateway(config, options.profile, judge, true)))

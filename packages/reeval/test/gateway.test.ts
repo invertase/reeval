@@ -691,6 +691,12 @@ describe('OpenRouter routes', () => {
       ANTHROPIC_AUTH_TOKEN: 'sk-or-test',
       ANTHROPIC_BASE_URL: 'https://openrouter.ai/api',
     })
+    // A Claude subscription's token is Anthropic's alone: OpenRouter's route never takes it.
+    assert.equal(agent.fallbackCredentials, undefined)
+    assert.throws(
+      () => agentAuth(agent, { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-x' }),
+      /^InfraError: OPENROUTER_API_KEY isn't set/,
+    )
     assert.deepEqual(agent.hosts, ['openrouter.ai'])
     assert.deepEqual(
       agent.endpoints.map((e) => [e.host, e.method, e.path]),

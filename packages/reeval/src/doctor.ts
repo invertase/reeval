@@ -45,7 +45,7 @@ import {
   vertexSettings,
   vertexSettingsIn,
 } from './gateway/vertex.ts'
-import { credentialOf, isAgentKind } from './harness/agents.ts'
+import { harnessCredentials, isAgentKind } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
 import { fromCwd, newRunId, relativeFile } from './ids.ts'
@@ -701,7 +701,7 @@ async function keyCheck(
       id,
       status: required ? 'fail' : 'warn',
       summary: `${model ? modelKeyOptions(model, gateway) : names.join(' or ')} for ${who}: not set`,
-      fix: `add ${names[0]}=... to ${envFile}${unused ? `, or add ${unused.gateway}() to gateway to use the ${unused.key} that's set` : ''}`,
+      fix: `add ${model ? `${names[0]}=...` : names.map((n) => `${n}=...`).join(' or ')} to ${envFile}${unused ? `, or add ${unused.gateway}() to gateway to use the ${unused.key} that's set` : ''}`,
     }
   }
   const value = deps.env[name] as string
@@ -715,7 +715,7 @@ async function keyCheck(
     }
   }
   const shadowed = names.slice(names.indexOf(name) + 1).find((n) => deps.env[n])
-  const wins = model && shadowed ? ` (${name} wins over ${shadowed})` : ''
+  const wins = shadowed ? ` (${name} wins over ${shadowed})` : ''
   if (!online) return { id, status: 'ok', summary: `${name} for ${who}: set${wins}` }
   const probed = await probeKey(name, value, deps.fetch)
   return {
@@ -745,9 +745,11 @@ export async function checkKeys(
     })),
     ...configuredUses(config).filter((u) => u.profile),
   ]
-  const needed = new Set(uses.flatMap((u) => (u.profile ? [] : [credentialOf(u.harness)])))
+  // A harness that takes any one of several keys has one line for them, keyed by all their names.
+  const keysOf = (h: HarnessDescriptor) => harnessCredentials(h).join(' ')
+  const needed = new Set(uses.flatMap((u) => (u.profile ? [] : [keysOf(u.harness)])))
   for (const use of uses) {
-    const key = credentialOf(use.harness)
+    const key = keysOf(use.harness)
     if (!key || (use.profile && needed.has(key))) continue
     const entry = byKey.get(key) ?? { who: [], required: false }
     const who = use.profile
@@ -761,7 +763,7 @@ export async function checkKeys(
     return [{ id: 'key', status: 'skip', summary: 'no harness in the config needs a key' }]
   return Promise.all(
     [...byKey].map(([key, { who, required }]) =>
-      keyCheck('key', [key], who.join(', '), required, deps, online, envFile),
+      keyCheck('key', key.split(' '), who.join(', '), required, deps, online, envFile),
     ),
   )
 }

@@ -153,7 +153,9 @@ export function renderMatrix(facts, { href }) {
   ]
   const rows = facts.map((h) => [
     `[${h.agent.name}](${href(h.page)})`,
-    h.agent.forModel ? "The model's provider's" : code(h.agent.credential),
+    h.agent.forModel
+      ? "The model's provider's"
+      : [h.agent.credential, ...(h.agent.fallbackCredentials ?? [])].map(code).join(' or '),
     yes(h.agent.endpoints.length > 0),
     code(h.agent.rulesFile),
     yes(!!h.agent.workspaceSkillDir),

@@ -473,7 +473,7 @@ evaluate('a', async () => {})
     assert.deepEqual(
       keys.map((c) => `${c.status} ${c.summary}`),
       [
-        'fail ANTHROPIC_API_KEY for claude-code:claude-sonnet-5: not set',
+        'fail ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN for claude-code:claude-sonnet-5: not set',
         'warn OPENAI_API_KEY for codex:gpt-5.4-mini in profile openai: not set',
       ],
     )
@@ -551,6 +551,43 @@ evaluate('a', async () => {})
       `{ harnesses: fakeHarness(), environments: defineEnvironment('fake', { sandbox: fakeSandbox() }) }`,
     )
     assert.deepEqual(statuses(await checkKeys(fake, deps(), false, '.env.local')), ['skip'])
+  })
+
+  test("keys: claudeCode() takes ANTHROPIC_API_KEY or a subscription's CLAUDE_CODE_OAUTH_TOKEN", async () => {
+    const config = await configOf('keys-claude', `{ harnesses: claudeCode({ model: 'opus' }) }`)
+    const none = await checkKeys(config, deps(), false, '.env.local')
+    assert.deepEqual(
+      none.map((c) => [c.status, c.summary, c.fix]),
+      [
+        [
+          'fail',
+          'ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN for claude-code:opus: not set',
+          'add ANTHROPIC_API_KEY=... or CLAUDE_CODE_OAUTH_TOKEN=... to .env.local',
+        ],
+      ],
+    )
+    const token = await checkKeys(
+      config,
+      deps({ env: { CLAUDE_CODE_OAUTH_TOKEN: SECRET } }),
+      true,
+      '.env.local',
+    )
+    assert.deepEqual(statuses(token), ['ok'])
+    assert.equal(
+      token[0]?.summary,
+      'CLAUDE_CODE_OAUTH_TOKEN for claude-code:opus: set (no auth check for this key)',
+    )
+    noSecret(token)
+    const both = await checkKeys(
+      config,
+      deps({ env: { ANTHROPIC_API_KEY: SECRET, CLAUDE_CODE_OAUTH_TOKEN: SECRET } }),
+      false,
+      '.env.local',
+    )
+    assert.equal(
+      both[0]?.summary,
+      'ANTHROPIC_API_KEY for claude-code:opus: set (ANTHROPIC_API_KEY wins over CLAUDE_CODE_OAUTH_TOKEN)',
+    )
   })
 
   test('--online: accepted, rejected, unanswered; the key goes only in headers', async () => {

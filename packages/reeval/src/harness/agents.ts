@@ -113,6 +113,12 @@ export type Agent = Layout & {
    */
   credential: string
   /**
+   * Host variables the harness authenticates with when `credential` isn't set, in the order it
+   * takes them (Claude Code's subscription token). The first one set is passed and brokered like
+   * `credential`, and the agent never gets another. A gateway's route takes none of them.
+   */
+  fallbackCredentials?: readonly string[]
+  /**
    * A short-lived token reeval mints on the host (Vertex AI's Google Cloud access token), which
    * the egress gateway adds to the agent's requests and replaces before it expires, in place of
    * `credential` from the environment.
@@ -991,6 +997,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     reasoningTokens: false,
     subagentCalls: true,
     credential: 'ANTHROPIC_API_KEY',
+    // A Claude subscription's token from `claude setup-token`, which the CLI sends as a Bearer
+    // token on the same endpoints. ANTHROPIC_AUTH_TOKEN isn't one: it's a gateway's key, which
+    // api.anthropic.com doesn't take.
+    fallbackCredentials: ['CLAUDE_CODE_OAUTH_TOKEN'],
     // What the CLI sends the key on, with non-essential traffic off.
     // Anything else gets a 403 from the gateway and a warning that names the request.
     endpoints: [
@@ -1557,18 +1567,20 @@ export function refusedPlugins(
  */
 export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Agent {
   const agent = AGENTS[h.kind]
+  // A gateway's route authenticates with its own credential only.
+  const { fallbackCredentials: _, ...routed } = agent
   if (h.gateway === 'vertex') {
     const route = VERTEX_ROUTES[h.kind]
     if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vertex AI`)
     if (!vertex) throw new InfraError(`${agent.name} on Vertex AI has no vertex() settings`)
-    return { ...agent, ...route(vertex) }
+    return { ...routed, ...route(vertex) }
   }
   if (isRoutingGateway(h.gateway)) {
     const gateway = ROUTING_GATEWAYS[h.gateway]
     const route = gateway.routes[h.kind]
     if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on ${gateway.name}`)
     // The route stands in for forModel: it decides the credential, endpoints and hosts there.
-    return { ...agent, ...route(process.env) }
+    return { ...routed, ...route(process.env) }
   }
   return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
 }
@@ -1577,12 +1589,22 @@ export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Ag
 export const agentOf = (h: HarnessDescriptor, vertex?: VertexSettings): Agent | undefined =>
   h.kind === 'fake' ? undefined : agentFor(h, vertex)
 
+/** The host variables an agent authenticates with, any one of which will do: `credential` first. */
+export const credentialsOf = (agent: Agent): string[] => [
+  agent.credential,
+  ...(agent.fallbackCredentials ?? []),
+]
+
+/** The host variable the agent authenticates with in `env`: the first set, else `credential`. */
+export const credentialIn = (agent: Agent, env: NodeJS.ProcessEnv = process.env): string =>
+  credentialsOf(agent).find((name) => env[name]) ?? agent.credential
+
 /**
- * The host variable a harness authenticates with; undefined for the fake harness, and on Vertex,
- * whose token comes from Application Default Credentials.
+ * The host variables a harness authenticates with, any one of which will do; none for the fake
+ * harness, and on Vertex, whose token comes from Application Default Credentials.
  */
-export const credentialOf = (h: HarnessDescriptor): string | undefined =>
-  h.kind === 'fake' || h.gateway === 'vertex' ? undefined : agentFor(h).credential
+export const harnessCredentials = (h: HarnessDescriptor): string[] =>
+  h.kind === 'fake' || h.gateway === 'vertex' ? [] : credentialsOf(agentFor(h))
 
 /** The fake agent's own layout. */
 const FAKE_LAYOUT: Layout = {
@@ -1636,7 +1658,7 @@ export function authHint(agent: Agent, message: string, refused = false): string
   if (agent.token) {
     return `The API rejected the access token reeval minted from ${agent.credential}: check gcloud auth application-default login (or GOOGLE_APPLICATION_CREDENTIALS) and the project's Vertex AI access`
   }
-  return keyRejected(agent.credential)
+  return keyRejected(credentialIn(agent))
 }
 
 /** What to do when the API refused the key in `credential`, naming it. */
@@ -1649,13 +1671,16 @@ export const keyRejected = (credential: string) =>
  */
 export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
   if (agent.token) return {}
-  const value = env[agent.credential]
+  const name = credentialIn(agent, env)
+  const value = env[name]
   if (!value) {
+    const names = credentialsOf(agent)
+    const unset = names.length === 1 ? `${name} isn't set` : `Neither ${names.join(' nor ')} is set`
     throw new InfraError(
-      `${agent.credential} isn't set, so the ${agent.name} harness can't authenticate. Set it in the environment or .env.local.`,
+      `${unset}, so the ${agent.name} harness can't authenticate. Set ${names.length === 1 ? 'it' : 'one'} in the environment or .env.local.`,
     )
   }
-  return { ...agent.authEnv, [agent.authAs ?? agent.credential]: value }
+  return { ...agent.authEnv, [name === agent.credential ? (agent.authAs ?? name) : name]: value }
 }
 
 /**
@@ -1681,8 +1706,9 @@ export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Bro
   }
   const agent = agentOf(h, vertex)
   if (!agent) return undefined
-  const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
+  const { endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
   const { localResponses } = agent
+  const credential = credentialIn(agent)
   return {
     credential,
     endpoints,
