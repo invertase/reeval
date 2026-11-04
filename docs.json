@@ -2,7 +2,7 @@
   "$schema": "https://docs.page/schema.json",
   "name": "reeval",
   "description": "Evals for coding agents: does an agent use your SDK, skills and docs correctly?",
-  "favicon": "/assets/reeval-mark-teal.png",
+  "favicon": "/assets/reeval-mark-teal.svg",
   "logo": {
     "light": "/assets/reeval-lockup-teal-light.svg",
     "dark": "/assets/reeval-lockup-teal.svg"
