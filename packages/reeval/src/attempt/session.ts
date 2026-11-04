@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
@@ -194,15 +195,16 @@ async function copyWorkspace(
   )
 }
 
-const FILES_TAR = '.reeval-files.tar'
+/** Bytes per tar: each is built in memory and piped in whole. */
+const TAR_BATCH_BYTES = 64 * 1024 * 1024
 
 type FileToWrite = { path: string; content: string | Uint8Array }
 
 /**
  * Writes `files` (workspace-relative, or `~/` for the home directory) with one tar per
  * destination: on a container or VM each `writeFile` is a process of its own, which a vendored
- * directory of thousands of files turns into minutes. A lone file is written as it is, and an
- * image without tar gets a write per file.
+ * directory of thousands of files turns into minutes. A lone file is written as it is, and a
+ * sandbox where the tar doesn't unpack gets a write per file.
  */
 export async function writeFiles(
   box: Sandbox,
@@ -227,29 +229,69 @@ async function unpackFiles(
     for (const f of files) await box.writeFile(`${prefix}${f.path}`, f.content)
   }
   if (files.length < 2) return one()
-  const mtime = Math.floor(Date.now() / 1000)
-  const tar = writeTar(
-    files.map((f) => ({
-      type: 'file' as const,
-      path: f.path,
-      mode: 0o644,
-      mtime,
-      data: typeof f.content === 'string' ? Buffer.from(f.content, 'utf8') : Buffer.from(f.content),
-    })),
-  )
-  await box.writeFile(`${prefix}${FILES_TAR}`, tar)
-  const dir = shellQuote(prefix ? box.home : box.workdir)
-  const r = await box.exec(`cd ${dir} && tar -xf ${FILES_TAR}; s=$?; rm -f ${FILES_TAR}; exit $s`, {
-    signal,
-  })
-  if (r.exitCode === 127) {
-    debugLog('env', `no tar in the sandbox: writing ${files.length} files one at a time`)
-    return one()
+  const entries = files.map((f) => ({
+    type: 'file' as const,
+    path: f.path,
+    mode: 0o644,
+    mtime: 0,
+    data:
+      typeof f.content === 'string'
+        ? Buffer.from(f.content, 'utf8')
+        : Buffer.from(f.content.buffer, f.content.byteOffset, f.content.byteLength),
+  }))
+  const batches: (typeof entries)[] = [[]]
+  let size = 0
+  for (const e of entries) {
+    if (size + e.data.length > TAR_BATCH_BYTES && batches[batches.length - 1]?.length) {
+      batches.push([])
+      size = 0
+    }
+    batches[batches.length - 1]?.push(e)
+    size += e.data.length
   }
-  if (r.exitCode !== 0) {
-    throw new InfraError(
-      `Couldn't unpack ${files.length} files into ${prefix ? 'the home directory' : 'the workspace'}: ${tailOf(r.stderr || r.stdout)}`,
-    )
+  const dir = shellQuote(prefix ? box.home : box.workdir)
+  const name = `.reeval-files-${randomUUID()}.tar`
+  // Unpacked into a temporary directory first. A file that exists already, or lies under a
+  // symbolic link to a directory, is then `cat` into place as `writeFile` does, so it keeps its
+  // mode and a link is written through: every tar (and BusyBox's `cp -R`) replaces an existing
+  // file, and bsdtar refuses to extract through a link. The rest go over in one more tar, written
+  // to a file rather than piped so that a name tar can't read back (GNU tar unescapes `-T`'s
+  // backslashes) fails the unpack instead of dropping that file.
+  const unpack = [
+    'unset TAR_OPTIONS',
+    `cd ${dir} || exit 1`,
+    'd=$PWD',
+    `t=$(mktemp -d) || { rm -f ${name}; exit 1; }`,
+    '(',
+    `  tar -xmf "$d/${name}" -C "$t" && cd "$t" && find . -type f > "$t.all" || exit $?`,
+    '  : > "$t.new"',
+    '  while IFS= read -r f; do',
+    '    if [ -e "$d/$f" ] || [ -L "$d/$f" ]; then',
+    '      cat "$f" > "$d/$f" || exit 1',
+    '      continue',
+    '    fi',
+    `    p=\${f%/*}`,
+    `    while [ "$p" != . ] && [ ! -L "$d/$p" ]; do p=\${p%/*}; done`,
+    '    if [ "$p" = . ]; then printf \'%s\\n\' "$f" >> "$t.new"',
+    `    else mkdir -p "$d/\${f%/*}" && cat "$f" > "$d/$f" || exit 1`,
+    '    fi',
+    '  done < "$t.all"',
+    '  [ ! -s "$t.new" ] || { tar -cf "$t.tar" -T "$t.new" && cd "$d" && tar -xf "$t.tar"; }',
+    ')',
+    's=$?',
+    `cd "$d"; rm -rf "$t" "$t.all" "$t.new" "$t.tar" ${name}`,
+    'exit $s',
+  ].join('\n')
+  for (const batch of batches) {
+    await box.writeFile(`${prefix}${name}`, writeTar(batch))
+    const r = await box.exec(unpack, { signal })
+    if (r.exitCode !== 0) {
+      debugLog(
+        'env',
+        `the files' tar didn't unpack (exit ${r.exitCode}: ${tailOf(r.stderr || r.stdout)}): writing ${files.length} files one at a time`,
+      )
+      return one()
+    }
   }
 }
 
