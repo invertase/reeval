@@ -45,6 +45,11 @@ async def require_poll_stops(c):
     await c.exec("echo never")
 
 
+@evaluate("asserts an unanswered judge")
+def asserts_an_unanswered_judge(c):
+    expect(c.judge("unanswered?", diff=True)).to_pass()
+
+
 @evaluate("writes and judges")
 async def writes_and_judges(c):
     await c.write_file("data.bin", bytes([0, 1]))
@@ -99,6 +104,25 @@ def test_bytes_go_as_base64_and_a_judge_sends_its_inputs(host: Host) -> None:
         {"op": "writeFile", "path": "data.bin", "contents": "AAE=", "encoding": "base64"},
         {"op": "judge", "question": "q", "options": {"diff": True}},
     ]
+
+
+def test_a_judge_call_that_failed_goes_back_to_reeval_as_it_came(host: Host) -> None:
+    # reeval matches a failed `toPass()` to its call by message, so the verdict goes back whole.
+    host.start("asserts an unanswered judge")
+    assert "error" not in host.done()
+    [judged, expected] = host.calls()
+    assert judged == {"op": "judge", "question": "unanswered?", "options": {"diff": True}}
+    assert expected["matcher"] == "toPass"
+    assert expected["subject"] == {
+        "value": {
+            "verdict": "error",
+            "score": None,
+            "threshold": 0.8,
+            "error": "rate limit",
+            "question": "unanswered?",
+            "model": "fake",
+        }
+    }
 
 
 def test_a_body_the_runner_cancels_without_an_abort_ends_with_an_error() -> None:

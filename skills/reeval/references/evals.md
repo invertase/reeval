@@ -115,11 +115,13 @@
   plain yes/no questions that don't name one specific way of doing it.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output. reeval sends every input the
-  call turns on, uncut, and knows no model's limit: a provider error keeps the provider's wording
-  and adds one line with the input's estimated size, biggest files and the inputs that were on,
-  largest first; narrow one, e.g. `{ diff: ['src/'] }`.
+  call turns on, uncut, and knows no model's limit: a provider error refusing it keeps the
+  provider's wording and adds one line with the input's estimated size, biggest files and the
+  inputs that were on, largest first; narrow one, e.g. `{ diff: ['src/'] }`.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
-  the later judges and checks still run, and the attempt fails as a judge error at the end.
+  the later judges and checks still run, and the attempt fails as a judge error at the end, or
+  as an infra error (which `--retry-errors` reruns) when the provider never answered and nothing
+  else failed.
   `expect(await c.judge(q, { diff: true }), name).toPass()` records each judge's result and
   carries on.
 

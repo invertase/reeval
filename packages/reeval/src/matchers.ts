@@ -93,6 +93,10 @@ const firstErrors = (c: CapturePage & { name?: string }, max = 5) => {
   return [...shown, ...(rest > 0 ? [`… ${rest} more${file}`] : [])].join('\n')
 }
 
+/** What `toPass()` and `.not.toPass()` fail with on a judge call that answered nothing. */
+export const judgeFailedMessage = (f: Pick<JudgeFailure, 'question' | 'model' | 'error'>) =>
+  `judge failed for "${f.question}" (${f.model}): ${f.error}`
+
 export const MATCHERS = {
   toBe: matcher((actual, [expected]: [unknown]) => {
     const pass = Object.is(actual, expected)
@@ -230,11 +234,7 @@ export const MATCHERS = {
     const failure = actual as JudgeFailure
     if (failure?.verdict === 'error' && typeof failure.error === 'string') {
       // A failed call answered nothing, so `.not.toPass()` fails on it too.
-      return {
-        pass: not,
-        message: () =>
-          `judge failed for "${failure.question}" (${failure.model}): ${failure.error}`,
-      }
+      return { pass: not, message: () => judgeFailedMessage(failure) }
     }
     const v = actual as Verdict
     if (typeof v?.score !== 'number') throw subjectError('toPass() expects a c.judge() verdict')

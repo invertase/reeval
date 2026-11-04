@@ -83,9 +83,10 @@ export type Attempt = {
   judgeThrown: Set<string>
   /**
    * Judge calls that failed without throwing, with each call's place, which fail the attempt once
-   * the eval's body is done, listed in call order.
+   * the eval's body is done, listed in call order. `transient` is a provider error retrying could
+   * fix (a rate limit, a 5xx, overload, the network); `matcher` is what `toPass()` fails with on it.
    */
-  judgeErrors: Array<{ call: number; message: string }>
+  judgeErrors: Array<{ call: number; message: string; transient: boolean; matcher: string }>
   /** `c.judge()` calls made so far: the next call's place, taken before it awaits anything. */
   judgeCalls: number
   /** The place of each entry in `record.judgeInputs`, which is kept in place order. */

@@ -17,7 +17,14 @@ import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
 import { observer } from './observe.ts'
-import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
+import {
+  attemptError,
+  judgeErrorsMessage,
+  recordEgress,
+  recordFailure,
+  recordOom,
+  writeRecord,
+} from './record.ts'
 import { startSession } from './session.ts'
 import { snapshotSidecar, takeSnapshot } from './snapshot.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
@@ -113,14 +120,10 @@ async function attemptBody(
     // A start that failed under a caught call or an `expect` still fails the attempt as itself.
     if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
-    const judgeErrors = a.judgeErrors.toSorted((x, y) => x.call - y.call).map((e) => e.message)
-    const [only, ...more] = judgeErrors
-    if (only) {
-      const message = more.length
-        ? `${more.length + 1} judge calls failed:\n${judgeErrors.join('\n')}`
-        : only
-      a.judgeThrown.add(message)
-      throw new Error(message)
+    const judgeErrors = judgeErrorsMessage(a)
+    if (judgeErrors) {
+      a.judgeThrown.add(judgeErrors)
+      throw new Error(judgeErrors)
     }
   } catch (thrown) {
     const error = attemptError(a, thrown, assertions())

@@ -214,7 +214,9 @@ group('hello', () => {
   [references/evals.md](references/evals.md). Prefer deterministic checks for what can be checked; use the judge for quality, with plain
   yes/no questions that don't name one specific way of doing it.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
-  the later judges and checks still run, and the attempt fails as a judge error at the end.
+  the later judges and checks still run, and the attempt fails as a judge error at the end, or
+  as an infra error (which `--retry-errors` reruns) when the provider never answered and nothing
+  else failed.
   `expect(await c.judge(q, { diff: true }), name).toPass()` records each judge's result and carries on.
 - Make the eval trustworthy. Before a real run, swap in the fake harness, and only the harness,
   so the eval runs in its real sandbox (its `docker()` image, `install`, egress and brokered

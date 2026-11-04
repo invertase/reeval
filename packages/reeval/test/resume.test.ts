@@ -1263,6 +1263,35 @@ evaluate('fails', async (c) => { await c.send('hi'); expect(1).toBe(2) })
     assert.equal((JSON.parse(json.stdout) as { outcome: string }).outcome, 'fail')
   })
 
+  test("runs again an attempt the judge's provider never answered", async () => {
+    const p = await project('retry-judge-outage', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/judged.eval.ts': `
+import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const model = fakeJudge({
+  score: () => {
+    if (process.env.FAIL) throw Object.assign(new Error('rate limit exceeded'), { statusCode: 429 })
+    return 0.9
+  },
+})
+evaluate('judged', async (c) => {
+  await c.send('hi')
+  expect(await c.judge('Is it done?', { model, diff: true })).toPass()
+})
+`,
+    })
+    const first = await runCli(p.dir, ['run', '--ui', 'plain'], outage)
+    assert.equal(first.code, 3, first.stdout + first.stderr)
+    const r = await runCli(p.dir, ['run', '--retry-errors', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^retried 1 errored attempt: 1 now passes, 0 fail, 0 still error$/m)
+    const { run } = readRun(p.dir)
+    assert.deepEqual(attemptsOf(run), [
+      ['judged', 'pass', ['judge failed for "Is it done?" (fake): rate limit exceeded']],
+    ])
+  })
+
   test('re-records a recorded run at the level it was recorded at', async () => {
     const p = await project('retry-rerecord-level', failing)
     assert.equal((await runCli(p.dir, ['run'], outage)).code, 3)

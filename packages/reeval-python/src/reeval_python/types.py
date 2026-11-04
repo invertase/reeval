@@ -95,7 +95,8 @@ VerdictKind = Literal["pass", "fail", "error"]
 @dataclass(frozen=True, slots=True)
 class Verdict:
     verdict: VerdictKind
-    score: float
+    # None when the call failed (`verdict` is "error"): the judge answered nothing.
+    score: float | None
     threshold: float
     question: str
     model: str
@@ -112,7 +113,7 @@ class Verdict:
         reason = next((r for r in reasons if isinstance(r, str) and r), None)
         return cls(
             verdict=cast(VerdictKind, data.get("verdict", "fail")),
-            score=float(data.get("score", 0)),
+            score=None if (score := data.get("score")) is None else float(score),
             threshold=float(data.get("threshold", 0)),
             question=str(data.get("question") or ""),
             model=str(data.get("model") or ""),

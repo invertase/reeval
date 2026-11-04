@@ -80,7 +80,7 @@ judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
 
 A score below the threshold prints `fail`, and `toPass()` fails the assertion.
 
-When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later assertions still run, and the attempt fails after the body finishes.
+When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later assertions still run, and the attempt fails after the body finishes. When the provider never answered (a rate limit, a 5xx, or overload, after the retries) and nothing else failed, the attempt is an infra error instead, which `reeval run --retry-errors` runs again.
 
 ## Choose what the judge sees
 

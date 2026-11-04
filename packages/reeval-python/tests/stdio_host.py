@@ -50,6 +50,13 @@ def reply_to(call: dict[str, Any]) -> dict[str, Any]:
             **({"message": "expected command to succeed"} if failed else {}),
         }
         return {"ok": True, "op": op, "assertion": assertion}
+    if op == "judge" and call["question"] == "unanswered?":
+        failure = {"verdict": "error", "score": None, "threshold": 0.8, "error": "rate limit"}
+        return {
+            "ok": True,
+            "op": op,
+            "verdict": {**failure, "question": "unanswered?", "model": "fake"},
+        }
     if op == "judge":
         verdict = {"verdict": "pass", "score": 1, "threshold": 0.8, "question": call["question"]}
         return {"ok": True, "op": op, "verdict": {**verdict, "model": "fake"}}

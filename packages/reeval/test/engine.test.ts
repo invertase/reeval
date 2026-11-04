@@ -1586,6 +1586,74 @@ evaluate('agent eval', async (c) => {
     assert.match(readRun(p.dir).read('summary.md'), /mock\/flaky, after 1 retry\): ok\?/)
   })
 
+  const providerError = (status: number, message: string) =>
+    `fakeJudge({ score: () => { throw Object.assign(new Error('${message}'), { statusCode: ${status} }) } })`
+  const outage = providerError(429, 'rate limit exceeded')
+
+  test('a judge call the provider never answered is an infra error, asserted or not', async () => {
+    const p = await project('judge-outage', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const outage = ${outage}
+const asked = (c: Parameters<Parameters<typeof evaluate>[1]>[0]) =>
+  c.judge('Is it done?', { model: outage, diff: true })
+evaluate('asserted', async (c) => { await c.send('go'); expect(await asked(c)).toPass() })
+evaluate('labelled', async (c) => { await c.send('go'); expect(await asked(c), 'done').toPass() })
+evaluate('negated', async (c) => { await c.send('go'); expect(await asked(c)).not.toPass() })
+evaluate('unasserted', async (c) => { await c.send('go'); await asked(c) })
+evaluate('twice', async (c) => { await c.send('go'); await asked(c); expect(await asked(c)).toPass() })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    for (const e of run.evals) {
+      const [attempt] = e.attempts
+      assert.equal(attempt?.outcome, 'infra_error', e.name)
+      assert.equal(attempt?.error?.kind, 'infra', e.name)
+      assert.match(attempt?.error?.message ?? '', /rate limit exceeded/, e.name)
+      assert.doesNotMatch(attempt?.error?.message ?? '', /judge's input was/, e.name)
+    }
+  })
+
+  test("a judge call that fails for the eval's own reason, or beside another failure, stays a fail", async () => {
+    const p = await project('judge-outage-not', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const outage = ${outage}
+const refused = ${providerError(401, 'invalid x-api-key')}
+const no = fakeJudge({ score: 0.1 })
+const yes = fakeJudge({ score: 0.9 })
+type C = Parameters<Parameters<typeof evaluate>[1]>[0]
+const ask = (c: C, model: unknown) => c.judge('Is it done?', { model: model as never, diff: true })
+evaluate('refused', async (c) => { await c.send('go'); expect(await ask(c, refused)).toPass() })
+evaluate('refused and down', async (c) => { await c.send('go'); await ask(c, refused); await ask(c, outage) })
+evaluate('answered no', async (c) => { await c.send('go'); await ask(c, outage); expect(await ask(c, no)).toPass() })
+evaluate('negated yes', async (c) => { await c.send('go'); await ask(c, outage); expect(await ask(c, yes)).not.toPass() })
+evaluate('check failed', async (c) => { await c.send('go'); expect(await ask(c, outage)).toPass(); expect(1).toBe(2) })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const kinds = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [
+        e.name,
+        [e.attempts[0]?.outcome, e.attempts[0]?.error?.kind],
+      ]),
+    )
+    assert.deepEqual(kinds, {
+      refused: ['fail', 'judge'],
+      'refused and down': ['fail', 'judge'],
+      'answered no': ['fail', 'judge'],
+      'negated yes': ['fail', 'judge'],
+      'check failed': ['fail', 'assertion'],
+    })
+    const refusedError = readRun(p.dir).evals.find((e) => e.name === 'refused')?.error?.message
+    assert.match(refusedError ?? '', /invalid x-api-key\nThe judge's input was ~\d+ tokens/)
+  })
+
   test('c.judge before any turn is an assertion error', async () => {
     const p = await project('judge-early', {
       'reeval.config.ts': fakeConfig(),

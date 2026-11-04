@@ -1178,7 +1178,7 @@ On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab
 
 ## `AttemptError`
 
-`AttemptRecord.error` is why an attempt failed, or null. `kind` is an `ErrorKind`. `message` is the text. `prepare` is set when sandbox preparation fails. `resource` is set when the sandbox runs out of a resource.
+`AttemptRecord.error` is why an attempt failed, or null. `kind` is an `ErrorKind`. `message` is the text. `judge` is a failed judge call or a `toPass()` that didn't hold. A judge call the provider never answered after its retries (a rate limit, a 5xx, overload, or the network) is `infra` instead, with the outcome `infra_error`, when nothing else failed the attempt. `prepare` is set when sandbox preparation fails. `resource` is set when the sandbox runs out of a resource.
 
 ## `PrepareFailureRecord`
 

@@ -14,11 +14,12 @@ import {
 } from '../judge/artifacts.ts'
 import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
-import { isApiError, type RetriedError } from '../judge/retry.ts'
+import { isApiError, isTransient, type RetriedError } from '../judge/retry.ts'
 import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
+import { judgeFailedMessage } from '../matchers.ts'
 import { redactSecrets, redactValue } from '../redact.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -262,10 +263,16 @@ export function judgeCaller(
     if (dropped.length) debugLog('judge', `left out of the judge's input: ${dropped.join(' · ')}`)
     debugTrace('judge', 'prompt', input, 'judge prompt')
 
-    const failed = (message: string, retries?: RetriedError['retries']): JudgeFailure => {
+    const failed = (
+      message: string,
+      transient: boolean,
+      retries?: RetriedError['retries'],
+    ): JudgeFailure => {
       a.judgeErrors.push({
         call: order,
         message: `c.judge(${JSON.stringify(clip(redactSecrets(question), 80))}) failed: ${message}`,
+        transient,
+        matcher: judgeFailedMessage({ question, model: name, error: message }),
       })
       input.error = message
       if (retries?.length) input.retries = retries
@@ -336,7 +343,11 @@ export function judgeCaller(
       if (a.signal.aborted) throw error
       const { retries } = error as Partial<RetriedError>
       const message = error instanceof Error ? error.message : String(error)
-      return failed(isApiError(error) ? withInputSize(message, state, question) : message, retries)
+      const transient = isTransient(error)
+      // The input's size can explain a request the provider refused, never an outage.
+      const explained =
+        isApiError(error) && !transient ? withInputSize(message, state, question) : message
+      return failed(explained, transient, retries)
     }
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
