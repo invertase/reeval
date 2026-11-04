@@ -39,14 +39,16 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
+import { AGENTS } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
+import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
-import { fakeDigest, fakeTart, holdLoopback } from './support/fake-tart.ts'
+import { fakeDigest, fakeTart, holdLoopback, LOOPBACK_WAIT_MS } from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -485,6 +487,14 @@ const perHarness = (
 ): Feature[] => layouts.map((layout) => ({ ...row(layout), layout, image: layout }))
 
 const BUT_CURSOR = BAKED_HARNESSES.filter((h) => h !== 'cursor')
+/** The harnesses tart() runs, listed so one it stops running fails its row rather than losing it. */
+const TART_HARNESSES = [
+  'cursor',
+  'claude-code',
+  'opencode',
+  'pi',
+  'codex',
+] as const satisfies readonly BakedHarness[]
 /** A regex for exactly `text`. */
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** The `agentCli` a Dockerfile built on each harness's image records. */
@@ -3126,8 +3136,9 @@ export const features: Feature[] = [
       assert.doesNotMatch(stdout, /moving tag/, 'a pinned tag has no warning')
     },
   },
-  {
-    // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers.
+  ...perHarness(TART_HARNESSES, (layout) => ({
+    // tart() on the fake `tart`: the agent runs on the VM's harness session, whose gateway brokers
+    // and, for a harness whose bridge is a server, tunnels the session's port to it.
     dir: 'sandbox/tart-brokered-agent',
     tiers: ['fake'],
     env: 'mac',
@@ -3141,15 +3152,16 @@ export const features: Feature[] = [
       return {
         ...fake.env,
         REEVAL_TEST_TART_ANY_HOST: '1',
-        CURSOR_API_KEY: 'key_tart_fixture_cursor',
+        REEVAL_FIXTURE_CREDENTIAL: AGENTS[layout].credential,
+        [AGENTS[layout].credential]: 'key_tart_fixture',
       }
     },
-    record: ({ run, project, runDir }) => {
-      assert.equal(filesContaining(runDir, 'key_tart_fixture_cursor'), '')
+    record: ({ project, runDir }) => {
+      assert.equal(filesContaining(runDir, 'key_tart_fixture'), '')
       const vms = join(fakeTarts.get(project) ?? '', 'vms')
       assert.deepEqual(readdirSync(vms), [], 'every VM is deleted')
     },
-  },
+  })),
   {
     // tart() on the fake `tart`: preflight bakes the agent's bootstrap into an image of its own,
     // which every attempt clones.
@@ -4399,7 +4411,8 @@ function fixtureTests(tiers: Tier[]) {
         { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
       test(`${rowName(f)} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
-        timeout,
+        // The run's own deadline starts once it holds the loopback, which it may wait for.
+        timeout: timeout + (f.loopback ? LOOPBACK_WAIT_MS : 0),
       }, async (t) => {
         const row = realRowOf(f)
         if (tier === 'real') {
@@ -4487,6 +4500,11 @@ test('every feature fixture is in the table, with one check and a canary', () =>
   assert.deepEqual(dirs, [...new Set(features.map((f) => f.dir))].sort())
   const names = features.map(rowName)
   assert.deepEqual(names, [...new Set(names)], 'every row has its own name')
+  assert.deepEqual(
+    BAKED_HARNESSES.filter((h) => takesHarness(capabilitiesOf({ kind: 'tart', image: 'i' }), h)),
+    TART_HARNESSES,
+    "tart()'s harnesses are the tart-brokered-agent rows",
+  )
   for (const dir of dirs) {
     const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
     const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'

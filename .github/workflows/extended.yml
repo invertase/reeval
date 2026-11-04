@@ -8,7 +8,7 @@
 # have no Docker. Windows starts processes slowly, so its unit files run in six shards, split by
 # each file's running time (scripts/test-shard.mjs) rather than Node's round-robin. macOS
 # splits the same way so unit, tiers and packed overlap. Its `bootstraps` part installs the
-# Cursor, pi and Codex CLIs' macOS builds the way tart() bakes them (no VM, no key).
+# macOS build of every harness tart() runs, the way tart() bakes them (no VM, no key).
 name: extended
 
 on:

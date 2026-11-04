@@ -154,6 +154,8 @@ export function fakeTart(images: string[] = []): {
   }
 }
 
+/** How long {@link holdLoopback} waits for the loopback before it fails. */
+export const LOOPBACK_WAIT_MS = 120_000
 /** The loopback port whose listener is {@link holdLoopback}'s lock. */
 const LOOPBACK_LOCK_PORT = 43127
 
@@ -165,7 +167,7 @@ const LOOPBACK_LOCK_PORT = 43127
  * file's 300s timeout.
  */
 export async function holdLoopback(): Promise<() => void> {
-  const deadline = Date.now() + 120_000
+  const deadline = Date.now() + LOOPBACK_WAIT_MS
   for (;;) {
     const server = createServer()
     const error = await new Promise<NodeJS.ErrnoException | undefined>((resolve) => {
@@ -180,7 +182,9 @@ export async function holdLoopback(): Promise<() => void> {
     }
     if (error.code !== 'EADDRINUSE') throw error
     if (Date.now() > deadline) {
-      throw new Error(`another process held 127.0.0.1:${LOOPBACK_LOCK_PORT} for 120s`)
+      throw new Error(
+        `another process held 127.0.0.1:${LOOPBACK_LOCK_PORT} for ${LOOPBACK_WAIT_MS / 1000}s`,
+      )
     }
     await new Promise((r) => setTimeout(r, 100))
   }

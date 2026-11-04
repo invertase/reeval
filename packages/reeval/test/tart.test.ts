@@ -11,7 +11,8 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { after, afterEach, before, describe, test } from 'node:test'
-import { adapterVersion } from '@reeval/sandbox-docker'
+import { resolveBridgePort } from '@ai-sdk/harness/utils'
+import { adapterVersion, BRIDGE_PORT } from '@reeval/sandbox-docker'
 import { fakeBootstrapScript } from '../src/harness/fake-bootstrap.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import type { SandboxProvider } from '../src/sandbox/provider.ts'
@@ -23,6 +24,7 @@ import {
   memoryMb,
   removeRunVms,
   sshGuest,
+  tartSession,
   vmPrefix,
 } from '../src/sandbox/tart.ts'
 import {
@@ -209,6 +211,52 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     } finally {
       await box.destroy()
     }
+  })
+
+  test('exposes the bridge port, and reaches a server on it in the VM through the gateway', async () => {
+    const box = await createTartSandbox(vm(), options())
+    try {
+      const port = resolveBridgePort({ sandboxSession: box.network, portOverride: undefined })
+      assert.equal(port, BRIDGE_PORT)
+      const server = await box.network.spawn({
+        command: `node -e "require('http').createServer((q, s) => s.end('bridge')).listen(${port}, '127.0.0.1', () => console.log('up'))"`,
+      })
+      try {
+        const up = await server.stdout.getReader().read()
+        assert.equal(new TextDecoder().decode(up.value).trim(), 'up')
+        const { url } = await box.network.getPortEndpoint({ port, protocol: 'http' })
+        assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/)
+        assert.notEqual(new URL(url).port, String(port), 'through the gateway, not the port itself')
+        assert.equal(await (await fetch(url)).text(), 'bridge')
+      } finally {
+        await server.kill()
+      }
+    } finally {
+      await box.destroy()
+    }
+  })
+
+  test("refuses a port once the gateway has stopped, rather than going to the VM's address", async () => {
+    const stopped = 'the forwarder exited (1)'
+    const gateway = {
+      stopped,
+      portUrl: async () => {
+        throw new Error(`the egress gateway stopped: ${stopped}`)
+      },
+    } as unknown as Parameters<typeof tartSession>[0]['gateway']
+    const session = tartSession({
+      vm: 'reeval-gone',
+      guest: sshGuest('192.0.2.1', '/nonexistent'),
+      home: '/Users/admin',
+      stateDir: '/Users/admin/.reeval-state',
+      env: {},
+      gateway,
+      destroy: async () => {},
+    })
+    await assert.rejects(
+      session.getPortEndpoint({ port: BRIDGE_PORT }),
+      /^Error: the egress gateway stopped: the forwarder exited \(1\)$/,
+    )
   })
 
   test("streams a spawned process's output, and its kill stops what it started in the VM", async () => {

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { resolveBridgePort } from '@ai-sdk/harness/utils'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
@@ -38,6 +39,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       }
       const layout = layoutOf(descriptor)
       const brokered = descriptor.brokers ? await brokerKey(descriptor, sandbox) : undefined
+      if (descriptor.brokers && AGENTS[descriptor.layout ?? 'cursor'].bridgePort) {
+        await reachBridge(sandbox, signal)
+      }
       const mcp = agentMcp(layout, all, plugins)
       for (const path of await writePluginFiles(sandbox, layout, plugins)) {
         debugLog('env', `plugin settings → ${path} by the fake agent`)
@@ -241,6 +245,37 @@ async function brokerKey(
     `${credential} is a placeholder for the fake agent, brokered on its endpoints`,
   )
   return { [credential]: placeholder }
+}
+
+/**
+ * Serves on the port the layout's adapter would put its bridge on, in the sandbox, and reaches it
+ * from the host through the session's endpoint, as that adapter's start does.
+ */
+async function reachBridge(sandbox: Sandbox, signal: AbortSignal): Promise<void> {
+  const network = hasNetworkSession(sandbox) ? sandbox.network : undefined
+  if (!network) throw new InfraError("The fake agent's bridge needs a sandbox session")
+  let port: number
+  try {
+    port = resolveBridgePort({ sandboxSession: network, portOverride: undefined })
+  } catch (error) {
+    throw new InfraError(`Fake harness failed to start: ${(error as Error).message}`)
+  }
+  const server = await network.spawn({
+    command: `node -e ${q(`require('http').createServer((q, s) => s.end('bridge')).listen(${port}, '0.0.0.0', () => console.log('up'))`)}`,
+    abortSignal: signal,
+  })
+  try {
+    const up = await server.stdout.getReader().read()
+    if (!new TextDecoder().decode(up.value).includes('up')) {
+      throw new InfraError(`The fake agent's bridge didn't listen on ${port}`)
+    }
+    const { url } = await network.getPortEndpoint({ port, protocol: 'http' })
+    const reply = await (await fetch(url, { signal })).text()
+    if (reply !== 'bridge') throw new InfraError(`${url} answered ${JSON.stringify(reply)}`)
+    debugLog('harness', `bridge port ${port} reached through ${url}`)
+  } finally {
+    await server.kill()
+  }
 }
 
 /**

@@ -406,6 +406,25 @@ evaluate('in docker', { sandbox: docker() }, async () => {
     assert.ok(r.stdout.includes(`warning: tart(${image}) uses no tag (so "latest")`), r.stdout)
   })
 
+  test('reeval image build warns once for an image every harness bakes on', async () => {
+    const image = `${host}/cirruslabs/small:latest`
+    const { p, cli } = await setup(image, {
+      ANTHROPIC_API_KEY: 'a',
+      GOOGLE_GENERATIVE_AI_API_KEY: 'g',
+    })
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      CONFIG.replace('{ fakeHarness }', '{ claudeCode, opencode }').replace(
+        'fakeHarness({})',
+        "[claudeCode({ model: 'claude-sonnet-5-5' }), opencode({ model: 'google/gemini-2.5-flash' })]",
+      ),
+    )
+    const r = await cli(['image', 'build', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /· claude-code-.+\n.+· opencode-/, 'two bakes')
+    assert.equal(r.stdout.split('uses the moving tag "latest"').length - 1, 1, r.stdout)
+  })
+
   test("a host without Tart still builds the plan's Docker images", async () => {
     const fake = fakeTart()
     const dockerCalls = noDocker(join(fake.dir, 'bin'))

@@ -4,7 +4,7 @@
 #   scripts/ci-os.sh unit 2/4    a shard of the unit and plan test files
 #   scripts/ci-os.sh tiers       typecheck, schema check, lint, fixtures (fake tier), studio, the other packages
 #   scripts/ci-os.sh packed      the pack test, then reeval init → run → doctor → studio build from the tarball
-#   scripts/ci-os.sh bootstraps  macOS only: the Cursor, pi and Codex bootstraps tart() bakes, on this host
+#   scripts/ci-os.sh bootstraps  macOS only: every bootstrap tart() bakes, on this host
 #
 # Run after `pnpm install` and `pnpm build`, from anywhere in the repo.
 set -euo pipefail
