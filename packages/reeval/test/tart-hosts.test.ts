@@ -181,7 +181,8 @@ describe('a host of tart({ hosts })', () => {
   test('shares one connection through a socket in a directory only this user can enter', {
     skip: !posix && 'ssh has no ControlMaster on Windows',
   }, () => {
-    const home = mkdtempSync(join(tmpdir(), 'reeval-control-home-'))
+    // Not under macOS's long $TMPDIR, where ~/.ssh/reeval/%C would be too long for a socket.
+    const home = mkdtempSync('/tmp/reeval-ch-')
     const was = process.env.HOME
     process.env.HOME = home
     try {
@@ -190,10 +191,32 @@ describe('a host of tart({ hosts })', () => {
       assert.equal(statSync(dir).mode & 0o777, 0o700)
       chmodSync(dir, 0o777)
       const open = hostSsh(parsed('mac'))
-      assert.ok(!open.some((a) => a.startsWith('Control')), 'another user could stand in there')
+      assert.ok(!open.includes(`ControlPath=${dir}/%C`), 'another user could stand in there')
+      assert.ok(open.includes(`ControlPath=/tmp/reeval-${process.getuid?.()}/%C`), open.join(' '))
     } finally {
       process.env.HOME = was
       rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  test("its socket is in /tmp/reeval-<uid> when a long home leaves ~/.ssh/reeval's too long", {
+    skip: !posix && 'ssh has no ControlMaster on Windows',
+  }, () => {
+    const home = join(mkdtempSync(join(tmpdir(), 'reeval-long-home-')), 'h'.repeat(80))
+    mkdirSync(home)
+    const was = process.env.HOME
+    process.env.HOME = home
+    try {
+      const argv = hostSsh(parsed('mac'))
+      const shared = `/tmp/reeval-${process.getuid?.()}`
+      assert.ok(argv.includes(`ControlPath=${shared}/%C`), argv.join(' '))
+      assert.ok(!existsSync(join(home, '.ssh', 'reeval')), 'no directory for a socket ssh refuses')
+      const st = statSync(shared)
+      assert.equal(st.uid, process.getuid?.())
+      assert.equal(st.mode & 0o077, 0, 'only this user can enter it')
+    } finally {
+      process.env.HOME = was
+      rmSync(join(home, '..'), { recursive: true, force: true })
     }
   })
 })
