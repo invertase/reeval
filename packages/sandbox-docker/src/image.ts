@@ -22,7 +22,7 @@ export const HARNESS_PACKAGES: Record<
   opencode: { name: '@reeval/harness-opencode', version: '0.2.16' },
   goose: { name: '@reeval/harness-goose', version: '0.1.14' },
   pi: { name: '@reeval/harness-pi', version: '0.2.9' },
-  codex: { name: '@reeval/harness-codex', version: '0.1.11' },
+  codex: { name: '@reeval/harness-codex', version: '0.1.12' },
   fx: { name: '@reeval/harness-fx', version: '0.1.9' },
   'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.11' },
 }

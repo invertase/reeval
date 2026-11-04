@@ -168,6 +168,7 @@ export const FX_INSTALL_COMMAND = `case "$(uname -s) $(uname -m)" in
   "Linux x86_64"|"Linux amd64") build=linux-x86_64 sha=${FX_CLI_SHA256.x86_64} ;;
   "Linux aarch64"|"Linux arm64") build=linux-aarch64 sha=${FX_CLI_SHA256.aarch64} ;;
   "Darwin arm64") build=macos-aarch64 sha=${FX_CLI_SHA256['darwin-aarch64']} ;;
+  "Darwin "*) echo "reeval runs fx on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
   *) echo "fx has no release for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o fx.tar.gz "https://github.com/vercel-labs/fx/releases/download/v${FX_CLI_VERSION}/fx-$build.tar.gz"

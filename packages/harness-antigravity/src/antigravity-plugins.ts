@@ -78,8 +78,9 @@ export function antigravityPluginInstall(cli: string, dir: string, installed: st
   return `set -eu
 ${shellQuote(cli)} plugin install ${shellQuote(dir)}
 front() { head -n 1 "$1" | grep -q '^---$'; }
-after_first() { { head -n 1 "$1"; printf '%s\\n' "$2"; tail -n +2 "$1"; } > "$1.reeval" && mv "$1.reeval" "$1"; }
-before() { t=$1; shift; { printf '%s\\n' "$@"; cat "$t"; } > "$t.reeval" && mv "$t.reeval" "$t"; }
+put() { cat "$1.reeval" > "$1" && rm "$1.reeval"; }
+after_first() { { IFS= read -r l < "$1" || :; printf '%s\\n%s\\n' "$l" "$2"; tail -n +2 "$1"; } > "$1.reeval" && put "$1"; }
+before() { t=$1; shift; { printf '%s\\n' "$@"; cat "$t"; } > "$t.reeval" && put "$t"; }
 for f in ${at}/skills/*/SKILL.md; do
   [ -f "$f" ] || continue
   grep -q '^name:' "$f" && continue

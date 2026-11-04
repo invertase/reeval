@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -330,7 +330,13 @@ describe('bootstrap', () => {
     assert.equal(pick('Darwin', 'arm64').stdout, `mac_arm64 ${sha['darwin-arm64']}\n`)
     const intel = pick('Darwin', 'x86_64')
     assert.equal(intel.status, 1)
-    assert.equal(intel.stderr, 'The Antigravity CLI has no build for Darwin x86_64\n')
+    assert.equal(
+      intel.stderr,
+      'reeval runs Antigravity on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+    )
+    const riscv = pick('Linux', 'riscv64')
+    assert.equal(riscv.status, 1)
+    assert.equal(riscv.stderr, 'The Antigravity CLI has no build for Linux riscv64\n')
   })
 
   test('pins the release and checks its sha256 on every build', async () => {
@@ -407,6 +413,7 @@ describe('plugins', () => {
       'src/skills/plugin-cmd-ship/SKILL.md': 'Ship it.\n',
       'src/skills/named/SKILL.md': '---\nname: named\ndescription: d\n---\nBody.\n',
       'src/skills/fronted/SKILL.md': '---\ndescription: d\n---\nBody.\n',
+      'src/skills/open/SKILL.md': '---',
       'src/rules/plain.md': 'Be kind.\n',
       'src/rules/always.mdc': '---\nalwaysApply: true\n---\nAlways.\n',
       'src/rules/scoped.mdc': '---\nglobs: "*.ts"\n---\nTyped.\n',
@@ -416,6 +423,7 @@ describe('plugins', () => {
       mkdirSync(dirname(join(tmp, path)), { recursive: true })
       writeFileSync(join(tmp, path), content)
     }
+    chmodSync(join(tmp, 'src/rules/plain.md'), 0o600)
     // A stand-in for agy: `plugin install <dir>` copies the plugin where agy would.
     const agy = join(tmp, 'agy')
     writeFileSync(agy, `#!/bin/sh\nmkdir -p "${dirname(installed)}" && cp -r "$3" "${installed}"\n`)
@@ -438,7 +446,9 @@ describe('plugins', () => {
       read('skills/fronted/SKILL.md'),
       '---\nname: fronted\ndescription: d\n---\nBody.\n',
     )
+    assert.equal(read('skills/open/SKILL.md'), '---\nname: open\n')
     assert.equal(read('rules/plain.md'), '---\ntrigger: always_on\n---\n\nBe kind.\n')
+    assert.equal(statSync(join(installed, 'rules/plain.md')).mode & 0o777, 0o600, 'its mode kept')
     assert.equal(
       read('rules/always.mdc'),
       '---\ntrigger: always_on\nalwaysApply: true\n---\nAlways.\n',
