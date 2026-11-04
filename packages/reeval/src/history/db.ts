@@ -16,8 +16,8 @@ import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
-import { type ClassContext, classifyCall } from './tool-class.ts'
-import { toolTarget } from './tool-target.ts'
+import { type ClassContext, classifyCall, skillsUsed } from './tool-class.ts'
+import { targetText, toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 export { toolTarget }
@@ -197,6 +197,12 @@ CREATE TABLE tool_calls (
 CREATE TABLE context_reads (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, path TEXT NOT NULL
 );
+-- Each placed skill a tool call used, by the call's line: by toHaveCalledSkill's rule, a load by
+-- name (Claude Code's Skill, OpenCode's and fx's skill, Goose's load_skill) or a target under
+-- skills/<name>.
+CREATE TABLE skill_uses (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, skill TEXT NOT NULL
+);
 -- Each stdio MCP server start in each attempt's turns (turn from 1): ms from spawning it to its
 -- answer to initialize, null when it never answered.
 CREATE TABLE mcp_startup (
@@ -220,6 +226,7 @@ CREATE INDEX cells_by_eval ON cells (eval_key, key);
 CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
 CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
 CREATE INDEX context_reads_by_attempt ON context_reads (run_id, attempt_key);
+CREATE INDEX skill_uses_by_attempt ON skill_uses (run_id, attempt_key);
 CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
 `
 
@@ -291,19 +298,16 @@ CREATE VIEW question_pairs AS SELECT * FROM question_pairs_m;
 -- pooled (comparable runs, and across evals), observed (over time), not_measured (one level).
 CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
 
--- Whether each attempt read each skill its environment placed, and at which transcript line.
--- A read is a tool whose target is under skills/<name>/, or a dedicated load
--- (OpenCode skill, Goose load_skill) whose target is the skill name. An attempt whose record has
--- tool calls but whose transcript wasn't kept (or couldn't be read) is left out: unknown, not unread.
+-- Whether each attempt read each skill its environment placed, and at which transcript line: the
+-- tool calls skill_uses has for it. An attempt whose record has tool calls but whose transcript
+-- wasn't kept (or couldn't be read) is left out: unknown, not unread.
 CREATE VIEW skill_reads AS
   SELECT a.run_id, a.eval_key, a.cell_key, a.key AS attempt_key, a.id AS attempt_id, c.variant,
     s.name AS skill, s.placement,
-    (SELECT MIN(t.line) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
-      AND (t.target LIKE '%skills/' || s.name || '/%'
-        OR (t.tool IN ('skill', 'Skill', 'load_skill') AND t.target = s.name))) AS read_line,
-    (SELECT COUNT(*) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
-      AND (t.target LIKE '%skills/' || s.name || '/%'
-        OR (t.tool IN ('skill', 'Skill', 'load_skill') AND t.target = s.name))) AS reads
+    (SELECT MIN(u.line) FROM skill_uses u WHERE u.run_id = a.run_id AND u.attempt_key = a.key
+      AND u.skill = s.name) AS read_line,
+    (SELECT COUNT(*) FROM skill_uses u WHERE u.run_id = a.run_id AND u.attempt_key = a.key
+      AND u.skill = s.name) AS reads
   FROM attempts a
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
@@ -447,6 +451,8 @@ export type ToolCall = {
   turn: number | null
   tool: string
   target: string
+  /** The target uncapped, which classifies the call. */
+  text: string
   /** Null when the harness never reported the call's result. */
   ok: boolean | null
   durationMs: number | null
@@ -469,6 +475,7 @@ export function toolCalls(transcript: string): ToolCall[] {
       turn: typeof event.turn === 'number' ? event.turn : null,
       tool: String(event.tool ?? ''),
       target: toolTarget(event.input, String(event.tool ?? '')),
+      text: targetText(event.input, String(event.tool ?? '')),
       ok: event.ok === null ? null : event.ok !== false,
       durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
     })
@@ -830,7 +837,7 @@ function insertRun(
         verify: a.checks.map((c) => c.command),
       }
       for (const t of transcript ? toolCalls(transcript) : []) {
-        const call = classifyOrWorkspace(t.tool, t.target, ctx)
+        const call = classifyOrWorkspace(t.tool, t.text, ctx)
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -845,6 +852,9 @@ function insertRun(
         )
         for (const path of call.files) {
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
+        }
+        for (const skill of skillsUsed(t.tool, t.text, skills)) {
+          run('INSERT INTO skill_uses VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, skill)
         }
       }
       for (const q of a.answers ?? []) {
@@ -1031,6 +1041,7 @@ const DATA_TABLES = [
   'attempt_context',
   'tool_calls',
   'context_reads',
+  'skill_uses',
   'mcp_startup',
   'assertions',
   'cell_checks',

@@ -1,5 +1,5 @@
-// Transcript matchers: pass, fail, .not, and every replay skill capture through
-// today's normalizer.
+// Transcript matchers: pass, fail, .not, every replay skill capture through
+// today's normalizer, and each harness's captured skill use.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,8 +20,10 @@ import {
   withinLimits,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
+import { AGENTS, type AgentKind } from '../src/harness/agents.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import { toolCalls } from '../src/history/db.ts'
+import { classifyCall, skillsUsed } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { matchers } from '../src/matchers.ts'
 import type { TranscriptEvent } from '../src/types.ts'
@@ -503,6 +505,129 @@ describe('replay captures through normalizeStream', () => {
       throws(() => expect(t).toHaveRun(/deploy/), /expected shell commands matching \/deploy\//)
     })
   }
+})
+
+const CLAUDE_CODE_SKILL =
+  'fixtures/records/real-contract/evals/.history/20260929T033538Z_nogit_runner_f3z3/evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/transcript.jsonl'
+
+/** Each harness's use of the contract's `contract-probe` skill, as its capture has it. */
+const SKILL_USES: Record<AgentKind, { from: string; tool: string; input: unknown } | null> = {
+  cursor: {
+    from: 'replay/cursor/skill.raw.jsonl',
+    tool: 'read',
+    input: { path: '/home/reeval/.agents/skills/contract-probe/SKILL.md' },
+  },
+  'claude-code': { from: CLAUDE_CODE_SKILL, tool: 'Skill', input: { skill: 'contract-probe' } },
+  antigravity: {
+    from: 'replay/antigravity/skill.raw.jsonl',
+    tool: 'read',
+    input: {
+      file_path: '/home/reeval/.gemini/config/skills/contract-probe/SKILL.md',
+      Path: '/home/reeval/.gemini/config/skills/contract-probe/SKILL.md',
+    },
+  },
+  opencode: {
+    from: 'replay/opencode/skill.raw.jsonl',
+    tool: 'skill',
+    input: { id: 'contract-probe' },
+  },
+  goose: {
+    from: 'replay/goose/skill.raw.jsonl',
+    tool: 'load_skill',
+    input: { name: 'contract-probe' },
+  },
+  pi: {
+    from: 'replay/pi/skill.raw.jsonl',
+    tool: 'read',
+    input: { path: '/home/reeval/.pi/agent/skills/contract-probe/SKILL.md', limit: 100, offset: 1 },
+  },
+  codex: {
+    from: 'replay/codex/skill.raw.jsonl',
+    tool: 'bash',
+    input: {
+      command: `/bin/bash -lc "sed -n '1,240p' /home/reeval/.agents/skills/contract-probe/SKILL.md"`,
+    },
+  },
+  fx: {
+    from: 'replay/fx/skill.raw.jsonl',
+    tool: 'skill',
+    input: { location: 'skill:61ce5ec8bc2106bf:0/contract-probe', name: 'contract-probe' },
+  },
+  // No capture: the contract's Grok Build rows have never recorded their skill turn.
+  'grok-build': null,
+}
+
+/** A capture's normalized tool calls: a replay stream through normalizeStream, or a transcript. */
+const capturedTools = (from: string) => {
+  const text = readFileSync(join(testDir, from), 'utf8')
+  const events = from.endsWith('.raw.jsonl')
+    ? normalizeStream(
+        text
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+          .map((l) => ({ ms: l.ms, part: l.part as never })),
+        0,
+      )
+    : (text
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l)) as TranscriptEvent[])
+  return events.flatMap((e) => (e.type === 'tool' ? [{ tool: e.tool, input: e.input }] : []))
+}
+
+describe("every harness's skill use", () => {
+  test('there is a row for each harness in the catalog', () => {
+    assert.deepEqual(Object.keys(SKILL_USES).sort(), Object.keys(AGENTS).sort())
+  })
+
+  for (const [harness, use] of Object.entries(SKILL_USES)) {
+    if (!use) continue
+    test(`${harness}: the row is in ${use.from}`, () => {
+      assert.ok(
+        capturedTools(use.from).some(
+          (t) => t.tool === use.tool && JSON.stringify(t.input) === JSON.stringify(use.input),
+        ),
+      )
+    })
+
+    test(`${harness}: toHaveCalledSkill, skill_reads and the context class all see it`, () => {
+      const t = turnOf([tool(use.tool, use.input)])
+      expect(t).toHaveCalledSkill('contract-probe')
+      expect(t).not.toHaveCalledSkill('contract')
+      expect(t).not.toHaveCalledSkill('probe')
+      const [call] = toolCalls(JSON.stringify({ type: 'tool', tool: use.tool, input: use.input }))
+      assert.ok(call)
+      assert.deepEqual(skillsUsed(call.tool, call.text, ['other', 'contract-probe']), [
+        'contract-probe',
+      ])
+      const ctx = { skills: ['contract-probe'], files: [], mcp: [], verify: [] }
+      assert.equal(classifyCall(call.tool, call.text, ctx).class, 'context')
+    })
+  }
+
+  test("Claude Code's plugin skill is <plugin>:<name>", () => {
+    const t = turnOf([tool('Skill', { skill: 'house:contract-probe' })])
+    expect(t).toHaveCalledSkill('contract-probe')
+    expect(t).toHaveCalledSkill('house:contract-probe')
+    expect(t).not.toHaveCalledSkill('house')
+  })
+
+  test('a shell command that cds into the skill reads it; one that excludes it does not', () => {
+    const cd = turnOf([tool('bash', { command: 'cd ~/.agents/skills/foo && cat SKILL.md' })])
+    expect(cd).toHaveCalledSkill('foo')
+    expect(cd).not.toHaveCalledSkill('foo-bar')
+    const excluded = turnOf([tool('bash', { command: 'rg -n todo --glob "!skills/foo/**"' })])
+    expect(excluded).not.toHaveCalledSkill('foo')
+    const tested = turnOf([tool('bash', { command: '[ -d ~/.agents/skills/foo ] && echo yes' })])
+    expect(tested).not.toHaveCalledSkill('foo')
+  })
+
+  test("Grok Build's read_file names its path in target_file", () => {
+    const input = { target_file: '/home/reeval/.grok/skills/foo/SKILL.md' }
+    assert.equal(toolTarget(input, 'read_file'), input.target_file)
+    expect(turnOf([tool('read_file', input)])).toHaveCalledSkill('foo')
+  })
 })
 
 describe('toStayWithin', () => {

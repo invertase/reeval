@@ -961,6 +961,26 @@ describe('context_use and skill_files on real runs', () => {
     )
   })
 
+  test("skill_reads sees each real harness's skill use, as toHaveCalledSkill does", async () => {
+    const p = await fixture('fixtures/records/real-contract')
+    const r = await runCli(p.dir, [
+      'query',
+      "SELECT attempt_id, reads FROM skill_reads WHERE eval_key = 'evals/skill.eval.ts › skill' ORDER BY attempt_id",
+      '--json',
+    ])
+    assert.equal(r.code, 0, r.stderr)
+    const rows = JSON.parse(r.stdout) as Array<{ attempt_id: string; reads: number }>
+    assert.deepEqual(
+      rows.map((row) => [row.attempt_id.split(':')[0], row.reads]),
+      [
+        ['claude-code', 1],
+        ['codex', 1],
+        ['cursor', 1],
+      ],
+      "Codex's failed cd into skills/r0/contract-probe isn't a read",
+    )
+  })
+
   test('an attempt whose transcript is gone has no skill_files or skill_reads rows', async () => {
     const p = await fixture('fixtures/records/real-contract')
     rmSync(

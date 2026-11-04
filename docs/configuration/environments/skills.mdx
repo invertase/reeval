@@ -28,7 +28,7 @@ Place a skill from a repository with [`skill.git`](/reference/environment-helper
 
 ## Check the agent used the skill
 
-`toHaveCalledSkill` fails the attempt when the agent never loads that skill. It passes when a tool named `skill`, `Skill`, or `load_skill` loads the name, or when the agent reads a file under `skills/<name>/`.
+`toHaveCalledSkill` fails the attempt when the agent never loads that skill. It passes when a tool named `skill`, `Skill`, or `load_skill` loads the name, or when the agent reads a file under `skills/<name>/`, on every harness.
 
 To check every turn of the attempt, pass `c` after the final `c.send()` call. To check one turn, pass the turn returned by `c.send()`:
 

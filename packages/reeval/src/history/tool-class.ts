@@ -184,17 +184,40 @@ function filesOf(word: string, files: string[]): { files: string[]; dir: boolean
   return { files: [], dir: under.length > 0 }
 }
 
+/** A dedicated load's name is the skill's, or `<plugin>:<name>` for a plugin's (Claude Code). */
+const isSkill = (loaded: string, name: string) => loaded === name || loaded.endsWith(`:${name}`)
+
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** `skills/<name>` as a whole directory name: `skills/foo/SKILL.md` and `cd skills/foo`, not `skills/foo-bar`. */
+const underSkill = (text: string, name: string) =>
+  new RegExp(`skills/${escaped(name)}(?![\\w.-])`).test(text)
+
+/**
+ * Which of `skills` one tool call used, from its tool and uncapped target (`targetText`): a
+ * dedicated load (`SKILL_LOAD_TOOLS`) by the skill's name, or a target under `skills/<name>`,
+ * where a shell command's words count and the ones it excludes or only tests don't. Every
+ * harness's skill use is one of these: `toHaveCalledSkill`, `skill_reads` and the `context`
+ * class all decide by it.
+ */
+export function skillsUsed(tool: string, target: string, skills: readonly string[]): string[] {
+  if (SKILL_LOAD_TOOLS.has(tool)) return skills.filter((s) => isSkill(target, s))
+  const words = SHELL_TOOL.test(tool) ? readWords(commandWords(target)) : [target]
+  return skills.filter((s) => words.some((w) => underSkill(w, s)))
+}
+
 /** A tool call's class, and the declared files it read (for `skill_files`). */
 export function classifyCall(
   tool: string,
   target: string,
   ctx: ClassContext,
 ): { class: ToolClass; files: string[] } {
+  const used = skillsUsed(tool, target, ctx.skills)
   if (SKILL_LOAD_TOOLS.has(tool)) {
-    if (!ctx.skills.includes(target)) return { class: 'workspace', files: [] }
+    if (!used.length) return { class: 'workspace', files: [] }
     return {
       class: 'context',
-      files: ctx.files.filter((f) => f.endsWith(`skills/${target}/SKILL.md`)),
+      files: ctx.files.filter((f) => used.some((s) => f.endsWith(`skills/${s}/SKILL.md`))),
     }
   }
   if (ctx.mcp.some((s) => tool.startsWith(`mcp__${s}__`) || tool.startsWith(`${s}__`))) {
@@ -203,18 +226,11 @@ export function classifyCall(
   const shell = SHELL_TOOL.test(tool)
   const words = shell ? readWords(commandWords(target)) : [target]
   const files = new Set<string>()
-  let context = false
+  let context = used.length > 0
   for (const w of words) {
     const hit = filesOf(w, ctx.files)
     for (const f of hit.files) files.add(f)
     if (hit.files.length || hit.dir) context = true
-    if (
-      ctx.skills.some(
-        (s) => normalize(w).includes(`skills/${s}/`) || normalize(w).endsWith(`skills/${s}`),
-      )
-    ) {
-      context = true
-    }
   }
   if (context) return { class: 'context', files: [...files] }
   if (words.some((w) => DEPENDENCY.test(normalize(w))) || (shell && words.includes('--help'))) {

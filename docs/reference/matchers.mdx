@@ -243,7 +243,7 @@ The failure message lists every MCP call as `server/tool`.
 
 ## `toHaveCalledSkill()`
 
-`toHaveCalledSkill(name)` passes when the agent loaded the skill. A load is a `skill`, `Skill`, or `load_skill` tool call whose `id` or `name` input is the skill's name, or any tool call whose target path, pattern, command, or URL includes the `skills/<name>/` path. The subject is a turn from `c.send()` or `c`.
+`toHaveCalledSkill(name)` passes when the agent loaded the skill. A load is a `skill`, `Skill`, or `load_skill` tool call whose `id`, `name`, or `skill` input is the skill's name (or `<plugin>:<name>`, as Claude Code names a plugin's skill), or any tool call whose target path, pattern, command, or URL is under `skills/<name>`. A shell command's words count, but not a path it only excludes or tests for. The subject is a turn from `c.send()` or `c`.
 
 ```ts
     expect(turn, 'used the skill').toHaveCalledSkill('api-conventions')
@@ -253,7 +253,19 @@ The failure message lists every MCP call as `server/tool`.
   The skill's directory name.
 </Property>
 
-The failure message lists every skill-like call, such as a read under a `skills/` directory.
+The failure message lists every skill-like call, such as a read under a `skills/` directory. Each harness uses a skill in one of these ways:
+
+| Harness | Skill use in the transcript |
+|---|---|
+| Claude Code | `Skill` with `{ skill: '<name>' }` |
+| OpenCode | `skill` with `{ id: '<name>' }` |
+| fx | `skill` with `{ name: '<name>' }` |
+| Goose | `load_skill` with `{ name: '<name>' }` |
+| Cursor, Antigravity, pi | `read` of `…/skills/<name>/SKILL.md` |
+| Codex | `bash` running a command on `…/skills/<name>/SKILL.md` |
+| Grok Build | `read_file` of `…/skills/<name>/SKILL.md` (no captured run yet) |
+
+The `skill_reads` view counts the same calls.
 
 ## `toHaveSearched()`
 
