@@ -959,14 +959,18 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'tart.harness',
     area: 'Sandbox',
-    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway, the bridge port tunneled to Claude Code's and OpenCode's bridge, a pinned pnpm on its `PATH`; Cursor, Claude Code, OpenCode, pi and Codex, the rest refused at plan time",
+    name: "A real harness in `tart()`: the VM as its harness session, the image user's `~/workspace`, the key brokered by the gateway, the bridge port tunneled to the bridge of each harness that serves one, a pinned pnpm on its `PATH`; every real harness, each from its macOS build",
     fixtures: ['sandbox/tart-brokered-agent'],
     unit: [
       'reeval/test/tart.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
       'reeval/test/tart-darwin.test.ts',
+      'harness-antigravity/test/unit.test.ts',
       'harness-codex/test/unit.test.ts',
+      'harness-fx/test/unit.test.ts',
+      'harness-goose/test/unit.test.ts',
+      'harness-grok-build/test/unit.test.ts',
     ],
   },
   {

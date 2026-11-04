@@ -6,11 +6,15 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { before, describe, test } from 'node:test'
+import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
 import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
+import { FX_CLI_VERSION } from '@reeval/harness-fx'
+import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
+import { GROK_CLI_VERSION } from '@reeval/harness-grok-build'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
-import { PNPM_VERSION } from '@reeval/sandbox-docker'
-import { capabilitiesOf } from '../src/sandbox/kinds.ts'
+import { BAKED_HARNESSES, PNPM_VERSION } from '@reeval/sandbox-docker'
+import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
 import { bakeTartImage, type TartBake, tartBake } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
 import { fakeDigest, installFakeTart } from './support/fake-tart.ts'
@@ -21,14 +25,20 @@ const skip = asked
   ? false
   : 'the macOS bootstraps download each CLI: set REEVAL_TEST_DARWIN_BOOTSTRAPS=1 on an Apple Silicon Mac'
 const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
-const harnesses = capabilitiesOf({ kind: 'tart', image: IMAGE }).harnesses as readonly string[]
+const harnesses = BAKED_HARNESSES.filter((h) =>
+  takesHarness(capabilitiesOf({ kind: 'tart', image: IMAGE }), h),
+)
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** The `--version` each bake records: the pinned CLI, not whatever executable came first. */
 const AGENT_VERSION: Record<string, RegExp> = {
   'claude-code': /^\d+\.\d+\.\d+ \(Claude Code\)$/,
-  codex: new RegExp(`^codex-cli ${literally(CODEX_CLI_VERSION)}$`),
+  antigravity: new RegExp(`^${literally(ANTIGRAVITY_CLI_VERSION)}$`),
   opencode: new RegExp(`^opencode v${literally(OPENCODE_CLI_VERSION)}$`),
+  goose: new RegExp(`${literally(GOOSE_CLI_VERSION)}$`),
   pi: new RegExp(`^${literally(PI_CLI_VERSION)}$`),
+  codex: new RegExp(`^codex-cli ${literally(CODEX_CLI_VERSION)}$`),
+  fx: new RegExp(`${literally(FX_CLI_VERSION)}$`),
+  'grok-build': new RegExp(`^grok ${literally(GROK_CLI_VERSION)}\\b`),
 }
 
 describe('harness bootstraps on macOS', { skip }, () => {

@@ -336,7 +336,8 @@ describe('bootstrap', () => {
   test('pins the release and checks its sha256 on every build', async () => {
     const script = antigravityInstallScript()
     assert.match(script, new RegExp(`/download/${ANTIGRAVITY_CLI_VERSION.replace(/\./g, '\\.')}/`))
-    for (const sha of Object.values(ANTIGRAVITY_CLI_SHA256)) assert.ok(script.includes(`sha=${sha}`))
+    for (const sha of Object.values(ANTIGRAVITY_CLI_SHA256))
+      assert.ok(script.includes(`sha=${sha}`))
     assertChecksSha256(script, 'agy.tar.gz')
     assert.match(script, /mv bin\/antigravity bin\/agy/)
     const bootstrap = await getAntigravityBootstrap()

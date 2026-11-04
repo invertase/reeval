@@ -362,7 +362,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   its browser test, the other packages) and `packed` (the pack test, then `reeval init` → `reeval run` →
   `reeval doctor` → `reeval studio build` in a fresh project from the tarball, and `reeval doctor`'s Docker
   fix) as parallel jobs. macOS also runs `bootstraps`: `test/tart-darwin.test.ts` bakes the
- Cursor, Claude Code, OpenCode, pi and Codex CLIs' macOS builds on the runner through the fake `tart`, as `tart()` bakes
+ macOS build of every harness's CLI on the runner through the fake `tart`, as `tart()` bakes
  them into an image (no VM and no key). There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
   sandboxes are Linux containers) and its macOS runners have no Docker. Tests that need POSIX
   signals skip on Windows with a reason (`noSignals` in `test/helpers.ts`). Anything reeval writes

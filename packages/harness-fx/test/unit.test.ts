@@ -53,7 +53,10 @@ test('the install downloads the pinned release and checks its sha256 on both arc
 })
 
 test('each OS and arch picks its own build and checksum, and any other is refused', () => {
-  const picks = FX_INSTALL_COMMAND.slice(FX_INSTALL_COMMAND.indexOf('case '), FX_INSTALL_COMMAND.indexOf('esac') + 4)
+  const picks = FX_INSTALL_COMMAND.slice(
+    FX_INSTALL_COMMAND.indexOf('case '),
+    FX_INSTALL_COMMAND.indexOf('esac') + 4,
+  )
   const pick = (os: string, arch: string) => {
     const bin = mkdtempSync(join(tmpdir(), 'uname-'))
     writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)

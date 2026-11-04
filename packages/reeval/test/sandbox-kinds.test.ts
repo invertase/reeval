@@ -96,7 +96,7 @@ describe('sandbox kinds', () => {
     })
   })
 
-  test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs five harnesses', () => {
+  test('Tart is an isolated macOS VM that brokers, preflight pulls and bakes, and runs every harness', () => {
     assert.deepEqual(capabilitiesOf(tart({ image: IMAGE })), {
       platform: 'darwin',
       egress: { enforce: 'none', record: true, switches: false },
@@ -108,7 +108,7 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: ['cursor', 'claude-code', 'opencode', 'pi', 'codex'],
+      harnesses: 'all',
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
@@ -196,21 +196,14 @@ describe('which sandbox a real harness runs in', () => {
     assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
-  test('Tart runs the harnesses whose bootstraps install for macOS, and refuses the rest at plan time', () => {
+  test('Tart runs every harness, each of whose bootstraps installs for macOS', () => {
     const mac = tart({ image: IMAGE })
-    for (const kind of ['cursor', 'claude-code', 'opencode', 'pi', 'codex'] as const) {
+    for (const kind of Object.keys(AGENTS) as (keyof typeof AGENTS)[]) {
       const harness = { kind, model: 'm' } as HarnessDescriptor
       assert.equal(agentSandboxProblem(harness, AGENTS[kind], mac), undefined, kind)
       assert.equal(unverifiedHarness(harness, mac), undefined, kind)
     }
     assert.equal(unverifiedHarness({ kind: 'fake' }, mac), undefined)
-    const goose = { kind: 'goose', model: 'gemini-3.8-flash' } as HarnessDescriptor
-    const refused = unverifiedHarness(goose, mac)
-    assert.match(
-      refused ?? '',
-      /^The Goose harness doesn't run in the tart sandbox yet: it runs Cursor, Claude Code, OpenCode, pi and Codex so far\. /,
-    )
-    assert.equal(agentSandboxProblem(goose, AGENTS.goose, mac), refused)
   })
 
   test("the fake sandbox's platform is the host's, which it never names", () => {
