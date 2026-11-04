@@ -1,7 +1,8 @@
 import picomatch from 'picomatch'
 import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
-import { SKILL_LOAD_TOOLS, toolTarget } from './history/tool-target.ts'
+import { skillsUsed } from './history/tool-class.ts'
+import { loadedSkill, targetText, toolTarget } from './history/tool-target.ts'
 import { isObjectLike } from './object.ts'
 import { commandOf, isShellCall, transcriptCommands } from './shell-commands.ts'
 import { formatDuration } from './text.ts'
@@ -83,24 +84,15 @@ const toolsOf = (transcript: TranscriptEvent[]) =>
 const editsOf = (transcript: TranscriptEvent[]) =>
   transcript.flatMap((e) => (e.type === 'file-edit' ? [e] : []))
 
-const skillLoadName = (event: ToolEvent): string | undefined => {
-  if (!SKILL_LOAD_TOOLS.has(event.tool)) return undefined
-  const input = record(event.input)
-  if (typeof input.id === 'string') return input.id
-  if (typeof input.name === 'string') return input.name
-}
-
 const skillLike = (event: ToolEvent): string | undefined => {
-  const loaded = skillLoadName(event)
+  const loaded = loadedSkill(event.tool, event.input)
   if (loaded) return `${event.tool}:${loaded}`
   const target = toolTarget(event.input, event.tool)
   if (target.includes('skills/')) return `${event.tool} ${target}`
 }
 
-const isSkillCall = (event: ToolEvent, name: string): boolean => {
-  if (skillLoadName(event) === name) return true
-  return toolTarget(event.input, event.tool).includes(`skills/${name}/`)
-}
+const isSkillCall = (event: ToolEvent, name: string): boolean =>
+  skillsUsed(event.tool, targetText(event.input, event.tool), [name]).length > 0
 
 const nameMatches = (tool: string, name: string | RegExp) =>
   typeof name === 'string' ? tool === name : name.test(tool)

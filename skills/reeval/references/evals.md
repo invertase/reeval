@@ -202,8 +202,8 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   and `yarn dlx`; `args` (joined by spaces) is a substring or RegExp, e.g. `/^add\b/`.
   `pnpm <bin>` and `npm run` aren't unwrapped, and a run counts even if its call failed.
   `shellCommands(c | turn | c.turns)` returns those programs to count or filter. `toHaveCalledSkill`
-  is opened or loaded (a `skill` / `load_skill` tool, or a Read/`sed` of
-  `skills/<name>/`), not "followed". MCP is `toHaveCalledMcp(server, tool)`
+  is opened or loaded (a `skill` / `Skill` / `load_skill` tool, or a Read/`sed` of
+  `skills/<name>/`, on every harness), not "followed". MCP is `toHaveCalledMcp(server, tool)`
   (the names in `mcp.<server>`); `toHaveCalledTool('mcp__<server>__<tool>')` is
   the raw transcript name. After adapters and the normalizer, that string is
   the same on every harness (stdio; Goose, OpenCode, pi and Codex refuse

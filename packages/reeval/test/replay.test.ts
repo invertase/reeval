@@ -93,13 +93,14 @@ const harnesses = existsSync(root)
       .map((d) => d.name)
   : []
 
-test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi, Codex and fx', () => {
+test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi, Codex, fx and Grok Build', () => {
   assert.deepEqual(harnesses.sort(), [
     'antigravity',
     'codex',
     'cursor',
     'fx',
     'goose',
+    'grok-build',
     'opencode',
     'pi',
   ])
@@ -116,6 +117,7 @@ test("skill.raw.jsonl's new file is a create where the harness says so, and a wr
     cursor: [['create', 1, 0]],
     fx: [['write', 1, null]],
     goose: [['write', 1, null]],
+    'grok-build': [['write', 1, null]],
     opencode: [['create', 1, 0]],
     pi: [['write', 1, null]],
   })

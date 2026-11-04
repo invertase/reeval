@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
-import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
+import { type ClassContext, classifyCall, skillsUsed } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
@@ -923,6 +923,33 @@ describe('tool-call classes', () => {
     })
     assert.equal(cls('shell', 'cat AGENTS.m[d]').class, 'workspace')
   })
+
+  test('the text a heredoc writes to a file is not what the command reads or runs', () => {
+    const pad = 'x'.repeat(320)
+    const write = (body: string) => `cat > NOTES.md <<'EOF'\n${pad}\n${body}\nEOF`
+    assert.deepEqual(cls('shell', write('See AGENTS.md')), { class: 'workspace', files: [] })
+    assert.equal(cls('shell', write('"test": "vitest"')).class, 'workspace')
+    assert.equal(cls('shell', write("import x from '../node_modules/y'")).class, 'workspace')
+    assert.deepEqual(
+      skillsUsed('shell', write('~/.agents/skills/fui-new/SKILL.md'), ['fui-new']),
+      [],
+    )
+    assert.equal(
+      cls('shell', `/bin/bash -lc "cat <<'EOF' > NOTES.md\n${pad}\nnpx tsc\nEOF"`).class,
+      'workspace',
+    )
+    assert.equal(
+      cls('shell', `python3 - <<'EOF'\n${pad}\nprint(open('.agents/skills/fui-new/SKILL.md'))\nEOF`)
+        .class,
+      'context',
+      'a heredoc another program reads stays',
+    )
+    assert.equal(cls('shell', `cat <<'EOF' | sh\n${pad}\nnpx tsc\nEOF`).class, 'verify')
+    assert.equal(
+      cls('shell', `cat > ~/.agents/skills/fui-new/SKILL.md <<'EOF'\n${pad}\nEOF`).class,
+      'context',
+    )
+  })
 })
 
 describe('context_use and skill_files on real runs', () => {
@@ -958,6 +985,26 @@ describe('context_use and skill_files on real runs', () => {
       unclaimed[0]?.n,
       0,
       'a CLI\u2019s own skills and home config are not the environment\u2019s',
+    )
+  })
+
+  test("skill_reads sees each real harness's skill use, as toHaveCalledSkill does", async () => {
+    const p = await fixture('fixtures/records/real-contract')
+    const r = await runCli(p.dir, [
+      'query',
+      "SELECT attempt_id, reads FROM skill_reads WHERE eval_key = 'evals/skill.eval.ts › skill' ORDER BY attempt_id",
+      '--json',
+    ])
+    assert.equal(r.code, 0, r.stderr)
+    const rows = JSON.parse(r.stdout) as Array<{ attempt_id: string; reads: number }>
+    assert.deepEqual(
+      rows.map((row) => [row.attempt_id.split(':')[0], row.reads]),
+      [
+        ['claude-code', 1],
+        ['codex', 1],
+        ['cursor', 1],
+      ],
+      "Codex's failed cd into skills/r0/contract-probe isn't a read",
     )
   })
 
