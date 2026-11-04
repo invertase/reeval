@@ -9,6 +9,7 @@ import {
   ImageBuildError,
   isTransient,
 } from '@reeval/sandbox-docker'
+import type { ParsedTartHost } from '../contract/tart.ts'
 import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
@@ -23,12 +24,15 @@ import type {
 } from '../types.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
 import {
+  type PrepareContext,
   type PreparedHandle,
   PrepareError,
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
 import { tartBake, tartBakeKey } from './tart-bake.ts'
+import { LOCAL_TART, type TartTarget } from './tart-cli.ts'
+import type { HostProbe, PreparedHost } from './tart-hosts.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
 export const dockerKey = (
@@ -294,124 +298,280 @@ const tartRefusal = (message: string): PrepareError =>
     message,
   })
 
+/** The hosts a Tart provider's `prepare` started each attempt's VM on, when it ran on others. */
+export const preparedHosts = (handle: PreparedHandle): PreparedHost[] | null => {
+  const hosts = (handle as { hosts?: unknown } | null)?.hosts
+  return Array.isArray(hosts) ? (hosts as PreparedHost[]) : null
+}
+
+/** Why Tart can't run on this machine, or null: it's a Mac with Apple Silicon and `tart`. */
+async function localTartProblem(): Promise<string | null> {
+  const { tartCli } = await import('./tart-cli.ts')
+  return (
+    tartHostProblem() ??
+    (await tartCli(['--version']).then(
+      (r) => (r.exitCode === 0 ? null : `tart --version failed: ${r.stderr.trim()}`),
+      () =>
+        "Tart isn't installed: there's no tart command on the PATH. Install it (brew install cirruslabs/cli/tart, see https://tart.run) and try again.",
+    ))
+  )
+}
+
+/** The key two spellings of one Mac share: its user, host and port. */
+const hostKey = (h: ParsedTartHost) => `${h.user ?? ''}@${h.host}:${h.port ?? ''}`
+
 /**
  * Tart: a run starts only from images `tart list` has, and refuses the rest; with `pull`
  * (`reeval image build`), it pulls them, once the disk has room for all of them (counting what
  * Tart prunes from its cache). Then it bakes each harness the run needs into its own local image
  * of each, one at a time (each bake boots a VM, and macOS runs two at once), unless Tart has it.
+ * A sandbox with `hosts` does all of this on each of them over SSH, after one check of each host:
+ * one that doesn't answer stops the run, and one short of disk or memory is skipped.
  */
 export const tartProvider = (
   options: { pull?: boolean; force?: boolean } = {},
 ): SandboxProvider<TartSandboxDescriptor> => {
   const pulls = new Map<string, Promise<void>>()
-  let bakes: Promise<unknown> = Promise.resolve()
-  const oneAtATime = <T>(step: () => Promise<T>): Promise<T> => {
-    const next = bakes.then(step, step)
-    bakes = next.catch(() => {})
+  const bakes = new Map<string, Promise<unknown>>()
+  const probes = new Map<string, HostProbe>()
+  /** One bake at a time on each Mac. */
+  const oneAtATime = <T>(where: string, step: () => Promise<T>): Promise<T> => {
+    const next = (bakes.get(where) ?? Promise.resolve()).then(step, step)
+    bakes.set(
+      where,
+      next.catch(() => {}),
+    )
     return next
+  }
+  /** The hosts of `sandbox` preflight kept, each with how many VMs it runs at once. */
+  const usableHosts = async (sandbox: TartSandboxDescriptor) => {
+    const { parseTartHosts } = await import('../contract/tart.ts')
+    return parseTartHosts(sandbox.hosts ?? []).flatMap((host) => {
+      const probe = probes.get(hostKey(host))
+      if (!probe) return [{ host, vms: host.vms }]
+      return probe.ok ? [{ host, vms: Math.min(host.vms, probe.vms) }] : []
+    })
   }
   return {
     kind: 'tart',
-    async check() {
-      const { tartCli } = await import('./tart-cli.ts')
-      const problem =
-        tartHostProblem() ??
-        (await tartCli(['--version']).then(
-          (r) => (r.exitCode === 0 ? null : `tart --version failed: ${r.stderr.trim()}`),
-          () =>
-            "Tart isn't installed: there's no tart command on the PATH. Install it (brew install cirruslabs/cli/tart, see https://tart.run) and try again.",
-        ))
-      if (!problem) return
-      throw new PrepareError({
-        class: 'config',
-        stage: 'tart',
-        ref: null,
-        cause: null,
-        log: null,
-        usage: true,
-        message: problem,
-      })
-    },
+    // What Tart needs depends on where each sandbox runs, so checkTargets checks it.
+    async check() {},
     key: tartBakeKey,
     async checkTargets(sandboxes, ctx) {
-      const { tartNames } = await import('./tart-cli.ts')
-      const images = await import('./tart-images.ts')
-      const { parseTartRef, tartListed } = await import('./tart-ref.ts')
-      const have = await tartNames(ctx.signal)
-      const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !tartListed(have, i))
-      if (!wanted.length) return
-      // A registry that doesn't answer soon leaves the size unsaid, not the refusal unmade.
-      const lookup = AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)])
-      const missing = await Promise.all(
-        wanted.map(async (image) => ({ image, size: await images.tartImageSize(image, lookup) })),
+      const here = sandboxes.filter((s) => !s.hosts)
+      if (here.length) {
+        const problem = await localTartProblem()
+        if (problem) throw tartRefusal(problem)
+        await checkImages(here, ctx, LOCAL_TART, !!options.pull)
+      }
+      const away = sandboxes.filter((s) => s.hosts)
+      if (!away.length) return
+      const { parseTartHosts } = await import('../contract/tart.ts')
+      const { HostRefusal, hostTarget, probeHost } = await import('./tart-hosts.ts')
+      const hosts = new Map<string, { host: ParsedTartHost; memory?: string | number }>()
+      for (const sandbox of away) {
+        for (const host of parseTartHosts(sandbox.hosts ?? [])) {
+          const memory = sandbox.memory ?? hosts.get(hostKey(host))?.memory
+          hosts.set(hostKey(host), { host, ...(memory !== undefined && { memory }) })
+        }
+      }
+      const refused: string[] = []
+      await Promise.all(
+        [...hosts].map(async ([key, { host, memory }]) => {
+          try {
+            const probe = await probeHost(host, { memory }, ctx.signal)
+            probes.set(key, probe)
+            if (!probe.ok) ctx.log(probe.skip)
+            else if (probe.note) ctx.log(probe.note)
+          } catch (error) {
+            if (!(error instanceof HostRefusal)) throw error
+            refused.push(error.message)
+          }
+        }),
       )
-      const local = missing.filter((m) => !parseTartRef(m.image).oci)
-      if (!options.pull || local.length) {
-        throw tartRefusal(images.missingImagesMessage(options.pull ? local : missing))
+      if (refused.length) throw tartRefusal(refused.sort().join('\n'))
+      for (const sandbox of away) {
+        const usable = await usableHosts(sandbox)
+        if (!usable.length) {
+          throw new PrepareError({
+            class: 'resource',
+            stage: 'tart',
+            ref: null,
+            cause: null,
+            log: null,
+            message: `tart(${sandbox.image}) has no host to run on: preflight skipped every one.\n${parseTartHosts(
+              sandbox.hosts ?? [],
+            )
+              .map((h) => {
+                const probe = probes.get(hostKey(h))
+                return `  ${probe && !probe.ok ? probe.skip : h.label}`
+              })
+              .join('\n')}`,
+          })
+        }
       }
-      for (const image of missing.filter((m) => !m.size)) {
-        ctx.log(
-          `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
-        )
+      const byHost = new Map<string, { host: ParsedTartHost; sandboxes: TartSandboxDescriptor[] }>()
+      for (const sandbox of away) {
+        for (const { host } of await usableHosts(sandbox)) {
+          const entry = byHost.get(hostKey(host)) ?? { host, sandboxes: [] }
+          entry.sandboxes.push(sandbox)
+          byHost.set(hostKey(host), entry)
+        }
       }
-      const present = [...new Set(sandboxes.map((s) => s.image))].filter((i) => tartListed(have, i))
-      const space = await images.pullSpace(missing, present)
-      if (!space) ctx.log(images.pullSpaceUnknown())
-      if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
-      // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
-      if (space?.verdict === 'short') {
-        throw new PrepareError({
-          class: 'resource',
-          stage: 'tart',
-          ref: null,
-          cause: 'enospc',
-          log: null,
-          message: images.pullSpaceMessage(missing, space),
-        })
+      for (const { host, sandboxes: on } of byHost.values()) {
+        await checkImages(on, ctx, hostTarget(host), !!options.pull)
       }
     },
     async prepare(sandbox, harness, ctx) {
-      const { tartNames } = await import('./tart-cli.ts')
-      const { tartDigest, tartPull, tartSource } = await import('./tart-images.ts')
-      const { parseTartRef, tartListed } = await import('./tart-ref.ts')
-      // Each harness on an image is a target of its own, and they share its one pull.
-      const pull = async () => {
-        if (!options.pull) return
-        const listed = tartListed(await tartNames(ctx.signal), sandbox.image)
-        // `--force` pulls a pulled tag again, which moves it to what the registry has now.
-        if (listed && !(options.force && parseTartRef(sandbox.image).oci)) return
-        const { sandboxId } = await import('../options.ts')
-        // Up to three pull at once: each line says whose it is.
-        const id = sandboxId(sandbox)
-        ctx.log(`tart pull ${sandbox.image}`)
-        await ctx.retry(() =>
-          tartPull(sandbox.image, {
-            signal: ctx.signal,
-            onLine: (line) => ctx.log(`${id}: ${line}`),
-          }),
+      if (!sandbox.hosts) {
+        const prepared = await prepareOn(sandbox, harness, ctx, LOCAL_TART)
+        return {
+          image: sandbox.image,
+          digest: prepared.digest,
+          ...(prepared.baked && { baked: prepared.baked }),
+        }
+      }
+      const { hostTarget } = await import('./tart-hosts.ts')
+      // A host the pull or bake fails on is skipped, as preflight skips one it can't reach: the
+      // target fails only when every host did.
+      const usable = await usableHosts(sandbox)
+      const settled = await Promise.allSettled(
+        usable.map(async ({ host, vms }) => ({
+          host: host.label,
+          vms,
+          ...(await prepareOn(sandbox, harness, ctx, hostTarget(host))),
+        })),
+      )
+      const each = settled.flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []))
+      const failed = settled.flatMap((s, i) =>
+        s.status === 'rejected' ? [{ host: usable[i]?.host.label, error: s.reason }] : [],
+      )
+      if (!each.length || ctx.signal.aborted) throw failed[0]?.error
+      for (const { host, error } of failed) {
+        ctx.log(
+          `tart(${sandbox.image}) skipped ${host}: ${error instanceof Error ? error.message : String(error)}`,
         )
       }
-      const pulled = pulls.get(sandbox.image) ?? pull()
-      pulls.set(sandbox.image, pulled)
-      await pulled
-      const digest = await tartDigest(sandbox.image)
-      const bake = tartBake(harness)
-      if (!bake) return { image: sandbox.image, digest }
-      const { bakeTartImage } = await import('./tart-bake.ts')
-      const source = await tartSource(sandbox.image)
-      const baked = await oneAtATime(() =>
-        ctx.retry(() =>
-          bakeTartImage(sandbox, bake, {
-            source,
-            force: !!options.force,
-            signal: ctx.signal,
-            log: ctx.log,
-          }),
-        ),
-      )
-      return { image: sandbox.image, digest, baked: baked.image }
+      const digests = new Set(each.map((h) => h.digest))
+      if (digests.size > 1) {
+        throw tartRefusal(
+          `tart(${sandbox.image}) is a different image on each host, so the record can't say which one an attempt ran:\n${each
+            .map((h) => `  ${h.host}: ${h.digest ?? 'no digest'}`)
+            .join(
+              '\n',
+            )}\nPin the image by digest (image@sha256:…), or pull it again on every host: reeval image build --force`,
+        )
+      }
+      const [first] = each
+      return {
+        image: sandbox.image,
+        digest: first?.digest ?? null,
+        ...(first?.baked && { baked: first.baked }),
+        hosts: each.map((h) => ({ host: h.host, vms: h.vms, image: h.baked ?? sandbox.image })),
+      }
     },
     classify: classifyTart,
+  }
+
+  /**
+   * Refuses the images `sandboxes` clone that Tart on `on` doesn't have; with `pull`, checks the
+   * disk has room to pull them (on this machine: another Mac's room was checked by its probe).
+   */
+  async function checkImages(
+    sandboxes: TartSandboxDescriptor[],
+    ctx: Pick<PrepareContext, 'signal' | 'log'>,
+    on: TartTarget,
+    pull: boolean,
+  ) {
+    const { tartNames } = await import('./tart-cli.ts')
+    const images = await import('./tart-images.ts')
+    const { parseTartRef, tartListed } = await import('./tart-ref.ts')
+    const have = await tartNames(ctx.signal, on)
+    const wanted = [...new Set(sandboxes.map((s) => s.image))].filter((i) => !tartListed(have, i))
+    if (!wanted.length) return
+    // A registry that doesn't answer soon leaves the size unsaid, not the refusal unmade.
+    const lookup = AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)])
+    const missing = await Promise.all(
+      wanted.map(async (image) => ({ image, size: await images.tartImageSize(image, lookup) })),
+    )
+    const local = missing.filter((m) => !parseTartRef(m.image).oci)
+    if (!pull || local.length) {
+      const message = images.missingImagesMessage(pull ? local : missing)
+      throw tartRefusal(on.remote ? images.onHost(message, on.label) : message)
+    }
+    if (on.remote) return
+    for (const image of missing.filter((m) => !m.size)) {
+      ctx.log(
+        `${image.image}: its registry didn't give its size, so the disk check doesn't count it`,
+      )
+    }
+    const present = [...new Set(sandboxes.map((s) => s.image))].filter((i) => tartListed(have, i))
+    const space = await images.pullSpace(missing, present)
+    if (!space) ctx.log(images.pullSpaceUnknown())
+    if (space?.verdict === 'prunes') ctx.log(images.pullPruneWarning(space))
+    // The machine's state, not the config: an infra failure (exit 3), as a full disk is to Docker.
+    if (space?.verdict === 'short') {
+      throw new PrepareError({
+        class: 'resource',
+        stage: 'tart',
+        ref: null,
+        cause: 'enospc',
+        log: null,
+        message: images.pullSpaceMessage(missing, space),
+      })
+    }
+  }
+
+  /** Pulls `sandbox`'s image on `on` (with `pull`), reads its digest, and bakes the harness there. */
+  async function prepareOn(
+    sandbox: TartSandboxDescriptor,
+    harness: HarnessDescriptor,
+    ctx: PrepareContext,
+    on: TartTarget,
+  ): Promise<{ digest: string | null; baked?: string }> {
+    const { tartNames } = await import('./tart-cli.ts')
+    const { tartDigestOn, tartPull, tartSourceOn } = await import('./tart-images.ts')
+    const { parseTartRef, tartListed } = await import('./tart-ref.ts')
+    const where = on.remote ? `${on.label}: ` : ''
+    // Each harness on an image is a target of its own, and they share its one pull.
+    const pull = async () => {
+      if (!options.pull) return
+      const listed = tartListed(await tartNames(ctx.signal, on), sandbox.image)
+      // `--force` pulls a pulled tag again, which moves it to what the registry has now.
+      if (listed && !(options.force && parseTartRef(sandbox.image).oci)) return
+      const { sandboxId } = await import('../options.ts')
+      // Up to three pull at once: each line says whose it is.
+      const id = `${where}${sandboxId(sandbox)}`
+      ctx.log(`${where}tart pull ${sandbox.image}`)
+      await ctx.retry(() =>
+        tartPull(sandbox.image, {
+          signal: ctx.signal,
+          onLine: (line) => ctx.log(`${id}: ${line}`),
+          on,
+        }),
+      )
+    }
+    const pullKey = `${on.label}\0${sandbox.image}`
+    const pulled = pulls.get(pullKey) ?? pull()
+    pulls.set(pullKey, pulled)
+    await pulled
+    const digest = await tartDigestOn(sandbox.image, on)
+    const bake = tartBake(harness)
+    if (!bake) return { digest }
+    const { bakeTartImage } = await import('./tart-bake.ts')
+    const source = await tartSourceOn(sandbox.image, on)
+    const baked = await oneAtATime(on.label, () =>
+      ctx.retry(() =>
+        bakeTartImage(sandbox, bake, {
+          source,
+          force: !!options.force,
+          signal: ctx.signal,
+          log: (line) => ctx.log(`${where}${line}`),
+          on,
+        }),
+      ),
+    )
+    return { digest, baked: baked.image }
   }
 }
 

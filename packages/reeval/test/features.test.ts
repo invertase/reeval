@@ -48,7 +48,13 @@ import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
-import { fakeDigest, fakeTart, holdLoopback, LOOPBACK_WAIT_MS } from './support/fake-tart.ts'
+import {
+  fakeDigest,
+  fakeTart,
+  fakeTartHosts,
+  holdLoopback,
+  LOOPBACK_WAIT_MS,
+} from './support/fake-tart.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -3162,6 +3168,95 @@ export const features: Feature[] = [
       assert.deepEqual(readdirSync(vms), [], 'every VM is deleted')
     },
   })),
+  {
+    // tart({ hosts }) on fake Macs that a fake ssh reaches, with no Tart host check on this machine:
+    // the VM runs on a host, and the gateway brokers from here.
+    dir: 'sandbox/tart-hosts-run',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    loopback: true,
+    canary: /expected '\/[^']*' to match/,
+    hostEnv: (dir) => {
+      const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
+      const fake = fakeTartHosts({
+        'mac-studio': { images: [image] },
+        'mac-mini.local': { images: [image] },
+      })
+      fakeTarts.set(dir, fake.dir)
+      return { ...fake.env, CURSOR_API_KEY: 'key_tart_hosts_fixture_cursor' }
+    },
+    record: ({ project, runDir }) => {
+      assert.equal(filesContaining(runDir, 'key_tart_hosts_fixture_cursor'), '')
+      const root = fakeTarts.get(project) ?? ''
+      // Every command each Mac ran, and what its VMs kept: the key stays on this machine.
+      assert.equal(filesContaining(join(root, 'hosts'), 'key_tart_hosts_fixture_cursor'), '')
+      const log = readFileSync(join(root, 'log'), 'utf8')
+      assert.doesNotMatch(log, /^(clone|run) /m, "nothing ran on this machine's Tart")
+      const hosts = ['mac-studio', 'mac-mini.local']
+      const clones = hosts.flatMap(
+        (h) => readFileSync(join(root, 'hosts', h, 'log'), 'utf8').match(/^clone /gm) ?? [],
+      )
+      assert.equal(clones.length, 2, 'one clone per attempt, on the hosts')
+      for (const h of hosts) {
+        assert.deepEqual(readdirSync(join(root, 'hosts', h, 'vms')), [], `${h} keeps no VM`)
+      }
+    },
+  },
+  {
+    // tart({ hosts }): the run's lease counts the hosts preflight kept, at the VMs each has memory
+    // for, so an attempt waits for its lease rather than on a full host.
+    dir: 'sandbox/tart-hosts-cap',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    loopback: true,
+    canary: /expected '\/[^']*' to match \/\\\/hosts\\\/small/,
+    hostEnv: (dir) => {
+      const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
+      const fake = fakeTartHosts({
+        'mac-studio': { images: [image] },
+        small: { images: [image], memsize: 8 * 1024 ** 3 },
+      })
+      fakeTarts.set(dir, fake.dir)
+      return fake.env
+    },
+    record: ({ run, project }) => {
+      for (const e of run.evals) assert.notEqual(e.attempts[0]?.outcome, 'infra_error', e.name)
+      const logs = filesUnder(join(project, '.reeval', 'debug'))
+        .filter((f) => f.endsWith('debug.log'))
+        .map((f) => readFileSync(f, 'utf8'))
+      assert.equal(logs.length, 2, 'both attempts ran')
+      assert.doesNotMatch(logs.join('\n'), /every host is at its VM limit/)
+      const root = fakeTarts.get(project) ?? ''
+      assert.doesNotMatch(readFileSync(join(root, 'hosts', 'small', 'log'), 'utf8'), /^clone /m)
+    },
+  },
+  {
+    // tart({ hosts }): a host whose `tart run` says it's at its VM limit is busy, not broken.
+    dir: 'sandbox/tart-hosts-busy',
+    tiers: ['fake'],
+    env: 'mac',
+    sandbox: 'tart:macos-sequoia-base:15.6',
+    posixModes: true,
+    loopback: true,
+    canary: /expected '\/[^']*' to match \/\\\/hosts\\\/full/,
+    hostEnv: (dir) => {
+      const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
+      const fake = fakeTartHosts({ full: { images: [image], limit: 0 }, free: { images: [image] } })
+      fakeTarts.set(dir, fake.dir)
+      return fake.env
+    },
+    record: ({ run, project }) => {
+      for (const e of run.evals) assert.notEqual(e.attempts[0]?.outcome, 'infra_error', e.name)
+      const root = fakeTarts.get(project) ?? ''
+      const full = readFileSync(join(root, 'hosts', 'full', 'log'), 'utf8')
+      assert.match(full, /^run reeval-\S+ --no-graphics$/m, 'full was tried first')
+      assert.deepEqual(readdirSync(join(root, 'hosts', 'full', 'vms')), [], 'its clone deleted')
+    },
+  },
   {
     // tart() on the fake `tart`: preflight bakes the agent's bootstrap into an image of its own,
     // which every attempt clones.

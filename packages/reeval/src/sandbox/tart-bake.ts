@@ -16,6 +16,7 @@ import {
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { fakeBootstrapId, fakeBootstrapScript } from '../harness/fake-bootstrap.ts'
 import type { HarnessDescriptor, TartSandboxDescriptor } from '../types.ts'
+import type { TartTarget } from './tart-cli.ts'
 
 /**
  * How reeval bakes a Tart image, beyond the adapter and pnpm: bump it when that changes what a
@@ -86,13 +87,14 @@ export function tartBake(harness: HarnessDescriptor): TartBake | null {
 
 /**
  * Which preflight target `sandbox` and `harness` are: one per image, user (the home a bake
- * installs into) and harness bake.
+ * installs into), harness bake and the hosts it bakes on.
  */
 export const tartBakeKey = (sandbox: TartSandboxDescriptor, harness: HarnessDescriptor) =>
   JSON.stringify({
     image: sandbox.image,
     user: sandbox.ssh?.user ?? null,
     bake: tartBake(harness)?.label ?? null,
+    ...(sandbox.hosts && { hosts: sandbox.hosts }),
   })
 
 /** The image's own name and tag, without its registry and owner: `macos-sequoia-base-latest`. */
@@ -135,16 +137,21 @@ export const isBakedImage = (name: string) =>
  * Deletes the VMs of bakes a killed reeval left behind (`tart run` outlives it): stopped ones
  * after {@link LEFTOVER_STOPPED_MS}, running ones after {@link LEFTOVER_RUNNING_MS}.
  */
-export async function sweepBakeVms(signal: AbortSignal, now = Date.now()): Promise<string[]> {
+export async function sweepBakeVms(
+  signal: AbortSignal,
+  now = Date.now(),
+  on?: TartTarget,
+): Promise<string[]> {
   const { tartCli, tartVms } = await import('./tart-cli.ts')
   const swept: string[] = []
-  for (const vm of await tartVms(signal)) {
+  const where = on ? { on } : {}
+  for (const vm of await tartVms(signal, on)) {
     const started = BAKE_VM.exec(vm.name)?.[1]
     if (!started) continue
     const age = now - Number.parseInt(started, 36)
     if (age < (vm.running ? LEFTOVER_RUNNING_MS : LEFTOVER_STOPPED_MS)) continue
-    if (vm.running) await tartCli(['stop', '--timeout', '5', vm.name]).catch(() => {})
-    await tartCli(['delete', vm.name]).catch(() => {})
+    if (vm.running) await tartCli(['stop', '--timeout', '5', vm.name], where).catch(() => {})
+    await tartCli(['delete', vm.name], where).catch(() => {})
     swept.push(vm.name)
   }
   return swept
@@ -154,7 +161,7 @@ export async function sweepBakeVms(signal: AbortSignal, now = Date.now()): Promi
  * Makes {@link bakedTartImage} unless Tart has it (or `force`, which replaces it): clones and
  * boots the base, installs pnpm and the harness, shuts it down and renames it. A failed or
  * canceled bake leaves nothing behind, and each bake first deletes what killed ones left.
- * `built` is false when the image was there already.
+ * `built` is false when the image was there already. With `on`, it all happens on that Mac.
  */
 export async function bakeTartImage(
   sandbox: TartSandboxDescriptor,
@@ -164,18 +171,22 @@ export async function bakeTartImage(
     force?: boolean
     signal: AbortSignal
     log: (line: string) => void
+    on?: TartTarget
   },
 ): Promise<{ image: string; built: boolean; agentVersion: string | null }> {
-  const { tartCli, tartNames } = await import('./tart-cli.ts')
+  const { LOCAL_TART, tartCli, tartNames } = await import('./tart-cli.ts')
   const { bootTartVm, PNPM_DIR, tartSession } = await import('./tart.ts')
+  const on = o.on ?? LOCAL_TART
   const image = await bakedTartImage(sandbox, bake, o.source)
-  for (const vm of await sweepBakeVms(o.signal)) o.log(`Deleted ${vm}, a bake reeval didn't finish`)
-  if (!o.force && (await tartNames(o.signal)).has(image)) {
+  for (const vm of await sweepBakeVms(o.signal, Date.now(), on)) {
+    o.log(`Deleted ${vm}, a bake reeval didn't finish`)
+  }
+  if (!o.force && (await tartNames(o.signal, on)).has(image)) {
     return { image, built: false, agentVersion: null }
   }
   const vm = `${image}-bake-${Date.now().toString(36)}-${randomBytes(2).toString('hex')}`
   o.log(`Baking ${bake.name} onto ${sandbox.image} as ${image}`)
-  const { guest, home, halt } = await bootTartVm(sandbox, sandbox.image, vm, o.signal)
+  const { guest, home, halt } = await bootTartVm(sandbox, sandbox.image, vm, o.signal, on)
   try {
     const stateDir = posix.join(home, '.reeval-state')
     const session = tartSession({
@@ -208,9 +219,9 @@ export async function bakeTartImage(
     o.log(`${bake.name} ${agentVersion}`)
     await run(`rm -f ${q(stateDir)}/exec-*.pid; sync`, 'sync')
     await halt(SHUTDOWN_S)
-    if (o.force) await tartCli(['delete', image], { signal: o.signal })
-    const renamed = await tartCli(['rename', vm, image], { signal: o.signal })
-    const names = await tartNames(o.signal)
+    if (o.force) await tartCli(['delete', image], { signal: o.signal, on })
+    const renamed = await tartCli(['rename', vm, image], { signal: o.signal, on })
+    const names = await tartNames(o.signal, on)
     // Another run baking the same image at once got there first.
     if (renamed.exitCode !== 0 && !names.has(image)) {
       throw new Error(`tart rename failed: ${renamed.stderr.trim() || `exit ${renamed.exitCode}`}`)
@@ -230,7 +241,7 @@ export async function bakeTartImage(
     return { image, built: true, agentVersion }
   } finally {
     await halt()
-    await tartCli(['delete', vm]).catch(() => {})
+    await tartCli(['delete', vm], { on }).catch(() => {})
   }
 }
 

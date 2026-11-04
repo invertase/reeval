@@ -2760,6 +2760,40 @@
       "required": [],
       "additionalProperties": {}
     },
+    "TartHost": {
+      "description": "A Mac that runs `tart()`'s VMs over SSH: an SSH destination, or its parts.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "The host name, address or `~/.ssh/config` alias.",
+              "type": "string"
+            },
+            "identityFile": {
+              "description": "The private key `ssh -i` takes: absolute, or `~/…`; the agent's or the config's when unset.",
+              "type": "string"
+            },
+            "port": {
+              "description": "The SSH port; `ssh`'s own (the config's, or 22) when unset.",
+              "type": "number"
+            },
+            "user": {
+              "description": "The login user; `ssh`'s own (the config's, or this machine's user) when unset.",
+              "type": "string"
+            },
+            "vms": {
+              "description": "The most of reeval's macOS VMs it runs at once: 1 or 2, and 2 when unset.",
+              "type": "number"
+            }
+          },
+          "required": ["host"]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
     "TartSandboxDescriptor": {
       "description": "A macOS VM on this Mac, cloned from `image` for each attempt by Tart, made by `tart()`.",
       "type": "object",
@@ -2769,6 +2803,43 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "hosts": {
+          "description": "Macs that run the VMs instead of this machine, each one plain `ssh` reaches without a prompt (an `~/.ssh/config` alias, the agent or a key file; no passwords): `'mac-studio'`, `'elliot@mac-mini.local'`, `'ssh://ci@10.0.0.5:2222'` or `{ host, user?, port?, identityFile?, vms? }`. reeval runs `tart` on each over SSH and keeps the egress gateway, and every key, here. Each host needs the image; preflight bakes the harness onto it there. This machine when unset.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "identityFile": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "user": {
+                    "type": "string"
+                  },
+                  "vms": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["host"],
+                "additionalProperties": false
+              }
+            ]
+          }
         },
         "id": {
           "description": "Cell id; defaults to `tart:<image>`, the image's last path segment.",

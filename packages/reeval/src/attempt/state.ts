@@ -5,6 +5,7 @@ import type { PlannedAttempt } from '../options.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { sandboxKind } from '../sandbox/kinds.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
+import type { PreparedHost } from '../sandbox/tart-hosts.ts'
 import type {
   BackgroundHandle,
   CaptureOptions,
@@ -53,6 +54,8 @@ export type Attempt = {
   env?: ResolvedEnvironment
   /** The image the Docker sandbox starts from, once prepared. */
   image?: string
+  /** The hosts of `tart({ hosts })` preflight kept, once prepared. */
+  hosts?: readonly PreparedHost[]
   /** As soon as it exists, so teardown can remove it even when the start fails later. */
   sandbox?: Sandbox
   session?: HarnessSession

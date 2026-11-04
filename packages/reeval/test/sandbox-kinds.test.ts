@@ -239,6 +239,14 @@ describe('how many sandboxes run at once', () => {
     assert.throws(() => tart({ image: IMAGE, maxConcurrent: 3 }), /at most 2 macOS VMs/)
   })
 
+  test('with hosts, Tart runs as many VMs at once as the hosts take together', () => {
+    const macs = tart({ image: IMAGE, hosts: ['mac-studio', { host: 'mac-mini', vms: 1 }] })
+    assert.equal(providerLimit(macs), 3)
+    assert.equal(providerLimit({ ...macs, maxConcurrent: 2 }), 2)
+    assert.equal(maxConcurrentProblem({ ...macs, maxConcurrent: 3 }, 'e'), undefined)
+    assert.match(maxConcurrentProblem({ ...macs, maxConcurrent: 4 }, 'e') ?? '', /is 4, but/)
+  })
+
   test("each attempt's gate holds Tart to its limit, whatever the run's concurrency", () => {
     const plan = (sandbox: SandboxDescriptor) => {
       const config = resolveConfig(
@@ -256,6 +264,10 @@ describe('how many sandboxes run at once', () => {
     assert.deepEqual(plan(tart({ image: IMAGE, maxConcurrent: 1 })), {
       attempts: 8,
       'sandbox:tart': 1,
+    })
+    assert.deepEqual(plan(tart({ image: IMAGE, hosts: ['a', 'b', { host: 'c', vms: 1 }] })), {
+      attempts: 8,
+      'sandbox:tart': 5,
     })
     assert.deepEqual(plan(docker()), { attempts: 8 })
   })

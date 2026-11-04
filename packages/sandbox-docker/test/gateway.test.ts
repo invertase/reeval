@@ -3,7 +3,15 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { X509Certificate } from 'node:crypto'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
@@ -314,12 +322,24 @@ describe('sshTransport', () => {
     assert.ok(!argv.some((a) => a.startsWith('ControlPath=')), 'no control socket unless asked')
   })
 
-  test('shares one connection through a control socket when given one', {
+  test('shares one connection through a control socket in a directory only this user can enter', {
     skip: process.platform === 'win32' && 'Windows OpenSSH has no ControlMaster',
   }, () => {
-    const argv = sshArgv({ ...target, controlPath: '/tmp/k/cm' }, 'true')
-    assert.ok(argv.includes('ControlMaster=auto'))
-    assert.ok(argv.includes('ControlPath=/tmp/k/cm'))
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-cm-'))
+    try {
+      const controlPath = join(dir, 'cm')
+      const argv = sshArgv({ ...target, controlPath }, 'true')
+      assert.ok(argv.includes('ControlMaster=auto'))
+      assert.ok(argv.includes(`ControlPath=${controlPath}`))
+      // Another user could put their own socket there and stand in for the VM.
+      chmodSync(dir, 0o777)
+      const shared = sshArgv({ ...target, controlPath }, 'true')
+      assert.ok(!shared.some((a) => a.startsWith('Control')), shared.join(' '))
+      const missing = sshArgv({ ...target, controlPath: join(dir, 'gone', 'cm') }, 'true')
+      assert.ok(!missing.some((a) => a.startsWith('Control')), 'no directory, no socket')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('runs the command as root through sudo, quoted as one remote line', () => {

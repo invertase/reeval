@@ -1192,7 +1192,30 @@ export type TartSandboxDescriptor = {
    * file it's written in.
    */
   ssh?: { user?: string; key: string }
+  /**
+   * Macs that run the VMs instead of this machine, each one plain `ssh` reaches without a prompt
+   * (an `~/.ssh/config` alias, the agent or a key file; no passwords): `'mac-studio'`,
+   * `'elliot@mac-mini.local'`, `'ssh://ci@10.0.0.5:2222'` or `{ host, user?, port?, identityFile?, vms? }`.
+   * reeval runs `tart` on each over SSH and keeps the egress gateway, and every key, here. Each
+   * host needs the image; preflight bakes the harness onto it there. This machine when unset.
+   */
+  hosts?: TartHost[]
 }
+/** A Mac that runs `tart()`'s VMs over SSH: an SSH destination, or its parts. */
+export type TartHost =
+  | string
+  | {
+      /** The host name, address or `~/.ssh/config` alias. */
+      host: string
+      /** The login user; `ssh`'s own (the config's, or this machine's user) when unset. */
+      user?: string
+      /** The SSH port; `ssh`'s own (the config's, or 22) when unset. */
+      port?: number
+      /** The private key `ssh -i` takes: absolute, or `~/…`; the agent's or the config's when unset. */
+      identityFile?: string
+      /** The most of reeval's macOS VMs it runs at once: 1 or 2, and 2 when unset. */
+      vms?: number
+    }
 /** A boat.dev machine size: `small` is 2 vCPUs and 4 GB. */
 export type BoatMachineType = 'small' | 'default' | 'large' | 'xlarge'
 /** The host variable holding a Boat API key, made by `secret.fromEnv`. */

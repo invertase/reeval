@@ -8,9 +8,21 @@
 // for a password. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it (`1`: out of disk).
 // FAKE_TART_PULL_FAILS: `tart pull` fails, saying it. FAKE_TART_CLONE_FAILS: `tart clone` fails,
 // saying it, after starting the VM's directory.
+//
+// {@link fakeTartHosts} adds Macs that `ssh <host>` reaches: each a directory of its own under
+// `hosts/`, with its own VMs, images and log, and its free space, memory and system in files there.
+// `tart run` there refuses a VM beyond its `limit`, as macOS does at its VM limit. As with sshd,
+// killing `ssh` leaves the command it ran on a Mac running.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,6 +52,8 @@ case "$cmd" in
     pulled "$1" ;;
   clone)
     [ -n "$FAKE_TART_CLONE_FAILS" ] && { mkdir -p "$root/vms/$2"; echo "$FAKE_TART_CLONE_FAILS" >&2; exit 1; }
+    [ -f "$root/clone-fails" ] && { cat "$root/clone-fails" >&2; exit 1; }
+    [ -f "$root/clone-seconds" ] && sleep "$(cat "$root/clone-seconds")"
     mkdir -p "$root/vms/$2/home" && echo "$1" > "$root/vms/$2/image"
     # A local VM's clone has its disk: here, its home and disk.img.
     if [ -d "$root/vms/$1/home" ]; then
@@ -50,6 +64,12 @@ case "$cmd" in
     mv "$root/vms/$1" "$root/vms/$2" ;;
   set) echo "$*" > "$root/vms/$1/set" ;;
   run)
+    if [ -f "$root/limit" ]; then
+      n=$(ls "$root"/vms/*/running 2>/dev/null | wc -l)
+      # Late: tart exits before what it said reaches the other end, as over ssh it can.
+      [ "$n" -ge "$(cat "$root/limit")" ] && [ -f "$root/refuses-late" ] && { ( sleep 0.3; echo "The number of VMs exceeds the system limit" >&2 ) & exit 1; }
+      [ "$n" -ge "$(cat "$root/limit")" ] && { echo "The number of VMs exceeds the system limit" >&2; exit 1; }
+    fi
     if [ "$FAKE_TART_RUN_FAILS" = 1 ]; then echo "no space for $1" >&2; exit 1; fi
     [ -n "$FAKE_TART_RUN_FAILS" ] && { echo "$FAKE_TART_RUN_FAILS" >&2; exit 1; }
     touch "$root/vms/$1/running"
@@ -62,6 +82,7 @@ case "$cmd" in
     cd "$root/vms/$vm/home" || exit 1
     HOME="$root/vms/$vm/home" exec perl -e 'setpgrp(0, 0); exec @ARGV' /bin/sh -c '"$@"; exit $?' sh "$@" ;;
   ip) [ -f "$root/vms/$1/running" ] && echo 127.0.0.1 || exit 1 ;;
+  get) [ -d "$root/vms/$1" ] || exit 1; printf '{"OS":"%s"}\n' "$(cat "$root/vms/$1/os" 2>/dev/null || echo darwin)" ;;
   stop) [ "$1" = --timeout ] && shift 2; rm -f "$root/vms/$1/running" ;;
   delete) rm -rf "$root/vms/$1" ;;
   list)
@@ -93,11 +114,49 @@ done
 exec "\${args[@]}"
 `
 
-// The last argument is the remote command line; the one running VM is the host.
+// The destination is the first argument that isn't an option; the rest is the remote command
+// line. A destination under hosts/ is a Mac of fakeTartHosts, which runs it with that Mac's
+// tart; any other name is unknown once there are hosts. Else the one running VM is the host.
 const SSH = `#!/bin/bash
 echo "ssh $*" >> "$FAKE_TART_DIR/log"
+while [ $# -gt 0 ]; do
+  case $1 in
+    --) shift; break ;;
+    -[oplibcFJLRDEmSw]) shift 2 ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+dest=$1; shift
+host=\${dest##*@}
+mac="$FAKE_TART_DIR/hosts/$host"
+if [ -d "$mac" ] && [ ! -f "$mac/unreachable" ]; then
+  echo "$*" >> "$mac/ssh.log"
+  # As sshd runs it: in a process group of its own, so killing this ssh leaves it running.
+  exec 3<&0
+  FAKE_TART_DIR="$mac" TART_HOME="$mac" PATH="$FAKE_TART_HOSTBIN:$PATH" \\
+    perl -e 'setpgrp(0, 0); exec @ARGV' /bin/sh -c "$*" <&3 > >(cat) 2> >(cat >&2) &
+  wait $!; exit $?
+fi
+if [ -d "$FAKE_TART_DIR/hosts" ] && [ "$host" != 127.0.0.1 ]; then
+  echo "ssh: Could not resolve hostname $host: nodename nor servname provided, or not known" >&2
+  exit 255
+fi
 for vm in "$FAKE_TART_DIR"/vms/*/; do [ -f "$vm/running" ] && break; done
 cd "$vm/home" && HOME="$vm/home" exec /bin/sh -c "\${@: -1}"
+`
+
+// A Mac's own df, sysctl and uname, from its files: free kilobytes, memory and system.
+const HOST_DF = `#!/bin/bash
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'
+printf '/dev/disk3s5 999999999 1 %s 1%% /\\n' "$(cat "$FAKE_TART_DIR/free-kb" 2>/dev/null || echo 900000000)"
+`
+const HOST_SYSCTL = `#!/bin/bash
+cat "$FAKE_TART_DIR/memsize" 2>/dev/null || echo 68719476736
+`
+const HOST_UNAME = `#!/bin/bash
+system=$(cat "$FAKE_TART_DIR/system" 2>/dev/null || echo Darwin-arm64)
+case $1 in -s) echo "\${system%-*}" ;; -m) echo "\${system#*-}" ;; *) echo "\${system%-*}" ;; esac
 `
 
 // A VM lists only its own listeners: the real lsof's, of processes working under the VM's
@@ -138,8 +197,19 @@ export function fakeTart(images: string[] = []): {
     writeFileSync(join(bin, name), script)
     chmodSync(join(bin, name), 0o755)
   }
+  const hostbin = join(dir, 'hostbin')
+  mkdirSync(hostbin)
+  for (const [name, script] of Object.entries({
+    df: HOST_DF,
+    sysctl: HOST_SYSCTL,
+    uname: HOST_UNAME,
+  })) {
+    writeFileSync(join(hostbin, name), script)
+    chmodSync(join(hostbin, name), 0o755)
+  }
   const env = {
     FAKE_TART_DIR: dir,
+    FAKE_TART_HOSTBIN: hostbin,
     TART_HOME: dir,
     PATH: `${bin}:${process.env.PATH ?? ''}`,
   }
@@ -156,6 +226,71 @@ export function fakeTart(images: string[] = []): {
 
 /** How long {@link holdLoopback} waits for the loopback before it fails. */
 export const LOOPBACK_WAIT_MS = 120_000
+
+/** A Mac of {@link fakeTartHosts}: the images it has, and what its checks and `tart run` find. */
+export type FakeTartHost = {
+  images?: string[]
+  /** Kilobytes free on Tart's volume; 900 GB when unset. */
+  freeKb?: number
+  /** `hw.memsize`; 64 GiB when unset. */
+  memsize?: number
+  /** `uname -s`-`uname -m`; `Darwin-arm64` when unset. */
+  system?: string
+  /** How many VMs `tart run` lets run at once; unlimited when unset. */
+  limit?: number
+  /** `ssh` can't reach it. */
+  unreachable?: boolean
+  /** Seconds `tart clone` takes. */
+  cloneSeconds?: number
+  /** What `tart clone` fails saying. */
+  cloneFails?: string
+  /** `tart run` at its `limit` exits before its refusal reaches stderr's other end. */
+  refusesLate?: boolean
+}
+
+/**
+ * A {@link fakeTart} that also has the Macs in `hosts`, by name, each with its own state under
+ * `hosts/<name>`; `log(name)` is that Mac's `tart` log, and `vms(name)` the VMs it has.
+ */
+export function fakeTartHosts(
+  hosts: Record<string, FakeTartHost>,
+  images: string[] = [],
+): ReturnType<typeof fakeTart> & {
+  hostLog: (name: string) => string[]
+  vms: (name: string) => string[]
+} {
+  const fake = fakeTart(images)
+  for (const [name, h] of Object.entries(hosts)) {
+    const mac = join(fake.dir, 'hosts', name)
+    mkdirSync(join(mac, 'vms'), { recursive: true })
+    const files = {
+      'free-kb': h.freeKb,
+      memsize: h.memsize,
+      system: h.system,
+      limit: h.limit,
+      unreachable: h.unreachable ? '' : undefined,
+      'clone-seconds': h.cloneSeconds,
+      'clone-fails': h.cloneFails,
+      'refuses-late': h.refusesLate ? '' : undefined,
+    }
+    for (const [file, value] of Object.entries(files)) {
+      if (value !== undefined) writeFileSync(join(mac, file), String(value))
+    }
+    for (const image of h.images ?? []) {
+      spawnSync(join(fake.dir, 'bin', 'tart'), ['pull', image], {
+        env: { ...process.env, ...fake.env, FAKE_TART_DIR: mac, TART_HOME: mac },
+      })
+    }
+    writeFileSync(join(mac, 'log'), '')
+  }
+  const read = (path: string) => readFileSync(path, 'utf8').split('\n').filter(Boolean)
+  return {
+    ...fake,
+    hostLog: (name) => read(join(fake.dir, 'hosts', name, 'log')),
+    vms: (name) => readdirSync(join(fake.dir, 'hosts', name, 'vms')),
+  }
+}
+
 /** The loopback port whose listener is {@link holdLoopback}'s lock. */
 const LOOPBACK_LOCK_PORT = 43127
 

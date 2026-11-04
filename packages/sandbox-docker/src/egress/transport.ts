@@ -1,4 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import { mkdirSync, statSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { docker } from '../docker-cli.ts'
 import { type Engine, engineEnv, engineSpec } from '../engine.ts'
 import { type RunResult, run, shellQuote } from '../process.ts'
@@ -76,6 +78,50 @@ export function execSpawn(
   return child
 }
 
+/** What every `ssh` reeval runs passes: no prompt, a dropped connection noticed within a minute. */
+export const SSH_OPTIONS = [
+  '-o',
+  'BatchMode=yes',
+  '-o',
+  'ServerAliveInterval=15',
+  '-o',
+  'ServerAliveCountMax=4',
+  '-o',
+  'LogLevel=ERROR',
+] as const
+
+/**
+ * Whether `dir` is a directory only this user can enter, made (0700) first with `make`. An ssh
+ * client trusts whatever listens at its ControlPath, so a socket in a directory another user can
+ * write lets them stand in for the host.
+ */
+export function privateDir(dir: string, o: { make?: boolean } = {}): boolean {
+  try {
+    if (o.make) mkdirSync(dir, { recursive: true, mode: 0o700 })
+    const st = statSync(dir)
+    return st.isDirectory() && st.uid === process.getuid?.() && (st.mode & 0o077) === 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The options that share one connection through a control socket at `path`, kept open `persistS`
+ * seconds after the last command; none on Windows, whose OpenSSH has no ControlMaster, or when
+ * the socket's directory isn't {@link privateDir}. `path` may end in an ssh token such as `%C`.
+ */
+export function controlOptions(path: string | undefined, persistS: number): string[] {
+  if (!path || process.platform === 'win32' || !privateDir(dirname(path))) return []
+  return [
+    '-o',
+    'ControlMaster=auto',
+    '-o',
+    `ControlPath=${path}`,
+    '-o',
+    `ControlPersist=${persistS}`,
+  ]
+}
+
 /** A VM reached over SSH with a per-sandbox key and a pinned host key. */
 export type SshTarget = {
   host: string
@@ -88,7 +134,10 @@ export type SshTarget = {
   knownHostsFile: string
   /** The name the host key is pinned under, since several VMs share one NAT host. */
   hostKeyAlias: string
-  /** Where the connection's control socket lives, so every command shares one connection. */
+  /**
+   * Where the connection's control socket lives, so every command shares one connection: in a
+   * directory only this user can enter, or the commands don't share one.
+   */
   controlPath?: string
 }
 
@@ -97,17 +146,6 @@ export type SshTarget = {
  * arguments into one line for the login shell, so the caller quotes it. No user config applies.
  */
 export function sshArgv(target: SshTarget, remote: string): string[] {
-  const shared =
-    target.controlPath && process.platform !== 'win32'
-      ? [
-          '-o',
-          'ControlMaster=auto',
-          '-o',
-          `ControlPath=${target.controlPath}`,
-          '-o',
-          'ControlPersist=300',
-        ]
-      : []
   return [
     'ssh',
     '-T',
@@ -117,8 +155,7 @@ export function sshArgv(target: SshTarget, remote: string): string[] {
     target.identityFile,
     '-p',
     String(target.port),
-    '-o',
-    'BatchMode=yes',
+    ...SSH_OPTIONS,
     '-o',
     'IdentitiesOnly=yes',
     '-o',
@@ -131,13 +168,7 @@ export function sshArgv(target: SshTarget, remote: string): string[] {
     `HostKeyAlias=${target.hostKeyAlias}`,
     '-o',
     'ConnectTimeout=20',
-    '-o',
-    'ServerAliveInterval=15',
-    '-o',
-    'ServerAliveCountMax=4',
-    '-o',
-    'LogLevel=ERROR',
-    ...shared,
+    ...controlOptions(target.controlPath, 300),
     `${target.user}@${target.host}`,
     remote,
   ]

@@ -1,4 +1,5 @@
 import { dirname } from 'node:path'
+import { preparedVmCap } from './attempt/environment.ts'
 import { runAttempt } from './attempt/index.ts'
 import { bestOfCell } from './best-of.ts'
 import { caseEvalName, caseKeys } from './cases.ts'
@@ -17,6 +18,7 @@ import {
   getRunContext,
   registerGroup,
   registerTest,
+  type TestOptions,
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import {
@@ -365,18 +367,27 @@ function prepare(
     const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
     for (const { name: testName, spec, ...options } of planned.tests) {
       const { cell, n, bestOf } = options.attempt
-      let hooks = {}
+      let hooks: Pick<TestOptions, 'ready' | 'settled'> = {}
       // A resumed run's completed attempts are skipped, but still settle their place in the cell.
       if (bestOf !== undefined) {
         const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
         bestOfCells.set(cell.key, of)
         hooks = of(n)
       }
-      registerTest(
-        testName,
-        { ...options, ...hooks },
-        spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
-      )
+      const test: TestOptions = { ...options, ...hooks }
+      if (spec && test.gate && spec.sandbox.kind === 'tart' && spec.sandbox.hosts) {
+        const gate = { ...test.gate, limits: { ...test.gate.limits } }
+        const before = test.ready
+        test.gate = gate
+        test.ready = async () => {
+          const { config, runId } = getRunContext()
+          const cap = await preparedVmCap(spec, config.root, runId)
+          const key = 'sandbox:tart'
+          if (cap && gate.limits[key]) gate.limits[key] = Math.min(gate.limits[key], cap)
+          return before ? before() : true
+        }
+      }
+      registerTest(testName, test, spec ? (handle) => runAttempt(spec, fn, handle) : async () => {})
     }
   }
   return { planned, commit }

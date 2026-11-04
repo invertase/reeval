@@ -554,7 +554,7 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="tart.maxConcurrent" type="number" optional>
-  The most VMs reeval runs at once across the run: `1` or `2`, and `2` by default, since macOS runs at most two macOS VMs at a time. The run's `concurrency` option still caps attempts overall.
+  The most VMs reeval runs at once across the run: `1` or `2`, and `2` by default, since macOS runs at most two macOS VMs at a time. With `hosts`, at most every host's `vms` added up, and that sum by default. The run's `concurrency` option still caps attempts overall.
 </Property>
 
 <Property name="tart.cpus" type="number" optional>
@@ -567,6 +567,10 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 
 <Property name="tart.ssh" type="{ user?: string; key: string | URL }" optional>
   Reach the VM over SSH when `tart exec` can't, for an image without the Tart Guest Agent. `key` is a private key the image trusts, relative to the file that calls `tart()`, absolute, or a `file:` URL; `user` defaults to `admin`.
+</Property>
+
+<Property name="tart.hosts" type="(string | { host: string; user?: string; port?: number; identityFile?: string; vms?: number })[]" optional>
+  Run the VMs on these Macs over SSH instead of this one: `'mac-studio'` (an `~/.ssh/config` alias), `'elliot@mac-mini.local'`, `'ssh://ci@10.0.0.5:2222'`, or an object. Each needs `tart` and must answer plain `ssh` with no prompt (an alias, the SSH agent or `identityFile`; no passwords). `vms` is how many of the run's VMs it runs at once, `1` or `2`, and `2` by default. The egress gateway and the keys stay on this machine. Each host must have `image` (`reeval image build` pulls it on every host); preflight bakes harness images on each host, refuses one that doesn't answer or a tag that's a different image on two hosts, and skips one short of disk or memory or whose pull or bake fails. The run starts as many VMs at once as the hosts it kept have room for.
 </Property>
 
 ## `boat()`

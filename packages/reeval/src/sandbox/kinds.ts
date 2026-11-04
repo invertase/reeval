@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
-import { TART_MAX_CONCURRENT } from '../contract/tart.ts'
+import { tartVmLimit } from '../contract/tart.ts'
 import type {
   BoatSandboxDescriptor,
   DockerSandboxDescriptor,
@@ -15,6 +15,7 @@ import type {
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
 import type { SandboxOptions } from './index.ts'
+import type { TartTarget } from './tart-cli.ts'
 import type { Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
@@ -79,7 +80,7 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = {
    * The most of its sandboxes the host runs at once, across the run, and why: the cap when
    * `maxConcurrent` is unset, and the most it may be. Unlimited when unset.
    */
-  hostLimit?: { max: number; why: string }
+  hostLimit?: (sandbox: D) => { max: number; why: string }
   privileges(sandbox: D): SandboxPrivileges
   create(sandbox: D, options: SandboxOptions): Promise<Sandbox>
   /** What its sandboxes may use at once, when they run somewhere other than the host. */
@@ -205,15 +206,24 @@ const TART: SandboxKind<TartSandboxDescriptor> = {
   id: (s) => `tart:${idPart(s.image)}`,
   hostPaths: { 'ssh.key': 'file' },
   buildsAtStart: () => true,
-  hostLimit: { max: TART_MAX_CONCURRENT, why: 'macOS runs two macOS VMs at a time' },
+  hostLimit: tartVmLimit,
   privileges: () => ({ root: false, capabilities: [] }),
   async create(sandbox, options) {
     const { createTartSandbox } = await import('./tart.ts')
     return createTartSandbox(sandbox, options)
   },
-  async cleanupRun(runId) {
+  async cleanupRun(runId, sandboxes) {
     const { removeRunVms } = await import('./tart.ts')
-    await removeRunVms(runId)
+    const { LOCAL_TART } = await import('./tart-cli.ts')
+    const { hostTarget } = await import('./tart-hosts.ts')
+    const { parseTartHost } = await import('../contract/tart.ts')
+    const away = new Map<string, TartTarget>()
+    for (const host of (sandboxes ?? []).flatMap((s) => s.hosts ?? [])) {
+      const parsed = parseTartHost(host)
+      if (typeof parsed !== 'string') away.set(parsed.label, hostTarget(parsed))
+    }
+    const here = !sandboxes || sandboxes.some((s) => !s.hosts)
+    await removeRunVms(runId, [...(here ? [LOCAL_TART] : []), ...away.values()])
   },
 }
 
@@ -321,7 +331,7 @@ export function maxConcurrentProblem(sandbox: SandboxDescriptor, where: string) 
   if (!(typeof max === 'number' && Number.isInteger(max) && max >= 1)) {
     return `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`
   }
-  const limit = SANDBOX_KINDS[sandbox.kind].hostLimit
+  const limit = sandboxKind(sandbox).hostLimit?.(sandbox)
   if (limit && max > limit.max) {
     return `sandbox.maxConcurrent in ${where} is ${max}, but ${SANDBOX_KINDS[sandbox.kind].helpers[0]}() runs at most ${limit.max} at once: ${limit.why}`
   }
@@ -330,7 +340,7 @@ export function maxConcurrentProblem(sandbox: SandboxDescriptor, where: string) 
 
 /** The cap on `sandbox`'s provider across the run: its `maxConcurrent`, else its kind's limit. */
 export const providerLimit = (sandbox: SandboxDescriptor): number | undefined =>
-  sandbox.maxConcurrent || SANDBOX_KINDS[sandbox.kind].hostLimit?.max
+  sandbox.maxConcurrent || sandboxKind(sandbox).hostLimit?.(sandbox).max
 
 /** What the first of `sandboxes` that runs off the host may use, or null when none does or it doesn't answer. */
 export async function sandboxCapacity(sandboxes: readonly SandboxDescriptor[]) {

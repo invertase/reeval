@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { lstat, readdir, readlink, stat, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { runArgv, type TartTarget } from './tart-cli.ts'
 import { parseTartRef } from './tart-ref.ts'
 
 /** Tart's own directory: `TART_HOME`, or `~/.tart`. */
@@ -40,6 +41,43 @@ export async function tartSource(image: string): Promise<string | null> {
   )
   if (!files[1]) return null
   return `local:${files.map((s) => (s ? `${s.size}:${Math.trunc(s.mtimeMs)}` : '-')).join(',')}`
+}
+
+/** Tart's own directory on a host, as a shell word: `$TART_HOME` there, or `~/.tart`. */
+// biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable, expanded on the host
+const HOST_TART_HOME = '"${TART_HOME:-$HOME/.tart}"'
+
+/** {@link tartDigest}, read by `on`'s `readlink` when it's another Mac. */
+export async function tartDigestOn(image: string, on: TartTarget): Promise<string | null> {
+  if (!on.remote) return tartDigest(image)
+  const ref = parseTartRef(image)
+  if (!ref.oci) return null
+  if (ref.digest) return ref.digest
+  const link = `${ref.host}/${ref.repo}/${ref.tag ?? 'latest'}`
+  const r = await runArgv(on.sh(`readlink ${HOST_TART_HOME}/cache/OCIs/"$1"`, [link]))
+  const digest = r.exitCode === 0 ? basename(r.stdout.trim()) : ''
+  return /^sha256:[0-9a-f]{64}$/.test(digest) ? digest : null
+}
+
+/**
+ * {@link tartSource} on `on`: for a local VM on another Mac, the size and modification time (in
+ * seconds) of each file of it, read there.
+ */
+export async function tartSourceOn(image: string, on: TartTarget): Promise<string | null> {
+  if (!on.remote) return tartSource(image)
+  if (parseTartRef(image).oci) return tartDigestOn(image, on)
+  const r = await runArgv(
+    on.sh(
+      `cd ${HOST_TART_HOME}/vms/"$1" 2>/dev/null || exit 1
+for f in config.json disk.img nvram.bin; do
+  if [ -f "$f" ]; then printf '%s:%s,' "$(wc -c < "$f" | tr -d ' ')" "$(date -r "$f" +%s)"; else printf -- '-,'; fi
+done`,
+      [image],
+    ),
+  )
+  const files = r.stdout.trim().replace(/,$/, '').split(',')
+  if (r.exitCode !== 0 || !files[1] || files[1] === '-') return null
+  return `local:${files.join(',')}`
 }
 
 /** What an image weighs: its layers to download, and what Tart unpacks them to (when it says). */
@@ -254,6 +292,14 @@ export function missingImagesMessage(missing: MissingImage[]): string {
 }
 
 /**
+ * {@link missingImagesMessage} for a host of `tart({ hosts })`: it names the host, and `tart pull`
+ * runs there.
+ */
+export function onHost(message: string, host: string): string {
+  return `On ${host}: ${message}\nEach host needs its own copy: ssh ${host} tart pull <image> pulls one there, and reeval image build pulls on every host.`
+}
+
+/**
  * Why `reeval image build` won't pull: the images' unpacked disks don't fit in what's free, even
  * once Tart prunes its cache.
  */
@@ -279,10 +325,11 @@ export function pullSpaceMessage(missing: MissingImage[], space: PullSpace): str
  */
 export function tartPull(
   image: string,
-  options: { signal?: AbortSignal; onLine?: (line: string) => void } = {},
+  options: { signal?: AbortSignal; onLine?: (line: string) => void; on?: TartTarget } = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('tart', ['pull', image], {
+    const [bin = 'tart', ...args] = options.on?.tart(['pull', image]) ?? ['tart', 'pull', image]
+    const child = spawn(bin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       ...(options.signal ? { signal: options.signal } : {}),
     })
@@ -310,7 +357,12 @@ export function tartPull(
     child.on('error', reject)
     child.on('close', (code) => {
       if (code === 0) return resolve()
-      reject(new Error(`tart pull ${image} failed: ${tail.slice(-5).join('\n') || `exit ${code}`}`))
+      const where = options.on?.remote ? ` on ${options.on.label}` : ''
+      reject(
+        new Error(
+          `tart pull ${image} failed${where}: ${tail.slice(-5).join('\n') || `exit ${code}`}`,
+        ),
+      )
     })
   })
 }

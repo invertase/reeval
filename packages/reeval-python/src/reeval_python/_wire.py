@@ -1826,6 +1826,32 @@ class SnapshotOptions(TypedDict):
 SubstituteIn: TypeAlias = "Literal[\"header\", \"query\", \"body\"]"
 
 
+class TartHostHost(TypedDict):
+    # The host name, address or `~/.ssh/config` alias.
+    host: str
+    # The private key `ssh -i` takes: absolute, or `~/…`; the agent's or the config's when
+    # unset.
+    identityFile: NotRequired[str]
+    # The SSH port; `ssh`'s own (the config's, or 22) when unset.
+    port: NotRequired[float]
+    # The login user; `ssh`'s own (the config's, or this machine's user) when unset.
+    user: NotRequired[str]
+    # The most of reeval's macOS VMs it runs at once: 1 or 2, and 2 when unset.
+    vms: NotRequired[float]
+
+
+# A Mac that runs `tart()`'s VMs over SSH: an SSH destination, or its parts.
+TartHost: TypeAlias = "TartHostHost | str"
+
+
+class TartSandboxDescriptorHostsItemHost(TypedDict):
+    host: str
+    identityFile: NotRequired[str]
+    port: NotRequired[int]
+    user: NotRequired[str]
+    vms: NotRequired[int]
+
+
 # Reach the VM over SSH when its Tart Guest Agent doesn't answer `tart exec`: as `user` (`admin`
 # when unset), with `key`, a private key the image trusts, absolute or relative to the file it's
 # written in.
@@ -1838,6 +1864,13 @@ class TartSandboxDescriptorSsh(TypedDict):
 class TartSandboxDescriptor(TypedDict):
     # CPUs each clone gets; the image's when unset.
     cpus: NotRequired[int]
+    # Macs that run the VMs instead of this machine, each one plain `ssh` reaches without a
+    # prompt (an `~/.ssh/config` alias, the agent or a key file; no passwords): `'mac-studio'`,
+    # `'elliot@mac-mini.local'`, `'ssh://ci@10.0.0.5:2222'` or `{ host, user?, port?,
+    # identityFile?, vms? }`. reeval runs `tart` on each over SSH and keeps the egress gateway,
+    # and every key, here. Each host needs the image; preflight bakes the harness onto it there.
+    # This machine when unset.
+    hosts: NotRequired[list[str | TartSandboxDescriptorHostsItemHost]]
     # Cell id; defaults to `tart:<image>`, the image's last path segment.
     id: NotRequired[str]
     # The VM each attempt clones: an OCI image such as
@@ -2066,6 +2099,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "failedRequests",
         "finalUrl",
         "flakeRate",
+        "identityFile",
         "ignoreAbort",
         "matchedBy",
         "maxConcurrent",

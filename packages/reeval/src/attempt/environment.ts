@@ -7,7 +7,29 @@ import { sandboxKind } from '../sandbox/kinds.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { preparedWorkspace } from '../workspace.ts'
 import { traceEnvironment } from './debug.ts'
-import type { Attempt } from './state.ts'
+import type { Attempt, AttemptSpec } from './state.ts'
+
+/**
+ * How many VMs the hosts preflight kept for `spec`'s sandbox run at once, or null when it runs
+ * on no hosts or preflight left nothing to read. The plan's cap counts every host it names at its
+ * `vms`; a host skipped, or with memory for fewer, runs fewer.
+ */
+export async function preparedVmCap(spec: AttemptSpec, root: string, runId: string) {
+  const { sandbox, harness } = spec
+  if (sandbox.kind !== 'tart' || !sandbox.hosts) return null
+  const { preparedFor } = await import('../sandbox/preflight.ts')
+  const { createProviders, preparedHosts } = await import('../sandbox/providers.ts')
+  const provider = createProviders().tart
+  if (!provider) return null
+  try {
+    const prepared = preparedFor(root, runId, provider, sandbox, harness)
+    const hosts = prepared ? preparedHosts(prepared) : null
+    return hosts ? hosts.reduce((sum, h) => sum + h.vms, 0) : null
+  } catch {
+    // A sandbox that failed to prepare fails in the attempt, which reads it again.
+    return null
+  }
+}
 
 /**
  * Resolves the attempt's environment (files, skills, secrets and their placeholders)
@@ -84,13 +106,17 @@ export async function prepareEnvironment(
     )
   } else if (kind.capabilities.isolated) {
     const { preparedFor } = await import('../sandbox/preflight.ts')
-    const { bakedImage, createProviders, vmImage } = await import('../sandbox/providers.ts')
+    const { bakedImage, createProviders, preparedHosts, vmImage } = await import(
+      '../sandbox/providers.ts'
+    )
     const provider = createProviders()[kind.provider(spec.sandbox)]
     const prepared = provider && preparedFor(root, runId, provider, spec.sandbox, spec.harness)
     const vm = prepared ? vmImage(prepared) : null
     if (vm) record.vmImage = vm
     const baked = prepared ? bakedImage(prepared) : null
     if (baked) a.image = baked
+    const hosts = prepared ? preparedHosts(prepared) : null
+    if (hosts) a.hosts = hosts
     const from = vm?.ref ?? ('image' in spec.sandbox ? spec.sandbox.image : undefined)
     debugLog(
       'image',
