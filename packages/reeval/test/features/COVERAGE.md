@@ -131,7 +131,7 @@
 | Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried | ✓ 2 | — | — | — | — | — |
 | `reeval clean --images`, and no `-base` tag or replaced image left behind | ✓ 1 | — | — | — | — | — |
 | `reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — | — |
-| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 7 | ● 4 | ● 2 |
+| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt; `--dry-run` and `reeval doctor` show each environment's policy | ✓ 5 | ✓ 2 | — | ● 7 | ● 4 | ● 2 |
 | `egress: { setup, agent }`: one policy for the setup steps and another for the agent's turns and the checks, switched in Docker as the agent starts, tunnels setup left open that the agent's policy refuses closed and raised as `setup-tunnel-closed`, each phase's traffic tagged in the record, and refused at plan time on `tart()` and `boat()` | ✓ 7 | ✓ 3 | ● 1 | ● 3 | — | — |
 | `egress: 'proxy'` (the default) detaches the container, so only HTTP(S) and WebSockets through the gateway leave it (Node's `fetch`, `http`, `https` and `WebSocket` too, without Node 22's experimental-proxy warning); `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM | ✓ 4 | ✓ 2 | — | ● 3 | ● 2 | — |
 | The harness's key never enters the container | ✓ 3 | — | — | — | — | ● 2 |

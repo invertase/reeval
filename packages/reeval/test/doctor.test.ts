@@ -1186,6 +1186,47 @@ describe('reeval doctor', () => {
     )
   })
 
+  test("egress names the policies the evals' environments set, not only the config's default", async () => {
+    const p = await project('doctor-egress-planned', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({ harnesses: fakeHarness() })
+`,
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const lib = defineEnvironment('lib', { sandbox: docker(), egress: { allow: ['registry.npmjs.org'] } })
+evaluate('one', { environments: lib, runs: 1 }, async () => {})
+evaluate('two', { environments: lib, runs: 1 }, async () => {})
+`,
+    })
+    const env = { DOCKER_HOST: 'unix:///nonexistent/reeval-doctor.sock' }
+    const egress = async () => {
+      const r = await runCli(p.dir, ['doctor', '--json'], { env })
+      return JSON.parse(r.stdout).checks.filter((c: Check) => c.id === 'egress')
+    }
+    assert.deepEqual(
+      (await egress()).map((c: Check) => c.summary),
+      [
+        "allow registry.npmjs.org, plus each harness's own hosts: every planned attempt (environment lib)",
+      ],
+    )
+    await writeFile(
+      join(p.dir, 'evals/b.eval.ts'),
+      `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+evaluate('three', { environments: defineEnvironment('open', { sandbox: docker() }), runs: 1 }, async () => {})
+`,
+    )
+    const summaries = (await egress()).map((c: Check) => c.summary)
+    assert.equal(summaries.length, 2, summaries.join('\n'))
+    assert.match(
+      summaries[0],
+      /^allow registry\.npmjs\.org, .*: 2 of 3 planned attempts \(environment lib\)$/,
+    )
+    assert.match(summaries[1], /^proxy: .*: 1 of 3 planned attempts \(environment open\)$/)
+    assert.doesNotMatch(summaries.join('\n'), /the default/)
+  })
+
   test('problems exit 1 with their fixes, and never print a key', async () => {
     const p = await project('doctor-problems', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
