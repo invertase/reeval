@@ -357,6 +357,17 @@ function parseJson(text: string): unknown {
   }
 }
 
+async function readProgress(dir: string) {
+  const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
+  return text ? readableLiveProgress(parseJson(text)) : null
+}
+
+const stagingLive = (
+  dir: string,
+  progress: Awaited<ReturnType<typeof readProgress>>,
+  now: number,
+) => (progress ? progressLive(progress, now) : false) || holderLive(dir)
+
 async function listCandidates(root: string, now = Date.now()): Promise<Candidate[]> {
   const found = new Map<string, Candidate>()
   const stagingRoot = join(root, '.reeval', 'staging')
@@ -365,9 +376,8 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     const dir = join(stagingRoot, runId)
     const info = await stat(dir).catch(() => null)
     if (!info?.isDirectory()) continue
-    const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
-    const progress = text ? readableLiveProgress(parseJson(text)) : null
-    const live = (progress ? progressLive(progress, now) : false) || holderLive(dir)
+    const progress = await readProgress(dir)
+    const live = stagingLive(dir, progress, now)
     const startedAt = progress?.startedAt ?? new Date(info.mtimeMs).toISOString()
     found.set(runId, {
       runId,
@@ -458,30 +468,29 @@ export async function sweepStaging(
 ): Promise<string[]> {
   const stagingRoot = join(root, '.reeval', 'staging')
   const names = await readdir(stagingRoot).catch((): string[] => [])
-  const candidates = new Map((await listCandidates(root, now)).map((c) => [c.runId, c]))
   const resumableIds: string[] = []
-  for (const name of names) {
+  for (const name of names.sort()) {
     if (name === keep) continue
     const dir = join(stagingRoot, name)
     const info = await stat(dir).catch(() => null)
     if (!info || now - info.mtimeMs <= STALE_STAGING_MS) continue
-    const found = candidates.get(name)
-    if (found?.live) continue
-    if (found && resumable(found)) resumableIds.push(name)
+    const run = RUN_ID.test(name) && info.isDirectory()
+    if (run && stagingLive(dir, await readProgress(dir), now)) continue
+    if (run && (await readScratch(root, name))?.status !== 'complete') resumableIds.push(name)
     else await rm(dir, { recursive: true, force: true })
   }
   return resumableIds
 }
 
 /** `reeval clean --staging`: removes every stopped run's staging and returns their ids. */
-export async function removeStoppedStaging(root: string): Promise<string[]> {
+export async function removeStoppedStaging(root: string, now = Date.now()): Promise<string[]> {
   const stagingRoot = join(root, '.reeval', 'staging')
   const names = await readdir(stagingRoot).catch((): string[] => [])
-  const live = new Set((await listCandidates(root)).filter((c) => c.live).map((c) => c.runId))
   const removed: string[] = []
   for (const name of names.sort()) {
-    if (live.has(name)) continue
-    await rm(join(stagingRoot, name), { recursive: true, force: true })
+    const dir = join(stagingRoot, name)
+    if (stagingLive(dir, await readProgress(dir), now)) continue
+    await rm(dir, { recursive: true, force: true })
     removed.push(name)
   }
   return removed
