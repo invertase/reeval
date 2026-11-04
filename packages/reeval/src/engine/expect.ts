@@ -20,7 +20,7 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
-import type { Limits } from '../assert.ts'
+import type { Limits, RunMatch } from '../assert.ts'
 import { fromCwd } from '../ids.ts'
 import type { AtLeastOne, MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
 import { isThenable } from '../object.ts'
@@ -136,7 +136,7 @@ declare module '@vitest/expect' {
       'toHaveCalledTool',
       (name: string | RegExp, input?: string | RegExp | Record<string, unknown>) => R
     >
-    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string) => R>
+    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string | RunMatch) => R>
     toHaveEdited: On<T, 'toHaveEdited', (path?: RegExp | string) => R>
     toHaveChanged: On<
       T,

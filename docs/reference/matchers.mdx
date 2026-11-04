@@ -156,11 +156,45 @@ The assertion passes when at least one changed file matches one of the patterns.
     expect(turn, 'ran vitest').toHaveRun(/vitest/)
 ```
 
-<Property name="command" type="string | RegExp" optional>
-  Text the call's `command` input contains, or a regular expression it matches. Without a command, any shell call passes.
+<Property name="command" type="string | RegExp | RunMatch" optional>
+  Text the call's `command` input contains, or a regular expression it matches. Without a command, any shell call passes. An object matches the program the command ran instead.
 </Property>
 
 The failure message lists every shell command the agent ran.
+
+A string or regular expression matches anywhere in the command line, so `/genkit/` also matches `cat genkit.config.ts` and `npm i genkit`. The object form matches the program each segment of the line ran:
+
+```ts
+    expect(turn, 'ran the genkit CLI').toHaveRun({
+      program: 'genkit',
+      args: /^flow:run\b/,
+    })
+```
+
+<Property name="program" type="string | RegExp" required>
+  The program's name without its directory, or a regular expression it matches. `./node_modules/.bin/genkit` is `genkit`. A package runner's package drops its version: `npx genkit@latest` is `genkit`, and `npx @angular/cli@19` is `@angular/cli`.
+</Property>
+
+<Property name="args" type="string | RegExp" optional>
+  Text the program's arguments contain, or a regular expression they match, with the arguments joined by single spaces and their quotes removed. Anchor a subcommand with a regular expression, as in `/^add\b/`. Without `args`, any run of the program passes.
+</Property>
+
+reeval reads each command line with [shell-quote](https://github.com/ljharb/shell-quote), then unwraps a fixed list of wrappers:
+
+| Step | What it does |
+|---|---|
+| Words | shell-quote splits the line into words, removing quotes and escapes. `$NAME` stays as written, a glob is its pattern, a redirection's target and file descriptor (the `2` of `2>&1`) are dropped, a `#` that starts a word starts a comment to the end of its line, and a heredoc's body is dropped. |
+| Segments | A line break, `&&`, `\|\|`, `;`, `\|`, `&`, `(`, and `)` end a segment, so the commands inside a subshell or `$(…)` count as their own. |
+| Keywords | Skips `if`, `then`, `else`, `elif`, `while`, `until`, `do`, `!`, and `{` before a command. `for`, `case`, and `select` headers and block ends run nothing. |
+| Wrappers | Skips leading `NAME=value` assignments, then unwraps `env`, `timeout`, `time`, `exec`, `sudo`, `nohup`, `nice`, `command` (not `command -v`), `npx`, `bunx`, `npm exec` (`npm x`), `pnpm exec`, `pnpm dlx`, and `yarn dlx`, with their flags, in any order. |
+| Scripts | `bash -c '<script>'` (or `-lc`, other options before `-c`, and `sh`, `zsh`, `dash`) reads the script's commands instead, the way Codex runs each command. |
+| Program | Takes the first word left. A wrapper with nothing after it, as in `npx --version`, is the program. |
+
+Aliases, functions, backticks, `xargs`, `find -exec`, and `npx -c` aren't followed, and `pnpm genkit` and `npm run genkit` run `pnpm` and `npm`. To read the programs yourself, use [`shellCommands()`](/reference/authoring-api#shellcommands).
+
+A run counts whether or not its shell call succeeded, and even when an earlier `&&` stopped the line before it, since a call's result covers its whole line. The object form's default label is `toHaveRun program genkit args /^flow:run\b/`, so it never shares a history key with the string form.
+
+The object form's failure message lists every program the agent ran with its arguments, and a negated failure lists the matching ones.
 
 ## `toHaveCalledTool()`
 

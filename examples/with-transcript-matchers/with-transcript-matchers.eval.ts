@@ -10,5 +10,8 @@ evaluate('runs the tests before it finishes', { environments: math }, async (c) 
 
   expect(turn, 'edited math.js').toHaveEdited('src/math.js')
   expect(turn, 'ran the tests').toHaveRun(/node --test|npm (test|t)\b/)
-  expect(turn, 'installed nothing').not.toHaveRun(/npm (install|i)\b/)
+  expect(turn, 'installed nothing').not.toHaveRun({
+    program: 'npm',
+    args: /^(install|i|add)\b/,
+  })
 })

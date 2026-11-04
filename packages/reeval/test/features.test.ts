@@ -2895,6 +2895,12 @@ export const features: Feature[] = [
     canary: /expected shell commands matching \/deploy\//,
   },
   {
+    dir: 'assert/ran-program',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected runs of deploy, got \["echo deploy-skipped","printf contract-42"\]/,
+  },
+  {
     dir: 'assert/edited',
     tiers: ['fake'],
     env: 'plain',

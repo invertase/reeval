@@ -14,6 +14,7 @@ import {
   isMisuse,
   limitsLabel,
   ran,
+  runMatchLabel,
   searched,
   TURN_EDITED,
   withinLimits,
@@ -185,6 +186,64 @@ describe('ran', () => {
     assert.equal(ran(shell, /contract-42/).pass, true)
     assert.equal(ran(bash, 'deploy').pass, false)
     assert.equal(ran(other).pass, false)
+  })
+
+  test('a string or RegExp still matches the whole command line', () => {
+    const t = turnOf([tool('bash', { command: 'cat genkit.config.ts' })])
+    assert.equal(ran(t, 'genkit').pass, true)
+    assert.equal(ran(t, /genkit/).pass, true)
+    assert.equal(ran(t, { program: 'genkit' }).pass, false)
+  })
+
+  test('{ program } matches the program a segment ran, after its wrappers', () => {
+    const t = turnOf([
+      tool('bash', { command: 'cd app && FOO=1 npx -y genkit@latest flow:run x' }),
+      tool('shell', { command: 'npm i genkit; ./node_modules/.bin/skills add y' }),
+    ])
+    assert.equal(ran(t, { program: 'genkit' }).pass, true)
+    assert.equal(ran(t, { program: 'genkit', args: /^flow:run\b/ }).pass, true)
+    assert.equal(ran(t, { program: 'genkit', args: 'flow:run x' }).pass, true)
+    assert.equal(ran(t, { program: /^gen/, args: 'x' }).pass, true)
+    assert.equal(ran(t, { program: 'skills', args: /^add\b/ }).pass, true)
+    assert.equal(ran(t, { program: 'genkit', args: /^start\b/ }).pass, false)
+    assert.equal(ran(t, { program: 'npx' }).pass, false)
+    assert.equal(ran(t, { program: 'npm', args: /^i\b/ }).pass, true)
+  })
+
+  test('{ program } fails listing every program run, and .not lists the matching ones', () => {
+    const t = turnOf([tool('bash', { command: 'npm i genkit && npx genkit start' })])
+    assert.equal(
+      ran(t, { program: 'genkit', args: /^flow:run\b/ }).message(),
+      'expected runs of genkit with args matching /^flow:run\\b/, got ["npm i genkit","genkit start"]',
+    )
+    expect(t).toHaveRun({ program: 'genkit' })
+    throws(
+      () => expect(t).not.toHaveRun({ program: 'genkit' }),
+      'expected no runs of genkit, got ["genkit start"]',
+    )
+  })
+
+  test('{ program } is checked: its keys, its program and its args', () => {
+    const t = turnOf([tool('bash', { command: 'genkit start' })])
+    const misuse = (match: unknown, message: RegExp) =>
+      assert.throws(
+        () => ran(t, match as never),
+        (e: Error) => isMisuse(e) && message.test(e.message),
+      )
+    misuse({ program: 'genkit', arg: 'start' }, /has no "arg"; .* Did you mean "args"\?/)
+    misuse({ args: 'start' }, /program is a program name or a regular expression/)
+    misuse({ program: '' }, /program is a program name/)
+    misuse({ program: 'genkit', args: ['start'] }, /args is text or a regular expression/)
+  })
+
+  test('runMatchLabel names the program and its args', () => {
+    assert.equal(
+      runMatchLabel({ program: 'genkit', args: /^flow:run\b/ }),
+      'program genkit args /^flow:run\\b/',
+    )
+    assert.equal(runMatchLabel({ program: /gen/ }), 'program /gen/')
+    assert.equal(runMatchLabel('genkit'), undefined)
+    assert.equal(runMatchLabel(/genkit/), undefined)
   })
 })
 
@@ -439,6 +498,7 @@ describe('replay captures through normalizeStream', () => {
     test(`${harness} edit-and-run.raw.jsonl: toHaveRun and toHaveEdited`, () => {
       const t = replay(harness, 'edit-and-run.raw.jsonl')
       expect(t).toHaveRun(/contract/)
+      expect(t).toHaveRun({ program: 'echo', args: /^contract-/ })
       expect(t).toHaveEdited('notes.txt')
       throws(() => expect(t).toHaveRun(/deploy/), /expected shell commands matching \/deploy\//)
     })

@@ -1630,6 +1630,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/assert.test.ts', 'reeval/test/query.test.ts'],
   },
   {
+    id: 'assert.ran-program',
+    area: 'Judges and matchers',
+    name: '`toHaveRun({ program, args? })` and `shellCommands()`: the program each shell segment ran, after env assignments, `timeout`, `sudo` and package runners',
+    fixtures: ['assert/ran-program'],
+    unit: [
+      'reeval/test/shell-commands.test.ts',
+      'reeval/test/assert.test.ts',
+      'reeval/test/match.test.ts',
+    ],
+  },
+  {
     id: 'assert.changed',
     area: 'Judges and matchers',
     name: '`toHaveChanged(paths?)`: files in the workspace diff, matched with globs',

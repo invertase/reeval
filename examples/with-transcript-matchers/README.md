@@ -36,6 +36,10 @@ fail             runs the tests before it finishes
 
 The matchers are synchronous, with no `await`, and read the same events on every harness:
 `toHaveRun` matches the agent's shell calls, not `c.exec`.
+A string or regular expression matches anywhere in a command line, so `/genkit/` also
+matches `cat genkit.config.ts`. The object form, `{ program, args }`, matches the program each
+part of the line ran, after `cd … &&`, env assignments, `timeout`, `sudo` and package runners
+such as `npx`.
 
 | File | What it is |
 |---|---|

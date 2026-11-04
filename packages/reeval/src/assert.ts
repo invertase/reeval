@@ -3,6 +3,7 @@ import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { SKILL_LOAD_TOOLS, toolTarget } from './history/tool-target.ts'
 import { isObjectLike } from './object.ts'
+import { commandOf, isShellCall, transcriptCommands } from './shell-commands.ts'
 import { formatDuration } from './text.ts'
 import type {
   AttemptContext,
@@ -120,13 +121,6 @@ export function inputMatches(input: unknown, expected?: ToolInputMatch): boolean
   })
 }
 
-const SHELL_TOOLS = new Set(['bash', 'shell'])
-
-const commandOf = (event: ToolEvent): string => {
-  const command = record(event.input).command
-  return typeof command === 'string' ? command : ''
-}
-
 function webEvent(
   matcher: string,
   actual: unknown,
@@ -221,9 +215,80 @@ function formatInput(input: ToolInputMatch): string {
   return JSON.stringify(input)
 }
 
-export function ran(actual: unknown, command?: RegExp | string): Result {
+/** `toHaveRun`'s object form: the program a segment of a shell command ran, after its wrappers. */
+export type RunMatch = {
+  /** The program's name without its directory, or a regular expression it matches. */
+  program: string | RegExp
+  /** Text the program's arguments, joined by spaces, contain, or a regular expression they match. */
+  args?: string | RegExp
+}
+
+const RUN_MATCH_KEYS = ['program', 'args'] as const
+
+const isPatternArg = (value: unknown): value is string | RegExp =>
+  typeof value === 'string' || value instanceof RegExp
+
+function checkRunMatch(match: Record<string, unknown>): RunMatch {
+  const example = "e.g. toHaveRun({ program: 'genkit', args: /^flow:run\\b/ })"
+  for (const key of Object.keys(match)) {
+    if ((RUN_MATCH_KEYS as readonly string[]).includes(key)) continue
+    const near = closest(key, RUN_MATCH_KEYS)
+    throw misuseError(
+      `toHaveRun() has no "${key}"; it takes program and args.${near ? ` Did you mean "${near}"?` : ''}`,
+    )
+  }
+  if (!isPatternArg(match.program) || match.program === '') {
+    throw misuseError(
+      `toHaveRun()'s program is a program name or a regular expression, ${example} (got ${JSON.stringify(match.program)})`,
+    )
+  }
+  if (match.args !== undefined && !isPatternArg(match.args)) {
+    throw misuseError(
+      `toHaveRun()'s args is text or a regular expression, ${example} (got ${JSON.stringify(match.args)})`,
+    )
+  }
+  return match as RunMatch
+}
+
+/**
+ * `toHaveRun({ program, args })`'s default label, `program genkit args /^flow:run\b/`: unlike
+ * `toHaveRun('genkit')`'s, so switching an eval to the object form starts a new history key.
+ */
+export function runMatchLabel(match: unknown): string | undefined {
+  if (!isObjectLike(match) || match instanceof RegExp || !isPatternArg(match.program)) {
+    return undefined
+  }
+  const { program, args } = match
+  const programPart = `program ${String(program)}`
+  return isPatternArg(args) ? `${programPart} args ${String(args)}` : programPart
+}
+
+function ranProgram(transcript: TranscriptEvent[], match: RunMatch): Result {
+  const commands = transcriptCommands(transcript)
+  const shown = (c: { program: string; args: string[] }) => [c.program, ...c.args].join(' ')
+  const hits = commands.filter(
+    (c) =>
+      (typeof match.program === 'string'
+        ? c.program === match.program
+        : match.program.test(c.program)) && matches(c.args.join(' '), match.args),
+  )
+  const argsPart = match.args === undefined ? '' : ` with args matching ${match.args}`
+  const target = `${match.program}${argsPart}`
+  return {
+    pass: hits.length > 0,
+    message: () =>
+      hits.length > 0
+        ? `expected no runs of ${target}, got ${listed(hits.map(shown))}`
+        : `expected runs of ${target}, got ${listed(commands.map(shown))}`,
+  }
+}
+
+export function ran(actual: unknown, command?: RegExp | string | RunMatch): Result {
   const { transcript } = transcriptSubject(actual, 'toHaveRun')
-  const shells = toolsOf(transcript).filter((e) => SHELL_TOOLS.has(e.tool))
+  if (isObjectLike(command) && !(command instanceof RegExp)) {
+    return ranProgram(transcript, checkRunMatch(command))
+  }
+  const shells = transcript.filter(isShellCall)
   const seen = shells.map(commandOf)
   const pass = shells.some((e) => matches(commandOf(e), command))
   return {
