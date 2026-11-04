@@ -473,7 +473,16 @@ const replay = (harness: string, file: string) => {
 
 describe('replay captures through normalizeStream', () => {
   test('there are skill and mcp captures for each harness', () => {
-    assert.deepEqual(harnesses, ['antigravity', 'codex', 'cursor', 'fx', 'goose', 'opencode', 'pi'])
+    assert.deepEqual(harnesses, [
+      'antigravity',
+      'codex',
+      'cursor',
+      'fx',
+      'goose',
+      'grok-build',
+      'opencode',
+      'pi',
+    ])
   })
 
   for (const harness of harnesses) {
@@ -511,7 +520,7 @@ const CLAUDE_CODE_SKILL =
   'fixtures/records/real-contract/evals/.history/20260929T033538Z_nogit_runner_f3z3/evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/transcript.jsonl'
 
 /** Each harness's use of the contract's `contract-probe` skill, as its capture has it. */
-const SKILL_USES: Record<AgentKind, { from: string; tool: string; input: unknown } | null> = {
+const SKILL_USES: Record<AgentKind, { from: string; tool: string; input: unknown }> = {
   cursor: {
     from: 'replay/cursor/skill.raw.jsonl',
     tool: 'read',
@@ -553,8 +562,14 @@ const SKILL_USES: Record<AgentKind, { from: string; tool: string; input: unknown
     tool: 'skill',
     input: { location: 'skill:61ce5ec8bc2106bf:0/contract-probe', name: 'contract-probe' },
   },
-  // No capture: the contract's Grok Build rows have never recorded their skill turn.
-  'grok-build': null,
+  'grok-build': {
+    from: 'replay/grok-build/skill.raw.jsonl',
+    tool: 'read_file',
+    input: {
+      target_file:
+        '/home/reeval/.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills/contract-probe/SKILL.md',
+    },
+  },
 }
 
 /** A capture's normalized tool calls: a replay stream through normalizeStream, or a transcript. */
@@ -582,7 +597,6 @@ describe("every harness's skill use", () => {
   })
 
   for (const [harness, use] of Object.entries(SKILL_USES)) {
-    if (!use) continue
     test(`${harness}: the row is in ${use.from}`, () => {
       assert.ok(
         capturedTools(use.from).some(
@@ -601,6 +615,7 @@ describe("every harness's skill use", () => {
       assert.deepEqual(skillsUsed(call.tool, call.text, ['other', 'contract-probe']), [
         'contract-probe',
       ])
+      assert.ok(!call.target.startsWith('{'), `${call.target} is a named input, not the JSON`)
       const ctx = { skills: ['contract-probe'], files: [], mcp: [], verify: [] }
       assert.equal(classifyCall(call.tool, call.text, ctx).class, 'context')
     })
@@ -621,12 +636,6 @@ describe("every harness's skill use", () => {
     expect(excluded).not.toHaveCalledSkill('foo')
     const tested = turnOf([tool('bash', { command: '[ -d ~/.agents/skills/foo ] && echo yes' })])
     expect(tested).not.toHaveCalledSkill('foo')
-  })
-
-  test("Grok Build's read_file names its path in target_file", () => {
-    const input = { target_file: '/home/reeval/.grok/skills/foo/SKILL.md' }
-    assert.equal(toolTarget(input, 'read_file'), input.target_file)
-    expect(turnOf([tool('read_file', input)])).toHaveCalledSkill('foo')
   })
 })
 

@@ -1,0 +1,102 @@
+{"turn":0,"ms":350,"part":{"type":"start"}}
+{"turn":0,"ms":1040,"part":{"type":"raw","rawValue":{"sessionUpdate":"config_option_update","configOptions":[{"id":"model","name":"Model","category":"model","type":"select","currentValue":"grok-4.6","options":[{"value":"grok-4.20-0309-non-reasoning","name":"grok-4.20-0309-non-reasoning"},{"value":"grok-4.20-0309-reasoning","name":"grok-4.20-0309-reasoning"},{"value":"grok-4.20-multi-agent-0309","name":"grok-4.20-multi-agent-0309"},{"value":"grok-4.3","name":"grok-4.3"},{"value":"grok-4.5","name":"grok-4.5"},{"value":"grok-4.6","name":"grok-4.6"},{"value":"grok-4.7","name":"grok-4.7"},{"value":"grok-build-0.1","name":"grok-build-0.1"},{"value":"grok-imagine-image","name":"grok-imagine-image"},{"value":"grok-imagine-image-2.0","name":"grok-imagine-image-2.0"},{"value":"grok-imagine-video","name":"grok-imagine-video"},{"value":"grok-imagine-video-1.5","name":"grok-imagine-video-1.5"},{"value":"grok-imagine-video-1.5-lite","name":"grok-imagine-video-1.5-lite"}]},{"id":"reasoning_effort","name":"Reasoning Effort","category":"thought_level","type":"select","currentValue":"medium","options":[{"value":"low","name":"Low"},{"value":"medium","name":"Medium"},{"value":"high","name":"High"},{"value":"xhigh","name":"X-High"}]}]}}}
+{"turn":0,"ms":2594,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"I'll"}}}}
+{"turn":0,"ms":2595,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":2595,"part":{"type":"text-start","id":"acp-text-1"}}
+{"turn":0,"ms":2595,"part":{"type":"text-delta","id":"acp-text-1","text":"I'll"}}
+{"turn":0,"ms":2596,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" look"}}}}
+{"turn":0,"ms":2596,"part":{"type":"text-delta","id":"acp-text-1","text":" look"}}
+{"turn":0,"ms":2598,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" up"}}}}
+{"turn":0,"ms":2598,"part":{"type":"text-delta","id":"acp-text-1","text":" up"}}
+{"turn":0,"ms":2604,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" the"}}}}
+{"turn":0,"ms":2604,"part":{"type":"text-delta","id":"acp-text-1","text":" the"}}
+{"turn":0,"ms":2615,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" stamp"}}}}
+{"turn":0,"ms":2615,"part":{"type":"text-delta","id":"acp-text-1","text":" stamp"}}
+{"turn":0,"ms":2624,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" server"}}}}
+{"turn":0,"ms":2624,"part":{"type":"text-delta","id":"acp-text-1","text":" server"}}
+{"turn":0,"ms":2637,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'s"}}}}
+{"turn":0,"ms":2637,"part":{"type":"text-delta","id":"acp-text-1","text":"'s"}}
+{"turn":0,"ms":2644,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" `"}}}}
+{"turn":0,"ms":2644,"part":{"type":"text-delta","id":"acp-text-1","text":" `"}}
+{"turn":0,"ms":2654,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"house"}}}}
+{"turn":0,"ms":2654,"part":{"type":"text-delta","id":"acp-text-1","text":"house"}}
+{"turn":0,"ms":2664,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"_"}}}}
+{"turn":0,"ms":2664,"part":{"type":"text-delta","id":"acp-text-1","text":"_"}}
+{"turn":0,"ms":2675,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"stamp"}}}}
+{"turn":0,"ms":2675,"part":{"type":"text-delta","id":"acp-text-1","text":"stamp"}}
+{"turn":0,"ms":2684,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"`"}}}}
+{"turn":0,"ms":2685,"part":{"type":"text-delta","id":"acp-text-1","text":"`"}}
+{"turn":0,"ms":2695,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" tool"}}}}
+{"turn":0,"ms":2695,"part":{"type":"text-delta","id":"acp-text-1","text":" tool"}}
+{"turn":0,"ms":2698,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":","}}}}
+{"turn":0,"ms":2698,"part":{"type":"text-delta","id":"acp-text-1","text":","}}
+{"turn":0,"ms":2724,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" then"}}}}
+{"turn":0,"ms":2724,"part":{"type":"text-delta","id":"acp-text-1","text":" then"}}
+{"turn":0,"ms":2725,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" call"}}}}
+{"turn":0,"ms":2726,"part":{"type":"text-delta","id":"acp-text-1","text":" call"}}
+{"turn":0,"ms":2726,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" it"}}}}
+{"turn":0,"ms":2726,"part":{"type":"text-delta","id":"acp-text-1","text":" it"}}
+{"turn":0,"ms":2726,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" once"}}}}
+{"turn":0,"ms":2726,"part":{"type":"text-delta","id":"acp-text-1","text":" once"}}
+{"turn":0,"ms":2732,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" and"}}}}
+{"turn":0,"ms":2732,"part":{"type":"text-delta","id":"acp-text-1","text":" and"}}
+{"turn":0,"ms":2733,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" report"}}}}
+{"turn":0,"ms":2733,"part":{"type":"text-delta","id":"acp-text-1","text":" report"}}
+{"turn":0,"ms":2733,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" the"}}}}
+{"turn":0,"ms":2733,"part":{"type":"text-delta","id":"acp-text-1","text":" the"}}
+{"turn":0,"ms":2733,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" result"}}}}
+{"turn":0,"ms":2733,"part":{"type":"text-delta","id":"acp-text-1","text":" result"}}
+{"turn":0,"ms":2733,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"."}}}}
+{"turn":0,"ms":2733,"part":{"type":"text-delta","id":"acp-text-1","text":"."}}
+{"turn":0,"ms":2781,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call","toolCallId":"call-643ce89c-32e8-474e-8df1-5e48c2bee6d3-0","title":"search_tool","rawInput":{"query":"stamp house_stamp","limit":5},"_meta":{"x.ai/tool":{"version":1,"name":"search_tool","kind":"search_tool","namespace":"grok_build","label":"Search Tools","read_only":false}}}}}
+{"turn":0,"ms":2782,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call-643ce89c-32e8-474e-8df1-5e48c2bee6d3-0","kind":"other","title":"Search tools: \"stamp house_stamp\"","locations":[],"rawInput":{"variant":"SearchTool","query":"stamp house_stamp","limit":5},"_meta":{"x.ai/tool":{"version":1,"name":"search_tool","kind":"search_tool","namespace":"grok_build","label":"Search Tools","read_only":false}}}}}
+{"turn":0,"ms":2822,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call-643ce89c-32e8-474e-8df1-5e48c2bee6d3-0","status":"completed","content":[{"type":"content","content":{"type":"text","text":"{\n  \"results\": [\n    {\n      \"server\": \"stamp\",\n      \"tools\": [\n        {\n          \"tool_name\": \"stamp__house_stamp\",\n          \"description\": \"Returns the house stamp.\",\n          \"score\": 2.143784999847412,\n          \"input_schema\": {\n            \"type\": \"object\",\n            \"properties\": {}\n          }\n        }\n      ]\n    }\n  ],\n  \"total_hidden_tools\": 1,\n  \"status\": \"ready\",\n  \"note\": null\n}"}}],"rawOutput":{"type":"SearchTool","result_count":1,"content":"{\n  \"results\": [\n    {\n      \"server\": \"stamp\",\n      \"tools\": [\n        {\n          \"tool_name\": \"stamp__house_stamp\",\n          \"description\": \"Returns the house stamp.\",\n          \"score\": 2.143784999847412,\n          \"input_schema\": {\n            \"type\": \"object\",\n            \"properties\": {}\n          }\n        }\n      ]\n    }\n  ],\n  \"total_hidden_tools\": 1,\n  \"status\": \"ready\",\n  \"note\": null\n}"}}}}
+{"turn":0,"ms":3766,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call","toolCallId":"call-3c7dc142-8c78-4fdb-9e0d-68423afc1647-1","title":"use_tool","rawInput":{"tool_name":"stamp__house_stamp","tool_input":{}},"_meta":{"x.ai/tool":{"version":1,"name":"use_tool","kind":"use_tool","namespace":"grok_build","label":"Use Tool","read_only":false}}}}}
+{"turn":0,"ms":3767,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call-3c7dc142-8c78-4fdb-9e0d-68423afc1647-1","kind":"other","title":"stamp__house_stamp","locations":[],"rawInput":{"variant":"UseTool","tool_name":"stamp__house_stamp","tool_input":{}},"_meta":{"x.ai/tool":{"version":1,"name":"use_tool","kind":"use_tool","namespace":"grok_build","label":"Use Tool","read_only":false}}}}}
+{"turn":0,"ms":3776,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call-3c7dc142-8c78-4fdb-9e0d-68423afc1647-1","status":"completed","rawOutput":{"type":"MCP","tool_name":"house_stamp","server_name":"stamp","output":{"OkayOutput":"STAMP-7Q"}}}}}
+{"turn":0,"ms":3818,"part":{"type":"text-end","id":"acp-text-1"}}
+{"turn":0,"ms":3820,"part":{"type":"tool-call","toolCallId":"call-643ce89c-32e8-474e-8df1-5e48c2bee6d3-0","toolName":"search_tool","input":{"query":"stamp house_stamp","limit":5},"providerExecuted":true}}
+{"turn":0,"ms":3821,"part":{"type":"tool-result","toolCallId":"call-643ce89c-32e8-474e-8df1-5e48c2bee6d3-0","toolName":"search_tool","input":{"query":"stamp house_stamp","limit":5},"output":"{\n  \"results\": [\n    {\n      \"server\": \"stamp\",\n      \"tools\": [\n        {\n          \"tool_name\": \"stamp__house_stamp\",\n          \"description\": \"Returns the house stamp.\",\n          \"score\": 2.143784999847412,\n          \"input_schema\": {\n            \"type\": \"object\",\n            \"properties\": {}\n          }\n        }\n      ]\n    }\n  ],\n  \"total_hidden_tools\": 1,\n  \"status\": \"ready\",\n  \"note\": null\n}","providerExecuted":true}}
+{"turn":0,"ms":3822,"part":{"type":"finish-step","finishReason":"tool-calls","rawFinishReason":"tool-calls","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"ScfpHIfxSDiJIlRI-0","timestamp":"2026-11-04T21:29:02.794Z","modelId":"grok-4.6","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":3823,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":3823,"part":{"type":"tool-call","toolCallId":"call-3c7dc142-8c78-4fdb-9e0d-68423afc1647-1","toolName":"mcp__stamp__house_stamp","input":{},"dynamic":true,"invalid":true,"error":{"name":"AI_NoSuchToolError","toolName":"mcp__stamp__house_stamp","availableTools":["bash","write","edit","grep","webSearch","read_file","list_dir","search_tool","spawn_subagent"]},"providerExecuted":true}}
+{"turn":0,"ms":3823,"part":{"type":"tool-result","toolCallId":"call-3c7dc142-8c78-4fdb-9e0d-68423afc1647-1","toolName":"mcp__stamp__house_stamp","input":{},"output":"STAMP-7Q","providerExecuted":true}}
+{"turn":0,"ms":3824,"part":{"type":"finish-step","finishReason":"tool-calls","rawFinishReason":"tool-calls","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"ScfpHIfxSDiJIlRI-1","timestamp":"2026-11-04T21:29:02.795Z","modelId":"grok-4.6","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":4535,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"The"}}}}
+{"turn":0,"ms":4579,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":4579,"part":{"type":"text-start","id":"acp-text-2"}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":"The"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" `"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":" `"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"house"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":"house"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"_"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":"_"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"stamp"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":"stamp"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"`"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":"`"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" tool"}}}}
+{"turn":0,"ms":4579,"part":{"type":"text-delta","id":"acp-text-2","text":" tool"}}
+{"turn":0,"ms":4579,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" returned"}}}}
+{"turn":0,"ms":4580,"part":{"type":"text-delta","id":"acp-text-2","text":" returned"}}
+{"turn":0,"ms":4580,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":":"}}}}
+{"turn":0,"ms":4580,"part":{"type":"text-delta","id":"acp-text-2","text":":"}}
+{"turn":0,"ms":4613,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" **"}}}}
+{"turn":0,"ms":4613,"part":{"type":"text-delta","id":"acp-text-2","text":" **"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ST"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"ST"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"AMP"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"AMP"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"-"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"-"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"7"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"7"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Q"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"Q"}}
+{"turn":0,"ms":4659,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"**"}}}}
+{"turn":0,"ms":4659,"part":{"type":"text-delta","id":"acp-text-2","text":"**"}}
+{"turn":0,"ms":4694,"part":{"type":"raw","rawValue":{"stopReason":"end_turn","_meta":{"sessionId":"01a1a877-191e-7c91-a563-89aa4898eb91","requestId":"2be2489c-0d3f-410a-8bf6-47fd08b99fb7","promptId":"2be2489c-0d3f-410a-8bf6-47fd08b99fb7","totalTokens":12030,"modelId":"grok-4.6","inputTokens":11989,"outputTokens":33,"cachedReadTokens":11904,"reasoningTokens":17,"usage":{"inputTokens":35520,"outputTokens":161,"totalTokens":35681,"cachedReadTokens":24064,"cacheCreationTokens":0,"reasoningTokens":81,"modelCalls":3,"apiDurationMs":3568,"costUsdTicks":359100000,"modelUsage":{"grok-4.6":{"inputTokens":35520,"outputTokens":161,"totalTokens":35681,"cachedReadTokens":24064,"cacheCreationTokens":0,"reasoningTokens":81,"modelCalls":3,"apiDurationMs":3568,"costUsdTicks":359100000}},"numTurns":3}}}}}
+{"turn":0,"ms":4695,"part":{"type":"text-end","id":"acp-text-2"}}
+{"turn":0,"ms":4695,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"end_turn","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"ScfpHIfxSDiJIlRI-2","timestamp":"2026-11-04T21:29:03.667Z","modelId":"grok-4.6","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":4696,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"end_turn","totalUsage":{"inputTokens":35520,"inputTokenDetails":{"noCacheTokens":11456,"cacheReadTokens":24064,"cacheWriteTokens":0},"outputTokens":161,"outputTokenDetails":{"textTokens":80,"reasoningTokens":81},"totalTokens":35681},"providerMetadata":{"acp":{"stopReason":"end_turn"}}}}
