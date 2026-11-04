@@ -429,7 +429,7 @@ describe('network policy', () => {
     // Twin: a host listed by name, in an allowed range, is trusted to resolve where it does.
     assert.deepEqual(await check('intranet.rebind.example'), {
       allowed: true,
-      address: '10.0.0.5',
+      addresses: ['10.0.0.5'],
     })
   })
 
@@ -453,7 +453,7 @@ describe('network policy', () => {
 
   test('allow-all allows anything but loopback and link-local', async () => {
     const check = createPolicyCheck({ mode: 'allow-all' }, { lookup })
-    assert.deepEqual(await check('example.com'), { allowed: true, address: '93.184.216.34' })
+    assert.deepEqual(await check('example.com'), { allowed: true, addresses: ['93.184.216.34'] })
     assert.equal((await check('sneaky.example')).allowed, false)
     assert.equal((await check('metadata.cloud')).allowed, false)
     assert.equal((await check('127.0.0.1')).allowed, false)
@@ -537,7 +537,7 @@ describe('network policy', () => {
     // Twin: a public embedded address in an allowed NAT64 range goes through.
     assert.deepEqual(await check('[64:ff9b::808:808]'), {
       allowed: true,
-      address: '64:ff9b::808:808',
+      addresses: ['64:ff9b::808:808'],
     })
   })
 
@@ -611,7 +611,7 @@ describe('network policy', () => {
     }
     assert.deepEqual(asked, [])
     // Twin: an address in an allowed range goes through, and one outside doesn't.
-    assert.deepEqual(await check('10.1.2.3'), { allowed: true, address: '10.1.2.3' })
+    assert.deepEqual(await check('10.1.2.3'), { allowed: true, addresses: ['10.1.2.3'] })
     assert.equal((await check('93.184.216.34')).allowed, true)
     assert.equal((await check('8.8.8.8')).allowed, false)
     assert.deepEqual(asked, [])
@@ -731,7 +731,7 @@ describe('network policy', () => {
       reason: "can't resolve flaky.example: getaddrinfo EAI_AGAIN flaky.example",
     })
     failing = false
-    assert.deepEqual(await flaky('flaky.example'), { allowed: true, address: '93.184.216.34' })
+    assert.deepEqual(await flaky('flaky.example'), { allowed: true, addresses: ['93.184.216.34'] })
     const empty = createPolicyCheck({ mode: 'allow-all' }, { lookup: async () => [] })
     assert.deepEqual(await empty('empty.example'), {
       allowed: false,

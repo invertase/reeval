@@ -222,7 +222,7 @@ export type EgressProxy = {
   close(): void
 }
 
-type Target = { host: string; port: number; address: string }
+type Target = { host: string; port: number; addresses: string[] }
 type Denied = Extract<Verdict, { allowed: false }>
 
 type RequestTracker = {
@@ -294,6 +294,21 @@ const authorityOf = (host: string, port: number) => {
 
 const pathOnly = (path: string) => path.split('?')[0]
 
+/**
+ * Connection options that reach `target` at the addresses its policy check resolved, with no
+ * lookup of their own. Node tries each in turn (Happy Eyeballs), so a host whose IPv6 address is
+ * unreachable from here is still reached over IPv4.
+ */
+function reachAt(target: Target) {
+  const addresses = target.addresses.map((address) => ({ address, family: net.isIP(address) }))
+  const lookup: net.LookupFunction = (_host, options, callback) => {
+    const [first = { address: target.host, family: net.isIP(target.host) }] = addresses
+    if (options.all) callback(null, addresses)
+    else callback(null, first.address, first.family)
+  }
+  return { host: target.host, lookup, autoSelectFamily: true }
+}
+
 /** Refused brokered requests recorded per method and path before the rest share an entry. */
 const REFUSED_PATHS = 20
 
@@ -364,7 +379,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     } while (at !== generation)
     emit(
       verdict.allowed
-        ? { type: 'dns', host, allowed: true, address: verdict.address }
+        ? { type: 'dns', host, allowed: true, address: verdict.addresses[0] }
         : {
             type: 'dns',
             host,
@@ -582,7 +597,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       }
       contact(socket, host, port)
       holdTunnel(socket, host, port)
-      const target = { host, port, address: verdict.address }
+      const target = { host, port, addresses: verdict.addresses }
       if (
         decrypts(rules, host) ||
         substitutes(allSubs(), host) ||
@@ -625,7 +640,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           ms: Date.now() - startedAt,
         })
       })
-      const upstream = track(net.connect({ host: target.address, port, allowHalfOpen: true }))
+      const upstream = track(net.connect({ ...reachAt(target), port, allowHalfOpen: true }))
       upstream.once('connect', () => {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) upstream.write(head)
@@ -684,7 +699,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       // Until its response ends, a request (a chunked upload, a streamed download) is a tunnel too.
       tunnels.set(req.socket, { host, port })
       res.once('close', () => tunnels.delete(req.socket))
-      const target = { host, port, address: verdict.address }
+      const target = { host, port, addresses: verdict.addresses }
       if (secure) {
         // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
         const headers = { ...req.headers, host: url.host }
@@ -734,7 +749,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       }
       contact(socket, host, port)
       holdTunnel(socket, host, port)
-      onPlainUpgrade({ host, port, address: verdict.address }, req, track(socket), head)
+      onPlainUpgrade({ host, port, addresses: verdict.addresses }, req, track(socket), head)
     })
   })
 
@@ -753,7 +768,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const url = `http://${target.host}:${target.port}${pathOnly(path)}`
     log(`reeval:egress ${req.method} ${url}`)
     const upstream = http.request({
-      host: target.address,
+      ...reachAt(target),
       port: target.port,
       method: req.method,
       path,
@@ -913,7 +928,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     log(`reeval:egress ${method} http://${authority}${pathOnly(path)} (upgrade)`)
     const upstream = http.request({
-      host: target.address,
+      ...reachAt(target),
       port: target.port,
       method,
       path,
@@ -1412,7 +1427,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
       const upstream = https.request({
-        host: target.address,
+        ...reachAt(target),
         servername: net.isIP(target.host) ? undefined : target.host,
         port: target.port,
         method,
@@ -1554,7 +1569,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       return reply(socket, refused.status, refused.reason)
     }
     const upstream = https.request({
-      host: target.address,
+      ...reachAt(target),
       servername: net.isIP(target.host) ? undefined : target.host,
       port: target.port,
       method,
@@ -1597,7 +1612,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     if (existing && !existing.closed && !existing.destroyed) return Promise.resolve(existing)
     return new Promise((resolve) => {
       const socket = tls.connect({
-        host: target.address,
+        ...reachAt(target),
         port: target.port,
         servername: net.isIP(target.host) ? undefined : target.host,
         ALPNProtocols: ['h2', 'http/1.1'],

@@ -32,6 +32,7 @@ const jwt = (claims: object, signature: string) =>
 const ACCESS = jwt({ sub: 'user_1', exp: 2_000_000_000 }, 'real-access-signature-0123456789')
 const REFRESH = jwt({ sub: 'user_1', exp: 2_100_000_000 }, 'real-refresh-signature-987654321')
 const OTHER = 'other.upstream.test'
+const DUAL = 'dual.upstream.test'
 
 type Seen = { host: string; method: string; path: string; headers: http.IncomingHttpHeaders }
 
@@ -303,6 +304,8 @@ async function startProxy(
     upstreamCA: upstreamCa.cert,
     lookup: async (host) => {
       if (host === 'nxdomain.test') throw new Error('ENOTFOUND')
+      // IPv6 first, as a resolver may answer: nothing listens on `::1`, so only IPv4 reaches it.
+      if (host === DUAL) return ['::1', '127.0.0.1']
       return host.endsWith('.test') ? ['127.0.0.1'] : ['203.0.113.1']
     },
     allowLoopback: true,
@@ -674,6 +677,64 @@ describe('egress proxy', () => {
     } finally {
       plain.close()
     }
+  })
+})
+
+describe('a host whose first address is unreachable', () => {
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  let gw: Gw
+  before(async () => {
+    h1 = await startUpstream(DUAL, false)
+    h2 = await startUpstream(DUAL, true)
+    gw = await startProxy()
+  })
+  after(() => {
+    gw.close()
+    h1.close()
+    h2.close()
+  })
+
+  test('a CONNECT tunnel falls back to its IPv4 address', async () => {
+    const echo = net.createServer((s) => s.pipe(s))
+    await new Promise<void>((r) => echo.listen(0, '127.0.0.1', r))
+    try {
+      const tunnel = await connect(gw, DUAL, (echo.address() as net.AddressInfo).port)
+      assert.ok(tunnel.ok, tunnel.ok ? '' : `${tunnel.status} ${tunnel.body}`)
+      const back = new Promise<string>((resolve) =>
+        tunnel.socket.once('data', (d) => resolve(String(d))),
+      )
+      tunnel.socket.write('hello')
+      assert.equal(await back, 'hello')
+      tunnel.socket.destroy()
+    } finally {
+      echo.close()
+    }
+  })
+
+  test('plain HTTP falls back to its IPv4 address', async () => {
+    const plain = http.createServer((_req, res) => res.end('plain ok'))
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    try {
+      const port = (plain.address() as net.AddressInfo).port
+      const r = await absolute(gw, `http://${DUAL}:${port}/x`)
+      assert.deepEqual([r.status, r.body], [200, 'plain ok'])
+    } finally {
+      plain.close()
+    }
+  })
+
+  test('decrypted HTTPS falls back to its IPv4 address, over HTTP/1.1 and HTTP/2', async () => {
+    seen.length = 0
+    const r = await absolute(gw, `https://${DUAL}:${h1.port}/echo`)
+    assert.equal(r.status, 200, r.body)
+    gw.proxy.addTransformations([
+      { match: { host: DUAL }, transform: { headers: { 'x-reeval': 'set' } } },
+    ])
+    const r2 = await viaProxyH2(gw, DUAL, h2.port, '/echo')
+    assert.equal(r2.status, 200, r2.body)
+    assert.equal(seen.at(-1)?.headers[':method'], 'POST', 'upstream saw HTTP/2')
+    assert.equal(seen.at(-1)?.headers['x-reeval'], 'set')
   })
 })
 
