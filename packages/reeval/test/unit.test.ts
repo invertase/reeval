@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
+import { writeFiles } from '../src/attempt/session.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
 import { regressions } from '../src/commands.ts'
 import {
@@ -86,9 +87,10 @@ import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
+import type { Sandbox } from '../src/sandbox/types.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
-import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
+import type { EvalOptions, ExecResult, Outcome, ResolvedProfile } from '../src/types.ts'
 import { gatePart } from '../src/view/gate.ts'
 import { runOutcome } from '../src/view/model.ts'
 import { splitPatch } from '../src/view/patch.ts'
@@ -201,6 +203,75 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/reeval/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/reeval/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/reeval/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+/** A fake sandbox that counts the processes a container would start for its writes and execs. */
+async function countingSandbox(execResult?: (command: string) => ExecResult | undefined) {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  const calls = { writeFile: 0, exec: 0 }
+  const counted: Sandbox = {
+    ...box,
+    writeFile: (path, content) => {
+      calls.writeFile++
+      return box.writeFile(path, content)
+    },
+    exec: async (command, opts) => {
+      calls.exec++
+      return execResult?.(command) ?? box.exec(command, opts)
+    },
+  }
+  return { box: counted, calls }
+}
+
+test('environment files are written with one tar per destination, not a write each', async () => {
+  const { box, calls } = await countingSandbox()
+  try {
+    const files = Array.from({ length: 50 }, (_, i) => ({
+      path: `vendor/lib/${i}.js`,
+      content: `export default ${i}\n`,
+    }))
+    const bytes = new Uint8Array([0, 1, 2, 255])
+    await writeFiles(
+      box,
+      [
+        ...files,
+        { path: 'bin/blob', content: bytes },
+        { path: '~/.config/a.txt', content: 'a' },
+        { path: '~/.config/b.txt', content: 'b' },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 2, exec: 2 }, 'one tar and one unpack per destination')
+    assert.equal(await box.readFile('vendor/lib/49.js'), 'export default 49\n')
+    assert.deepEqual(readFileSync(join(box.workdir, 'bin/blob')), Buffer.from(bytes))
+    assert.equal(await box.readFile('~/.config/b.txt'), 'b')
+    assert.equal(existsSync(join(box.workdir, '.reeval-files.tar')), false, 'the tar is removed')
+    assert.equal(existsSync(join(box.home, '.reeval-files.tar')), false)
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files fall back to a write each in a sandbox without tar', async () => {
+  const { box, calls } = await countingSandbox((command) =>
+    command.includes('tar -xf')
+      ? { exitCode: 127, stdout: '', stderr: 'tar: not found' }
+      : undefined,
+  )
+  try {
+    await writeFiles(
+      box,
+      [
+        { path: 'a.txt', content: 'a' },
+        { path: 'b/c.txt', content: 'c' },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 3, exec: 1 })
+    assert.equal(await box.readFile('b/c.txt'), 'c')
   } finally {
     await box.destroy()
   }
