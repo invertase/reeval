@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
-import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
+import { type ClassContext, classifyCall, skillsUsed } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
@@ -922,6 +922,33 @@ describe('tool-call classes', () => {
       files: ['~/.agents/skills/fui-new/references/react.md'],
     })
     assert.equal(cls('shell', 'cat AGENTS.m[d]').class, 'workspace')
+  })
+
+  test('the text a heredoc writes to a file is not what the command reads or runs', () => {
+    const pad = 'x'.repeat(320)
+    const write = (body: string) => `cat > NOTES.md <<'EOF'\n${pad}\n${body}\nEOF`
+    assert.deepEqual(cls('shell', write('See AGENTS.md')), { class: 'workspace', files: [] })
+    assert.equal(cls('shell', write('"test": "vitest"')).class, 'workspace')
+    assert.equal(cls('shell', write("import x from '../node_modules/y'")).class, 'workspace')
+    assert.deepEqual(
+      skillsUsed('shell', write('~/.agents/skills/fui-new/SKILL.md'), ['fui-new']),
+      [],
+    )
+    assert.equal(
+      cls('shell', `/bin/bash -lc "cat <<'EOF' > NOTES.md\n${pad}\nnpx tsc\nEOF"`).class,
+      'workspace',
+    )
+    assert.equal(
+      cls('shell', `python3 - <<'EOF'\n${pad}\nprint(open('.agents/skills/fui-new/SKILL.md'))\nEOF`)
+        .class,
+      'context',
+      'a heredoc another program reads stays',
+    )
+    assert.equal(cls('shell', `cat <<'EOF' | sh\n${pad}\nnpx tsc\nEOF`).class, 'verify')
+    assert.equal(
+      cls('shell', `cat > ~/.agents/skills/fui-new/SKILL.md <<'EOF'\n${pad}\nEOF`).class,
+      'context',
+    )
   })
 })
 

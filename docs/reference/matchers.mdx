@@ -243,7 +243,7 @@ The failure message lists every MCP call as `server/tool`.
 
 ## `toHaveCalledSkill()`
 
-`toHaveCalledSkill(name)` passes when the agent loaded the skill. A load is a `skill`, `Skill`, or `load_skill` tool call whose `id`, `name`, or `skill` input is the skill's name (or `<plugin>:<name>`, as Claude Code names a plugin's skill), or any tool call whose target path, pattern, command, or URL is under `skills/<name>`. A shell command's words count, but not a path it only excludes or tests for. The subject is a turn from `c.send()` or `c`.
+`toHaveCalledSkill(name)` passes when the agent loaded the skill. A load is a `skill`, `Skill`, or `load_skill` tool call whose `id`, `name`, or `skill` input is the skill's name (or `<plugin>:<name>`, as Claude Code names a plugin's skill), or any tool call whose target path, pattern, command, or URL is under `skills/<name>`. A shell command's words count, but not a path it only excludes or tests for, or the text a `cat` or `tee` heredoc writes to a file. The subject is a turn from `c.send()` or `c`.
 
 ```ts
     expect(turn, 'used the skill').toHaveCalledSkill('api-conventions')

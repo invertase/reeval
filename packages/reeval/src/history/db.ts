@@ -23,7 +23,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 22
+const DB_VERSION = 23
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -488,11 +488,11 @@ function classifyOrWorkspace(
   tool: string,
   target: string,
   ctx: ClassContext,
-): ReturnType<typeof classifyCall> {
+): ReturnType<typeof classifyCall> & { skills: string[] } {
   try {
-    return classifyCall(tool, target, ctx)
+    return { ...classifyCall(tool, target, ctx), skills: skillsUsed(tool, target, ctx.skills) }
   } catch {
-    return { class: 'workspace', files: [] }
+    return { class: 'workspace', files: [], skills: [] }
   }
 }
 
@@ -853,7 +853,7 @@ function insertRun(
         for (const path of call.files) {
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
         }
-        for (const skill of skillsUsed(t.tool, t.text, skills)) {
+        for (const skill of call.skills) {
           run('INSERT INTO skill_uses VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, skill)
         }
       }

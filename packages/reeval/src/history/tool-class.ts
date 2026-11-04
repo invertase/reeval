@@ -61,6 +61,25 @@ export function shellWords(command: string): string[] {
   return words
 }
 
+/** A heredoc and its header line; the terminator may close a `bash -c "…"` script's quote. */
+const HEREDOC =
+  /^([^\n]*?)<<-?[ \t]*(['"]?)([\w.-]+)\2([^\n]*)\n[\s\S]*?(?:^[ \t]*\3[ \t]*["']?[ \t]*$|(?![\s\S]))/gm
+
+/**
+ * A command without the text its `cat` or `tee` heredocs write to a file: what a file says it
+ * reads, runs or depends on isn't what the command does. A heredoc another program reads
+ * (`python3 - <<EOF`, `cat <<EOF | sh`) stays.
+ */
+function withoutWrittenText(command: string): string {
+  if (!command.includes('<<')) return command
+  return command.replace(HEREDOC, (all, head: string, _q, _d, tail: string) => {
+    const line = `${head}${tail}`
+    return /\b(?:cat|tee)\b/.test(line) && /\btee\b|>/.test(line) && !line.includes('|')
+      ? line
+      : all
+  })
+}
+
 /** A command's words, with a `bash -c '…'` (or `-lc`) script split into its own words. */
 function commandWords(command: string): string[] {
   const words = shellWords(command)
@@ -190,8 +209,16 @@ const isSkill = (loaded: string, name: string) => loaded === name || loaded.ends
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** `skills/<name>` as a whole directory name: `skills/foo/SKILL.md` and `cd skills/foo`, not `skills/foo-bar`. */
-const underSkill = (text: string, name: string) =>
-  new RegExp(`skills/${escaped(name)}(?![\\w.-])`).test(text)
+const skillDirs = new Map<string, RegExp>()
+const underSkill = (text: string, name: string) => {
+  if (!text.includes('skills/')) return false
+  let re = skillDirs.get(name)
+  if (!re) {
+    re = new RegExp(`skills/${escaped(name)}(?![\\w.-])`)
+    skillDirs.set(name, re)
+  }
+  return re.test(text)
+}
 
 /**
  * Which of `skills` one tool call used, from its tool and uncapped target (`targetText`): a
@@ -202,7 +229,9 @@ const underSkill = (text: string, name: string) =>
  */
 export function skillsUsed(tool: string, target: string, skills: readonly string[]): string[] {
   if (SKILL_LOAD_TOOLS.has(tool)) return skills.filter((s) => isSkill(target, s))
-  const words = SHELL_TOOL.test(tool) ? readWords(commandWords(target)) : [target]
+  const words = SHELL_TOOL.test(tool)
+    ? readWords(commandWords(withoutWrittenText(target)))
+    : [target]
   return skills.filter((s) => words.some((w) => underSkill(w, s)))
 }
 
@@ -224,6 +253,7 @@ export function classifyCall(
     return { class: 'context', files: [] }
   }
   const shell = SHELL_TOOL.test(tool)
+  if (shell) target = withoutWrittenText(target)
   const words = shell ? readWords(commandWords(target)) : [target]
   const files = new Set<string>()
   let context = used.length > 0
