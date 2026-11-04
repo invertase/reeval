@@ -3,7 +3,7 @@
 // egress gateway stays on this machine and reaches the VM through the same SSH connection.
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { controlOptions, privateDir, SSH_OPTIONS } from '@reeval/sandbox-docker'
+import { controlOptions, controlPathFits, privateDir, SSH_OPTIONS } from '@reeval/sandbox-docker'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type ParsedTartHost, parseTartHost, TART_MAX_CONCURRENT } from '../contract/tart.ts'
 import type { TartSandboxDescriptor } from '../types.ts'
@@ -40,12 +40,17 @@ export class TartBusyError extends InfraError {
 
 /**
  * One connection per host, shared by every command reeval runs there, for a minute after the last.
- * Its socket is under ~/.ssh, since macOS caps a socket's path at 104 bytes.
+ * Its socket is in ~/.ssh/reeval, or in /tmp/reeval-<uid> when that isn't private or a long home
+ * takes the path past what a socket allows (104 bytes on macOS). Either directory must be this
+ * user's alone, since ssh trusts whatever listens there; with neither, the commands don't share one.
  */
-const hostControl = () => {
-  const dir = join(homedir(), '.ssh', 'reeval')
-  if (process.platform !== 'win32') privateDir(dir, { make: true })
-  return controlOptions(join(dir, '%C'), 60)
+function hostControl(): string[] {
+  if (process.platform === 'win32') return []
+  for (const dir of [join(homedir(), '.ssh', 'reeval'), `/tmp/reeval-${process.getuid?.()}`]) {
+    const path = join(dir, '%C')
+    if (controlPathFits(path) && privateDir(dir, { make: true })) return controlOptions(path, 60)
+  }
+  return []
 }
 
 /** `~/…` on this machine, which `ssh -i` would also expand, made absolute for messages and traces. */

@@ -1,5 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
-import { mkdirSync, statSync } from 'node:fs'
+import { lstatSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { docker } from '../docker-cli.ts'
 import { type Engine, engineEnv, engineSpec } from '../engine.ts'
@@ -98,7 +98,7 @@ export const SSH_OPTIONS = [
 export function privateDir(dir: string, o: { make?: boolean } = {}): boolean {
   try {
     if (o.make) mkdirSync(dir, { recursive: true, mode: 0o700 })
-    const st = statSync(dir)
+    const st = lstatSync(dir)
     return st.isDirectory() && st.uid === process.getuid?.() && (st.mode & 0o077) === 0
   } catch {
     return false
@@ -106,12 +106,24 @@ export function privateDir(dir: string, o: { make?: boolean } = {}): boolean {
 }
 
 /**
+ * Whether ssh can listen on a control socket at `path` on `platform`. A socket's path has
+ * `sizeof(sun_path)` bytes with its NUL (104 on macOS and the BSDs, 108 on Linux), and the master
+ * first listens on `path` plus a 17-byte random suffix. `%C` expands to a 40-character hash.
+ */
+export function controlPathFits(path: string, platform: NodeJS.Platform = process.platform) {
+  const room = platform === 'linux' ? 108 : 104
+  return Buffer.byteLength(path.replaceAll('%C', 'C'.repeat(40))) + 17 < room
+}
+
+/**
  * The options that share one connection through a control socket at `path`, kept open `persistS`
- * seconds after the last command; none on Windows, whose OpenSSH has no ControlMaster, or when
- * the socket's directory isn't {@link privateDir}. `path` may end in an ssh token such as `%C`.
+ * seconds after the last command; none on Windows, whose OpenSSH has no ControlMaster, when the
+ * path is too long for a socket ({@link controlPathFits}), or when the socket's directory isn't
+ * {@link privateDir}. `path` may end in an ssh token such as `%C`.
  */
 export function controlOptions(path: string | undefined, persistS: number): string[] {
-  if (!path || process.platform === 'win32' || !privateDir(dirname(path))) return []
+  if (!path || process.platform === 'win32' || !controlPathFits(path)) return []
+  if (!privateDir(dirname(path))) return []
   return [
     '-o',
     'ControlMaster=auto',

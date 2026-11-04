@@ -20,6 +20,7 @@ import { describe, test } from 'node:test'
 import { PROXY_PORT, startGateway } from '../src/egress/gateway.ts'
 import {
   containerTransport,
+  controlPathFits,
   type ExecEnd,
   type ExecTransport,
   execRun,
@@ -340,6 +341,22 @@ describe('sshTransport', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test("names no control socket whose path, with the master's suffix, a socket can't hold", () => {
+    // 103 bytes with its NUL on macOS, less the master's 17-byte `.<random>` suffix: 86.
+    const at = (n: number) => `/${'d'.repeat(n - 1)}`
+    assert.ok(controlPathFits(at(86), 'darwin'))
+    assert.ok(!controlPathFits(at(87), 'darwin'))
+    assert.ok(controlPathFits(at(90), 'linux'))
+    assert.ok(!controlPathFits(at(91), 'linux'))
+    // %C is ssh's 40-character hash, counted as ssh expands it.
+    assert.ok(controlPathFits(`${at(45)}/%C`, 'darwin'))
+    assert.ok(!controlPathFits(`${at(46)}/%C`, 'darwin'))
+    assert.ok(!controlPathFits(`/${'é'.repeat(43)}`, 'darwin'), 'bytes, not characters')
+    const long = `/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/${'d'.repeat(40)}/cm`
+    const argv = sshArgv({ ...target, controlPath: long }, 'true')
+    assert.ok(!argv.some((a) => a.startsWith('Control')), argv.join(' '))
   })
 
   test('runs the command as root through sudo, quoted as one remote line', () => {
