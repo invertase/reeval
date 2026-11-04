@@ -88,7 +88,8 @@ const ALWAYS_DENIED = [
 export const isRestricted = (policy: NetworkPolicy) => policy.mode !== 'allow-all'
 
 export type Verdict =
-  | { allowed: true; address: string }
+  /** Every address the name resolved to, all checked, in the resolver's order. */
+  | { allowed: true; addresses: string[] }
   | { allowed: false; reason: string; status: 403 }
   /** The name didn't resolve: no policy refused it. */
   | { allowed: false; reason: string; status: 502; unresolved: true }
@@ -179,8 +180,8 @@ const defaultLookup: Lookup = async (host) =>
 export type PolicyOptions = { lookup?: Lookup; allowLoopback?: boolean }
 
 /**
- * Decides whether `host` may be reached and which address to connect to. The gateway connects
- * to the address it checked, so a DNS answer can't change between the check and the connect.
+ * Decides whether `host` may be reached and which addresses to connect to. The gateway connects
+ * only to the addresses it checked, so a DNS answer can't change between the check and the connect.
  */
 export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions = {}) {
   const lookup = options.lookup ?? defaultLookup
@@ -211,8 +212,7 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
         reason: `can't resolve ${host}: ${(error as Error).message}`,
       }
     }
-    const first = addresses[0]
-    if (!first) {
+    if (!addresses.length) {
       return { allowed: false, status: 502, unresolved: true, reason: `${host} has no addresses` }
     }
     const reached = addresses.flatMap(reaches)
@@ -230,7 +230,7 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
           : `${which} is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it`,
       }
     }
-    if (!custom) return { allowed: true, address: first }
+    if (!custom) return { allowed: true, addresses }
     if (reached.some((a) => inList(deniedCidrs, a))) {
       return { allowed: false, status: 403, reason: `${host} is in a denied range` }
     }
@@ -241,9 +241,9 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
         reason: `${host} resolves to a private address, which a *. pattern doesn't allow; list the host itself`,
       }
     }
-    if (listed) return { allowed: true, address: first }
+    if (listed) return { allowed: true, addresses }
     if (custom.allowedCIDRs?.length && addresses.every((a) => inList(allowedCidrs, a))) {
-      return { allowed: true, address: first }
+      return { allowed: true, addresses }
     }
     return { allowed: false, status: 403, reason: `${host} isn't in the allowlist` }
   }
