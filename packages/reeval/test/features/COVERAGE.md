@@ -182,7 +182,7 @@
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 1 | — | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 2 | — | — | — | — | — |
-| `c.exec(command, { env })`: variables for one command, over the environment's, in the foreground, the background and `expect.poll`; secret-named values masked in everything reeval writes, and a brokered secret's host value sent as its placeholder | ✓ 2 | — | ● 3 | ● 3 | — | — |
+| `c.exec(command, { env })`: variables for one command, over the environment's, in the foreground, the background and `expect.poll`; secret-named values masked in everything reeval writes, and a brokered secret's host value sent as its placeholder | ✓ 3 | — | ● 3 | ● 3 | — | — |
 | `c.exec(command, { retries, interval })`: a non-zero exit runs the command again, each try in the check's record and log, and `passed on try 2 of 3` in the output, `summary.md`, `reeval show` and the studio | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | `expect(await c.exec(…)).toSucceed()` checks the result at once, with no `await` in front of `expect`; only `c.exec()`'s promise makes it async | ✓ 2 | — | ● 1 | ● 1 | — | — |
 | An async matcher the eval doesn't await (`toHaveFile`, `expect(c.exec(…)).toSucceed()`, `.resolves`) fails the attempt, naming the matcher and the eval's line | ✓ 1 | — | ● 1 | ● 1 | — | — |

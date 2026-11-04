@@ -5,7 +5,7 @@ import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { acceptIntoSnapshot } from '../diff.ts'
 import { SUBJECT } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
-import { redactSecrets, registerVariable } from '../redact.ts'
+import { MIN_FRAGMENT, redactSecrets, registerExecEnv } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { BackgroundHandle, ExecEnv, ExecResult, ExecRetry } from '../types.ts'
@@ -22,17 +22,29 @@ export const sandboxFor = async (a: Attempt, who: string): Promise<Sandbox> =>
 /**
  * `c.exec`'s own `env` as the sandbox gets it: each brokered secret's host value in it replaced
  * by that secret's placeholder, so the real value stays on the host and the gateway swaps it back
- * on the secret's hosts, as it does for the environment's variables.
+ * on the secret's hosts, as it does for the environment's variables. A value shorter than
+ * `MIN_FRAGMENT` is only replaced where no letter, digit or `_` touches it, so a short secret (`test`)
+ * can't rewrite a word that holds it (`latest`).
  */
 export function execEnv(a: Attempt, env: ExecEnv | undefined): Record<string, string> {
   if (!env) return {}
   const brokered = (a.env?.substitutions ?? [])
     .filter((s) => s.value.length >= 4)
     .toSorted((x, y) => y.value.length - x.value.length)
+    .map((s) => ({
+      placeholder: s.placeholder,
+      find:
+        s.value.length >= MIN_FRAGMENT
+          ? s.value
+          : new RegExp(
+              `(?<![A-Za-z0-9_])${s.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`,
+              'g',
+            ),
+    }))
   const out: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
     let v = value
-    for (const s of brokered) v = v.replaceAll(s.value, s.placeholder)
+    for (const { find, placeholder } of brokered) v = v.replaceAll(find, () => placeholder)
     out[name] = v
   }
   return out
@@ -106,13 +118,7 @@ export function createChecks(a: Attempt) {
     command: string,
     options?: Options & { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle> {
-    // Before the options are checked, so a refusal that quotes a value masks a secret's.
-    const env: unknown = options?.env
-    if (env && typeof env === 'object') {
-      for (const [name, value] of Object.entries(env)) {
-        if (typeof value === 'string') registerVariable(name, value)
-      }
-    }
+    registerExecEnv(options?.env)
     const problem = options === undefined ? undefined : execOptionsProblem(options)
     if (problem) return Promise.reject(new UsageError(problem))
     if (options?.background) {

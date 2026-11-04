@@ -38,7 +38,7 @@ const verify = await c.exec('node verify.mjs', { env: { EXPECTED: '42' } })
 </Property>
 
 <Property name="options.env" type="Record<string, string>" optional>
-  Variables for this command only, over the environment's. Names are letters, digits and `_`, not starting with a digit. A value whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL` is masked in the record, transcripts, `.reeval/debug` and the output, as a host variable's is. The host value of a secret the environment brokers goes in as that secret's placeholder, which the gateway swaps back on the secret's hosts, so `{ env: { GH_TOKEN: process.env.GITHUB_TOKEN } }` never puts a brokered token's real value in the sandbox.
+  Variables for this command only, over the environment's. A value of 8 or more characters named like a secret (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) is masked, and a brokered secret's host value goes in as its placeholder. A background command's `env` stays readable in `/proc` while it runs.
 </Property>
 
 <Property name="options.retries" type="number" optional>

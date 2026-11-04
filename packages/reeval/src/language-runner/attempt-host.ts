@@ -10,6 +10,7 @@ import {
 } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
+import { registerExecEnv } from '../redact.ts'
 import type {
   AttemptContext,
   BackgroundHandle,
@@ -38,6 +39,9 @@ export async function replyToAttempt(
   request: AttemptRequest,
 ): Promise<AttemptReply> {
   const { id, call } = request
+  const raw = call as { env?: unknown; subject?: { env?: unknown } } | undefined
+  registerExecEnv(raw?.env)
+  registerExecEnv(raw?.subject?.env)
   let problem: string | undefined
   try {
     problem = attemptRequestProblem({ id, call })

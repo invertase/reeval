@@ -1564,7 +1564,11 @@ export const inventory: InventoryFeature[] = [
     area: 'Judges and matchers',
     name: "`c.exec(command, { env })`: variables for one command, over the environment's, in the foreground, the background and `expect.poll`; secret-named values masked in everything reeval writes, and a brokered secret's host value sent as its placeholder",
     fixtures: ['assert/exec-env', 'secrets/exec-env-masked', 'secrets/exec-env-brokered'],
-    unit: ['reeval/test/refusals.test.ts', 'reeval/test/conformance.test.ts'],
+    unit: [
+      'reeval/test/refusals.test.ts',
+      'reeval/test/conformance.test.ts',
+      'reeval/test/exec-env.test.ts',
+    ],
   },
   {
     id: 'assert.exec-retries',

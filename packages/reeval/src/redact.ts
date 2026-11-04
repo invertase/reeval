@@ -113,6 +113,17 @@ export function registerVariable(name: string, value: string): void {
   if (SECRET_NAME.test(name) && value.length >= 8) sandboxVariables.set(value, name)
 }
 
+/**
+ * Registers each string in `c.exec`'s `env` as `registerVariable` does, whatever else it holds:
+ * called before the options are checked, so a refusal that quotes a value masks a secret's.
+ */
+export function registerExecEnv(env: unknown): void {
+  if (!env || typeof env !== 'object') return
+  for (const [name, value] of Object.entries(env)) {
+    if (typeof value === 'string') registerVariable(name, value)
+  }
+}
+
 /** What a found secret is: the variable it's the value of, or the credential shape it has. */
 const DECLARED_RULE = 'a declared secret'
 const valueRule = (name: string) => `the value of ${name}`
