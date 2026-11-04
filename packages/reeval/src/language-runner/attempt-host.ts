@@ -10,6 +10,7 @@ import {
 } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
+import { registerExecEnv } from '../redact.ts'
 import type {
   AttemptContext,
   BackgroundHandle,
@@ -38,6 +39,9 @@ export async function replyToAttempt(
   request: AttemptRequest,
 ): Promise<AttemptReply> {
   const { id, call } = request
+  const raw = call as { env?: unknown; subject?: { env?: unknown } } | undefined
+  registerExecEnv(raw?.env)
+  registerExecEnv(raw?.subject?.env)
   let problem: string | undefined
   try {
     problem = attemptRequestProblem({ id, call })
@@ -71,14 +75,16 @@ async function perform(
       return { turn: data }
     }
     case 'exec': {
+      const env = call.env === undefined ? {} : { env: call.env }
       if (call.background) {
-        const handle = await c.exec(call.command, { background: true })
+        const handle = await c.exec(call.command, { background: true, ...env })
         const handleId = `h${handles.size + 1}`
         handles.set(handleId, handle)
         return { result: { handle: handleId } }
       }
       const { retries, interval } = call
       const result = await c.exec(call.command, {
+        ...env,
         ...(retries === undefined ? {} : { retries }),
         ...(interval === undefined ? {} : { interval }),
       })

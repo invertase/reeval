@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import inspect
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from contextvars import ContextVar
 from datetime import timedelta
 from typing import Any, Literal, NoReturn, Unpack, cast, overload
@@ -132,6 +132,37 @@ def _no_poll_retries(retries: int | None, interval: timedelta | float | None) ->
         )
 
 
+def _exec_env(env: Mapping[str, str] | None) -> dict[str, str] | None:
+    if env is None:
+        return None
+    if not isinstance(env, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise TypeError(
+            f"c.exec(env=…) takes a mapping of names to strings (got {type(env).__name__})"
+        )
+    out: dict[str, str] = {}
+    for name, value in env.items():
+        if not isinstance(name, str) or not isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"c.exec(env=…) takes strings for names and values (got {name!r}: "
+                f"{type(value).__name__})"
+            )
+        out[name] = value
+    return out
+
+
+def _described_exec(
+    command: str,
+    env: Mapping[str, str] | None,
+    retries: int | None,
+    interval: timedelta | float | None,
+) -> Described:
+    _no_poll_retries(retries, interval)
+    variables = _exec_env(env)
+    return Described(
+        {"exec": command} if variables is None else {"exec": command, "env": variables}
+    )
+
+
 PATTERN_ROUNDS = 5
 
 
@@ -161,11 +192,16 @@ class AttemptContext:
 
     @overload
     def exec(
-        self, command: str, *, retries: int | None = None, interval: timedelta | float | None = None
+        self,
+        command: str,
+        *,
+        env: Mapping[str, str] | None = None,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
     ) -> Coroutine[Any, Any, ExecResult]: ...
     @overload
     def exec(
-        self, command: str, *, background: Literal[True]
+        self, command: str, *, background: Literal[True], env: Mapping[str, str] | None = None
     ) -> Coroutine[Any, Any, BackgroundHandle]: ...
     @overload
     def exec(
@@ -173,6 +209,7 @@ class AttemptContext:
         command: str,
         *,
         background: bool,
+        env: Mapping[str, str] | None = None,
         retries: int | None = None,
         interval: timedelta | float | None = None,
     ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]: ...
@@ -182,28 +219,34 @@ class AttemptContext:
         command: str,
         *,
         background: bool = False,
+        env: Mapping[str, str] | None = None,
         retries: int | None = None,
         interval: timedelta | float | None = None,
     ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]:
-        """Run a command in the sandbox; with `background=True`, leave it running. With
-        `retries`, a non-zero exit runs it again, up to that many extra times, `interval`
-        apart (seconds or a timedelta, default 1 second), and it returns the last try."""
+        """Run a command in the sandbox; with `background=True`, leave it running. `env` adds
+        variables for this command only. With `retries`, a non-zero exit runs it again, up to
+        that many extra times, `interval` apart (seconds or a timedelta, default 1 second), and
+        it returns the last try."""
         if _describing.get() is not None and not background:
-            _no_poll_retries(retries, interval)
-            return cast(Any, Described({"exec": command}))
+            return cast(Any, _described_exec(command, env, retries, interval))
         _not_describing("c.exec(…, background=True)")
-        return tracked(self._exec(command, background, retries, interval), "c.exec()")
+        return tracked(
+            self._exec(command, background, _exec_env(env), retries, interval), "c.exec()"
+        )
 
     async def _exec(
         self,
         command: str,
         background: bool,
+        env: dict[str, str] | None,
         retries: int | None,
         interval: timedelta | float | None,
     ) -> ExecResult | BackgroundHandle:
         call: AttemptCallExec = {"op": "exec", "command": command}
         if background:
             call["background"] = True
+        if env is not None:
+            call["env"] = env
         if retries is not None:
             call["retries"] = retries
         if interval is not None:
@@ -369,16 +412,24 @@ class SyncAttemptContext:
 
     @overload
     def exec(
-        self, command: str, *, retries: int | None = None, interval: timedelta | float | None = None
+        self,
+        command: str,
+        *,
+        env: Mapping[str, str] | None = None,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
     ) -> ExecResult: ...
     @overload
-    def exec(self, command: str, *, background: Literal[True]) -> BackgroundHandle: ...
+    def exec(
+        self, command: str, *, background: Literal[True], env: Mapping[str, str] | None = None
+    ) -> BackgroundHandle: ...
     @overload
     def exec(
         self,
         command: str,
         *,
         background: bool,
+        env: Mapping[str, str] | None = None,
         retries: int | None = None,
         interval: timedelta | float | None = None,
     ) -> ExecResult | BackgroundHandle: ...
@@ -388,18 +439,18 @@ class SyncAttemptContext:
         command: str,
         *,
         background: bool = False,
+        env: Mapping[str, str] | None = None,
         retries: int | None = None,
         interval: timedelta | float | None = None,
     ) -> ExecResult | BackgroundHandle:
         """Run a command in the sandbox and wait for it; with `background=True`, leave it
-        running. With `retries`, a non-zero exit runs it again, up to that many extra times,
-        `interval` apart (seconds or a timedelta, default 1 second), and it returns the last
-        try."""
+        running. `env` adds variables for this command only. With `retries`, a non-zero exit
+        runs it again, up to that many extra times, `interval` apart (seconds or a timedelta,
+        default 1 second), and it returns the last try."""
         if _describing.get() is not None and not background:
-            _no_poll_retries(retries, interval)
-            return cast(Any, Described({"exec": command}))
+            return cast(Any, _described_exec(command, env, retries, interval))
         _not_describing("c.exec(…, background=True)")
-        return self._run(self._ctx._exec(command, background, retries, interval))  # pyright: ignore[reportPrivateUsage]
+        return self._run(self._ctx._exec(command, background, _exec_env(env), retries, interval))  # pyright: ignore[reportPrivateUsage]
 
     def read_file(self, path: str) -> str | None:
         """A file's contents in the sandbox, or `None` when there's no such file."""

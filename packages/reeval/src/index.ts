@@ -55,6 +55,7 @@ export type {
   EnvVars,
   EvalFn,
   EvalOptions,
+  ExecEnv,
   ExecResult,
   ExecRetry,
   GroupOptions,

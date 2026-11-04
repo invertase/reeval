@@ -91,14 +91,15 @@ class AttemptCallSend(TypedDict):
     prompt: str
 
 
-# `c.exec(command, { background?, retries?, interval? })`: a command in the sandbox. Replies
-# with its exit code and output (the last try, with `retries`), or with a handle when it runs in
-# the background.
+# `c.exec(command, { background?, env?, retries?, interval? })`: a command in the sandbox.
+# Replies with its exit code and output (the last try, with `retries`), or with a handle when it
+# runs in the background.
 class AttemptCallExec(TypedDict):
     # Leave it running and reply with its handle, not its output.
     background: NotRequired[bool]
     # A shell command, run in the workspace.
     command: str
+    env: NotRequired[ExecEnv]
     # Milliseconds to wait before each extra try. Default 1000.
     interval: NotRequired[float]
     op: Literal["exec"]
@@ -1007,6 +1008,13 @@ class EvalOptionsData2(TypedDict):
 EvalOptionsData: TypeAlias = "EvalOptionsDataCompare | EvalOptionsData2"
 
 
+# Variables `c.exec` sets for one command, over the environment's own. A value whose name looks
+# like a secret's (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) is masked in everything
+# reeval writes, as a host variable's is. The host value of a secret the environment brokers
+# goes in as its placeholder, which the gateway swaps back on that secret's hosts.
+ExecEnv: TypeAlias = "dict[str, str]"
+
+
 class ExecResult(TypedDict):
     exitCode: int
     stderr: str
@@ -1421,6 +1429,7 @@ class MatcherSubjectValue(TypedDict):
 
 
 class MatcherSubjectExec(TypedDict):
+    env: NotRequired[ExecEnv]
     # A command reeval runs, for its `ExecResult`; again on each try when polled.
     exec: str
     # The command's `ExecResult` when the runner already ran it: reeval checks that instead of

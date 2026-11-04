@@ -169,6 +169,10 @@ the last try. Use it for a check that can fail on a transient, such as a test th
 `expect(c.exec("pytest -q tests/hidden", retries=2)).to_succeed()`. Any non-zero exit retries,
 and the record and output say `passed on try 2 of 3`.
 
+`c.exec(cmd, env={"EXPECTED": "42"})` sets variables for that command only, over the
+environment's, in the background and in `expect.poll` too. A value named like a secret
+(`*_TOKEN`, `*_KEY`, …) is masked in everything reeval writes.
+
 `expect.poll` retries a matcher until it passes, every `interval` until `timeout` (one second by
 default). Hand it a function that returns one `c.read_file(…)` or `c.exec(…)`, and reeval reads or
 runs it again on each try; it works the same in both kinds of body. Check the output with the

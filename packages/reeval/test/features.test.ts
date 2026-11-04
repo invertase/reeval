@@ -1127,6 +1127,30 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/exec-env-brokered',
+    tiers: ['fake', 'docker'],
+    env: 'keys',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'Bearer reeval_secret_[0-9A-Za-z]+…' to be 'Bearer \[REDACTED\]…'/,
+    record: ({ runDir }) => {
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'secrets/exec-env-masked',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected '\[REDACTED\]' to be 'not the token'/,
+    record: ({ project, runDir, stdout }) => {
+      const token = ['exec', 'env', '7f3a9c', '41d2b8'].join('-')
+      assert.equal(filesContaining(runDir, token), '')
+      assert.equal(filesContaining(join(project, '.reeval'), token), '')
+      assert.ok(!stdout.includes(token), 'the terminal output has the token')
+      // Twin: the same search finds what was left in its place.
+      assert.notEqual(filesContaining(runDir, '[REDACTED]'), '')
+    },
+  },
+  {
     dir: 'secrets/checks-setup-background',
     tiers: ['docker'],
     env: 'unbrokered',
@@ -2774,6 +2798,12 @@ export const features: Feature[] = [
           ),
         )
     },
+  },
+  {
+    dir: 'assert/exec-env',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected '' to be 'hello'/,
   },
   {
     dir: 'assert/exec-retries',

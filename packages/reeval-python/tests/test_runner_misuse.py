@@ -10,6 +10,7 @@ from stdio_host import Host
 
 EVAL = '''
 import asyncio
+from types import MappingProxyType
 from reeval_python import aio, evaluate, expect
 
 
@@ -99,6 +100,16 @@ def sync_poll_exec_retries(c):
     expect.poll(lambda: c.exec("test -f ready.txt", retries=2)).to_succeed()
 
 
+@evaluate("exec env")
+async def exec_env(c):
+    await c.exec("npm test", env=MappingProxyType({"CI": "1"}))
+
+
+@evaluate("exec env not strings")
+def exec_env_not_strings(c):
+    c.exec("npm test", env={"PORT": 3000})
+
+
 @evaluate("aio expect in sync body")
 def aio_in_sync(c):
     aio.expect(1).to_be(1)
@@ -166,6 +177,20 @@ def test_exec_sends_retries_and_its_interval_in_seconds_as_ms(host: Host) -> Non
     host.done()
     [run] = host.calls()
     assert run == {"op": "exec", "command": "npm test", "retries": 2, "interval": 250}
+
+
+def test_exec_sends_its_env_as_a_plain_object(host: Host) -> None:
+    host.start("exec env")
+    host.done()
+    [run] = host.calls()
+    assert run == {"op": "exec", "command": "npm test", "env": {"CI": "1"}}
+
+
+def test_exec_refuses_an_env_value_that_isnt_a_string_before_running(host: Host) -> None:
+    host.start("exec env not strings")
+    message = host.done()["error"]["message"]
+    assert "c.exec(env=…) takes strings for names and values (got 'PORT': int)" in message
+    assert host.calls() == []
 
 
 def test_exec_refuses_a_negative_interval_before_running(host: Host) -> None:

@@ -1,0 +1,12 @@
+{"case":"exec-env","about":"commands with variables of their own: in the foreground, in the background, and run again by a poll","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/exec-env.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"exec","command":"printf %s \"$GREETING\"","env":{"GREETING":"hello"}}}}
+{"reeval":{"id":"1","ok":true,"op":"exec","result":{"exitCode":0,"stdout":"hello","stderr":""}}}
+{"runner":{"id":"2","call":{"op":"exec","command":"printf %s \"$WHO\" > who.txt","background":true,"env":{"WHO":"background"}}}}
+{"reeval":{"id":"2","ok":true,"op":"exec","result":{"handle":"h1"}}}
+{"runner":{"id":"3","call":{"op":"expect","subject":{"readFile":"who.txt"},"matcher":"toBe","args":["background"],"not":false,"soft":true,"poll":{"interval":50,"timeout":10000}}}}
+{"reeval":{"id":"3","ok":true,"op":"expect","assertion":{"label":"poll.toBe background","labelled":false,"matcher":"poll.toBe","status":"pass","soft":true,"durationMs":0}}}
+{"runner":{"id":"4","call":{"op":"expect","subject":{"exec":"test \"$WHO\" = polled","env":{"WHO":"polled"}},"matcher":"toSucceed","args":[],"not":false,"soft":true,"poll":{"timeout":10000}}}}
+{"reeval":{"id":"4","ok":true,"op":"expect","assertion":{"label":"poll.toSucceed test \"$WHO\" = polled","labelled":false,"matcher":"poll.toSucceed","status":"pass","soft":true,"durationMs":0}}}
+{"runner":{"type":"done"}}
+{"record":{"outcome":"pass","error":null,"assertions":[{"label":"poll.toBe background","labelled":false,"matcher":"poll.toBe","status":"pass","soft":true,"durationMs":0},{"label":"poll.toSucceed test \"$WHO\" = polled","labelled":false,"matcher":"poll.toSucceed","status":"pass","soft":true,"durationMs":0}],"judgements":[],"checks":[{"command":"printf %s \"$GREETING\"","exitCode":0},{"command":"test \"$WHO\" = polled","exitCode":0}]}}

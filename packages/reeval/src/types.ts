@@ -98,6 +98,14 @@ export type ExecRetry = {
   interval?: number
 }
 
+/**
+ * Variables `c.exec` sets for one command, over the environment's own. A value whose name looks
+ * like a secret's (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) is masked in everything
+ * reeval writes, as a host variable's is. The host value of a secret the environment brokers
+ * goes in as its placeholder, which the gateway swaps back on that secret's hosts.
+ */
+export type ExecEnv = Record<string, string>
+
 /** One run of a `c.exec` command that had `retries`. */
 export type ExecTry = { exitCode: number; durationMs: number }
 
@@ -334,7 +342,7 @@ export type TurnData = {
 
 export type Turn = TurnData & {
   /** Runs in the eval's sandbox. Same as `c.exec`. */
-  exec(command: string, options?: ExecRetry): Promise<ExecResult>
+  exec(command: string, options?: ExecRetry & { env?: ExecEnv }): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
 }
 
@@ -532,13 +540,17 @@ export type AttemptContext = {
   judge(question: string, options: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   /**
    * Runs `command` in the sandbox. With `retries`, a non-zero exit runs it again, up to that
-   * many extra times, `interval` ms apart; it resolves with the last try.
+   * many extra times, `interval` ms apart; it resolves with the last try. `env` adds variables
+   * for this command only.
    */
-  exec(command: string, options?: ExecRetry & { background?: false }): Promise<ExecResult>
-  exec(command: string, options: { background: true }): Promise<BackgroundHandle>
   exec(
     command: string,
-    options?: ExecRetry & { background?: boolean },
+    options?: ExecRetry & { env?: ExecEnv; background?: false },
+  ): Promise<ExecResult>
+  exec(command: string, options: { background: true; env?: ExecEnv }): Promise<BackgroundHandle>
+  exec(
+    command: string,
+    options?: ExecRetry & { env?: ExecEnv; background?: boolean },
   ): Promise<ExecResult | BackgroundHandle>
   /**
    * Starts `command` in the background with `PORT` set to `port`, or to a port reeval allocates,
