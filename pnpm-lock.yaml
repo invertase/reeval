@@ -770,7 +770,7 @@ importers:
         specifier: 2.4.0
         version: 2.4.0
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.14
+        specifier: workspace:0.1.15
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.11
@@ -779,13 +779,13 @@ importers:
         specifier: workspace:0.1.8
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
-        specifier: workspace:0.1.8
+        specifier: workspace:0.1.9
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.13
+        specifier: workspace:0.1.14
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.10
+        specifier: workspace:0.1.11
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.16
@@ -826,7 +826,7 @@ importers:
         specifier: 1.0.2
         version: 1.0.2
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.14
+        specifier: workspace:0.1.15
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.11
@@ -835,13 +835,13 @@ importers:
         specifier: workspace:0.1.8
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
-        specifier: workspace:0.1.8
+        specifier: workspace:0.1.9
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.13
+        specifier: workspace:0.1.14
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.10
+        specifier: workspace:0.1.11
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.16

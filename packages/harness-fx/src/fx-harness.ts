@@ -10,9 +10,11 @@ import { FX_BUILTIN_TOOLS, type FxBuiltinTools } from './fx-tools.ts'
 export const FX_HARNESS_ID = 'fx'
 /** The fx release the bootstrap installs, checked against its published sha256s. */
 export const FX_CLI_VERSION = '0.0.14'
+/** Linux's build for each arch, and macOS's for Apple Silicon (a Tart VM). */
 export const FX_CLI_SHA256 = {
   x86_64: '731c1914fc2d497a10583f4416f8382c192e4897d6a0b4f713d6194455a8548b',
   aarch64: '9f5cfbac1728fffddc2d5d874d1f7fe8d34f179e1bc86fb2e67a6e75074e53f3',
+  'darwin-aarch64': '619c6dccf4e8cd6290ec4a052d29c8724b2a4b150d893435b3de9086c21fb7b1',
 } as const
 
 /**
@@ -158,13 +160,17 @@ for _ in $(seq 100); do [ -e "$ready" ] && break; sleep 0.05; done
 exec "$bin/fx" acp
 `
 
-/** Downloads the pinned release for the sandbox's arch and checks its sha256, and writes the relay. */
-export const FX_INSTALL_COMMAND = `case "$(uname -m)" in
-  x86_64|amd64) arch=x86_64 sha=${FX_CLI_SHA256.x86_64} ;;
-  aarch64|arm64) arch=aarch64 sha=${FX_CLI_SHA256.aarch64} ;;
-  *) echo "fx has no release for $(uname -m)" >&2; exit 1 ;;
+/**
+ * Downloads the pinned release for the sandbox's OS and arch and checks its sha256, and writes
+ * the relay.
+ */
+export const FX_INSTALL_COMMAND = `case "$(uname -s) $(uname -m)" in
+  "Linux x86_64"|"Linux amd64") build=linux-x86_64 sha=${FX_CLI_SHA256.x86_64} ;;
+  "Linux aarch64"|"Linux arm64") build=linux-aarch64 sha=${FX_CLI_SHA256.aarch64} ;;
+  "Darwin arm64") build=macos-aarch64 sha=${FX_CLI_SHA256['darwin-aarch64']} ;;
+  *) echo "fx has no release for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
-curl -fsSL --retry 3 -o fx.tar.gz "https://github.com/vercel-labs/fx/releases/download/v${FX_CLI_VERSION}/fx-linux-$arch.tar.gz"
+curl -fsSL --retry 3 -o fx.tar.gz "https://github.com/vercel-labs/fx/releases/download/v${FX_CLI_VERSION}/fx-$build.tar.gz"
 node -e 'const h = require("crypto").createHash("sha256").update(require("fs").readFileSync("fx.tar.gz")).digest("hex"); if (h !== process.argv[1]) { console.error("fx.tar.gz does not match its sha256"); process.exit(1) }' "$sha"
 mkdir -p "$HOME/.local/bin"
 tar -xzf fx.tar.gz -C "$HOME/.local/bin" fx
