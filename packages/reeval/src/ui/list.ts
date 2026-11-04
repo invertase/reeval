@@ -296,9 +296,15 @@ export class LiveList {
   readonly #evals = new Map<string, LiveEval>()
   readonly #byKey = new Map<string, LiveAttempt>()
   readonly #harness: string
+  #planned = 0
 
   constructor(harness: string) {
     this.#harness = harness
+  }
+
+  /** The plan's eval count, so the total holds from the start while files are still collected. */
+  planned(evals: number) {
+    this.#planned = evals
   }
 
   collected(file: string, evals: CollectedEval[]) {
@@ -380,8 +386,9 @@ export class LiveList {
   }
 
   /**
-   * Evals with every attempt ended, and evals in all; of the ended ones, those that failed, and of
-   * the rest, those with a run that already failed (`failing`), which isn't their outcome yet.
+   * Evals with every attempt ended, and evals in all (the plan's, or as many as were collected
+   * when that's more); of the ended ones, those that failed, and of the rest, those with a run
+   * that already failed (`failing`), which isn't their outcome yet.
    */
   counts(): { done: number; total: number; running: number; failed: number; failing: number } {
     const rows = [...this.#evals.values()].map((e) => this.#row(e).icon)
@@ -390,7 +397,7 @@ export class LiveList {
       e.attempts.every((a) => a.state !== 'queued' && a.state !== 'running')
     return {
       done: all.filter(finished).length,
-      total: all.length,
+      total: Math.max(this.#planned, all.length),
       running: all.filter((e) => e.attempts.some((a) => a.state === 'running')).length,
       failed: rows.filter((i) => i === 'fail').length,
       failing: rows.filter((i) => i === 'failing').length,

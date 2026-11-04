@@ -1198,3 +1198,20 @@ test('ui/ never imports Vitest', () => {
     assert.doesNotMatch(readFileSync(join(dir, file), 'utf8'), /from ['"]vitest/, file)
   }
 })
+
+test('progress counts against the planned total while later files are still to be collected', () => {
+  const planned = planEvent({
+    header: { ...header, evals: 4, attempts: 4 },
+    warnings: [],
+    hints: [],
+  })
+  const events = [interleaved[0] as ReevalEvent, planned, ...interleaved.slice(1)]
+  const beats = render(events, options({ outputLogs: 'none' }))
+    .split('\n')
+    .filter((line) => line.startsWith('…'))
+  assert.equal(beats[0], '… 0 of 4 evals done (1m 00s)')
+  assert.equal(beats.at(-1), '… 1 of 4 evals done (6m 00s)')
+  const status = render(events, options({ statusLine: true, outputLogs: 'none' }))
+  assert.ok(status.includes('\r\x1b[2K4 evals · 0/4 tries'), status)
+  assert.doesNotMatch(status, /2 evals · \d\/2 tries/)
+})
