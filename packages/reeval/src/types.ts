@@ -3109,8 +3109,8 @@ export type EvalPlan = {
   sandboxWarnings: SandboxWarning[]
   /** Secrets any of its attempts brokers, as `NAME → host, host`. */
   brokered: string[]
-  /** Each distinct restricted egress policy its attempts run under, as the plan prints it. */
-  egress: string[]
+  /** Each distinct egress policy its attempts run under, by environment and harness. */
+  egress: PlanEgress[]
   /** Each distinct git workspace its attempts start from, as `repo#ref:path`. */
   workspaces: string[]
   /** Resolved camera defaults when any field is set. */
@@ -3141,6 +3141,15 @@ export type SandboxWarning = {
 
 /** One phase's egress policy, and the hosts a restricted one allows on top of its own. */
 export type PlannedPhaseEgress = { policy: EgressPolicy; auto: string[] }
+
+/** One environment's egress on one harness, as the `--dry-run` table prints it. */
+export type PlanEgress = {
+  environment: string
+  harness: string
+  /** The policy as the plan prints it (`proxy` for the default), without the automatic hosts. */
+  policy: string
+  auto: string[]
+}
 
 /**
  * An attempt's egress: the agent phase's policy (the harness's start, its turns and the checks),

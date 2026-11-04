@@ -3,6 +3,7 @@ import { acrossOf, type PairAttempt, pairFactors, pairsOf, plannedSides } from '
 import { questionShows, resolveQuestionState } from './compare/state.ts'
 import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
+import { NO_ENVIRONMENT } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
 import { noDefaultEffort } from './harness/default-effort.ts'
@@ -566,6 +567,7 @@ function bestOfRange(p: EvalPlan, attempts: number): string {
  */
 export function planTable(plan: RunPlan, todos: readonly string[] = []): string[] {
   const header = ['eval', 'harnesses', 'variants', 'runs', 'attempts', 'notes']
+  const egress = egressByEnvironment(plan.rows.filter((m) => !m.plan.skip))
   const groups = evalUnits(plan.rows).map((members) => ({
     id: (members[0] as PlanRow).family?.id ?? (members[0] as PlanRow).id,
     members,
@@ -600,7 +602,7 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
         ...pooled,
         ...p.notes,
         p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
-        p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
+        rowEgress(live, egress),
         p.workspaces.length ? `workspace: ${p.workspaces.join('; ')}` : '',
       ]
         .filter(Boolean)
@@ -620,7 +622,63 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       const g = groups[i]
       return [line(row), ...(g ? questionLines(g.members, plan.questionModel) : [])]
     }),
+    ...egressLines(egress),
   ]
+}
+
+/** Each environment's egress policies (the default `proxy` included) and its automatic hosts by harness. */
+type EnvironmentEgress = { policies: Set<string>; auto: Map<string, Set<string>> }
+
+function egressByEnvironment(rows: readonly PlanRow[]): Map<string, EnvironmentEgress> {
+  const out = new Map<string, EnvironmentEgress>()
+  for (const e of rows.flatMap((r) => r.plan.egress)) {
+    const env = out.get(e.environment) ?? { policies: new Set(), auto: new Map() }
+    out.set(e.environment, env)
+    env.policies.add(e.policy)
+    const auto = env.auto.get(e.harness) ?? new Set()
+    env.auto.set(e.harness, auto)
+    for (const host of e.auto) auto.add(host)
+  }
+  for (const [name, env] of out)
+    if (env.policies.size === 1 && env.policies.has('proxy')) out.delete(name)
+  return out
+}
+
+/**
+ * A row's egress note: only for an environment whose policy differs between evals, since
+ * {@link egressLines} prints one that doesn't once for the whole plan.
+ */
+function rowEgress(rows: readonly PlanRow[], egress: Map<string, EnvironmentEgress>): string {
+  const varying = rows
+    .flatMap((r) => r.plan.egress)
+    .filter((e) => (egress.get(e.environment)?.policies.size ?? 0) > 1)
+  const policies = [...new Set(varying.map((e) => e.policy))]
+  return policies.length ? `egress: ${policies.join('; ')}` : ''
+}
+
+/**
+ * `egress  lib  allow registry.npmjs.org` once per environment with a restricted policy, then
+ * the hosts reeval adds to it, by harness where they differ.
+ */
+function egressLines(egress: Map<string, EnvironmentEgress>): string[] {
+  const label = (name: string) => (name === NO_ENVIRONMENT ? '(no environment)' : name)
+  const width = Math.max(0, ...[...egress.keys()].map((n) => label(n).length))
+  return [...egress].flatMap(([name, env]) => {
+    const policy = env.policies.size === 1 ? [...env.policies][0] : 'set per eval (see its notes)'
+    const byHosts = new Map<string, string[]>()
+    for (const [harness, hosts] of env.auto) {
+      if (!hosts.size) continue
+      const key = [...hosts].join(', ')
+      byHosts.set(key, [...(byHosts.get(key) ?? []), harness])
+    }
+    const indent = ' '.repeat('egress  '.length + width + 2)
+    const auto = [...byHosts].map(([hosts, harnesses]) =>
+      byHosts.size === 1 && harnesses.length === env.auto.size
+        ? `${indent}+ auto: ${hosts}`
+        : `${indent}+ auto on ${harnesses.join(', ')}: ${hosts}`,
+    )
+    return [`egress  ${label(name).padEnd(width)}  ${policy}`, ...auto]
+  })
 }
 
 export type PlanCell = Cell & {

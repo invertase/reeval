@@ -1215,9 +1215,51 @@ evaluate('uses it', { environments: env${options ?? ''} }, async () => {})
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /egress: deny-all \+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com, events\.example\.com$/m,
+      /^egress {2}services {2}deny-all\n {18}\+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com, events\.example\.com$/m,
     )
-    assert.match(r.stdout, /egress: allow api\.example\.com \+ auto: uploads\.example\.com/)
+    assert.match(
+      r.stdout,
+      /^egress {2}listed {4}allow api\.example\.com\n {18}\+ auto: uploads\.example\.com$/m,
+    )
+    assert.doesNotMatch(r.stdout, /egress: /, 'one policy per environment stays off the rows')
+  })
+
+  test("the text plan prints an environment's policy once, not on every row and harness", async () => {
+    const p = await project('egress-once', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { claudeCode, cursor } from 'reeval/harness'
+export default defineConfig({
+  harnesses: [cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-sonnet-5-5' })],
+})
+`,
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const lib = defineEnvironment('lib', {
+  sandbox: docker(),
+  egress: { allow: ['registry.npmjs.org', 'pypi.org'] },
+})
+const mixed = defineEnvironment('mixed', {
+  sandbox: docker(),
+  egress: { allow: ['example.com'] },
+})
+for (const name of ['one', 'two', 'three'])
+  evaluate(name, { environments: lib, runs: 1 }, async () => {})
+evaluate('kept', { environments: mixed, runs: 1 }, async () => {})
+evaluate('own', { environments: mixed, runs: 1, egress: 'deny-all' }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'], { env: NO_DOCKER })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(r.stdout.split('registry.npmjs.org, pypi.org').length - 1, 1, r.stdout)
+    assert.match(r.stdout, /^egress {2}lib {4}allow registry\.npmjs\.org, pypi\.org$/m)
+    assert.match(
+      r.stdout,
+      /^ {15}\+ auto on cursor:composer-2\.5: api2\.cursor\.sh, \*\.cursor\.sh$/m,
+    )
+    assert.doesNotMatch(r.stdout, /› one .*egress/)
+    assert.match(r.stdout, /^egress {2}mixed {2}set per eval \(see its notes\)$/m)
+    assert.match(r.stdout, /› kept .*egress: allow example\.com$/m)
+    assert.match(r.stdout, /› own .*egress: deny-all$/m)
   })
 
   test("a cell filter narrows each row's counts in the text plan, not only the totals", async () => {
