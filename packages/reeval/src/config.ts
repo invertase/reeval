@@ -918,9 +918,13 @@ export function missingCredentials(
   }
   // A harness that takes any one of several keys (Claude Code's API key or subscription token)
   // names them all.
-  const harnesses = options.harnesses ?? config.harness
-  const keys = new Set(harnesses.flatMap((h) => harnessCredentials(h).join(' or ') || []))
-  for (const key of keys) if (!key.split(' or ').some((k) => env[k])) missing.push(key)
+  const keys = new Map(
+    (options.harnesses ?? config.harness)
+      .map(harnessCredentials)
+      .filter((names) => names.length > 0)
+      .map((names) => [names.join(' or '), names]),
+  )
+  for (const [line, names] of keys) if (!names.some((k) => env[k])) missing.push(line)
   const judge = runJudgeModel(config, options.profile)
   const models = [
     ...(typeof judge === 'string'
