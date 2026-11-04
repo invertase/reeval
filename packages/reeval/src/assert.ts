@@ -250,13 +250,17 @@ function checkRunMatch(match: Record<string, unknown>): RunMatch {
   return match as RunMatch
 }
 
-/** `toHaveRun({ program, args })`'s default label: `genkit /^flow:run\b/`. */
+/**
+ * `toHaveRun({ program, args })`'s default label, `program genkit args /^flow:run\b/`: unlike
+ * `toHaveRun('genkit')`'s, so switching an eval to the object form starts a new history key.
+ */
 export function runMatchLabel(match: unknown): string | undefined {
   if (!isObjectLike(match) || match instanceof RegExp || !isPatternArg(match.program)) {
     return undefined
   }
   const { program, args } = match
-  return isPatternArg(args) ? `${String(program)} ${String(args)}` : String(program)
+  const programPart = `program ${String(program)}`
+  return isPatternArg(args) ? `${programPart} args ${String(args)}` : programPart
 }
 
 function ranProgram(transcript: TranscriptEvent[], match: RunMatch): Result {

@@ -505,7 +505,7 @@ describe('one matcher table', () => {
     const passed = recorded(await expectCall(c, calls, call({ npm: true }, { test: true })))
     assert.deepEqual(
       { status: passed.status, label: passed.label },
-      { status: 'pass', label: "toHaveRun re.compile('^np') re.compile('^t')" },
+      { status: 'pass', label: "toHaveRun program re.compile('^np') args re.compile('^t')" },
     )
   })
 

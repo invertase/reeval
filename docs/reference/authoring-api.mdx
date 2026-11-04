@@ -211,7 +211,7 @@ Each command line gives one entry per segment, read the way [`toHaveRun()`](/ref
 </Property>
 
 <Property name="ok" type="boolean | null" required>
-  Whether the shell call succeeded, or `null` when the harness never reported its result. It's the call's result, so every segment of one line has the same `ok`.
+  Whether the shell call succeeded, or `null` when the harness never reported its result. It's the whole call's result, not the program's, so every segment of one line has the same `ok`: in `cd missing && genkit start`, `genkit` has `ok: false` though it never ran.
 </Property>
 
 <Property name="turn" type="number" required>

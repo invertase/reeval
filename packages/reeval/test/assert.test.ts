@@ -237,8 +237,11 @@ describe('ran', () => {
   })
 
   test('runMatchLabel names the program and its args', () => {
-    assert.equal(runMatchLabel({ program: 'genkit', args: /^flow:run\b/ }), 'genkit /^flow:run\\b/')
-    assert.equal(runMatchLabel({ program: /gen/ }), '/gen/')
+    assert.equal(
+      runMatchLabel({ program: 'genkit', args: /^flow:run\b/ }),
+      'program genkit args /^flow:run\\b/',
+    )
+    assert.equal(runMatchLabel({ program: /gen/ }), 'program /gen/')
     assert.equal(runMatchLabel('genkit'), undefined)
     assert.equal(runMatchLabel(/genkit/), undefined)
   })

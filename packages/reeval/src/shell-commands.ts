@@ -1,6 +1,6 @@
 // The programs a shell command line runs, for `toHaveRun({ program })` and `shellCommands`:
 // shell-quote's words and operators, with a fixed list of wrappers unwrapped on top. Aliases,
-// functions and heredocs aren't followed.
+// functions and backticks aren't followed.
 import { parse } from 'shell-quote'
 import { isObjectLike } from './object.ts'
 import type { AttemptContext, TranscriptEvent, Turn } from './types.ts'
@@ -41,27 +41,63 @@ export const commandOf = (event: ToolEvent): string => {
 /** Operators that end a segment. `(` and `)` do too, so a subshell's or `$(…)`'s commands count. */
 const SEPARATORS = new Set(['&&', '||', ';', ';;', '|', '|&', '&', '(', ')'])
 
+/** A line break, as `shellText` hands it to shell-quote: `;;` ends a segment and survives in quotes. */
+const LINE_BREAK = '\n;;'
+
+const HEREDOC = /(?<!<)<<-?[ \t]*(['"]?)([A-Za-z_][\w.-]*)\1/g
+
+/** The line without its heredocs' bodies, which are text, not commands. */
+function withoutHeredocs(line: string): string {
+  const lines = line.split('\n')
+  const kept: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    kept.push(lines[i] as string)
+    for (const [, , end] of (lines[i] as string).matchAll(HEREDOC)) {
+      do i++
+      while (i < lines.length && (lines[i] as string).replace(/^\t+/, '') !== end)
+    }
+  }
+  return kept.join('\n')
+}
+
+/**
+ * The line as shell-quote should read it, where it reads a shell differently: a line break ends
+ * a segment, a `\` continuation joins its lines, the `2` of `2>&1` is no word, and a `#` inside
+ * a word (`http://host/#top`) starts no comment. Rewritten in quotes too; `words` undoes it there.
+ */
+const shellText = (line: string) =>
+  withoutHeredocs(line)
+    .replace(/\\\n/g, '')
+    .replace(/(^|[\s;&|()])\d+(?=[<>])/g, '$1')
+    .replace(/(?<=[^\s;&|()])#/g, '\\#')
+    .replace(/\n/g, LINE_BREAK)
+
+const word = (token: string) => token.replaceAll(LINE_BREAK, '\n').replaceAll('\\#', '#')
+
 /**
  * The command line's words, a list per segment, as shell-quote reads them: variables stay as
- * written, a glob is its pattern, a redirection drops its target, and a comment ends the line.
+ * written, a glob is its pattern, a redirection drops its target, and a comment runs to the end
+ * of its line.
  */
-function segments(line: string): string[][] {
+function words(text: string): string[][] {
   const out: string[][] = [[]]
   let redirect = false
-  for (const token of parse(line, (name) => `$${name}`)) {
-    const words = out.at(-1) as string[]
-    if (typeof token === 'string') {
-      if (!redirect) words.push(token)
+  for (const token of parse(text, (name) => `$${name}`)) {
+    const current = out.at(-1) as string[]
+    if (typeof token === 'string' || ('op' in token && token.op === 'glob')) {
+      if (!redirect) current.push(word(typeof token === 'string' ? token : token.pattern))
       redirect = false
-    } else if ('comment' in token) break
-    else if (token.op === 'glob') {
-      if (!redirect) words.push(token.pattern)
-      redirect = false
+    } else if ('comment' in token) {
+      const next = token.comment.indexOf(LINE_BREAK)
+      if (next !== -1) out.push(...words(token.comment.slice(next + LINE_BREAK.length)))
+      break
     } else if (SEPARATORS.has(token.op)) out.push([])
     else redirect = true
   }
-  return out.filter((words) => words.length > 0)
+  return out.filter((w) => w.length > 0)
 }
+
+const segments = (line: string) => words(shellText(line))
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const DURATION = /^\d+(\.\d+)?[smhd]?$/
@@ -86,8 +122,9 @@ const YARN_FLAGS = set('--cwd', '-p', '--package')
 
 /**
  * Where a wrapper's command starts, or undefined when `words[i]` isn't a wrapper: the env
- * assignments, `env`, `timeout`, `time`, `exec`, `sudo`, and the package runners `npx`,
- * `bunx`, `npm exec` (`npm x`), `pnpm exec`, `pnpm dlx` and `yarn dlx`, each with its flags.
+ * assignments, `env`, `timeout`, `time`, `exec`, `sudo`, `nohup`, `nice`, `command` (not
+ * `command -v`), and the package runners `npx`, `bunx`, `npm exec` (`npm x`), `pnpm exec`,
+ * `pnpm dlx` and `yarn dlx`, each with its flags.
  */
 function unwrap(words: string[], i: number): { next: number; runner: boolean } | undefined {
   const name = basename(words[i] as string)
@@ -107,6 +144,14 @@ function unwrap(words: string[], i: number): { next: number; runner: boolean } |
       return { next: flags(), runner: false }
     case 'exec':
       return { next: flags(set('-a')), runner: false }
+    case 'nohup':
+      return { next: flags(), runner: false }
+    case 'nice':
+      return { next: flags(set('-n', '--adjustment')), runner: false }
+    case 'command':
+      // `command -v genkit` looks the program up without running it.
+      if (/^-[a-zA-Z]*[vV]/.test(words[i + 1] ?? '')) return undefined
+      return { next: flags(), runner: false }
     case 'sudo':
       return {
         next: flags(set('-u', '--user', '-g', '--group', '-p', '--prompt', '-C', '-D', '--chdir')),
@@ -144,10 +189,32 @@ function programName(word: string, runner: boolean): string {
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
 const COMMAND_FLAG = /^-[a-z]*c[a-z]*$/
 
+/** A shell's `-c` script, after the shell's other options (`bash -e -o pipefail -c '…'`). */
+function scriptOf(args: string[]): string | undefined {
+  let command = false
+  let j = 0
+  while (j < args.length && /^[-+]./.test(args[j] as string)) {
+    if (args[j] === '--') {
+      j++
+      break
+    }
+    if (COMMAND_FLAG.test(args[j] as string)) command = true
+    j += /^[-+][oO]$/.test(args[j] as string) ? 2 : 1
+  }
+  return command ? args[j] : undefined
+}
+
+/** Reserved words before a command, which run it: `then genkit`, `! genkit`, `{ genkit; }`. */
+const KEYWORDS = set('!', '{', 'if', 'then', 'else', 'elif', 'while', 'until', 'do')
+/** Segments that run nothing: a block's end, or a `for`, `case` or `select` header. */
+const NOT_A_COMMAND = set('}', 'fi', 'done', 'esac', 'for', 'case', 'select', 'function')
+
 function parseSegment(words: string[]): ParsedCommand[] {
   let i = 0
   let runner = false
   let wrapper = -1
+  while (i < words.length && KEYWORDS.has(words[i] as string)) i++
+  if (NOT_A_COMMAND.has(words[i] as string)) return []
   for (;;) {
     while (i < words.length && ASSIGNMENT.test(words[i] as string)) i++
     if (i >= words.length) break
@@ -165,9 +232,8 @@ function parseSegment(words: string[]): ParsedCommand[] {
   const program = programName(words[i] as string, runner)
   const args = words.slice(i + 1)
   // `bash -lc '<script>'`, as Codex runs every command: the script's programs ran.
-  if (!runner && SHELLS.has(program) && COMMAND_FLAG.test(args[0] ?? '') && args[1] !== undefined) {
-    return parseCommandLine(args[1])
-  }
+  const script = !runner && SHELLS.has(program) ? scriptOf(args) : undefined
+  if (script !== undefined) return parseCommandLine(script)
   return [{ program, args }]
 }
 
@@ -194,7 +260,7 @@ type ShellSubject =
 /**
  * The programs the agent ran from its shell calls (the tools named `bash` or `shell`), in order:
  * one per segment of each command line, after its env assignments, `env`, `timeout`, `time`,
- * `exec`, `sudo`, `bash -c` and package runners (`npx`, `bunx`, `npm exec`, `pnpm exec`,
+ * `exec`, `sudo`, `nohup`, `nice`, `command`, `bash -c` and package runners (`npx`, `bunx`, `npm exec`, `pnpm exec`,
  * `pnpm dlx`, `yarn dlx`). Takes a turn from `c.send()`, a list of turns, or `c`.
  */
 export function shellCommands(subject: ShellSubject | AttemptContext): ShellCommand[] {
