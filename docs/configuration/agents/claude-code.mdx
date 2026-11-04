@@ -7,7 +7,7 @@ description: "The Claude Code harness runs Claude Code in the sandbox on an Anth
 
 ## `ANTHROPIC_API_KEY`
 
-`claudeCode()` reads `ANTHROPIC_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+`claudeCode()` reads `ANTHROPIC_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when neither it nor [`CLAUDE_CODE_OAUTH_TOKEN`](#claudecodeoauthtoken) is set, or when the value it uses contains whitespace or a line break.
 
 The gateway swaps the key in only on these requests to `api.anthropic.com`:
 
@@ -32,7 +32,13 @@ For more information about the variable, see [`ANTHROPIC_API_KEY`](/reference/en
 CLAUDE_CODE_OAUTH_TOKEN=replace-with-your-token
 ```
 
-A run exits with code 2 when neither variable is set. When both are set, `ANTHROPIC_API_KEY` wins. The gateway swaps the token in as a Bearer token on the same endpoints as the key. `ANTHROPIC_AUTH_TOKEN` doesn't count: `api.anthropic.com` doesn't accept a gateway's token.
+The gateway swaps the token in as a Bearer token on the same endpoints as the key. `ANTHROPIC_AUTH_TOKEN` doesn't count: `api.anthropic.com` doesn't accept a gateway's token.
+
+When both are set, `ANTHROPIC_API_KEY` wins, and `reeval doctor` says so. A judge or analysis model on `anthropic/` still needs `ANTHROPIC_API_KEY`, so setting it for them moves the harness off the subscription too.
+
+<Warning>
+Subscription tokens are meant for personal use. Using one through reeval is at your own risk under [Anthropic's terms](https://code.claude.com/docs/en/legal-and-compliance), and heavy or parallel runs may hit your plan's limits. For a team or CI, use `ANTHROPIC_API_KEY`.
+</Warning>
 
 When the API rejects the token, the attempt is an infra error whose message begins with `The API rejected CLAUDE_CODE_OAUTH_TOKEN: set a valid key in the environment or .env.local`.
 
