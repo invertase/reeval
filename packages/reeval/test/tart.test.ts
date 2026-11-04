@@ -174,6 +174,23 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     })
   })
 
+  test("fails a harness that trusts only the keychain when the gateway's CA can't go there", async () => {
+    await withEnv({ FAKE_TART_NO_TRUST: '1' }, async () => {
+      const box = await createTartSandbox(vm(), options())
+      await box.destroy()
+      await assert.rejects(
+        createTartSandbox(vm(), options({ keychainTrust: true })).then(async (started) => {
+          await started.destroy()
+          return started
+        }),
+        /^InfraError: This harness's CLI trusts only the macOS keychain, .*The authorization was denied since no user interaction was possible.*com\.apple\.trust-settings\.admin allow$/,
+      )
+      assert.deepEqual(vms(), [], 'and the clone is deleted')
+    })
+    const box = await createTartSandbox(vm(), options({ keychainTrust: true }))
+    await box.destroy()
+  })
+
   test("gives a real harness the VM as its session, in the image user's home", async () => {
     const env = { A: 'eval', HTTPS_PROXY: 'http://eval.example:1' }
     const box = await createTartSandbox(vm(), options({ env }))

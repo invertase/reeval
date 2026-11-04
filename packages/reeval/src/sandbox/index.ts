@@ -17,6 +17,8 @@ export type SandboxOptions = {
   hosts?: readonly PreparedHost[]
   /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
   brokering?: Brokering
+  /** The harness's CLI trusts only the keychain's CAs on macOS (its catalog's `keychainTrust`). */
+  keychainTrust?: boolean
   /** Hosts the harness always tries: refused requests to them are traced, not logged each time. */
   expectedBlocked?: readonly string[]
   /** User secrets the Docker egress gateway brokers; none is swapped in until `setSubstitutions`. */

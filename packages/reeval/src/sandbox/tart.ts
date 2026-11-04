@@ -505,6 +505,13 @@ export async function createTartSandbox(
         : `the gateway CA isn't in the System keychain after ${((Date.now() - trustStarted) / 1000).toFixed(1)}s (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
     )
     if (signal.aborted) return fail(signal.reason)
+    if (trusted.exitCode !== 0 && options.keychainTrust) {
+      return fail(
+        new InfraError(
+          `This harness's CLI trusts only the macOS keychain, and sudo security add-trusted-cert couldn't add the egress gateway's CA to ${vm}'s System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}). In the image, allow it without a prompt: sudo security authorizationdb write com.apple.trust-settings.admin allow`,
+        ),
+      )
+    }
     const bundle = posix.join(stateDir, 'ca-bundle.pem')
     const bundled = await runIn(guest, ['/bin/sh', '-c', CA_BUNDLE_SCRIPT, 'sh', bundle], {
       signal,
