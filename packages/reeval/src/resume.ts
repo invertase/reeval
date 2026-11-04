@@ -10,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
@@ -349,6 +349,14 @@ async function readScratch(root: string, runId: string): Promise<RunRecord | nul
   }
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
 async function listCandidates(root: string, now = Date.now()): Promise<Candidate[]> {
   const found = new Map<string, Candidate>()
   const stagingRoot = join(root, '.reeval', 'staging')
@@ -358,7 +366,7 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     const info = await stat(dir).catch(() => null)
     if (!info?.isDirectory()) continue
     const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
-    const progress = text ? readableLiveProgress(JSON.parse(text) as unknown) : null
+    const progress = text ? readableLiveProgress(parseJson(text)) : null
     const live = (progress ? progressLive(progress, now) : false) || holderLive(dir)
     const startedAt = progress?.startedAt ?? new Date(info.mtimeMs).toISOString()
     found.set(runId, {
@@ -433,6 +441,50 @@ function matchRef(candidates: Candidate[], ref: string): Candidate | undefined {
     throw new RefError(`"${ref}" matches ${byId.length} runs: use more of the id`)
   }
   return undefined
+}
+
+/** Staging untouched this long is a leftover the sweep at the start of a run looks at. */
+const STALE_STAGING_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Removes staging untouched for a day that no run can resume (a run that finished assembling, or
+ * a stray entry), and returns the ids of the stale runs it keeps because `--resume` still can.
+ * A running run's staging, and `keep`'s, are left alone.
+ */
+export async function sweepStaging(
+  root: string,
+  keep?: string,
+  now = Date.now(),
+): Promise<string[]> {
+  const stagingRoot = join(root, '.reeval', 'staging')
+  const names = await readdir(stagingRoot).catch((): string[] => [])
+  const candidates = new Map((await listCandidates(root, now)).map((c) => [c.runId, c]))
+  const resumableIds: string[] = []
+  for (const name of names) {
+    if (name === keep) continue
+    const dir = join(stagingRoot, name)
+    const info = await stat(dir).catch(() => null)
+    if (!info || now - info.mtimeMs <= STALE_STAGING_MS) continue
+    const found = candidates.get(name)
+    if (found?.live) continue
+    if (found && resumable(found)) resumableIds.push(name)
+    else await rm(dir, { recursive: true, force: true })
+  }
+  return resumableIds
+}
+
+/** `reeval clean --staging`: removes every stopped run's staging and returns their ids. */
+export async function removeStoppedStaging(root: string): Promise<string[]> {
+  const stagingRoot = join(root, '.reeval', 'staging')
+  const names = await readdir(stagingRoot).catch((): string[] => [])
+  const live = new Set((await listCandidates(root)).filter((c) => c.live).map((c) => c.runId))
+  const removed: string[] = []
+  for (const name of names.sort()) {
+    if (live.has(name)) continue
+    await rm(join(stagingRoot, name), { recursive: true, force: true })
+    removed.push(name)
+  }
+  return removed
 }
 
 /**

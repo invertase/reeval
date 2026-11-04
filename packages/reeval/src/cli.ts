@@ -55,6 +55,7 @@ import {
   prepareResume,
   previousAttempt,
   type ResumeTarget,
+  removeStoppedStaging,
   resolveResume,
   resolveRetry,
   restoreRetry,
@@ -62,6 +63,7 @@ import {
   savedFilters,
   savedInvocation,
   stoppedRetry,
+  sweepStaging,
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
@@ -127,6 +129,15 @@ function quitWithoutRecord(runId: string, stagingDir: string): string {
     `  reeval run --resume ${runId} keeps the attempts that finished, runs the rest and writes the record.`,
     `  Deleting ${fromCwd(stagingDir)} discards the run.`,
   ].join('\n')
+}
+
+/** Sweeps stale staging, naming each stale run it keeps because it can still be resumed. */
+async function sweep(root: string, keep?: string): Promise<void> {
+  for (const runId of await sweepStaging(root, keep)) {
+    process.stderr.write(
+      `reeval: run ${runId} stopped over a day ago and can still be resumed: reeval run --resume ${runId} finishes it, reeval clean --staging deletes it.\n`,
+    )
+  }
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -245,7 +256,7 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `reeval clean`: removes local debug data and snapshots, all of them or all but the newest
- * `--keep` runs'.
+ * `--keep` runs', and with `--staging` every stopped run's staging.
  */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
@@ -265,6 +276,14 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
       ? `Removed debug data and snapshots for ${runs.length} run${runs.length === 1 ? '' : 's'} (${formatBytes(bytes)}) from ${where} and .reeval/runs`
       : `No debug data or snapshots to remove in ${where} or .reeval/runs`,
   )
+  if (flags.staging) {
+    const removed = await removeStoppedStaging(config.root)
+    console.log(
+      removed.length
+        ? `Removed the staging of ${removed.length} stopped run${removed.length === 1 ? '' : 's'}: ${removed.join(', ')}`
+        : 'No stopped runs in .reeval/staging to remove',
+    )
+  }
   if (flags.images) {
     const { dockerAvailable, pruneImages } = await import('@reeval/sandbox-docker')
     const { requireDocker } = await import('./sandbox/providers.ts')
@@ -852,7 +871,7 @@ async function startRun({
   const { worktreePatch } = await import('./history/state.ts')
   const patch = git?.dirty ? await worktreePatch(config.root, [config.history.dir]) : null
   const who = await author(config.root)
-  const { stagingDir, sweepStaging } = await import('./results.ts')
+  const { stagingDir } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
   if (resume !== undefined || retry !== undefined) {
@@ -861,7 +880,7 @@ async function startRun({
     if (!dryRun && retry === undefined) await prepareResume(target, config.root)
     else if (!dryRun) holdRetry(target, config.root)
     const stopped = retry === undefined ? await stoppedRetry(config.root, target) : null
-    await sweepStaging(config.root, target.runId)
+    if (!dryRun) await sweep(config.root, target.runId)
     const aside = dryRun
       ? { record: target.previous, artifacts: target.previousArtifacts }
       : await loadPrevious(stagingDir(config.root, target.runId))
@@ -916,7 +935,7 @@ async function startRun({
   for (let n = 1; stamps.has(runId.slice(0, RUN_STAMP_LENGTH)); n++) {
     runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
   }
-  await sweepStaging(config.root)
+  if (!dryRun) await sweep(config.root)
   return {
     runId,
     // Workers create it with their first record; a run that never starts leaves nothing behind.
