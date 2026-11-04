@@ -33,6 +33,9 @@ const ACCESS = jwt({ sub: 'user_1', exp: 2_000_000_000 }, 'real-access-signature
 const REFRESH = jwt({ sub: 'user_1', exp: 2_100_000_000 }, 'real-refresh-signature-987654321')
 const OTHER = 'other.upstream.test'
 const DUAL = 'dual.upstream.test'
+const REBIND = 'rebind.upstream.test'
+/** What {@link REBIND} resolves to now. */
+let rebind = ['127.0.0.1']
 
 type Seen = { host: string; method: string; path: string; headers: http.IncomingHttpHeaders }
 
@@ -306,6 +309,7 @@ async function startProxy(
       if (host === 'nxdomain.test') throw new Error('ENOTFOUND')
       // IPv6 first, as a resolver may answer: nothing listens on `::1`, so only IPv4 reaches it.
       if (host === DUAL) return ['::1', '127.0.0.1']
+      if (host === REBIND) return rebind
       return host.endsWith('.test') ? ['127.0.0.1'] : ['203.0.113.1']
     },
     allowLoopback: true,
@@ -695,6 +699,20 @@ describe('a host whose first address is unreachable', () => {
     h2.close()
   })
 
+  test('when every address fails, the refusal names each one', async () => {
+    const closed = net.createServer()
+    await new Promise<void>((r) => closed.listen(0, '127.0.0.1', r))
+    const port = (closed.address() as net.AddressInfo).port
+    await new Promise((r) => closed.close(r))
+    const tunnel = await connect(gw, DUAL, port)
+    assert.deepEqual(tunnel.ok ? 200 : tunnel.status, 502)
+    const plain = await absolute(gw, `http://${DUAL}:${port}/`)
+    for (const body of [tunnel.ok ? '' : tunnel.body, plain.body]) {
+      assert.match(body, new RegExp(`::1\\]?:${port}`))
+      assert.match(body, new RegExp(`127\\.0\\.0\\.1:${port}`))
+    }
+  })
+
   test('a CONNECT tunnel falls back to its IPv4 address', async () => {
     const echo = net.createServer((s) => s.pipe(s))
     await new Promise<void>((r) => echo.listen(0, '127.0.0.1', r))
@@ -735,6 +753,114 @@ describe('a host whose first address is unreachable', () => {
     assert.equal(r2.status, 200, r2.body)
     assert.equal(seen.at(-1)?.headers[':method'], 'POST', 'upstream saw HTTP/2')
     assert.equal(seen.at(-1)?.headers['x-reeval'], 'set')
+  })
+
+  test('a plain websocket upgrade falls back to its IPv4 address', async () => {
+    const plain = http.createServer()
+    plain.on('upgrade', (_req, socket: net.Socket) => {
+      socket.end(
+        'HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\n\r\n',
+      )
+    })
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    const port = (plain.address() as net.AddressInfo).port
+    const client = net.connect(gw.port, '127.0.0.1')
+    try {
+      client.write(
+        `GET http://${DUAL}:${port}/ws HTTP/1.1\r\nhost: ${DUAL}:${port}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-version: 13\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`,
+      )
+      const text = await new Promise<string>((resolve) =>
+        client.once('data', (d) => resolve(String(d))),
+      )
+      assert.match(text, /^HTTP\/1\.1 101 /)
+    } finally {
+      client.destroy()
+      plain.close()
+    }
+  })
+
+  test('a decrypted websocket upgrade falls back to its IPv4 address', async () => {
+    gw.proxy.addTransformations([
+      { match: { host: DUAL }, transform: { headers: { 'x-reeval': 'set' } } },
+    ])
+    const tunnel = await connect(gw, DUAL, h1.port)
+    assert.ok(tunnel.ok)
+    const secure = tls.connect({ socket: tunnel.socket, servername: DUAL, ca: gw.ca.cert })
+    try {
+      await new Promise((r) => secure.once('secureConnect', r))
+      secure.write(
+        `GET /ws HTTP/1.1\r\nhost: ${DUAL}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nsec-websocket-version: 13\r\n\r\n`,
+      )
+      const text = await new Promise<string>((resolve) =>
+        secure.once('data', (d) => resolve(String(d))),
+      )
+      assert.match(text, /^HTTP\/1\.1 101 /)
+    } finally {
+      secure.destroy()
+    }
+  })
+
+  test('a kept-alive connection is reused only for the addresses its own check reached', async () => {
+    const plain = http.createServer((_req, res) => res.end('reached 127.0.0.1'))
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    const port = (plain.address() as net.AddressInfo).port
+    try {
+      rebind = ['127.0.0.1']
+      const first = await absolute(gw, `http://${REBIND}:${port}/`)
+      assert.deepEqual([first.status, first.body], [200, 'reached 127.0.0.1'])
+      // The name now answers `::1` alone, and the new policy denies 127.0.0.1: the connection
+      // kept alive from the first request mustn't carry the second there.
+      rebind = ['::1']
+      gw.proxy.setPolicy({
+        mode: 'custom',
+        allowedHosts: [REBIND],
+        deniedCIDRs: ['127.0.0.1/32'],
+      })
+      const second = await absolute(gw, `http://${REBIND}:${port}/`)
+      assert.equal(second.status, 502, second.body)
+    } finally {
+      gw.proxy.setPolicy({ mode: 'allow-all' })
+      plain.close()
+    }
+  })
+
+  test('an HTTP/2 session is reused only for the addresses its own check reached', async () => {
+    const h2Rebind = await startUpstream(REBIND, true)
+    gw.proxy.addTransformations([
+      { match: { host: REBIND }, transform: { headers: { 'x-reeval': 'set' } } },
+    ])
+    try {
+      rebind = ['127.0.0.1']
+      const first = await viaProxyH2(gw, REBIND, h2Rebind.port, '/echo')
+      assert.equal(first.status, 200, first.body)
+      rebind = ['::1']
+      gw.proxy.setPolicy({
+        mode: 'custom',
+        allowedHosts: [REBIND],
+        deniedCIDRs: ['127.0.0.1/32'],
+      })
+      const second = await viaProxyH2(gw, REBIND, h2Rebind.port, '/echo')
+      assert.equal(second.status, 502, second.body)
+    } finally {
+      gw.proxy.setPolicy({ mode: 'allow-all' })
+      h2Rebind.close()
+    }
+  })
+
+  test('the dns event names every address the gateway may try', async () => {
+    const events: EgressEvent[] = []
+    const watched = await startProxy({ mode: 'allow-all' }, { onEvent: (e) => events.push(e) })
+    const plain = http.createServer((_req, res) => res.end('ok'))
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    try {
+      const port = (plain.address() as net.AddressInfo).port
+      assert.equal((await absolute(watched, `http://${DUAL}:${port}/`)).status, 200)
+      const dns = events.find((e) => e.type === 'dns')
+      assert.deepEqual(dns?.type === 'dns' && dns.addresses, ['::1', '127.0.0.1'])
+    } finally {
+      plain.close()
+      watched.close()
+    }
   })
 })
 

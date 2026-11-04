@@ -156,7 +156,8 @@ export type EgressEvent =
       type: 'dns'
       host: string
       allowed: boolean
-      address?: string
+      /** Every address the name resolved to, in the order the gateway tries them. */
+      addresses?: string[]
       reason?: string
       /** Refused because the name didn't resolve, not by the policy. */
       unresolved?: true
@@ -306,8 +307,36 @@ function reachAt(target: Target) {
     if (options.all) callback(null, addresses)
     else callback(null, first.address, first.family)
   }
-  return { host: target.host, lookup, autoSelectFamily: true }
+  return { host: target.host, lookup, autoSelectFamily: true, pinned: pinnedKey(target) }
 }
+
+/** The checked addresses, in a stable order, that a pooled connection to `target` was made for. */
+const pinnedKey = (target: Target) => [...target.addresses].sort().join(',')
+
+/**
+ * An agent whose pool keys a connection by the addresses its policy check reached as well as by
+ * name, so a kept-alive connection is reused only by a request whose own check reached the same
+ * addresses, never one checked under an earlier policy or DNS answer.
+ */
+class PinnedAgent extends http.Agent {
+  override getName(options?: http.ClientRequestArgs & { pinned?: string }) {
+    return `${super.getName(options)}:${options?.pinned ?? ''}`
+  }
+}
+class PinnedHttpsAgent extends https.Agent {
+  override getName(options?: https.RequestOptions & { pinned?: string }) {
+    return `${super.getName(options)}:${options?.pinned ?? ''}`
+  }
+}
+
+/**
+ * Why a connect failed. Happy Eyeballs fails with an `AggregateError` whose own message is empty
+ * when every address does, so name each address's error.
+ */
+const failure = (error: Error) =>
+  error instanceof AggregateError && error.errors.length
+    ? error.errors.map((e: Error) => e.message).join(', ')
+    : error.message
 
 /** Refused brokered requests recorded per method and path before the rest share an entry. */
 const REFUSED_PATHS = 20
@@ -379,7 +408,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     } while (at !== generation)
     emit(
       verdict.allowed
-        ? { type: 'dns', host, allowed: true, address: verdict.addresses[0] }
+        ? { type: 'dns', host, allowed: true, addresses: verdict.addresses }
         : {
             type: 'dns',
             host,
@@ -400,7 +429,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const leaves = new Map<string, { key: string | Buffer; cert: string }>()
   const open = new Set<Duplex>()
   const sessions = new Map<string, http2.ClientHttp2Session>()
-  const agent = new https.Agent({ keepAlive: true })
+  const agent = new PinnedHttpsAgent({ keepAlive: true })
+  const plainAgent = new PinnedAgent({ keepAlive: true })
   const ca = options.upstreamCA ? [...tls.rootCertificates, options.upstreamCA] : undefined
 
   const track = <T extends Duplex>(s: T): T => {
@@ -647,10 +677,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         link(socket, upstream)
       })
       upstream.once('error', (error) => {
-        log(`reeval:egress CONNECT ${host}:${port} failed (${error.message})`)
+        log(`reeval:egress CONNECT ${host}:${port} failed (${failure(error)})`)
         status = 502
-        reason = `couldn't reach ${host}:${port}: ${error.message}`
-        reply(socket, 502, `reeval egress gateway couldn't reach ${host}:${port}: ${error.message}`)
+        reason = `couldn't reach ${host}:${port}: ${failure(error)}`
+        reply(
+          socket,
+          502,
+          `reeval egress gateway couldn't reach ${host}:${port}: ${failure(error)}`,
+        )
       })
     })
   })
@@ -773,6 +807,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       method: req.method,
       path,
       headers: { ...endToEnd(req.headers), host },
+      agent: plainAgent,
     })
     forwardHttp1(req.pipe(counter(done.sent)), res, upstream, { own: [], creds: [], url, t: done })
   }
@@ -936,6 +971,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         ...endToEnd(req.headers, ['upgrade', 'connection']),
         host: req.headers.host ?? authority,
       },
+      agent: plainAgent,
     })
     upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
       upgraded({ status: up.statusCode, responseHeaders: plainHeaders(up.headers) })
@@ -954,8 +990,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       up.resume()
     })
     upstream.once('error', (error) => {
-      upgraded({ status: 502, reason: error.message })
-      reply(socket, 502, `reeval egress gateway: ${error.message}`)
+      upgraded({ status: 502, reason: failure(error) })
+      reply(socket, 502, `reeval egress gateway: ${failure(error)}`)
     })
     upstream.end()
   }
@@ -1453,7 +1489,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       ':authority': authority,
     })
     const fail = (error: Error) => {
-      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${error.message}\n`)
+      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${failure(error)}\n`)
       else res.destroy()
     }
     stream.once('error', fail)
@@ -1526,8 +1562,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       })
     })
     upstream.once('error', (error) => {
-      t?.set({ status: 502, reason: error.message })
-      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${error.message}\n`)
+      t?.set({ status: 502, reason: failure(error) })
+      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${failure(error)}\n`)
       else res.destroy()
     })
     req.pipe(upstream)
@@ -1575,6 +1611,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       method,
       path,
       headers: { ...headers, host: target.host },
+      agent,
       ca,
     })
     upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
@@ -1601,13 +1638,15 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       reply(socket, up.statusCode ?? 502, `upstream refused the upgrade (${up.statusCode})`)
       up.resume()
     })
-    upstream.once('error', (error) => reply(socket, 502, `reeval egress gateway: ${error.message}`))
+    upstream.once('error', (error) =>
+      reply(socket, 502, `reeval egress gateway: ${failure(error)}`),
+    )
     upstream.end()
   }
 
   /** One HTTP/2 session per upstream, or null when it doesn't speak h2. */
   function upstreamSession(target: Target): Promise<http2.ClientHttp2Session | null> {
-    const key = `${target.host}:${target.port}`
+    const key = `${target.host}:${target.port}:${pinnedKey(target)}`
     const existing = sessions.get(key)
     if (existing && !existing.closed && !existing.destroyed) return Promise.resolve(existing)
     return new Promise((resolve) => {
@@ -1694,6 +1733,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       for (const s of sessions.values()) s.destroy()
       sessions.clear()
       agent.destroy()
+      plainAgent.destroy()
     },
   }
 }
