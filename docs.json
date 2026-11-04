@@ -11,6 +11,9 @@
     "primary": "#63D0BD",
     "backgroundDark": "#040406"
   },
+  "header": {
+    "showName": false
+  },
   "variables": {
     "pkg": "reeval",
     "cli": "reeval",
