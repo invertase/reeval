@@ -733,7 +733,14 @@ describe('egress policy in Docker', {
       box.hits++
       res.end('host')
     })
-    const box = { port: 0, hits: 0, close: () => server.close() }
+    const box = {
+      port: 0,
+      hits: 0,
+      close: () => {
+        server.closeAllConnections()
+        server.close()
+      },
+    }
     await new Promise<void>((r) => server.listen(0, '0.0.0.0', r))
     box.port = (server.address() as net.AddressInfo).port
     listener = box
@@ -974,7 +981,14 @@ describe('egress policy in Docker', {
 
   test('setEgress: a direct phase detaches at the switch, and allow-all direct reattaches', async () => {
     let received = 0
-    const raw = net.createServer((c) => c.on('data', (d) => (received += d.length)))
+    // Rootless Podman's slirp4netns holds the host end of a container's connection, and never
+    // closes it for a container detached mid-connection while another keeps the network up, so
+    // the socket would keep this file's process alive after `raw.close()`.
+    const accepted = new Set<net.Socket>()
+    const raw = net.createServer((c) => {
+      accepted.add(c)
+      c.on('data', (d) => (received += d.length))
+    })
     await new Promise<void>((r) => raw.listen(0, '0.0.0.0', r))
     const rawPort = (raw.address() as net.AddressInfo).port
     const s = await open(allowAll)
@@ -1006,6 +1020,7 @@ describe('egress policy in Docker', {
       assert.equal((await retry(() => direct(s))).stdout, '200', 'allow-all direct reattached')
     } finally {
       await writer.kill().catch(() => {})
+      for (const c of accepted) c.destroy()
       raw.close()
     }
   })

@@ -437,9 +437,24 @@ jobs:
           node --input-type=module -e "
             import { buildImage } from './packages/sandbox-docker/dist/index.js'
             await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
+      # A test file whose process outlives its tests fails a minute later naming what holds it
+      # (scripts/handle-dump.mjs); the step timeout catches any other hang. Normally under 2 min.
       - name: sandbox-docker on Podman
         working-directory: packages/sandbox-docker
+        timeout-minutes: 8
+        env:
+          NODE_OPTIONS: --import ${{ github.workspace }}/scripts/handle-dump.mjs
+          REEVAL_HANDLE_DUMP_DIR: ${{ runner.temp }}/handles
         run: pnpm test
+      - name: handle dumps
+        if: failure()
+        run: |
+          shopt -s nullglob
+          dumps=("$RUNNER_TEMP"/handles/*.txt)
+          [ ${#dumps[@]} -eq 0 ] && echo 'No process dumped its handles.'
+          for f in "${dumps[@]}"; do echo "::group::$f"; cat "$f"; echo '::endgroup::'; done
+          ps -eo pid,ppid,pgid,stat,etime,args --forest
+          podman ps -a
       - name: the fixtures' Podman tier
         working-directory: packages/reeval
         run: node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts
