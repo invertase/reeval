@@ -4,7 +4,7 @@ import { Readable } from 'node:stream'
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import { type Gateway, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
-import { type SshTarget, sshArgv, sshTransport } from './egress/transport.ts'
+import { controlOptions, type SshTarget, sshArgv, sshTransport } from './egress/transport.ts'
 import { BRIDGE_PORT, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_STATE, SANDBOX_USER } from './image.ts'
 import { shellQuote as q, run as runHost } from './process.ts'
 import {
@@ -98,7 +98,7 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${marker ? ` ${EXEC_MARKER}=${marker}` : ''} /bin/sh -c ${q(`cd ${SANDBOX_STATE} || exit 1; ${EXEC_UMASK}; ${command}`)}`
 
   const closeConnection = async () => {
-    if (!target.controlPath || process.platform === 'win32') return
+    if (!controlOptions(target.controlPath, 0).length) return
     const [bin = 'ssh', ...args] = sshArgv(target, '')
     await runHost(bin, ['-O', 'exit', ...args.slice(0, -1)]).catch(() => {})
   }

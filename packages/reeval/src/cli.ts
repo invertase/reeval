@@ -68,7 +68,7 @@ import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
-import type { CursorEfforts, RunContext } from './types.ts'
+import type { CursorEfforts, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -1283,6 +1283,16 @@ async function executeRun(
       sandboxWarnings: plan.sandboxWarnings,
     })
     if (setup.dryRun) return false
+    if (continuing) {
+      // startRun cleared this machine before the plan named the Macs the run's VMs were on.
+      const away = new Map<string, SandboxDescriptor>()
+      for (const { attempt } of planned) {
+        if (attempt.sandbox.kind === 'tart' && attempt.sandbox.hosts) {
+          away.set(JSON.stringify(attempt.sandbox.hosts), attempt.sandbox)
+        }
+      }
+      if (away.size) await cleanupRun(runId, [...away.values()]).catch(() => {})
+    }
     checkAttemptBudget(plan, setup.force, config.file)
     const questionModels = new Set<string>()
     const asked: EvalQuestions[] = []

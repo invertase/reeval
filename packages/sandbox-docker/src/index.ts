@@ -91,7 +91,10 @@ export {
 export { placeholder, type SubstituteIn, type Substitution } from './egress/substitution.ts'
 export type { DerivedTokens } from './egress/tokens.ts'
 export {
+  controlOptions,
   type ExecTransport,
+  privateDir,
+  SSH_OPTIONS,
   type SshTarget,
   sshArgv,
   sshTransport,

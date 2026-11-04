@@ -1007,6 +1007,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'tart.hosts',
+    area: 'Sandbox',
+    name: "`tart({ hosts })`: the VMs on other Macs over plain `ssh`, with the gateway and keys on this machine; up to each host's `vms` (2) at once, counted with `tart list` there, a host at its VM limit passed over without an infra error; preflight probes each host once (unreachable, no `tart` or not a Mac refused naming it, low disk or memory skipped), checks and bakes its images there (a host the pull or bake fails on skipped, a tag that's a different image on two hosts refused), the run's lease held to the VMs the kept hosts have room for, one claim at a time on each host, and the run's VMs deleted on every host, by a `--resume` too",
+    fixtures: ['sandbox/tart-hosts-run', 'sandbox/tart-hosts-cap', 'sandbox/tart-hosts-busy'],
+    plan: ['tart/hosts'],
+    unit: [
+      'reeval/test/tart-hosts.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'docker.privilege-warnings',
     area: 'Sandbox',
     name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',

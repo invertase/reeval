@@ -2,6 +2,7 @@ import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
 import type { PlannedEgress, SandboxDescriptor } from '../types.ts'
 import { sandboxKind } from './kinds.ts'
+import type { PreparedHost } from './tart-hosts.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
 export type SandboxOptions = {
@@ -12,6 +13,8 @@ export type SandboxOptions = {
   env: Record<string, string>
   /** The image preflight prepared: Docker's, or the Tart image with the harness baked in. */
   image?: string
+  /** The hosts of `tart({ hosts })` preflight kept, each with the image it prepared there. */
+  hosts?: readonly PreparedHost[]
   /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
   brokering?: Brokering
   /** Hosts the harness always tries: refused requests to them are traced, not logged each time. */
