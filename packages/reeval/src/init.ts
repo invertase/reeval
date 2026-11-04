@@ -485,6 +485,25 @@ function packageManager(dir: string): { install: string; exec: string } {
   return { install: 'npm install', exec: 'npx reeval' }
 }
 
+/**
+ * Whether `package.json` in `dir` lists `pkg` and a `node_modules` from `dir` up has it, so
+ * nothing is left to install.
+ */
+function installedAlready(dir: string, pkg: string): boolean {
+  const existing = read(join(dir, 'package.json'))
+  if (existing === undefined) return false
+  try {
+    const manifest = JSON.parse(withoutBom(existing))
+    if (!manifest?.dependencies?.[pkg] && !manifest?.devDependencies?.[pkg]) return false
+  } catch {
+    return false
+  }
+  for (let d = resolve(dir); ; d = dirname(d)) {
+    if (existsSync(join(d, 'node_modules', pkg, 'package.json'))) return true
+    if (dirname(d) === d) return false
+  }
+}
+
 export type InitIO = {
   out: (line: string) => void
   input: Readable & { isTTY?: boolean }
@@ -543,6 +562,7 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
       `reeval is already set up in ${where}: ${plan.conflicts.join('; ')}. Nothing was written.`,
     )
   }
+  const installed = installedAlready(dir, manifest.name)
   const dry = !!flags['dry-run']
   io.out(`reeval init · ${where}${dry ? ' (nothing written: --dry-run)' : ''}`)
   const width = Math.max(...plan.actions.map((a) => a.path.length))
@@ -568,7 +588,7 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
       : 'the evals in evals/'
   const next: Array<[string, string]> = [
     ...(where === '.' ? [] : [[`cd ${where}`, ''] as [string, string]]),
-    [pm.install, ''],
+    ...(installed ? [] : [[pm.install, ''] as [string, string]]),
     [build, `bakes ${h.label} into its sandbox image (needs Docker)`],
     [`${pm.exec} run`, `${evals} on ${h.label}, with ${keyOf(h)} in .env.local`],
   ]

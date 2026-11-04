@@ -15,7 +15,7 @@ import {
 } from './contract/questions.ts'
 import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
-import { egressLabel, layerEgress, plannedEgress } from './egress.ts'
+import { autoHosts, layerEgress, ownEgressLabel, plannedEgress } from './egress.ts'
 import {
   type AppliedEnvironment,
   applied,
@@ -1421,7 +1421,19 @@ export function evalPlan(
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
-    egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
+    egress: [
+      ...new Map(
+        attempts.map((a) => {
+          const e = {
+            environment: a.environment.name,
+            harness: harnessId(a.harness),
+            policy: ownEgressLabel(a.egress) || 'proxy',
+            auto: autoHosts(a.egress),
+          }
+          return [JSON.stringify(e), e] as const
+        }),
+      ).values(),
+    ],
     workspaces: [
       ...new Set(
         attempts.flatMap((a) => {

@@ -831,10 +831,10 @@
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "egress": {
-          "description": "Each distinct restricted egress policy its attempts run under, as the plan prints it.",
+          "description": "Each distinct egress policy its attempts run under, by environment and harness.",
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/PlanEgress"
           }
         },
         "excluded": {
@@ -1820,6 +1820,29 @@
       },
       "required": ["kind", "model"],
       "additionalProperties": false
+    },
+    "PlanEgress": {
+      "description": "One environment's egress on one harness, as the `--dry-run` table prints it.",
+      "type": "object",
+      "properties": {
+        "auto": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "policy": {
+          "description": "The policy as the plan prints it (`proxy` for the default), without the automatic hosts.",
+          "type": "string"
+        }
+      },
+      "required": ["auto", "environment", "harness", "policy"]
     },
     "PlannedEgress": {
       "description": "An attempt's egress: the agent phase's policy (the harness's start, its turns and the checks), and `setup`'s when the setup phase (files and setup steps) runs under another.",

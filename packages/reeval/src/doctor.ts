@@ -28,7 +28,7 @@ import {
 } from './egress.ts'
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
-import { environmentSandbox, profileSandbox } from './environment.ts'
+import { environmentSandbox, NO_ENVIRONMENT, profileSandbox } from './environment.ts'
 import {
   fellBackToDirect,
   gatewayScope,
@@ -68,6 +68,7 @@ import type {
   FakeJudgeModel,
   GatewayName,
   HarnessDescriptor,
+  PlannedEgress,
   ResolvedConfig,
   SandboxDescriptor,
 } from './types.ts'
@@ -280,7 +281,7 @@ export function configuredUses(config: ResolvedConfig) {
 }
 
 /** What a run would use: the evals' planned attempts, or why they didn't load. */
-type Planned = { uses: ImageUse[] } | { error: string }
+export type Planned = { uses: ImageUse[] } | { error: string }
 
 const planUses = (config: ResolvedConfig, deps: DoctorDeps): Promise<Planned> =>
   deps.plannedUses(config).then(
@@ -1199,22 +1200,71 @@ const onePolicyText = (policy: EgressPolicy) =>
         ? "deny-all: only each harness's own hosts"
         : `allow ${policy.allow.join(', ') || 'none'}, plus each harness's own hosts`
 
-/** Every policy the config and its profiles set, the config's own first; the default when it sets none. */
-const configuredEgress = (config: ResolvedConfig): EgressPolicy[] =>
-  [
+/**
+ * Every policy the config and its profiles set, the config's own first (the default when it sets
+ * none), then each phase's policy of the planned attempts.
+ */
+const egressPolicies = (config: ResolvedConfig, planned?: Planned): EgressPolicy[] => [
+  ...[
     config.egress ?? DEFAULT_EGRESS,
     ...Object.values(config.profiles).flatMap((p) => p.defaults?.egress ?? []),
-  ].flatMap((e) => Object.values(phasePolicies(e)))
+  ].flatMap((e) => Object.values(phasePolicies(e))),
+  ...(planned && 'uses' in planned ? planned.uses : []).flatMap((u) =>
+    u.egress ? [u.egress.policy, ...(u.egress.setup ? [u.egress.setup.policy] : [])] : [],
+  ),
+]
 
-/** `cloud` is the cloud VM or CI runner this machine looks like, which `allow-all` exposes. */
-export function checkEgress(config: ResolvedConfig, cloud: string | null = null): Check[] {
-  const checks: Check[] = []
-  const inherited = config.egress ?? DEFAULT_EGRESS
-  checks.push({
-    id: 'egress',
-    status: 'ok',
-    summary: `${policyText(inherited)}${config.egress === undefined ? ' (the default)' : ''}; evals and environments may set their own`,
+const plannedText = (p: PlannedEgress) =>
+  p.setup
+    ? `setup ${onePolicyText(p.setup.policy)}; agent ${onePolicyText(p.policy)}`
+    : onePolicyText(p.policy)
+
+/**
+ * What the planned attempts run under, a line per distinct policy with the environments that set
+ * it; empty when the evals didn't load.
+ */
+function plannedEgress(planned: Planned | undefined): Check[] {
+  const uses = planned && 'uses' in planned ? planned.uses : []
+  const byPolicy = new Map<string, { attempts: number; environments: Set<string> }>()
+  for (const use of uses) {
+    if (!use.egress) continue
+    const text = plannedText(use.egress)
+    const entry = byPolicy.get(text) ?? { attempts: 0, environments: new Set() }
+    byPolicy.set(text, entry)
+    entry.attempts++
+    if (use.environment && use.environment !== NO_ENVIRONMENT)
+      entry.environments.add(use.environment)
+  }
+  const total = [...byPolicy.values()].reduce((sum, e) => sum + e.attempts, 0)
+  return [...byPolicy].map(([text, { attempts, environments }]) => {
+    const which =
+      byPolicy.size === 1 ? 'every planned attempt' : `${attempts} of ${total} planned attempts`
+    const envs = environments.size
+      ? ` (${environments.size === 1 ? 'environment' : 'environments'} ${[...environments].join(', ')})`
+      : ''
+    return { id: 'egress', status: 'ok', summary: `${text}: ${which}${envs}` }
   })
+}
+
+/**
+ * The policies the planned attempts run under, or the config's when the evals didn't load, then
+ * each profile's. `cloud` is the cloud VM or CI runner this machine looks like, which `allow-all`
+ * exposes.
+ */
+export function checkEgress(
+  config: ResolvedConfig,
+  cloud: string | null = null,
+  planned?: Planned,
+): Check[] {
+  const checks: Check[] = plannedEgress(planned)
+  const inherited = config.egress ?? DEFAULT_EGRESS
+  if (!checks.length) {
+    checks.push({
+      id: 'egress',
+      status: 'ok',
+      summary: `${policyText(inherited)}${config.egress === undefined ? ' (the default)' : ''}; evals and environments may set their own`,
+    })
+  }
   for (const [name, p] of Object.entries(config.profiles)) {
     const policy = p.defaults?.egress
     if (policy !== undefined) {
@@ -1230,7 +1280,7 @@ export function checkEgress(config: ResolvedConfig, cloud: string | null = null)
       checks.push({ id: 'egress', status: 'fail', summary: problem })
     }
   }
-  if (cloud && configuredEgress(config).some(isDirect)) {
+  if (cloud && egressPolicies(config, planned).some(isDirect)) {
     checks.push({
       id: 'egress',
       status: 'warn',
@@ -1407,8 +1457,8 @@ export async function doctor(
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
     checks.push(...checkGateways(config, deps, envFile))
     checks.push(...(await checkVertex(config, deps, online)))
-    const cloud = configuredEgress(config).some(isDirect) ? await deps.cloudHost() : null
-    checks.push(...checkEgress(config, cloud))
+    const cloud = egressPolicies(config, planned).some(isDirect) ? await deps.cloudHost() : null
+    checks.push(...checkEgress(config, cloud, planned))
     checks.push(await checkGitignore(config.root, deps))
     const envFiles = await checkEnvFiles(config.root, deps)
     if (envFiles) checks.push(envFiles)

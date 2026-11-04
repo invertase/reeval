@@ -51,7 +51,7 @@ reeval init [dir]             Scaffold a project in dir (default: here): reeval.
 
 ## `reeval doctor`
 
-The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request.
+The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request. The egress check names each policy the planned attempts run under, with the environments that set it, or the config's policy when the evaluations don't load.
 
 [//]: # (generated:cli-help:doctor)
 

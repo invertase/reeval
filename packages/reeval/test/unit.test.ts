@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -17,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
+import { writeFiles } from '../src/attempt/session.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
 import { regressions } from '../src/commands.ts'
 import {
@@ -86,9 +90,10 @@ import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
+import type { Sandbox } from '../src/sandbox/types.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
-import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
+import type { EvalOptions, ExecResult, Outcome, ResolvedProfile } from '../src/types.ts'
 import { gatePart } from '../src/view/gate.ts'
 import { runOutcome } from '../src/view/model.ts'
 import { splitPatch } from '../src/view/patch.ts'
@@ -201,6 +206,213 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/reeval/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/reeval/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/reeval/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+/** A fake sandbox that counts the processes a container would start for its writes and execs. */
+async function countingSandbox(execResult?: (command: string) => ExecResult | undefined) {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  const calls = { writeFile: 0, exec: 0 }
+  const counted: Sandbox = {
+    ...box,
+    writeFile: (path, content) => {
+      calls.writeFile++
+      return box.writeFile(path, content)
+    },
+    exec: async (command, opts) => {
+      calls.exec++
+      return execResult?.(command) ?? box.exec(command, opts)
+    },
+  }
+  return { box: counted, calls }
+}
+
+test('environment files are written with one tar per destination, not a write each', async () => {
+  const { box, calls } = await countingSandbox()
+  try {
+    const files = Array.from({ length: 50 }, (_, i) => ({
+      path: `vendor/lib/${i}.js`,
+      content: `export default ${i}\n`,
+    }))
+    const bytes = new Uint8Array([0, 1, 2, 255])
+    await writeFiles(
+      box,
+      [
+        ...files,
+        { path: 'bin/blob', content: bytes },
+        { path: '~/.config/a.txt', content: 'a' },
+        { path: '~/.config/b.txt', content: 'b' },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 2, exec: 2 }, 'one tar and one unpack per destination')
+    assert.equal(await box.readFile('vendor/lib/49.js'), 'export default 49\n')
+    assert.deepEqual(readFileSync(join(box.workdir, 'bin/blob')), Buffer.from(bytes))
+    assert.equal(await box.readFile('~/.config/b.txt'), 'b')
+    for (const dir of [box.workdir, box.home]) {
+      const left = readdirSync(dir).filter((f) => f.endsWith('.tar'))
+      assert.deepEqual(left, [], 'the tar is removed')
+    }
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files fall back to a write each in a sandbox without tar', async () => {
+  const { box, calls } = await countingSandbox((command) =>
+    command.includes('tar -xf')
+      ? { exitCode: 127, stdout: '', stderr: 'tar: not found' }
+      : undefined,
+  )
+  try {
+    await writeFiles(
+      box,
+      [
+        { path: 'a.txt', content: 'a' },
+        { path: 'b/c.txt', content: 'c' },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 3, exec: 1 })
+    assert.equal(await box.readFile('b/c.txt'), 'c')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files fall back to a write each when the tar fails to unpack', async () => {
+  const { box, calls } = await countingSandbox((command) =>
+    command.includes('tar -xf')
+      ? { exitCode: 1, stdout: '', stderr: 'Cannot extract through symlink' }
+      : undefined,
+  )
+  try {
+    await writeFiles(
+      box,
+      [
+        { path: 'a.txt', content: 'a' },
+        { path: 'b/c.txt', content: 'c' },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 3, exec: 1 })
+    assert.equal(await box.readFile('b/c.txt'), 'c')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files write into existing files and linked directories as a write each does', {
+  skip: process.platform === 'win32' && 'needs symbolic links and POSIX modes',
+}, async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    writeFileSync(join(box.workdir, 'run.sh'), 'old\n', { mode: 0o755 })
+    mkdirSync(join(box.workdir, 'shared'))
+    writeFileSync(join(box.workdir, 'shared/target.txt'), 'old\n')
+    symlinkSync('shared', join(box.workdir, 'linked'))
+    symlinkSync('shared/target.txt', join(box.workdir, 'link.txt'))
+    await writeFiles(
+      box,
+      [
+        { path: 'run.sh', content: 'new\n' },
+        { path: 'linked/inside.txt', content: 'in\n' },
+        { path: 'link.txt', content: 'through\n' },
+        { path: 'with space/ünï-cödé.txt', content: '' },
+        { path: '-dash.txt', content: 'd' },
+      ],
+      new AbortController().signal,
+    )
+    assert.equal(await box.readFile('run.sh'), 'new\n')
+    assert.equal(statSync(join(box.workdir, 'run.sh')).mode & 0o111, 0o111, 'still executable')
+    assert.equal(readFileSync(join(box.workdir, 'shared/inside.txt'), 'utf8'), 'in\n')
+    assert.ok(lstatSync(join(box.workdir, 'link.txt')).isSymbolicLink(), 'the link is kept')
+    assert.equal(readFileSync(join(box.workdir, 'shared/target.txt'), 'utf8'), 'through\n')
+    assert.equal(await box.readFile('with space/ünï-cödé.txt'), '')
+    assert.equal(await box.readFile('-dash.txt'), 'd')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test("environment files are dated by the sandbox's clock, not the host's", async (t) => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    const now = Date.now()
+    t.mock.method(Date, 'now', () => now + 86_400_000)
+    await writeFiles(
+      box,
+      [
+        { path: 'a.txt', content: 'a' },
+        { path: 'b/c.txt', content: 'c' },
+      ],
+      new AbortController().signal,
+    )
+    t.mock.restoreAll()
+    const age = Date.now() - statSync(join(box.workdir, 'b/c.txt')).mtimeMs
+    assert.ok(Math.abs(age) < 60_000, `a new file is dated now (${age}ms old)`)
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files with names tar reads back differently are still written', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    await writeFiles(
+      box,
+      [
+        { path: 'a\\tb.txt', content: 'x' },
+        { path: 'ok.txt', content: 'y' },
+      ],
+      new AbortController().signal,
+    )
+    assert.equal(await box.readFile('a\\tb.txt'), 'x')
+    assert.equal(await box.readFile('ok.txt'), 'y')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test("environment files ignore the environment's TAR_OPTIONS and keep a user's own tar", async () => {
+  const { box } = await countingSandbox()
+  const exec = box.exec.bind(box)
+  box.exec = (command, opts) => exec(`export TAR_OPTIONS=--to-stdout\n${command}`, opts)
+  try {
+    writeFileSync(join(box.workdir, '.reeval-files.tar'), 'mine')
+    await writeFiles(
+      box,
+      [
+        { path: 'a.txt', content: 'a' },
+        { path: 'b.txt', content: 'b' },
+      ],
+      new AbortController().signal,
+    )
+    assert.equal(await box.readFile('b.txt'), 'b')
+    assert.equal(readFileSync(join(box.workdir, '.reeval-files.tar'), 'utf8'), 'mine')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('environment files go over in tars of at most 64 MiB each', async () => {
+  const { box, calls } = await countingSandbox()
+  try {
+    const mib = 1024 * 1024
+    const big = new Uint8Array(30 * mib + 2).fill(7)
+    await writeFiles(
+      box,
+      [
+        { path: 'a.bin', content: big.subarray(1, 30 * mib + 1) },
+        { path: 'b.bin', content: big.subarray(1, 30 * mib + 1) },
+        { path: 'c.bin', content: big.subarray(1, 30 * mib + 1) },
+      ],
+      new AbortController().signal,
+    )
+    assert.deepEqual(calls, { writeFile: 2, exec: 2 })
+    assert.equal(statSync(join(box.workdir, 'c.bin')).size, 30 * mib)
   } finally {
     await box.destroy()
   }
