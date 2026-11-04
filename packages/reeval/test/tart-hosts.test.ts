@@ -181,7 +181,8 @@ describe('a host of tart({ hosts })', () => {
   test('shares one connection through a socket in a directory only this user can enter', {
     skip: !posix && 'ssh has no ControlMaster on Windows',
   }, () => {
-    const home = mkdtempSync(join(tmpdir(), 'reeval-control-home-'))
+    // Not under macOS's long $TMPDIR, where ~/.ssh/reeval/%C would be too long for a socket.
+    const home = mkdtempSync('/tmp/reeval-ch-')
     const was = process.env.HOME
     process.env.HOME = home
     try {
