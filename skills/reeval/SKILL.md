@@ -107,7 +107,7 @@ export default defineConfig({
 ```
 
 - Harnesses (`reeval/harness`), each with a required `model`; a list runs each as its own cell:
-  `cursor` (`CURSOR_API_KEY`), `claudeCode` (`ANTHROPIC_API_KEY`), `antigravity`
+  `cursor` (`CURSOR_API_KEY`), `claudeCode` (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), `antigravity`
   (`GEMINI_API_KEY`), `opencode` (the provider's key; model `<provider>/<model>`), `goose` and
   `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`OPENAI_API_KEY` for a bare id,
   `AI_GATEWAY_API_KEY` with `vercel()` or `OPENROUTER_API_KEY` with `openrouter()` in `gateway`), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details

@@ -115,6 +115,10 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 `ANTHROPIC_API_KEY` is the credential for the `claudeCode` harness, and for `opencode` on an `anthropic/` model.
 
+## `CLAUDE_CODE_OAUTH_TOKEN`
+
+`CLAUDE_CODE_OAUTH_TOKEN` is a Claude subscription token from `claude setup-token`. The `claudeCode` harness uses it when `ANTHROPIC_API_KEY` is unset. A gateway's route, such as `openrouter()`, never uses it.
+
 ## `GEMINI_API_KEY`
 
 `GEMINI_API_KEY` is the credential for the `antigravity` harness.
