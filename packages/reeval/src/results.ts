@@ -1,4 +1,4 @@
-import { readdir, rm, stat } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type AssembleInput, assembleRun } from './history/assemble.ts'
 import { scratchDir, type WrittenRun, writeRun } from './history/files.ts'
@@ -7,24 +7,8 @@ import type { RunRecord } from './history/types.ts'
 import type { ResolvedConfig } from './types.ts'
 import { REMARKS_FILE, type RunRemarks } from './view/remarks.ts'
 
-const STALE_STAGING_MS = 24 * 60 * 60 * 1000
-
 /** Where workers write raw per-eval records before the run is assembled. */
 export const stagingDir = (root: string, runId: string) => join(root, '.reeval', 'staging', runId)
-
-/** Removes staging left behind by runs that were killed before they could clean up. */
-export async function sweepStaging(root: string, keep?: string): Promise<void> {
-  const dir = join(root, '.reeval', 'staging')
-  const entries = await readdir(dir).catch(() => [])
-  for (const name of entries) {
-    if (name === keep) continue
-    const age = await stat(join(dir, name)).then(
-      (s) => Date.now() - s.mtimeMs,
-      () => 0,
-    )
-    if (age > STALE_STAGING_MS) await rm(join(dir, name), { recursive: true, force: true })
-  }
-}
 
 /**
  * The run's remarks, each marked with whether the run's output prints it, or null when it raised

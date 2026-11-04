@@ -61,6 +61,8 @@ Usage:
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
+    --staging                   Also delete every stopped run's staging (.reeval/staging), so
+                                reeval run --resume can no longer finish it
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
                                 --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   reeval history [filter]       Pass/fail per recorded eval over recent runs

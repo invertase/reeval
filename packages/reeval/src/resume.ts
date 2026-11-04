@@ -10,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
@@ -349,6 +349,25 @@ async function readScratch(root: string, runId: string): Promise<RunRecord | nul
   }
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+async function readProgress(dir: string) {
+  const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
+  return text ? readableLiveProgress(parseJson(text)) : null
+}
+
+const stagingLive = (
+  dir: string,
+  progress: Awaited<ReturnType<typeof readProgress>>,
+  now: number,
+) => (progress ? progressLive(progress, now) : false) || holderLive(dir)
+
 async function listCandidates(root: string, now = Date.now()): Promise<Candidate[]> {
   const found = new Map<string, Candidate>()
   const stagingRoot = join(root, '.reeval', 'staging')
@@ -357,9 +376,8 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     const dir = join(stagingRoot, runId)
     const info = await stat(dir).catch(() => null)
     if (!info?.isDirectory()) continue
-    const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
-    const progress = text ? readableLiveProgress(JSON.parse(text) as unknown) : null
-    const live = (progress ? progressLive(progress, now) : false) || holderLive(dir)
+    const progress = await readProgress(dir)
+    const live = stagingLive(dir, progress, now)
     const startedAt = progress?.startedAt ?? new Date(info.mtimeMs).toISOString()
     found.set(runId, {
       runId,
@@ -433,6 +451,69 @@ function matchRef(candidates: Candidate[], ref: string): Candidate | undefined {
     throw new RefError(`"${ref}" matches ${byId.length} runs: use more of the id`)
   }
   return undefined
+}
+
+/** Staging untouched this long is a leftover the sweep at the start of a run looks at. */
+const STALE_STAGING_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Staging a resume keeps something from: a finished attempt, or the record a resume or retry
+ * moved aside.
+ */
+async function holdsWork(dir: string): Promise<boolean> {
+  if (existsSync(join(dir, 'previous.json'))) return true
+  const names = await readdir(join(dir, 'evals')).catch((): string[] => [])
+  return names.some((name) => {
+    const record = readEvalRecord(join(dir, 'evals', name))
+    return !!record && isCompletedAttempt(record.outcome, record.error)
+  })
+}
+
+/**
+ * Removes staging untouched for a day that a resume would keep nothing from (a run that finished
+ * assembling, one stopped before any attempt finished, or a stray entry), and returns the ids of
+ * the stale runs it keeps because `--resume` still can. A running run's staging, and `keep`'s,
+ * are left alone.
+ */
+export async function sweepStaging(
+  root: string,
+  keep?: string,
+  now = Date.now(),
+): Promise<string[]> {
+  const stagingRoot = join(root, '.reeval', 'staging')
+  const names = await readdir(stagingRoot).catch((): string[] => [])
+  const resumableIds: string[] = []
+  for (const name of names.sort()) {
+    if (name === keep) continue
+    const dir = join(stagingRoot, name)
+    const info = await stat(dir).catch(() => null)
+    if (!info || now - info.mtimeMs <= STALE_STAGING_MS) continue
+    const run = RUN_ID.test(name) && info.isDirectory()
+    if (run && stagingLive(dir, await readProgress(dir), now)) continue
+    const open = run && (await readScratch(root, name))?.status !== 'complete'
+    if (open && (await holdsWork(dir))) resumableIds.push(name)
+    else await rm(dir, { recursive: true, force: true })
+  }
+  return resumableIds
+}
+
+/**
+ * `reeval clean --staging`: removes every stopped run's staging and returns their ids. A record
+ * a resume or retry moved aside into it goes back to `.reeval/runs` first, since it can be the
+ * run's only copy.
+ */
+export async function removeStoppedStaging(root: string, now = Date.now()): Promise<string[]> {
+  const stagingRoot = join(root, '.reeval', 'staging')
+  const names = await readdir(stagingRoot).catch((): string[] => [])
+  const removed: string[] = []
+  for (const name of names.sort()) {
+    const dir = join(stagingRoot, name)
+    if (stagingLive(dir, await readProgress(dir), now)) continue
+    if (RUN_ID.test(name)) putBackAside(root, name)
+    await rm(dir, { recursive: true, force: true })
+    removed.push(name)
+  }
+  return removed
 }
 
 /**
@@ -629,15 +710,26 @@ export async function restoreRetry(root: string, runId: string): Promise<void> {
   const staging = stagingOf(root, runId)
   // Another process's retry of the run holds its staging: leave that retry alone.
   if (!holdsStaging(staging)) return
+  putBackAside(root, runId)
+  if (existsSync(join(scratchDir(root), `${runId}.json`))) {
+    rmSync(staging, { recursive: true, force: true })
+  }
+}
+
+/** Moves the record and artifacts {@link prepareResume} set aside in staging back to `.reeval/runs`. */
+function putBackAside(root: string, runId: string): void {
+  const staging = stagingOf(root, runId)
   const scratch = scratchDir(root)
   const aside = join(staging, 'previous.json')
   const recordPath = join(scratch, `${runId}.json`)
-  if (existsSync(aside) && !existsSync(recordPath)) renameSync(aside, recordPath)
+  if (existsSync(aside) && !existsSync(recordPath)) {
+    mkdirSync(scratch, { recursive: true })
+    renameSync(aside, recordPath)
+  }
   const artifacts = join(staging, 'previous-artifacts')
   if (existsSync(artifacts) && !existsSync(join(scratch, runId))) {
     renameSync(artifacts, join(scratch, runId))
   }
-  if (existsSync(recordPath)) rmSync(staging, { recursive: true, force: true })
 }
 
 export async function loadPrevious(staging: string): Promise<{

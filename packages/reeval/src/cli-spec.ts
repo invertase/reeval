@@ -18,6 +18,7 @@ export const FLAGS = {
   trace: { type: 'boolean' },
   keep: { type: 'string' },
   images: { type: 'boolean' },
+  staging: { type: 'boolean' },
   json: { type: 'boolean' },
   md: { type: 'boolean' },
   all: { type: 'boolean' },
@@ -181,14 +182,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 finished run. Exit 2 when the plan or eval source changed since`,
   },
   clean: {
-    flags: ['keep', 'images'],
+    flags: ['keep', 'images', 'staging'],
     positionals: 0,
     help: `
   reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
                                 --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds; with Tart, delete
-                                every Tart image reeval baked a harness into that isn't running`,
+                                every Tart image reeval baked a harness into that isn't running
+    --staging                   Also delete every stopped run's staging (.reeval/staging), so
+                                reeval run --resume can no longer finish it`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],

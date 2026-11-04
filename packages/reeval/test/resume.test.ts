@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -24,11 +32,13 @@ import {
   noteRetries,
   prepareResume,
   readCurrent,
+  removeStoppedStaging,
   resolveResume,
   resolveRetry,
   restoreRetry,
   resumeSettings,
   savedFilters,
+  sweepStaging,
   writeCurrent,
 } from '../src/resume.ts'
 import { retryCounts, retryLine } from '../src/retry.ts'
@@ -515,6 +525,115 @@ evaluate('shot', { environments: site }, async (c) => {
     const r = await runCli(p.dir, ['run', '--resume', run.runId])
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stderr, /is complete and cannot be resumed/)
+  })
+})
+
+describe('the staging sweep', () => {
+  const twoDaysAgo = () => new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  const age = (root: string, name: string) => {
+    const when = twoDaysAgo()
+    utimesSync(join(root, '.reeval', 'staging', name), when, when)
+  }
+  const stagingNames = (root: string) => readdirSync(join(root, '.reeval', 'staging')).sort()
+  const scratchRecord = (root: string, runId: string) =>
+    join(root, '.reeval', 'runs', `${runId}.json`)
+  const oneEval = {
+    'reeval.config.ts': fakeConfig(),
+    'evals/pair.eval.ts': `
+import { evaluate } from 'reeval'
+evaluate('done', async () => {})
+evaluate('leftover', async () => {})
+`,
+  }
+  const done = [{ file: 'evals/pair.eval.ts', name: 'done', cell: 'fake/fake/fake' }]
+
+  test('keeps stale staging a resume can take and removes what no run can resume', async () => {
+    const p = await project('sweep-unit', { 'reeval.config.ts': fakeConfig() })
+    const stopped = '20260101T000000Z_nogit_stop_aaaa'
+    const empty = '20260102T000000Z_nogit_empty_bbbb'
+    const assembled = '20260103T000000Z_nogit_done_cccc'
+    const live = '20260104T000000Z_nogit_live_dddd'
+    const fresh = '20260105T000000Z_nogit_new_eeee'
+    writeStoppedStaging(p.dir, stopped, done)
+    writeStoppedStaging(p.dir, empty)
+    writeStoppedStaging(p.dir, assembled)
+    writeScratch(p.dir, assembled, 'complete')
+    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeStoppedStaging(p.dir, fresh)
+    mkdirSync(join(p.dir, '.reeval', 'staging', 'stray'))
+    for (const name of [stopped, empty, assembled, live, 'stray']) age(p.dir, name)
+    assert.deepEqual(await sweepStaging(p.dir), [stopped])
+    assert.deepEqual(stagingNames(p.dir), [stopped, live, fresh].sort())
+    assert.deepEqual(await sweepStaging(p.dir, stopped), [])
+  })
+
+  test('keeps stale staging that holds the record a killed retry moved aside', async () => {
+    const p = await project('sweep-aside', { 'reeval.config.ts': fakeConfig() })
+    writeScratch(p.dir, SEEDED_RUN_ID, 'complete')
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    renameSync(scratchRecord(p.dir, SEEDED_RUN_ID), join(staging, 'previous.json'))
+    age(p.dir, SEEDED_RUN_ID)
+    assert.deepEqual(await sweepStaging(p.dir), [SEEDED_RUN_ID])
+  })
+
+  test('reeval clean --staging puts back the record a killed retry moved aside', async () => {
+    const p = await project('sweep-clean-aside', { 'reeval.config.ts': fakeConfig() })
+    writeScratch(p.dir, SEEDED_RUN_ID, 'complete')
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    renameSync(scratchRecord(p.dir, SEEDED_RUN_ID), join(staging, 'previous.json'))
+    assert.deepEqual(await removeStoppedStaging(p.dir), [SEEDED_RUN_ID])
+    assert.equal(existsSync(staging), false)
+    assert.equal((await resolveRetry(p.dir, SEEDED_RUN_ID)).runId, SEEDED_RUN_ID)
+  })
+
+  test('a run keeps a stopped run older than a day and names it, so --resume still finishes it', async () => {
+    const p = await project('sweep-run', oneEval)
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
+    age(p.dir, SEEDED_RUN_ID)
+    const r = await runCli(p.dir, ['run', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      new RegExp(
+        `run ${SEEDED_RUN_ID} stopped over a day ago and can still be resumed: reeval run --resume ${SEEDED_RUN_ID} finishes it, reeval clean --staging deletes it`,
+      ),
+    )
+    assert.deepEqual(stagingNames(p.dir), [SEEDED_RUN_ID])
+    const resumed = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--ui', 'plain'])
+    assert.equal(resumed.code, 0, resumed.stdout + resumed.stderr)
+    const { run } = readRun(p.dir, { back: 1 })
+    assert.equal(run.runId, SEEDED_RUN_ID)
+    const kept = run.evals.find((e) => e.name === 'done')
+    assert.equal(kept?.attempts[0]?.startedAt, '2026-01-01T00:00:00.000Z')
+  })
+
+  test('--dry-run sweeps nothing, even staging no run can resume', async () => {
+    const p = await project('sweep-dry', oneEval)
+    const assembled = '20260103T000000Z_nogit_done_cccc'
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
+    writeStoppedStaging(p.dir, assembled)
+    writeScratch(p.dir, assembled, 'complete')
+    for (const name of [SEEDED_RUN_ID, assembled]) age(p.dir, name)
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stderr, /can still be resumed/)
+    const resumed = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--dry-run'])
+    assert.equal(resumed.code, 0, resumed.stdout + resumed.stderr)
+    assert.deepEqual(stagingNames(p.dir), [SEEDED_RUN_ID, assembled].sort())
+  })
+
+  test('reeval clean --staging deletes every stopped run and leaves a running one', async () => {
+    const p = await project('sweep-clean', { 'reeval.config.ts': fakeConfig() })
+    const live = '20260104T000000Z_nogit_live_dddd'
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
+    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    assert.deepEqual(await removeStoppedStaging(p.dir), [SEEDED_RUN_ID])
+    assert.deepEqual(stagingNames(p.dir), [live])
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
+    const r = await runCli(p.dir, ['clean', '--staging'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, new RegExp(`Removed the staging of 1 stopped run: ${SEEDED_RUN_ID}`))
+    assert.deepEqual(stagingNames(p.dir), [live])
   })
 })
 
