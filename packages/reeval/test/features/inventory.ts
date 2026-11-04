@@ -1218,7 +1218,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.claude-code',
     area: 'Harnesses',
-    name: '`claudeCode()`: its image, rules, skills and MCP shape',
+    name: "`claudeCode()`: its image, rules, skills and MCP shape, on `ANTHROPIC_API_KEY` or, when it's unset, a subscription's brokered `CLAUDE_CODE_OAUTH_TOKEN`",
     fixtures: [
       'harness/rules:claude-code',
       'harness/workspace-skills:claude-code',
@@ -1226,7 +1226,11 @@ export const inventory: InventoryFeature[] = [
       'harness/dockerfile:claude-code',
     ],
     plan: ['harnesses/claude-code'],
-    unit: ['reeval/test/harness.test.ts'],
+    unit: [
+      'reeval/test/harness.test.ts',
+      'reeval/test/doctor.test.ts',
+      'reeval/test/docker.test.ts',
+    ],
   },
   {
     id: 'harness.antigravity',

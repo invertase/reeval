@@ -1795,4 +1795,56 @@ evaluate('hi', async (c) => {
       assert.equal(liveContainers(refusedRun.run.runId), '')
     },
   )
+
+  test(
+    'Claude Code on a subscription token: the token is brokered as a Bearer token on its endpoints only',
+    claudeImage,
+    async () => {
+      const p = await project('docker-claude-oauth', {
+        'reeval.config.ts': `
+import { defineConfig, defineEnvironment } from 'reeval'
+import { claudeCode } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+export default defineConfig({
+  harnesses: claudeCode({ model: 'claude-sonnet-5' }),
+  environments: defineEnvironment('box', { sandbox: docker() }),
+  timeout: '90s',
+})
+`,
+        'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('hi', async (c) => {
+  await c.send('Reply with the word hi.').catch(() => {})
+  const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
+  const tokenLines = environ.stdout
+    .split('\\n')
+    .filter((line) => /^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/.test(line))
+  expect(
+    tokenLines.every((line) =>
+      /^CLAUDE_CODE_OAUTH_TOKEN=(?:aisdkhc_[\\w-]{43}|reeval_secret_[0-9A-Za-z]{32})?$/.test(line),
+    ),
+  ).toBe(true)
+  expect(environ.stdout).not.toContain('not_a_real_token')
+})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env: {
+          ANTHROPIC_API_KEY: '',
+          CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-not_a_real_token_0000000000000000',
+          REEVAL_DEBUG: '1',
+        },
+        timeoutMs: 240_000,
+      })
+      const out = r.stdout + r.stderr
+      assert.equal(r.code, 3, out)
+      assert.match(out, /The API rejected CLAUDE_CODE_OAUTH_TOKEN: set a valid key/)
+      assertKeyRejected(p.dir, 'CLAUDE_CODE_OAUTH_TOKEN')
+      assert.match(
+        out,
+        /reeval:egress POST https:\/\/api\.anthropic\.com\/v1\/messages\S* HTTP\/[\d.]+ \(set authorization\)/i,
+      )
+      assert.doesNotMatch(out, /refused/, 'the CLI sends the token on its endpoints only')
+      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+    },
+  )
 })

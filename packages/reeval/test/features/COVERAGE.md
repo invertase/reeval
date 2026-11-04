@@ -146,7 +146,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | A refused harness key names its variable and how to fix it, and makes the attempt an infra error | ✓ 3 | — | ● 1 | ● 1 | — | — |
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | — | ● 5 |
-| `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 3 | ● 4 | — | — |
+| `claudeCode()`: its image, rules, skills and MCP shape, on `ANTHROPIC_API_KEY` or, when it's unset, a subscription's brokered `CLAUDE_CODE_OAUTH_TOKEN` | ✓ 3 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 1 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers | ✓ 5 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time | ✓ 5 | ✓ 2 | — | — | — | ● 1 |
