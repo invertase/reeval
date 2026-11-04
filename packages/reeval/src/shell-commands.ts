@@ -68,7 +68,7 @@ function segments(line: string): string[][] {
     } else if (ch === '"') {
       inWord = true
       for (i++; i < line.length && line[i] !== '"'; i++) {
-        if (line[i] === '\\' && '"\\$`'.includes(line[i + 1] ?? '')) i++
+        if (line[i] === '\\' && i + 1 < line.length && '"\\$`'.includes(line[i + 1] as string)) i++
         word += line[i]
       }
     } else if (ch === '\\') {

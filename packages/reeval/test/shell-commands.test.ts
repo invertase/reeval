@@ -37,6 +37,7 @@ describe('parseCommandLine', () => {
     ['echo "a && b" \'c; d\' e\\ f', ['echo a && b c; d e f']],
     ['echo "say \\"hi\\""', ['echo say "hi"']],
     ['echo a#b', ['echo a#b']],
+    ['echo "unclosed \\', ['echo unclosed \\']],
     ["echo ''", ['echo ']],
     ['FOO=1 BAR="x y" genkit start', ['genkit start']],
     ['env -u HOME FOO=1 genkit start', ['genkit start']],
