@@ -11,6 +11,7 @@ import pytest
 
 from reeval_python.context import PATTERN_ROUNDS, AttemptContext
 from reeval_python.errors import ReevalAssertionError
+from reeval_python.expect import _Matchers  # pyright: ignore[reportPrivateUsage]
 from reeval_python.wire import Patterns
 
 
@@ -146,3 +147,32 @@ def test_patterns_are_answered_off_the_event_loop(monkeypatch: pytest.MonkeyPatc
 
     asyncio.run(main())
     assert waited == [True], "the event loop stopped while the patterns were matched"
+
+
+class _Args(_Matchers[tuple[str, list[Any]]]):
+    def _match(self, matcher: str, args: list[Any]) -> tuple[str, list[Any]]:
+        return matcher, args
+
+
+def test_to_have_run_sends_a_command_or_a_program_with_its_args() -> None:
+    m = _Args({"turn": 0}, None)
+    args = re.compile(r"^flow:run\b")
+    assert m.to_have_run() == ("toHaveRun", [])
+    assert m.to_have_run("npm test") == ("toHaveRun", ["npm test"])
+    assert m.to_have_run(program="genkit") == ("toHaveRun", [{"program": "genkit"}])
+    assert m.to_have_run(program="genkit", args=args) == (
+        "toHaveRun",
+        [{"program": "genkit", "args": args}],
+    )
+    with pytest.raises(TypeError, match="not both"):
+        m.to_have_run("genkit", program="genkit")
+    with pytest.raises(TypeError, match=r"needs program="):
+        m.to_have_run(args="flow:run")
+
+
+def test_a_program_pattern_is_answered_at_its_depth() -> None:
+    host = Host(["genkit", "flow:run x"])
+    _expect(host, [{"program": re.compile("^gen"), "args": re.compile(r"^flow:run\b")}])
+    last = host.calls[-1]["args"][0]
+    assert last["program"]["answers"] == {"genkit": True, "flow:run x": False}
+    assert last["args"]["answers"] == {"genkit": False, "flow:run x": True}

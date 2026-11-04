@@ -215,8 +215,27 @@ class _Matchers(Generic[R]):
     def to_have_called_tool(self, name: Pattern, input: ToolInput = _UNSET) -> R:  # noqa: A002
         return self._match("toHaveCalledTool", _given(name, input))
 
-    def to_have_run(self, command: Pattern = _UNSET) -> R:
-        return self._match("toHaveRun", _given(command))
+    def to_have_run(
+        self,
+        command: Pattern = _UNSET,
+        *,
+        program: Pattern | None = None,
+        args: Pattern | None = None,
+    ) -> R:
+        """A shell call's command line contains or matches `command`; or, with `program`, a
+        segment of one ran that program (its name without its directory, after env assignments,
+        `timeout`, `sudo`, `npx`, `pnpm dlx` and the other wrappers reeval unwraps), with
+        arguments, joined by spaces, that contain or match `args`."""
+        if program is None:
+            if args is not None:
+                raise TypeError("to_have_run(args=…) needs program=…")
+            return self._match("toHaveRun", _given(command))
+        if command is not _UNSET:
+            raise TypeError("to_have_run() takes a command or program=…, not both")
+        match: dict[str, Any] = {"program": program}
+        if args is not None:
+            match["args"] = args
+        return self._match("toHaveRun", [match])
 
     def to_have_edited(self, path: Pattern = _UNSET) -> R:
         return self._match("toHaveEdited", _given(path))

@@ -241,7 +241,11 @@ group('hello', () => {
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
   `toHaveFetched(url?)`. `toHaveEdited` counts edit tools' events and the files that changed
-  while the agent ran the turn, so a shell write counts and a read doesn't. Guard files with
+  while the agent ran the turn, so a shell write counts and a read doesn't. `toHaveRun('genkit')`
+  matches anywhere in a command line (`cat genkit.config.ts` too); to ask "did it run the CLI",
+  use `toHaveRun({ program: 'genkit', args: /^flow:run\b/ })`, which matches the program each
+  segment ran after env assignments, `timeout`, `sudo`, `npx`, `pnpm dlx` and similar wrappers.
+  `shellCommands(c)` (from `reeval`) lists those `{ program, args, line, ok, turn }` to count. Guard files with
   `expect(c).not.toHaveChanged(globs)`: its globs are exact, while `toHaveEdited`'s string
   matches any path containing it. `toHaveEdited()` counts files that appear in the workspace
   diff. Gitignored files don't appear there, so use `toHaveFile()` to check them. Label

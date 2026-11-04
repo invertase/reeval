@@ -13,6 +13,7 @@ import {
   type Limits,
   type PathMatch,
   type Result,
+  type RunMatch,
   ran,
   searched,
   subjectError,
@@ -184,7 +185,9 @@ export const MATCHERS = {
       calledTool(actual, name, input),
   ),
 
-  toHaveRun: matcher((actual, [command]: [command?: RegExp | string]) => ran(actual, command)),
+  toHaveRun: matcher((actual, [command]: [command?: RegExp | string | RunMatch]) =>
+    ran(actual, command),
+  ),
 
   toHaveEdited: matcher((actual, [path]: [path?: RegExp | string]) => edited(actual, path)),
 

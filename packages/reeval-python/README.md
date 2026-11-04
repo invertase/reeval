@@ -111,6 +111,14 @@ import re
 expect(c.turns[0]).to_have_run(re.compile(r"^(npm|pnpm) t(est)?$"))
 ```
 
+`to_have_run(program=…, args=…)` matches the program a shell call ran instead of the whole command
+line, after env assignments, `timeout`, `sudo` and package runners such as `npx`, so
+`cat genkit.config.ts` doesn't count as running `genkit`:
+
+```python
+expect(c).to_have_run(program="genkit", args=re.compile(r"^flow:run\b"))
+```
+
 Use snake_case on the context (`read_file`, `write_file`, `file`) and on matchers (`to_succeed`,
 `to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`.
 

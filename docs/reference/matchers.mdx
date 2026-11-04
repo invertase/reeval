@@ -156,11 +156,41 @@ The assertion passes when at least one changed file matches one of the patterns.
     expect(turn, 'ran vitest').toHaveRun(/vitest/)
 ```
 
-<Property name="command" type="string | RegExp" optional>
-  Text the call's `command` input contains, or a regular expression it matches. Without a command, any shell call passes.
+<Property name="command" type="string | RegExp | RunMatch" optional>
+  Text the call's `command` input contains, or a regular expression it matches. Without a command, any shell call passes. An object matches the program the command ran instead.
 </Property>
 
 The failure message lists every shell command the agent ran.
+
+A string or regular expression matches anywhere in the command line, so `/genkit/` also matches `cat genkit.config.ts` and `npm i genkit`. The object form matches the program each segment of the line ran:
+
+```ts
+    expect(turn, 'ran the genkit CLI').toHaveRun({
+      program: 'genkit',
+      args: /^flow:run\b/,
+    })
+```
+
+<Property name="program" type="string | RegExp" required>
+  The program's name without its directory, or a regular expression it matches. `./node_modules/.bin/genkit` is `genkit`. A package runner's package drops its version: `npx genkit@latest` is `genkit`, and `npx @angular/cli@19` is `@angular/cli`.
+</Property>
+
+<Property name="args" type="string | RegExp" optional>
+  Text the program's arguments contain, or a regular expression they match, with the arguments joined by single spaces and their quotes removed. Anchor a subcommand with a regular expression, as in `/^add\b/`. Without `args`, any run of the program passes.
+</Property>
+
+reeval reads each command line in a fixed way, and isn't a shell parser:
+
+| Step | What it does |
+|---|---|
+| Segments | Splits the line on `&&`, `\|\|`, `;`, `\|`, `&`, and line breaks outside quotes. `2>&1` and `&>` stay words. |
+| Words | Splits a segment on whitespace. Single quotes, double quotes, and backslashes group and escape words. A `#` that starts a word comments out the rest of the line. |
+| Wrappers | Skips leading `NAME=value` assignments, then unwraps `env`, `timeout`, `time`, `exec`, `sudo`, `npx`, `bunx`, `npm exec` (`npm x`), `pnpm exec`, `pnpm dlx`, and `yarn dlx`, with their flags, in any order. |
+| Program | Takes the first word left. A wrapper with nothing after it, as in `npx --version`, is the program. |
+
+Anything else is read as plain words: `$(…)`, backticks, subshells, `bash -c`, `npx -c`, aliases, functions, redirections, and heredocs. `pnpm genkit` and `npm run genkit` run `pnpm` and `npm`. To read the programs yourself, use [`shellCommands()`](/reference/authoring-api#shellcommands).
+
+The object form's failure message lists every program the agent ran with its arguments, and a negated failure lists the matching ones.
 
 ## `toHaveCalledTool()`
 

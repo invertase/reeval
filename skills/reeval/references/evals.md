@@ -194,7 +194,13 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
 - Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
-  `toHaveFetched(url?)`. `.not` is Vitest's. `toHaveCalledSkill`
+  `toHaveFetched(url?)`. `.not` is Vitest's. `toHaveRun(string | RegExp)` matches the whole
+  command line, so `/genkit/` passes on `cat genkit.config.ts`; `toHaveRun({ program, args? })`
+  matches the program a segment (split on `&&`, `||`, `;`, `|`, `&`, line breaks) ran, by its
+  name without a directory, after `VAR=x`, `env`, `timeout`, `time`, `exec`, `sudo`, `npx`,
+  `bunx`, `npm exec`, `pnpm exec`/`dlx` and `yarn dlx`; `args` (joined by spaces) is a
+  substring or RegExp, e.g. `/^add\b/`. It doesn't unwrap `bash -c`, `$(…)` or `pnpm <bin>`.
+  `shellCommands(c | turn | c.turns)` returns those programs to count or filter. `toHaveCalledSkill`
   is opened or loaded (a `skill` / `load_skill` tool, or a Read/`sed` of
   `skills/<name>/`), not "followed". MCP is `toHaveCalledMcp(server, tool)`
   (the names in `mcp.<server>`); `toHaveCalledTool('mcp__<server>__<tool>')` is

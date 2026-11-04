@@ -185,6 +185,39 @@ For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's
 
 `expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.require()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
 
+## `shellCommands()`
+
+`shellCommands(subject)` returns the programs the agent ran from its shell calls, the tool calls named `bash` or `shell`, in order. The subject is a turn from `c.send()`, a list of turns such as `c.turns`, or `c`.
+
+```ts title="evals/adoption.eval.ts"
+import { evaluate, shellCommands } from '{{ pkg }}'
+// ...
+  const runs = shellCommands(c).filter((r) => r.program === 'genkit')
+  c.observe('genkit runs', runs.length)
+```
+
+Each command line gives one entry per segment, read the way [`toHaveRun()`](/reference/matchers#tohaverun) reads it: `cd app && npx genkit flow:run x` gives `cd` with `['app']`, then `genkit` with `['flow:run', 'x']`. Each entry is a `ShellCommand`:
+
+<Property name="program" type="string" required>
+  The program's name without its directory, after env assignments and wrappers. A package runner's package drops its version.
+</Property>
+
+<Property name="args" type="string[]" required>
+  The words after the program, with quotes removed.
+</Property>
+
+<Property name="line" type="string" required>
+  The shell call's whole command line.
+</Property>
+
+<Property name="ok" type="boolean | null" required>
+  Whether the shell call succeeded, or `null` when the harness never reported its result. It's the call's result, so every segment of one line has the same `ok`.
+</Property>
+
+<Property name="turn" type="number" required>
+  The turn's index in the subject. For a single turn, it's `0`.
+</Property>
+
 ## `DEFAULT_EGRESS_ALLOW`
 
 `DEFAULT_EGRESS_ALLOW` is a `readonly string[]` of the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org`, and `files.pythonhosted.org`. Spread it into an `egress.allow` list that still installs packages, as in `egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }`.

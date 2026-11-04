@@ -54,8 +54,13 @@ For more information about `c.exec`, see [the `c.exec` method](/reference/attemp
 ```ts title="with-transcript-matchers.eval.ts"
 expect(turn, 'edited math.js').toHaveEdited('src/math.js')
 expect(turn, 'ran the tests').toHaveRun(/node --test|npm (test|t)\b/)
-expect(turn, 'installed nothing').not.toHaveRun(/npm (install|i)\b/)
+expect(turn, 'installed nothing').not.toHaveRun({
+  program: 'npm',
+  args: /^(install|i|add)\b/,
+})
 ```
+
+A string or regular expression matches anywhere in the command line, so `/genkit/` also matches `cat genkit.config.ts`. The `{ program, args }` form matches the program each part of the line ran, after wrappers such as `FOO=1`, `timeout`, and `npx`. For the full list, see [`toHaveRun()`](/reference/matchers#tohaverun).
 
 `toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. `toStayWithin` caps the tokens, tool calls, and time the turns took, as in `expect(c).toStayWithin({ tokens: 20_000, toolCalls: 30 })`. For a runnable project, see [`with-transcript-matchers`](https://github.com/invertase/reeval/tree/main/examples/with-transcript-matchers).
 

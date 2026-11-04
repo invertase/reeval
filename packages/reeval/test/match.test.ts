@@ -149,6 +149,8 @@ const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], str
   ['toHaveRun', { turn: 0 }, [re('npm (run )?test', 'i')]],
   ['toHaveRun', { attempt: true }, ['pnpm']],
   ['toHaveRun', { turn: 0 }, ['npm'], 'runs the tests'],
+  ['toHaveRun', { turn: 0 }, [{ program: 'npm', args: re('^(run )?test', 'i') }]],
+  ['toHaveRun', { attempt: true }, [{ program: 'pnpm' }]],
   ['toHaveFetched', { turn: 0 }, [], 'fetched something'],
   ['toHaveEdited', { turn: 0 }, ['greet.js']],
   ['toHaveChanged', { attempt: true }, [['src', re('\\.md$')]]],
@@ -476,6 +478,34 @@ describe('one matcher table', () => {
         "not.toHaveRun re.compile('npm t(est)?')",
         "toHaveRun re.compile('npm t(est)?') #2",
       ],
+    )
+  })
+
+  test("a runner's own pattern inside toHaveRun({ program, args }) is asked about the program and its args", async () => {
+    const call = (program: Record<string, boolean>, args: Record<string, boolean>): ExpectCall => ({
+      op: 'expect',
+      subject: { turn: 0 },
+      matcher: 'toHaveRun',
+      args: [
+        {
+          program: { matchedBy: "re.compile('^np')", answers: program },
+          args: { matchedBy: "re.compile('^t')", answers: args },
+        },
+      ],
+      not: false,
+      soft: false,
+    })
+    const calls: RawAssertion[] = []
+    assert.deepEqual(await expectCall(c, calls, call({}, {})), {
+      untested: { "re.compile('^np')": ['npm'] },
+    })
+    assert.deepEqual(await expectCall(c, calls, call({ npm: true }, {})), {
+      untested: { "re.compile('^t')": ['test'] },
+    })
+    const passed = recorded(await expectCall(c, calls, call({ npm: true }, { test: true })))
+    assert.deepEqual(
+      { status: passed.status, label: passed.label },
+      { status: 'pass', label: "toHaveRun re.compile('^np') re.compile('^t')" },
     )
   })
 
