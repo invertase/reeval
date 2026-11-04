@@ -1,7 +1,7 @@
-// The programs a shell command line runs, for `toHaveRun({ program })` and `shellCommands`. Not a
-// shell parser: it splits on a fixed set of separators, honors quotes and backslashes the simple
-// way, and unwraps a fixed list of wrappers. Anything else (subshells, `$(…)`, `bash -c`, aliases,
-// functions, redirections, heredocs) is read as plain words.
+// The programs a shell command line runs, for `toHaveRun({ program })` and `shellCommands`:
+// shell-quote's words and operators, with a fixed list of wrappers unwrapped on top. Aliases,
+// functions and heredocs aren't followed.
+import { parse } from 'shell-quote'
 import { isObjectLike } from './object.ts'
 import type { AttemptContext, TranscriptEvent, Turn } from './types.ts'
 
@@ -38,68 +38,29 @@ export const commandOf = (event: ToolEvent): string => {
   return typeof command === 'string' ? command : ''
 }
 
+/** Operators that end a segment. `(` and `)` do too, so a subshell's or `$(…)`'s commands count. */
+const SEPARATORS = new Set(['&&', '||', ';', ';;', '|', '|&', '&', '(', ')'])
+
 /**
- * The command line's words, a list per segment: `&&`, `||`, `;`, `|`, `&` and line breaks
- * separate segments outside quotes, and a `#` starting a word comments out the rest of its line.
+ * The command line's words, a list per segment, as shell-quote reads them: variables stay as
+ * written, a glob is its pattern, a redirection drops its target, and a comment ends the line.
  */
 function segments(line: string): string[][] {
-  const out: string[][] = []
-  let words: string[] = []
-  let word = ''
-  let inWord = false
-  const endWord = () => {
-    if (inWord) words.push(word)
-    word = ''
-    inWord = false
+  const out: string[][] = [[]]
+  let redirect = false
+  for (const token of parse(line, (name) => `$${name}`)) {
+    const words = out.at(-1) as string[]
+    if (typeof token === 'string') {
+      if (!redirect) words.push(token)
+      redirect = false
+    } else if ('comment' in token) break
+    else if (token.op === 'glob') {
+      if (!redirect) words.push(token.pattern)
+      redirect = false
+    } else if (SEPARATORS.has(token.op)) out.push([])
+    else redirect = true
   }
-  const endSegment = () => {
-    endWord()
-    if (words.length) out.push(words)
-    words = []
-  }
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i] as string
-    if (ch === "'") {
-      const close = line.indexOf("'", i + 1)
-      const end = close === -1 ? line.length : close
-      word += line.slice(i + 1, end)
-      inWord = true
-      i = end
-    } else if (ch === '"') {
-      inWord = true
-      for (i++; i < line.length && line[i] !== '"'; i++) {
-        if (line[i] === '\\' && i + 1 < line.length && '"\\$`'.includes(line[i + 1] as string)) i++
-        word += line[i]
-      }
-    } else if (ch === '\\') {
-      if (line[i + 1] === '\n') i++
-      else if (i + 1 < line.length) {
-        word += line[++i]
-        inWord = true
-      }
-    } else if (ch === '#' && !inWord) {
-      while (i + 1 < line.length && line[i + 1] !== '\n') i++
-    } else if (ch === ';' || ch === '\n' || ch === '|') {
-      if (ch === '|' && (line[i + 1] === '|' || line[i + 1] === '&')) i++
-      endSegment()
-    } else if (ch === '&') {
-      // `2>&1` and `&>file` are redirections, not separators.
-      if (line[i - 1] === '>' || line[i - 1] === '<' || line[i + 1] === '>') {
-        word += ch
-        inWord = true
-      } else {
-        if (line[i + 1] === '&') i++
-        endSegment()
-      }
-    } else if (/\s/.test(ch)) {
-      endWord()
-    } else {
-      word += ch
-      inWord = true
-    }
-  }
-  endSegment()
-  return out
+  return out.filter((words) => words.length > 0)
 }
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
@@ -180,7 +141,10 @@ function programName(word: string, runner: boolean): string {
   return at > 0 ? base.slice(0, at) : base
 }
 
-function parseSegment(words: string[]): ParsedCommand | undefined {
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
+const COMMAND_FLAG = /^-[a-z]*c[a-z]*$/
+
+function parseSegment(words: string[]): ParsedCommand[] {
   let i = 0
   let runner = false
   let wrapper = -1
@@ -195,18 +159,21 @@ function parseSegment(words: string[]): ParsedCommand | undefined {
   }
   if (i >= words.length) {
     // Only assignments, or a wrapper with nothing after it (`npx --version`): the wrapper ran.
-    if (wrapper === -1) return undefined
-    return { program: basename(words[wrapper] as string), args: words.slice(wrapper + 1) }
+    if (wrapper === -1) return []
+    return [{ program: basename(words[wrapper] as string), args: words.slice(wrapper + 1) }]
   }
-  return { program: programName(words[i] as string, runner), args: words.slice(i + 1) }
+  const program = programName(words[i] as string, runner)
+  const args = words.slice(i + 1)
+  // `bash -lc '<script>'`, as Codex runs every command: the script's programs ran.
+  if (!runner && SHELLS.has(program) && COMMAND_FLAG.test(args[0] ?? '') && args[1] !== undefined) {
+    return parseCommandLine(args[1])
+  }
+  return [{ program, args }]
 }
 
 /** The programs a command line runs, one per segment, in order. */
 export function parseCommandLine(line: string): ParsedCommand[] {
-  return segments(line).flatMap((words) => {
-    const parsed = parseSegment(words)
-    return parsed ? [parsed] : []
-  })
+  return segments(line).flatMap(parseSegment)
 }
 
 /** The programs the transcript's shell calls ran, in order. */
@@ -227,8 +194,8 @@ type ShellSubject =
 /**
  * The programs the agent ran from its shell calls (the tools named `bash` or `shell`), in order:
  * one per segment of each command line, after its env assignments, `env`, `timeout`, `time`,
- * `exec`, `sudo` and package runners (`npx`, `bunx`, `npm exec`, `pnpm exec`, `pnpm dlx`,
- * `yarn dlx`). Takes a turn from `c.send()`, a list of turns, or `c`.
+ * `exec`, `sudo`, `bash -c` and package runners (`npx`, `bunx`, `npm exec`, `pnpm exec`,
+ * `pnpm dlx`, `yarn dlx`). Takes a turn from `c.send()`, a list of turns, or `c`.
  */
 export function shellCommands(subject: ShellSubject | AttemptContext): ShellCommand[] {
   const given: unknown = subject

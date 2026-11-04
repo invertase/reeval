@@ -179,16 +179,17 @@ A string or regular expression matches anywhere in the command line, so `/genkit
   Text the program's arguments contain, or a regular expression they match, with the arguments joined by single spaces and their quotes removed. Anchor a subcommand with a regular expression, as in `/^add\b/`. Without `args`, any run of the program passes.
 </Property>
 
-reeval reads each command line in a fixed way, and isn't a shell parser:
+reeval reads each command line with [shell-quote](https://github.com/ljharb/shell-quote), then unwraps a fixed list of wrappers:
 
 | Step | What it does |
 |---|---|
-| Segments | Splits the line on `&&`, `\|\|`, `;`, `\|`, `&`, and line breaks outside quotes. `2>&1` and `&>` stay words. |
-| Words | Splits a segment on whitespace. Single quotes, double quotes, and backslashes group and escape words. A `#` that starts a word comments out the rest of the line. |
+| Words | shell-quote splits the line into words, removing quotes and escapes. `$NAME` stays as written, a glob is its pattern, a redirection's target is dropped, and a `#` comment ends the line. |
+| Segments | `&&`, `\|\|`, `;`, `\|`, `&`, `(`, and `)` end a segment, so the commands inside a subshell or `$(…)` count as their own. |
 | Wrappers | Skips leading `NAME=value` assignments, then unwraps `env`, `timeout`, `time`, `exec`, `sudo`, `npx`, `bunx`, `npm exec` (`npm x`), `pnpm exec`, `pnpm dlx`, and `yarn dlx`, with their flags, in any order. |
+| Scripts | `bash -c '<script>'` (or `-lc`, and `sh`, `zsh`, `dash`) reads the script's commands instead, the way Codex runs each command. |
 | Program | Takes the first word left. A wrapper with nothing after it, as in `npx --version`, is the program. |
 
-Anything else is read as plain words: `$(…)`, backticks, subshells, `bash -c`, `npx -c`, aliases, functions, redirections, and heredocs. `pnpm genkit` and `npm run genkit` run `pnpm` and `npm`. To read the programs yourself, use [`shellCommands()`](/reference/authoring-api#shellcommands).
+A line break outside quotes is read as a space, not a separator, so a multi-line script reads as one long command. Aliases, functions, heredocs, and `npx -c` aren't followed, and `pnpm genkit` and `npm run genkit` run `pnpm` and `npm`. To read the programs yourself, use [`shellCommands()`](/reference/authoring-api#shellcommands).
 
 The object form's failure message lists every program the agent ran with its arguments, and a negated failure lists the matching ones.
 

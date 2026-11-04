@@ -495,6 +495,7 @@ describe('replay captures through normalizeStream', () => {
     test(`${harness} edit-and-run.raw.jsonl: toHaveRun and toHaveEdited`, () => {
       const t = replay(harness, 'edit-and-run.raw.jsonl')
       expect(t).toHaveRun(/contract/)
+      expect(t).toHaveRun({ program: 'echo', args: /^contract-/ })
       expect(t).toHaveEdited('notes.txt')
       throws(() => expect(t).toHaveRun(/deploy/), /expected shell commands matching \/deploy\//)
     })
