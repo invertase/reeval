@@ -68,7 +68,7 @@ reeval doctor                 Check Node and npm, the config, Docker and its mem
 
 ## `reeval run`
 
-The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs. `--retry-errors` takes the same refs, over the finished runs. A stopped run's staging stays in `.reeval/staging` until a resume finishes it or `reeval clean --staging` deletes it; once it's a day old, each `reeval run` but a `--dry-run` names it on stderr.
+The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs. `--retry-errors` takes the same refs, over the finished runs. A stopped run with a finished attempt stays resumable until `reeval clean --staging`, and `reeval run` names it once it's a day old.
 
 [//]: # (generated:cli-help:run)
 
@@ -168,7 +168,7 @@ The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `d
 
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers, and with Tart installed, deletes every Tart image reeval baked a harness into that isn't running. `--staging` deletes every stopped run's staging in `.reeval/staging`, but not a running run's, so `reeval run --resume` can no longer finish those runs.
+The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers, and with Tart installed, deletes every Tart image reeval baked a harness into that isn't running. `--staging` deletes every stopped run's staging, after putting back any record a killed resume or retry moved into it, so `reeval run --resume` can no longer finish those runs.
 
 The command prints `Removed debug data and snapshots for <n> runs (<size>) from <directory> and .reeval/runs`, or `No debug data or snapshots to remove in <directory> or .reeval/runs`. With `--staging`, it then prints `Removed the staging of <n> stopped runs: <ids>`, or `No stopped runs in .reeval/staging to remove`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
 

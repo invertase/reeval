@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs'
@@ -534,6 +535,8 @@ describe('the staging sweep', () => {
     utimesSync(join(root, '.reeval', 'staging', name), when, when)
   }
   const stagingNames = (root: string) => readdirSync(join(root, '.reeval', 'staging')).sort()
+  const scratchRecord = (root: string, runId: string) =>
+    join(root, '.reeval', 'runs', `${runId}.json`)
   const oneEval = {
     'reeval.config.ts': fakeConfig(),
     'evals/pair.eval.ts': `
@@ -559,9 +562,28 @@ evaluate('leftover', async () => {})
     writeStoppedStaging(p.dir, fresh)
     mkdirSync(join(p.dir, '.reeval', 'staging', 'stray'))
     for (const name of [stopped, empty, assembled, live, 'stray']) age(p.dir, name)
-    assert.deepEqual(await sweepStaging(p.dir), [stopped, empty])
-    assert.deepEqual(stagingNames(p.dir), [stopped, empty, live, fresh].sort())
-    assert.deepEqual(await sweepStaging(p.dir, stopped), [empty])
+    assert.deepEqual(await sweepStaging(p.dir), [stopped])
+    assert.deepEqual(stagingNames(p.dir), [stopped, live, fresh].sort())
+    assert.deepEqual(await sweepStaging(p.dir, stopped), [])
+  })
+
+  test('keeps stale staging that holds the record a killed retry moved aside', async () => {
+    const p = await project('sweep-aside', { 'reeval.config.ts': fakeConfig() })
+    writeScratch(p.dir, SEEDED_RUN_ID, 'complete')
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    renameSync(scratchRecord(p.dir, SEEDED_RUN_ID), join(staging, 'previous.json'))
+    age(p.dir, SEEDED_RUN_ID)
+    assert.deepEqual(await sweepStaging(p.dir), [SEEDED_RUN_ID])
+  })
+
+  test('reeval clean --staging puts back the record a killed retry moved aside', async () => {
+    const p = await project('sweep-clean-aside', { 'reeval.config.ts': fakeConfig() })
+    writeScratch(p.dir, SEEDED_RUN_ID, 'complete')
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    renameSync(scratchRecord(p.dir, SEEDED_RUN_ID), join(staging, 'previous.json'))
+    assert.deepEqual(await removeStoppedStaging(p.dir), [SEEDED_RUN_ID])
+    assert.equal(existsSync(staging), false)
+    assert.equal((await resolveRetry(p.dir, SEEDED_RUN_ID)).runId, SEEDED_RUN_ID)
   })
 
   test('a run keeps a stopped run older than a day and names it, so --resume still finishes it', async () => {
