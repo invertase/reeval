@@ -1,6 +1,6 @@
 // Where a turn's time went: its tool calls (durations the harness didn't report inferred from
 // the next event), its model calls, and the background jobs it waited on, swept into one
-// segmented timeline whose totals are the turn's `timeSplit`. Browser-safe: the studio draws it.
+// segmented timeline whose totals are the turn's `timeSplit`. Browser-safe.
 import type { TimeSplit, TranscriptEvent } from '../types.ts'
 
 type ToolLike = Extract<
@@ -26,7 +26,9 @@ const isToolLike = (e: TranscriptEvent): e is ToolLike =>
 
 /**
  * The events with each tool call's missing `durationMs` run to the next event's `atMs` (the
- * turn's end for the last), flagged `durationInferred`.
+ * turn's end for the last), flagged `durationInferred`. A main model call ends it too: the agent
+ * only calls the model again once the tool's result is back. A side call or a call that carries
+ * the whole turn doesn't.
  */
 export function inferDurations(
   events: readonly TranscriptEvent[],
@@ -34,7 +36,9 @@ export function inferDurations(
 ): TranscriptEvent[] {
   return events.map((e, i) => {
     if (!isToolLike(e) || e.durationMs !== null) return e
-    const next = events.slice(i + 1).find((n) => n.type !== 'model-call' && n.atMs > e.atMs)
+    const next = events
+      .slice(i + 1)
+      .find((n) => n.atMs > e.atMs && (n.type !== 'model-call' || (!n.stream && n.role !== 'side')))
     const end = Math.max(e.atMs, next ? next.atMs : turnMs)
     return { ...e, durationMs: end - e.atMs, durationInferred: true as const }
   })

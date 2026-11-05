@@ -196,15 +196,18 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
 export function recordTimeline(a: Attempt, sandbox: Sandbox | undefined): void {
   const calls = sandbox?.modelCalls?.() ?? []
   for (const turn of a.record.turns) {
-    const events = [
-      ...inferDurations(turn.transcript, turn.durationMs),
-      ...modelCallEvents(calls, {
-        startedAt: Date.parse(turn.startedAt),
-        durationMs: turn.durationMs,
-        model: turn.model,
-        steps: a.turnSteps.get(turn) ?? [],
-      }),
-    ].sort((x, y) => x.atMs - y.atMs)
+    const events = inferDurations(
+      [
+        ...turn.transcript,
+        ...modelCallEvents(calls, {
+          startedAt: Date.parse(turn.startedAt),
+          durationMs: turn.durationMs,
+          model: turn.model,
+          steps: a.turnSteps.get(turn) ?? [],
+        }),
+      ].sort((x, y) => x.atMs - y.atMs),
+      turn.durationMs,
+    )
     turn.transcript = events
     turn.timeSplit = timeSplit(events, turn.durationMs)
   }

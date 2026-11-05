@@ -478,7 +478,8 @@ export function toolCalls(transcript: string): ToolCall[] {
       target: toolTarget(event.input, String(event.tool ?? '')),
       text: targetText(event.input, String(event.tool ?? '')),
       ok: event.ok === null ? null : event.ok !== false,
-      durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
+      durationMs:
+        typeof event.durationMs === 'number' && !event.durationInferred ? event.durationMs : null,
     })
   })
   return calls

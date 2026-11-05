@@ -192,12 +192,25 @@ describe('inferDurations', () => {
     assert.deepEqual(
       events.map((e) => ('durationMs' in e ? [e.durationMs, 'durationInferred' in e] : null)),
       [
-        [300, true],
+        [50, true],
         [10, false],
         [10, false],
         [300, true],
       ],
     )
+  })
+
+  test("twin: a side call or one carrying the whole turn doesn't end a call", () => {
+    const events = inferDurations(
+      [
+        tool(100, 'read', {}, null),
+        { ...model(150, 10), role: 'side' } as TranscriptEvent,
+        model(200, 10, true),
+        tool(400, 'read', {}),
+      ],
+      1000,
+    )
+    assert.deepEqual(events[0] && 'durationMs' in events[0] && events[0].durationMs, 300)
   })
 })
 

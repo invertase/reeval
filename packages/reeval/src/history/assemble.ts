@@ -406,7 +406,10 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
       ? null
       : turns.reduce((n: number, ms) => n + (ms ?? 0), 0)
   const toolDurations = events.flatMap((e) =>
-    e.type !== 'model-call' && 'durationMs' in e && typeof e.durationMs === 'number'
+    e.type !== 'model-call' &&
+    'durationMs' in e &&
+    typeof e.durationMs === 'number' &&
+    !('durationInferred' in e && e.durationInferred)
       ? [e.durationMs]
       : [],
   )
