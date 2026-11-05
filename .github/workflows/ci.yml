@@ -152,7 +152,11 @@ jobs:
                 packages/reeval/test/sandbox-* | \
                 packages/reeval/test/contract* | \
                 packages/reeval/test/e2e-real* | \
-                packages/reeval/test/cursor-sdk-shape*)
+                packages/reeval/test/cursor-sdk-shape* | \
+                packages/reeval/src/store/* | \
+                packages/reeval/src/store-s3.ts | \
+                packages/reeval/test/store* | \
+                packages/reeval/test/support/minio.ts)
                   docker=true ;;
               esac
               case $f in
@@ -280,13 +284,13 @@ jobs:
           save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
+      - name: reeval (every test file but the fixture, Docker, MinIO, studio, pack and real-agent ones)
         working-directory: packages/reeval
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
             --test-shard=${{ matrix.shard }} \
-            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real|openrouter-real).test.ts
+            test/!(features|docker|docker-antigravity|store-minio|studio|pack|contract|e2e-real|questions-real|openrouter-real).test.ts
       # The other packages' own tests take seconds, so the first shard runs them. sandbox-docker's
       # real-container tests skip here: there's no sandbox image. The docker job runs them.
       - name: sandbox-docker (without containers) and the harness packages
@@ -359,11 +363,11 @@ jobs:
           - package: 'reeval'
             part: sandbox 2/2
             run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$IMAGE_BUILDS" test/docker.test.ts
-          # The Docker sandbox contracts, and the harness contract and e2e CLI suites on their
-          # key-free fake row (real rows run in real.yml).
+          # The Docker sandbox contracts, the harness contract and e2e CLI suites on their
+          # key-free fake row (real rows run in real.yml), and s3() on MinIO.
           - package: 'reeval'
             part: contracts
-            run: node --test --experimental-strip-types --no-warnings test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
+            run: node --test --experimental-strip-types --no-warnings test/store-minio.test.ts test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
           # Its whole suite, real containers included.
           - package: '@reeval/sandbox-docker'
             part: all
