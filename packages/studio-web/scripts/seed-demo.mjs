@@ -208,6 +208,8 @@ await writeFile(
         ...good,
         id: 'hasty',
         flakeRate: 0.35,
+        // Starts a job in the background and polls it once: its agent time has a wait.
+        script: [[{ exec: 'sleep 1 > /dev/null 2>&1 &' }, { exec: 'sleep 1' }]],
         withSkill: { files: { 'greet.js': TERSE_AHOY, 'package.json': PKG } },
       }),
     ],

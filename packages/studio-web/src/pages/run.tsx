@@ -52,12 +52,14 @@ import {
   runOutcome,
   type SandboxWarning,
   shortSha,
+  type TimeSplit,
   type TreeNode,
   VERDICT_TEXT,
 } from 'reeval/view'
 import { CopyButton } from '@/components/copy-button'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { Lift, OutcomeBadge, OutcomeIcon, Rate, TallyBar } from '@/components/status'
+import { Axis, SplitBar, SplitLegend } from '@/components/timeline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -691,6 +693,43 @@ function ChecksTable({ entry }: { entry: EvalEntry }) {
   )
 }
 
+const splitTotal = (s: TimeSplit) => s.toolMs + s.waitingMs + s.otherMs + (s.modelMs ?? 0)
+
+/** Each arm's median agent time as one bar on a shared axis, split into where it went. */
+function ArmTimelines({ rows }: { rows: CellRow[] }) {
+  const arms = rows.flatMap((row) => (row.effort?.split ? [{ row, split: row.effort.split }] : []))
+  if (arms.length < 2) return null
+  const scale = Math.max(1, ...arms.map((a) => splitTotal(a.split)))
+  const label = (row: CellRow) =>
+    [rows.some((r) => r.harness !== row.harness) ? row.harness : null, row.environment]
+      .filter(Boolean)
+      .join(' · ')
+  return (
+    <section className="space-y-2" data-arm-timelines>
+      <h3 className="text-sm font-medium">Agent time</h3>
+      <div className="space-y-3 rounded-lg border p-4">
+        {arms.map(({ row, split }) => (
+          <div key={row.key} className="space-y-1.5" data-arm={row.key}>
+            <div className="flex items-baseline gap-2 text-xs">
+              <span className="font-mono">{label(row)}</span>
+              {row.role === 'control' ? (
+                <span className="text-muted-foreground">control</span>
+              ) : null}
+              <span className="tabular ml-auto text-muted-foreground">
+                {formatDuration(splitTotal(split))}
+                {row.effort && row.effort.n > 1 ? ` median of ${row.effort.n}` : ''}
+              </span>
+            </div>
+            <SplitBar split={split} scaleMs={scale} />
+            <SplitLegend split={split} />
+          </div>
+        ))}
+        <Axis ms={scale} />
+      </div>
+    </section>
+  )
+}
+
 function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
@@ -748,6 +787,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
       ) : standingRates.length ? (
         <JudgeRates rates={standingRates} />
       ) : null}
+
+      {matrix ? <ArmTimelines rows={rows} /> : null}
 
       <ChecksTable entry={entry} />
 

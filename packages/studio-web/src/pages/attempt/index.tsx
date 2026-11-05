@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
+import { useMemo } from 'react'
 import {
   type AttemptRecord,
   activityLabel,
@@ -10,15 +11,18 @@ import {
   findEval,
   formatDuration,
   formatUsage,
+  parseTranscript,
+  type RunRecord,
   reasoningLabel,
 } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { OutcomeBadge, OutcomeIcon } from '@/components/status'
+import { Axis, SegmentBar, SplitBar, SplitLegend, transcriptTurns } from '@/components/timeline'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { debugQuery, recordQuery, useStudio } from '@/lib/data'
+import { artifactQuery, debugQuery, recordQuery, useStudio } from '@/lib/data'
 import { plural, shortRunId } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { CapturePageFacts } from './capture-page'
@@ -72,6 +76,47 @@ function Timings({ attempt }: { attempt: AttemptRecord }) {
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** Where the agent's time went, a bar per turn from its transcript (one bar from the totals without it). */
+function AgentTime({ record, attempt }: { record: RunRecord; attempt: AttemptRecord }) {
+  const { data: studio } = useStudio()
+  const path = studio?.features.artifacts === false ? undefined : attempt.files.transcript?.path
+  const { data: text } = useQuery(artifactQuery(record.runId, path))
+  const turns = useMemo(() => (text ? transcriptTurns(parseTranscript(text)) : []), [text])
+  const split = attempt.timeSplit
+  if (!split) return null
+  const scale = Math.max(1, ...turns.map((t) => t.durationMs))
+  return (
+    <div className="space-y-2 border-t pt-3" data-agent-time>
+      <div className="text-xs font-medium text-muted-foreground">Agent time</div>
+      {turns.length ? (
+        <div className="space-y-1.5">
+          {turns.map((t) => (
+            <div key={t.turn} className="flex items-center gap-2">
+              {turns.length > 1 ? (
+                <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
+                  Turn {t.turn + 1}
+                </span>
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <SegmentBar segments={t.segments} totalMs={t.durationMs} scaleMs={scale} />
+              </div>
+            </div>
+          ))}
+          <div className={turns.length > 1 ? 'pl-14' : undefined}>
+            <Axis ms={scale} />
+          </div>
+        </div>
+      ) : (
+        <SplitBar
+          split={split}
+          scaleMs={split.toolMs + split.waitingMs + split.otherMs + (split.modelMs ?? 0)}
+        />
+      )}
+      <SplitLegend split={split} />
     </div>
   )
 }
@@ -244,8 +289,9 @@ export function AttemptPage() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border bg-card p-4">
+      <div className="space-y-3 rounded-xl border bg-card p-4">
         <Timings attempt={attempt} />
+        <AgentTime record={record} attempt={attempt} />
       </div>
 
       {attempt.files.artifacts?.length ? (

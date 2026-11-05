@@ -438,6 +438,51 @@ describe('studio in a browser', () => {
     await page.close()
   }
 
+  test("an attempt's agent time, and each arm's on its eval, split into where it went", async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    const out = join(demo, 'studio-timeline')
+    const built = spawnSync(
+      process.execPath,
+      [cli, 'studio', 'build', '--config', config, '--out', out],
+      {
+        encoding: 'utf8',
+      },
+    )
+    assert.equal(built.status, 0, built.stderr)
+    type Attempt = { id: string; cell: string; timeSplit?: { waitingMs: number } }
+    type Entry = { slug: string; cells: unknown[]; attempts: Attempt[] }
+    const runs = readdirSync(join(out, 'data/runs'))
+      .filter((n) => n.endsWith('.json'))
+      .map((n) => JSON.parse(readFileSync(join(out, 'data/runs', n), 'utf8')))
+    const waits = (a: Attempt) => (a.timeSplit?.waitingMs ?? 0) > 0
+    // The arm's bar is its median attempt, so most of one cell's attempts wait.
+    const waitingArm = (e: Entry) =>
+      e.cells.length > 1 &&
+      e.attempts.some((a) => {
+        const cell = e.attempts.filter((b) => b.cell === a.cell)
+        return cell.filter(waits).length * 2 > cell.length
+      })
+    const run = runs.find((r) => r.evals.some(waitingArm))
+    assert.ok(run, "the matrix run's hasty agent waits")
+    const entry = run.evals.find(waitingArm)
+    const base = await host(out)
+    const { page, errors } = await open(`${base}#/runs/${run.runId}?eval=${entry.slug}`)
+    const arms = page.locator('[data-arm-timelines] [data-arm]')
+    await arms.first().waitFor()
+    assert.ok((await arms.count()) >= 2, 'a bar per arm')
+    assert.ok((await page.locator('[data-arm-timelines] [data-segment="waiting"]').count()) > 0)
+    await page.locator('[data-arm-timelines] [data-split="waiting"]').first().waitFor()
+
+    const waited = entry.attempts.find(waits) as Attempt
+    await page.goto(
+      `${base}#/runs/${run.runId}/evals/${entry.slug}/attempts/${encodeURIComponent(waited.id)}`,
+    )
+    await page.locator('[data-agent-time] [data-segment="waiting"]').first().waitFor()
+    await page.locator('[data-wait="background"]').first().waitFor()
+    await page.locator('[data-wait="poll"]').first().waitFor()
+    assert.deepEqual(errors, [])
+  })
+
   test('every run in the record corpus renders: runs, analysis, and every attempt tab', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
     const names = readdirSync(corpus).filter((n) => existsSync(join(corpus, n, 'evals/.history')))

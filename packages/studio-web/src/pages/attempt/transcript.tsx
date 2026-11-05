@@ -8,9 +8,11 @@ import {
   FilePlus,
   FileText,
   Globe,
+  Hourglass,
   MessageSquare,
   RotateCcw,
   Search,
+  Sparkles,
   TerminalSquare,
   UserRound,
   Wrench,
@@ -19,9 +21,11 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   formatDuration,
   parseTranscript,
+  type TranscriptEvent,
   type TranscriptItem,
   type TranscriptLine,
   transcriptItems,
+  waitRoles,
 } from 'reeval/view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -110,8 +114,48 @@ function Block({ label, text }: { label: string; text: string }) {
   )
 }
 
-function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: () => void }) {
-  const dur = 'durationMs' in e && e.durationMs ? formatDuration(e.durationMs) : null
+type WaitRole = 'background' | 'poll'
+
+const WAIT_TITLE: Record<WaitRole, string> = {
+  background: 'Went to the background: the agent waited on it',
+  poll: 'Checked on a background job',
+}
+
+function Waits({ role }: { role: WaitRole | undefined }) {
+  if (!role) return null
+  return (
+    <span title={WAIT_TITLE[role]} data-wait={role} className="inline-flex items-center text-infra">
+      <Hourglass className="size-3.5" />
+    </span>
+  )
+}
+
+function Duration({ e }: { e: EventLine }) {
+  if (!('durationMs' in e) || !e.durationMs) return null
+  const inferred = 'durationInferred' in e && e.durationInferred
+  return (
+    <span
+      data-inferred={inferred ? '' : undefined}
+      title={inferred ? "The harness didn't report when it ended: until the next event" : undefined}
+    >
+      {inferred ? '~' : ''}
+      {formatDuration(e.durationMs)}
+    </span>
+  )
+}
+
+function EventRow({
+  e,
+  open,
+  toggle,
+  role,
+}: {
+  e: EventLine
+  open: boolean
+  toggle: () => void
+  role?: WaitRole
+}) {
+  const dur = 'durationMs' in e && e.durationMs ? <Duration e={e} /> : null
   switch (e.type) {
     case 'text':
       return (
@@ -164,6 +208,7 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
             <span className="flex items-center gap-2">
               {e.ok === false ? <span className="text-fail">failed</span> : null}
               {e.ok === null ? <span className="text-muted-foreground">unfinished</span> : null}
+              <Waits role={role} />
               {dur}
             </span>
           }
@@ -209,6 +254,39 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{dur}</span>
         </div>
       )
+    case 'model-call':
+      return (
+        <div
+          className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-1.5 text-xs text-muted-foreground"
+          data-model-call
+        >
+          <Sparkles className="size-3.5 text-drift" />
+          <span>{e.stream ? 'Model stream' : 'Model call'}</span>
+          <span className="min-w-0 truncate font-mono text-[11px]">{e.model ?? e.request}</span>
+          <span className="ml-auto flex shrink-0 gap-2">
+            {e.status !== null && (e.status < 200 || e.status > 299) ? (
+              <span className="text-fail">{e.status}</span>
+            ) : null}
+            {e.firstByteMs !== null ? (
+              <span title="Until the response's first byte">
+                first byte {formatDuration(e.firstByteMs)}
+              </span>
+            ) : null}
+            {e.usage ? (
+              <span>
+                {(
+                  e.usage.input +
+                  e.usage.cacheRead +
+                  e.usage.cacheWrite +
+                  e.usage.output
+                ).toLocaleString()}{' '}
+                tokens
+              </span>
+            ) : null}
+            <span>{formatDuration(e.durationMs)}</span>
+          </span>
+        </div>
+      )
     case 'retry':
       return (
         <div className="flex items-start gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
@@ -230,10 +308,12 @@ function ItemRow({
   item,
   open,
   toggle,
+  role,
 }: {
   item: TranscriptItem
   open: boolean
   toggle: () => void
+  role?: WaitRole
 }) {
   if (item.kind === 'turn') {
     return (
@@ -270,7 +350,7 @@ function ItemRow({
         {offset(e.atMs)}
       </span>
       <div className="min-w-0 flex-1">
-        <EventRow e={e} open={open} toggle={toggle} />
+        <EventRow e={e} open={open} toggle={toggle} role={role} />
       </div>
     </div>
   )
@@ -315,6 +395,24 @@ export function Transcript({ text, filesChanged }: { text: string; filesChanged?
     }
     return { tools, reasoning, edits }
   }, [items])
+  const roles = useMemo(() => {
+    const byTurn = new Map<number, { events: TranscriptEvent[]; at: number[] }>()
+    items.forEach((item, i) => {
+      if (item.kind !== 'event') return
+      const turn = byTurn.get(item.turn) ?? { events: [], at: [] }
+      byTurn.set(item.turn, turn)
+      turn.events.push(item.event as TranscriptEvent)
+      turn.at.push(i)
+    })
+    const out = new Map<number, WaitRole>()
+    for (const { events, at } of byTurn.values()) {
+      for (const [i, role] of waitRoles(events)) {
+        const index = at[i]
+        if (index !== undefined) out.set(index, role)
+      }
+    }
+    return out
+  }, [items])
   const foldables = items.flatMap((item, i) => (foldable(item) ? [i] : []))
   const allOpen = foldables.length > 0 && foldables.every((i) => open.has(i))
 
@@ -354,7 +452,12 @@ export function Transcript({ text, filesChanged }: { text: string; filesChanged?
               className="absolute top-0 left-0 w-full pb-2.5"
               style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
             >
-              <ItemRow item={item} open={open.has(row.index)} toggle={() => toggle(row.index)} />
+              <ItemRow
+                item={item}
+                open={open.has(row.index)}
+                toggle={() => toggle(row.index)}
+                role={roles.get(row.index)}
+              />
             </div>
           )
         })}

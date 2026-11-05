@@ -23,6 +23,7 @@ export type {
   CapturePageFile,
   Outcome,
   SandboxWarning,
+  TimeSplit,
   TranscriptEvent,
 } from '../types.ts'
 export * from './analysis.ts'
@@ -48,3 +49,4 @@ export {
 } from './record.ts'
 export * from './remarks.ts'
 export * from './suite.ts'
+export * from './timeline.ts'
