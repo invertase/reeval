@@ -1357,7 +1357,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.fx',
     area: 'Harnesses',
-    name: '`fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names',
+    name: "`fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens (cache reads and reasoning from the relay's log of each Chat Completions call) and its tool names",
     fixtures: [
       'harness/rules:fx',
       'harness/workspace-skills:fx',
@@ -1365,7 +1365,11 @@ export const inventory: InventoryFeature[] = [
       'harness/dockerfile:fx',
     ],
     plan: ['fx/fx'],
-    unit: ['reeval/test/harness.test.ts', 'harness-fx/test/unit.test.ts'],
+    unit: [
+      'reeval/test/harness.test.ts',
+      'reeval/test/replay.test.ts',
+      'harness-fx/test/unit.test.ts',
+    ],
   },
   {
     id: 'harness.cursor',
