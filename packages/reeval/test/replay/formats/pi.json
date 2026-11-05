@@ -137,6 +137,7 @@
   "message_start/assistant .message.durationMs",
   "message_start/assistant .message.model",
   "message_start/assistant .message.provider",
+  "message_start/assistant .message.rawStopReason",
   "message_start/assistant .message.responseId",
   "message_start/assistant .message.responseModel",
   "message_start/assistant .message.role",
