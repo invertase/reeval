@@ -2,6 +2,7 @@ import { TURN_EDITED } from '../assert.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { changedBetween, diffSinceSnapshot, workspaceBlobs } from '../diff.ts'
 import { ProviderStopError } from '../harness/provider-stop.ts'
+import { fitToolOutput } from '../harness/tool-output.ts'
 import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
@@ -159,7 +160,7 @@ export function turnSender(
       }
     })
     const timedBefore = a.record.timings.agentMs
-    const { raw, rejectedKey, providerStop, reasoningMs, agentMs, steps, ...sent } = await a
+    const { raw, rejectedKey, providerStop, reasoningMs, agentMs, steps, ...said } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
@@ -172,6 +173,7 @@ export function turnSender(
         watch?.close()
       })
     if (steps) a.turnSteps.set(entry, steps)
+    const sent = { ...said, transcript: said.transcript.map((e) => fitToolOutput(e)) }
     const sendWallMs = agentMs ?? Date.now() - sendStarted
     if (agentMs !== undefined) a.record.timings.agentMs = timedBefore + agentMs
     const startup = await watch?.end()

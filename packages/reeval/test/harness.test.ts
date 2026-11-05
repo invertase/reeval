@@ -89,6 +89,7 @@ import {
 import { noDefaultEffort, withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
+import { fitToolOutput, TOOL_OUTPUT_MAX_BYTES } from '../src/harness/tool-output.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import {
   antigravity,
@@ -2802,4 +2803,130 @@ describe("each harness's image serves its attempts' bootstrap", () => {
       }
     })
   }
+})
+
+describe('what a tool event shows: the model view or the full output', () => {
+  const call = (id: string, toolName: string) => ({
+    ms: 1,
+    part: { type: 'tool-call', toolCallId: id, toolName, input: {} },
+  })
+  const done = (id: string, output: unknown, extra: Record<string, unknown> = {}) => ({
+    ms: 2,
+    part: { type: 'tool-result', toolCallId: id, output, ...extra },
+  })
+  const tools = (events: TranscriptEvent[]) =>
+    events.flatMap((e) =>
+      e.type === 'tool' ? [[e.tool, e.output, e.outputView, e.outputTruncated]] : [],
+    )
+
+  test('the model view unless the catalog says the harness reports a tool whole', () => {
+    const parts = [call('a', 'bash'), done('a', 'out'), call('b', 'mcp'), done('b', 'res')]
+    assert.deepEqual(tools(normalizeStream(parts, 0)), [
+      ['bash', 'out', 'model', undefined],
+      ['mcp', 'res', 'model', undefined],
+    ])
+    assert.deepEqual(
+      tools(normalizeStream(parts, 0, { fullToolOutput: ['bash'] })).map((t) => t[2]),
+      ['full', 'model'],
+    )
+    assert.deepEqual(
+      tools(normalizeStream(parts, 0, { fullToolOutput: 'all' })).map((t) => t[2]),
+      ['full', 'full'],
+    )
+    assert.deepEqual(AGENTS.codex.fullToolOutput, 'all')
+    assert.deepEqual(AGENTS.fx.fullToolOutput, ['bash'])
+    assert.equal(AGENTS.cursor.fullToolOutput, undefined)
+  })
+
+  test("output an adapter read from the CLI's file is the full view, with the size it cut", () => {
+    const metadata = (toolOutput: unknown) => ({ providerMetadata: { agy: { toolOutput } } })
+    assert.deepEqual(
+      tools(
+        normalizeStream(
+          [
+            call('a', 'mcp__probe__bulk'),
+            done('a', 'bulk…', metadata({ view: 'full', bytes: 2_000_000 })),
+            call('b', 'mcp__probe__echo'),
+            done('b', 'ECHO', metadata({ view: 'model' })),
+          ],
+          0,
+        ),
+      ),
+      [
+        ['mcp__probe__bulk', 'bulk…', 'full', { bytes: 2_000_000 }],
+        ['mcp__probe__echo', 'ECHO', 'model', undefined],
+      ],
+    )
+  })
+
+  test("a later raw part's toolOutput replaces the result's output, but never a failure's", () => {
+    const later = (toolCallId: string, output: unknown) => ({
+      ms: 3,
+      part: {
+        type: 'raw',
+        rawValue: { type: 'output', toolOutput: { toolCallId, output, view: 'full' } },
+      },
+    })
+    assert.deepEqual(
+      tools(
+        normalizeStream(
+          [
+            call('a', 'bash'),
+            done('a', ''),
+            call('f', 'bash'),
+            { ms: 2, part: { type: 'tool-error', toolCallId: 'f', error: 'no' } },
+            later('a', 'line-1\nEND\n'),
+            later('f', 'x'),
+          ],
+          0,
+        ),
+      ).map((t) => t.slice(1, 3)),
+      [
+        ['line-1\nEND\n', 'full'],
+        ['no', 'model'],
+      ],
+    )
+  })
+})
+
+describe('fitToolOutput: the transcript keeps at most 128 KiB of each text in a tool output', () => {
+  const tool = (output: unknown, extra: Partial<Extract<TranscriptEvent, { type: 'tool' }>> = {}) =>
+    ({
+      type: 'tool',
+      id: 't',
+      tool: 'bash',
+      input: {},
+      output,
+      ok: true,
+      ...extra,
+    }) as TranscriptEvent
+
+  test('its first and last half, a line saying how much was cut, and the whole size', () => {
+    const text = `${'h'.repeat(100)}${'m'.repeat(56)}${'t'.repeat(100)}`
+    const fitted = fitToolOutput(tool(text), 64)
+    assert.ok(fitted.type === 'tool')
+    assert.equal(fitted.output, `${'h'.repeat(32)}\n[… 192 bytes cut …]\n${'t'.repeat(32)}`)
+    assert.deepEqual(fitted.outputTruncated, { bytes: 256 })
+    assert.equal(TOOL_OUTPUT_MAX_BYTES, 128 * 1024)
+  })
+
+  test('each text in structured output, with its JSON size; a split character is dropped', () => {
+    const output = [{ type: 'text', text: `xé${'y'.repeat(10)}` }, { n: 1 }]
+    const fitted = fitToolOutput(tool(output), 4)
+    assert.ok(fitted.type === 'tool')
+    assert.deepEqual(fitted.output, [{ type: 'text', text: 'x\n[… 10 bytes cut …]\nyy' }, { n: 1 }])
+    assert.equal(fitted.outputTruncated?.bytes, Buffer.byteLength(JSON.stringify(output)))
+  })
+
+  test("output within the cap is untouched; the harness's larger size is kept", () => {
+    const small = tool('ok')
+    assert.equal(fitToolOutput(small), small)
+    const fitted = fitToolOutput(tool('x'.repeat(10), { outputTruncated: { bytes: 5_000 } }), 4)
+    assert.ok(fitted.type === 'tool')
+    assert.deepEqual(fitted.outputTruncated, { bytes: 5_000 })
+    assert.equal(
+      fitToolOutput({ type: 'text', text: 'x'.repeat(10) } as TranscriptEvent, 4).type,
+      'text',
+    )
+  })
 })

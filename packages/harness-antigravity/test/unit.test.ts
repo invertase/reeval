@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { HARNESS_V1_BUILTIN_TOOL_NAMES } from '@ai-sdk/harness'
+import { parseSavedOutput, savedOutputScript } from '../src/antigravity-saved-output.ts'
 import {
   ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_CLI_SHA256,
@@ -463,6 +464,36 @@ describe('plugins', () => {
         stdio: 'ignore',
       }),
     )
+  })
+})
+
+describe('saved output', () => {
+  const read = (content: string, max: number) => {
+    const file = join(mkdtempSync(join(tmpdir(), 'agy-step-')), "it's output.txt")
+    writeFileSync(file, content)
+    return parseSavedOutput(
+      execFileSync('sh', ['-c', savedOutputScript(file, max)], { encoding: 'utf8' }),
+      max,
+    )
+  }
+
+  test('a file within the cap is read whole', () => {
+    assert.deepEqual(read('a\nb\n', 64), { text: 'a\nb\n', bytes: 4, cut: false })
+  })
+
+  test("past the cap: its first and last half, what was cut between them, and the file's size", () => {
+    const content = `${'h'.repeat(40)}${'m'.repeat(100)}${'t'.repeat(40)}`
+    assert.deepEqual(read(content, 64), {
+      text: `${'h'.repeat(32)}\n[… 116 bytes cut …]\n${'t'.repeat(32)}`,
+      bytes: 180,
+      cut: true,
+    })
+  })
+
+  test('a missing file exits non-zero, and output with no size line is not read', () => {
+    const missing = spawnSync('sh', ['-c', savedOutputScript('/nonexistent/output.txt')])
+    assert.equal(missing.status, 3)
+    assert.equal(parseSavedOutput(''), undefined)
   })
 })
 

@@ -349,7 +349,10 @@ export function createAgentHarness(
             const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
             const refused = statuses.includes(401)
             // A block that arrived whole was never timed, whatever its start and end parts say.
-            const events = [...normalizeStream(parts, startedAt), ...extra].map((e) =>
+            const normalized = normalizeStream(parts, startedAt, {
+              ...(catalog.fullToolOutput ? { fullToolOutput: catalog.fullToolOutput } : {}),
+            })
+            const events = [...normalized, ...extra].map((e) =>
               e.type === 'reasoning' && catalog.reasoning !== 'streamed'
                 ? { ...e, durationMs: null }
                 : e,

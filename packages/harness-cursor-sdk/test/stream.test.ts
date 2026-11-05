@@ -375,3 +375,76 @@ describe('a failed or canceled turn, as the runner reports it (SDK 1.0.32)', () 
     })
   })
 })
+
+describe('output the CLI saved to a file (SDK 1.0.40: the stream reports it empty)', () => {
+  const call = (call_id: string, name: string, result: unknown) =>
+    event({ type: 'tool_call', call_id, name, status: 'completed', args: {}, result })
+  const shell = call('s', 'shell', {
+    status: 'success',
+    value: { exitCode: 0, signal: '', stdout: '', stderr: '', executionTime: 367 },
+  })
+  const mcp = call('m', 'mcp', {
+    status: 'success',
+    value: { content: [{ text: { text: '' } }, { text: { text: 'small' } }], isError: false },
+  })
+  const result = line({ type: 'result', status: 'finished' })
+  const saved = (value: Record<string, unknown>) =>
+    line({ type: 'output', turn: 1, path: '/home/reeval/.cursor/x.txt', ...value })
+  const toolOutputs = (ndjson: string) => {
+    const t = new CursorSdkStreamTranslator()
+    return ndjson
+      .split('\n')
+      .flatMap((l) => t.push(l))
+      .flatMap((p) => {
+        const raw = p.type === 'raw' ? (p.rawValue as { toolOutput?: unknown }) : undefined
+        return raw?.toolOutput ? [raw.toolOutput] : []
+      })
+  }
+
+  test("a shell's saved text replaces its empty output, the whole output", () => {
+    const text = 'line-1\nEND-OF-OUTPUT-77\n'
+    assert.deepEqual(
+      toolOutputs([shell, saved({ call_id: 's', bytes: 24, text }), result].join('\n')),
+      [{ toolCallId: 's', output: text, view: 'full', path: '/home/reeval/.cursor/x.txt' }],
+    )
+  })
+
+  test("an MCP result's saved item replaces that item only, with the file's size when cut", () => {
+    const [out] = toolOutputs(
+      [
+        mcp,
+        saved({ call_id: 'm', item: 0, bytes: 2_000_000, cut: true, text: 'a…z' }),
+        result,
+      ].join('\n'),
+    )
+    assert.deepEqual(out, {
+      toolCallId: 'm',
+      output: [
+        { type: 'text', text: 'a…z' },
+        { type: 'text', text: 'small' },
+      ],
+      view: 'full',
+      path: '/home/reeval/.cursor/x.txt',
+      bytes: 2_000_000,
+    })
+  })
+
+  test('nothing replaces a call it does not fit: unknown, failed, unread or out of range', () => {
+    const failed = call('f', 'shell', { status: 'error', error: { message: 'no' } })
+    assert.deepEqual(
+      toolOutputs(
+        [
+          shell,
+          mcp,
+          failed,
+          saved({ call_id: 'unknown', text: 'x' }),
+          saved({ call_id: 'f', text: 'x' }),
+          saved({ call_id: 's', error: 'ENOENT' }),
+          saved({ call_id: 'm', item: 5, text: 'x' }),
+          result,
+        ].join('\n'),
+      ),
+      [],
+    )
+  })
+})

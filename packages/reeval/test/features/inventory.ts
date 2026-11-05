@@ -1477,6 +1477,19 @@ export const inventory: InventoryFeature[] = [
     ],
     real: ['contract › file edited and command run, both in the transcript'],
   },
+  {
+    id: 'harness.tool-output',
+    area: 'Harnesses',
+    name: "A tool's output in the transcript: `outputView` says whether it's what the model saw or the whole output, each text past 128 KiB keeps its first and last half with `outputTruncated`, and output Cursor and Antigravity saved to a file is read back",
+    fixtures: ['harness/tool-output-cut'],
+    unit: [
+      'reeval/test/harness.test.ts',
+      'harness-cursor-sdk/test/stream.test.ts',
+      'harness-cursor-sdk/test/unit.test.ts',
+      'harness-antigravity/test/harness.test.ts',
+      'harness-antigravity/test/unit.test.ts',
+    ],
+  },
 
   {
     id: 'harness.stream-format',

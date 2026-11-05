@@ -65,6 +65,10 @@ export function fakeSandbox(options: {
             if (key === target || key.startsWith(`${target}/`)) files.delete(key)
           }
         }
+      } else if (command.startsWith('[ -f ')) {
+        const content = files.get(quoted[0] ?? '')
+        if (content === undefined) return { ...ok, exitCode: 3 }
+        return { ...ok, stdout: `${Buffer.byteLength(content)}\n${content}` }
       } else if (command.startsWith('test ! -e ')) {
         const target = quoted[0] ?? ''
         const exists = [...files.keys()].some((k) => k === target || k.startsWith(`${target}/`))

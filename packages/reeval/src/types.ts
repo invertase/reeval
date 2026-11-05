@@ -87,6 +87,18 @@ export type TranscriptEvent = EventTime &
         tool: string
         input: unknown
         output: unknown
+        /**
+         * What `output` holds: `model`, the result as the harness gave it to the model; `full`,
+         * the tool's whole output, which can be more than the model saw (the harness cut it for
+         * the model, or saved it to a file and gave the model a pointer, which reeval read).
+         */
+        outputView?: 'model' | 'full'
+        /**
+         * Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last
+         * 64 KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8
+         * (its JSON's, for structured output).
+         */
+        outputTruncated?: { bytes: number }
         /** Whether the call succeeded; null when the harness never reported its result. */
         ok: boolean | null
         durationMs: number | null

@@ -42,6 +42,12 @@ import {
   antigravityPluginInstall,
   installedPluginDir,
 } from './antigravity-plugins.ts'
+import {
+  fillSavedOutput,
+  parseSavedOutput,
+  savedOutputPath,
+  savedOutputScript,
+} from './antigravity-saved-output.ts'
 import { AntigravityStreamTranslator } from './antigravity-stream.ts'
 import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antigravity-tools.ts'
 
@@ -130,6 +136,23 @@ async function tail(stream: ReadableStream<Uint8Array>, max = 4000): Promise<str
   let text = ''
   for await (const line of lines(stream)) text = `${text}${line}\n`.slice(-max)
   return text
+}
+
+/** A step's saved output, or nothing when it can't be read: the result then stays empty. */
+async function readSavedOutput(
+  sandbox: HarnessV1NetworkSandboxSession | SandboxSession,
+  path: string,
+  abortSignal: AbortSignal | undefined,
+) {
+  try {
+    const { exitCode, stdout } = await sandbox.run({
+      command: savedOutputScript(path),
+      ...(abortSignal ? { abortSignal } : {}),
+    })
+    return exitCode === 0 ? parseSavedOutput(stdout) : undefined
+  } catch {
+    return undefined
+  }
 }
 
 const canBroker = (
@@ -357,7 +380,18 @@ async function startSession(
       const done = (async () => {
         const stderr = tail(proc.stderr).catch(() => '')
         try {
-          for await (const line of lines(proc.stdout)) emit(translator.push(line))
+          for await (const line of lines(proc.stdout)) {
+            const parts = translator.push(line)
+            for (const step of translator.takeSavedOutputs()) {
+              const saved = await readSavedOutput(
+                sandbox,
+                savedOutputPath(home, step),
+                turn.abortSignal,
+              )
+              if (saved) fillSavedOutput(parts, step.toolCallId, saved)
+            }
+            emit(parts)
+          }
           const { exitCode } = await proc.wait()
           emit(
             translator.end({

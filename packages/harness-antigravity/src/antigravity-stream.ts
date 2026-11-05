@@ -1,5 +1,6 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { JSONValue } from '@ai-sdk/provider'
+import type { AntigravitySavedStep } from './antigravity-saved-output.ts'
 import { projectToolCall } from './antigravity-tools.ts'
 
 /**
@@ -155,6 +156,7 @@ export class AntigravityStreamTranslator {
     number,
     { toolCallId: string; toolName: string; nativeName: string; dynamic: boolean }
   >()
+  private saved: AntigravitySavedStep[] = []
   private pendingStep: AntigravityUsage | undefined
   /** Content went out since the last `finish-step`, which `finish` must not leave open. */
   private stepOpen = false
@@ -169,6 +171,16 @@ export class AntigravityStreamTranslator {
     this.turn = options.turn
     this.conversationId = options.conversationId
     this.resumed = options.conversationId !== undefined
+  }
+
+  /**
+   * The finished MCP calls the last lines reported with no output: agy reports none for a large
+   * result, which it saved to the step's file, so the caller reads it into the result.
+   */
+  takeSavedOutputs(): AntigravitySavedStep[] {
+    const saved = this.saved
+    this.saved = []
+    return saved
   }
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
@@ -370,6 +382,12 @@ export class AntigravityStreamTranslator {
       if (s.state && TERMINAL_TOOL_STATES.has(s.state)) {
         this.openTools.delete(index)
         const failed = s.state !== 'DONE' || info.error !== undefined
+        if (!failed && info.output === undefined && nativeName === 'call_mcp_tool') {
+          const conversationId = s.conversation_id ?? this.conversationId
+          if (conversationId) {
+            this.saved.push({ toolCallId: call.toolCallId, conversationId, step: index })
+          }
+        }
         parts.push(
           this.toolResult(
             call,

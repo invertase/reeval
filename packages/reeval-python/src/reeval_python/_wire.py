@@ -1984,6 +1984,13 @@ class TranscriptEventWebFetch(TypedDict):
     url: str
 
 
+# Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last 64
+# KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8 (its
+# JSON's, for structured output).
+class TranscriptEventToolOutputTruncated(TypedDict):
+    bytes: float
+
+
 class TranscriptEventTool(TypedDict):
     atMs: float
     # Set when the harness never reported the call's end, so `durationMs` runs to the next
@@ -1994,6 +2001,14 @@ class TranscriptEventTool(TypedDict):
     # Whether the call succeeded; null when the harness never reported its result.
     ok: bool | None
     output: Any
+    # Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last 64
+    # KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8 (its
+    # JSON's, for structured output).
+    outputTruncated: NotRequired[TranscriptEventToolOutputTruncated]
+    # What `output` holds: `model`, the result as the harness gave it to the model; `full`, the
+    # tool's whole output, which can be more than the model saw (the harness cut it for the
+    # model, or saved it to a file and gave the model a pointer, which reeval read).
+    outputView: NotRequired[Literal["model", "full"]]
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
     # The `toolCallId` of the subagent call whose agent made this call; absent for the agent's
@@ -2157,6 +2172,8 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "maxConcurrent",
         "mediaType",
         "minLift",
+        "outputTruncated",
+        "outputView",
         "passRate",
         "providerOptions",
         "readFile",
