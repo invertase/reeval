@@ -2803,3 +2803,87 @@ describe("each harness's image serves its attempts' bootstrap", () => {
     })
   }
 })
+
+describe('what a tool event shows: the model view or the full output', () => {
+  const call = (id: string, toolName: string) => ({
+    ms: 1,
+    part: { type: 'tool-call', toolCallId: id, toolName, input: {} },
+  })
+  const done = (id: string, output: unknown, extra: Record<string, unknown> = {}) => ({
+    ms: 2,
+    part: { type: 'tool-result', toolCallId: id, output, ...extra },
+  })
+  const tools = (events: TranscriptEvent[]) =>
+    events.flatMap((e) =>
+      e.type === 'tool' ? [[e.tool, e.output, e.outputView, e.outputTruncated]] : [],
+    )
+
+  test('the model view unless the catalog says the harness reports a tool whole', () => {
+    const parts = [call('a', 'bash'), done('a', 'out'), call('b', 'mcp'), done('b', 'res')]
+    assert.deepEqual(tools(normalizeStream(parts, 0)), [
+      ['bash', 'out', 'model', undefined],
+      ['mcp', 'res', 'model', undefined],
+    ])
+    assert.deepEqual(
+      tools(normalizeStream(parts, 0, { fullToolOutput: ['bash'] })).map((t) => t[2]),
+      ['full', 'model'],
+    )
+    assert.deepEqual(
+      tools(normalizeStream(parts, 0, { fullToolOutput: 'all' })).map((t) => t[2]),
+      ['full', 'full'],
+    )
+    assert.deepEqual(AGENTS.codex.fullToolOutput, 'all')
+    assert.deepEqual(AGENTS.fx.fullToolOutput, ['bash'])
+    assert.equal(AGENTS.cursor.fullToolOutput, undefined)
+  })
+
+  test("output an adapter read from the CLI's file is the full view, with the size it cut", () => {
+    const metadata = (toolOutput: unknown) => ({ providerMetadata: { agy: { toolOutput } } })
+    assert.deepEqual(
+      tools(
+        normalizeStream(
+          [
+            call('a', 'mcp__probe__bulk'),
+            done('a', 'bulk…', metadata({ view: 'full', bytes: 2_000_000 })),
+            call('b', 'mcp__probe__echo'),
+            done('b', 'ECHO', metadata({ view: 'model' })),
+          ],
+          0,
+        ),
+      ),
+      [
+        ['mcp__probe__bulk', 'bulk…', 'full', { bytes: 2_000_000 }],
+        ['mcp__probe__echo', 'ECHO', 'model', undefined],
+      ],
+    )
+  })
+
+  test("a later raw part's toolOutput replaces the result's output, but never a failure's", () => {
+    const later = (toolCallId: string, output: unknown) => ({
+      ms: 3,
+      part: {
+        type: 'raw',
+        rawValue: { type: 'output', toolOutput: { toolCallId, output, view: 'full' } },
+      },
+    })
+    assert.deepEqual(
+      tools(
+        normalizeStream(
+          [
+            call('a', 'bash'),
+            done('a', ''),
+            call('f', 'bash'),
+            { ms: 2, part: { type: 'tool-error', toolCallId: 'f', error: 'no' } },
+            later('a', 'line-1\nEND\n'),
+            later('f', 'x'),
+          ],
+          0,
+        ),
+      ).map((t) => t.slice(1, 3)),
+      [
+        ['line-1\nEND\n', 'full'],
+        ['no', 'model'],
+      ],
+    )
+  })
+})

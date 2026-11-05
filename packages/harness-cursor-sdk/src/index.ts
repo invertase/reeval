@@ -28,8 +28,10 @@ export {
   cursorSdkInstallScript,
   getCursorSdkBootstrap,
   type StoredResult,
+  type StoredSavedOutput,
   type StoredWebCall,
   storedResults,
+  storedSavedOutputs,
   storedShapeProblems,
   storedWebCalls,
 } from './cursor-sdk-bootstrap.ts'

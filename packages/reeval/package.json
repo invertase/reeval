@@ -136,7 +136,7 @@
     "@modelcontextprotocol/client": "2.4.0",
     "@reeval/harness-antigravity": "workspace:0.1.15",
     "@reeval/harness-codex": "workspace:0.1.12",
-    "@reeval/harness-cursor-sdk": "workspace:0.1.8",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.9",
     "@reeval/harness-fx": "workspace:0.1.10",
     "@reeval/harness-goose": "workspace:0.1.14",
     "@reeval/harness-grok-build": "workspace:0.1.11",

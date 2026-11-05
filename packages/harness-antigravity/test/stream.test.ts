@@ -405,6 +405,39 @@ describe('stream translation', () => {
   })
 })
 
+describe("an MCP result agy saved to the step's file (agy 1.4.7: the DONE step has no output)", () => {
+  const mcp = (step_index: number, state: string, info: Record<string, unknown> = {}) =>
+    step({
+      conversation_id: 'c1',
+      step_index,
+      state,
+      step_type: 'tool',
+      tool_name: 'call_mcp_tool',
+      tool_info: {
+        name: 'call_mcp_tool',
+        parameters: { ServerName: 'probe', ToolName: 'bulk' },
+        ...info,
+      },
+    })
+
+  test('only a finished MCP call with no output is left for the caller to read', () => {
+    const t = new AntigravityStreamTranslator({ turn: 1 })
+    for (const l of [
+      mcp(1, 'ACTIVE'),
+      mcp(1, 'DONE'),
+      mcp(2, 'DONE', { output: 'ECHO:ARG-PAYLOAD-123' }),
+      mcp(3, 'ERROR'),
+      mcp(4, 'DONE', { error: { message: 'refused' } }),
+    ]) {
+      t.push(l)
+    }
+    assert.deepEqual(t.takeSavedOutputs(), [
+      { toolCallId: 'agy-c1-1', conversationId: 'c1', step: 1 },
+    ])
+    assert.deepEqual(t.takeSavedOutputs(), [], 'each once')
+  })
+})
+
 describe("cache reads in a real turn (agy 1.4.4, gemini-3.8-flash-low, Gemini's implicit cache)", () => {
   // Each model call's usageMetadata as the Gemini API sent it, recorded beside the capture:
   // [promptTokenCount, cachedContentTokenCount, candidatesTokenCount]. promptTokenCount

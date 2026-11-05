@@ -120,6 +120,8 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     tool: z.string(),
     input: z.unknown(),
     output: z.unknown(),
+    outputView: z.enum(['model', 'full']).optional(),
+    outputTruncated: z.strictObject({ bytes: z.number() }).optional(),
     ok: z.boolean().nullable(),
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),

@@ -12,6 +12,6 @@ evals/phases.eval.ts › a variant changes only setup                     fake/c
 evals/phases.eval.ts › each restricted phase gets the automatic hosts   fake/closed/docker      control           gated    ×1  egress.setup {"allow":["registry.npmjs.org"]} + api.anthropic.com, *.anthropic.com · egress "deny-all" + api.anthropic.com, *.anthropic.com
 excluded: —
 image docker · cursor · 8 evals
-  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.176-patch.a9d56a8c  (reeval's image: built when missing or when its base changed)

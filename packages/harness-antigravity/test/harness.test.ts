@@ -288,6 +288,48 @@ describe('createAntigravity', () => {
     assert.equal(parts.at(-1)?.type === 'finish' && parts.at(-1)?.finishReason.unified, 'stop')
   })
 
+  test("an MCP result agy saved to the step's file is read into the call's result", async () => {
+    // agy 1.4.7 reports a 60 KB MCP result with no output; the step's output.txt has it.
+    const conversation = 'f2c9cec5-bb74-4316-8ef0-5a9b4332ce6e'
+    const mcp = (state: string, step_index: number) =>
+      JSON.stringify({
+        event: 'step_update',
+        step_update: {
+          conversation_id: conversation,
+          step_index,
+          state,
+          step_type: 'tool',
+          tool_name: 'call_mcp_tool',
+          tool_info: {
+            name: 'call_mcp_tool',
+            parameters: { Arguments: {}, ServerName: 'probe', ToolName: 'bulk' },
+          },
+        },
+      })
+    const sandbox = fakeSandbox({
+      turns: [
+        {
+          stdout: `${[mcp('ACTIVE', 22), mcp('DONE', 22), mcp('DONE', 23)].join('\n')}\n${result(conversation)}`,
+        },
+      ],
+    })
+    const bulk = 'bulk-line-0001\nBULK-END-MARKER-5150\n'
+    sandbox.files.set(
+      `/root/.gemini/antigravity-cli/brain/${conversation}/.system_generated/steps/22/output.txt`,
+      bulk,
+    )
+    const parts = visible(await runTurn(await start(sandbox), 'go'))
+    const results = parts.filter((p) => p.type === 'tool-result')
+    assert.deepEqual(
+      results.map((r) => [r.result, r.providerMetadata]),
+      [
+        [bulk, { antigravity: { toolOutput: { view: 'full' } } }],
+        ['', undefined],
+      ],
+      'the step with no file keeps its empty result',
+    )
+  })
+
   test('a CLI that dies without a result still finishes the turn', async () => {
     const sandbox = fakeSandbox({
       turns: [{ stdout: '', stderr: 'error: authentication required', exitCode: 1 }],

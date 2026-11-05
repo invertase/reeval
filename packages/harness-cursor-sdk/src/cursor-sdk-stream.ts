@@ -59,8 +59,26 @@ export type CursorSdkRunnerLine =
   | { type: 'event'; event: CursorSdkMessage; recovered?: string }
   /** The runner couldn't recover these tools' calls from the stored conversation this turn. */
   | { type: 'unreported'; turn?: number; tools: string[]; message?: string }
+  | CursorSdkSavedOutput
   | ({ type: 'result' } & CursorSdkResult)
   | { type: 'error'; turn?: number; message: string; name?: string; code?: string; status?: number }
+
+/**
+ * A finished call's output that the CLI saved to a file, read after the turn: the whole result's
+ * (a shell's), or the `item`th text of an MCP result. `bytes` is the file's size; `cut` says
+ * `text` is only its first and last half. `error` says why the file couldn't be read.
+ */
+export type CursorSdkSavedOutput = {
+  type: 'output'
+  turn?: number
+  call_id: string
+  item?: number
+  path: string
+  bytes?: number
+  text?: string
+  cut?: boolean
+  error?: string
+}
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
 
@@ -158,6 +176,8 @@ export class CursorSdkStreamTranslator {
   private stepHasContent = false
   /** Built-in tools this turn may have used with no `tool_call` reported. */
   private unreportedTools: string[] = []
+  /** Each successful call's output as reported, which a saved output then replaces in part. */
+  private readonly results = new Map<string, unknown>()
 
   private readonly workDir: string | undefined
 
@@ -188,6 +208,7 @@ export class CursorSdkStreamTranslator {
     }
     if (this.finished) return [{ type: 'raw', rawValue: parsed }]
     const parts: HarnessV1StreamPart[] = []
+    let rawValue: JSONValue = parsed as unknown as JSONValue
     switch (parsed.type) {
       case 'init':
         this.agentId = parsed.agentId ?? this.agentId
@@ -208,8 +229,13 @@ export class CursorSdkStreamTranslator {
       case 'unreported':
         this.unreportedTools = [...new Set([...this.unreportedTools, ...(parsed.tools ?? [])])]
         break
+      case 'output': {
+        const toolOutput = this.savedOutput(parsed)
+        if (toolOutput) rawValue = { ...(rawValue as Record<string, JSONValue>), toolOutput }
+        break
+      }
     }
-    parts.push({ type: 'raw', rawValue: parsed })
+    parts.push({ type: 'raw', rawValue })
     if (parts.some(isContent)) this.stepHasContent = true
     return parts
   }
@@ -329,6 +355,7 @@ export class CursorSdkStreamTranslator {
         if (status === 'running') return
         this.openTools.delete(id)
         const { output, error } = projectToolResult(call.toolName, status, e.result)
+        if (error === undefined) this.results.set(id, output)
         parts.push({
           type: 'tool-result',
           toolCallId: id,
@@ -344,6 +371,29 @@ export class CursorSdkStreamTranslator {
         this.stepUsage = e.usage ?? {}
         return
       }
+    }
+  }
+
+  /**
+   * The output that replaces a finished call's reported one, as the `toolOutput` of the line's
+   * raw part: the saved text in place of a shell's empty output or of the MCP result's empty
+   * item. `bytes` goes with it when the runner kept only part of the file.
+   */
+  private savedOutput(s: CursorSdkSavedOutput): JSONValue | undefined {
+    if (typeof s.text !== 'string' || !this.results.has(s.call_id)) return undefined
+    const reported = this.results.get(s.call_id)
+    let output: unknown = s.text
+    if (s.item !== undefined) {
+      if (!Array.isArray(reported) || s.item >= reported.length) return undefined
+      output = reported.map((c, i) => (i === s.item ? { type: 'text', text: s.text } : c))
+    }
+    this.results.set(s.call_id, output)
+    return {
+      toolCallId: s.call_id,
+      output: output as JSONValue,
+      view: 'full',
+      path: s.path,
+      ...(s.cut && s.bytes !== undefined ? { bytes: s.bytes } : {}),
     }
   }
 

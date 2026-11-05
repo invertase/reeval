@@ -98,11 +98,35 @@ function storedResults(value, ids, found = []) {
     for (const v of Object.values(value)) storedResults(v, ids, found)
   }
   return found
+}
+function storedSavedOutputs(value, ids, found = []) {
+  if (Array.isArray(value)) {
+    for (const v of value) storedSavedOutputs(v, ids, found)
+  } else if (value && typeof value === 'object') {
+    if (typeof value.toolCallId === 'string' && ids.has(value.toolCallId)) {
+      const id = value.toolCallId
+      const saved = (location, item) => {
+        if (typeof location?.filePath !== 'string' || !location.filePath) return
+        if (found.some((f) => f.id === id && f.item === item)) return
+        found.push({ id, ...(item === undefined ? {} : { item }), path: location.filePath })
+      }
+      for (const [key, call] of Object.entries(value)) {
+        if (!key.endsWith('ToolCall') || !call?.result || typeof call.result !== 'object') continue
+        for (const outcome of Object.values(call.result)) {
+          if (!outcome || typeof outcome !== 'object') continue
+          saved(outcome.outputLocation)
+          if (Array.isArray(outcome.content)) outcome.content.forEach((c, i) => saved(c?.text?.outputLocation, i))
+        }
+      }
+    }
+    for (const v of Object.values(value)) storedSavedOutputs(v, ids, found)
+  }
+  return found
 }`
 
 const stored = new Function(
   'RECOVERED',
-  `${CURSOR_SDK_STORED_HELPERS}\nreturn { storedWebCalls, storedShapeProblems, storedResults }`,
+  `${CURSOR_SDK_STORED_HELPERS}\nreturn { storedWebCalls, storedShapeProblems, storedResults, storedSavedOutputs }`,
 )(CURSOR_SDK_RECOVERED_TOOLS) as {
   storedWebCalls: (
     value: unknown,
@@ -115,6 +139,7 @@ const stored = new Function(
     recovered?: Record<string, string>,
   ) => string[]
   storedResults: (value: unknown, ids: Set<string>) => StoredResult[]
+  storedSavedOutputs: (value: unknown, ids: Set<string>) => StoredSavedOutput[]
 }
 
 /**
@@ -154,6 +179,27 @@ export type StoredResult = {
  */
 export const storedResults = stored.storedResults
 
+/** Where the CLI saved a call's output: its whole result, or its MCP result's `item`th text. */
+export type StoredSavedOutput = { id: string; item?: number; path: string }
+
+/**
+ * The files the stored conversation says these calls' output went to. Output past the CLI's
+ * threshold (40,000 bytes at {@link CURSOR_SDK_VERSION}) goes to a file under the project's
+ * `agent-tools/`, the model gets a pointer to it, and the stream reports the result empty: a
+ * shell's `success` or `failure` has an `outputLocation`, and so does each MCP text item. The
+ * runner runs the same source.
+ */
+export const storedSavedOutputs = stored.storedSavedOutputs
+
+/**
+ * The most of a saved output the runner reads, its first and last half; it reports the file's
+ * whole size beside them.
+ */
+export const CURSOR_SDK_SAVED_OUTPUT_MAX = 1024 * 1024
+
+/** The streamed tools whose output the CLI saves to a file and reports empty. */
+export const CURSOR_SDK_SAVED_OUTPUT_TOOLS = ['shell', 'mcp'] as const
+
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
 /** The runner's path relative to the bootstrap directory. */
@@ -177,7 +223,7 @@ export const cursorSdkTurnReady = (turn: number) => `turn-${turn}.ready`
  * everything but those lines goes to stderr.
  */
 export const CURSOR_SDK_RUNNER = `// A local Cursor SDK agent's turns, as NDJSON on stdout.
-import { existsSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -206,6 +252,27 @@ const epochMs = (v) => (v === undefined || v === null || Number.isNaN(Number(v))
 // As JSON: in memory they're protobuf messages, whose oneofs are { case, value }.
 const listMessages = async (turn) =>
   JSON.parse(JSON.stringify(await Agent.messages.list(agent.agentId, { cwd: turn.cwd, store })))
+const SAVED_OUTPUT_TOOLS = ${JSON.stringify(CURSOR_SDK_SAVED_OUTPUT_TOOLS)}
+const SAVED_OUTPUT_MAX = ${CURSOR_SDK_SAVED_OUTPUT_MAX}
+// A saved output whole, or its first and last half with what was cut between them.
+const readSaved = (path) => {
+  let fd
+  try {
+    fd = openSync(path, 'r')
+    const bytes = fstatSync(fd).size
+    if (bytes <= SAVED_OUTPUT_MAX) return { bytes, text: readFileSync(fd, 'utf8') }
+    const half = SAVED_OUTPUT_MAX / 2
+    const head = Buffer.alloc(half)
+    const tail = Buffer.alloc(half)
+    readSync(fd, head, 0, half, 0)
+    readSync(fd, tail, 0, half, bytes - half)
+    return { bytes, cut: true, text: \`\${head.toString('utf8')}\\n[… \${bytes - 2 * half} bytes cut …]\\n\${tail.toString('utf8')}\` }
+  } catch (error) {
+    return { error: String(error?.message ?? error) }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
+}
 
 let agent
 let run
@@ -310,6 +377,18 @@ for (; !stopping; n++) {
         }
       } catch (error) {
         console.error(\`The stored conversation could not be read for unfinished tool calls: \${error?.message ?? error}\`)
+      }
+    }
+    // Output the CLI saved to a file, which the stream reported empty.
+    const finished = new Set([...streamed].filter(([id, name]) => ended.has(id) && SAVED_OUTPUT_TOOLS.includes(name)).map(([id]) => id))
+    if (finished.size) {
+      try {
+        messages ??= await listMessages(turn)
+        for (const s of storedSavedOutputs(messages, finished)) {
+          out({ type: 'output', turn: n, call_id: s.id, ...(s.item === undefined ? {} : { item: s.item }), path: s.path, ...readSaved(s.path) })
+        }
+      } catch (error) {
+        console.error(\`The stored conversation could not be read for saved tool output: \${error?.message ?? error}\`)
       }
     }
     out({

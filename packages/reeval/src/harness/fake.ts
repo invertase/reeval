@@ -140,6 +140,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               tool: tool.tool,
               input: tool.input,
               output: tool.output,
+              outputView: 'model',
               ok: tool.ok === undefined ? true : tool.ok,
               durationMs: tool.durationMs === undefined ? 0 : tool.durationMs,
             })
@@ -169,6 +170,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
                 tool: 'shell',
                 input: { command: step.exec },
                 output: r.stdout,
+                outputView: 'model',
                 ok: r.exitCode === 0,
                 durationMs: Date.now() - startedAt - time.atMs,
               })
@@ -187,6 +189,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
                 tool: `mcp__${server}__${tool}`,
                 input: {},
                 output: r.output,
+                outputView: 'model',
                 ok: r.ok,
                 durationMs: Date.now() - startedAt - time.atMs,
               })

@@ -203,6 +203,12 @@ export type Agent = Layout & {
    */
   storedUsage?: () => Promise<StoredUsage>
   /**
+   * Tools whose result the agent reports whole while its model gets a cut of it, so their
+   * transcript `output` is the `full` view; `'all'` for every tool. Unset, every tool's output is
+   * what the model saw, except one its adapter read from where the CLI saved it.
+   */
+  fullToolOutput?: 'all' | readonly string[]
+  /**
    * Set when the transcript has a subagent's tool calls, so its edits count as file edits (Claude
    * Code's bridge passes a subagent's messages on raw, and reeval reads them). Unset, only the
    * workspace diff's `changedFiles` shows what a subagent changed.
@@ -1280,6 +1286,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
       const m = await import('@reeval/harness-codex')
       return { command: m.codexStoredUsageCommand, parse: m.parseCodexStoredUsage }
     },
+    // Its JSON events carry a command's and an MCP call's whole result; the model gets its start and end.
+    fullToolOutput: 'all',
     credential: 'OPENAI_API_KEY',
     // On the adapter's provider (HTTP, not WebSockets): the model calls, whose responses name the
     // dated model and the effort that served them, and the web search tool's searches.
@@ -1324,6 +1332,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: 'provider',
+    // A command's output is rebuilt from its streamed updates; the model gets a clipped summary.
+    fullToolOutput: ['bash'],
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,

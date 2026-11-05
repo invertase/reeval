@@ -15,6 +15,7 @@ import {
   projectToolResult,
   resolveCursorSdkCredentials,
   storedResults,
+  storedSavedOutputs,
   storedShapeProblems,
   storedWebCalls,
   VERSION,
@@ -234,6 +235,38 @@ describe('storedResults: the results of calls the stream never completed', () =>
       status: 'error',
       error: { message: 'timeout' },
     })
+  })
+})
+
+describe('storedSavedOutputs: where the CLI saved output too large for the stream', () => {
+  // A live SDK 1.0.40 turn: a shell command printing 311 KB and an MCP tool returning 60 KB.
+  const live = () => JSON.parse(fixture('stored-saved-output.json'))
+  const shell = 'tool_8158fe01-706b-4c43-b3f9-e557d9124f6'
+  const mcp = 'tool_5aa87c85-9eb8-4c0a-80d7-b20942a3986'
+  const dir = '/home/reeval/.cursor/projects/reeval-workspace/agent-tools'
+
+  test("finds a shell's file and an MCP result item's, once each", () => {
+    assert.deepEqual(storedSavedOutputs(live(), new Set([shell, mcp])), [
+      { id: shell, path: `${dir}/b9c07a3c-38df-459b-80b8-bc8085ba0f6c.txt` },
+      { id: mcp, item: 0, path: `${dir}/57dd53bb-45c1-4d6c-944e-42b6df71dce9.txt` },
+    ])
+  })
+
+  test('only the ids asked for, and nothing for output the stream carried', () => {
+    assert.deepEqual(
+      storedSavedOutputs(live(), new Set([mcp])).map((s) => s.id),
+      [mcp],
+    )
+    const small = JSON.parse(JSON.stringify(live()), (key, value) =>
+      key === 'outputLocation' ? undefined : value,
+    )
+    assert.deepEqual(storedSavedOutputs(small, new Set([shell, mcp])), [])
+  })
+
+  test('the runner reads them after the turn, capped', () => {
+    assert.match(CURSOR_SDK_RUNNER, /^function storedSavedOutputs\(/m)
+    assert.match(CURSOR_SDK_RUNNER, /storedSavedOutputs\(messages, finished\)/)
+    assert.match(CURSOR_SDK_RUNNER, /const SAVED_OUTPUT_MAX = 1048576/)
   })
 })
 

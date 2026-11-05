@@ -357,18 +357,54 @@ function subagentParts(raw: Record<string, unknown>): Array<StampedPart['part']>
   })
 }
 
+type AdapterToolOutput = { view?: 'full'; bytes?: number }
+
+const toolOutputOf = (value: unknown): AdapterToolOutput => {
+  const said = record(value)
+  if (said.view !== 'full') return {}
+  return { view: 'full', ...(typeof said.bytes === 'number' ? { bytes: said.bytes } : {}) }
+}
+
+/**
+ * What an adapter says about a tool result's output, as `toolOutput` in the result's
+ * `providerMetadata` under its own key: `view: 'full'` for output it read from where the CLI
+ * saved it (the model got a pointer or nothing), and `bytes`, the saved output's size in UTF-8,
+ * when it kept only part of it. An adapter that finds the saved output only after the result
+ * went out sends a `raw` part whose `toolOutput` also has the `toolCallId` and the `output` that
+ * replaces the result's.
+ */
+function adapterToolOutput(metadata: unknown): AdapterToolOutput {
+  for (const entry of Object.values(record(metadata))) {
+    const said = toolOutputOf(record(entry).toolOutput)
+    if (said.view) return said
+  }
+  return {}
+}
+
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalized to `file-edit`, web tools given their
  * query or URL, and the harness's duplicate `fileChange` events dropped. Cursor's tool durations
  * come from its runner's own `tool_call` events, because tool results are only flushed at the
- * end of a step.
+ * end of a step. Each tool event's `outputView` is `full` for the tools in `fullToolOutput` and
+ * for output an adapter read from where its CLI saved it, else `model`.
  */
-export function normalizeStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
+export function normalizeStream(
+  parts: StampedPart[],
+  startedAt: number,
+  options: { fullToolOutput?: 'all' | readonly string[] } = {},
+): TranscriptEvent[] {
+  const fullByHarness = (tool: string) =>
+    options.fullToolOutput === 'all' || options.fullToolOutput?.includes(tool) === true
   const timing = new Map<string, Timing>()
+  const replaced = new Map<string, AdapterToolOutput & { output: unknown }>()
   for (const { ms, part } of parts) {
     if (part.type !== 'raw') continue
     const raw = record(part.rawValue)
+    const later = record(raw.toolOutput)
+    if (typeof later.toolCallId === 'string' && 'output' in later && toolOutputOf(later).view) {
+      replaced.set(later.toolCallId, { ...toolOutputOf(later), output: later.output })
+    }
     const event = raw.type === 'event' ? record(raw.event) : {}
     const id = event.type === 'tool_call' ? str(event.call_id) : ''
     if (!id) continue
@@ -400,7 +436,12 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
     call = t?.at === undefined ? call : { ...call, ms: t.at }
     const input = record(call.part.input)
     const name = toolName(call.part)
-    const raw = failed ? errorText(end.part.error) : end.part.output
+    const replacement = failed ? undefined : replaced.get(id)
+    const raw = failed
+      ? errorText(end.part.error)
+      : replacement
+        ? replacement.output
+        : end.part.output
     const subagent = str(call.part.subagent)
     const structured = record(end.part.structured)
     // Antigravity runs commands in a PTY, so their output has CRLF line endings.
@@ -456,6 +497,7 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
       })
       return
     }
+    const said = replacement ?? adapterToolOutput(end.part.providerMetadata)
     out.push({
       at: call.ms,
       event: {
@@ -465,6 +507,8 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
         tool: name,
         input: toolInput(call.part),
         output,
+        outputView: said.view ?? (fullByHarness(name) ? 'full' : 'model'),
+        ...(said.bytes !== undefined ? { outputTruncated: { bytes: said.bytes } } : {}),
         ok: !failed,
       },
     })
