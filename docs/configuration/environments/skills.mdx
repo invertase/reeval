@@ -41,3 +41,19 @@ expect(turn).toHaveCalledSkill('jsdoc')
 For a runnable project, see [`with-skill`](https://github.com/invertase/reeval/tree/main/examples/with-skill).
 
 For more information about this matcher, see [toHaveCalledSkill](/reference/matchers#tohavecalledskill).
+
+## Count skills reeval didn't place
+
+A setup step can install skills too, such as a package manager's skill installer. The workspace may already ship them, or a package cache may hold them:
+
+```ts title="evals/environments.ts"
+export const relic = defineEnvironment('relic', {
+  setup: [{ run: 'dart pub get && dart run skills@ get --all' }],
+})
+```
+
+`toHaveCalledSkill` and `reeval query skill_reads` count these skills as they count placed ones. The `source` column says where each one came from: `placed`, `skill-dir` for a skill in a directory some agent reads, or `elsewhere` for a `SKILL.md` read outside those directories:
+
+```bash title="Query"
+reeval query "SELECT skill, source, reads FROM skill_reads"
+```

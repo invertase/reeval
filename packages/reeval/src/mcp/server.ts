@@ -39,7 +39,7 @@ const VIEW_ROWS: Record<string, string> = {
   measure_effects:
     'measure per variant cell (pooled over the cases, on an eval with several) per run: pass rate, each check, judge and compare question, tool calls, agent time and tokens, each side’s value, the estimate, interval or p, verdict (better, worse, same or leans), its text and the runs a lean needs to hold',
   skill_reads:
-    'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>, or a Skill, skill or load_skill call by its name), and how many',
+    'attempt and skill it had, placed by its environment or found (source: placed, skill-dir for one a setup step, the workspace or a package manager put in an agent skill directory, elsewhere for a SKILL.md read outside them): the transcript line of its first read (a path under skills/<name>, or a Skill, skill or load_skill call by its name), and how many',
   flaky_cells: `cell (per case, on an eval with cases) with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',

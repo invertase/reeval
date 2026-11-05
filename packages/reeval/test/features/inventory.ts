@@ -1836,6 +1836,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/analysis.test.ts'],
   },
   {
+    id: 'query.found-skills',
+    area: 'Records and studio',
+    name: "Skill use of skills reeval didn't place (a setup step, the workspace or a package cache put them there): `skill_reads` and `skill_uses` by `source` (`placed`, `skill-dir`, `elsewhere`), from a native load or a path under an agent's skill directory",
+    fixtures: ['skills/setup-installed'],
+    unit: ['reeval/test/query.test.ts'],
+  },
+  {
     id: 'query.noise',
     area: 'Records and studio',
     name: '`flaky_cells` pooled over comparable runs, `flaky` from a minimum n and `mixed` below it, and `drift` with changed paths and a `noise` flag',

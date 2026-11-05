@@ -8,6 +8,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | Behavior | The eval checks (in the sandbox) | The canary | The record check (host side) |
 |---|---|---|---|
 | skill placed where the agent reads it, and used | `skill-proof.txt` holds a code only the skill has | no turn: no proof | the attempt's `context` lists the skill at the harness's path |
+| skill a setup step installed, used and counted | `installed-proof.txt` holds a code only the skill has; the environment has no `skills`, and a setup step copies the skill into every agent's workspace skill directory | no turn: no proof | the environment placed no skill, and `reeval query skill_reads` has the skill for the attempt with `source` `skill-dir` and at least one read |
 | rules read | `codeword.txt` holds a word only the rules have | no turn: no word | — |
 | stdio MCP server started and called | the server logged `tools/call`; the transcript names `mcp__stamp__house_stamp` | no turn: no call | the environment lists the server ; on a harness with no MCP client, the MCP evals (tagged `mcp`) are left out of its run, and `--dry-run` of them exits 2 naming the eval, harness and server, while a `--dry-run` of an eval without MCP plans |
 | file edited and command run, both in the transcript | `notes.txt` changed; the transcript has its edit and a tool whose output is `contract-42` | no turn: unchanged | `changedFiles` has `notes.txt` |
@@ -197,7 +198,7 @@ plugin: {
   agent's own copy for one that installs the plugin itself (Antigravity's `agy plugin install`).
 - `copy`, for such an agent, is where its copy lives (`~/.gemini/config/plugins/probe/`): the
   hermetic check allows the plugin items under it.
-- The row then runs 23 attempts instead of 13 (fewer if it leaves hooks, agents or rules out): raise
+- The row then runs 25 attempts instead of 15 (fewer if it leaves hooks, agents or rules out): raise
   `REEVAL_REAL_ATTEMPT_BUDGET` in `contract.yml` by the difference.
 
 ## Running it
@@ -212,7 +213,7 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 13 attempts (12 without an `effort`), 6 of them with one short agent turn, or up to 23 with a
+picks rows. Each real row is 15 attempts (14 without an `effort`), 7 of them with one short agent turn, or up to 25 with a
 `plugin` field, at `--concurrency 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.

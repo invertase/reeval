@@ -1547,6 +1547,14 @@
     },
     {
       "run_id": "20260926T140020Z_931dae5_cursor-agent_3sth",
+      "cell_key": "antigravity:gemini-3.8-flash-low/-/es-tarball",
+      "skill": "agy-customizations",
+      "attempts": 2,
+      "read": 1,
+      "first": 40
+    },
+    {
+      "run_id": "20260926T140020Z_931dae5_cursor-agent_3sth",
       "cell_key": "antigravity:gemini-3.8-flash-low/es-good/es-tarball",
       "skill": "es-good",
       "attempts": 6,

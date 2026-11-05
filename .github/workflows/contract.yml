@@ -45,14 +45,14 @@ jobs:
       # latest leg that names the cursor row (drift.yml's, after a new @cursor/sdk).
       CURSOR_CHECKS: ${{ inputs.harnesses == '' || (inputs.versions == 'latest' && contains(format(',{0},', inputs.harnesses), ',cursor,')) }}
       # The hard cap for this job: the contract on all eleven rows (contract.test.ts's attemptsFor:
-      # 22 on Cursor and Antigravity, whose plugins load rules but which set no effort; 21 on Claude
-      # Code and Grok Build, whose plugins don't load rules; 19 on OpenCode, with no hooks or rules;
-      # 17 on Goose and pi, with no hooks, subagents or rules; 16 on Codex and fx, which also set no
-      # effort; 13 on the two OpenCode rows without plugins), the e2e (2) on the nine harnesses'
-      # own rows, and the real-tier fixtures (2 each, 15 of them): 44 + 42 + 19 + 34 + 32 + 26 +
-      # 18 + 30 = 245, plus 5 of headroom. The latest leg skips the e2e (227), so it fits too. Each
+      # 24 on Cursor and Antigravity, whose plugins load rules but which set no effort; 23 on Claude
+      # Code and Grok Build, whose plugins don't load rules; 21 on OpenCode, with no hooks or rules;
+      # 19 on Goose and pi, with no hooks, subagents or rules; 18 on Codex and fx, which also set no
+      # effort; 15 on the two OpenCode rows without plugins), the e2e (2) on the nine harnesses'
+      # own rows, and the real-tier fixtures (2 each, 15 of them): 48 + 46 + 21 + 38 + 36 + 30 +
+      # 18 + 30 = 267, plus 5 of headroom. The latest leg skips the e2e (249), so it fits too. Each
       # reserves its attempts in the ledger first, and fails rather than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '250'
+      REEVAL_REAL_ATTEMPT_BUDGET: '272'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
