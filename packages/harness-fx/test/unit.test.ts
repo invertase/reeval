@@ -94,11 +94,10 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
     FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://api.openai.com',
-    FX_RELAY_GOOGLE: '',
     FX_RELAY_EFFORT: '',
     FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   })
-  assert.equal(fxEnv('openai/gpt-5.6').FX_RELAY_USAGE, '')
+  assert.equal(fxEnv('openai/gpt-5.6').FX_RELAY_USAGE, FX_RELAY_USAGE_FILE)
   assert.deepEqual(
     Object.keys(fxEnv('openai/gpt-5.6')).sort(),
     Object.keys(fxEnv('gpt-4.1')).sort(),
@@ -127,7 +126,6 @@ test('on OpenRouter, an OpenRouter id runs on its Chat Completions API through t
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
     FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://openrouter.ai',
-    FX_RELAY_GOOGLE: '',
     FX_RELAY_EFFORT: '',
     FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   })
@@ -166,7 +164,6 @@ test("on Vertex AI, fx calls the relay's copy of the Chat Completions endpoint w
   const env = fxEnv('google/gemini-3.8-flash', { vertex, effort: 'low' })
   assert.equal(env.FX_PROVIDER, 'vertex')
   assert.equal(env.FX_RELAY_UPSTREAM, 'https://aiplatform.googleapis.com')
-  assert.equal(env.FX_RELAY_GOOGLE, '1')
   assert.equal(env.FX_RELAY_EFFORT, 'low')
   assert.equal(env.FX_RELAY_USAGE, FX_RELAY_USAGE_FILE)
   assert.equal(
@@ -251,7 +248,7 @@ const events = (text: string) =>
     .filter((l) => l.startsWith('data: {'))
     .map((l) => JSON.parse(l.slice(6)))
 
-test("the relay makes Google's Chat Completions stream one fx reads, and gives back its signatures", async () => {
+test('the relay makes a stream with thought signatures one fx reads, and gives them back', async () => {
   const call = { id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{}' } }
   const stream = sse(
     {
@@ -274,13 +271,22 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
   )
   await withRelay(
     () => stream,
-    { FX_RELAY_GOOGLE: '1', FX_RELAY_EFFORT: 'low' },
+    {},
     async (url, requests) => {
       const post = (messages: unknown[]) =>
         fetch(`${url}/v1/projects/p/locations/global/endpoints/openapi/chat/completions`, {
           method: 'POST',
           body: JSON.stringify({ model: 'google/gemini-3.8-flash', messages }),
         }).then((r) => r.text())
+      const other = { ...call, id: 'call_unseen' }
+      const before = JSON.stringify({
+        model: 'google/gemini-3.8-flash',
+        messages: [{ role: 'assistant', tool_calls: [other] }],
+      })
+      await fetch(`${url}/v1/chat/completions`, { method: 'POST', body: before }).then((r) =>
+        r.text(),
+      )
+      assert.equal(requests.shift(), before, 'no signature seen yet, so none is added')
       const [first, last] = events(await post([{ role: 'user', content: 'hi' }]))
       assert.equal(first.choices[0].delta.tool_calls[0].index, 0)
       assert.equal(last.choices[0].finish_reason, 'tool_calls')
@@ -290,10 +296,8 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
         total_tokens: 150,
         completion_tokens_details: { reasoning_tokens: 40 },
       })
-      const other = { ...call, id: 'call_unseen' }
       await post([{ role: 'assistant', tool_calls: [call, other] }])
       const sent = JSON.parse(requests[1] ?? '')
-      assert.equal(sent.reasoning_effort, 'low')
       assert.deepEqual(
         sent.messages[0].tool_calls.map(
           (c: { extra_content: { google: { thought_signature: string } } }) =>
@@ -305,14 +309,26 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
   )
 })
 
-test('without FX_RELAY_GOOGLE or FX_RELAY_EFFORT the relay passes calls through as they are', async () => {
-  const stream = sse({
-    choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 5 },
-  })
+test('without FX_RELAY_EFFORT the relay passes a call and a stream fx reads as they are', async () => {
+  const stream = sse(
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'f' } }],
+          },
+        },
+      ],
+    },
+    {
+      choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  )
   await withRelay(
     () => stream,
-    { FX_RELAY_GOOGLE: '', FX_RELAY_EFFORT: '' },
+    { FX_RELAY_EFFORT: '' },
     async (url, requests) => {
       const sent = JSON.stringify({ model: 'gpt-5.5', messages: [] })
       const text = await fetch(`${url}/v1/chat/completions`, { method: 'POST', body: sent }).then(
@@ -363,13 +379,13 @@ test("with FX_RELAY_USAGE the relay logs each call's last usage, and passes the 
   )
 })
 
-test("on Google the relay logs the usage fx reads, Google's thinking tokens counted", async () => {
+test('the relay logs the usage fx reads, with thinking tokens only total_tokens counted', async () => {
   const log = join(mkdtempSync(join(tmpdir(), 'fx-usage-')), 'usage.ndjson')
   await withRelay(
     // No [DONE]: the stream's end logs it.
     () =>
       `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 10, total_tokens: 150 } })}\n\n`,
-    { FX_RELAY_GOOGLE: '1', FX_RELAY_USAGE: log },
+    { FX_RELAY_USAGE: log },
     async (url) => {
       await fetch(`${url}/v1/projects/p/locations/global/endpoints/openapi/chat/completions`, {
         method: 'POST',
@@ -385,10 +401,10 @@ test("on Google the relay logs the usage fx reads, Google's thinking tokens coun
   )
 })
 
-test('the relay keeps a character its request splits across chunks whole', async () => {
+test('the relay keeps a character its request splits across chunks whole, and adds the effort', async () => {
   await withRelay(
     () => sse({ choices: [] }),
-    { FX_RELAY_GOOGLE: '1' },
+    { FX_RELAY_EFFORT: 'low' },
     async (url, requests) => {
       const content = 'héllo — 日本語 🎉'
       const sent = Buffer.from(
@@ -409,6 +425,7 @@ test('the relay keeps a character its request splits across chunks whole', async
         duplex: 'half',
       } as RequestInit).then((r) => r.text())
       assert.equal(JSON.parse(requests[0] ?? '').messages[0].content, content)
+      assert.equal(JSON.parse(requests[0] ?? '').reasoning_effort, 'low')
     },
   )
 })
