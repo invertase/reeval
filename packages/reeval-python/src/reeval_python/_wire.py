@@ -1168,7 +1168,8 @@ class FakeScriptStepRefuseKey(TypedDict):
 # the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
 # (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
 # would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error`
-# ends the turn there with status `error` and that message, as a provider error would.
+# ends the turn there with status `error` and that message, as a provider error would; one
+# worded as a provider's credit, quota or rate limit makes the attempt an infra error.
 # `refuseKey` ends it as the model API rejecting the key in that variable would, which makes the
 # attempt an infra error.
 FakeScriptStep: TypeAlias = "FakeScriptStepExec | FakeScriptStepWrite | FakeScriptStepReply | FakeScriptStepMcp | FakeScriptStepError | FakeScriptStepRefuseKey"

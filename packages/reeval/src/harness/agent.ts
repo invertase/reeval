@@ -24,6 +24,7 @@ import {
   unverifiedHarness,
   writePluginFiles,
 } from './agents.ts'
+import { providerStop } from './provider-stop.ts'
 import { errorText, normalizeStream, reasoningTime, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
@@ -315,6 +316,13 @@ export function createAgentHarness(
               return { ...e, message }
             })
             const rejected = rejectedKey({ hinted, status, statuses })
+            const stopped = rejected
+              ? undefined
+              : providerStop({
+                  errors: transcript.flatMap((e) => (e.type === 'error' ? [e.message] : [])),
+                  status,
+                  statuses,
+                })
             return {
               text,
               status,
@@ -327,6 +335,7 @@ export function createAgentHarness(
               durationMs: Date.now() - startedAt,
               transcript,
               ...(rejected ? { rejectedKey: rejected } : {}),
+              ...(stopped ? { providerStop: stopped } : {}),
               ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
             }
           }

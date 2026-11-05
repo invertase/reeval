@@ -2564,6 +2564,29 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/provider-stop-is-infra',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^The model provider stopped the turn, out of credit: Your credit balance is too low/,
+      },
+    },
+    canary: /expected 'error' to be 'completed'/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.deepEqual(attempt?.error?.provider, { cause: 'credit', status: null })
+      assert.deepEqual(
+        attempt?.turns.map((t) => t.status),
+        ['error', 'error'],
+      )
+      assert.deepEqual(attempt?.checks, [], 'no check ran')
+    },
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',

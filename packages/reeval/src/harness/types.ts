@@ -1,6 +1,7 @@
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
 import type { PluginPart, TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
+import type { ProviderStop } from './provider-stop.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */
@@ -33,6 +34,8 @@ export type HarnessResult = {
    * the attempt is then an infra error, not the agent's failure.
    */
   rejectedKey?: string
+  /** When the model provider, not the agent, ended the turn: the attempt is then an infra error. */
+  providerStop?: ProviderStop
 }
 
 /** One agent conversation in one sandbox. Each `send` is the next turn. */

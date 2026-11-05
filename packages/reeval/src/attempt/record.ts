@@ -5,6 +5,7 @@ import { allowedHosts, isDirect } from '../egress.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
+import { ProviderStopError } from '../harness/provider-stop.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { sandboxProvider } from '../options.ts'
 import { redactJson, redactSecrets, redactSplitSecrets } from '../redact.ts'
@@ -113,6 +114,7 @@ export function recordFailure(
     const { class: kind, stage, ref, cause, log, setBy } = error.failure
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
   }
+  if (error instanceof ProviderStopError && !timedOut) record.error.provider = { ...error.stop }
   if (record.error.kind === 'assertion' && isJudges(a, error, raw)) {
     record.error.kind = judgeOutage(a, error, raw) ? 'infra' : 'judge'
   }

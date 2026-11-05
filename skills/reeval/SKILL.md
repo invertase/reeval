@@ -334,7 +334,7 @@ reeval analyze           reeval studio          reeval image build      reeval d
 | 0 | Pass, and `--dry-run` |
 | 1 | A gated failure |
 | 2 | A usage or config error, including a filter that matches nothing |
-| 3 | An infra error, such as a sandbox that failed to start or a harness key the API rejected |
+| 3 | An infra error, such as a sandbox that failed to start, a harness key the API rejected or a turn the provider stopped |
 
 `reeval run` ends with a status list: each eval file, a line per eval under it with its icon and
 `N of M runs passed`, and for a failure, a compare or an eval with remarks, a sentence for each

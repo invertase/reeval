@@ -41,6 +41,7 @@ import {
   brokeringFor,
   expectedBlockedFor,
 } from '../src/harness/agents.ts'
+import { type ProviderStop, providerStop } from '../src/harness/provider-stop.ts'
 import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
 import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
@@ -536,6 +537,86 @@ describe('Vercel AI Gateway routes', () => {
       ],
     ]
     for (const [name, turn, expected] of cases) assert.equal(rejectedKey(turn), expected, name)
+  })
+
+  test("a provider stop is a turn that ended on the provider's limit, not any 429 or wording", () => {
+    const credit = 'Your credit balance is too low to access the Anthropic API.'
+    type Turn = Parameters<typeof providerStop>[0]
+    const cases: Array<[string, Turn, Pick<ProviderStop, 'cause' | 'status'> | undefined]> = [
+      [
+        "Anthropic's low credit, an HTTP 400",
+        { errors: [credit], status: 'error', statuses: [200, 400] },
+        { cause: 'credit', status: 400 },
+      ],
+      [
+        "OpenAI's quota on a 429",
+        { errors: ['429 insufficient_quota'], status: 'error', statuses: [429, 429] },
+        { cause: 'quota', status: 429 },
+      ],
+      [
+        "Google's RESOURCE_EXHAUSTED, nothing brokered",
+        { errors: ['Error 429, Status: RESOURCE_EXHAUSTED'], status: 'error', statuses: [] },
+        { cause: 'quota', status: null },
+      ],
+      [
+        'a 402 the CLI words its own way',
+        { errors: ['request failed'], status: 'error', statuses: [402] },
+        { cause: 'credit', status: 402 },
+      ],
+      [
+        "fx's every-call-failed error on 429s",
+        {
+          errors: ['every fx model call in the turn failed (HTTP 429)'],
+          status: 'error',
+          statuses: [429],
+        },
+        { cause: 'rate_limit', status: 429 },
+      ],
+      [
+        "Anthropic's overload, a 529",
+        { errors: ['API Error: 529 overloaded_error'], status: 'error', statuses: [529] },
+        { cause: 'overloaded', status: 529 },
+      ],
+      [
+        'a 429 the CLI retried past, then a crash',
+        { errors: ['segfault'], status: 'error', statuses: [429, 200] },
+        undefined,
+      ],
+      [
+        'the wording in a turn whose last call worked',
+        { errors: [credit], status: 'error', statuses: [200] },
+        undefined,
+      ],
+      [
+        'a turn that recovered',
+        { errors: [credit], status: 'completed', statuses: [429, 200] },
+        undefined,
+      ],
+      ['an aborted turn', { errors: [credit], status: 'aborted', statuses: [429] }, undefined],
+      [
+        'a 503 or an outage in plain words',
+        { errors: ['503 Service Unavailable: overloaded'], status: 'error', statuses: [503] },
+        undefined,
+      ],
+      [
+        'a bad request',
+        { errors: ['invalid_request_error: max_tokens'], status: 'error', statuses: [400] },
+        undefined,
+      ],
+      [
+        'a rate limit in plain words, nothing brokered',
+        { errors: ['the test hit a rate limit'], status: 'error', statuses: [] },
+        undefined,
+      ],
+    ]
+    for (const [name, turn, expected] of cases) {
+      const stop = providerStop(turn)
+      assert.deepEqual(stop && { cause: stop.cause, status: stop.status }, expected, name)
+    }
+    assert.equal(
+      providerStop({ errors: [credit], status: 'error', statuses: [400] })?.message,
+      `The model provider stopped the turn, out of credit (HTTP 400): ${credit}`,
+    )
   })
 
   test('pi on Vercel: its own provider on Chat Completions, the model as google/<id>', () => {

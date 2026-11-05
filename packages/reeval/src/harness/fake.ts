@@ -8,6 +8,7 @@ import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
 import { fakeBootstrapScript } from './fake-bootstrap.ts'
+import { providerStop } from './provider-stop.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -70,6 +71,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       return {
         async send(prompt, signal) {
           const startedAt = Date.now()
+          const brokeredBefore = sandbox.brokeredStatuses?.().length ?? 0
           const script = descriptor.script ?? []
           const steps = script[Math.min(turns++, script.length - 1)] ?? []
           const at = () => {
@@ -185,7 +187,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             } else if ('error' in step) {
               debugLog('harness', `turn failed: ${step.error}`)
               transcript.push({ ...at(), type: 'error', message: step.error })
-              return done('', 'error')
+              const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
+              const stopped = providerStop({ errors: [step.error], status: 'error', statuses })
+              return { ...done('', 'error'), ...(stopped && { providerStop: stopped }) }
             } else if ('refuseKey' in step) {
               const message = `${keyRejected(step.refuseKey)}. 401 Unauthorized (the fake agent's)`
               debugLog('harness', `turn failed: ${message}`)
