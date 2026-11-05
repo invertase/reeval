@@ -9,6 +9,7 @@ load the reeval skill in [`skills/reeval/SKILL.md`](./skills/reeval/SKILL.md). A
 another eval language runtime (Dart, Go, …) should load
 [`.agents/skills/add-a-language/SKILL.md`](./.agents/skills/add-a-language/SKILL.md). The
 [README](./README.md) has the pitch.
+Harness work: [add a harness](./.agents/skills/add-harness/SKILL.md), [bump a harness pin](./.agents/skills/bump-harness/SKILL.md), [audit a harness's telemetry](./.agents/skills/telemetry-audit/SKILL.md).
 
 ## Before you finish
 
@@ -30,7 +31,7 @@ pnpm docs:gen && pnpm docs:check     # after any user-visible change
 - **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
  table gives it (a plan case or a fixture), an `inventory.ts` entry (unit tests count by file) and
  `pnpm features:matrix --write`.
-- **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
+- **A user-visible change** updates its entry in `docs/reference/` (see [Adding a feature](#adding-a-feature)).
 - **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
  `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
  the Zod schema, and only the compiler sees it. A field's docs go in the type's TSDoc, not a
@@ -97,6 +98,11 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
   "previously", "after #123", "captured from 1.2.11"), leftover reasoning, or stale names.
   License headers, generated-file markers and `/* c8 ignore */` with a current reason stay.
   Git is the history.
+- **User docs take corrections, not additions.** `docs/` and `skills/reeval/` take only inline
+  factual corrections and generated blocks: no new headings, sections, paragraphs or notes.
+  Maintainer knowledge goes in AGENTS.md or `.agents/skills/`, and explanations go in the PR body.
+- **No studio work until its overhaul.** Leave `packages/studio-web` and `reeval studio` alone,
+  beyond the minimum a change elsewhere needs to compile.
 - `@vitest/expect` and `@vitest/utils` are pinned to exactly the same version, and only
   `packages/reeval/src/engine` imports them (`test/manifest.test.ts` and `test/engine.test.ts`
   hold both). `@vitest/utils` is Vitest's internal package and isn't semver-safe alone, so bump
@@ -496,10 +502,10 @@ once per harness by `perHarness` in `features.test.ts`; don't copy the directory
 
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
-updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
-reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs:gen` and `pnpm docs:check`
-(below). If the change affects how agents should write evals, update the reeval skill in
-`skills/reeval/SKILL.md` (or the reference under `references/` that covers it) too.
+updates its page in the docs' Reference tab (`docs/reference/`), only through generated blocks,
+inline corrections to existing text, or the bare entry `pnpm docs:check` requires. Then run
+`pnpm build && pnpm docs:gen` and `pnpm docs:check` (below). `skills/reeval/` takes inline
+corrections only. Elliot writes new prose in the docs and the skill.
 
 ### Docs
 
