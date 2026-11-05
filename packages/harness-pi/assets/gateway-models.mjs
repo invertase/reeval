@@ -1,9 +1,9 @@
 // Writes pi's models.json for a model on an AI gateway, run in the sandbox before each turn, with
-// the model in a provider of reeval's. An Anthropic model goes on the gateway's Anthropic Messages
-// API and any other on its Chat Completions API. Its thinking levels, limits and prices are pi's
-// catalog entry for it, on the gateway or its provider, else the host's description of it. A
-// Gemini model's thinking level goes as the gateway's native Gemini `thinkingConfig`, so the model
-// gets the level pi sends it there.
+// the model in a provider of reeval's, on the API its provider's route names (`gateway.routes`),
+// else Chat Completions. Its thinking levels, limits and prices are pi's catalog entry for it, on
+// the gateway or its provider, else the host's description of it. A route with `thinkingConfig`
+// sends each thinking level as the model's native `thinkingConfig`, so the model gets the level pi
+// sends it there.
 //
 // node gateway-models.mjs <bootstrap dir> <models.json> <gateway json> <model> <model info json>
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
@@ -34,13 +34,16 @@ const catalog = (name) => {
 const slash = model.indexOf('/')
 const provider = slash < 0 ? '' : model.slice(0, slash)
 const id = model.slice(slash + 1)
-const gemini = provider === 'google'
+const route = gateway.routes[provider] ?? {}
+const native = route.thinkingConfig
 
 let entry
-if (gemini) {
-  entry = catalog('google').find((m) => m.id === id)
+if (native) {
+  entry = catalog(native.catalog).find((m) => m.id === id)
   if (!entry)
-    fail(`pi's catalog has no Gemini model ${id}, so pi can't run ${model} on ${gateway.name}`)
+    fail(
+      `pi's ${native.catalog} catalog has no model ${id}, so pi can't run ${model} on ${gateway.name}`,
+    )
   if (entry.reasoning && !entry.thinkingLevelMap) {
     fail(
       `${id} takes a thinking budget, not a thinking level, so pi can't run it on ${gateway.name}`,
@@ -60,28 +63,28 @@ if (gemini) {
 
 const thinking = (level) => ({ thinkingConfig: { thinkingLevel: level, includeThoughts: true } })
 const byLevel = {}
-for (const level of gemini && entry.reasoning ? ['minimal', 'low', 'medium', 'high'] : []) {
+for (const level of native && entry.reasoning ? ['minimal', 'low', 'medium', 'high'] : []) {
   const mapped = entry.thinkingLevelMap[level]
   if (mapped === null) continue
-  const native = (typeof mapped === 'string' ? mapped : level).toLowerCase()
+  const sent = (typeof mapped === 'string' ? mapped : level).toLowerCase()
   byLevel[level] = {
-    providerOptions: Object.fromEntries(gateway.gemini.upstreams.map((u) => [u, thinking(native)])),
+    providerOptions: Object.fromEntries(native.upstreams.map((u) => [u, thinking(sent)])),
   }
 }
 
-const anthropic = provider === 'anthropic'
+const api = route.api ?? 'openai-completions'
 const models = {
   providers: {
     [gateway.id]: {
       name: gateway.name,
-      baseUrl: anthropic ? gateway.anthropic : gateway.openai,
-      api: anthropic ? 'anthropic-messages' : 'openai-completions',
+      baseUrl: api === 'anthropic-messages' ? gateway.anthropic : gateway.openai,
+      api,
       apiKey: `$${gateway.credentialEnv}`,
       authHeader: true,
       compat: {
-        // A Gemini model's level goes as the thinkingConfig above; the gateway's shared effort
-        // field would map Gemini's levels onto its own.
-        ...(gemini ? { supportsReasoningEffort: false } : {}),
+        // The level goes as the thinkingConfig above; the gateway's shared effort field would map
+        // the model's levels onto its own.
+        ...(native ? { supportsReasoningEffort: false } : {}),
         supportsStore: false,
         supportsDeveloperRole: false,
       },

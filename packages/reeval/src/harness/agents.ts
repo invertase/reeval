@@ -1433,7 +1433,9 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
         openrouter: pi.PI_OPENROUTER,
       })
       const modelInfo =
-        gateway && model && !model.startsWith('google/') ? await modelLimits(model) : undefined
+        gateway && model && !pi.piGatewayDescribes(gateway, model)
+          ? await modelLimits(model)
+          : undefined
       return pi.createPi({
         auth,
         ...(gateway

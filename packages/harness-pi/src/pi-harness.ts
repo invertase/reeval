@@ -74,12 +74,27 @@ export type PiGateway = {
   /** pi's own provider for the gateway, whose catalog has the model's limits when it lists it. */
   readonly catalog: string
   /**
-   * How a Gemini model runs: with its native `thinkingConfig` under these `providerOptions` keys,
-   * in reeval's provider, or on pi's own provider for the gateway, which sends its thinking level
-   * in a field the gateway gives Gemini as that level.
+   * How a model runs, by the provider its id names (`google` in `google/gemini-3.8-flash`). A
+   * provider with no route runs on the Chat Completions API, described by pi's catalog for the
+   * gateway or the provider, else `PiModelInfo`.
    */
-  readonly gemini: { readonly upstreams: readonly string[] } | 'builtin'
+  readonly routes: Readonly<Record<string, PiGatewayRoute>>
 }
+
+/** How a {@link PiGateway} runs one provider's models. */
+export type PiGatewayRoute =
+  /** On pi's own provider for the gateway (`--provider <catalog>`), not one of reeval's. */
+  | { readonly builtin: true }
+  | {
+      readonly builtin?: false
+      /** The gateway's API it goes on; default `openai-completions`. */
+      readonly api?: 'anthropic-messages' | 'openai-completions'
+      /**
+       * Each thinking level goes as the model's native `thinkingConfig`, under these
+       * `providerOptions` keys: the model must be in pi's `thinkingCatalog` and take a level.
+       */
+      readonly thinkingConfig?: { readonly catalog: string; readonly upstreams: readonly string[] }
+    }
 
 /**
  * Vercel AI Gateway. It takes Gemini's own `thinkingConfig` under the provider that serves the
@@ -92,7 +107,10 @@ export const PI_AI_GATEWAY: PiGateway = {
   openai: 'https://ai-gateway.vercel.sh/v1',
   anthropic: 'https://ai-gateway.vercel.sh',
   catalog: 'vercel-ai-gateway',
-  gemini: { upstreams: ['google', 'vertex'] },
+  routes: {
+    anthropic: { api: 'anthropic-messages' },
+    google: { thinkingConfig: { catalog: 'google', upstreams: ['google', 'vertex'] } },
+  },
 }
 
 /**
@@ -106,7 +124,7 @@ export const PI_OPENROUTER: PiGateway = {
   openai: 'https://openrouter.ai/api/v1',
   anthropic: 'https://openrouter.ai/api',
   catalog: 'openrouter',
-  gemini: 'builtin',
+  routes: { anthropic: { api: 'anthropic-messages' }, google: { builtin: true } },
 }
 
 /** The model calls pi makes on a {@link PiGateway}, which it streams. */
@@ -136,7 +154,17 @@ export type PiModelInfo = {
   readonly maxTokens: number
 }
 
-const isGemini = (model: string) => model.startsWith('google/')
+const routeOf = (gateway: PiGateway, model: string): PiGatewayRoute | undefined =>
+  gateway.routes[model.slice(0, Math.max(0, model.indexOf('/')))]
+
+/**
+ * Whether pi's own catalogs describe `model` on `gateway`, so it needs no `PiModelInfo`: a route
+ * that runs it on pi's provider, or takes its thinking levels from pi's catalog.
+ */
+export const piGatewayDescribes = (gateway: PiGateway, model: string): boolean => {
+  const route = routeOf(gateway, model)
+  return !!route && (route.builtin === true || 'thinkingConfig' in route)
+}
 
 /** An `mcp.json` server: stdio (`command`) or streamable HTTP (`url`); pi has no SSE transport. */
 export type PiMcpServer =
@@ -415,7 +443,7 @@ async function startSession(
       abortSignal,
     })
   }
-  const builtin = (model: string) => gateway?.gemini === 'builtin' && isGemini(model)
+  const builtin = (model: string) => !!gateway && routeOf(gateway, model)?.builtin === true
   const writeModels = (model: string) =>
     gateway && !builtin(model)
       ? [

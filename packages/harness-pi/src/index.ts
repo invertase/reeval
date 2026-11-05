@@ -22,10 +22,12 @@ export {
   PI_VERTEX_PROVIDER,
   PI_WORKSPACE_SKILLS_DIR,
   type PiGateway,
+  type PiGatewayRoute,
   type PiHarnessSettings,
   type PiMcpServer,
   type PiModelInfo,
   type PiVertex,
+  piGatewayDescribes,
   piGatewayEndpoints,
 } from './pi-harness.ts'
 export { PI_PROVIDERS, PI_REFUSED_PROVIDERS, PROBED_VERSION } from './pi-provider-table.ts'

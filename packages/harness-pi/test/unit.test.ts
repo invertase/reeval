@@ -487,7 +487,7 @@ test('twin: a Gemini model missing from the catalog, or on a thinking budget, is
   const out = join(root, 'agent/models.json')
   const missing = await gatewayModels(bootstrap, out, 'google/gemini-9')
   assert.equal(missing.status, 1)
-  assert.match(missing.stderr, /pi's catalog has no Gemini model gemini-9/)
+  assert.match(missing.stderr, /pi's google catalog has no model gemini-9/)
   const budget = await gatewayModels(bootstrap, out, 'google/gemini-2.5-pro')
   assert.equal(budget.status, 1)
   assert.match(budget.stderr, /gemini-2\.5-pro takes a thinking budget, not a thinking level/)
