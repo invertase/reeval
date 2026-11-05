@@ -583,8 +583,47 @@ describe('Vercel AI Gateway routes', () => {
         undefined,
       ],
       [
-        'the wording in a turn whose last call worked',
-        { errors: [credit], status: 'error', statuses: [200] },
+        "Anthropic's overload inside a streamed 200",
+        { errors: ['API Error: overloaded_error'], status: 'error', statuses: [200] },
+        { cause: 'overloaded', status: null },
+      ],
+      [
+        "Cursor's usage limit on its Connect stream's 200s",
+        { errors: ["You've hit your usage limit"], status: 'error', statuses: [200, 200] },
+        { cause: 'quota', status: null },
+      ],
+      [
+        "Codex's quota on a 429",
+        {
+          errors: ['Quota exceeded. Check your plan and billing details.'],
+          status: 'error',
+          statuses: [429],
+        },
+        { cause: 'quota', status: 429 },
+      ],
+      [
+        "xAI's spent credits, an HTTP 403",
+        {
+          errors: [
+            '403 Forbidden "Your team 1 has either used all available credits or reached its monthly spending limit."',
+          ],
+          status: 'error',
+          statuses: [403],
+        },
+        { cause: 'credit', status: 403 },
+      ],
+      [
+        "Google's overloaded model, a 503",
+        {
+          errors: ['503 UNAVAILABLE: The model is overloaded. Please try again later.'],
+          status: 'error',
+          statuses: [503],
+        },
+        { cause: 'overloaded', status: 503 },
+      ],
+      [
+        'a 429 the CLI retried past, then a plain-worded failure',
+        { errors: ['request failed'], status: 'error', statuses: [429, 200] },
         undefined,
       ],
       [

@@ -1178,7 +1178,7 @@ On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab
 
 ## `AttemptError`
 
-`AttemptRecord.error` is why an attempt failed, or null. `kind` is an `ErrorKind`, `infra` for a judge call its provider never answered after its retries when nothing else failed the attempt. `message` is the text. `prepare` is set when sandbox preparation fails. `resource` is set when the sandbox runs out of a resource, and `provider` (`cause` `credit`, `quota`, `rate_limit` or `overloaded`, and the last brokered call's HTTP `status` or null) when the model provider stopped a turn.
+`AttemptRecord.error` is why an attempt failed, or null. `kind` is an `ErrorKind`, `infra` for a judge call its provider never answered after its retries when nothing else failed the attempt. `message` is the text. `prepare` is set when sandbox preparation fails. `resource` is set when the sandbox runs out of a resource, and `provider` (`cause` `credit`, `quota`, `rate_limit` or `overloaded`, and the HTTP `status` of the turn's last brokered call when that call failed, else null) when the model provider stopped a turn. A provider stop is a failed turn whose error is in the provider's own words (Anthropic's `credit balance is too low`, `insufficient_quota`, `RESOURCE_EXHAUSTED`, `rate_limit_error`, `overloaded_error`, a usage limit and the like) or whose last brokered call got a 402, 429 or 529.
 
 ## `PrepareFailureRecord`
 

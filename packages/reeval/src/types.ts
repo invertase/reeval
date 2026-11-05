@@ -2561,8 +2561,9 @@ export type ResourceFailureRecord = { cause: 'oom'; kills: number }
 
 /**
  * The model provider ended a turn, not the agent: out of credit, over its quota, rate limited or
- * overloaded, with the HTTP status of the last model call the egress gateway brokered (`null`
- * when none was). The attempt is then an infra error, so `--retry-errors` runs it again.
+ * overloaded, with the HTTP status of the last model call the egress gateway brokered when that
+ * call failed (`null` when it didn't, as in a stream that failed inside an HTTP 200, or none was).
+ * The attempt is then an infra error, so `--retry-errors` runs it again.
  */
 export type ProviderStopRecord = {
   cause: 'credit' | 'quota' | 'rate_limit' | 'overloaded'
