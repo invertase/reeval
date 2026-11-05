@@ -27,7 +27,13 @@ import {
   writePluginFiles,
 } from './agents.ts'
 import { providerStop } from './provider-stop.ts'
-import { errorText, normalizeStream, reasoningTime, type StampedPart } from './transcript.ts'
+import {
+  errorText,
+  normalizeStream,
+  reasoningTime,
+  type StampedPart,
+  timesReasoning,
+} from './transcript.ts'
 import type { Harness, HarnessResult } from './types.ts'
 
 /** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
@@ -354,7 +360,7 @@ export function createAgentHarness(
               ...(catalog.fullToolOutput ? { fullToolOutput: catalog.fullToolOutput } : {}),
             })
             const events = [...normalized, ...extra].map((e) =>
-              e.type === 'reasoning' && catalog.reasoning !== 'streamed'
+              e.type === 'reasoning' && !timesReasoning(catalog.reasoning)
                 ? { ...e, durationMs: null }
                 : e,
             )

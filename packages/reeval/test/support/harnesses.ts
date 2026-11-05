@@ -162,6 +162,12 @@ export type HarnessRow = {
    * the reasoning check out.
    */
   reasoning?: { tokens: boolean; text: boolean }
+  /**
+   * A model of the row's that shows its thinking, which the reasoning eval runs on: its transcript
+   * must have the reasoning's text and its turn a reasoning time. Unset, the row leaves the
+   * reasoning eval out.
+   */
+  reasoningModel?: string
 }
 
 export const harnesses: HarnessRow[] = [
@@ -213,6 +219,10 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash/,
     wireModel: /^gemini-3\.8-flash$/,
+    // agy's stream has no thoughts; reeval reads them from its stored conversation. The
+    // contract's -low model doesn't think, so the reasoning eval runs on -high.
+    reasoning: { tokens: true, text: true },
+    reasoningModel: 'gemini-3.8-flash-high',
   },
   {
     id: 'claude-code',
@@ -826,6 +836,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
     ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
     ...(row.effort ? { REEVAL_CONTRACT_EFFORT: row.effort.value } : {}),
+    ...(row.reasoningModel ? { REEVAL_CONTRACT_REASONING_MODEL: row.reasoningModel } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...Object.fromEntries(

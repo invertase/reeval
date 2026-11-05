@@ -43,6 +43,21 @@ export default defineConfig({
 
 For more information about model ids and effort values, see [Set the agent's model](/configuration/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 
+## Reasoning
+
+agy's stream-json output reports each step's `thinking_tokens` but not the thoughts. After each turn, reeval reads them back from agy's stored conversation in the sandbox:
+
+| What | Where agy stores it |
+|---|---|
+| Thought text | `thinking` on each step of `~/.gemini/antigravity-cli/brain/<conversation>/.system_generated/logs/transcript_full.jsonl` |
+| Thinking time | `thinking_duration` on each step in `~/.gemini/antigravity-cli/conversations/<conversation>.db` |
+
+Each thought becomes a `reasoning` event in `transcript.jsonl`, placed before its step's edit, command, or reply. The turn's `reasoningMs` adds up their times. Reading the times needs Node 22.13 or later in the sandbox; with an older Node, the thoughts have no time and `reasoningMs` is null.
+
+<Info>
+A step can spend thinking tokens without storing a thought summary, and low-effort models such as `gemini-3.8-flash-low` often think not at all. A turn with thinking tokens but no stored thought has a null `reasoningMs`.
+</Info>
+
 ## `plugins`
 
 reeval installs each plugin whole with `agy plugin install` as the session starts, and Antigravity loads each plugin's MCP servers itself.

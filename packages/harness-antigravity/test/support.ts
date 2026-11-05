@@ -20,6 +20,8 @@ export type Spawned = { command: string; env: Record<string, string>; workingDir
 export function fakeSandbox(options: {
   broker?: boolean
   turns?: Array<{ stdout: string | Uint8Array[]; stderr?: string; exitCode?: number }>
+  /** Answers a `run` the fake doesn't emulate itself, such as reading the stored thoughts. */
+  run?: (command: string) => { exitCode: number; stdout: string; stderr: string }
 }) {
   const files = new Map<string, string>()
   const spawned: Spawned[] = []
@@ -50,7 +52,10 @@ export function fakeSandbox(options: {
     async writeFile() {
       throw new Error('not used')
     },
+    ran: [] as string[],
     async run({ command }: { command: string }) {
+      session.ran.push(command)
+      if (options.run && command.startsWith("'node' ")) return options.run(command)
       const ok = { exitCode: 0, stdout: '', stderr: '' }
       if (command.includes('$HOME')) return { ...ok, stdout: '/root' }
       const quoted = [...command.matchAll(/'([^']*)'/g)].map((m) => m[1] ?? '')

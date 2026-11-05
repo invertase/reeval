@@ -15,11 +15,15 @@ import { fakeScript } from './evals/probes.ts'
 // The harness contract.test.ts picks for the run (REEVAL_CONTRACT_HARNESS, REEVAL_CONTRACT_MODEL);
 // without one it's the scripted fake agent with Cursor's layout, the key-free row that checks the
 // suite itself.
-const model = process.env.REEVAL_CONTRACT_MODEL ?? ''
+const defaultModel = process.env.REEVAL_CONTRACT_MODEL ?? ''
 
-/** The row's harness, with `effort` when it's given: the effort eval's cell. */
-export const contractHarness = (effort?: string) => {
+/**
+ * The row's harness, with `effort` when it's given (the effort eval's cell), on another model when
+ * one is given (the reasoning eval's).
+ */
+export const contractHarness = (effort?: string, on?: string) => {
   const e = effort ? { effort } : {}
+  const model = on || defaultModel
   switch (process.env.REEVAL_CONTRACT_HARNESS) {
     case 'cursor':
       // fast=false: the standard-priced variant, pinned though it is the default.

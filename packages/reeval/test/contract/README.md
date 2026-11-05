@@ -18,6 +18,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | real key never in the container | after a turn, a scan of every process's environment and command line and every file under the writable roots finds no form of the key | the same scan finds a value planted in the environment and a home file | the key isn't in the run directory |
 | deny-all plus auto hosts works | under `egress: 'deny-all'` the turn completes, and a `curl` to example.com gets a 403 at CONNECT | no turn: the same `curl` isn't a 200 | `egress`: the harness's automatic hosts allowed, its API contacted, example.com:443 refused and recorded |
 | served model recorded | — | — | every attempt's `servedModels` names the model (null for a harness whose requests don't say) |
+| reasoning text and time recorded | the `reasoning` eval, on a row with a `reasoningModel` (one that shows its thinking), writes the one prime | — | the attempt's transcript has a `reasoning` event with text, and every turn a `reasoningMs` above 0: on Antigravity, the thoughts the adapter read back from agy's stored conversation |
 | effort sent as the model's own setting | the `effort` eval, on a row with an `effort`, passes | — | every answered model call of that attempt that sets reasoning (`requestEffort` in `.reeval/debug`) sets the row's level in the field the model reads, and more than one does; in the same task without `effort`, some call sets none |
 | upstream provider and cost recorded | — | — | on a gateway whose responses say them (the `*-openrouter` rows), every attempt's `upstreams` names a provider with its calls and `reportedCostUsd` is above 0; elsewhere both are unset |
 | nothing silently unreported | — | — | every turn's `unreported` is empty: no harness fell back to flagging events it couldn't report (the Cursor SDK's web calls, when recovering them fails or finds a stored shape it doesn't know) |
@@ -74,7 +75,7 @@ that closes fails until its cell says so.
 | Fresh input vs cache read | captured? [4] | captured | captured | captured | captured | captured | captured | **dropped** [5] | captured |
 | Cache write | captured? [4] | captured | captured | n/p | captured [6] | captured | n/p | n/p | n/p |
 | Reasoning tokens | n/p | captured | captured | captured | captured | **dropped** [7] | captured | **dropped** [8] | captured |
-| Reasoning text | captured | captured | captured [9] | **dropped** [10] | captured [11] | captured | captured | n/p | captured |
+| Reasoning text | captured | captured | captured [9] | captured [10] | captured [11] | captured | captured | n/p | captured |
 | Per-call usage | **dropped** [12] | **dropped** [13] | **dropped** [14] | **dropped** [15] | **dropped** [16] | **dropped** [17] | **dropped** [13] | **dropped** [7] | **dropped** [18] |
 | Side-call usage (titles, search) | **dropped**? [19] | **dropped** [20] | n/p [21] | **dropped** [22] | **dropped** [23] | **dropped** [24] | n/p | n/p | **dropped** [25] |
 | Served model (gateway) | **dropped**? [26] | **dropped** [27] | captured | captured | captured | captured | captured | captured | captured |
@@ -98,7 +99,7 @@ that closes fails until its cell says so.
 7. On the wire only.
 8. On Chat Completions, the wire's `completion_tokens_details.reasoning_tokens` only.
 9. The summary `model_reasoning_summary = "auto"` asks for.
-10. On the wire, none in the transcript.
+10. From agy's stored conversation, not its stream.
 11. On Gemini; Anthropic returned no visible thinking.
 12. The SDK and `agent-store` keep turn totals only.
 13. In the raw `finish-step` parts.
@@ -198,7 +199,7 @@ plugin: {
   agent's own copy for one that installs the plugin itself (Antigravity's `agy plugin install`).
 - `copy`, for such an agent, is where its copy lives (`~/.gemini/config/plugins/probe/`): the
   hermetic check allows the plugin items under it.
-- The row then runs 25 attempts instead of 15 (fewer if it leaves hooks, agents or rules out): raise
+- The row then runs 25 attempts instead of 15 (26 with a `reasoningModel`) (fewer if it leaves hooks, agents or rules out): raise
   `REEVAL_REAL_ATTEMPT_BUDGET` in `contract.yml` by the difference.
 
 ## Running it
@@ -213,7 +214,7 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 15 attempts (14 without an `effort`), 7 of them with one short agent turn, or up to 25 with a
+picks rows. Each real row is 15 attempts (14 without an `effort`, one more with a `reasoningModel`), 7 of them with one short agent turn, or up to 26 with a
 `plugin` field, at `--concurrency 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.

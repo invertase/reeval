@@ -173,6 +173,7 @@ export function renderMatrix(facts, { href }) {
 
 const REASONING_TIME = {
   streamed: '✓',
+  recovered: '✓ (from its stored conversation)',
   whole: '✗ (its reasoning arrives whole)',
   none: '✗ (it never shows its reasoning)',
 }

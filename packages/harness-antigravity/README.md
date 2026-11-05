@@ -26,6 +26,12 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   parts: text, provider-executed tool calls and results under common names (`bash`, `read`,
   `write`, `edit`, `grep`, `glob`, `webSearch`), per-step `finish-step` and a `finish` with
   token usage. The CLI reports usage; Cursor doesn't.
+- **Reasoning.** The stream has no thoughts, so once the process exits the turn reads them back
+  from the stored conversation (`readAntigravityThoughts`, one `node` in the sandbox): each
+  step's `thinking` from `brain/<id>/.system_generated/logs/transcript_full.jsonl` and its
+  `thinking_duration` from `conversations/<id>.db`. They become `reasoning-*` parts ahead of the
+  turn's `finish`, with `harnessMetadata.antigravity` saying how long before its arrival each
+  started (`startedBeforeMs`) and its `durationMs`. A store it can't read adds none.
 - **Bootstrap.** Downloads the pinned CLI release (1.4.7) for x64 or arm64 Linux and checks its
   sha256. The binary needs glibc.
 - **Auth.** A Gemini API key only (`GEMINI_API_KEY`), with `modelProvider: "gemini"` pinned in

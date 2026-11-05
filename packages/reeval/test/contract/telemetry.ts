@@ -205,7 +205,7 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     cacheRead: captured,
     cacheWrite: notProduced,
     reasoningTokens: captured,
-    reasoningText: dropped('on the wire, none in the transcript'),
+    reasoningText: { state: 'captured', note: "from agy's stored conversation, not its stream" },
     perCallUsage: dropped('turn totals only'),
     sideCallUsage: dropped(
       "the title and web-search calls on Flash Lite: the model's in `servedModels`, its tokens aren't",

@@ -1,7 +1,8 @@
 // Replays one real edit-and-reason turn per harness (test/replay/telemetry/, recorded with
 // REEVAL_RAW_TRANSCRIPT=1 on a two-file edit eval) through today's normalizer and the catalog's
 // reasoning delivery: every harness's edits are counted, a reasoning time is a measurement only
-// where the harness streams its reasoning, and a time it can't measure is null, never 0.
+// where the harness streams its reasoning or recovers it with its time, and a time it can't
+// measure is null, never 0.
 // `<harness>-subagent` captures had the agent hand the edits to a subagent.
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -42,7 +43,7 @@ const reasoningMs = (harness: keyof typeof AGENTS, lines: Line[]) =>
 const REASONING: Record<keyof typeof AGENTS, 'measured' | null> = {
   cursor: 'measured',
   'claude-code': 'measured',
-  antigravity: null,
+  antigravity: 'measured',
   opencode: null,
   goose: 'measured',
   pi: 'measured',
@@ -82,11 +83,49 @@ for (const harness of Object.keys(AGENTS) as Array<keyof typeof AGENTS>)
   })
 
 test('a harness that bills reasoning tokens without showing it reports no reasoning time', () => {
-  for (const harness of ['codex', 'antigravity', 'opencode'] as const) {
+  for (const harness of ['codex', 'opencode'] as const) {
     const lines = parse(read(harness))
     assert.ok((usageOf(lines)?.reasoning ?? 0) > 0, `${harness} billed reasoning tokens`)
     assert.equal(reasoningMs(harness, lines), null, harness)
   }
+})
+
+describe("telemetry: Antigravity's reasoning, recovered from agy's stored conversation", () => {
+  const lines = parse(read('antigravity'))
+  const events = normalize(lines)
+  const recovered = lines.flatMap(({ part }) =>
+    part.type === 'reasoning-start'
+      ? [(part.providerMetadata as { antigravity: { durationMs: number } }).antigravity]
+      : [],
+  )
+  test("each block has its text and agy's thinking_duration", () => {
+    const blocks = events.flatMap((e) => (e.type === 'reasoning' ? [e] : []))
+    assert.ok(blocks.length > 0)
+    assert.deepEqual(
+      blocks.map((b) => b.durationMs),
+      recovered.map((r) => r.durationMs),
+    )
+    for (const b of blocks) assert.ok(b.text.trim(), 'a block with no text')
+    assert.equal(
+      reasoningMs('antigravity', lines),
+      recovered.reduce((n, r) => n + r.durationMs, 0),
+    )
+  })
+  test('each block sits where the model thought, ahead of what its step did', () => {
+    // Recovered after the turn, every block arrived with the result: it's placed by its metadata.
+    const arrived = lines.find((l) => l.part.type === 'reasoning-start')?.ms ?? 0
+    for (const [i, e] of events.entries()) {
+      if (e.type !== 'reasoning') continue
+      assert.ok(e.atMs < arrived, `${e.atMs} is where it arrived`)
+      const next = events[i + 1]
+      assert.ok(next && next.type !== 'reasoning' && next.atMs >= e.atMs + (e.durationMs ?? 0))
+    }
+  })
+  test('twin: a store it could not read leaves the time unknown, not 0', () => {
+    const without = lines.filter((l) => !l.part.type.startsWith('reasoning-'))
+    assert.ok((usageOf(without)?.reasoning ?? 0) > 0)
+    assert.equal(reasoningMs('antigravity', without), null)
+  })
 })
 
 test('twin: the same capture read as streamed reasons for 0 ms, not null', () => {

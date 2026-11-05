@@ -49,6 +49,7 @@ import {
   savedOutputScript,
 } from './antigravity-saved-output.ts'
 import { AntigravityStreamTranslator } from './antigravity-stream.ts'
+import { readAntigravityThoughts } from './antigravity-thoughts.ts'
 import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antigravity-tools.ts'
 
 export const ANTIGRAVITY_HARNESS_ID = 'antigravity'
@@ -380,7 +381,7 @@ async function startSession(
       const done = (async () => {
         const stderr = tail(proc.stderr).catch(() => '')
         try {
-          for await (const line of lines(proc.stdout)) {
+          const pushLine = async (line: string) => {
             const parts = translator.push(line)
             for (const step of translator.takeSavedOutputs()) {
               const saved = await readSavedOutput(
@@ -392,7 +393,26 @@ async function startSession(
             }
             emit(parts)
           }
+          // The result ends the turn's parts, so it waits for the thoughts agy stores as it exits.
+          const held: string[] = []
+          for await (const line of lines(proc.stdout)) {
+            if (held.length || AntigravityStreamTranslator.isResult(line)) held.push(line)
+            else await pushLine(line)
+          }
           const { exitCode } = await proc.wait()
+          const id = translator.conversationId
+          const fromStep = translator.firstReplyStep
+          if (id && fromStep !== undefined && turn.abortSignal?.aborted !== true) {
+            translator.recover(
+              await readAntigravityThoughts(sandbox, {
+                home,
+                conversationId: id,
+                fromStep,
+                ...(turn.abortSignal ? { abortSignal: turn.abortSignal } : {}),
+              }),
+            )
+          }
+          for (const line of held) await pushLine(line)
           emit(
             translator.end({
               exitCode,

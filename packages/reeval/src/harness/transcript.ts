@@ -42,6 +42,22 @@ function stallFlags(tool: string, durationMs: number | null): { stalled?: boolea
 }
 const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
+/**
+ * A reasoning block recovered after the turn (Antigravity's, from its stored conversation) says
+ * in its provider metadata how long before its own part it started, and how long the agent says
+ * it took: it's placed there, not where it arrived.
+ */
+function recoveredTiming(
+  part: StampedPart['part'],
+): { startedBeforeMs: number; durationMs: number | null } | undefined {
+  for (const meta of Object.values(record(part.providerMetadata))) {
+    const { startedBeforeMs, durationMs } = record(meta)
+    if (typeof startedBeforeMs !== 'number') continue
+    return { startedBeforeMs, durationMs: typeof durationMs === 'number' ? durationMs : null }
+  }
+  return undefined
+}
+
 /** The harness's synthetic "fileChange" twin of every edit, which always says "modify". */
 const isFileChangeEcho = (part: StampedPart['part']) =>
   part.toolName === 'fileChange' || str(part.toolCallId).startsWith('harness-file-change-')
@@ -425,7 +441,10 @@ export function normalizeStream(
 
   const out: Array<{ at: number; event: TranscriptEvent }> = []
   const stamp = (at: number) => ({ ts: new Date(startedAt + at).toISOString(), atMs: at })
-  const blocks = new Map<string, { type: 'text' | 'reasoning'; ms: number; text: string }>()
+  const blocks = new Map<
+    string,
+    { type: 'text' | 'reasoning'; ms: number; text: string; durationMs?: number | null }
+  >()
   const pending = new Map<string, Pending>()
 
   const toolDone = (id: string, reported: Pending, end: StampedPart, failed: boolean) => {
@@ -531,13 +550,16 @@ export function normalizeStream(
         }
         break
       case 'text-start':
-      case 'reasoning-start':
+      case 'reasoning-start': {
+        const recovered = part.type === 'reasoning-start' ? recoveredTiming(part) : undefined
         blocks.set(str(part.id), {
           type: part.type === 'text-start' ? 'text' : 'reasoning',
-          ms,
+          ms: recovered ? Math.max(0, ms - recovered.startedBeforeMs) : ms,
           text: '',
+          ...(recovered ? { durationMs: recovered.durationMs } : {}),
         })
         break
+      }
       case 'text-delta':
       case 'reasoning-delta': {
         const block = blocks.get(str(part.id))
@@ -555,7 +577,7 @@ export function normalizeStream(
               ...stamp(block.ms),
               type: block.type,
               text: block.text,
-              durationMs: ms - block.ms,
+              durationMs: block.durationMs !== undefined ? block.durationMs : ms - block.ms,
             },
           })
         }
@@ -656,18 +678,22 @@ export function normalizeStream(
   return out.sort((a, b) => a.at - b.at).map((e) => e.event)
 }
 
+/** Whether a harness's reasoning blocks carry their time: streamed, or recovered with it. */
+export const timesReasoning = (delivery: ReasoningDelivery) =>
+  delivery === 'streamed' || delivery === 'recovered'
+
 /**
  * A turn's reasoning time, from the reasoning blocks the harness streamed; null when it can't be
  * known. A harness whose reasoning arrives whole (`whole`) or not at all (`none`) can't time it.
- * A streamed turn with no reasoning block has spent none only when its usage says it used no
- * reasoning tokens; otherwise the model may have reasoned without the harness showing it.
+ * A streamed or recovered turn with no reasoning block has spent none only when its usage says it
+ * used no reasoning tokens; otherwise the model may have reasoned without the harness showing it.
  */
 export function reasoningTime(
   delivery: ReasoningDelivery,
   events: readonly TranscriptEvent[],
   usage: TokenUsage | null,
 ): number | null {
-  if (delivery !== 'streamed') return null
+  if (!timesReasoning(delivery)) return null
   const blocks = events.flatMap((e) => (e.type === 'reasoning' ? [e.durationMs] : []))
   if (blocks.length === 0) return usage?.reasoning === 0 ? 0 : null
   if (blocks.some((ms) => ms === null)) return null
