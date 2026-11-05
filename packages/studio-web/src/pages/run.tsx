@@ -35,7 +35,6 @@ import {
   familyOf,
   familyRateLabel,
   filesChanged,
-  formatCost,
   formatDuration,
   formatPercent,
   formatRatio,
@@ -49,7 +48,6 @@ import {
   observedTallies,
   pinnedAnalysis,
   type RunRecord,
-  runCost,
   runLead,
   runOutcome,
   type SandboxWarning,
@@ -112,11 +110,6 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
           <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
           {record.cost.usage ? (
             <Meta icon={Coins}>{formatUsage(record.cost.usage)} tokens</Meta>
-          ) : null}
-          {runCost(record.cost) ? (
-            <Meta icon={Coins}>
-              <span title={runCost(record.cost)?.source}>{formatCost(runCost(record.cost))}</span>
-            </Meta>
           ) : null}
         </div>
       </div>
