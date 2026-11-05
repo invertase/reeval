@@ -749,10 +749,10 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 
 ## `history`
 
-`history` is the history directory and which evaluations keep artifacts there.
+`history` is where recorded runs are kept and which evaluations keep artifacts there.
 
-<Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }" optional>
-  `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'`, `'failures'` (the default), or `'none'`; `'failures'` keeps the artifacts of each attempt whose outcome is `fail` or `infra_error`, including its setup and `c.exec` logs, and only the `diff.patch` of a passing attempt in a cell with a failed attempt. A cell that failed with no failed attempt, such as on `minLift`, keeps every attempt's artifacts. Any other passing attempt keeps no transcript, so `skill_reads` and `skill_files` leave it out.
+<Property name="history" type="{ store?: LocalStoreDescriptor | S3StoreDescriptor | HistoryStore, artifacts?: 'all' | 'failures' | 'none' }" optional>
+  `store` defaults to `local()`, whose `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'`, `'failures'` (the default), or `'none'`; `'failures'` keeps the artifacts of each attempt whose outcome is `fail` or `infra_error`, including its setup and `c.exec` logs, and only the `diff.patch` of a passing attempt in a cell with a failed attempt. A cell that failed with no failed attempt, such as on `minLift`, keeps every attempt's artifacts. Any other passing attempt keeps no transcript, so `skill_reads` and `skill_files` leave it out.
 </Property>
 
 ## `budget`

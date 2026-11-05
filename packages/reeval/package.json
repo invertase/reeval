@@ -38,6 +38,14 @@
       "types": "./dist/sandbox/boat.d.ts",
       "default": "./dist/sandbox/boat.js"
     },
+    "./store/local": {
+      "types": "./dist/store/local.d.ts",
+      "default": "./dist/store/local.js"
+    },
+    "./store/s3": {
+      "types": "./dist/store/s3.d.ts",
+      "default": "./dist/store/s3.js"
+    },
     "./judge": {
       "types": "./dist/judge.d.ts",
       "default": "./dist/judge.js"

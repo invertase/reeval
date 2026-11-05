@@ -1938,8 +1938,88 @@ export const CASES: Record<string, Case[]> = {
     ['runs best of 3', options({ runs: { bestOf: 3 } })],
     ['config runs best of 6', config({ runs: { bestOf: 6 } })],
     ['yaml: include null', yaml('include:\n')],
-    ['yaml: a typo in history', yaml('history:\n  dirr: runs\n')],
-    ['yaml: history.dir a number', yaml('history:\n  dir: 3\n')],
+    ['yaml: a typo in history', yaml('history:\n  artifact: all\n')],
+    ['yaml: history.dir', yaml('history:\n  dir: runs\n')],
+    ['yaml: history.store.dir a number', yaml('history:\n  store: { kind: local, dir: 3 }\n')],
+    ['yaml: history.store of an unknown kind', yaml('history:\n  store: { kind: s4 }\n')],
+    ['history.store a string', config({ history: { store: 's3://runs' } })],
+    ['history.store s3 without a bucket', config({ history: { store: { kind: 's3' } } })],
+    [
+      'history.store s3 with a secret key',
+      config({ history: { store: { kind: 's3', bucket: 'runs', secretAccessKey: 'abc' } } }),
+    ],
+    [
+      'yaml: history.store s3 with an access key',
+      yaml('history:\n  store: { kind: s3, bucket: runs, accessKeyId: AKIA }\n'),
+    ],
+    [
+      'history.store s3 env holding a value',
+      config({
+        history: { store: { kind: 's3', bucket: 'runs', env: { accessKeyId: 'AKIA/abc+' } } },
+      }),
+    ],
+    [
+      'history.store s3 env with a typo',
+      config({ history: { store: { kind: 's3', bucket: 'runs', env: { acessKeyId: 'KEY' } } } }),
+    ],
+    [
+      'history.store s3 endpoint with credentials',
+      config({
+        history: {
+          store: { kind: 's3', bucket: 'runs', endpoint: 'https://key:secret@s3.example.com' },
+        },
+      }),
+    ],
+    [
+      'history.store s3 endpoint with the bucket in it',
+      config({
+        history: { store: { kind: 's3', bucket: 'runs', endpoint: 'https://s3.example.com/runs' } },
+      }),
+    ],
+    [
+      'history.store s3 endpoint not a URL',
+      config({ history: { store: { kind: 's3', bucket: 'runs', endpoint: 's3.example.com' } } }),
+    ],
+    [
+      'history.store s3 prefix with ..',
+      config({ history: { store: { kind: 's3', bucket: 'runs', prefix: 'ci/../main' } } }),
+    ],
+    [
+      'history.store a custom store without a name',
+      config({
+        history: {
+          store: {
+            listRuns: async () => [],
+            readRun: async () => null,
+            writeRun: async () => ({ ok: false }),
+            addFile: async () => {},
+          },
+        },
+      }),
+    ],
+    [
+      'history.store a custom store without addFile',
+      config({
+        history: {
+          store: {
+            name: 'mine',
+            listRuns: async () => [],
+            readRun: async () => null,
+            writeRun: async () => ({ ok: false }),
+          },
+        },
+      }),
+    ],
+    [
+      'yaml: a profile history typo',
+      yaml('profiles:\n  ci:\n    history: { stor: { kind: local } }\n'),
+    ],
+    [
+      'yaml: a profile history s3 with a session token',
+      yaml(
+        'profiles:\n  ci:\n    history:\n      store: { kind: s3, bucket: runs, sessionToken: x }\n',
+      ),
+    ],
     ['yaml: a typo in debug', yaml('debug:\n  keepRuns: 3\n')],
     ['yaml: defaultProfile null', yaml('defaultProfile:\n')],
     ['yaml: compare', yaml('compare:\n  variants: []\n')],
@@ -2051,7 +2131,7 @@ judge:
 capture: { viewport: full-page, timeout: 30s }
 concurrency: 2
 record: manual
-history: { dir: .history, artifacts: failures }
+history: { store: { kind: local, dir: .history }, artifacts: failures }
 budget: { attempts: 20, duration: 1h }
 defaultProfile: { ci: pr }
 secrets: { unbrokered: error }

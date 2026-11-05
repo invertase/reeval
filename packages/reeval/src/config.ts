@@ -42,6 +42,7 @@ import { checkHarnesses, checkOptions, mergeSnapshot, profileJudge } from './opt
 import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
+import { resolveHistory } from './store/resolve.ts'
 import type {
   AttemptMeta,
   Budget,
@@ -57,6 +58,7 @@ import type {
   ReevalConfig,
   ReevalConfigData,
   ResolvedConfig,
+  ResolvedHistory,
   ResolvedProfile,
   SandboxDescriptor,
 } from './types.ts'
@@ -88,7 +90,16 @@ const CONFIG_KEYS = [
   'debug',
   'analysis',
 ]
-const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags', 'gateway']
+const PROFILE_KEYS = [
+  'defaults',
+  'limit',
+  'judge',
+  'budget',
+  'record',
+  'tags',
+  'gateway',
+  'history',
+]
 const DEFAULTS_KEYS = [
   'harnesses',
   'sandbox',
@@ -368,7 +379,6 @@ export function evalRoot(include: string[]): string {
   return common.join('/')
 }
 
-const ARTIFACTS = ['all', 'failures', 'none'] as const
 const RECORD = ['manual', 'ci', 'always'] as const
 
 const unknownKey = (value: object, allowed: string[], where: string, file: string) => {
@@ -602,7 +612,16 @@ export function selectProfile(
     budget: { ...config.budget, ...profile.budget },
     ...(profile.record ? { record: profile.record } : {}),
     ...(profile.gateway ? { gateway: profile.gateway } : {}),
+    ...(config.profileHistory[name] ? { history: config.profileHistory[name] } : {}),
   }
+}
+
+/** The config with the profile's `history` in place of its own, when the profile sets one. */
+export function withProfileHistory(
+  config: ResolvedConfig,
+  profile: ResolvedProfile | null,
+): ResolvedConfig {
+  return profile?.history ? { ...config, history: profile.history } : config
 }
 
 /**
@@ -636,13 +655,8 @@ export function resolveConfig(
   if (!RECORD.includes(record)) {
     throw new UsageError(`record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(record)})`)
   }
-  const artifacts = user.history?.artifacts ?? 'failures'
-  if (!ARTIFACTS.includes(artifacts)) {
-    throw new UsageError(
-      `history.artifacts in ${file} is ${oneOf(ARTIFACTS)} (got ${JSON.stringify(artifacts)})`,
-    )
-  }
-  const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
+  const historyDefault = join(evalRoot(include), '.history')
+  const history = resolveHistory(user.history, 'history', file, root, historyDefault)
   const harness = user.harnesses === undefined ? [DEFAULT_HARNESS] : [user.harnesses].flat()
   if (harness.length === 0) {
     throw new UsageError(
@@ -650,7 +664,8 @@ export function resolveConfig(
     )
   }
   checkHarnesses(harness, file)
-  const profiles: Record<string, Profile> = {}
+  const profiles: Record<string, Omit<Profile, 'history'>> = {}
+  const profileHistory: Record<string, ResolvedHistory> = {}
   if (user.profiles !== undefined) {
     if (typeof user.profiles !== 'object' || user.profiles === null) {
       throw new UsageError(
@@ -658,7 +673,12 @@ export function resolveConfig(
       )
     }
     for (const [name, profile] of Object.entries(user.profiles)) {
-      profiles[name] = checkProfile(name, profile, file)
+      const { history: own, ...checked } = checkProfile(name, profile, file)
+      profiles[name] = checked
+      if (own !== undefined) {
+        const where = `profiles.${name}.history`
+        profileHistory[name] = resolveHistory(own, where, file, root, historyDefault, history)
+      }
     }
   }
   const defaultProfile = user.defaultProfile ?? {}
@@ -697,7 +717,8 @@ export function resolveConfig(
         ? undefined
         : checkConcurrency(user.concurrency, `concurrency in ${file}`),
     record,
-    history: { dir: historyDir, artifacts },
+    history,
+    profileHistory,
     secrets: checkSecrets(user.secrets, file),
     debug: checkDebug(user.debug, file),
     analysis: checkAnalysis(user.analysis, file),

@@ -1461,7 +1461,8 @@
         }
       ]
     },
-    "HistoryConfig": {
+    "HistoryConfigData": {
+      "description": "`HistoryConfig` as data: the store is `local` or `s3`.",
       "type": "object",
       "properties": {
         "artifacts": {
@@ -1469,9 +1470,16 @@
           "type": "string",
           "enum": ["all", "failures", "none"]
         },
-        "dir": {
-          "description": "Committed history folder (default: `.history` in the directory the evals live in).",
-          "type": "string"
+        "store": {
+          "description": "Where recorded runs are kept: `{ kind: local }` (the default) or `{ kind: s3, … }`.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LocalStoreDescriptor"
+            },
+            {
+              "$ref": "#/$defs/S3StoreDescriptor"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1547,6 +1555,22 @@
           "type": "string"
         }
       ]
+    },
+    "LocalStoreDescriptor": {
+      "description": "A history folder committed with the evals: `local()` from `reeval/store/local`.",
+      "type": "object",
+      "properties": {
+        "dir": {
+          "description": "The folder, relative to the config's directory (default: `.history` in the directory the evals live in).",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "const": "local"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
@@ -2129,6 +2153,10 @@
             "$ref": "#/$defs/GatewayEntryData"
           }
         },
+        "history": {
+          "description": "The history this profile records to and every history command reads with `--profile`, merged over the config's `history` key by key.",
+          "$ref": "#/$defs/HistoryConfigData"
+        },
         "judge": {
           "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
           "$ref": "#/$defs/ConfigJudgeData"
@@ -2454,8 +2482,8 @@
           ]
         },
         "history": {
-          "description": "The history folder, and which attempts keep their artifacts there.",
-          "$ref": "#/$defs/HistoryConfig"
+          "description": "Where recorded runs are kept, and which attempts keep their artifacts there.",
+          "$ref": "#/$defs/HistoryConfigData"
         },
         "include": {
           "description": "Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`.",
@@ -2563,6 +2591,69 @@
         "timeout": {
           "description": "Per attempt; default `'15m'`.",
           "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
+    "S3StoreDescriptor": {
+      "description": "An S3-compatible bucket, such as AWS S3, Cloudflare R2 or MinIO: `s3()` from `reeval/store/s3`. reeval keeps a copy of it in `.reeval/store/` that every history command reads.",
+      "type": "object",
+      "properties": {
+        "bucket": {
+          "description": "The bucket; `env.bucket` names a variable with it instead.",
+          "type": "string"
+        },
+        "endpoint": {
+          "description": "The endpoint's origin, such as `https://<account>.r2.cloudflarestorage.com` or `http://127.0.0.1:9000`; without it, `env.endpoint`'s variable, else AWS S3 in the region.",
+          "type": "string"
+        },
+        "env": {
+          "description": "Which host variables hold the credentials, and the bucket, endpoint or region when they aren't set here.",
+          "$ref": "#/$defs/S3StoreEnv"
+        },
+        "kind": {
+          "type": "string",
+          "const": "s3"
+        },
+        "prefix": {
+          "description": "A key prefix every object goes under, so several projects can share a bucket (default none).",
+          "type": "string"
+        },
+        "region": {
+          "description": "The signing region (default: `env.region`'s variable, else `auto`).",
+          "type": "string"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "S3StoreEnv": {
+      "description": "The host variables an `s3()` store reads. Each names a variable, never a value: credentials come from the environment only.",
+      "type": "object",
+      "properties": {
+        "accessKeyId": {
+          "description": "The access key id (default `AWS_ACCESS_KEY_ID`).",
+          "type": "string"
+        },
+        "bucket": {
+          "description": "The bucket, when `bucket` isn't set.",
+          "type": "string"
+        },
+        "endpoint": {
+          "description": "The endpoint, when `endpoint` isn't set (default `AWS_ENDPOINT_URL_S3`, then `AWS_ENDPOINT_URL`).",
+          "type": "string"
+        },
+        "region": {
+          "description": "The region, when `region` isn't set (default `AWS_REGION`, then `AWS_DEFAULT_REGION`).",
+          "type": "string"
+        },
+        "secretAccessKey": {
+          "description": "The secret access key (default `AWS_SECRET_ACCESS_KEY`).",
+          "type": "string"
+        },
+        "sessionToken": {
+          "description": "A session token for temporary credentials (default `AWS_SESSION_TOKEN`), when it's set.",
+          "type": "string"
         }
       },
       "additionalProperties": false

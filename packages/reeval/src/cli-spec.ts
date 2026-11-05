@@ -194,46 +194,51 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 reeval run --resume can no longer finish it`,
   },
   record: {
-    flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],
+    flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan', 'profile'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
-                                --artifacts all|failures|none --allow-incomplete --skip-secret-scan`,
+                                --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   history: {
-    flags: ['limit', 'all', 'json'],
+    flags: ['limit', 'all', 'json', 'profile'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval history [filter]       Pass/fail per recorded eval over recent runs
-                                --limit <n> --all (include unrecorded runs) --json`,
+                                --limit <n> --all (include unrecorded runs) --json
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   show: {
-    flags: ['json', 'md', 'trace', 'out'],
+    flags: ['json', 'md', 'trace', 'out', 'profile'],
     positionals: 1,
     help: `
   reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
     --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
                                 attempts in lanes, with setup, turns, tool calls, checks and judge
-    --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)`,
+    --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   compare: {
-    flags: ['md', 'json', 'fail-on-regression', 'verbose'],
+    flags: ['md', 'json', 'fail-on-regression', 'verbose', 'profile'],
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
     -v, --verbose               Also each cell's lift and effort and each variant's comparison with
-                                its baseline, base → head, and the stack changes`,
+                                its baseline, base → head, and the stack changes
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   checkout: {
-    flags: [],
+    flags: ['profile'],
     positionals: 2,
     help: `
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
-                                (default dir: .reeval/checkouts/<run>)`,
+                                (default dir: .reeval/checkouts/<run>)
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   query: {
-    flags: ['json', 'schema', 'rebuild', 'run'],
+    flags: ['json', 'schema', 'rebuild', 'run', 'profile'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
@@ -243,10 +248,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 check_streaks. No argument lists them
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
-    --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
+    --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
+    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache', 'profile'],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -257,10 +263,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   mcp: {
-    flags: ['http', 'port', 'host', 'token'],
+    flags: ['http', 'port', 'host', 'token', 'profile'],
     positionals: 0,
     help: `
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
@@ -269,25 +276,28 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 as resources
     --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
                                 --port <n> (default 4986), --host <addr>
-    --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)`,
+    --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   studio: {
-    flags: ['port', 'host', 'open', 'no-scratch', 'no-token'],
+    flags: ['port', 'host', 'open', 'no-scratch', 'no-token', 'profile'],
     positionals: 0,
     help: `
   reeval studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
     --port <n>                  First port to try (default 4984); --host <addr> (default 127.0.0.1)
     --open                      Open the browser; --no-scratch hides unrecorded runs from .reeval/runs
-    --no-token                  Skip the session token (for scripts; anyone local can then read it)`,
+    --no-token                  Skip the session token (for scripts; anyone local can then read it)
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
     sub: {
       build: {
-        flags: ['out', 'scratch', 'no-artifacts'],
+        flags: ['out', 'scratch', 'no-artifacts', 'profile'],
         positionals: 0,
         help: `
   reeval studio build           Write the studio as a static site for Pages, Netlify or any host
     --out <dir>                 Output folder (default studio-dist beside the config); --scratch
                                 adds unrecorded runs
-    --no-artifacts              Records and index only: no transcripts, diffs, logs or judge inputs`,
+    --no-artifacts              Records and index only: no transcripts, diffs, logs or judge inputs
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
       },
     },
   },

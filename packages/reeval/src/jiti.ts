@@ -43,6 +43,8 @@ async function ownModules(): Promise<Record<string, unknown>> {
     '/harness': import('./harness.ts'),
     '/sandbox': import('./sandbox.ts'),
     '/sandbox/boat': import('./sandbox-boat.ts'),
+    '/store/local': import('./store-local.ts'),
+    '/store/s3': import('./store-s3.ts'),
     '/judge': import('./judge.ts'),
     '/gateway': import('./gateway.ts'),
     '/view': import('./view/index.ts'),

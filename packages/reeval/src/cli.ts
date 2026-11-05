@@ -22,6 +22,7 @@ import {
   runJudgeModel,
   selectProfile,
   UsageError,
+  withProfileHistory,
 } from './config.ts'
 import { ciRunner, directOnCloud, isDirect, rootlessPodmanSwitch, setupEgress } from './egress.ts'
 import { budgetMarker } from './engine/budget.ts'
@@ -69,9 +70,10 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
+import { storeReady } from './store/resolve.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
-import type { CursorEfforts, RunContext, SandboxDescriptor } from './types.ts'
+import type { CursorEfforts, ResolvedConfig, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -193,19 +195,19 @@ async function run(argv: string[]): Promise<number> {
     return imageBuildCommand(values, configPath, filters.slice(1))
   }
   if (command === 'studio') {
-    const config = await loadConfig(configPath, 'studio')
+    const config = await historyConfig(configPath, 'studio', values.profile)
     const { studioCommand } = await import('./studio/command.ts')
     return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
   }
   if (command === 'mcp') {
     // On stdio, stdout carries the protocol: anything the config prints goes to stderr.
     if (!values.http) console.log = console.info = console.debug = console.error
-    const config = await loadConfig(configPath, 'mcp')
+    const config = await historyConfig(configPath, 'mcp', values.profile)
     const { mcpCommand } = await import('./mcp/command.ts')
     return mcpCommand({ config, flags: values, version })
   }
   if (command in HISTORY_COMMANDS) {
-    const config = await loadConfig(configPath, command)
+    const config = await historyConfig(configPath, command, values.profile)
     const commands = await import('./commands.ts')
     const ctx = { config, flags: values, out: (s: string) => console.log(s) }
     switch (command as keyof typeof HISTORY_COMMANDS) {
@@ -233,6 +235,22 @@ async function run(argv: string[]): Promise<number> {
   if (command === 'clean') return cleanCommand(values, configPath)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run reeval --help.`)
   return runCommand(values, configPath, filters)
+}
+
+/**
+ * The config a command that reads the history runs on: the profile `--profile`, `REEVAL_PROFILE`
+ * or `defaultProfile` picks sets which store it reads, as it does for `reeval run`.
+ */
+async function historyConfig(
+  configPath: string | undefined,
+  command: string,
+  flag: string | undefined,
+): Promise<ResolvedConfig> {
+  const named = flag ?? (process.env.REEVAL_PROFILE || undefined)
+  const config = await loadConfig(configPath, command, named)
+  const resolved = withProfileHistory(config, selectProfile(config, flag))
+  storeReady(resolved)
+  return resolved
 }
 
 /** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
@@ -776,13 +794,15 @@ async function prepareRun(
   const path = requireConfig(configPath)
   loadEnvFiles(path)
   const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
-  const config = await loadConfig(path, 'run', named)
-  if (profileOf && flags.profile && !config.profiles[flags.profile]) {
+  const loaded = await loadConfig(path, 'run', named)
+  if (profileOf && flags.profile && !loaded.profiles[flags.profile]) {
     throw new UsageError(
-      `run ${profileOf} was started with profile ${flags.profile}, which ${config.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
+      `run ${profileOf} was started with profile ${flags.profile}, which ${loaded.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
     )
   }
-  const profile = noProfile ? null : selectProfile(config, flags.profile)
+  const profile = noProfile ? null : selectProfile(loaded, flags.profile)
+  const config = withProfileHistory(loaded, profile)
+  storeReady(config)
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)

@@ -2263,14 +2263,112 @@ export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
   model?: string | FakeJudgeModel
 }
 
-export type HistoryConfig = {
-  /** Committed history folder (default: `.history` in the directory the evals live in). */
+/** A history folder committed with the evals: `local()` from `reeval/store/local`. */
+export type LocalStoreDescriptor = {
+  kind: 'local'
+  /**
+   * The folder, relative to the config's directory (default: `.history` in the directory the
+   * evals live in).
+   */
   dir?: string
+}
+
+/**
+ * The host variables an `s3()` store reads. Each names a variable, never a value: credentials
+ * come from the environment only.
+ */
+export type S3StoreEnv = {
+  /** The access key id (default `AWS_ACCESS_KEY_ID`). */
+  accessKeyId?: string
+  /** The secret access key (default `AWS_SECRET_ACCESS_KEY`). */
+  secretAccessKey?: string
+  /** A session token for temporary credentials (default `AWS_SESSION_TOKEN`), when it's set. */
+  sessionToken?: string
+  /** The endpoint, when `endpoint` isn't set (default `AWS_ENDPOINT_URL_S3`, then `AWS_ENDPOINT_URL`). */
+  endpoint?: string
+  /** The bucket, when `bucket` isn't set. */
+  bucket?: string
+  /** The region, when `region` isn't set (default `AWS_REGION`, then `AWS_DEFAULT_REGION`). */
+  region?: string
+}
+
+/**
+ * An S3-compatible bucket, such as AWS S3, Cloudflare R2 or MinIO: `s3()` from `reeval/store/s3`.
+ * reeval keeps a copy of it in `.reeval/store/` that every history command reads.
+ */
+export type S3StoreDescriptor = {
+  kind: 's3'
+  /** The bucket; `env.bucket` names a variable with it instead. */
+  bucket?: string
+  /**
+   * The endpoint's origin, such as `https://<account>.r2.cloudflarestorage.com` or
+   * `http://127.0.0.1:9000`; without it, `env.endpoint`'s variable, else AWS S3 in the region.
+   */
+  endpoint?: string
+  /** The signing region (default: `env.region`'s variable, else `auto`). */
+  region?: string
+  /** A key prefix every object goes under, so several projects can share a bucket (default none). */
+  prefix?: string
+  /** Which host variables hold the credentials, and the bucket, endpoint or region when they aren't set here. */
+  env?: S3StoreEnv
+}
+
+/** A history store as data, which `reeval.yaml` can name too. */
+export type HistoryStoreDescriptor = LocalStoreDescriptor | S3StoreDescriptor
+
+/** One version of a stored run: its id, and a value that changes whenever any of its files does. */
+export type StoredRunVersion = { runId: string; version: string }
+
+/** A run as a store holds it: the record, and every file beside it by its path under the run. */
+export type StoredRun = {
+  runId: string
+  /** The record's bytes, `<runId>.json` in a history folder. */
+  record: Uint8Array
+  /** Its artifacts, summary, remarks and saved analyses, by posix path under the run. */
+  files: Map<string, Uint8Array>
+}
+
+/**
+ * Run history kept anywhere, for a TypeScript config: `history: { store: myStore }`. reeval hands
+ * it runs it has already masked and scanned for secrets, and keeps a copy in `.reeval/store/` that
+ * every history command reads. `reeval.yaml` names only `local` and `s3`.
+ */
+export type HistoryStore = {
+  /** Names the store in messages and keys its copy in `.reeval/store/`, e.g. `gcs:my-bucket`. */
+  readonly name: string
+  /** Every run in the store. */
+  listRuns(): Promise<StoredRunVersion[]>
+  /** One run, with its version; null when the store doesn't have it. */
+  readRun(runId: string): Promise<(StoredRun & { version: string }) | null>
+  /**
+   * Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there.
+   * With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.
+   */
+  writeRun(
+    run: StoredRun,
+    options: { replaces?: string },
+  ): Promise<{ ok: true; version: string } | { ok: false }>
+  /** Adds or replaces one file beside a stored run: a saved analysis or the run's remarks. */
+  addFile(runId: string, path: string, bytes: Uint8Array): Promise<void>
+}
+
+export type HistoryConfig = {
+  /**
+   * Where recorded runs are kept: `local()` (the default, a folder committed with the evals),
+   * `s3()`, or in a TypeScript config any `HistoryStore`.
+   */
+  store?: HistoryStoreDescriptor | HistoryStore
   /**
    * Artifacts recorded next to each run: every attempt's, failed attempts' only (the default), or
    * none. The setup log and each `c.exec` log are an attempt's artifacts too.
    */
   artifacts?: ArtifactLevel
+}
+
+/** `HistoryConfig` as data: the store is `local` or `s3`. */
+export type HistoryConfigData = Omit<HistoryConfig, 'store'> & {
+  /** Where recorded runs are kept: `{ kind: local }` (the default) or `{ kind: s3, … }`. */
+  store?: HistoryStoreDescriptor
 }
 
 /** Run-level caps. `attempts` is checked against the plan; `duration` while running. */
@@ -2337,6 +2435,11 @@ export type Profile = {
   budget?: Budget
   /** When this profile's runs are copied into the history folder. */
   record?: RecordMode
+  /**
+   * The history this profile records to and every history command reads with `--profile`, merged
+   * over the config's `history` key by key.
+   */
+  history?: HistoryConfig
   /** Tag filters for this profile, like `--tag` (`'!slow'` excludes). */
   tags?: string[]
   /** Replaces the config's `gateway` list for this profile's runs. */
@@ -2471,7 +2574,7 @@ export type ReevalConfig = {
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
   record?: RecordMode
-  /** The history folder, and which attempts keep their artifacts there. */
+  /** Where recorded runs are kept, and which attempts keep their artifacts there. */
   history?: HistoryConfig
   /** Caps on a run; a profile's `budget` is merged over it. */
   budget?: Budget
@@ -2538,13 +2641,18 @@ export type ProfileDefaultsData = Omit<ProfileDefaults, 'environments' | 'judge'
 }
 
 /** `Profile` as data: its defaults and judge as data. */
-export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
+export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway' | 'history'> & {
   /** What evals get when they don't say otherwise: under groups and evals. */
   defaults?: ProfileDefaultsData
   /** Judge settings for this profile, the same as `defaults.judge`, which wins field by field. */
   judge?: ConfigJudgeData
   /** Replaces the config's `gateway` list for this profile's runs. */
   gateway?: GatewayEntryData[]
+  /**
+   * The history this profile records to and every history command reads with `--profile`, merged
+   * over the config's `history` key by key.
+   */
+  history?: HistoryConfigData
 }
 
 /**
@@ -2554,8 +2662,10 @@ export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
  */
 export type ReevalConfigData = Omit<
   ReevalConfig,
-  'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway'
+  'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway' | 'history'
 > & {
+  /** Where recorded runs are kept, and which attempts keep their artifacts there. */
+  history?: HistoryConfigData
   /**
    * What every eval runs in when it names no environment and has no compare: one, or a list (a
    * cell each).
@@ -2600,6 +2710,27 @@ export type ResolvedProfile = {
   record?: RecordMode
   /** The profile's own `gateway` list, which replaces the config's. */
   gateway?: GatewayDescriptor[]
+  /** The profile's `history` merged over the config's, when it sets one. */
+  history?: ResolvedHistory
+}
+
+/** Where a resolved history's runs are kept. */
+export type ResolvedStore =
+  | { kind: 'local' }
+  | { kind: 's3'; descriptor: S3StoreDescriptor }
+  | { kind: 'custom'; store: HistoryStore }
+
+export type ResolvedHistory = {
+  /**
+   * The folder every history command reads: the history folder for `local()`, else the store's
+   * copy in `.reeval/store/<id>/history`.
+   */
+  dir: string
+  artifacts: ArtifactLevel
+  store: ResolvedStore & {
+    /** The store in messages: `local`, `s3://<bucket>/<prefix>` or a custom store's name. */
+    name: string
+  }
 }
 
 export type ResolvedConfig = {
@@ -2632,9 +2763,14 @@ export type ResolvedConfig = {
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode
-  history: { dir: string; artifacts: ArtifactLevel }
+  history: ResolvedHistory
+  /**
+   * Each profile's `history` resolved over the config's, for the profiles that set one; their
+   * `profiles` entries leave it out.
+   */
+  profileHistory: Record<string, ResolvedHistory>
   budget: Budget
-  profiles: Record<string, Profile>
+  profiles: Record<string, Omit<Profile, 'history'>>
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }

@@ -10,11 +10,14 @@ import type {
   CaptureOptions,
   CaptureWindow,
   FakeAnalysisData,
-  HistoryConfig,
+  HistoryConfigData,
+  LocalStoreDescriptor,
   ProfileData,
   ProfileDefaultsData,
   ProfileLimit,
   ReevalConfigData,
+  S3StoreDescriptor,
+  S3StoreEnv,
 } from '../types.ts'
 import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts'
 import { gatewayEntryDataSchema } from './gateway.ts'
@@ -70,8 +73,36 @@ export const budgetSchema = z.strictObject({
   duration: durationSchema.optional(),
 })
 
-export const historyConfigSchema = z.strictObject({
+export const localStoreDescriptorSchema = z.strictObject({
+  kind: z.literal('local'),
   dir: z.string().optional(),
+})
+
+export const s3StoreEnvSchema = z.strictObject({
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+  sessionToken: z.string().optional(),
+  endpoint: z.string().optional(),
+  bucket: z.string().optional(),
+  region: z.string().optional(),
+})
+
+export const s3StoreDescriptorSchema = z.strictObject({
+  kind: z.literal('s3'),
+  bucket: z.string().optional(),
+  endpoint: z.string().optional(),
+  region: z.string().optional(),
+  prefix: z.string().optional(),
+  env: s3StoreEnvSchema.optional(),
+})
+
+export const historyStoreDescriptorSchema = z.discriminatedUnion('kind', [
+  localStoreDescriptorSchema,
+  s3StoreDescriptorSchema,
+])
+
+export const historyConfigDataSchema = z.strictObject({
+  store: historyStoreDescriptorSchema.optional(),
   artifacts: z.enum(['all', 'failures', 'none']).optional(),
 })
 
@@ -109,6 +140,7 @@ export const profileDataSchema = z.strictObject({
   record: recordMode.optional(),
   tags: z.array(z.string()).optional(),
   gateway: z.array(gatewayEntryDataSchema).min(1).optional(),
+  history: historyConfigDataSchema.optional(),
 })
 
 const fakeVote = z.enum(['A', 'B', 'tie'])
@@ -152,7 +184,7 @@ export const reevalConfigDataSchema = z.strictObject({
   snapshot: snapshotOptionSchema.optional(),
   concurrency: count().optional(),
   record: recordMode.optional(),
-  history: historyConfigSchema.optional(),
+  history: historyConfigDataSchema.optional(),
   budget: budgetSchema.optional(),
   profiles: z.record(z.string(), profileDataSchema).optional(),
   defaultProfile: z
@@ -173,7 +205,10 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof captureWindowSchema>, CaptureWindow>>,
   Assert<Same<z.infer<typeof captureOptionsSchema>, CaptureOptions>>,
   Assert<Same<z.infer<typeof budgetSchema>, Budget>>,
-  Assert<Same<z.infer<typeof historyConfigSchema>, HistoryConfig>>,
+  Assert<Same<z.infer<typeof historyConfigDataSchema>, HistoryConfigData>>,
+  Assert<Same<z.infer<typeof localStoreDescriptorSchema>, LocalStoreDescriptor>>,
+  Assert<Same<z.infer<typeof s3StoreDescriptorSchema>, S3StoreDescriptor>>,
+  Assert<Same<z.infer<typeof s3StoreEnvSchema>, S3StoreEnv>>,
   Assert<Same<z.infer<typeof profileDefaultsDataSchema>, ProfileDefaultsData>>,
   Assert<Same<keyof z.infer<typeof profileDefaultsDataSchema>, keyof ProfileDefaultsData>>,
   Assert<Same<z.infer<typeof profileLimitSchema>, ProfileLimit>>,

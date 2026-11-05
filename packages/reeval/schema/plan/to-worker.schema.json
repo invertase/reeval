@@ -1379,6 +1379,41 @@
         }
       ]
     },
+    "HistoryStore": {
+      "description": "Run history kept anywhere, for a TypeScript config: `history: { store: myStore }`. reeval hands it runs it has already masked and scanned for secrets, and keeps a copy in `.reeval/store/` that every history command reads. `reeval.yaml` names only `local` and `s3`.",
+      "type": "object",
+      "properties": {
+        "addFile": {
+          "description": "Adds or replaces one file beside a stored run: a saved analysis or the run's remarks.",
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "listRuns": {
+          "description": "Every run in the store.",
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "name": {
+          "description": "Names the store in messages and keys its copy in `.reeval/store/`, e.g. `gcs:my-bucket`.",
+          "type": "string"
+        },
+        "readRun": {
+          "description": "One run, with its version; null when the store doesn't have it.",
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "writeRun": {
+          "description": "Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there. With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.",
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
+      "required": ["addFile", "listRuns", "name", "readRun", "writeRun"]
+    },
     "HostFile": {
       "description": "A file on the host, read when an attempt starts. Made by the `file` helper.",
       "type": "object",
@@ -2012,47 +2047,6 @@
         }
       ]
     },
-    "Profile": {
-      "description": "How a run is sized: chosen with `--profile`, `REEVAL_PROFILE` or `defaultProfile`.",
-      "type": "object",
-      "properties": {
-        "budget": {
-          "description": "Merged over the config's `budget`.",
-          "$ref": "#/$defs/Budget"
-        },
-        "defaults": {
-          "description": "What evals get when they don't say otherwise: under groups and evals.",
-          "$ref": "#/$defs/ProfileDefaults"
-        },
-        "gateway": {
-          "description": "Replaces the config's `gateway` list for this profile's runs.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/GatewayDescriptor"
-          }
-        },
-        "judge": {
-          "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
-          "$ref": "#/$defs/ConfigJudgeOptions"
-        },
-        "limit": {
-          "description": "Caps over every eval, which only narrow; `pin` on a group or eval skips them.",
-          "$ref": "#/$defs/ProfileLimit"
-        },
-        "record": {
-          "description": "When this profile's runs are copied into the history folder.",
-          "enum": ["always", "ci", "manual"]
-        },
-        "tags": {
-          "description": "Tag filters for this profile, like `--tag` (`'!slow'` excludes).",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": []
-    },
     "ProfileDefaults": {
       "description": "What evals get when they don't say otherwise: under groups and evals.",
       "type": "object",
@@ -2452,16 +2446,7 @@
           }
         },
         "history": {
-          "type": "object",
-          "properties": {
-            "artifacts": {
-              "$ref": "#/$defs/ArtifactLevel"
-            },
-            "dir": {
-              "type": "string"
-            }
-          },
-          "required": ["artifacts", "dir"]
+          "$ref": "#/$defs/ResolvedHistory"
         },
         "include": {
           "type": "array",
@@ -2535,12 +2520,58 @@
             "type": "string"
           }
         },
+        "profileHistory": {
+          "description": "Each profile's `history` resolved over the config's, for the profiles that set one; their `profiles` entries leave it out.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "$ref": "#/$defs/ResolvedHistory"
+          }
+        },
         "profiles": {
           "type": "object",
           "properties": {},
           "required": [],
           "additionalProperties": {
-            "$ref": "#/$defs/Profile"
+            "type": "object",
+            "properties": {
+              "budget": {
+                "description": "Merged over the config's `budget`.",
+                "$ref": "#/$defs/Budget"
+              },
+              "defaults": {
+                "description": "What evals get when they don't say otherwise: under groups and evals.",
+                "$ref": "#/$defs/ProfileDefaults"
+              },
+              "gateway": {
+                "description": "Replaces the config's `gateway` list for this profile's runs.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/GatewayDescriptor"
+                }
+              },
+              "judge": {
+                "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
+                "$ref": "#/$defs/ConfigJudgeOptions"
+              },
+              "limit": {
+                "description": "Caps over every eval, which only narrow; `pin` on a group or eval skips them.",
+                "$ref": "#/$defs/ProfileLimit"
+              },
+              "record": {
+                "description": "When this profile's runs are copied into the history folder.",
+                "enum": ["always", "ci", "manual"]
+              },
+              "tags": {
+                "description": "Tag filters for this profile, like `--tag` (`'!slow'` excludes).",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": []
           }
         },
         "question": {
@@ -2606,6 +2637,7 @@
         "history",
         "include",
         "judge",
+        "profileHistory",
         "profiles",
         "question",
         "record",
@@ -2616,6 +2648,68 @@
         "snapshot",
         "timeoutMs"
       ]
+    },
+    "ResolvedHistory": {
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "$ref": "#/$defs/ArtifactLevel"
+        },
+        "dir": {
+          "description": "The folder every history command reads: the history folder for `local()`, else the store's copy in `.reeval/store/<id>/history`.",
+          "type": "string"
+        },
+        "store": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "descriptor": {
+                  "$ref": "#/$defs/S3StoreDescriptor"
+                },
+                "kind": {
+                  "const": "s3"
+                },
+                "name": {
+                  "description": "The store in messages: `local`, `s3://<bucket>/<prefix>` or a custom store's name.",
+                  "type": "string"
+                }
+              },
+              "required": ["descriptor", "kind", "name"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "custom"
+                },
+                "name": {
+                  "description": "The store in messages: `local`, `s3://<bucket>/<prefix>` or a custom store's name.",
+                  "type": "string"
+                },
+                "store": {
+                  "$ref": "#/$defs/HistoryStore"
+                }
+              },
+              "required": ["kind", "name", "store"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "local"
+                },
+                "name": {
+                  "description": "The store in messages: `local`, `s3://<bucket>/<prefix>` or a custom store's name.",
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "name"]
+            }
+          ]
+        }
+      },
+      "required": ["artifacts", "dir", "store"]
     },
     "ResolvedProfile": {
       "description": "A profile as the run uses it, with why it was chosen.",
@@ -2633,6 +2727,10 @@
           "items": {
             "$ref": "#/$defs/GatewayDescriptor"
           }
+        },
+        "history": {
+          "description": "The profile's `history` merged over the config's, when it sets one.",
+          "$ref": "#/$defs/ResolvedHistory"
         },
         "judge": {
           "$ref": "#/$defs/ConfigJudgeOptions"
@@ -2744,6 +2842,69 @@
         }
       },
       "required": ["concurrency", "config", "profile", "runId", "stagingDir", "tags"]
+    },
+    "S3StoreDescriptor": {
+      "description": "An S3-compatible bucket, such as AWS S3, Cloudflare R2 or MinIO: `s3()` from `reeval/store/s3`. reeval keeps a copy of it in `.reeval/store/` that every history command reads.",
+      "type": "object",
+      "properties": {
+        "bucket": {
+          "description": "The bucket; `env.bucket` names a variable with it instead.",
+          "type": "string"
+        },
+        "endpoint": {
+          "description": "The endpoint's origin, such as `https://<account>.r2.cloudflarestorage.com` or `http://127.0.0.1:9000`; without it, `env.endpoint`'s variable, else AWS S3 in the region.",
+          "type": "string"
+        },
+        "env": {
+          "description": "Which host variables hold the credentials, and the bucket, endpoint or region when they aren't set here.",
+          "$ref": "#/$defs/S3StoreEnv"
+        },
+        "kind": {
+          "type": "string",
+          "const": "s3"
+        },
+        "prefix": {
+          "description": "A key prefix every object goes under, so several projects can share a bucket (default none).",
+          "type": "string"
+        },
+        "region": {
+          "description": "The signing region (default: `env.region`'s variable, else `auto`).",
+          "type": "string"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "S3StoreEnv": {
+      "description": "The host variables an `s3()` store reads. Each names a variable, never a value: credentials come from the environment only.",
+      "type": "object",
+      "properties": {
+        "accessKeyId": {
+          "description": "The access key id (default `AWS_ACCESS_KEY_ID`).",
+          "type": "string"
+        },
+        "bucket": {
+          "description": "The bucket, when `bucket` isn't set.",
+          "type": "string"
+        },
+        "endpoint": {
+          "description": "The endpoint, when `endpoint` isn't set (default `AWS_ENDPOINT_URL_S3`, then `AWS_ENDPOINT_URL`).",
+          "type": "string"
+        },
+        "region": {
+          "description": "The region, when `region` isn't set (default `AWS_REGION`, then `AWS_DEFAULT_REGION`).",
+          "type": "string"
+        },
+        "secretAccessKey": {
+          "description": "The secret access key (default `AWS_SECRET_ACCESS_KEY`).",
+          "type": "string"
+        },
+        "sessionToken": {
+          "description": "A session token for temporary credentials (default `AWS_SESSION_TOKEN`), when it's set.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "SandboxDescriptor": {
       "anyOf": [

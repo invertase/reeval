@@ -159,6 +159,8 @@ export default defineConfig({
     harness: 'src/harness.ts',
     sandbox: 'src/sandbox.ts',
     'sandbox/boat': 'src/sandbox-boat.ts',
+    'store/local': 'src/store-local.ts',
+    'store/s3': 'src/store-s3.ts',
     judge: 'src/judge.ts',
     gateway: 'src/gateway.ts',
     'view/index': 'src/view/index.ts',

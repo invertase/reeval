@@ -309,7 +309,16 @@ test('the packed package installs into a clean project and runs reeval', {
   )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.doesNotMatch(listing, /^package\/dist\/studio-app\//m, 'the studio app is in a chunk')
-  for (const entry of ['index', 'harness', 'sandbox', 'sandbox/boat', 'judge', 'view/index']) {
+  for (const entry of [
+    'index',
+    'harness',
+    'sandbox',
+    'sandbox/boat',
+    'store/local',
+    'store/s3',
+    'judge',
+    'view/index',
+  ]) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))
   }
