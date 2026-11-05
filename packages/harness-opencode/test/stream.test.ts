@@ -68,7 +68,10 @@ test('names a call from its first update, and keeps the usage', () => {
   const finish = out.find((p) => p.type === 'finish') as {
     totalUsage: Record<string, { total?: number }>
   }
-  assert.deepEqual(finish.totalUsage, LAST_CALL)
+  assert.deepEqual(finish.totalUsage, {
+    ...LAST_CALL,
+    inputTokens: { total: 8559, noCache: 8559 },
+  })
 })
 
 test("adds the turn's thoughts to its output, which OpenCode reports beside it", () => {
@@ -82,7 +85,11 @@ test("adds the turn's thoughts to its output, which OpenCode reports beside it",
   assert.deepEqual(out, [
     {
       type: 'finish',
-      totalUsage: { ...usage, outputTokens: { total: 32, text: 1, reasoning: 31 } },
+      totalUsage: {
+        ...usage,
+        inputTokens: { total: 4864, noCache: 4864 },
+        outputTokens: { total: 32, text: 1, reasoning: 31 },
+      },
     },
   ])
 })
@@ -94,7 +101,69 @@ test('twin: a total of input and output means the thoughts are already in the ou
     raw: { totalTokens: 4896 },
   }
   const out = new OpenCodeStreamTranslator().push({ type: 'finish', totalUsage: usage })
-  assert.deepEqual(out, [{ type: 'finish', totalUsage: usage }])
+  assert.deepEqual(out, [
+    { type: 'finish', totalUsage: { ...usage, inputTokens: { total: 4864, noCache: 4864 } } },
+  ])
+})
+
+/** A turn's `PromptResponse.usage` as `harness-acp` maps it (its `mapACPUsage`). */
+const acpUsage = (raw: Record<string, number>) => ({
+  inputTokens: {
+    total: raw.inputTokens,
+    noCache: undefined,
+    cacheRead: raw.cachedReadTokens,
+    cacheWrite: raw.cachedWriteTokens,
+  },
+  outputTokens: { total: raw.outputTokens, text: undefined, reasoning: raw.thoughtTokens },
+  raw,
+})
+const finishOf = (raw: Record<string, number>) =>
+  new OpenCodeStreamTranslator().push({ type: 'finish', totalUsage: acpUsage(raw) })[0]
+    ?.totalUsage as { inputTokens: Record<string, unknown>; outputTokens: Record<string, unknown> }
+
+test("OpenCode's inputTokens is the uncached input, and the cache is added to the prompt", () => {
+  // Real turns' PromptResponse.usage: Gemini reads the cache, Anthropic reads and writes it. Each
+  // `totalTokens` is input, output, thoughts and both cache counts.
+  const gemini = {
+    totalTokens: 238571,
+    inputTokens: 56088,
+    outputTokens: 308,
+    thoughtTokens: 1807,
+    cachedReadTokens: 180368,
+  }
+  assert.deepEqual(finishOf(gemini).inputTokens, {
+    total: 236456,
+    noCache: 56088,
+    cacheRead: 180368,
+    cacheWrite: undefined,
+  })
+  assert.equal(finishOf(gemini).outputTokens.total, 2115)
+  const anthropic = {
+    totalTokens: 196069,
+    inputTokens: 18,
+    outputTokens: 880,
+    thoughtTokens: 70,
+    cachedReadTokens: 132256,
+    cachedWriteTokens: 62845,
+  }
+  assert.deepEqual(finishOf(anthropic).inputTokens, {
+    total: 195119,
+    noCache: 18,
+    cacheRead: 132256,
+    cacheWrite: 62845,
+  })
+  assert.equal(finishOf(anthropic).outputTokens.total, 950)
+})
+
+test('twin: a total of the whole prompt and output means the thoughts are in the output', () => {
+  const usage = finishOf({
+    totalTokens: 236456 + 2115,
+    inputTokens: 56088,
+    outputTokens: 2115,
+    thoughtTokens: 1807,
+    cachedReadTokens: 180368,
+  })
+  assert.equal(usage.outputTokens.total, 2115)
 })
 
 test('twin: without the first update the call keeps its generic name', () => {

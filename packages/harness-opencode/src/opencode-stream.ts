@@ -34,20 +34,31 @@ function contentText(content: unknown): string | undefined {
 const count = (value: unknown) => (typeof value === 'number' ? value : undefined)
 
 /**
- * The turn's usage with `outputTokens.total` counting reasoning. OpenCode's `PromptResponse.usage`
- * reports `thoughtTokens` beside `outputTokens`, not in it (its `totalTokens` is input, output and
- * thoughts), and `harness-acp` passes both on as they are.
+ * The turn's usage in the AI SDK's terms. OpenCode's `PromptResponse.usage` counts `inputTokens`
+ * without the cache reads and writes beside it, and `thoughtTokens` beside `outputTokens`, not in
+ * it: its `totalTokens` is all five. `harness-acp` passes them on as they are, so the input's
+ * `total` becomes the whole prompt with the uncached part as `noCache`, and the output's `total`
+ * counts the reasoning.
  */
 export function openCodeTurnUsage(usage: unknown): unknown {
-  const input = count(record(record(usage).inputTokens).total)
+  const inputTokens = record(record(usage).inputTokens)
+  const input = count(inputTokens.total)
+  if (input === undefined) return usage
+  const cacheRead = count(inputTokens.cacheRead) ?? 0
+  const cacheWrite = count(inputTokens.cacheWrite) ?? 0
+  const prompt = input + cacheRead + cacheWrite
+  const withPrompt = {
+    ...record(usage),
+    inputTokens: { ...inputTokens, total: prompt, noCache: input },
+  }
   const outputTokens = record(record(usage).outputTokens)
   const output = count(outputTokens.total)
   const reasoning = count(outputTokens.reasoning)
   const total = count(record(record(usage).raw).totalTokens)
-  if (input === undefined || output === undefined || reasoning === undefined) return usage
-  if (total === undefined || total <= input + output) return usage
+  if (output === undefined || reasoning === undefined) return withPrompt
+  if (total === undefined || total <= prompt + output) return withPrompt
   return {
-    ...record(usage),
+    ...withPrompt,
     outputTokens: { ...outputTokens, total: output + reasoning, text: output },
   }
 }
@@ -69,7 +80,8 @@ const searchResults = (text: string) =>
  *   `harness-acp` can pass `tool_call.name` through instead (`patch`, `<server>_<tool>`); that
  *   is remapped the same way.
  * - The `finish` part's usage is `PromptResponse.usage` (the whole turn) as `@ai-sdk/harness-acp`
- *   mapped it, with the reasoning added to the output ({@link openCodeTurnUsage}).
+ *   mapped it, with the cache added to the input and the reasoning to the output
+ *   ({@link openCodeTurnUsage}).
  *   `usage_update.used` is the last step's context size, so it is not used here.
  */
 export class OpenCodeStreamTranslator {
