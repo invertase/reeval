@@ -453,18 +453,27 @@ export function fxSession(
   const turn = (run: (options: never) => unknown) => async (options: { emit: Emit }) => {
     const translator = new FxStreamTranslator({ mcpServers })
     let finish: Part | undefined
-    try {
-      return await run({
-        ...options,
-        emit: (part: Part) => {
-          const out = translator.push(part)
-          if (ledger && out.type === 'finish') finish = out
-          else options.emit(out)
-        },
-      } as never)
-    } finally {
-      if (finish && ledger) options.emit(await ledger.settle(finish))
-    }
+    const control = await run({
+      ...options,
+      emit: (part: Part) => {
+        const out = translator.push(part)
+        if (ledger && out.type === 'finish') finish = out
+        else options.emit(out)
+      },
+    } as never)
+    const done = (control as { done?: unknown } | undefined)?.done
+    if (!ledger || !done) return control
+    // The turn's stream closes when `done` settles, so the held part goes out just before.
+    const settled = Promise.resolve(done).finally(async () => {
+      if (finish) options.emit(await ledger.settle(finish))
+    })
+    return new Proxy(control as object, {
+      get(target, key) {
+        if (key === 'done') return settled
+        const value = Reflect.get(target, key, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
   }
   return new Proxy(session, {
     get(target, key, receiver) {

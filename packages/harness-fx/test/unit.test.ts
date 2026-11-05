@@ -561,22 +561,29 @@ test("the ledger splits each turn from the calls logged since the last, and hold
   assert.deepEqual(withUsageSplit(finish(1, 1), {}, true), finish(1, 1))
 })
 
-test("on a Chat Completions provider, a turn's finish is emitted once the ledger has split it", async () => {
+test("on a Chat Completions provider, a turn's finish goes out once the ledger has split it, before the turn is done", async () => {
   const log = [call(100, 10, 60, 4)]
   const emitted: Array<{ type: string; totalUsage?: unknown }> = []
+  let end = () => {}
+  // As harness-acp's turn: it returns the turn's control at once, and `done` settles at its end.
   const session = {
     doPromptTurn: async ({ emit }: { emit: (part: unknown) => void }) => {
-      emit({ type: 'text-delta', delta: 'hi' })
-      emit({
-        type: 'finish',
-        totalUsage: { inputTokens: { total: 100 }, outputTokens: { total: 10 } },
+      const done = new Promise<void>((resolve) => {
+        end = () => {
+          emit({ type: 'text-delta', delta: 'hi' })
+          emit({
+            type: 'finish',
+            totalUsage: { inputTokens: { total: 100 }, outputTokens: { total: 10 } },
+          })
+          resolve()
+        }
       })
-      assert.deepEqual(
-        emitted.map((p) => p.type),
-        ['text-delta'],
-        'finish held',
-      )
-      return 'done'
+      return {
+        done,
+        submit: function (this: unknown) {
+          return this
+        },
+      }
     },
   }
   let reads = 0
@@ -586,8 +593,14 @@ test("on a Chat Completions provider, a turn's finish is emitted once the ledger
       return reads++ === 0 ? null : log.join('\n')
     },
   })
-  const started = fxSession(session as never, [], ledger) as unknown as typeof session
-  assert.equal(await started.doPromptTurn({ emit: (p) => emitted.push(p as never) }), 'done')
+  const started = fxSession(session as never, [], ledger) as unknown as {
+    doPromptTurn: (o: unknown) => Promise<{ done: Promise<void>; submit: () => unknown }>
+  }
+  const control = await started.doPromptTurn({ emit: (p: never) => emitted.push(p) })
+  assert.deepEqual(emitted, [], 'the turn is still running')
+  assert.ok(control.submit(), "the control's methods still work")
+  end()
+  await control.done
   assert.deepEqual(
     emitted.map((p) => p.type),
     ['text-delta', 'finish'],
