@@ -227,10 +227,8 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     compaction: NOT_COMPACTED,
   },
   opencode: {
-    turnTokens: partial(
-      'fresh input is 0: `tokenUsage` subtracts cache reads from an already-uncached `inputTokens`',
-    ),
-    cacheRead: dropped('fresh input lands as 0, so the split is lost (see main-call tokens)'),
+    turnTokens: captured,
+    cacheRead: captured,
     cacheWrite: { state: 'captured', note: 'on Anthropic; Gemini writes none' },
     reasoningTokens: captured,
     reasoningText: {
@@ -254,11 +252,12 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     compaction: NOT_COMPACTED,
   },
   goose: {
-    turnTokens: dropped(
-      "`usage: null` (ACP's is the last call's); `sessions.db`'s `usage_ledger` has every call",
-    ),
-    cacheRead: dropped('`usage_ledger.cache_read_tokens`'),
-    cacheWrite: dropped(),
+    turnTokens: {
+      state: 'captured',
+      note: "the sum of the turn's rows in `sessions.db`'s `usage_ledger`",
+    },
+    cacheRead: captured,
+    cacheWrite: captured,
     reasoningTokens: dropped('on the wire only'),
     reasoningText: captured,
     perCallUsage: dropped('`usage_ledger`, one row per model call'),

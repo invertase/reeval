@@ -69,87 +69,84 @@ that closes fails until its cell says so.
 
 | Signal | Cursor | Claude Code | Codex | Antigravity | OpenCode | Goose | pi | fx | Grok Build |
 |---|---|---|---|---|---|---|---|---|---|
-| Main-call tokens per turn | captured? [1] | captured | captured | captured | partial [2] | **dropped** [3] | captured | partial [4] | captured |
-| Fresh input vs cache read | captured? [5] | captured | captured | captured | **dropped** [6] | **dropped** [7] | captured | **dropped** [8] | captured |
-| Cache write | captured? [5] | captured | captured | n/p | captured [9] | **dropped** | n/p | n/p | n/p |
-| Reasoning tokens | n/p | **dropped** [10] | captured | captured | captured | **dropped** [11] | captured | **dropped** [12] | captured |
-| Reasoning text | captured | captured | n/p [13] | **dropped** [14] | n/p [15] | captured | captured | n/p | captured |
-| Per-call usage | **dropped** [16] | **dropped** [17] | **dropped** [18] | **dropped** [19] | **dropped** [20] | **dropped** [21] | **dropped** [17] | **dropped** [11] | **dropped** [22] |
-| Side-call usage (titles, search) | **dropped**? [23] | **dropped** [24] | n/p [25] | **dropped** [26] | **dropped** [27] | **dropped** [28] | n/p | n/p | **dropped** [29] |
-| Served model (gateway) | **dropped**? [30] | **dropped** [31] | captured | captured | captured | captured | captured | captured | captured |
-| Provider or CLI cost | n/p | **dropped** [32] | n/p | n/p | **dropped** [33] | **dropped** [34] | n/p | n/p | **dropped** [35] |
-| Usage on an aborted turn | **dropped** [36] | captured | **dropped** [37] | partial [38] | **dropped** [39] | **dropped** | captured | **dropped** | **dropped** [40] |
-| Transcript of an aborted turn | captured | captured | captured | captured | **dropped** [41] | **dropped** [41] | captured | **dropped** [41] | **dropped** [41] |
-| Large shell output | **dropped** [42] | partial [43] | captured [44] | partial [43] | partial [43] | partial [43] | partial [43] | captured [44] | partial [43] |
-| Large MCP result | **dropped** [45] | partial [46] | captured | **dropped** [47] | partial [48] | captured | partial [43] | partial [49] | partial [50] |
-| Small MCP args and result | captured | captured | captured | captured | partial [51] | partial [52] | partial [53] | partial [54] | captured |
-| Context window used and size | n/p | **dropped** | **dropped** [55] | n/p | **dropped** [56] | **dropped** [56] | n/p | n/p | **dropped** |
-| System prompt and tool count | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] |
-| Retries, 429s, rate-limit headers | **dropped**? [23] | **dropped** [58] | **dropped** [59] | n/p | n/p | n/p | n/p | n/p | n/p |
-| Compaction | n/p? [60] | n/p? [60] | n/p? [61] | n/p? [60] | n/p? [60] | n/p? [62] | n/p? [60] | n/p? [60] | n/p? [60] |
+| Main-call tokens per turn | captured? [1] | captured | captured | captured | captured | captured [2] | captured | partial [3] | captured |
+| Fresh input vs cache read | captured? [4] | captured | captured | captured | captured | captured | captured | **dropped** [5] | captured |
+| Cache write | captured? [4] | captured | captured | n/p | captured [6] | captured | n/p | n/p | n/p |
+| Reasoning tokens | n/p | **dropped** [7] | captured | captured | captured | **dropped** [8] | captured | **dropped** [9] | captured |
+| Reasoning text | captured | captured | n/p [10] | **dropped** [11] | n/p [12] | captured | captured | n/p | captured |
+| Per-call usage | **dropped** [13] | **dropped** [14] | **dropped** [15] | **dropped** [16] | **dropped** [17] | **dropped** [18] | **dropped** [14] | **dropped** [8] | **dropped** [19] |
+| Side-call usage (titles, search) | **dropped**? [20] | **dropped** [21] | n/p [22] | **dropped** [23] | **dropped** [24] | **dropped** [25] | n/p | n/p | **dropped** [26] |
+| Served model (gateway) | **dropped**? [27] | **dropped** [28] | captured | captured | captured | captured | captured | captured | captured |
+| Provider or CLI cost | n/p | **dropped** [29] | n/p | n/p | **dropped** [30] | **dropped** [31] | n/p | n/p | **dropped** [32] |
+| Usage on an aborted turn | **dropped** [33] | captured | **dropped** [34] | partial [35] | **dropped** [36] | **dropped** | captured | **dropped** | **dropped** [37] |
+| Transcript of an aborted turn | captured | captured | captured | captured | **dropped** [38] | **dropped** [38] | captured | **dropped** [38] | **dropped** [38] |
+| Large shell output | **dropped** [39] | partial [40] | captured [41] | partial [40] | partial [40] | partial [40] | partial [40] | captured [41] | partial [40] |
+| Large MCP result | **dropped** [42] | partial [43] | captured | **dropped** [44] | partial [45] | captured | partial [40] | partial [46] | partial [47] |
+| Small MCP args and result | captured | captured | captured | captured | partial [48] | partial [49] | partial [50] | partial [51] | captured |
+| Context window used and size | n/p | **dropped** | **dropped** [52] | n/p | **dropped** [53] | **dropped** [53] | n/p | n/p | **dropped** |
+| System prompt and tool count | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] | **dropped** [54] |
+| Retries, 429s, rate-limit headers | **dropped**? [20] | **dropped** [55] | **dropped** [56] | n/p | n/p | n/p | n/p | n/p | n/p |
+| Compaction | n/p? [57] | n/p? [57] | n/p? [58] | n/p? [57] | n/p? [57] | n/p? [59] | n/p? [57] | n/p? [57] | n/p? [57] |
 
 1. From the SDK only; reeval totals it, since the raw `totalTokens` counts cache reads twice.
-2. Fresh input is 0: `tokenUsage` subtracts cache reads from an already-uncached `inputTokens`.
-3. `usage: null` (ACP's is the last call's); `sessions.db`'s `usage_ledger` has every call.
-4. On Chat Completions, input counts cache reads as fresh.
-5. From the SDK only.
-6. Fresh input lands as 0, so the split is lost (see main-call tokens).
-7. `usage_ledger.cache_read_tokens`.
-8. ACP sends no cache field; the wire's `prompt_tokens_details.cached_tokens`.
-9. On Anthropic; Gemini writes none.
-10. `thinking_tokens` in `message_delta`, the session JSONL and `modelUsage`; the catalog's `reasoningTokens: false`.
-11. On the wire only.
-12. On Chat Completions, the wire's `completion_tokens_details.reasoning_tokens` only.
-13. Its `config.toml` sets no `model_reasoning_summary`, so reasoning comes back encrypted.
-14. On the wire, none in the transcript.
-15. On Gemini its config sends no `includeThoughts`; Anthropic returned no visible thinking.
-16. The SDK and `agent-store` keep turn totals only.
-17. In the raw `finish-step` parts.
-18. The rollout JSONL's `token_count` events.
-19. Turn totals only.
-20. `opencode.db`'s `session_message.data.tokens`.
-21. `usage_ledger`, one row per model call.
-22. On the wire, and per turn in `usage.json`.
-23. The wire is protobuf.
-24. `WebSearch` is its own `/v1/messages` call, in `modelUsage` only.
-25. Web search is `POST /v1/alpha/search`, which carries no usage.
-26. The title and web-search calls on Flash Lite: the model's in `servedModels`, its tokens aren't.
-27. The session-title call.
-28. The session-naming call, on the wire only (not in `usage_ledger`).
-29. `session_title` and the server-side `web_search` call, the larger share of a searching attempt's cost.
-30. The gateway can't read the protobuf requests; the record has the SDK's turn model.
-31. The gateway doesn't read Anthropic responses; the record has the CLI's turn model.
-32. `result.modelUsage[*].costUSD`.
-33. ACP `usage_update.cost`, and `opencode.db`.
-34. ACP `usage_update.cost`, and `usage_ledger.cost` (estimated).
-35. `usage.cost_in_usd_ticks` on every response, and `usage.json`.
-36. `usage: null`.
-37. `usage: null`; the rollout JSONL has each call's `last_token_usage`.
-38. Kept, without the title call's.
-39. `usage: null`; `opencode.db` has the calls' tokens.
-40. `usage: null`; `sessions/<cwd>/<id>/usage.json` has the turn's.
-41. No parts: harness-acp drops what it buffered when it abandons the turn.
-42. `""`; the full output is in `~/.cursor/projects/*/agent-tools/*.txt`.
-43. The CLI's truncated view, which the model saw; the full output is spilled to disk.
-44. More than the model saw: the transcript has the full output.
-45. `""`; spilled like the shell output.
-46. A "saved to …" notice, which the model saw; the result is in `tool-results/`.
-47. `""`; the result is in `brain/<id>/.system_generated/steps/<n>/output.txt`.
-48. Cut short with no end marker; the full result is in `tool-output/`.
-49. A pointer the model follows with `read_tool_result`.
-50. Cut short.
-51. The result keeps its `{metadata, output}` wrapper.
-52. The result keeps its ACP `content[]` wrapper.
-53. The result keeps its `{output, details}` wrapper.
-54. The result keeps its `{server, tool, result}` wrapper.
-55. The rollout's `model_context_window`.
-56. ACP `usage_update.used` and `size`.
-57. On the wire; the record keeps no request shape.
-58. `anthropic-ratelimit-*` headers on every call.
-59. `x-ratelimit-*` headers on every call, and the rollout's rate limits.
-60. No contract run compacts context.
-61. No contract run compacts context; the rollout would show it.
-62. No contract run compacts context; `usage_ledger.is_compaction` would show it.
+2. The sum of the turn's rows in `sessions.db`'s `usage_ledger`.
+3. On Chat Completions, input counts cache reads as fresh.
+4. From the SDK only.
+5. ACP sends no cache field; the wire's `prompt_tokens_details.cached_tokens`.
+6. On Anthropic; Gemini writes none.
+7. `thinking_tokens` in `message_delta`, the session JSONL and `modelUsage`; the catalog's `reasoningTokens: false`.
+8. On the wire only.
+9. On Chat Completions, the wire's `completion_tokens_details.reasoning_tokens` only.
+10. Its `config.toml` sets no `model_reasoning_summary`, so reasoning comes back encrypted.
+11. On the wire, none in the transcript.
+12. On Gemini its config sends no `includeThoughts`; Anthropic returned no visible thinking.
+13. The SDK and `agent-store` keep turn totals only.
+14. In the raw `finish-step` parts.
+15. The rollout JSONL's `token_count` events.
+16. Turn totals only.
+17. `opencode.db`'s `session_message.data.tokens`.
+18. `usage_ledger`, one row per model call.
+19. On the wire, and per turn in `usage.json`.
+20. The wire is protobuf.
+21. `WebSearch` is its own `/v1/messages` call, in `modelUsage` only.
+22. Web search is `POST /v1/alpha/search`, which carries no usage.
+23. The title and web-search calls on Flash Lite: the model's in `servedModels`, its tokens aren't.
+24. The session-title call.
+25. The session-naming call, on the wire only (not in `usage_ledger`).
+26. `session_title` and the server-side `web_search` call, the larger share of a searching attempt's cost.
+27. The gateway can't read the protobuf requests; the record has the SDK's turn model.
+28. The gateway doesn't read Anthropic responses; the record has the CLI's turn model.
+29. `result.modelUsage[*].costUSD`.
+30. ACP `usage_update.cost`, and `opencode.db`.
+31. ACP `usage_update.cost`, and `usage_ledger.cost` (estimated).
+32. `usage.cost_in_usd_ticks` on every response, and `usage.json`.
+33. `usage: null`.
+34. `usage: null`; the rollout JSONL has each call's `last_token_usage`.
+35. Kept, without the title call's.
+36. `usage: null`; `opencode.db` has the calls' tokens.
+37. `usage: null`; `sessions/<cwd>/<id>/usage.json` has the turn's.
+38. No parts: harness-acp drops what it buffered when it abandons the turn.
+39. `""`; the full output is in `~/.cursor/projects/*/agent-tools/*.txt`.
+40. The CLI's truncated view, which the model saw; the full output is spilled to disk.
+41. More than the model saw: the transcript has the full output.
+42. `""`; spilled like the shell output.
+43. A "saved to …" notice, which the model saw; the result is in `tool-results/`.
+44. `""`; the result is in `brain/<id>/.system_generated/steps/<n>/output.txt`.
+45. Cut short with no end marker; the full result is in `tool-output/`.
+46. A pointer the model follows with `read_tool_result`.
+47. Cut short.
+48. The result keeps its `{metadata, output}` wrapper.
+49. The result keeps its ACP `content[]` wrapper.
+50. The result keeps its `{output, details}` wrapper.
+51. The result keeps its `{server, tool, result}` wrapper.
+52. The rollout's `model_context_window`.
+53. ACP `usage_update.used` and `size`.
+54. On the wire; the record keeps no request shape.
+55. `anthropic-ratelimit-*` headers on every call.
+56. `x-ratelimit-*` headers on every call, and the rollout's rate limits.
+57. No contract run compacts context.
+58. No contract run compacts context; the rollout would show it.
+59. No contract run compacts context; `usage_ledger.is_compaction` would show it.
 
 | Signal | What the record holds when captured |
 |---|---|
