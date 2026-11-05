@@ -8,6 +8,8 @@ import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
 import { checkGateways } from '../src/config.ts'
+import { ROUTING_GATEWAY_NAMES } from '../src/contract/gateway.ts'
+import { anthropicPath, apiHost, openaiPath } from '../src/gateway/api.ts'
 import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
 import {
   anthropicOnOpenRouter,
@@ -16,6 +18,7 @@ import {
 } from '../src/gateway/openrouter.ts'
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
+import { onRoutingGateway, ROUTING_GATEWAYS } from '../src/gateway/routes.ts'
 import { brokerToken, cachedTokenSource, RETRY_MS } from '../src/gateway/token.ts'
 import {
   jwtExpiry,
@@ -1349,5 +1352,90 @@ describe('brokered tokens', () => {
     fail = true
     await assert.rejects(brokerToken(brokered, session, c), /offline/)
     await assert.rejects(brokerToken(brokered, {}, c), /can't add request transformations/)
+  })
+})
+
+describe('routing gateways as data', () => {
+  const adapters = async () => {
+    const [codex, goose, pi, grok, fx] = await Promise.all([
+      import('@reeval/harness-codex'),
+      import('@reeval/harness-goose'),
+      import('@reeval/harness-pi'),
+      import('@reeval/harness-grok-build'),
+      import('@reeval/harness-fx'),
+    ])
+    return { codex, goose, pi, grok, fx }
+  }
+
+  test('one gateway per name reeval/gateway routes on', () => {
+    assert.deepEqual(Object.keys(ROUTING_GATEWAYS), [...ROUTING_GATEWAY_NAMES])
+  })
+
+  test('onRoutingGateway takes the entry for the gateway a harness resolved to', () => {
+    const each = { vercel: 'v', openrouter: 'o' }
+    assert.equal(onRoutingGateway(pinned(codex, 'vercel'), each), 'v')
+    assert.equal(onRoutingGateway(pinned(codex, 'openrouter'), each), 'o')
+    for (const gateway of ['direct', 'vertex', undefined]) {
+      assert.equal(onRoutingGateway({ gateway }, each), undefined)
+    }
+  })
+
+  test("every route is brokered on its gateway's API", () => {
+    for (const [name, gateway] of Object.entries(ROUTING_GATEWAYS)) {
+      for (const [kind, route] of Object.entries(gateway.routes)) {
+        for (const endpoint of route(process.env).endpoints ?? []) {
+          assert.equal(endpoint.host, apiHost(gateway.api), `${kind} on ${name}`)
+        }
+      }
+    }
+    assert.equal(
+      OPENROUTER_GATEWAY.routes['claude-code']?.(process.env).authEnv?.ANTHROPIC_BASE_URL,
+      OPENROUTER_GATEWAY.api.anthropic,
+    )
+  })
+
+  test("every adapter's provider for a gateway points at its API, on the key its route sends", async () => {
+    const { codex, goose, pi, grok, fx } = await adapters()
+    const providers = {
+      vercel: {
+        codex: codex.AI_GATEWAY_PROVIDER,
+        goose: goose.AI_GATEWAY_PROVIDER,
+        pi: pi.PI_AI_GATEWAY,
+        'grok-build': grok.AI_GATEWAY_PROVIDER,
+      },
+      openrouter: {
+        codex: codex.OPENROUTER_PROVIDER,
+        goose: goose.OPENROUTER_PROVIDER,
+        pi: pi.PI_OPENROUTER,
+        'grok-build': grok.OPENROUTER_PROVIDER,
+      },
+    } as const
+    for (const name of ROUTING_GATEWAY_NAMES) {
+      const { api, routes } = ROUTING_GATEWAYS[name]
+      for (const [kind, provider] of Object.entries(providers[name])) {
+        const route = routes[kind as keyof typeof routes]?.(process.env)
+        assert.equal(provider.credentialEnv, route?.authAs, `${kind} on ${name}`)
+        // Goose's built-in providers take the origin and add the API's path themselves.
+        assert.equal(
+          provider.baseUrl,
+          kind === 'goose' ? api.origin : api.openai,
+          `${kind} on ${name}`,
+        )
+      }
+    }
+    assert.equal(fx.FX_PROVIDERS.gateway.url, VERCEL_GATEWAY.api.origin)
+    const { url, path } = fx.FX_PROVIDERS.openrouter
+    assert.equal(`${url}${path}`, OPENROUTER_GATEWAY.api.openai)
+  })
+
+  test('openaiPath and anthropicPath put an endpoint under the API base', () => {
+    const api = {
+      origin: 'https://gw.example',
+      openai: 'https://gw.example/api/v1/',
+      anthropic: 'https://gw.example',
+    }
+    assert.equal(apiHost(api), 'gw.example')
+    assert.equal(openaiPath(api, '/chat/completions'), '/api/v1/chat/completions')
+    assert.equal(anthropicPath(api, '/v1/messages'), '/v1/messages')
   })
 })

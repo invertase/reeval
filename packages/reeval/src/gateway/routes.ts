@@ -1,7 +1,8 @@
 // The gateways that route a harness's model calls somewhere other than its provider's own API:
 // for each, the harnesses it serves and what each needs there, and why it can't serve the rest.
+import type { ROUTING_GATEWAY_NAMES } from '../contract/gateway.ts'
 import type { Agent, AgentKind, ModelSpecific } from '../harness/agents.ts'
-import type { GatewayName } from '../types.ts'
+import type { GatewayApi } from './api.ts'
 import { OPENROUTER_GATEWAY } from './openrouter.ts'
 import { VERCEL_GATEWAY } from './vercel.ts'
 
@@ -17,6 +18,7 @@ export type GatewayRoute = ModelSpecific &
 export type RoutingGateway = {
   /** For messages: `Vercel AI Gateway`. */
   name: string
+  api: GatewayApi
   routes: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => GatewayRoute>>
   /** Why it can't serve an agent it has no route for, for the plan's messages. */
   refusals: Partial<Record<AgentKind, string>>
@@ -29,7 +31,7 @@ export type RoutingGateway = {
 }
 
 /** Vertex AI takes a minted token, not a brokered key, so it has a catalog of its own. */
-export type RoutingGatewayName = Exclude<GatewayName, 'direct' | 'vertex'>
+export type RoutingGatewayName = (typeof ROUTING_GATEWAY_NAMES)[number]
 
 /** Every gateway that brokers a key, by name. */
 export const ROUTING_GATEWAYS: Readonly<Record<RoutingGatewayName, RoutingGateway>> = {
@@ -40,3 +42,12 @@ export const ROUTING_GATEWAYS: Readonly<Record<RoutingGatewayName, RoutingGatewa
 /** Whether a harness's `gateway` names one of {@link ROUTING_GATEWAYS}. */
 export const isRoutingGateway = (name: string | undefined): name is RoutingGatewayName =>
   name !== undefined && Object.hasOwn(ROUTING_GATEWAYS, name)
+
+/**
+ * What a harness's adapter takes on the routing gateway the harness resolved to, from one entry
+ * per gateway, so a new gateway names it for every adapter; undefined on direct and Vertex AI.
+ */
+export const onRoutingGateway = <T>(
+  harness: { gateway?: string },
+  each: Readonly<Record<RoutingGatewayName, T>>,
+): T | undefined => (isRoutingGateway(harness.gateway) ? each[harness.gateway] : undefined)

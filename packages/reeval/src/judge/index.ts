@@ -1,5 +1,5 @@
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
-import type { RoutingGatewayName } from '../gateway/routes.ts'
+import { ROUTING_GATEWAYS, type RoutingGatewayName } from '../gateway/routes.ts'
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
 import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
@@ -125,8 +125,7 @@ export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 
   if (gateway !== 'direct') return ''
   const set = setGatewayKey(env)
   if (!set) return ''
-  const name = set.gateway === 'vercel' ? 'Vercel AI Gateway' : 'OpenRouter'
-  return ` ${set.key} is set, but no gateway in the config uses it: add ${set.gateway}() to gateway to call the model through ${name}.`
+  return ` ${set.key} is set, but no gateway in the config uses it: add ${set.gateway}() to gateway to call the model through ${ROUTING_GATEWAYS[set.gateway].name}.`
 }
 
 /**

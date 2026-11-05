@@ -88,6 +88,12 @@ export type EgressProxyOptions = {
    */
   modelResponses?: readonly EndpointMatch[]
   /**
+   * Response headers on a `modelResponses` endpoint that name what the call cost as a number
+   * (`x-litellm-response-cost`), the first set one recorded as `responseCost`; a `"cost"` in the
+   * body wins.
+   */
+  costHeaders?: readonly string[]
+  /**
    * Requests the gateway answers itself, never sending them upstream: e.g. a token exchange whose
    * answer is a placeholder the gateway then swaps for a real token on the model calls.
    */
@@ -378,6 +384,19 @@ const plainHeaders = (headers: IncomingHttpHeaders | OutgoingHttpHeaders): Heade
       v === undefined ? [] : [[k, Array.isArray(v) ? v.map(String) : String(v)]],
     ),
   )
+
+/** The first of `names` set in `headers` to a finite number, as a call's cost; undefined if none is. */
+export function headerCost(
+  headers: IncomingHttpHeaders,
+  names: readonly string[] = [],
+): number | undefined {
+  for (const name of names) {
+    const raw = headers[name.toLowerCase()]
+    const value = Number((Array.isArray(raw) ? raw[0] : raw)?.trim() || Number.NaN)
+    if (Number.isFinite(value)) return value
+  }
+  return undefined
+}
 
 export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const log = options.log ?? (() => {})
@@ -1528,6 +1547,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     const out = responseHeaders(headers, own, creds, plan)
     t?.set({ responseHeaders: plainHeaders(out) })
+    const cost = readsModel ? headerCost(headers, options.costHeaders) : undefined
+    if (cost !== undefined) t?.set({ responseCost: cost })
     res.writeHead(status, out)
     responseBody(up, plan, t, readsModel)
       .once('error', () => res.destroy())

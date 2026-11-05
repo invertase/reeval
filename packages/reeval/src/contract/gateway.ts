@@ -18,6 +18,12 @@ export const GATEWAY_NAMES = ['direct', 'vercel', 'openrouter', 'vertex'] as con
 
 export const gatewayNameSchema = z.enum(GATEWAY_NAMES)
 
+/** The gateways that broker a key of their own, each with its `<name>/…` model ids. */
+export const ROUTING_GATEWAY_NAMES = [
+  'vercel',
+  'openrouter',
+] as const satisfies readonly GatewayName[]
+
 const directSettings = {
   enabled: z.boolean().optional(),
 }
