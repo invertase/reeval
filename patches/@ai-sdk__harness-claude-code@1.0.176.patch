@@ -1,5 +1,5 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..fbc55c16a45e3d1d8e7fd0e7b665d0d470917f90 100644
+index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..f4287bd2147fd406e6bd12f5a86e9369736ba08d 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
 @@ -732,7 +732,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
@@ -12,8 +12,29 @@ index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..fbc55c16a45e3d1d8e7fd0e7b665d0d4
  			const initModel = type === "system" && msg.subtype === "init" && typeof msg.model === "string" ? msg.model : void 0;
  			emit({
  				type: "stream-start",
+@@ -1195,6 +1196,7 @@ function parseMcpToolResult(content) {
+ function mapUsage(usage) {
+ 	if (!usage || typeof usage !== "object") return void 0;
+ 	const u = usage;
++	const reasoning = u.output_tokens_details?.thinking_tokens;
+ 	return {
+ 		inputTokens: {
+ 			total: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+@@ -1202,7 +1204,11 @@ function mapUsage(usage) {
+ 			cacheRead: u.cache_read_input_tokens ?? 0,
+ 			cacheWrite: u.cache_creation_input_tokens ?? 0
+ 		},
+-		outputTokens: {
++		outputTokens: typeof reasoning === "number" ? {
++			total: u.output_tokens ?? 0,
++			text: Math.max((u.output_tokens ?? 0) - reasoning, 0),
++			reasoning
++		} : {
+ 			total: u.output_tokens ?? 0,
+ 			text: u.output_tokens ?? 0
+ 		}
 diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
-index b9d020f904e691b72cbc62786822a6772d213174..f62b5bf5a8ddb4b0aa086658ad7f465219f1f3ac 100644
+index b9d020f904e691b72cbc62786822a6772d213174..d629e47b02daf468b3aacd79154532a6b949a7c6 100644
 --- a/src/bridge/create-emit-stream-event.ts
 +++ b/src/bridge/create-emit-stream-event.ts
 @@ -205,9 +205,16 @@ export function createEmitStreamEvent({
@@ -35,3 +56,40 @@ index b9d020f904e691b72cbc62786822a6772d213174..f62b5bf5a8ddb4b0aa086658ad7f4652
        const initModel =
          type === 'system' &&
          msg.subtype === 'init' &&
+@@ -923,7 +930,14 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
+     cache_creation_input_tokens?: number;
+     cache_read_input_tokens?: number;
+     output_tokens?: number;
++    output_tokens_details?: { thinking_tokens?: number };
+   };
++  /*
++   * Anthropic counts thinking inside `output_tokens` and reports it apart in
++   * `output_tokens_details.thinking_tokens`, on each `message_delta` and on
++   * the result's turn total.
++   */
++  const reasoning = u.output_tokens_details?.thinking_tokens;
+   return {
+     inputTokens: {
+       total:
+@@ -934,10 +948,17 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
+       cacheRead: u.cache_read_input_tokens ?? 0,
+       cacheWrite: u.cache_creation_input_tokens ?? 0,
+     },
+-    outputTokens: {
+-      total: u.output_tokens ?? 0,
+-      text: u.output_tokens ?? 0,
+-    },
++    outputTokens:
++      typeof reasoning === 'number'
++        ? {
++            total: u.output_tokens ?? 0,
++            text: Math.max((u.output_tokens ?? 0) - reasoning, 0),
++            reasoning,
++          }
++        : {
++            total: u.output_tokens ?? 0,
++            text: u.output_tokens ?? 0,
++          },
+   };
+ }
+ 

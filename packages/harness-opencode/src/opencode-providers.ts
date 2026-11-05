@@ -186,7 +186,11 @@ export function providerServedModel(
 export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 
 /** Gemini's own thinking level, as Gemini's API takes it. */
-const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
+// The body replaces the `thinkingConfig` OpenCode would send, so it keeps OpenCode's own
+// `includeThoughts`, without which Gemini returns no thought text.
+const geminiThinking = (effort: string) => ({
+  thinkingConfig: { thinkingLevel: effort, includeThoughts: true },
+})
 
 /** Anthropic models whose API refuses `output_config.effort`. */
 const ANTHROPIC_NO_EFFORT = new Set(['claude-sonnet-4-5', 'claude-haiku-4-5'])

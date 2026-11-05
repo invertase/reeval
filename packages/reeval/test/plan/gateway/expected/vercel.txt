@@ -9,7 +9,7 @@ evals/g.eval.ts › greets  claude-code:claude-sonnet-5-5/-/docker  control  gat
 evals/g.eval.ts › pinned  b/-/docker                              control  gated  ×1  gateway: b → direct
 excluded: —
 image docker · claude-code · 1 evals
-  base  reeval-sandbox:claude-code-1.0.176-patch.8c0f3055  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.176-patch.a9d56a8c  (reeval's image: built when missing or when its base changed)
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.12  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 2 evals

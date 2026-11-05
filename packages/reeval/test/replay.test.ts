@@ -22,7 +22,11 @@ import { tokenUsage } from '../src/harness/agent.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { promptTokens } from '../src/usage.ts'
-import { replayBridge, withSessionStartHook } from './support/claude-code-bridge.ts'
+import {
+  type BridgePart,
+  replayBridge,
+  withSessionStartHook,
+} from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
 import { turnThrough } from './support/harness-agent.ts'
 import {
@@ -1198,6 +1202,34 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
     try {
       const parts = await replayBridge({ bridge: unpatched, start, messages })
       assert.deepEqual(parts[0], { type: 'stream-start' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("the shipped bridge counts the turn's thinking tokens apart, inside its output", async () => {
+    const result = sdk.find((m) => m.type === 'result') as {
+      usage: { output_tokens: number; output_tokens_details: { thinking_tokens: number } }
+    }
+    assert.deepEqual(
+      [result.usage.output_tokens, result.usage.output_tokens_details.thinking_tokens],
+      [534, 204],
+    )
+    const output = (parts: BridgePart[]) =>
+      (parts.at(-1)?.totalUsage as { outputTokens?: Record<string, number> } | undefined)
+        ?.outputTokens
+    const parts = await replayBridge({ bridge: shipped, start, messages })
+    assert.deepEqual(output(parts), { total: 534, text: 330, reasoning: 204 })
+    // The twin: a bridge that doesn't read `output_tokens_details` counts it all as text.
+    const source = readFileSync(shipped, 'utf8')
+    const read = 'const reasoning = u.output_tokens_details?.thinking_tokens;'
+    assert.ok(source.includes(read), 'the shipped bridge reads thinking tokens')
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-thinkless-'))
+    const thinkless = join(dir, 'bridge.mjs')
+    writeFileSync(thinkless, source.replace(read, 'const reasoning = void 0;'))
+    try {
+      const unread = await replayBridge({ bridge: thinkless, start, messages })
+      assert.deepEqual(output(unread), { total: 534, text: 534 })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

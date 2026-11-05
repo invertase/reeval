@@ -329,6 +329,36 @@ export const behaviors: Behavior[] = [
     },
   },
   {
+    name: "the model's reasoning recorded where the harness gets it",
+    canary: false,
+    skips: (row) => (row.reasoning ? undefined : `the ${row.id} row has no reasoning to check`),
+    check(ran, row) {
+      const expected = row.reasoning
+      assert.ok(expected)
+      const attempts = withTurns(ran.run)
+      const tokens = attempts.flatMap((a) =>
+        (a.turns as TurnRecord[]).map((t) => t.usage?.reasoning ?? 0),
+      )
+      if (expected.tokens)
+        assert.ok(
+          tokens.some((n) => n > 0),
+          `no turn records reasoning tokens: ${JSON.stringify(tokens)}`,
+        )
+      if (expected.text) {
+        const chars = attempts.map((a) =>
+          transcriptOf(ran, a).reduce(
+            (n, e) => n + (e.type === 'reasoning' ? e.text.length : 0),
+            0,
+          ),
+        )
+        assert.ok(
+          chars.some((n) => n > 0),
+          `no transcript has reasoning text: ${JSON.stringify(chars)}`,
+        )
+      }
+    },
+  },
+  {
     name: 'real key never in the container',
     canary: true,
     check(ran, row) {
