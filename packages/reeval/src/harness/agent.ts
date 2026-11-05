@@ -9,12 +9,13 @@ import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts
 import { plural } from '../text.ts'
 import type {
   AgentHarnessDescriptor,
+  CostUsd,
   SandboxDescriptor,
   TokenUsage,
   TranscriptEvent,
   TurnStatus,
 } from '../types.ts'
-import { addUsage } from '../usage.ts'
+import { addUsage, tokenUsage } from '../usage.ts'
 import {
   type AdapterVertex,
   type Agent,
@@ -66,28 +67,32 @@ function traceStreamPart(
   }
 }
 
-/** The AI SDK's usage as reeval's, or null when the harness reported none (every field undefined). */
-export function tokenUsage(usage: {
-  inputTokens?: number | undefined
-  outputTokens?: number | undefined
-  inputTokenDetails?: {
-    noCacheTokens?: number | undefined
-    cacheReadTokens?: number | undefined
-    cacheWriteTokens?: number | undefined
-  }
-  outputTokenDetails?: { reasoningTokens?: number | undefined }
-}): TokenUsage | null {
-  if (usage.inputTokens === undefined && usage.outputTokens === undefined) return null
-  const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? 0
-  const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0
-  return {
-    input:
-      usage.inputTokenDetails?.noCacheTokens ??
-      Math.max((usage.inputTokens ?? 0) - cacheRead - cacheWrite, 0),
-    output: usage.outputTokens ?? 0,
-    cacheRead,
-    cacheWrite,
-    reasoning: usage.outputTokenDetails?.reasoningTokens ?? null,
+/**
+ * Each turn's cost from what the harness reports on its finish: a session's running total, as
+ * Claude Code's is, less what its earlier turns reported. A total that fell, or a session other
+ * than the attempt's first, can't be split into turns, so that turn has no reported cost; nor
+ * has one the harness put at $0, which it says for a model its own prices don't list.
+ */
+export function turnCosts(
+  reported: Agent['reportedCost'],
+  source: string,
+): (harnessMetadata: unknown) => CostUsd | undefined {
+  let session: string | undefined
+  let before = 0
+  return (harnessMetadata) => {
+    const said = reported?.(harnessMetadata)
+    if (!said) return undefined
+    let usd = said.usd
+    if (said.session !== undefined) {
+      const same = session === undefined || session === said.session
+      const fell = said.usd < before
+      session ??= said.session
+      if (!same) return undefined
+      usd = Math.round((said.usd - before) * 1e9) / 1e9
+      before = said.usd
+      if (fell) return undefined
+    }
+    return usd > 0 ? { usd, basis: 'reported', source } : undefined
   }
 }
 
@@ -229,6 +234,7 @@ export function createAgentHarness(
       const auth = agentAuth(catalog)
       let servedModel: string | null = null
       let finishMetadata: unknown
+      const turnCost = turnCosts(catalog.reportedCost, descriptor.kind)
       const servers = agentMcp(catalog, mcp, plugins)
       const model = catalog.modelId?.(descriptor.model) ?? descriptor.model
       const vertex = catalog.adc ? await writeAdc(sandbox, catalog.adc) : undefined
@@ -393,10 +399,12 @@ export function createAgentHarness(
                   status,
                   statuses,
                 })
+            const cost = turnCost(finishMetadata)
             return {
               text,
               status,
               usage,
+              ...(cost ? { cost } : {}),
               // An adapter that doesn't say takes the gateway's word: the turn's last brokered call.
               model: servedModel ?? sandbox.servedRequests?.().slice(servedBefore).at(-1) ?? null,
               unreported: catalog.unreported?.(finishMetadata) ?? [],

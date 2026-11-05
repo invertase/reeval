@@ -18,10 +18,9 @@ import { FX_RELAY_USAGE_FILE, FxStreamTranslator, FxUsageLedger } from '@reeval/
 import { GooseStreamTranslator } from '@reeval/harness-goose'
 import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
-import { tokenUsage } from '../src/harness/agent.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
-import { promptTokens } from '../src/usage.ts'
+import { promptTokens, tokenUsage } from '../src/usage.ts'
 import {
   type BridgePart,
   replayBridge,

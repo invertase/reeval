@@ -78,26 +78,32 @@ export const TYPICAL_JUDGE_CALL: { low: Tokens; high: Tokens } = {
 
 const EFFORT_SUFFIX = /-(none|minimal|low|medium|high|xhigh|max|thinking)$/
 
+const DATE_SUFFIX = /-(\d{8}|\d{4}-\d{2}-\d{2})$/
+
 /**
  * A model's price by its id, as written (`anthropic/claude-sonnet-5.5`) or without its
- * `provider/` prefix, without `[param=…]` labels or a trailing effort
- * (`gemini-3.8-flash-medium`); null when `table` has no exact match.
+ * `provider/` prefix, without `[param=…]` labels, a trailing effort (`gemini-3.8-flash-medium`)
+ * or date (`claude-sonnet-5-20261001`), and with its version's dots as dashes
+ * (`claude-sonnet-5-5`, as Anthropic's own ids write it); null when `table` has none of those.
  */
 export function priceFor(model: string, table: Record<string, Price>): Price | null {
   let id = model.toLowerCase().replace(/\[.*\]$/, '')
   for (;;) {
     const bare = id.slice(id.lastIndexOf('/') + 1)
-    const key = Object.hasOwn(table, id) ? id : Object.hasOwn(table, bare) ? bare : null
-    if (key !== null) return table[key] as Price
-    const shorter = id.replace(EFFORT_SUFFIX, '')
+    const key = [id, bare, bare.replaceAll('.', '-')].find((k) => Object.hasOwn(table, k))
+    if (key !== undefined) return table[key] as Price
+    const shorter = id.replace(EFFORT_SUFFIX, '').replace(DATE_SUFFIX, '')
     if (shorter === id) return null
     id = shorter
   }
 }
 
-/** `output` already counts the reasoning tokens, which are billed as output. */
-export const usdOf = (t: Tokens, [input, cacheRead, cacheWrite, output]: Price) =>
-  (t.input * input + t.cacheRead * cacheRead + t.cacheWrite * cacheWrite + t.output * output) / 1e6
+/** `output` already counts the reasoning tokens, billed at the output rate unless the price has its own. */
+export function usdOf(t: Tokens, [input, cacheRead, cacheWrite, output, reasoning]: Price): number {
+  const thought = reasoning === undefined ? 0 : Math.min(t.reasoning ?? 0, t.output)
+  const spoken = (t.output - thought) * output + thought * (reasoning ?? output)
+  return (t.input * input + t.cacheRead * cacheRead + t.cacheWrite * cacheWrite + spoken) / 1e6
+}
 
 const tokensOf = (t: Tokens) => totalTokens({ reasoning: null, ...t })
 

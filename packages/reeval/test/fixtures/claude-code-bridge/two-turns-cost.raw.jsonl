@@ -1,0 +1,56 @@
+{"turn":0,"ms":404,"part":{"type":"start"}}
+{"turn":0,"ms":1972,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":1972,"part":{"type":"tool-input-start","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","toolName":"write","providerExecuted":true}}
+{"turn":0,"ms":2620,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"{\"file_"}}
+{"turn":0,"ms":2622,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"path\": "}}
+{"turn":0,"ms":2622,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"\""}}
+{"turn":0,"ms":2622,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"he"}}
+{"turn":0,"ms":2623,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"llo.txt"}}
+{"turn":0,"ms":2623,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"\""}}
+{"turn":0,"ms":2624,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":", \"cont"}}
+{"turn":0,"ms":2624,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"ent\": \""}}
+{"turn":0,"ms":2624,"part":{"type":"tool-input-delta","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","delta":"hi\\n\"}"}}
+{"turn":0,"ms":2626,"part":{"type":"tool-call","toolCallId":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","toolName":"write","input":{"file_path":"hello.txt","content":"hi\n"},"providerExecuted":true,"providerMetadata":{"claude-code":{"nativeToolName":"Write"}}}}
+{"turn":0,"ms":2628,"part":{"type":"tool-input-end","id":"toolu_017H5Xs5VBgbiV8vgtrKdr5n"}}
+{"turn":0,"ms":2629,"part":{"type":"raw","rawValue":{"type":"stream_event","event":{"type":"message_stop"},"session_id":"474dc295-5482-464f-bc1b-da65885d2c01","parent_tool_use_id":null,"uuid":"5aa4ebca-fc4f-464a-8336-c4c20090f467","usage":{"input_tokens":2,"cache_creation_input_tokens":27508,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":27508,"ephemeral_1h_input_tokens":0},"output_tokens":84,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0}}}}}
+{"turn":0,"ms":2649,"part":{"type":"tool-result","toolCallId":"toolu_017H5Xs5VBgbiV8vgtrKdr5n","toolName":"write","input":{"file_path":"hello.txt","content":"hi\n"},"output":{"type":"create","filePath":"hello.txt","content":"hi\n","structuredPatch":[],"originalFile":null,"userModified":false},"providerExecuted":true}}
+{"turn":0,"ms":2650,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":27510,"inputTokenDetails":{"noCacheTokens":2,"cacheReadTokens":0,"cacheWriteTokens":27508},"outputTokens":84,"outputTokenDetails":{"textTokens":84},"totalTokens":27594},"response":{"id":"CzNDj0X6QnVVYYvd-0","timestamp":"2026-11-05T21:18:02.161Z","modelId":"claude-sonnet-5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":3382,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":3382,"part":{"type":"text-start","id":"60d256c1-1104-40ea-871d-2271c82ab3d0"}}
+{"turn":0,"ms":3382,"part":{"type":"text-delta","id":"60d256c1-1104-40ea-871d-2271c82ab3d0","text":"Created hello.txt with"}}
+{"turn":0,"ms":3442,"part":{"type":"text-delta","id":"60d256c1-1104-40ea-871d-2271c82ab3d0","text":" \""}}
+{"turn":0,"ms":3443,"part":{"type":"text-delta","id":"60d256c1-1104-40ea-871d-2271c82ab3d0","text":"hi\"."}}
+{"turn":0,"ms":3443,"part":{"type":"text-end","id":"60d256c1-1104-40ea-871d-2271c82ab3d0"}}
+{"turn":0,"ms":3445,"part":{"type":"raw","rawValue":{"type":"stream_event","event":{"type":"message_stop"},"session_id":"474dc295-5482-464f-bc1b-da65885d2c01","parent_tool_use_id":null,"uuid":"350d8b7b-73d3-4d84-b8fd-ef19631ca575","usage":{"input_tokens":2,"cache_creation_input_tokens":167,"cache_read_input_tokens":27508,"cache_creation":{"ephemeral_5m_input_tokens":167,"ephemeral_1h_input_tokens":0},"output_tokens":14,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0}}}}}
+{"turn":0,"ms":3445,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":27677,"inputTokenDetails":{"noCacheTokens":2,"cacheReadTokens":27508,"cacheWriteTokens":167},"outputTokens":14,"outputTokenDetails":{"textTokens":14},"totalTokens":27691},"response":{"id":"CzNDj0X6QnVVYYvd-1","timestamp":"2026-11-05T21:18:02.957Z","modelId":"claude-sonnet-5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":3473,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":55187,"inputTokenDetails":{"noCacheTokens":4,"cacheReadTokens":27508,"cacheWriteTokens":27675},"outputTokens":98,"outputTokenDetails":{"textTokens":98},"totalTokens":55285},"providerMetadata":{"claude-code":{"costUsd":0.0756771,"sessionId":"474dc295-5482-464f-bc1b-da65885d2c01"}}}}
+{"turn":1,"ms":56,"part":{"type":"start"}}
+{"turn":1,"ms":1088,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":1,"ms":1088,"part":{"type":"tool-input-start","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","toolName":"edit","providerExecuted":true}}
+{"turn":1,"ms":1861,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"{\"file_"}}
+{"turn":1,"ms":1862,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"path\": "}}
+{"turn":1,"ms":1862,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"\""}}
+{"turn":1,"ms":1862,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"he"}}
+{"turn":1,"ms":1862,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"llo.txt"}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"\""}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":", \"old_"}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"string\""}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":": \"hi\\n"}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"\""}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":", \"new_"}}
+{"turn":1,"ms":1864,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"string\""}}
+{"turn":1,"ms":1865,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":": \"hi\\n"}}
+{"turn":1,"ms":1865,"part":{"type":"tool-input-delta","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR","delta":"bye\\n\"}"}}
+{"turn":1,"ms":1868,"part":{"type":"tool-call","toolCallId":"toolu_01BaZPhPSN1pmBfw85VWMCjR","toolName":"edit","input":{"file_path":"hello.txt","old_string":"hi\n","new_string":"hi\nbye\n","replace_all":false},"providerExecuted":true,"providerMetadata":{"claude-code":{"nativeToolName":"Edit"}}}}
+{"turn":1,"ms":1870,"part":{"type":"tool-input-end","id":"toolu_01BaZPhPSN1pmBfw85VWMCjR"}}
+{"turn":1,"ms":1872,"part":{"type":"raw","rawValue":{"type":"stream_event","event":{"type":"message_stop"},"session_id":"474dc295-5482-464f-bc1b-da65885d2c01","parent_tool_use_id":null,"uuid":"facde3e2-bd3b-4d1a-9d3e-9f565406d447","usage":{"input_tokens":2,"cache_creation_input_tokens":70,"cache_read_input_tokens":27675,"cache_creation":{"ephemeral_5m_input_tokens":70,"ephemeral_1h_input_tokens":0},"output_tokens":115,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0}}}}}
+{"turn":1,"ms":1891,"part":{"type":"tool-result","toolCallId":"toolu_01BaZPhPSN1pmBfw85VWMCjR","toolName":"edit","input":{"file_path":"hello.txt","old_string":"hi\n","new_string":"hi\nbye\n","replace_all":false},"output":{"filePath":"hello.txt","oldString":"hi\n","newString":"hi\nbye\n","originalFile":"hi\n","structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":2,"lines":[" hi","+bye"]}],"userModified":false,"replaceAll":false},"providerExecuted":true}}
+{"turn":1,"ms":1892,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":27747,"inputTokenDetails":{"noCacheTokens":2,"cacheReadTokens":27675,"cacheWriteTokens":70},"outputTokens":115,"outputTokenDetails":{"textTokens":115},"totalTokens":27862},"response":{"id":"0lcM9O2HM2EbE7nd-0","timestamp":"2026-11-05T21:18:05.216Z","modelId":"claude-sonnet-5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":1,"ms":2534,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":1,"ms":2534,"part":{"type":"text-start","id":"e492831d-bfd1-40e4-b211-6cdf6062fb6d"}}
+{"turn":1,"ms":2534,"part":{"type":"text-delta","id":"e492831d-bfd1-40e4-b211-6cdf6062fb6d","text":"Appended \"bye\" to"}}
+{"turn":1,"ms":2581,"part":{"type":"text-delta","id":"e492831d-bfd1-40e4-b211-6cdf6062fb6d","text":" hello.txt."}}
+{"turn":1,"ms":2582,"part":{"type":"text-end","id":"e492831d-bfd1-40e4-b211-6cdf6062fb6d"}}
+{"turn":1,"ms":2583,"part":{"type":"raw","rawValue":{"type":"stream_event","event":{"type":"message_stop"},"session_id":"474dc295-5482-464f-bc1b-da65885d2c01","parent_tool_use_id":null,"uuid":"9700db53-9d12-4ac5-a8cc-dba5ee8ce369","usage":{"input_tokens":2,"cache_creation_input_tokens":225,"cache_read_input_tokens":27745,"cache_creation":{"ephemeral_5m_input_tokens":225,"ephemeral_1h_input_tokens":0},"output_tokens":16,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0}}}}}
+{"turn":1,"ms":2583,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":27972,"inputTokenDetails":{"noCacheTokens":2,"cacheReadTokens":27745,"cacheWriteTokens":225},"outputTokens":16,"outputTokenDetails":{"textTokens":16},"totalTokens":27988},"response":{"id":"0lcM9O2HM2EbE7nd-1","timestamp":"2026-11-05T21:18:05.907Z","modelId":"claude-sonnet-5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":1,"ms":2608,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":55719,"inputTokenDetails":{"noCacheTokens":4,"cacheReadTokens":55420,"cacheWriteTokens":295},"outputTokens":131,"outputTokenDetails":{"textTokens":131},"totalTokens":55850},"providerMetadata":{"claude-code":{"costUsd":0.0888166,"sessionId":"474dc295-5482-464f-bc1b-da65885d2c01"}}}}

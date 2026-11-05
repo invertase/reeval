@@ -823,6 +823,11 @@
           "type": "boolean",
           "const": true
         },
+        "costUsd": {
+          "description": "US dollars the fake agent says every turn cost, as a harness that reports its cost does; 0 reports none.",
+          "type": "number",
+          "minimum": 0
+        },
         "delayMs": {
           "description": "Simulated turn length, honors the abort signal.",
           "type": "number",

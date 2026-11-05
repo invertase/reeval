@@ -16,4 +16,4 @@ reeval's word in code and messages.
 | pass@1 (passes over passes and fails; `pass_at_1` in `reeval query`) | success rate, resolve rate (SWE-bench) |
 | checks, judge (`expect`, `c.exec`, `c.judge`) | grader, verifier, scorer, evaluator |
 | transcript (`transcript.jsonl`) | trajectory, trace |
-| effort (measured tool calls, agent time, tokens) | efficiency, cost |
+| effort (measured tool calls, agent time, tokens, cost) | efficiency |

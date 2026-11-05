@@ -1369,7 +1369,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
       [
         'a usd budget',
         { budget: { usd: 20 } },
-        /budget\.usd in reeval\.config\.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
+        /budget\.usd in reeval\.config\.ts isn't supported yet: reeval records the tokens and cost of each attempt, but enforces no cost or token budget\. Cap the run with attempts or duration\./,
       ],
       [
         'an unbrokered policy reeval does not know',

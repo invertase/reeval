@@ -185,6 +185,7 @@ export const fakeHarnessSchema = z.strictObject({
     })
     .optional(),
   flakeRate: z.number().optional(),
+  costUsd: z.number().nonnegative().optional(),
   usage: tokenUsageSchema.optional(),
   script: z.array(z.array(fakeScriptStepSchema)).optional(),
   maxConcurrent: z.number().optional(),

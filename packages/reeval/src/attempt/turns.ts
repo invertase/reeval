@@ -159,7 +159,7 @@ export function turnSender(
       }
     })
     const timedBefore = a.record.timings.agentMs
-    const { raw, rejectedKey, providerStop, reasoningMs, agentMs, steps, ...sent } = await a
+    const { raw, rejectedKey, providerStop, reasoningMs, agentMs, steps, cost, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
@@ -198,6 +198,7 @@ export function turnSender(
       result,
       raw ? { raw } : {},
       reasoningMs !== undefined ? { reasoningMs } : {},
+      cost ? { cost } : {},
       {
         durationMs: Math.max(result.durationMs, sendWallMs),
         ...(startup ? { mcpStartup: mcpStartupOf(startup.entries) } : {}),

@@ -397,6 +397,28 @@ export type TimeSplit = {
   otherMs: number
 }
 
+/** A dollar figure and where it came from. */
+export type CostUsd = {
+  /** US dollars. */
+  usd: number
+  /**
+   * `reported`: what the harness (Claude Code, pi) or the gateway (OpenRouter) said it cost;
+   * `estimated`: the tokens at list prices, which leave out discounts and long-context rates.
+   */
+  basis: 'reported' | 'estimated'
+  /**
+   * Who reported it (`claude-code`, `pi`, `openrouter`, `fake`), or the prices it was estimated
+   * at (`models.dev 2026-11-05`, a `REEVAL_PRICES` file); several, joined with `, `, in a sum.
+   */
+  source: string
+}
+
+/**
+ * Costs added up: `basis` is `reported` only when every part was. `unpriced` counts the parts
+ * (attempts, or judge calls) that used tokens but have no cost, which `usd` leaves out.
+ */
+export type CostTotal = CostUsd & { unpriced?: number }
+
 /** One agent turn. Immutable once `c.send()` resolves. */
 /** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
 export type TurnData = {
@@ -795,6 +817,8 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
+  /** US dollars the fake agent says every turn cost, as a harness that reports its cost does; 0 reports none. */
+  costUsd?: number
   /** Tokens the fake agent reports for every turn, as `turn.usage`; without it, null. */
   usage?: {
     input: number
@@ -2694,6 +2718,8 @@ export type TurnRecord = Pick<
   reasoningMs?: number | null
   /** See the run record's `turns[].timeSplit`. */
   timeSplit?: TimeSplit
+  /** What the harness said the turn cost; reeval's estimate is added when the run is recorded. */
+  cost?: CostUsd
 }
 
 /**
@@ -3071,7 +3097,7 @@ export type EvalRecord = {
    * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
    * included, which its judgment key is numbered by.
    */
-  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
+  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number; usage?: TokenUsage }>
   /** Session starts that didn't become ready in time, or failed on a transient error, and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings

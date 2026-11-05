@@ -3,13 +3,15 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
 type FinishReason = Extract<HarnessV1StreamPart, { type: 'finish-step' }>['finishReason']
 
-/** One model call's counts, as pi's `message_end` reports them (it also has a USD `cost`). */
+/** One model call's counts, as pi's `message_end` reports them, and what pi priced it at. */
 export type PiUsage = {
   input?: number
   output?: number
   cacheRead?: number
   cacheWrite?: number
   reasoning?: number
+  /** US dollars, from pi's own model prices. */
+  cost?: { total?: number }
 }
 
 type PiContent = { type?: string; text?: string }
@@ -74,7 +76,16 @@ const add = (a: PiUsage | undefined, b: PiUsage): PiUsage => ({
   cacheRead: (a?.cacheRead ?? 0) + (b.cacheRead ?? 0),
   cacheWrite: (a?.cacheWrite ?? 0) + (b.cacheWrite ?? 0),
   reasoning: (a?.reasoning ?? 0) + (b.reasoning ?? 0),
+  ...costOf(a?.cost?.total, b.cost?.total),
 })
+
+/** The calls' summed cost; none when neither has one. */
+function costOf(a: unknown, b: unknown): Pick<PiUsage, 'cost'> {
+  if (!usd(a) && !usd(b)) return {}
+  return { cost: { total: (usd(a) ? a : 0) + (usd(b) ? b : 0) } }
+}
+
+const usd = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0
 
 /** pi's stop reasons for a call that didn't fail; a failed call is handled on `agent_end`. */
 const UNIFIED: Record<string, FinishReason['unified']> = {
@@ -395,6 +406,9 @@ export class PiStreamTranslator {
         raw,
       },
       totalUsage: toUsage(this.total),
+      ...(this.total?.cost?.total !== undefined
+        ? { harnessMetadata: { pi: { costUsd: this.total.cost.total } } }
+        : {}),
     })
   }
 }

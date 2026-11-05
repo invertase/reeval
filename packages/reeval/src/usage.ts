@@ -1,5 +1,30 @@
 import type { TokenUsage } from './types.ts'
 
+/** The AI SDK's usage as reeval's, or null when the harness reported none (every field undefined). */
+export function tokenUsage(usage: {
+  inputTokens?: number | undefined
+  outputTokens?: number | undefined
+  inputTokenDetails?: {
+    noCacheTokens?: number | undefined
+    cacheReadTokens?: number | undefined
+    cacheWriteTokens?: number | undefined
+  }
+  outputTokenDetails?: { reasoningTokens?: number | undefined }
+}): TokenUsage | null {
+  if (usage.inputTokens === undefined && usage.outputTokens === undefined) return null
+  const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? 0
+  const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0
+  return {
+    input:
+      usage.inputTokenDetails?.noCacheTokens ??
+      Math.max((usage.inputTokens ?? 0) - cacheRead - cacheWrite, 0),
+    output: usage.outputTokens ?? 0,
+    cacheRead,
+    cacheWrite,
+    reasoning: usage.outputTokenDetails?.reasoningTokens ?? null,
+  }
+}
+
 /** Two counts as one; null only when neither reported any. */
 export function addUsage(a: TokenUsage | null, b: TokenUsage | null): TokenUsage | null {
   if (!a || !b) return a ?? b
@@ -23,7 +48,7 @@ export const sumUsage = (usages: Iterable<TokenUsage | null | undefined>): Token
 /** Every token the prompt side used: uncached input plus cache reads and writes. */
 export const promptTokens = (u: TokenUsage) => u.input + u.cacheRead + u.cacheWrite
 
-/** Prompt side and output. `output` already counts `reasoning`, its share of thinking. No USD. */
+/** Prompt side and output. `output` already counts `reasoning`, its share of thinking. */
 export const totalTokens = (u: TokenUsage) => promptTokens(u) + u.output
 
 /** A token count as people read it: `9,512`, `430k`, `1,094k`. */

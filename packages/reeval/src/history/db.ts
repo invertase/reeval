@@ -30,7 +30,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 24
+const DB_VERSION = 25
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -167,11 +167,13 @@ CREATE TABLE attempts (
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
   reasoning_effort TEXT, served_reasoning_effort TEXT, files_changed INTEGER, reasoning_ms INTEGER,
   case_key TEXT, model_ms INTEGER, tool_ms INTEGER, waiting_ms INTEGER, other_ms INTEGER,
+  cost_usd REAL, cost_basis TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, key TEXT NOT NULL, question TEXT,
   verdict TEXT, score REAL, threshold REAL, model TEXT, resolved_model TEXT, input_path TEXT,
+  cost_usd REAL, cost_basis TEXT,
   PRIMARY KEY (run_id, attempt_key, key)
 );
 CREATE TABLE environments (
@@ -807,7 +809,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(37).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(39).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -845,6 +847,8 @@ function insertRun(
         a.timeSplit?.toolMs ?? null,
         a.timeSplit?.waitingMs ?? null,
         a.timeSplit?.otherMs ?? null,
+        a.cost?.usd ?? null,
+        a.cost?.basis ?? null,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
@@ -987,7 +991,7 @@ function insertRun(
       }
       for (const j of a.judgements) {
         run(
-          'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
           a.key,
           j.key,
@@ -998,6 +1002,8 @@ function insertRun(
           j.model,
           j.resolvedModel ?? null,
           a.files.judgeInput?.path ?? null,
+          j.cost?.usd ?? null,
+          j.cost?.basis ?? null,
         )
       }
       for (const [kind, ref] of Object.entries(a.files)) {

@@ -2,7 +2,8 @@ import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
 import { openRouterBilling, openRouterDecisionModel } from '../gateway/openrouter-models.ts'
 import { type VertexSettings, vertexDecisionModel, vertexSettings } from '../gateway/vertex.ts'
-import type { GatewayName, JudgeModel, JudgeOptions } from '../types.ts'
+import type { GatewayName, JudgeModel, JudgeOptions, TokenUsage } from '../types.ts'
+import { tokenUsage } from '../usage.ts'
 import {
   DIRECT_PROVIDERS,
   type JudgeState,
@@ -100,6 +101,7 @@ export async function scoreWithModel(
   resolvedModel: string | undefined
   upstream?: string
   costUsd?: number
+  usage: TokenUsage | null
 }> {
   const resolved = await resolveModel(model, gateway, fallbacks, vertex)
   const result = await decide({
@@ -124,6 +126,7 @@ export async function scoreWithModel(
   return {
     score: result.answers.answer.probability,
     resolvedModel: result.response?.modelId,
+    usage: usage ? tokenUsage(usage) : null,
     ...(gateway === 'openrouter' ? openRouterBilling(providerMetadata) : {}),
   }
 }

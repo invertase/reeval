@@ -1904,6 +1904,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'record.cost',
+    area: 'Records and studio',
+    name: "Each turn's, attempt's, judge call's, cell's and run's cost: what Claude Code, pi or OpenRouter reported, else an estimate at the served model's list price marked `estimated` with its source, none for an unlisted model (a total counts it `unpriced`), on the `Done in` line, in summary.md, `reeval compare`, `reeval query effort` and the studio",
+    fixtures: ['run/cost'],
+    unit: ['reeval/test/cost.test.ts', 'harness-pi/test/stream.test.ts'],
+  },
+  {
     id: 'effort.files-changed',
     area: 'Records and studio',
     name: "Each turn's files changed from the workspace diff, a file the shell wrote included, on its turn line, in `debug.log` and beside the edit tool calls in summary.md and the studio",

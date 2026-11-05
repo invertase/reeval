@@ -307,7 +307,7 @@ export function judgeCaller(
       // Vertex's project and regions).
       const entry = gateway && scope.gateways.find((g) => g.kind === gateway)
       const routed = gateway ? { ...unpinned, gateway: entry || gateway } : unpinned
-      const { verdict, retries } = await a.timed('judgeMs', () =>
+      const { verdict, retries, usage } = await a.timed('judgeMs', () =>
         withLease(
           maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},
           () => runJudge(question, decide, { ...routed, model, threshold: atLeast }, a.signal),
@@ -322,7 +322,12 @@ export function judgeCaller(
           order,
         ),
         0,
-        { ...recorded, ...(retries.length ? { retries } : {}), call: order },
+        {
+          ...recorded,
+          ...(retries.length ? { retries } : {}),
+          ...(usage ? { usage } : {}),
+          call: order,
+        },
       )
       const { score } = verdict
       debugLog(

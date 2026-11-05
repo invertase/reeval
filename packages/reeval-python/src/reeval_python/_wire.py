@@ -1058,6 +1058,9 @@ class FakeHarnessDescriptor(TypedDict):
     # OpenCode, Goose, fx, Grok Build), it also serves on the session's first exposed port and
     # reaches it from the host, as that adapter's start does.
     brokers: NotRequired[Literal[True]]
+    # US dollars the fake agent says every turn cost, as a harness that reports its cost does; 0
+    # reports none.
+    costUsd: NotRequired[float]
     # Simulated turn length, honors the abort signal.
     delayMs: NotRequired[float]
     # Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what

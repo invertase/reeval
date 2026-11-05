@@ -5,8 +5,10 @@
 // and how base would score under head's, and isn't collapsed, as isn't one whose `c.observe()`
 // tallies moved (informational: the shift never changes its status). Pure and deterministic, from the two
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
+
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced, plural } from '../text.ts'
+import type { CostTotal } from '../types.ts'
 import type {
   CompareCell,
   CompareFamilyLift,
@@ -15,6 +17,7 @@ import type {
   CompareStatus,
   StackChange,
 } from '../view/compare.ts'
+import { formatUsd } from '../view/cost.ts'
 import { effortChangeLabel } from '../view/effort.ts'
 import { type Measure, measuresLine } from '../view/measures.ts'
 import { observedShift } from '../view/observations.ts'
@@ -55,6 +58,8 @@ export type CompareSide = {
   unreachable?: boolean
   /** How the run ended; one that didn't finish has evals that never ran to the end. */
   status?: RunRecord['status']
+  /** The run's agent and judge cost; unset when it has none. */
+  cost?: CostTotal
 }
 
 export type CompareInput = {
@@ -689,6 +694,13 @@ function sideNotes(c: Colors, input: CompareInput): string[] {
   })
 }
 
+/** `cost $0.42 → $0.31 (est.)`, when both runs have one. */
+function costNote(c: Colors, base: CompareSide, head: CompareSide): string[] {
+  if (!base.cost || !head.cost) return []
+  const est = base.cost.basis === 'estimated' || head.cost.basis === 'estimated' ? ' (est.)' : ''
+  return [c.dim(`cost ${formatUsd(base.cost.usd)} → ${formatUsd(head.cost.usd)}${est}`)]
+}
+
 function stackNotes(c: Colors, changes: StackChange[]): string[] {
   return changes.map((x) => c.dim(`stack changed: ${x.label} ${x.base} → ${x.head}`))
 }
@@ -750,7 +762,11 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
       ),
     )
   }
-  const notes = [...sideNotes(c, input), ...(opts.verbose ? stackNotes(c, input.changes) : [])]
+  const notes = [
+    ...sideNotes(c, input),
+    ...(opts.verbose ? stackNotes(c, input.changes) : []),
+    ...costNote(c, input.base, input.head),
+  ]
   return [...blocks.flatMap((b) => [...b, '']), ...notes, compareTally(c, input.rows)]
 }
 

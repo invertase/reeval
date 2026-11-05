@@ -1,5 +1,5 @@
-// List prices for the dry run's cost estimate, fetched when it's shown and never stored in a
-// record: prices change, so reeval keeps no table of its own. models.dev's direct providers, and
+// List prices for the dry run's cost estimate and a recorded run's estimated costs, fetched
+// when they're needed: prices change, so reeval keeps no table of its own. models.dev's direct providers, and
 // Vercel AI Gateway's and OpenRouter's `provider/model` ids, cached on the host for a day, and an older copy when
 // it can't be reached; a failed fetch isn't retried for an hour. The fetch goes through Node's
 // default agent, so it takes the environment's proxy under `NODE_USE_ENV_PROXY=1`, as the judge's
@@ -28,12 +28,23 @@ const FETCH_TIMEOUT_MS = 2000
 /** The decompressed catalog's ceiling; models.dev's was 6 MB in October 2026. */
 const MAX_BYTES = 32 * 1024 * 1024
 
-/** USD per million tokens: input, cache read, cache write, output. */
-export type Price = readonly [number, number, number, number]
+/**
+ * USD per million tokens: input, cache read, cache write, output, and reasoning where the model
+ * bills it apart from output.
+ */
+export type Price =
+  | readonly [number, number, number, number]
+  | readonly [number, number, number, number, number]
 
 /** models.dev's cost fields, which a `REEVAL_PRICES` file uses too. */
-type Cost = { input?: unknown; output?: unknown; cache_read?: unknown; cache_write?: unknown }
-const COST_FIELDS = ['input', 'output', 'cache_read', 'cache_write']
+type Cost = {
+  input?: unknown
+  output?: unknown
+  cache_read?: unknown
+  cache_write?: unknown
+  reasoning?: unknown
+}
+const COST_FIELDS = ['input', 'output', 'cache_read', 'cache_write', 'reasoning']
 
 /**
  * When models.dev's prices were fetched, or why there are none. An older copy, used for want of a
@@ -58,14 +69,19 @@ export type Prices =
   | { table: null; why: string }
 
 const usd = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0
-const isPrice = (p: unknown): p is Price => Array.isArray(p) && p.length === 4 && p.every(usd)
+const isPrice = (p: unknown): p is Price =>
+  Array.isArray(p) && (p.length === 4 || p.length === 5) && p.every(usd)
 
 /** Null without an input and output price, or with any field that isn't a USD amount. */
 function priceOf(c: Cost | null | undefined): Price | null {
   if (!c || typeof c !== 'object' || !usd(c.input) || !usd(c.output)) return null
   const cacheRead = c.cache_read ?? c.input
   const cacheWrite = c.cache_write ?? c.input
-  return usd(cacheRead) && usd(cacheWrite) ? [c.input, cacheRead, cacheWrite, c.output] : null
+  const reasoning = c.reasoning ?? c.output
+  if (!usd(cacheRead) || !usd(cacheWrite) || !usd(reasoning)) return null
+  return reasoning === c.output
+    ? [c.input, cacheRead, cacheWrite, c.output]
+    : [c.input, cacheRead, cacheWrite, c.output, reasoning]
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>

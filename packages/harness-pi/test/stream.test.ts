@@ -17,6 +17,16 @@ function translate(lines: string[], exitCode = 0) {
 const usage = (p: HarnessV1StreamPart | undefined) =>
   p && 'totalUsage' in p ? p.totalUsage : p && 'usage' in p ? p.usage : undefined
 
+/** A `message_end` line's `usage.cost.total`; 0 for any other line. */
+function endCost(line: string): number {
+  if (!line.trim()) return 0
+  const event = JSON.parse(line) as {
+    type?: string
+    message?: { usage?: { cost?: { total?: number } } }
+  }
+  return event.type === 'message_end' ? (event.message?.usage?.cost?.total ?? 0) : 0
+}
+
 test('a real multi-call turn: tool calls, results, one step per model call and their summed tokens', () => {
   const { t, parts } = translate(fixture('edit-and-run'))
   assert.equal(t.sessionId, '11111111-2222-3333-4444-555555555555')
@@ -35,6 +45,11 @@ test('a real multi-call turn: tool calls, results, one step per model call and t
   const finish = parts.find((p) => p.type === 'finish')
   assert.equal(usage(finish)?.inputTokens.total, 1379 + 1490 + 1539 + 1612 + 1668)
   assert.equal(usage(finish)?.outputTokens.total, 101 + 32 + 49 + 40 + 7)
+  assert.deepEqual(
+    (finish as { harnessMetadata?: unknown })?.harnessMetadata,
+    { pi: { costUsd: [...fixture('edit-and-run')].reduce((sum, line) => sum + endCost(line), 0) } },
+    "pi's own prices of the turn's model calls, summed",
+  )
   assert.equal(parts[0]?.type, 'stream-start')
   assert.equal((parts[0] as { modelId?: string }).modelId, 'gemini-3.8-flash')
   // pi opens empty text blocks around tool calls; only the reply's is passed on.

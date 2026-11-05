@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -17,8 +17,14 @@ import {
   usdOf,
 } from '../src/cost.ts'
 import { UsageError } from '../src/errors.ts'
+import { turnCosts } from '../src/harness/agent.ts'
+import { claudeCodeCost, piCost } from '../src/harness/agents.ts'
+import { priceRecord, pricerOf } from '../src/history/cost.ts'
+import type { RunRecord } from '../src/history/types.ts'
 import { loadPrices, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
+import { tokenUsage } from '../src/usage.ts'
+import { formatCost, formatUsd } from '../src/view/cost.ts'
 
 const FLASH: Price = [0.75, 0.075, 0.75, 3.75]
 const TABLE: Record<string, Price> = {
@@ -59,6 +65,21 @@ describe('priceFor', () => {
   test('prices reasoning as part of output, never on top of it', () => {
     const tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 }
     assert.equal(usdOf({ ...tokens, reasoning: 800_000 }, FLASH), usdOf(tokens, FLASH))
+  })
+
+  test('bills reasoning at its own rate when the price has one', () => {
+    const tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000, reasoning: 400_000 }
+    assert.equal(usdOf(tokens, [1, 0.1, 1, 4, 10]), 0.6 * 4 + 0.4 * 10)
+    assert.equal(usdOf({ ...tokens, reasoning: null }, [1, 0.1, 1, 4, 10]), 4)
+  })
+
+  test("matches Anthropic's dashed and dated ids from a dotted or dated one", () => {
+    const sonnet: Price = [3, 0.3, 3.75, 15]
+    const table = { 'claude-sonnet-5-5': sonnet, 'claude-haiku-5': [1, 0.1, 1.25, 5] as Price }
+    assert.deepEqual(priceFor('claude-sonnet-5.5', table), sonnet)
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-5.5-high', table), sonnet)
+    assert.deepEqual(priceFor('claude-haiku-5-20261001', table), table['claude-haiku-5'])
+    assert.deepEqual(priceFor('claude-haiku-5-2026-10-01', table), table['claude-haiku-5'])
   })
 
   test('is null for a model without an exact price, rather than a near one', () => {
@@ -352,7 +373,7 @@ describe('loadPrices', () => {
     }
     await refused(
       JSON.stringify({ 'composer-2.5': { input: 0.5, cacheRead: 0.05, output: 2.5 } }),
-      /composer-2\.5 has cacheRead, which isn't one of input, output, cache_read, cache_write$/,
+      /composer-2\.5 has cacheRead, which isn't one of input, output, cache_read, cache_write, reasoning$/,
     )
     for (const top of ['[{"input":1,"output":1}]', 'null', '3', '"composer-2.5"']) {
       await refused(top, /must be a JSON object of prices by model id/)
@@ -605,5 +626,182 @@ console.log(JSON.stringify(p.table))`
       'anthropic/claude-sonnet-5.5': [3, 3, 3, 15],
       'x-ai/grok-4.6': [2, 2, 2, 6],
     })
+  })
+})
+
+describe('record costs', () => {
+  const usage = { input: 1000, output: 500, cacheRead: 2000, cacheWrite: 0, reasoning: null }
+  const pricer = pricerOf({
+    table: { 'claude-sonnet-5': [2, 0.2, 2.5, 10], 'gemini-3.8-flash': FLASH },
+    overlay: { 'my-model': [1, 1, 1, 1] },
+    file: 'prices.json',
+    modelsDev: { fetchedAt: '2026-11-05T09:00:00Z', stale: false },
+  })
+  const turn = (model: string | null, extra: object = {}) => ({ usage, model, ...extra })
+  const record = (attempts: object[], judgements: object[] = []) =>
+    ({
+      cost: { inputTokens: null, outputTokens: null, usage: null, source: 'unreported' },
+      evals: [
+        {
+          cells: [{ key: 'a', model: 'claude-sonnet-5' }],
+          attempts: attempts.map((a) => ({ cell: 'a', usage, judgements, ...a })),
+        },
+      ],
+    }) as unknown as RunRecord
+
+  test('a reported cost wins; else the served model, then the cell model, at its list price', () => {
+    const run = priceRecord(
+      record([
+        { turns: [turn('claude-sonnet-5', { cost: { usd: 1, basis: 'reported', source: 'pi' } })] },
+        { turns: [turn('my-model'), turn(null)] },
+      ]),
+      pricer,
+    )
+    const [reported, estimated] = run.evals[0]?.attempts ?? []
+    assert.deepEqual(reported?.cost, { usd: 1, basis: 'reported', source: 'pi' })
+    assert.deepEqual(
+      estimated?.turns.map((t) => t.cost),
+      [
+        { usd: 0.0035, basis: 'estimated', source: 'prices.json' },
+        { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' },
+      ],
+    )
+    assert.deepEqual(estimated?.cost, {
+      usd: 0.0109,
+      basis: 'estimated',
+      source: 'prices.json, models.dev 2026-11-05',
+    })
+    assert.deepEqual(run.evals[0]?.cells[0]?.cost?.agent, {
+      usd: 1.0109,
+      basis: 'estimated',
+      source: 'pi, prices.json, models.dev 2026-11-05',
+    })
+  })
+
+  test('an unlisted model has no cost, never $0, and a total counts it unpriced', () => {
+    const run = priceRecord(
+      record([{ turns: [turn('composer-2.5')] }, { turns: [turn('claude-sonnet-5')] }]),
+      pricer,
+    )
+    const [unknown] = run.evals[0]?.attempts ?? []
+    assert.equal(unknown?.turns[0]?.cost, undefined)
+    assert.equal(unknown?.cost, undefined)
+    assert.deepEqual(run.cost.agentUsd, {
+      usd: 0.0074,
+      basis: 'estimated',
+      source: 'models.dev 2026-11-05',
+      unpriced: 1,
+    })
+    const partly = priceRecord(
+      record([{ turns: [turn('composer-2.5'), turn('claude-sonnet-5')] }]),
+      pricer,
+    )
+    assert.equal(partly.evals[0]?.attempts[0]?.cost, undefined, 'a partly priced attempt has none')
+    assert.equal(
+      priceRecord(record([{ turns: [turn('claude-sonnet-5')] }]), null).cost.agentUsd,
+      undefined,
+    )
+  })
+
+  test("OpenRouter's billed cost is the attempt's and the judge call's", () => {
+    const run = priceRecord(
+      record(
+        [{ turns: [turn('claude-sonnet-5')], reportedCostUsd: 0.5 }],
+        [
+          { model: 'claude-sonnet-5', costUsd: 0.01 },
+          { model: 'claude-sonnet-5', usage },
+          { model: 'fake' },
+        ],
+      ),
+      pricer,
+    )
+    const attempt = run.evals[0]?.attempts[0]
+    assert.deepEqual(attempt?.cost, { usd: 0.5, basis: 'reported', source: 'openrouter' })
+    assert.deepEqual(
+      attempt?.judgements.map((j) => j.cost),
+      [
+        { usd: 0.01, basis: 'reported', source: 'openrouter' },
+        { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' },
+        undefined,
+      ],
+    )
+    assert.deepEqual(run.cost.judgeUsd, {
+      usd: 0.0174,
+      basis: 'estimated',
+      source: 'openrouter, models.dev 2026-11-05',
+    })
+    assert.deepEqual(priceRecord(run, pricer), run, 'pricing a priced record changes nothing')
+  })
+
+  test('a reported $0 is no cost, so the tokens are estimated', () => {
+    const run = priceRecord(
+      record(
+        [{ turns: [turn('claude-sonnet-5')], reportedCostUsd: 0 }],
+        [{ model: 'claude-sonnet-5', costUsd: 0, usage }],
+      ),
+      pricer,
+    )
+    const attempt = run.evals[0]?.attempts[0]
+    const estimated = { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' }
+    assert.deepEqual(attempt?.cost, estimated)
+    assert.deepEqual(attempt?.judgements[0]?.cost, estimated)
+  })
+
+  test('formats dollars to two significant figures under $1 and says what was estimated', () => {
+    assert.equal(
+      formatCost({ usd: 0.2574, basis: 'estimated', source: 'x', unpriced: 1 }),
+      '$0.26 (est., 1 unpriced)',
+    )
+    assert.equal(formatCost({ usd: 12.4, basis: 'reported', source: 'x' }), '$12.40')
+    assert.equal(formatUsd(0.0074), '$0.0074')
+    assert.equal(formatUsd(0.00000012), '<$0.0001')
+    assert.equal(formatCost(undefined), '')
+  })
+
+  test("Claude Code's running session total becomes each turn's own cost", () => {
+    // A real two-turn Claude Code attempt on claude-sonnet-5: each turn's delta is exactly its own
+    // tokens at that model's list price.
+    const sonnet: Price = [2, 0.2, 2.5, 10]
+    const finishes = readFileSync(
+      new URL('./fixtures/claude-code-bridge/two-turns-cost.raw.jsonl', import.meta.url),
+      'utf8',
+    )
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l).part)
+      .filter((p) => p.type === 'finish')
+    assert.equal(finishes.length, 2)
+    const cost = turnCosts(claudeCodeCost, 'claude-code')
+    for (const finish of finishes) {
+      const usage = tokenUsage(finish.totalUsage)
+      assert.ok(usage)
+      assert.deepEqual(cost(finish.providerMetadata), {
+        usd: Number(usdOf(usage, sonnet).toFixed(9)),
+        basis: 'reported',
+        source: 'claude-code',
+      })
+    }
+  })
+
+  test("a session's total that fell, another session or a reported $0 is no reported cost", () => {
+    const said = (costUsd: number, sessionId = 's1') => ({ 'claude-code': { costUsd, sessionId } })
+    const fell = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(fell(said(0.03))?.usd, 0.03)
+    assert.equal(fell(said(0.01)), undefined, 'a reset is unknown, not $0')
+    assert.equal(fell(said(0.015))?.usd, 0.005, 'and counts on from the new total')
+    const other = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(other(said(0.02))?.usd, 0.02)
+    assert.equal(other(said(0.05, 's2')), undefined, 'a fork may carry the old total')
+    const free = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(free(said(0)), undefined)
+    assert.equal(free(said(0)), undefined, 'an unchanged total is no reported cost')
+    assert.equal(free({ 'claude-code': { sessionId: 's1' } }), undefined)
+    const pi = turnCosts(piCost, 'pi')
+    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), {
+      usd: 0.002,
+      basis: 'reported',
+      source: 'pi',
+    })
+    assert.equal(pi({ pi: { costUsd: 0 } }), undefined, "a model outside pi's prices is estimated")
   })
 })
