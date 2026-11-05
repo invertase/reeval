@@ -20,6 +20,7 @@ import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
+import { promptTokens } from '../src/usage.ts'
 import { replayBridge, withSessionStartHook } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
 import { turnThrough } from './support/harness-agent.ts'
@@ -523,6 +524,73 @@ describe('replay: the OpenCode adapter, from the captured parts', () => {
       .map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
     assert.ok(names(lines.map((l) => l.part)).every((n) => String(n).startsWith('acp_tool_')))
     assert.deepEqual(edits(events(lines)), [])
+  })
+})
+
+// OpenCode's PromptResponse.usage counts `inputTokens` without the cache reads and writes beside
+// it, and its `totalTokens` is every count. Each turn's usage goes from the ACP response, as the
+// bridge maps it, through the adapter and HarnessAgent to reeval's `usage`.
+describe("replay: OpenCode's turn usage, from its PromptResponse.usage", () => {
+  type AcpUsage = Record<string, number>
+  const fixture = (name: string) =>
+    parse(
+      readFileSync(join(testDir, 'fixtures', `opencode-${name}-cached-usage.raw.jsonl`), 'utf8'),
+    )
+  const captures: Record<string, Line[]> = {
+    gemini: fixture('gemini'),
+    anthropic: fixture('anthropic'),
+    telemetry: parse(readFileSync(join(root, 'telemetry', 'opencode.raw.jsonl'), 'utf8')),
+  }
+  const acpOf = (line: Line) =>
+    (line.part.providerMetadata as { acp: { usage: AcpUsage } }).acp.usage
+  /** harness-acp's `mapACPUsage`. */
+  const fromBridge = (acp: AcpUsage) => ({
+    type: 'finish',
+    finishReason: { unified: 'stop', raw: 'end_turn' },
+    totalUsage: {
+      inputTokens: {
+        total: acp.inputTokens,
+        noCache: undefined,
+        cacheRead: acp.cachedReadTokens,
+        cacheWrite: acp.cachedWriteTokens,
+      },
+      outputTokens: { total: acp.outputTokens, text: undefined, reasoning: acp.thoughtTokens },
+      raw: acp,
+    },
+  })
+  const usageOf = async (acp: AcpUsage, translate = true) => {
+    const part = fromBridge(acp)
+    const parts = translate ? new OpenCodeStreamTranslator().push(part) : [part]
+    return (await turnThrough(parts as HarnessV1StreamPart[])).usage
+  }
+  const finishes = (lines: Line[]) => lines.filter((l) => l.part.type === 'finish')
+
+  for (const [name, lines] of Object.entries(captures))
+    test(`${name}: input is OpenCode's inputTokens, and every count adds up to its total`, async () => {
+      assert.ok(finishes(lines).length > 0, 'the capture has a finished turn')
+      for (const line of finishes(lines)) {
+        const acp = acpOf(line)
+        assert.ok(acp.cachedReadTokens > 0, `turn ${line.turn} read the cache`)
+        const usage = await usageOf(acp)
+        assert.ok(usage)
+        assert.deepEqual(usage, {
+          input: acp.inputTokens,
+          output: acp.outputTokens + (acp.thoughtTokens ?? 0),
+          cacheRead: acp.cachedReadTokens,
+          cacheWrite: acp.cachedWriteTokens ?? 0,
+          reasoning: acp.thoughtTokens ?? null,
+        })
+        assert.equal(promptTokens(usage) + usage.output, acp.totalTokens)
+      }
+    })
+
+  test('twin: the bridge alone takes the cache reads out of the input again', async () => {
+    for (const line of finishes(captures.gemini as Line[])) {
+      const acp = acpOf(line)
+      const usage = await usageOf(acp, false)
+      assert.equal(usage?.input, 0)
+      assert.notEqual(promptTokens(usage as never) + (usage?.output ?? 0), acp.totalTokens)
+    }
   })
 })
 

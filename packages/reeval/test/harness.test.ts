@@ -2710,6 +2710,26 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(totalTokens(usage), 4896, "OpenCode's own total, reasoning counted once")
   })
 
+  test("OpenCode: inputTokens is the uncached input, so the cache reads aren't taken out of it", async () => {
+    // A real Gemini turn on OpenCode 2: inputTokens 56088, cachedReadTokens 180368, outputTokens
+    // 308, thoughtTokens 1807, totalTokens 238571. opencode.db's per-message input sums to 56088.
+    const acp = openCodeTurnUsage({
+      inputTokens: { total: 56088, cacheRead: 180368 },
+      outputTokens: { total: 308, reasoning: 1807 },
+      raw: { totalTokens: 238571, inputTokens: 56088, outputTokens: 308, thoughtTokens: 1807 },
+    })
+    const { usage } = await turnThrough(finishWith(acp))
+    assert.deepEqual(usage, {
+      input: 56088,
+      output: 2115,
+      cacheRead: 180368,
+      cacheWrite: 0,
+      reasoning: 1807,
+    })
+    assert.ok(usage)
+    assert.equal(totalTokens(usage), 238571)
+  })
+
   test('a harness that reports neither records null for both', async () => {
     const none = cursorUsage(undefined)
     const { usage, served } = await turnThrough(finishWith(none))

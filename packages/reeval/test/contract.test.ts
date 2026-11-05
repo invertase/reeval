@@ -309,7 +309,9 @@ export const behaviors: Behavior[] = [
         }
         const u = t.usage
         assert.ok(u, `a turn has no usage: ${JSON.stringify(t).slice(0, 300)}`)
-        assert.ok(u.input + u.cacheRead > 0 && u.output > 0, JSON.stringify(u))
+        assert.ok(u.output > 0, JSON.stringify(u))
+        // A turn's new prompt is never in the cache, so its uncached input is never 0.
+        assert.ok(u.input > 0, `no uncached input: ${JSON.stringify(u)}`)
         for (const [k, v] of Object.entries(u))
           assert.ok(v === null || v >= 0, `usage ${k} is ${v}`)
       }
