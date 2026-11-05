@@ -1518,7 +1518,7 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
     )
   })
 
-  test('--profile picks the history store a history command reads, as REEVAL_PROFILE does', async () => {
+  test('--profile picks the history store a command reads, as REEVAL_PROFILE does', async () => {
     const p = await project('profile-history', {
       'reeval.yaml': [
         'harnesses: { kind: fake }',
@@ -1532,17 +1532,18 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
     })
     const local = await runCli(p.dir, ['history'])
     assert.equal(local.code, 0, local.stdout + local.stderr)
-    const notYet =
-      /^reeval: history\.store in reeval\.yaml keeps runs in s3:\/\/runs, and reeval can't read or write a s3\(\) store yet\. Use local\(\) for now\.\n$/
+    const remote =
+      /^reeval: reeval studio reads a local\(\) history only, and history\.store in reeval\.yaml keeps runs in s3:\/\/runs\./
     for (const [args, env] of [
-      [['history', '--profile', 'ci'], {}],
-      [['query', 'eval_trend'], { REEVAL_PROFILE: 'ci' }],
-      [['run', '--profile', 'ci', '--dry-run'], {}],
+      [['studio', 'build', '--profile', 'ci'], {}],
+      [['studio', 'build'], { REEVAL_PROFILE: 'ci' }],
     ] as const) {
       const r = await runCli(p.dir, [...args], { env })
       assert.equal(r.code, 2, r.stdout + r.stderr)
-      assert.match(r.stderr, notYet, args.join(' '))
+      assert.match(r.stderr, remote, args.join(' '))
     }
+    const plan = await runCli(p.dir, ['run', '--profile', 'ci', '--dry-run'])
+    assert.equal(plan.code, 0, plan.stdout + plan.stderr)
     const unknown = await runCli(p.dir, ['show', '--profile', 'nope'])
     assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
     assert.match(unknown.stderr, /Unknown profile "nope"\. Profiles in reeval\.yaml: ci\./)

@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { git, gitText } from './git.ts'
-import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
+import { listRuns, type RecordResult, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
@@ -22,6 +22,17 @@ import {
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
+import {
+  isRemote,
+  markPending,
+  notUploaded,
+  pendingDir,
+  pendingRuns,
+  type RemoteHistory,
+  StoreError,
+  type Uploaded,
+  uploadPending,
+} from './store/sync.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
 import { runCost } from './view/cost.ts'
@@ -121,6 +132,7 @@ export async function record(
   runId: string,
   flags: HistoryFlags,
 ): Promise<string> {
+  const remote = isRemote(config.history) ? config.history : null
   const result = await recordRun({
     root: config.root,
     historyDir: config.history.dir,
@@ -128,7 +140,9 @@ export async function record(
     artifacts: parseLevel(flags.artifacts, config.history.artifacts),
     allowIncomplete: flags['allow-incomplete'],
     skipSecretScan: flags['skip-secret-scan'],
+    committed: !remote,
   })
+  if (remote) return recordRemote(remote, runId, result)
   const where = rel(result.recordPath)
   const ignored =
     result.ignored.length === 0
@@ -156,6 +170,66 @@ export async function record(
     ...ignored,
     recorded,
   ].join('\n')
+}
+
+/** The copy's run uploaded to its store; a StoreError, naming `reeval sync`, if it didn't. */
+async function recordRemote(
+  history: RemoteHistory,
+  runId: string,
+  result: RecordResult,
+): Promise<string> {
+  const name = history.store.name
+  await markPending(history, runId)
+  let uploaded: Uploaded
+  try {
+    uploaded = await uploadPending(history, runId)
+  } catch (error) {
+    if (!(error instanceof StoreError)) throw error
+    throw new StoreError(notUploaded(error, rel(pendingDir(history))))
+  }
+  const kb = (result.bytes / 1024).toFixed(1)
+  const line =
+    uploaded === 'already'
+      ? `${runId} is already recorded in ${name}`
+      : `${uploaded === 'replaced' ? 'updated' : 'recorded'} ${runId} in ${name} (${result.files + 1} files, ${kb} KB)`
+  if (result.droppedPatch.length === 0) return line
+  return [
+    `warning: left worktree.patch out of ${runId}: it looks like it holds a secret.`,
+    ...result.droppedPatch.map((l) => `  ${l}`),
+    "  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work. The record says the patch was left out, so reeval checkout recreates the commit alone.",
+    line,
+  ].join('\n')
+}
+
+/** `reeval sync`: uploads every run recorded into the store's copy that didn't upload. */
+export async function syncCommand(ctx: Ctx): Promise<number> {
+  const history = ctx.config.history
+  if (!isRemote(history)) {
+    ctx.out(`history.store is local(): runs are recorded in ${rel(history.dir)}, nothing to sync`)
+    return 0
+  }
+  const runs = await pendingRuns(history)
+  const failed: string[] = []
+  for (const runId of runs) {
+    try {
+      const done = await uploadPending(history, runId)
+      ctx.out(
+        `${done === 'already' ? 'already in' : 'uploaded to'} ${history.store.name}: ${runId}`,
+      )
+    } catch (error) {
+      if (!(error instanceof StoreError)) throw error
+      failed.push(error.message)
+    }
+  }
+  if (failed.length) {
+    throw new StoreError(notUploaded(new StoreError(failed.join('\n')), rel(pendingDir(history))))
+  }
+  ctx.out(
+    runs.length
+      ? `${runs.length} run(s) in ${history.store.name}`
+      : `nothing to upload to ${history.store.name}`,
+  )
+  return 0
 }
 
 export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {

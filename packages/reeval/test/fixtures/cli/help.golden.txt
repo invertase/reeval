@@ -82,6 +82,9 @@ Usage:
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
+  reeval sync                   Upload the runs recorded to history.store that didn't upload
+                                (kept in .reeval/store/<id>/pending); exit 3 if any still fails
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 measure_effects, skill_reads, flaky_cells, drift, failing_attempts,

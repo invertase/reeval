@@ -310,7 +310,7 @@ async function claimRun(dir: string, runId: string): Promise<() => Promise<void>
  * A record its continuation replaces: the run stopped before it finished, or `next` ran one of
  * its infra errors again and keeps that error in the attempt's `retries`.
  */
-const replaceable = (bytes: Buffer, where: string, next: Buffer) => {
+export const replaceable = (bytes: Buffer, where: string, next: Buffer) => {
   try {
     const was = parseRecord(bytes, where)
     if (was.status === 'interrupted' || was.status === 'budget') return true
@@ -472,6 +472,11 @@ export type RecordOptions = {
   allowIncomplete?: boolean
   /** Skip the last-chance secret scan, for false positives checked by hand. */
   skipSecretScan?: boolean
+  /**
+   * The history folder is committed with git, so it gets its `.gitignore` and `.gitattributes`;
+   * a remote store's copy isn't (default true).
+   */
+  committed?: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -602,10 +607,14 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       )
     }
   }
-  await ensureHistoryGitignore(options.historyDir)
-  await ensureHistoryGitattributes(options.historyDir)
+  const committed = options.committed ?? true
+  if (committed) {
+    await ensureHistoryGitignore(options.historyDir)
+    await ensureHistoryGitattributes(options.historyDir)
+  }
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
+  if (!committed) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }
   const folderFiles = [
     historyGitignorePath(options.historyDir),
     historyGitattributesPath(options.historyDir),

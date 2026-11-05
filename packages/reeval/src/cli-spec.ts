@@ -237,6 +237,14 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 (default dir: .reeval/checkouts/<run>)
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
+  sync: {
+    flags: ['profile'],
+    positionals: 0,
+    help: `
+  reeval sync                   Upload the runs recorded to history.store that didn't upload
+                                (kept in .reeval/store/<id>/pending); exit 3 if any still fails
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
+  },
   query: {
     flags: ['json', 'schema', 'rebuild', 'run', 'profile'],
     positionals: Number.POSITIVE_INFINITY,

@@ -271,6 +271,18 @@ reeval checkout [run] [dir]   A git worktree at the run's commit, with its workt
 
 [//]: # (/generated:cli-help:checkout)
 
+## `reeval sync`
+
+[//]: # (generated:cli-help:sync)
+
+```text
+reeval sync                   Upload the runs recorded to history.store that didn't upload
+                              (kept in .reeval/store/<id>/pending); exit 3 if any still fails
+  --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
+```
+
+[//]: # (/generated:cli-help:sync)
+
 ## `reeval query`
 
 The `reeval query` command runs read-only SQL over recorded and scratch runs. With no argument, the command lists every view and table with example statements. `--run` takes `last`, `latest`, a run id, or a unique prefix of one. `--schema` lists every view, table, and column.

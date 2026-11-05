@@ -70,7 +70,8 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
-import { storeReady } from './store/resolve.ts'
+import { localStudio } from './store/resolve.ts'
+import { storeCredentials } from './store/sync.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
 import type { CursorEfforts, ResolvedConfig, RunContext, SandboxDescriptor } from './types.ts'
@@ -86,9 +87,12 @@ const HISTORY_COMMANDS = {
   checkout: 1,
   query: 1,
   analyze: 1,
+  sync: 1,
 }
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
+/** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
+const INFRA_ERRORS = ['PreflightInfraError', 'StoreError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
@@ -105,7 +109,10 @@ const invocation: {
   flags?: Flags
   runId: string | null
   unhandledErrors: string[]
-  /** The exit 3 is the machine's state (a full disk), not a bug: no `reeval report` hint. */
+  /**
+   * The exit 3 is the machine's state (a full disk) or the history store's, not a bug: no
+   * `reeval report` hint.
+   */
   machineState?: boolean
 } = {
   runId: null,
@@ -196,6 +203,7 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'studio') {
     const config = await historyConfig(configPath, 'studio', values.profile)
+    localStudio(config)
     const { studioCommand } = await import('./studio/command.ts')
     return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
   }
@@ -221,6 +229,8 @@ async function run(argv: string[]): Promise<number> {
         return commands.compareCommand(ctx, filters)
       case 'checkout':
         return commands.checkoutCommand(ctx, filters)
+      case 'sync':
+        return commands.syncCommand(ctx)
       case 'query': {
         const { queryCommand } = await import('./query.ts')
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
@@ -249,9 +259,7 @@ async function historyConfig(
   loadEnvFiles(configPath)
   const named = flag ?? (process.env.REEVAL_PROFILE || undefined)
   const config = await loadConfig(configPath, command, named)
-  const resolved = withProfileHistory(config, selectProfile(config, flag))
-  storeReady(resolved)
-  return resolved
+  return withProfileHistory(config, selectProfile(config, flag))
 }
 
 /** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
@@ -646,7 +654,7 @@ async function runCommand(
     notRun > 0 && !stopped && record.status === 'interrupted'
       ? runOutcome({ ...record, status: 'complete' })
       : outcome
-  const code = stopped
+  let code: number = stopped
     ? stopCode
     : ran === 'fail'
       ? EXIT.failed
@@ -697,7 +705,14 @@ async function runCommand(
     const level = rerecord
       ? { artifacts: (await readRecord(recordFile(config.history.dir, record.runId))).artifacts }
       : {}
-    const line = await recordCmd(config, record.runId, { ...flags, ...allow, ...level })
+    const line = await recordCmd(config, record.runId, { ...flags, ...allow, ...level }).catch(
+      (error: Error) => {
+        if (error.name !== 'StoreError') throw error
+        code = EXIT.infra
+        invocation.machineState = true
+        return red(`reeval: ${redactSecrets(error.message)}`)
+      },
+    )
     if (setup.json) console.error(line)
     else console.log(line)
   } else if (autoRecord && notRun > 0 && !stopped) {
@@ -803,7 +818,11 @@ async function prepareRun(
   }
   const profile = noProfile ? null : selectProfile(loaded, flags.profile)
   const config = withProfileHistory(loaded, profile)
-  storeReady(config)
+  const recording =
+    flags.record ||
+    (profile?.record ?? config.record) === 'always' ||
+    ((profile?.record ?? config.record) === 'ci' && inCI())
+  if (recording && !flags['dry-run']) storeCredentials(config.history)
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)
@@ -1759,13 +1778,12 @@ run(process.argv.slice(2))
     },
     (error: unknown) => {
       const name = (error as Error).name
-      const expected =
-        error instanceof UsageError ||
-        EXPECTED_ERRORS.includes(name) ||
-        name === 'PreflightInfraError'
+      const infra = INFRA_ERRORS.includes(name)
+      if (name === 'StoreError') invocation.machineState = true
+      const expected = error instanceof UsageError || EXPECTED_ERRORS.includes(name) || infra
       console.error(red(`reeval: ${redactSecrets((error as Error).message)}`))
       if (!expected && process.env.REEVAL_DEBUG) console.error(redactSecrets(inspect(error)))
-      const code = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
+      const code = infra ? EXIT.infra : EXIT.usage
       finish(code, error, error instanceof UsageError ? 'usage' : expected ? 'expected' : 'crash')
       process.exitCode = code
     },

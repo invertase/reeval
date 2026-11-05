@@ -1755,6 +1755,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'history.store.s3',
+    area: 'Records and studio',
+    name: "`s3()`: a recorded run uploads to an S3-compatible bucket, the record last and create-only (a resume's or `--retry-errors`' replaces it at the version it read), one retried failure, exit 3 and `reeval sync` when the store keeps failing, keys refused before a run that would record, and `reeval studio` refusing a remote store",
+    unit: ['reeval/test/store.test.ts', 'reeval/test/pack.test.ts'],
+  },
+  {
     id: 'history.logs',
     area: 'Records and studio',
     name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',
