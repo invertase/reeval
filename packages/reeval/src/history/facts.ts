@@ -41,9 +41,9 @@ CREATE TABLE effort_m (
   environment TEXT, n INTEGER, tools_median REAL, tools_q1 REAL, tools_q3 REAL,
   agent_s_median REAL, agent_s_q1 REAL, agent_s_q3 REAL, file_edits_median REAL,
   files_changed_median REAL,
-  tokens_median REAL, tokens_q1 REAL, tokens_q3 REAL,
+  tokens_median REAL, tokens_q1 REAL, tokens_q3 REAL, cost_usd_median REAL,
   control_key TEXT, control_n INTEGER, control_tools_median REAL, control_agent_s_median REAL,
-  control_tokens_median REAL,
+  control_tokens_median REAL, control_cost_usd_median REAL,
   tools_ratio REAL, agent_s_ratio REAL, agent_s_delta REAL, tokens_ratio REAL,
   tools_p REAL, agent_s_p REAL, tokens_p REAL,
   separated INTEGER, time_separated INTEGER, tokens_separated INTEGER,
@@ -158,6 +158,7 @@ type Attempt = {
   tool_ms: number | null
   waiting_ms: number | null
   other_ms: number | null
+  cost_usd: number | null
 }
 
 /** Each fingerprint part's name in `drift.changed` and its `cells` column; every part has one. */
@@ -334,7 +335,7 @@ export function deriveFacts(db: DatabaseSync): void {
     db.prepare(
       `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, case_key, tools, agent_ms, file_edits, files_changed,
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-        model_ms, tool_ms, waiting_ms, other_ms
+        model_ms, tool_ms, waiting_ms, other_ms, cost_usd
        FROM attempts ORDER BY run_id, rowid`,
     ),
   )
@@ -387,6 +388,7 @@ export function deriveFacts(db: DatabaseSync): void {
               },
             }
           : {}),
+        ...(a.cost_usd !== null ? { usd: a.cost_usd } : {}),
       },
     ])
   }
@@ -454,11 +456,13 @@ export function deriveFacts(db: DatabaseSync): void {
       tokens_median: own?.tokens?.median ?? null,
       tokens_q1: own?.tokens?.q1 ?? null,
       tokens_q3: own?.tokens?.q3 ?? null,
+      cost_usd_median: own?.usd?.median ?? null,
       control_key: control?.key ?? null,
       control_n: vs?.control.n ?? null,
       control_tools_median: vs?.control.tools.median ?? null,
       control_agent_s_median: vs ? s1(vs.control.agentMs.median) : null,
       control_tokens_median: vs?.control.tokens?.median ?? null,
+      control_cost_usd_median: vs?.control.usd?.median ?? null,
       tools_ratio: r4(vs?.toolsRatio ?? null),
       agent_s_ratio: r4(vs?.agentMsRatio ?? null),
       agent_s_delta: vs ? s1(vs.agentMsDelta) : null,

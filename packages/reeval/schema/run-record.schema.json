@@ -431,6 +431,10 @@
             "$ref": "#/$defs/ContextFile"
           }
         },
+        "cost": {
+          "description": "The gateway's billed `reportedCostUsd`, else the turns' costs added up; unset when a turn with tokens has none.",
+          "$ref": "#/$defs/CostUsd"
+        },
         "durationMs": {
           "type": "number"
         },
@@ -631,6 +635,10 @@
           "items": {
             "type": "object",
             "properties": {
+              "cost": {
+                "description": "What the harness says the turn cost (Claude Code, pi), else its tokens at the list price of its model (or the cell's); unset when neither is known.",
+                "$ref": "#/$defs/CostUsd"
+              },
               "durationMs": {
                 "type": "number"
               },
@@ -981,6 +989,19 @@
             "$ref": "#/$defs/CellCheck"
           }
         },
+        "cost": {
+          "description": "The cell's attempts' agent and judge costs added up; unset where none has one.",
+          "type": "object",
+          "properties": {
+            "agent": {
+              "$ref": "#/$defs/CostTotal"
+            },
+            "judge": {
+              "$ref": "#/$defs/CostTotal"
+            }
+          },
+          "required": []
+        },
         "effort": {
           "description": "The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.",
           "anyOf": [
@@ -1255,9 +1276,13 @@
       "required": ["path", "sha256"]
     },
     "Cost": {
-      "description": "The tokens the run used, as the harnesses count them; reeval prices nothing.",
+      "description": "The tokens the run used, as the harnesses count them, and what they cost.",
       "type": "object",
       "properties": {
+        "agentUsd": {
+          "description": "The attempts' costs added up; unset when none has one.",
+          "$ref": "#/$defs/CostTotal"
+        },
         "inputTokens": {
           "description": "Prompt tokens, cache reads and writes included.",
           "anyOf": [
@@ -1268,6 +1293,10 @@
               "type": "number"
             }
           ]
+        },
+        "judgeUsd": {
+          "description": "The judge calls' costs added up; unset when none has one.",
+          "$ref": "#/$defs/CostTotal"
         },
         "outputTokens": {
           "anyOf": [
@@ -1295,6 +1324,47 @@
         }
       },
       "required": ["inputTokens", "outputTokens", "source", "usage"]
+    },
+    "CostTotal": {
+      "description": "Costs added up: `basis` is `reported` only when every part was. `unpriced` counts the parts (attempts, or judge calls) that used tokens but have no cost, which `usd` leaves out.",
+      "type": "object",
+      "properties": {
+        "basis": {
+          "description": "`reported`: what the harness (Claude Code, pi) or the gateway (OpenRouter) said it cost; `estimated`: the tokens at list prices, which leave out discounts and long-context rates.",
+          "enum": ["estimated", "reported"]
+        },
+        "source": {
+          "description": "Who reported it (`claude-code`, `pi`, `openrouter`, `fake`), or the prices it was estimated at (`models.dev 2026-11-05`, a `REEVAL_PRICES` file); several, joined with `, `, in a sum.",
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "number"
+        },
+        "usd": {
+          "description": "US dollars.",
+          "type": "number"
+        }
+      },
+      "required": ["basis", "source", "usd"]
+    },
+    "CostUsd": {
+      "description": "A dollar figure and where it came from.",
+      "type": "object",
+      "properties": {
+        "basis": {
+          "description": "`reported`: what the harness (Claude Code, pi) or the gateway (OpenRouter) said it cost; `estimated`: the tokens at list prices, which leave out discounts and long-context rates.",
+          "enum": ["estimated", "reported"]
+        },
+        "source": {
+          "description": "Who reported it (`claude-code`, `pi`, `openrouter`, `fake`), or the prices it was estimated at (`models.dev 2026-11-05`, a `REEVAL_PRICES` file); several, joined with `, `, in a sum.",
+          "type": "string"
+        },
+        "usd": {
+          "description": "US dollars.",
+          "type": "number"
+        }
+      },
+      "required": ["basis", "source", "usd"]
     },
     "EgressPolicy": {
       "description": "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
@@ -2443,6 +2513,10 @@
             "$ref": "#/$defs/JudgeArtifactRef"
           }
         },
+        "cost": {
+          "description": "`costUsd` as reported, else the call's tokens at the judge model's list price; unset when neither is known.",
+          "$ref": "#/$defs/CostUsd"
+        },
         "costUsd": {
           "description": "What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.",
           "type": "number"
@@ -2481,6 +2555,10 @@
         "upstream": {
           "description": "The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.",
           "type": "string"
+        },
+        "usage": {
+          "description": "The call's tokens; unset when the provider reported none, and for the fake judge.",
+          "$ref": "#/$defs/TokenUsage"
         },
         "verdict": {
           "enum": ["fail", "pass"]

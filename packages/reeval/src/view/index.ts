@@ -28,6 +28,7 @@ export type {
 export * from './analysis.ts'
 export * from './capture.ts'
 export * from './compare.ts'
+export * from './cost.ts'
 export * from './debug.ts'
 export * from './effort.ts'
 export * from './family.ts'

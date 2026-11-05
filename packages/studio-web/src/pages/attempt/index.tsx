@@ -8,6 +8,7 @@ import {
   filesChanged,
   findAttempt,
   findEval,
+  formatCost,
   formatDuration,
   formatUsage,
   reasoningLabel,
@@ -162,6 +163,7 @@ export function AttemptPage() {
             {activityLabel(attempt.activity, filesChanged(attempt.changedFiles))}
             {` · reasoning ${reasoningLabel(attempt.activity.reasoningMs)}`}
             {attempt.usage ? ` · ${formatUsage(attempt.usage)} tokens` : ''}
+            {attempt.cost ? ` · ${formatCost(attempt.cost)} from ${attempt.cost.source}` : ''}
             {served.length ? ` · served by ${served.join(', ')}` : ''}
             {attempt.effort
               ? ` · reasoning effort: ${attempt.effort}${attempt.servedEffort && attempt.servedEffort !== attempt.effort ? ` (served ${attempt.servedEffort})` : ''}`

@@ -7,6 +7,8 @@ import type {
   Cell,
   CellGate,
   CompareAnswer,
+  CostTotal,
+  CostUsd,
   EgressRecord,
   EnvironmentRecord,
   EvalCompareMeta,
@@ -124,6 +126,10 @@ export type JudgmentRecord = {
   upstream?: string
   /** What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none. */
   costUsd?: number
+  /** The call's tokens; unset when the provider reported none, and for the fake judge. */
+  usage?: TokenUsage
+  /** `costUsd` as reported, else the call's tokens at the judge model's list price; unset when neither is known. */
+  cost?: CostUsd
   /**
    * `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a
    * verdict can be followed across runs (and an edited question starts a new series). `<index>`
@@ -254,6 +260,11 @@ export type AttemptRecord = {
     usage: TokenUsage | null
     /** The model the harness says served the turn; null when it reports none. */
     model: string | null
+    /**
+     * What the harness says the turn cost (Claude Code, pi), else its tokens at the list price of
+     * its model (or the cell's); unset when neither is known.
+     */
+    cost?: CostUsd
     /** Event types the harness can't report; see `Turn.unreported`. */
     unreported: WebEventType[]
     /** The turn's first error, such as a provider's billing or auth error, cut at 1 KB; else null. */
@@ -284,6 +295,11 @@ export type AttemptRecord = {
   timeSplit?: TimeSplit
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
+  /**
+   * The gateway's billed `reportedCostUsd`, else the turns' costs added up; unset when a turn with
+   * tokens has none.
+   */
+  cost?: CostUsd
   /**
    * Tokens the capture vision loop used. Infrastructure only: never included
    * in `usage`, effort, compare, or lift.
@@ -702,6 +718,8 @@ export type CellRecord = Cell & {
    * gates on that majority. `runs` still counts every planned attempt, the skipped ones included.
    */
   bestOf?: number
+  /** The cell's attempts' agent and judge costs added up; unset where none has one. */
+  cost?: { agent?: CostTotal; judge?: CostTotal }
   runs: number
   pass: number
   fail: number
@@ -759,7 +777,7 @@ export type RunSummary = {
   skipped: number
 }
 
-/** The tokens the run used, as the harnesses count them; reeval prices nothing. */
+/** The tokens the run used, as the harnesses count them, and what they cost. */
 export type Cost = {
   /** Prompt tokens, cache reads and writes included. */
   inputTokens: number | null
@@ -767,6 +785,10 @@ export type Cost = {
   /** The same totals split as each turn reports them. */
   usage: TokenUsage | null
   source: 'reported' | 'unreported'
+  /** The attempts' costs added up; unset when none has one. */
+  agentUsd?: CostTotal
+  /** The judge calls' costs added up; unset when none has one. */
+  judgeUsd?: CostTotal
 }
 
 /**

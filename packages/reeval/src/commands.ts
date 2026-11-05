@@ -1,4 +1,5 @@
 // The run-history commands: record, history, show, compare, checkout.
+
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -23,6 +24,7 @@ import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { runCost } from './view/cost.ts'
 import type { LiveRun } from './view/live.ts'
 import type { TranscriptLine } from './view/model.ts'
 import { suiteResult } from './view/suite.ts'
@@ -339,6 +341,7 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
         suite: suiteResult(record),
         unreachable: unreachable(e, reach),
         status: record.status,
+        cost: runCost(record.cost),
       }
     }
     const input = {

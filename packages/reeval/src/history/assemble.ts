@@ -63,6 +63,7 @@ import { promptTokens, sumUsage } from '../usage.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
 import { checkTallies, discrimination, foldCases } from './cases.ts'
+import { withCosts } from './cost.ts'
 import { familiesOf, pooledPassRate } from './families.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -1087,6 +1088,7 @@ async function attemptEvidence(
       ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
       ...(t.reasoningMs !== undefined ? { reasoningMs: t.reasoningMs } : {}),
       ...(t.timeSplit ? { timeSplit: t.timeSplit } : {}),
+      ...(t.cost ? { cost: t.cost } : {}),
       text: turnText(t.text),
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
@@ -1549,5 +1551,5 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
       : {}),
   }
-  return { record: foldCases(record), artifacts: out.files, moves: out.moves }
+  return { record: await withCosts(foldCases(record)), artifacts: out.files, moves: out.moves }
 }

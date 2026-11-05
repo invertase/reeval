@@ -10,6 +10,7 @@ import type {
   JudgeModel,
   JudgeOptions,
   JudgeState,
+  TokenUsage,
   Verdict,
 } from '../types.ts'
 import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
@@ -177,7 +178,12 @@ export function judgeRoute(
 }
 
 /** A verdict plus the transient failures retried on the way to it. */
-export type JudgeResult = { verdict: Verdict; retries: JudgeRetry[] }
+export type JudgeResult = {
+  verdict: Verdict
+  retries: JudgeRetry[]
+  /** The call's tokens; null when the provider reported none, and for the fake judge. */
+  usage: TokenUsage | null
+}
 
 /** Transient provider errors (429, 5xx, "high demand") are retried with backoff and recorded. */
 export async function runJudge(
@@ -205,6 +211,7 @@ export async function runJudge(
   let resolvedModel: string | undefined
   let billing: { upstream?: string; costUsd?: number } = {}
   let retries: JudgeRetry[] = []
+  let usage: TokenUsage | null = null
   if (isFakeJudge(model)) {
     score = typeof model.score === 'function' ? model.score(state) : model.score
   } else {
@@ -228,9 +235,10 @@ export async function runJudge(
       retry,
       signal,
     )
-    const { score: scoredAt, resolvedModel: served, ...billed } = scored.value
+    const { score: scoredAt, resolvedModel: served, usage: used, ...billed } = scored.value
     score = scoredAt
     resolvedModel = served
+    usage = used
     billing = billed
     retries = scored.retries
   }
@@ -244,5 +252,5 @@ export async function runJudge(
     ...(gateway && typeof model === 'string' ? { gateway } : {}),
     ...billing,
   }
-  return { verdict, retries }
+  return { verdict, retries, usage }
 }

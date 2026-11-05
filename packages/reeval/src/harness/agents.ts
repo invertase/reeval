@@ -183,6 +183,12 @@ export type Agent = Layout & {
    */
   unreported?: (harnessMetadata: unknown) => WebEventType[]
   /**
+   * What the agent said its turn cost, in US dollars, from the turn's `finish` part's
+   * `harnessMetadata`. `session` names a running total over the session's turns (Claude Code's
+   * `total_cost_usd`), so the turn's cost is the rise since the session's last turn.
+   */
+  reportedCost?: (harnessMetadata: unknown) => { usd: number; session?: string } | undefined
+  /**
    * How the agent's reasoning reaches reeval, which decides whether a turn's reasoning time is
    * measured: `streamed`, as the model produces it, so each block is timed; `recovered`, read
    * back from the agent's stored conversation after the turn, with the time the agent stored
@@ -334,6 +340,25 @@ export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
   const meta = harnessMetadata as { cursorSdk?: { unreportedTools?: unknown } } | undefined
   const tools = meta?.cursorSdk?.unreportedTools
   return Array.isArray(tools) ? tools.flatMap((t) => (WEB_EVENTS[t] ? [WEB_EVENTS[t]] : [])) : []
+}
+
+const usdIn = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined
+
+/** Claude Code's `total_cost_usd`, its session's cost so far, as its bridge reports it. */
+export function claudeCodeCost(harnessMetadata: unknown) {
+  const meta = (
+    harnessMetadata as { 'claude-code'?: { costUsd?: unknown; sessionId?: unknown } }
+  )?.['claude-code']
+  const usd = usdIn(meta?.costUsd)
+  if (usd === undefined) return undefined
+  return { usd, session: typeof meta?.sessionId === 'string' ? meta.sessionId : '' }
+}
+
+/** The sum of the turn's model calls' `cost.total`, which pi prices itself. */
+export function piCost(harnessMetadata: unknown) {
+  const usd = usdIn((harnessMetadata as { pi?: { costUsd?: unknown } })?.pi?.costUsd)
+  return usd === undefined ? undefined : { usd }
 }
 
 /**
@@ -1059,6 +1084,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     reasoning: 'streamed',
     reasoningTokens: true,
     subagentCalls: true,
+    reportedCost: claudeCodeCost,
     credential: 'ANTHROPIC_API_KEY',
     // A Claude subscription's token from `claude setup-token`, which the CLI sends as a Bearer
     // token on the same endpoints. ANTHROPIC_AUTH_TOKEN isn't one: it's a gateway's key, which
@@ -1242,6 +1268,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     platforms: ['linux', 'darwin'],
     reasoning: 'streamed',
     reasoningTokens: true,
+    reportedCost: piCost,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The only request pi sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,

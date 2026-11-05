@@ -392,7 +392,7 @@ export function checkBudget(budget: unknown, where: string, file: string): Budge
   }
   if ('usd' in budget || 'tokens' in budget) {
     throw new UsageError(
-      `${where}.${'usd' in budget ? 'usd' : 'tokens'} in ${file} isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
+      `${where}.${'usd' in budget ? 'usd' : 'tokens'} in ${file} isn't supported yet: reeval records the tokens and cost of each attempt, but enforces no cost or token budget. Cap the run with attempts or duration.`,
     )
   }
   unknownKey(budget, ['attempts', 'duration'], where, file)

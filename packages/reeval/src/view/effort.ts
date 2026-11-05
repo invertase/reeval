@@ -1,11 +1,11 @@
-// Effort next to lift: tool calls, agent time, and tokens per cell, and a variant's against
+// Effort next to lift: tool calls, agent time, tokens and cost per cell, and a variant's against
 // its control. Pass rate can't tell a skill that makes the agent 4× cheaper from no skill at
-// all when both pass, so effort is reported with its own test and verdict. No USD: prices
-// aren't reeval's to know.
+// all when both pass, so effort is reported with its own test and verdict.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
 import type { TimeSplit } from '../types.ts'
 import { formatTokens, totalTokens } from '../usage.ts'
+import { formatUsd } from './cost.ts'
 
 /** Below this two-sided p, an effort difference is an effect. */
 export const EFFORT_ALPHA = 0.05
@@ -24,6 +24,8 @@ export type EffortSample = {
   tokens?: number
   /** Where its agent time went; omitted for an attempt recorded without it. */
   split?: TimeSplit
+  /** The agent's cost in US dollars (`cost.usd`); omitted when the attempt has none. */
+  usd?: number
 }
 export type Spread = { median: number; q1: number; q3: number }
 /** One cell's effort over its counted attempts (passes and fails; infra errors and skips aren't). */
@@ -42,6 +44,8 @@ export type CellEffort = {
    * omitted when none does. `modelMs` is null when any of them saw no model calls.
    */
   split?: TimeSplit
+  /** The agent's cost in US dollars over the counted attempts that have one; omitted when none does. */
+  usd?: Spread
 }
 
 /**
@@ -85,7 +89,7 @@ export type EffortContrast = {
 }
 
 export const effortSample = (
-  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage' | 'changedFiles' | 'timeSplit'>,
+  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage' | 'changedFiles' | 'timeSplit' | 'cost'>,
 ): EffortSample => ({
   tools: a.activity.tools,
   agentMs: a.timings.agentMs,
@@ -93,6 +97,7 @@ export const effortSample = (
   filesChanged: filesChanged(a.changedFiles),
   ...(a.usage ? { tokens: totalTokens(a.usage) } : {}),
   ...(a.timeSplit ? { split: a.timeSplit } : {}),
+  ...(a.cost ? { usd: a.cost.usd } : {}),
 })
 
 /** The files the workspace diff changed, a collapsed directory counting each of its files. */
@@ -128,6 +133,7 @@ export function effortOf(samples: EffortSample[]): CellEffort | null {
   if (samples.length === 0) return null
   const tokens = tokenValues(samples)
   const split = splitOf(samples)
+  const usd = samples.flatMap((s) => (s.usd === undefined ? [] : [s.usd]))
   return {
     n: samples.length,
     tools: spread(samples.map((s) => s.tools)),
@@ -136,6 +142,7 @@ export function effortOf(samples: EffortSample[]): CellEffort | null {
     filesChanged: median(samples.map((s) => s.filesChanged)) ?? 0,
     ...(tokens.length ? { tokens: spread(tokens) } : {}),
     ...(split ? { split } : {}),
+    ...(usd.length ? { usd: spread(usd) } : {}),
   }
 }
 
@@ -334,23 +341,33 @@ export function effortLabel(c: EffortContrast): string {
       `tokens ${formatTokens(c.variant.tokens.median)} vs ${formatTokens(c.control.tokens.median)} ${r('tokens', c.tokensRatio)}`,
     )
   }
+  if (c.variant.usd && c.control.usd) {
+    const [vu, cu] = [c.variant.usd.median, c.control.usd.median]
+    parts.push(`cost ${formatUsd(vu)} vs ${formatUsd(cu)} (${formatRatio(ratio(vu, cu))})`)
+  }
   const n = apartOn.size ? ` (n = ${c.variant.n} vs ${c.control.n})` : ''
   return `${parts.join(', ')}: ${toolsVerdictText(c)}${tokensVerdictText(c)}${n}`
 }
 
-/** One cell's effort on its own: `tools 43 · agent 46s`, plus tokens when any attempt reported them. */
-export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>) =>
-  e.tokens
-    ? `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)} · tokens ${formatTokens(e.tokens.median)}`
-    : `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)}`
+/**
+ * One cell's effort on its own: `tools 43 · agent 46s`, plus tokens and cost when any attempt
+ * reported them.
+ */
+export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'usd'>) =>
+  [
+    `tools ${formatCount(e.tools.median)}`,
+    `agent ${formatSeconds(e.agentMs.median)}`,
+    ...(e.tokens ? [`tokens ${formatTokens(e.tokens.median)}`] : []),
+    ...(e.usd ? [`cost ${formatUsd(e.usd.median)}`] : []),
+  ].join(' · ')
 
 /**
  * The same cell between two runs: `tools 44 → 10 (×0.23) · agent 45s → 21s (×0.47)`, then
  * `waiting 0s → 1m 21s` when either side waited on a background job.
  */
 export function effortChangeLabel(
-  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split'>,
-  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split'>,
+  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split' | 'usd'>,
+  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split' | 'usd'>,
 ): string {
   const waited = base.split && head.split && (base.split.waitingMs || head.split.waitingMs)
   const waiting = waited
@@ -360,15 +377,26 @@ export function effortChangeLabel(
 }
 
 function effortCore(
-  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
-  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
+  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'usd'>,
+  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'usd'>,
 ): string {
   const t = ratio(head.tools.median, base.tools.median)
   const a = ratio(head.agentMs.median, base.agentMs.median)
   const [ba, ha] = [base.agentMs.median, head.agentMs.median]
   const agent = `agent ${formatSeconds(ba)} → ${formatSeconds(ha)}${bothUnderATenth(ba, ha) ? '' : ` (${formatRatio(a)})`}`
   const core = `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · ${agent}`
-  if (!base.tokens || !head.tokens) return core
-  const tok = ratio(head.tokens.median, base.tokens.median)
-  return `${core} · tokens ${formatTokens(base.tokens.median)} → ${formatTokens(head.tokens.median)} (${formatRatio(tok)})`
+  const parts = [core]
+  if (base.tokens && head.tokens) {
+    const tok = ratio(head.tokens.median, base.tokens.median)
+    parts.push(
+      `tokens ${formatTokens(base.tokens.median)} → ${formatTokens(head.tokens.median)} (${formatRatio(tok)})`,
+    )
+  }
+  if (base.usd && head.usd) {
+    const usd = ratio(head.usd.median, base.usd.median)
+    parts.push(
+      `cost ${formatUsd(base.usd.median)} → ${formatUsd(head.usd.median)} (${formatRatio(usd)})`,
+    )
+  }
+  return parts.join(' · ')
 }

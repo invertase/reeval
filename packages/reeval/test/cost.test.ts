@@ -17,8 +17,13 @@ import {
   usdOf,
 } from '../src/cost.ts'
 import { UsageError } from '../src/errors.ts'
+import { turnCosts } from '../src/harness/agent.ts'
+import { claudeCodeCost, piCost } from '../src/harness/agents.ts'
+import { priceRecord, pricerOf } from '../src/history/cost.ts'
+import type { RunRecord } from '../src/history/types.ts'
 import { loadPrices, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
+import { formatCost, formatUsd } from '../src/view/cost.ts'
 
 const FLASH: Price = [0.75, 0.075, 0.75, 3.75]
 const TABLE: Record<string, Price> = {
@@ -59,6 +64,21 @@ describe('priceFor', () => {
   test('prices reasoning as part of output, never on top of it', () => {
     const tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 }
     assert.equal(usdOf({ ...tokens, reasoning: 800_000 }, FLASH), usdOf(tokens, FLASH))
+  })
+
+  test('bills reasoning at its own rate when the price has one', () => {
+    const tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000, reasoning: 400_000 }
+    assert.equal(usdOf(tokens, [1, 0.1, 1, 4, 10]), 0.6 * 4 + 0.4 * 10)
+    assert.equal(usdOf({ ...tokens, reasoning: null }, [1, 0.1, 1, 4, 10]), 4)
+  })
+
+  test("matches Anthropic's dashed and dated ids from a dotted or dated one", () => {
+    const sonnet: Price = [3, 0.3, 3.75, 15]
+    const table = { 'claude-sonnet-5-5': sonnet, 'claude-haiku-5': [1, 0.1, 1.25, 5] as Price }
+    assert.deepEqual(priceFor('claude-sonnet-5.5', table), sonnet)
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-5.5-high', table), sonnet)
+    assert.deepEqual(priceFor('claude-haiku-5-20261001', table), table['claude-haiku-5'])
+    assert.deepEqual(priceFor('claude-haiku-5-2026-10-01', table), table['claude-haiku-5'])
   })
 
   test('is null for a model without an exact price, rather than a near one', () => {
@@ -352,7 +372,7 @@ describe('loadPrices', () => {
     }
     await refused(
       JSON.stringify({ 'composer-2.5': { input: 0.5, cacheRead: 0.05, output: 2.5 } }),
-      /composer-2\.5 has cacheRead, which isn't one of input, output, cache_read, cache_write$/,
+      /composer-2\.5 has cacheRead, which isn't one of input, output, cache_read, cache_write, reasoning$/,
     )
     for (const top of ['[{"input":1,"output":1}]', 'null', '3', '"composer-2.5"']) {
       await refused(top, /must be a JSON object of prices by model id/)
@@ -604,6 +624,146 @@ console.log(JSON.stringify(p.table))`
       'gemini-3.8-flash': FLASH,
       'anthropic/claude-sonnet-5.5': [3, 3, 3, 15],
       'x-ai/grok-4.6': [2, 2, 2, 6],
+    })
+  })
+})
+
+describe('record costs', () => {
+  const usage = { input: 1000, output: 500, cacheRead: 2000, cacheWrite: 0, reasoning: null }
+  const pricer = pricerOf({
+    table: { 'claude-sonnet-5': [2, 0.2, 2.5, 10], 'gemini-3.8-flash': FLASH },
+    overlay: { 'my-model': [1, 1, 1, 1] },
+    file: 'prices.json',
+    modelsDev: { fetchedAt: '2026-11-05T09:00:00Z', stale: false },
+  })
+  const turn = (model: string | null, extra: object = {}) => ({ usage, model, ...extra })
+  const record = (attempts: object[], judgements: object[] = []) =>
+    ({
+      cost: { inputTokens: null, outputTokens: null, usage: null, source: 'unreported' },
+      evals: [
+        {
+          cells: [{ key: 'a', model: 'claude-sonnet-5' }],
+          attempts: attempts.map((a) => ({ cell: 'a', usage, judgements, ...a })),
+        },
+      ],
+    }) as unknown as RunRecord
+
+  test('a reported cost wins; else the served model, then the cell model, at its list price', () => {
+    const run = priceRecord(
+      record([
+        { turns: [turn('claude-sonnet-5', { cost: { usd: 1, basis: 'reported', source: 'pi' } })] },
+        { turns: [turn('my-model'), turn(null)] },
+      ]),
+      pricer,
+    )
+    const [reported, estimated] = run.evals[0]?.attempts ?? []
+    assert.deepEqual(reported?.cost, { usd: 1, basis: 'reported', source: 'pi' })
+    assert.deepEqual(
+      estimated?.turns.map((t) => t.cost),
+      [
+        { usd: 0.0035, basis: 'estimated', source: 'prices.json' },
+        { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' },
+      ],
+    )
+    assert.deepEqual(estimated?.cost, {
+      usd: 0.0109,
+      basis: 'estimated',
+      source: 'prices.json, models.dev 2026-11-05',
+    })
+    assert.deepEqual(run.evals[0]?.cells[0]?.cost?.agent, {
+      usd: 1.0109,
+      basis: 'estimated',
+      source: 'pi, prices.json, models.dev 2026-11-05',
+    })
+  })
+
+  test('an unlisted model has no cost, never $0, and a total counts it unpriced', () => {
+    const run = priceRecord(
+      record([{ turns: [turn('composer-2.5')] }, { turns: [turn('claude-sonnet-5')] }]),
+      pricer,
+    )
+    const [unknown] = run.evals[0]?.attempts ?? []
+    assert.equal(unknown?.turns[0]?.cost, undefined)
+    assert.equal(unknown?.cost, undefined)
+    assert.deepEqual(run.cost.agentUsd, {
+      usd: 0.0074,
+      basis: 'estimated',
+      source: 'models.dev 2026-11-05',
+      unpriced: 1,
+    })
+    const partly = priceRecord(
+      record([{ turns: [turn('composer-2.5'), turn('claude-sonnet-5')] }]),
+      pricer,
+    )
+    assert.equal(partly.evals[0]?.attempts[0]?.cost, undefined, 'a partly priced attempt has none')
+    assert.equal(
+      priceRecord(record([{ turns: [turn('claude-sonnet-5')] }]), null).cost.agentUsd,
+      undefined,
+    )
+  })
+
+  test("OpenRouter's billed cost is the attempt's and the judge call's", () => {
+    const run = priceRecord(
+      record(
+        [{ turns: [turn('claude-sonnet-5')], reportedCostUsd: 0.5 }],
+        [
+          { model: 'claude-sonnet-5', costUsd: 0.01 },
+          { model: 'claude-sonnet-5', usage },
+          { model: 'fake' },
+        ],
+      ),
+      pricer,
+    )
+    const attempt = run.evals[0]?.attempts[0]
+    assert.deepEqual(attempt?.cost, { usd: 0.5, basis: 'reported', source: 'openrouter' })
+    assert.deepEqual(
+      attempt?.judgements.map((j) => j.cost),
+      [
+        { usd: 0.01, basis: 'reported', source: 'openrouter' },
+        { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' },
+        undefined,
+      ],
+    )
+    assert.deepEqual(run.cost.judgeUsd, {
+      usd: 0.0174,
+      basis: 'estimated',
+      source: 'openrouter, models.dev 2026-11-05',
+    })
+    assert.deepEqual(priceRecord(run, pricer), run, 'pricing a priced record changes nothing')
+  })
+
+  test('formats dollars to two significant figures under $1 and says what was estimated', () => {
+    assert.equal(
+      formatCost({ usd: 0.2574, basis: 'estimated', source: 'x', unpriced: 1 }),
+      '$0.26 (est., 1 unpriced)',
+    )
+    assert.equal(formatCost({ usd: 12.4, basis: 'reported', source: 'x' }), '$12.40')
+    assert.equal(formatUsd(0.0074), '$0.0074')
+    assert.equal(formatUsd(0.00000012), '<$0.0001')
+    assert.equal(formatCost(undefined), '')
+  })
+
+  test("Claude Code's running session total becomes each turn's own cost", () => {
+    const cost = turnCosts(claudeCodeCost, 'claude-code')
+    const said = (costUsd: number, sessionId = 's1') => ({ 'claude-code': { costUsd, sessionId } })
+    assert.deepEqual(cost(said(0.0207876)), {
+      usd: 0.0207876,
+      basis: 'reported',
+      source: 'claude-code',
+    })
+    assert.equal(cost(said(0.0339271))?.usd.toFixed(7), '0.0131395')
+    assert.equal(cost(said(0.004, 's2'))?.usd, 0.004, 'a new session starts from zero')
+    assert.equal(cost({ 'claude-code': { sessionId: 's1' } }), undefined)
+    const pi = turnCosts(piCost, 'pi')
+    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), {
+      usd: 0.002,
+      basis: 'reported',
+      source: 'pi',
+    })
+    assert.deepEqual(pi({ pi: { costUsd: 0.003 } }), {
+      usd: 0.003,
+      basis: 'reported',
+      source: 'pi',
     })
   })
 })

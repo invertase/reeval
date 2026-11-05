@@ -48,6 +48,7 @@ import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
+import { seedModelsDev } from './support/cost.ts'
 import {
   fakeDigest,
   fakeTart,
@@ -4094,6 +4095,52 @@ export const features: Feature[] = [
         /· 1 tool call, 1 file changed$/,
         "the eval's own write isn't the turn's",
       )
+    },
+  },
+  {
+    dir: 'run/cost',
+    tiers: ['fake'],
+    env: '-',
+    prepare: seedModelsDev,
+    hostEnv: (dir) => ({ XDG_CACHE_HOME: join(dir, '.cache'), REEVAL_PRICES: '' }),
+    canary: /expected null not to be null/,
+    evals: {
+      lands: {
+        outcome: 'pass',
+        attempts: ['reporter/-/fake#1', 'listed/-/fake#1', 'unknown/-/fake#1'],
+      },
+      canary: {
+        outcome: 'fail',
+        attempts: ['silent/-/fake#1'],
+        error: { kind: 'assertion', message: /expected null not to be null/ },
+        clean: [],
+      },
+    },
+    record: ({ run, stdout }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      const of = (id: string) => lands?.attempts.find((a) => a.id.startsWith(`${id}/`))
+      const reported = { usd: 0.25, basis: 'reported', source: 'fake' }
+      assert.deepEqual(of('reporter')?.turns[0]?.cost, reported, "the harness's cost wins")
+      assert.deepEqual(of('reporter')?.cost, reported)
+      const today = new Date().toISOString().slice(0, 10)
+      // 1,000 in at $2, 2,000 cache reads at $0.20 and 500 out at $10 per million.
+      const estimated = { usd: 0.0074, basis: 'estimated', source: `models.dev ${today}` }
+      assert.deepEqual(of('listed')?.turns[0]?.cost, estimated, 'priced at the served model')
+      assert.deepEqual(of('listed')?.cost, estimated)
+      assert.equal(
+        of('unknown')?.turns[0]?.cost,
+        undefined,
+        'an unlisted model costs nothing known',
+      )
+      assert.equal(of('unknown')?.cost, undefined)
+      assert.deepEqual(run.cost.agentUsd, {
+        usd: 0.2574,
+        basis: 'estimated',
+        source: `fake, models.dev ${today}`,
+        unpriced: 1,
+      })
+      assert.equal(run.cost.judgeUsd, undefined)
+      assert.match(stdout, /^Done in .* · \$0\.26 \(est\., 1 unpriced\)$/m)
     },
   },
   {

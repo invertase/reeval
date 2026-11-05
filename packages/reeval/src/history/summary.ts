@@ -2,6 +2,7 @@ import { clip, fenced, formatDuration, plural } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
+import { formatCost, sumCosts } from '../view/cost.ts'
 import { filesChanged, splitLabel } from '../view/effort.ts'
 import { checkLabels, checkTries, commandLine, labeledJudgments } from '../view/judgments.ts'
 import {
@@ -199,6 +200,8 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     `- Time: setup ${formatDuration(t.setupMs)} · agent ${formatDuration(t.agentMs)} · checks ${formatDuration(t.checksMs)} · judge ${formatDuration(t.judgeMs)}`,
   )
   if (a.timeSplit) lines.push(`- Agent time: ${splitLabel(a.timeSplit)}`)
+  const cost = costLine(a)
+  if (cost) lines.push(`- Cost: ${cost}`)
   const act = a.activity
   const web = (n: number | null, what: string) =>
     n === null ? `${what} not reported` : `${n} ${what}`
@@ -264,4 +267,18 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   if (snapshots.length) {
     lines.push(`- Snapshots (in .reeval/runs, never recorded): ${snapshots.join(' · ')}`)
   }
+}
+
+/** `agent $0.021 (est.) · judge $0.0004 · from models.dev 2026-11-05, openrouter`; null without one. */
+export function costLine(a: Pick<AttemptRecord, 'cost' | 'judgements'>): string | null {
+  const judge = sumCosts(a.judgements.map((j) => ({ cost: j.cost, used: !!j.usage })))
+  if (!a.cost && !judge) return null
+  const sources = new Set([a.cost, judge].flatMap((c) => c?.source.split(', ') ?? []))
+  return [
+    a.cost && `agent ${formatCost(a.cost)}`,
+    judge && `judge ${formatCost(judge)}`,
+    `from ${[...sources].join(', ')}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }

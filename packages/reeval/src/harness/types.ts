@@ -1,6 +1,13 @@
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type { PluginPart, TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
+import type {
+  CostUsd,
+  PluginPart,
+  TokenUsage,
+  TranscriptEvent,
+  TurnStatus,
+  WebEventType,
+} from '../types.ts'
 import type { ProviderStop } from './provider-stop.ts'
 
 export type HarnessResult = {
@@ -27,6 +34,8 @@ export type HarnessResult = {
    * harness's `turnMs` sets it.
    */
   agentMs?: number
+  /** What the harness said the turn cost, when it says. */
+  cost?: CostUsd
   /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
   /**

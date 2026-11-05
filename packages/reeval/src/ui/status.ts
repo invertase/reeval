@@ -34,10 +34,12 @@
 //   per harness when several); one item prints on the `Worth knowing:` line itself.
 //
 // Only the cells that decide the outcome count: the gated ones, or every cell of a study.
+
 import stringWidth from 'string-width'
 import type { RunRecord } from '../history/types.ts'
 import { clip, formatDuration, plural } from '../text.ts'
 import type { ErrorKind } from '../types.ts'
+import { formatCost, runCost } from '../view/cost.ts'
 import { formatUsage } from '../view/model.ts'
 import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
@@ -1029,6 +1031,7 @@ export function statusList(input: ListInput): StatusList {
     `Done in ${formatDuration(record.durationMs)}`,
     tallyText(suite) || 'nothing ran',
     tokens,
+    formatCost(runCost(record.cost)),
   ]
     .filter(Boolean)
     .join(' · ')

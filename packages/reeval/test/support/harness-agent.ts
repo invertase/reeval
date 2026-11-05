@@ -1,7 +1,8 @@
 import type { HarnessV1, HarnessV1StreamPart } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { observed, tokenUsage } from '../../src/harness/agent.ts'
+import { observed } from '../../src/harness/agent.ts'
 import { errorText, type StampedPart } from '../../src/harness/transcript.ts'
+import { tokenUsage } from '../../src/usage.ts'
 
 /**
  * A harness that emits `parts` for every turn, through a real HarnessAgent, as reeval drives it.
