@@ -100,6 +100,10 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
   Which artifacts sit next to this record. Refs to files that weren't kept are removed.
 </Property>
 
+<Property name="debug" type="RunDebug" optional>
+  The attempts' debug data uploaded with the run to its store (`history.debug`), each file by its path in `.reeval/debug/<run>/` (`<eval>/<cell>/<n>/requests.ndjson`); absent when none was.
+</Property>
+
 <Property name="redaction" type="{version: 1}"></Property>
 
 <Property name="summary" type="RunSummary"></Property>

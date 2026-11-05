@@ -6,7 +6,8 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { UsageError } from '../errors.ts'
-import { recordFile, replaceable, runDir } from '../history/files.ts'
+import { filesUnder, recordFile, replaceable, runDir } from '../history/files.ts'
+import type { RunRecord } from '../history/types.ts'
 import { randomSuffix, sha256 } from '../ids.ts'
 import type { HistoryStore, ResolvedHistory, S3StoreDescriptor, StoredRun } from '../types.ts'
 import { S3_ENV_DEFAULTS, unsafePath } from './resolve.ts'
@@ -45,6 +46,10 @@ export function storeCredentials(history: ResolvedHistory): void {
 /** `.reeval/store/<id>/pending`: the runs recorded into the copy that haven't uploaded yet. */
 export const pendingDir = (history: RemoteHistory) => join(dirname(history.dir), 'pending')
 
+/** `.reeval/store/<id>/debug/<run>`: the debug data a pending run uploads with it. */
+export const debugStaging = (history: RemoteHistory, runId: string) =>
+  join(dirname(history.dir), 'debug', runId)
+
 /**
  * The runs marked for upload. A marker whose run never reached the copy (the recording stopped in
  * between) is dropped: there's nothing to upload.
@@ -54,20 +59,12 @@ export async function pendingRuns(history: RemoteHistory): Promise<string[]> {
   const runs: string[] = []
   for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
     if (existsSync(recordFile(history.dir, name))) runs.push(name)
-    else await unmarkPending(history, name)
+    else {
+      await unmarkPending(history, name)
+      await rm(debugStaging(history, name), { recursive: true, force: true })
+    }
   }
   return runs
-}
-
-async function filesUnder(dir: string, at = ''): Promise<Array<[string, Uint8Array]>> {
-  const entries = await readdir(join(dir, at), { withFileTypes: true }).catch(() => [])
-  const out: Array<[string, Uint8Array]> = []
-  for (const entry of entries) {
-    const path = at ? `${at}/${entry.name}` : entry.name
-    if (entry.isDirectory()) out.push(...(await filesUnder(dir, path)))
-    else if (entry.isFile()) out.push([path, await readFile(join(dir, path))])
-  }
-  return out
 }
 
 /**
@@ -125,7 +122,11 @@ export async function uploadRun(history: RemoteHistory, runId: string): Promise<
   const store = storeOf(history)
   const record = await readFile(recordFile(history.dir, runId))
   const run = { runId, record, files: new Map(await filesUnder(runDir(history.dir, runId))) }
+  const debug = await stagedDebug(history, runId, record)
   try {
+    for (const [path, bytes] of debug) {
+      await tries(() => store.addFile(runId, `debug/${path}`, bytes))
+    }
     return await tries(async () => {
       const created = await store.writeRun(run, {})
       if (created.ok) return { how: 'uploaded' as const, version: created.version }
@@ -147,6 +148,23 @@ export async function uploadRun(history: RemoteHistory, runId: string): Promise<
     if (error instanceof UsageError || error instanceof StoreError) throw error
     throw new StoreError(`couldn't upload ${runId} to ${store.name}: ${reason(error, history)}`)
   }
+}
+
+/** The debug files the record names, from where recording staged them, each checked. */
+async function stagedDebug(history: RemoteHistory, runId: string, record: Buffer) {
+  const { debug } = JSON.parse(record.toString()) as RunRecord
+  const files: Array<[string, Uint8Array]> = []
+  for (const ref of debug?.files ?? []) {
+    const file = join(debugStaging(history, runId), ...ref.path.split('/'))
+    const bytes = await readFile(file).catch(() => null)
+    if (!bytes || sha256(bytes) !== ref.sha256) {
+      throw new StoreError(
+        `${runId}'s debug file ${ref.path} is ${bytes ? 'changed' : 'missing'} in ${debugStaging(history, runId)}, so it can't upload as recorded`,
+      )
+    }
+    files.push([ref.path, bytes])
+  }
+  return files
 }
 
 /**
@@ -172,6 +190,7 @@ export async function uploadPending(history: RemoteHistory, runId: string): Prom
     state.versions[runId] = version
   })
   await unmarkPending(history, runId)
+  await rm(debugStaging(history, runId), { recursive: true, force: true })
   return how
 }
 

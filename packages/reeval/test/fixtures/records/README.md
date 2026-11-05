@@ -57,6 +57,7 @@ config API like any other project.
 | `before-retry-errors` | The corpus project's fake-harness runs from before `evals[].attempts[].retries` (the infra errors an attempt ended with before `reeval run --retry-errors` or `--resume` ran it again) |
 | `before-vm-image` | The fake harness in `tart()` on the fake `tart`, from before `evals[].attempts[].vmImage` (the image an attempt's VM was cloned from, with its digest), when a run pulled the image itself |
 | `with-vm-image` | The same run with `evals[].attempts[].vmImage`, its digest also the cell's `fingerprintParts.image` |
+| `before-debug-upload` | The corpus project's fake-harness runs from before `debug` (each attempt's debug data uploaded with the run to a remote store, `history.debug`) |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

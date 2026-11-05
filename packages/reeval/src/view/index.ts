@@ -13,6 +13,7 @@ export type {
   HistoryCell,
   HistoryEntry,
   JudgmentRecord,
+  RunDebug,
   RunRecord,
   StackSummary,
 } from '../history/types.ts'

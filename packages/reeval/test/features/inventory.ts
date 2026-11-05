@@ -1767,6 +1767,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/store.test.ts'],
   },
   {
+    id: 'history.debug',
+    area: 'Records and studio',
+    name: "`history.debug`: each attempt's `requests.ndjson` (`'requests'`) or all its debug data (`'all'`) uploads with the run to a remote store under a `debug/` prefix of its own, rescanned for secrets (a finding leaves the file out and names it in `record.debug.dropped`), staged so `reeval sync` still uploads it after `.reeval/debug` is pruned; refused on `local()`",
+    unit: ['reeval/test/store.test.ts'],
+  },
+  {
     id: 'history.logs',
     area: 'Records and studio',
     name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',

@@ -3,6 +3,8 @@
 //   <prefix>/reeval-store.json                       { kind: 'reeval-store', schemaVersion: 1 }
 //   <prefix>/runs/<YYYY-MM>/<runId>.json             the record, written last
 //   <prefix>/runs/<YYYY-MM>/<runId>/<path>           every file beside it
+//   <prefix>/debug/<YYYY-MM>/<runId>/<path>          its debug data (`history.debug`), apart so a
+//                                                    pull never lists or downloads it
 //
 // Every key is under its run id, so concurrent writers never touch one object. The record is
 // created with `If-None-Match: *` and replaced with `If-Match: <etag>`, so a run lands whole once.
@@ -204,7 +206,14 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
       return { ok: true, version }
     },
     async addFile(runId, path, bytes) {
-      await put(`${runKey(runId)}/${path}`, bytes)
+      const debug = /^debug\/(.+)$/.exec(path)?.[1]
+      const key = runKey(runId)
+      await put(
+        debug
+          ? `${base}debug/${key.slice(base.length + 'runs/'.length)}/${debug}`
+          : `${key}/${path}`,
+        bytes,
+      )
     },
   }
 }

@@ -1943,6 +1943,11 @@ export const CASES: Record<string, Case[]> = {
     ['yaml: history.store.dir a number', yaml('history:\n  store: { kind: local, dir: 3 }\n')],
     ['yaml: history.store of an unknown kind', yaml('history:\n  store: { kind: s4 }\n')],
     ['history.store a string', config({ history: { store: 's3://runs' } })],
+    ['history.debug on local()', config({ history: { debug: 'requests' } })],
+    [
+      'yaml: history.debug unknown',
+      yaml('history:\n  store: { kind: s3, bucket: runs }\n  debug: some\n'),
+    ],
     ['history.store s3 without a bucket', config({ history: { store: { kind: 's3' } } })],
     [
       'history.store s3 with a secret key',

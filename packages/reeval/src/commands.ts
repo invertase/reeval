@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { git, gitText } from './git.ts'
 import { listRuns, type RecordResult, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
-import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
+import type { ArtifactLevel, HistoryEntry, RunDebug } from './history/types.ts'
 import {
   type CompareRow,
   compare,
@@ -24,6 +24,7 @@ import {
 import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import {
+  debugStaging,
   isRemote,
   markPending,
   notUploaded,
@@ -168,6 +169,9 @@ export async function record(
       allowIncomplete: flags['allow-incomplete'],
       skipSecretScan: flags['skip-secret-scan'],
       committed: !remote,
+      ...(remote && remote.debug !== 'none'
+        ? { debug: { level: remote.debug, staging: debugStaging(remote, runId) } }
+        : {}),
     })
   } catch (error) {
     if (remote && !marked) await unmarkPending(remote, runId)
@@ -204,6 +208,13 @@ export async function record(
 }
 
 /** The copy's run uploaded to its store; a StoreError, naming `reeval sync`, if it didn't. */
+const debugNote = (debug: RunDebug | undefined) => {
+  if (!debug?.files.length) return ''
+  const kb = (debug.files.reduce((n, f) => n + f.bytes, 0) / 1024).toFixed(1)
+  const n = debug.files.length
+  return `, ${n} debug file${n === 1 ? '' : 's'}, ${kb} KB`
+}
+
 async function recordRemote(
   history: RemoteHistory,
   runId: string,
@@ -222,9 +233,14 @@ async function recordRemote(
   const line =
     uploaded === 'already'
       ? `${runId} is already recorded in ${name}`
-      : `${uploaded === 'replaced' ? 'updated' : 'recorded'} ${runId} in ${name} (${result.files + 1} files, ${kb} KB)`
-  if (result.droppedPatch.length === 0) return line
+      : `${uploaded === 'replaced' ? 'updated' : 'recorded'} ${runId} in ${name} (${result.files + 1} files, ${kb} KB${debugNote(result.debug)})`
+  const dropped = (result.debug?.dropped ?? []).map(
+    (d) =>
+      `warning: left debug/${d.path} out of ${runId}'s upload: ${d.note.replace(/^not kept: /, '')}`,
+  )
+  if (result.droppedPatch.length === 0) return [...dropped, line].join('\n')
   return [
+    ...dropped,
     `warning: left worktree.patch out of ${runId}: it looks like it holds a secret.`,
     ...result.droppedPatch.map((l) => `  ${l}`),
     "  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work. The record says the patch was left out, so reeval checkout recreates the commit alone.",

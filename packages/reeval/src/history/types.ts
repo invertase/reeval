@@ -45,6 +45,14 @@ export type RecordMode = 'manual' | 'ci' | 'always'
 /** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */
 export type FileRef = { path: string; sha256: string; bytes: number }
 
+export type RunDebug = {
+  /** `requests`: each attempt's `requests.ndjson`; `all`: its `debug.log` and `trace.ndjson` too. */
+  level: 'requests' | 'all'
+  files: FileRef[]
+  /** Files left out because the secret scan found something in them, with what it found. */
+  dropped?: Array<{ path: string; note: string }>
+}
+
 /** A generic attempt file from `c.capture()`. */
 export type ArtifactRef = FileRef & {
   name: string
@@ -896,6 +904,11 @@ export type RunRecord = {
   cost: Cost
   /** Which artifacts sit next to this record. Refs to files that weren't kept are removed. */
   artifacts: ArtifactLevel
+  /**
+   * The attempts' debug data uploaded with the run to its store (`history.debug`), each file by
+   * its path in `.reeval/debug/<run>/` (`<eval>/<cell>/<n>/requests.ndjson`); absent when none was.
+   */
+  debug?: RunDebug
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]

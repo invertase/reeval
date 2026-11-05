@@ -2347,7 +2347,11 @@ export type HistoryStore = {
     run: StoredRun,
     options: { replaces?: string },
   ): Promise<{ ok: true; version: string } | { ok: false }>
-  /** Adds or replaces one file beside a stored run: a saved analysis or the run's remarks. */
+  /**
+   * Adds or replaces one file beside a stored run: a saved analysis, the run's remarks, or with
+   * `history.debug` its debug data, under `debug/` (`debug/<eval>/<cell>/<n>/requests.ndjson`),
+   * before the record. `readRun` needn't return debug files: no reader asks for them.
+   */
   addFile(runId: string, path: string, bytes: Uint8Array): Promise<void>
 }
 
@@ -2362,7 +2366,15 @@ export type HistoryConfig = {
    * none. The setup log and each `c.exec` log are an attempt's artifacts too.
    */
   artifacts?: ArtifactLevel
+  /**
+   * Each attempt's debug data uploaded with the run to a remote store: none (the default), its
+   * gateway requests (`requests.ndjson`, which holds prompts and responses), or all of it
+   * (`debug.log` and `trace.ndjson` too). Rescanned for secrets first; `local()` takes `'none'` only.
+   */
+  debug?: DebugUpload
 }
+
+export type DebugUpload = 'none' | 'requests' | 'all'
 
 /** `HistoryConfig` as data: the store is `local` or `s3`. */
 export type HistoryConfigData = Omit<HistoryConfig, 'store'> & {
@@ -2723,6 +2735,7 @@ export type ResolvedHistory = {
    */
   dir: string
   artifacts: ArtifactLevel
+  debug: DebugUpload
   /**
    * Which recorded runs the history commands list: a remote store holds every branch's, so it
    * lists those whose commit HEAD reaches unless `--all-branches` asks for all. `local()` has none.
