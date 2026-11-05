@@ -186,6 +186,29 @@ describe('reeval on MinIO', { skip }, () => {
     assert.equal(readFileSync(join(target, 'feature.txt'), 'utf8'), 'feature')
   })
 
+  test("reeval sync --debug brings one run's debug data to the other clone", async () => {
+    const runId = ids.main as string
+    const r = await runCli(b, ['sync', '--profile', 'ci', '--debug', runId], { env: env() })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `^downloaded \\d+ debug files? of ${runId} .* into \\.reeval/debug/${runId}$`,
+        'm',
+      ),
+    )
+    const record = JSON.parse(await s3.read(`team/runs/${month(runId)}/${runId}.json`)) as RunRecord
+    for (const file of record.debug?.files ?? []) {
+      assert.deepEqual(
+        readFileSync(join(b, '.reeval/debug', runId, file.path)),
+        readFileSync(join(a, '.reeval/debug', runId, file.path)),
+        file.path,
+      )
+    }
+    const again = await runCli(b, ['sync', '--profile', 'ci', '--debug', runId], { env: env() })
+    assert.match(again.stdout, /debug data is already in \.reeval\/debug\//)
+  })
+
   test('recording a run again is a no-op, and sync has nothing to do', async () => {
     const again = await runCli(a, ['record', '--profile', 'ci', ids.main as string], {
       env: env(),
