@@ -81,10 +81,6 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
-- `reeval query skill_reads` says whether each attempt read each skill, including ones reeval
-  didn't place (a setup step installed them, the workspace ships them, a package cache has
-  them): `source` is `placed`, `skill-dir` or `elsewhere`. A skill arm installed by a setup step
-  needs no `skills` entry to be counted.
 
 ## Labeled checks that discriminate
 

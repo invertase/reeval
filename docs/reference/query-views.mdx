@@ -138,21 +138,13 @@ reeval query "SELECT variant, measure, label, verdict, text, needed FROM measure
 
 ## `skill_reads`
 
-`skill_reads` lists one row per attempt and skill: each skill the environment placed, and each skill any attempt in the cell found without reeval placing it.
+`skill_reads` lists one row per attempt and skill, placed or not.
 
 ```bash title="Query"
-reeval query "SELECT skill, source, reads, read_line FROM skill_reads"
+reeval query "SELECT skill, reads, read_line FROM skill_reads"
 ```
 
-| `source` | The skill |
-|---|---|
-| `placed` | Placed by the environment's `skills` or a plugin. `placement` says where |
-| `skill-dir` | Was in a skill directory some agent reads, such as `.claude/skills` or `~/.agents/skills`, put there by a setup step, the workspace or a package manager's skill installer |
-| `elsewhere` | Was read as a `skills/<name>/SKILL.md` outside those directories, such as a package cache |
-
-A read of a placed skill is a tool call [`toHaveCalledSkill`](/reference/matchers#tohavecalledskill) counts: a target under `skills/<name>`, or a `skill`, `Skill`, or `load_skill` call that names the skill. Any other skill counts when such a call names it, when a call opens its `SKILL.md`, or when a call reads under a skill the attempt's context listed in a skill directory. The `skill_uses` table has each read by its transcript line, with its `source`.
-
-In Docker and other isolated sandboxes, the context lists every found skill in a skill directory, so one the agent never opened reads `0`. On the fake sandbox, a found skill only has rows once some attempt in the cell reads it. An attempt with tool calls but no kept transcript, such as a passing attempt recorded with `history.artifacts: 'failures'`, has no row in `skill_reads`, `skill_files`, or `context_use`.
+A read is a tool call [`toHaveCalledSkill`](/reference/matchers#tohavecalledskill) counts: a target under `skills/<name>`, or a `skill`, `Skill`, or `load_skill` call that names the skill. The `skill_uses` table has each one by its transcript line. An attempt with tool calls but no kept transcript, such as a passing attempt recorded with `history.artifacts: 'failures'`, has no row in `skill_reads`, `skill_files`, or `context_use`.
 
 ## `context_use`
 
