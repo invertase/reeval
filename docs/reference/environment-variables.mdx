@@ -21,7 +21,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_PRICES`
 
-`REEVAL_PRICES` names a JSON file of custom model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
+`REEVAL_PRICES` names a JSON file of custom model prices for the `reeval run --dry-run` cost estimate and a recorded run's estimated costs. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops a dry run, and a recorded run warns and records no estimates.
 
 ## `REEVAL_CAPTURE_BROWSER`
 

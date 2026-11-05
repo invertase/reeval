@@ -78,7 +78,7 @@ result block's effort table) is always the measured tool-call, time and token me
 
 Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
 harness's own endpoints. Every harness reports tokens, which reeval records per turn,
-attempt and run (no prices).
+attempt and run with their cost (reported, else estimated at list prices).
 
 `gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
 judge and analysis take the first that can serve them. Every list ends with `direct()` (each
