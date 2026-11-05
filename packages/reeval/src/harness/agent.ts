@@ -6,6 +6,7 @@ import { brokerToken } from '../gateway/token.ts'
 import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
 import { capabilitiesOf, runsAgent, sandboxKind, suggestedSandbox } from '../sandbox/kinds.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
+import { plural } from '../text.ts'
 import type {
   AgentHarnessDescriptor,
   SandboxDescriptor,
@@ -21,12 +22,13 @@ import {
   agentFor,
   agentMcp,
   authHint,
+  type HarnessUsage,
   unverifiedHarness,
   writePluginFiles,
 } from './agents.ts'
 import { providerStop } from './provider-stop.ts'
 import { errorText, normalizeStream, reasoningTime, type StampedPart } from './transcript.ts'
-import type { Harness } from './types.ts'
+import type { Harness, HarnessResult } from './types.ts'
 
 /** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
 function traceStreamPart(
@@ -84,6 +86,24 @@ export function tokenUsage(usage: {
 }
 
 type Usage = Parameters<typeof tokenUsage>[0]
+
+/** How long reading a CLI's stored usage gets, past which the turn keeps none. */
+const STORED_USAGE_MS = 5_000
+
+/** An adapter's usage, in the AI SDK's provider shape, as reeval's; null when it counts nothing. */
+export function harnessUsage(usage: HarnessUsage): TokenUsage | null {
+  const { inputTokens: input, outputTokens: output } = usage
+  if (input.total === undefined && output.total === undefined) return null
+  const cacheRead = input.cacheRead ?? 0
+  const cacheWrite = input.cacheWrite ?? 0
+  return {
+    input: input.noCache ?? Math.max((input.total ?? 0) - cacheRead - cacheWrite, 0),
+    output: output.total ?? 0,
+    cacheRead,
+    cacheWrite,
+    reasoning: output.reasoning ?? null,
+  }
+}
 
 /**
  * The adapter, with every part its sessions emit also passed to `onPart`. `HarnessAgent` keeps
@@ -271,21 +291,60 @@ export function createAgentHarness(
           `${hint ? `${hint}. ` : ''}${catalog.name} harness failed to start: ${message}`,
         )
       }
+      const network = sandbox.network
+      let usageMark: string | undefined
+      const storedUsage = async (since: number): Promise<TokenUsage | null> => {
+        const store = await catalog.storedUsage?.()
+        if (!store) return null
+        const command = store.command({ since, ...(usageMark ? { mark: usageMark } : {}) })
+        const read = await Promise.resolve(
+          network.run({ command, abortSignal: AbortSignal.timeout(STORED_USAGE_MS) }),
+        )
+          .then(({ exitCode, stdout, stderr }) => {
+            if (exitCode !== 0) throw new Error(`exit ${exitCode}: ${stderr.trim().slice(-300)}`)
+            return store.parse(stdout)
+          })
+          .catch((error: unknown) => {
+            debugLog(
+              'harness',
+              `reading ${catalog.name}'s stored usage failed: ${errorText(error)}`,
+            )
+            return undefined
+          })
+        if (!read) {
+          debugLog('harness', `no usage in ${catalog.name}'s store since the turn began`)
+          return null
+        }
+        if (read.mark) usageMark = read.mark
+        const usage = harnessUsage(read.usage)
+        debugLog(
+          'harness',
+          `usage read back from ${catalog.name}'s store: ${plural(read.calls, 'model call')}${usage ? ` · ${usage.input} in · ${usage.output} out` : ''}`,
+        )
+        return usage
+      }
+      let running: ((note: TranscriptEvent) => Promise<HarnessResult>) | undefined
+      let turn: { startedAt: number; salvaged?: Promise<TokenUsage | null> } | undefined
       return {
         async send(prompt, turnSignal) {
           const startedAt = Date.now()
+          const current: NonNullable<typeof turn> = { startedAt }
+          turn = current
           const parts: StampedPart[] = []
           const servedBefore = sandbox.servedRequests?.().length ?? 0
           const brokeredBefore = sandbox.brokeredStatuses?.().length ?? 0
           servedModel = null
           finishMetadata = undefined
           let stepUsage: TokenUsage | null = null
-          const finish = (
+          // A turn whose stream reported no usage takes what its CLI stored for the turn's model
+          // calls: an aborted turn's stream ends before the usage it would have sent.
+          const finish = async (
             text: string,
             status: TurnStatus,
             extra: TranscriptEvent[] = [],
-            usage: TokenUsage | null = stepUsage,
-          ) => {
+            reported: TokenUsage | null = stepUsage,
+          ): Promise<HarnessResult> => {
+            const usage = reported ?? (await (current.salvaged ?? storedUsage(startedAt)))
             const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
             const refused = statuses.includes(401)
             // A block that arrived whole was never timed, whatever its start and end parts say.
@@ -339,6 +398,7 @@ export function createAgentHarness(
               ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
             }
           }
+          running = (note) => finish('', 'aborted', [note])
           try {
             // stream(), not generate(): only the stream says when each event happened.
             const result = await agent.stream({ session, prompt, abortSignal: turnSignal })
@@ -351,7 +411,12 @@ export function createAgentHarness(
                 stepUsage = addUsage(stepUsage, tokenUsage(part.usage as Usage))
               }
             }
-            const total = tokenUsage(await result.totalUsage)
+            const reported = await result.totalUsage
+            const total = tokenUsage(reported)
+            const mark = (await catalog.storedUsage?.())?.mark?.(
+              (reported as { raw?: unknown }).raw,
+            )
+            if (mark) usageMark = mark
             // A turn the abort cut short can still end its stream cleanly.
             const status = turnSignal.aborted ? 'aborted' : 'completed'
             return finish(await result.text, status, [], total ?? stepUsage)
@@ -376,7 +441,16 @@ export function createAgentHarness(
                     },
                   ],
             )
+          } finally {
+            if (turn === current) turn = undefined
           }
+        },
+        stopped: (note) =>
+          running ? running(note) : Promise.reject(new Error('No turn is running')),
+        salvage: async () => {
+          if (!turn) return
+          turn.salvaged ??= storedUsage(turn.startedAt)
+          await turn.salvaged
         },
         close: () => {
           stopToken()

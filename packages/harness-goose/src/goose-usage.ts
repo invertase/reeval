@@ -1,6 +1,7 @@
 import { shellQuote } from '@ai-sdk/harness/utils'
 import type { LanguageModelV4Usage } from '@ai-sdk/provider'
 import type { Experimental_SandboxSession as SandboxSession } from '@ai-sdk/provider-utils'
+import { GOOSE_HOME } from './goose-launcher.ts'
 
 /**
  * Goose's sessions database, under its home (the bootstrap's private one,
@@ -156,4 +157,28 @@ export class GooseLedger {
       return undefined
     }
   }
+}
+
+/**
+ * The command that prints the ledger's rows after `mark`, the last row a turn before reported
+ * (all of them without one), run from `$HOME`: for a turn cut off before it reported its usage.
+ */
+export function gooseStoredUsageCommand(o: { mark?: string }): string {
+  return `cd "$HOME" && ${gooseLedgerCommand(GOOSE_HOME, Number(o.mark ?? 0))}`
+}
+
+/** The rows the command printed, summed, and the last one's id; undefined without any. */
+export function parseGooseStoredUsage(stdout: string) {
+  const read = parseGooseLedger(stdout)
+  const rows = read && 'rows' in read ? read.rows : []
+  const usage = gooseLedgerUsage(rows)
+  const last = rows.at(-1)
+  return usage && last ? { usage, calls: rows.length, mark: String(last.id) } : undefined
+}
+
+/** The last ledger row a turn's reported usage summed, from its `raw` rows. */
+export function gooseUsageMark(raw: unknown): string | undefined {
+  const rows = (raw as { usage_ledger?: Array<{ id?: unknown }> } | undefined)?.usage_ledger
+  const id = Array.isArray(rows) ? rows.at(-1)?.id : undefined
+  return Number.isInteger(id) ? String(id) : undefined
 }

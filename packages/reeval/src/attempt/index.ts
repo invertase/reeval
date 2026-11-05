@@ -78,7 +78,11 @@ async function attemptBody(
     },
     snapshotSidecar(stagingDir, attemptKey(id, spec.cell.key, spec.n)),
   )
-  const destroy = () => void a.sandbox?.destroy()
+  // The running turn's CLI stores its usage in the sandbox: read it before the sandbox goes.
+  const destroy = () =>
+    void Promise.resolve(a.session?.salvage?.())
+      .catch(() => {})
+      .finally(() => a.sandbox?.destroy())
   testSignal.addEventListener('abort', destroy, { once: true })
 
   const takeContext = contextTaker(a)

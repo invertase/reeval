@@ -20,28 +20,36 @@ import type { Attempt } from './state.ts'
 const TURN_STOP_GRACE_MS = 3_000
 
 /**
- * Resolves `grace` ms after `signal` aborts, with the turn as cut off; `cancel` drops the timer
- * once the turn settles on its own.
+ * Resolves `grace` ms after `signal` aborts, with the turn as cut off: what the session says it
+ * got to, or an empty turn; `cancel` drops the timer once the turn settles on its own.
  */
-function cutOff(signal: AbortSignal, startedAt: string, grace = TURN_STOP_GRACE_MS) {
+function cutOff(
+  signal: AbortSignal,
+  startedAt: string,
+  session: HarnessSession,
+  grace = TURN_STOP_GRACE_MS,
+) {
   let timer: NodeJS.Timeout | undefined
   let onAbort = () => {}
-  const cutoff = new Promise<Awaited<ReturnType<HarnessSession['send']>>>((resolve) => {
+  const cutoff = new Promise<HarnessResult>((resolve) => {
     onAbort = () => {
       timer = setTimeout(() => {
         const message = `The agent didn't stop within ${grace / 1000}s of being canceled, so reeval stopped waiting for its turn`
         const at = Date.now() - Date.parse(startedAt)
-        resolve({
+        const note = { type: 'error' as const, message, ts: new Date().toISOString(), atMs: at }
+        const empty: HarnessResult = {
           text: '',
           status: 'aborted',
-          transcript: [{ type: 'error', message, ts: new Date().toISOString(), atMs: at }],
+          transcript: [note],
           usage: null,
           model: null,
           unreported: [],
           reasoningMs: null,
           startedAt,
           durationMs: at,
-        })
+        }
+        if (!session.stopped) return resolve(empty)
+        session.stopped(note).then(resolve, () => resolve(empty))
       }, grace)
     }
     if (signal.aborted) onAbort()
@@ -132,7 +140,7 @@ export function turnSender(
     const watch = a.mcpStartup && watchMcpStartup(a.mcpStartup)
     const signal = watch ? AbortSignal.any([a.signal, watch.signal]) : a.signal
     // An agent that ignores the abort would hold the attempt, and the run, until it finishes.
-    const { cutoff, cancel } = cutOff(signal, entry.startedAt)
+    const { cutoff, cancel } = cutOff(signal, entry.startedAt, agent)
     const sendStarted = Date.now()
     const sending = agent.send(prompt, signal).catch((error: unknown): HarnessResult => {
       // A harness whose turn throws on abort (the fake agent's commands do) was cut off by the

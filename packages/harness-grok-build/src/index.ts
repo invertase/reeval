@@ -22,4 +22,5 @@ export {
 } from './grok-build-harness.ts'
 export { GrokBuildStreamTranslator, grokTurnUsage } from './grok-build-stream.ts'
 export { GROK_BUILD_BUILTIN_TOOLS, type GrokBuildBuiltinTools } from './grok-build-tools.ts'
+export { GROK_LOGS_DIR, grokStoredUsageCommand, parseGrokStoredUsage } from './grok-build-usage.ts'
 export { VERSION } from './version.ts'

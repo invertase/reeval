@@ -1,3 +1,4 @@
+import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import type { OpenCodeMcpServer } from '@reeval/harness-opencode'
 import {
@@ -191,6 +192,13 @@ export type Agent = Layout & {
    */
   reasoningTokens: boolean | 'provider'
   /**
+   * Reads back the usage the agent's CLI stored for each model call, for a turn whose stream
+   * reported none: an aborted turn's, whose stream ends before the turn's usage. Unset for a CLI
+   * that stores no usage per call (fx), stores none for a canceled run (Cursor) or whose stream
+   * always has it.
+   */
+  storedUsage?: () => Promise<StoredUsage>
+  /**
    * Set when the transcript has a subagent's tool calls, so its edits count as file edits (Claude
    * Code's bridge passes a subagent's messages on raw, and reeval reads them). Unset, only the
    * workspace diff's `changedFiles` shows what a subagent changed.
@@ -258,6 +266,22 @@ export type Agent = Layout & {
     model: string
     plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
+}
+
+/** A harness adapter's usage, in the AI SDK's provider shape. */
+export type HarnessUsage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
+
+/** Reads a CLI's stored usage in the sandbox; see `Agent.storedUsage`. */
+export type StoredUsage = {
+  /**
+   * The command that prints the usage of the model calls since `since` (ms since the epoch), or
+   * after `mark` when an earlier read, or `mark` below, gave one.
+   */
+  command: (o: { since: number; mark?: string }) => string
+  /** What it printed; undefined when it read nothing. `mark` is where the next read starts. */
+  parse: (stdout: string) => { usage: HarnessUsage; calls: number; mark?: string } | undefined
+  /** Where the next read starts, from the `raw` of the usage a turn's stream reported. */
+  mark?: (raw: unknown) => string | undefined
 }
 
 /** How an agent's reasoning reaches reeval; see `Agent.reasoning`. */
@@ -1093,6 +1117,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: 'provider',
+    storedUsage: async () => {
+      const m = await import('@reeval/harness-opencode')
+      return { command: m.openCodeStoredUsageCommand, parse: m.parseOpenCodeStoredUsage }
+    },
     // Google's, for what names no model; forModel gives the model's provider's.
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
@@ -1127,6 +1155,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The adapter reads each turn's usage from Goose's usage_ledger, which counts thinking tokens
     // in the output without splitting them out.
     reasoningTokens: false,
+    storedUsage: async () => {
+      const m = await import('@reeval/harness-goose')
+      return {
+        command: m.gooseStoredUsageCommand,
+        parse: m.parseGooseStoredUsage,
+        mark: m.gooseUsageMark,
+      }
+    },
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
@@ -1210,6 +1246,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // codex exec sends a reasoning item only once it's complete, when it sends one at all.
     reasoning: 'whole',
     reasoningTokens: true,
+    storedUsage: async () => {
+      const m = await import('@reeval/harness-codex')
+      return { command: m.codexStoredUsageCommand, parse: m.parseCodexStoredUsage }
+    },
     credential: 'OPENAI_API_KEY',
     // On the adapter's provider (HTTP, not WebSockets): the model calls, whose responses name the
     // dated model and the effort that served them, and the web search tool's searches.
@@ -1290,6 +1330,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: true,
+    storedUsage: async () => {
+      const m = await import('@reeval/harness-grok-build')
+      return { command: m.grokStoredUsageCommand, parse: m.parseGrokStoredUsage }
+    },
     credential: 'XAI_API_KEY',
     // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
     endpoints: XAI_ENDPOINTS,
