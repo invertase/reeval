@@ -242,8 +242,7 @@ export type AttemptRecord = {
    * `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl`
    * file.
    * `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
-   * `reasoningMs` is how long the turn's reasoning took, streamed or as the agent stored it
-   * (Antigravity's), null when the harness can't time it.
+   * `reasoningMs` is how long the turn's reasoning took, null when the harness can't time it.
    */
   turns: Array<{
     prompt: string

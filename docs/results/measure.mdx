@@ -21,7 +21,7 @@ npx reeval query "SELECT cell_key, outcome, turns, tools, input_tokens, output_t
 | Time | Agent time per attempt | The `time` column of the `effort` table, and `agent_ms` on `attempts` |
 | File edits | The agent's edit, write, and delete tool calls. Shell edits don't count | `activity.fileEdits` in the record |
 | Files changed | The files the workspace diff shows changed, however they changed | `files_changed` on `attempts`, and `changedFiles` in the record |
-| Reasoning time | How long the agent reasoned, streamed or as the agent stored it, or `n/a` when the harness can't time it | `reasoning_ms` on `attempts`, null when not reported |
+| Reasoning time | How long the agent reasoned, or `n/a` when the harness can't time it | `reasoning_ms` on `attempts`, null when not reported |
 
 ## What each harness reports
 
