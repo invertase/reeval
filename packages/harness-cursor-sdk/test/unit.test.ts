@@ -5,6 +5,7 @@ import {
   CURSOR_SDK_BUILTIN_TOOLS,
   CURSOR_SDK_RUNNER,
   CURSOR_SDK_VERSION,
+  CursorCatalogError,
   catalogFor,
   createCursorSdkRequestTransformations,
   cursorSdkEndpoints,
@@ -68,6 +69,106 @@ describe('auth', () => {
       ['composer-2.5'],
     )
     assert.equal(catalogFor(a, 'unknown').length, 2, 'the SDK names the problem for an unknown id')
+  })
+
+  const catalogBody = { items: [{ id: 'composer-2.5' }] }
+  const noWait = { retryDelaysMs: [0, 0] }
+
+  test("one caller's abort ends only its own wait: the others sharing the request get the catalog", async () => {
+    let calls = 0
+    let respond = () => {}
+    const fake = (async (_url: string, init: RequestInit) => {
+      calls++
+      await new Promise<void>((resolve, reject) => {
+        respond = resolve
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+      })
+      return Response.json(catalogBody)
+    }) as unknown as typeof fetch
+    // Two attempts in one worker start together; the first one's start times out and is aborted.
+    const first = new AbortController()
+    const second = new AbortController()
+    const a = fetchCursorModelCatalog({ apiKey: 'shared' }, { fetch: fake, signal: first.signal })
+    const b = fetchCursorModelCatalog({ apiKey: 'shared' }, { fetch: fake, signal: second.signal })
+    first.abort(new Error('cursor: session did not become ready within 1m 30s'))
+    await assert.rejects(a, /did not become ready/)
+    respond()
+    assert.deepEqual(await b, catalogBody.items, "the other attempt doesn't get the first's abort")
+    assert.equal(calls, 1)
+  })
+
+  test('a 5xx or a network error is tried again; the catalog then comes back', async () => {
+    const replies: Array<() => Response> = [
+      () => new Response('bad gateway', { status: 502 }),
+      () => {
+        throw new TypeError('fetch failed')
+      },
+      () => Response.json(catalogBody),
+    ]
+    let calls = 0
+    const fake = (async () => replies[calls++]?.()) as unknown as typeof fetch
+    assert.deepEqual(
+      await fetchCursorModelCatalog({ apiKey: 'flaky' }, { fetch: fake, ...noWait }),
+      catalogBody.items,
+    )
+    assert.equal(calls, 3)
+  })
+
+  test('a 5xx on every try fails, transient, naming the tries; the next caller tries afresh', async () => {
+    let calls = 0
+    const fake = (async () => {
+      calls++
+      return new Response('', { status: 503 })
+    }) as unknown as typeof fetch
+    const error = await fetchCursorModelCatalog(
+      { apiKey: 'down' },
+      { fetch: fake, ...noWait },
+    ).then(
+      () => assert.fail('resolved'),
+      (e: unknown) => e,
+    )
+    assert.ok(error instanceof CursorCatalogError)
+    assert.equal(error.message, "Cursor's model catalog request failed: HTTP 503 (tried 3 times)")
+    assert.equal(error.transient, true)
+    assert.equal(calls, 3)
+    await fetchCursorModelCatalog({ apiKey: 'down' }, { fetch: fake, ...noWait }).catch(() => {})
+    assert.equal(calls, 6, 'a failure is not cached')
+  })
+
+  test('a 4xx is not tried again and is not transient', async () => {
+    let calls = 0
+    const fake = (async () => {
+      calls++
+      return new Response('', { status: 401 })
+    }) as unknown as typeof fetch
+    await assert.rejects(
+      fetchCursorModelCatalog({ apiKey: 'refused' }, { fetch: fake, ...noWait }),
+      (e: unknown) =>
+        e instanceof CursorCatalogError &&
+        !e.transient &&
+        e.message === "Cursor's model catalog request failed: HTTP 401",
+    )
+    assert.equal(calls, 1)
+  })
+
+  test('a request with no response is cut off at its timeout, and is transient', async (t) => {
+    const fake = ((_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+      })) as unknown as typeof fetch
+    // A real request's socket keeps the process up; AbortSignal.timeout's timer doesn't.
+    const alive = setInterval(() => {}, 1_000)
+    t.after(() => clearInterval(alive))
+    await assert.rejects(
+      fetchCursorModelCatalog(
+        { apiKey: 'silent' },
+        { fetch: fake, timeoutMs: 50, retryDelaysMs: [] },
+      ),
+      (e: unknown) =>
+        e instanceof CursorCatalogError &&
+        e.transient &&
+        e.message === "Cursor's model catalog request failed: no response within 0.05s",
+    )
   })
 })
 

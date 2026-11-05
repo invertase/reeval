@@ -289,6 +289,7 @@ export function createAgentHarness(
         const hint = authHint(catalog, message, refusedSince(0))
         throw new InfraError(
           `${hint ? `${hint}. ` : ''}${catalog.name} harness failed to start: ${message}`,
+          { transient: !hint && (error as { transient?: unknown }).transient === true },
         )
       }
       const network = sandbox.network
