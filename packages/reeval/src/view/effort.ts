@@ -275,12 +275,15 @@ export function formatSeconds(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
 
-/** `model 1m 05s · tools 12s · waiting 1m 21s · other 3m 22s`, model left out when unknown. */
+/**
+ * `model 1m 05s · tools 12s · waiting 1m 21s · other 3m 22s`: model left out when unknown,
+ * waiting when there was none.
+ */
 export const splitLabel = (s: TimeSplit) =>
   [
     ...(s.modelMs === null ? [] : [`model ${formatSeconds(s.modelMs)}`]),
     `tools ${formatSeconds(s.toolMs)}`,
-    `waiting ${formatSeconds(s.waitingMs)}`,
+    ...(s.waitingMs > 0 ? [`waiting ${formatSeconds(s.waitingMs)}`] : []),
     `other ${formatSeconds(s.otherMs)}`,
   ].join(' · ')
 
