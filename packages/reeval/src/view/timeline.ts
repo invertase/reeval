@@ -115,13 +115,13 @@ export function waitSpans(events: readonly TranscriptEvent[]): WaitSpan[] {
   }
   events.forEach((e, i) => {
     if (!isToolLike(e) || e.subagent) return
-    if (polls(e)) {
+    if (backgrounded(e, named)) {
+      if (open?.polls.length) close()
+      open ??= { startMs: e.atMs, endMs: endOf(e), background: i, polls: [] }
+    } else if (polls(e)) {
       open ??= { startMs: e.atMs, endMs: e.atMs, background: null, polls: [] }
       open.polls.push(i)
       open.endMs = Math.max(open.endMs, endOf(e))
-    } else if (backgrounded(e, named)) {
-      if (open?.polls.length) close()
-      open ??= { startMs: e.atMs, endMs: endOf(e), background: i, polls: [] }
     } else if (open?.polls.length || works(e)) close()
   })
   close()
