@@ -1747,7 +1747,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history.store',
     area: 'Records and studio',
-    name: "`history.store`: `local()` or `s3()` from `reeval/store/*` (or a `HistoryStore`), a profile's `history` over the config's, `--profile` on the commands that read runs, and every credential refused in the config",
+    name: "`history.store`: `local()` or `s3()` from `reeval/store/*` (anything else refused), a profile's `history` over the config's, `--profile` on the commands that read runs, and every credential refused in the config",
     unit: [
       'reeval/test/unit.test.ts',
       'reeval/test/options.test.ts',

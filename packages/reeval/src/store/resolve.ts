@@ -9,7 +9,6 @@ import { sha256 } from '../ids.ts'
 import { isObjectLike } from '../object.ts'
 import type {
   HistoryConfig,
-  HistoryStore,
   LocalStoreDescriptor,
   ResolvedHistory,
   S3StoreDescriptor,
@@ -41,6 +40,12 @@ export const storeStateDir = (root: string, id: string) => join(root, '.reeval',
 
 const STORE_EXAMPLE = "local(), or s3({ bucket: 'my-runs' }) from reeval/store/s3"
 
+/** What a value that isn't a store is, for the refusal: an object without a `kind` by its keys. */
+const describe = (value: unknown) =>
+  isObjectLike(value) && !Array.isArray(value)
+    ? `an object with ${Object.keys(value).join(', ') || 'no keys'} and no kind`
+    : JSON.stringify(value)
+
 function unknownKey(value: object, allowed: string[], where: string, file: string) {
   const key = Object.keys(value).find((k) => !allowed.includes(k))
   if (key === undefined) return
@@ -48,29 +53,6 @@ function unknownKey(value: object, allowed: string[], where: string, file: strin
   throw new UsageError(
     `Unknown option "${key}" in ${where} in ${file}. ${near ? `Did you mean "${near}"?` : `Use ${allowed.join(', ')}.`}`,
   )
-}
-
-/** A `HistoryStore` object, which only a TypeScript config can hold. */
-export function isHistoryStore(value: unknown): value is HistoryStore {
-  if (!isObjectLike(value) || 'kind' in value) return false
-  const v = value as Record<string, unknown>
-  return ['listRuns', 'readRun', 'writeRun', 'addFile'].some((m) => typeof v[m] === 'function')
-}
-
-function checkCustom(store: HistoryStore, where: string, file: string): void {
-  const missing = (['listRuns', 'readRun', 'writeRun', 'addFile'] as const).filter(
-    (m) => typeof store[m] !== 'function',
-  )
-  if (missing.length > 0) {
-    throw new UsageError(
-      `${where} in ${file} is a history store without ${missing.join(', ')}. A HistoryStore has listRuns, readRun, writeRun and addFile.`,
-    )
-  }
-  if (typeof store.name !== 'string' || store.name.trim() === '') {
-    throw new UsageError(
-      `${where} in ${file} is a history store without a name. Give it one, e.g. name: 'gcs:my-bucket'; it keys the store's copy in .reeval/store.`,
-    )
-  }
 }
 
 const isString = (v: unknown): v is string => typeof v === 'string'
@@ -207,16 +189,10 @@ export function resolveHistory(
       ? { ...base, artifacts }
       : localHistory({ kind: 'local' }, root, defaultDir, artifacts)
   }
-  if (isHistoryStore(store)) {
-    checkCustom(store, at, file)
-    const id = storeId({ kind: 'custom', name: store.name })
-    const custom = { kind: 'custom' as const, store, name: store.name }
-    // Workers get the run's config as JSON over IPC; the store itself stays in the CLI process.
-    Object.defineProperty(custom, 'toJSON', { value: () => ({ kind: 'custom', name: store.name }) })
-    return { dir: join(storeStateDir(root, id), 'history'), artifacts, store: custom }
-  }
   if (!isObjectLike(store) || !isString((store as { kind?: unknown }).kind)) {
-    throw new UsageError(`${at} in ${file} must be ${STORE_EXAMPLE} (got ${JSON.stringify(store)})`)
+    throw new UsageError(
+      `${at} in ${file} must be ${STORE_EXAMPLE}: reeval keeps runs in a local folder or an S3-compatible bucket (got ${describe(store)})`,
+    )
   }
   const kind = (store as { kind: string }).kind
   if (kind === 'local') {
@@ -262,6 +238,6 @@ export function storeReady(config: { history: ResolvedHistory; file: string }): 
   const { store } = config.history
   if (store.kind === 'local') return
   throw new UsageError(
-    `history.store in ${config.file} keeps runs in ${store.name}, and reeval can't read or write a ${store.kind === 's3' ? 's3()' : 'custom'} store yet. Use local() for now.`,
+    `history.store in ${config.file} keeps runs in ${store.name}, and reeval can't read or write a s3() store yet. Use local() for now.`,
   )
 }

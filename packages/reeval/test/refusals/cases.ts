@@ -1985,20 +1985,7 @@ export const CASES: Record<string, Case[]> = {
       config({ history: { store: { kind: 's3', bucket: 'runs', prefix: 'ci/../main' } } }),
     ],
     [
-      'history.store a custom store without a name',
-      config({
-        history: {
-          store: {
-            listRuns: async () => [],
-            readRun: async () => null,
-            writeRun: async () => ({ ok: false }),
-            addFile: async () => {},
-          },
-        },
-      }),
-    ],
-    [
-      'history.store a custom store without addFile',
+      'history.store an object that is neither local() nor s3()',
       config({
         history: {
           store: {

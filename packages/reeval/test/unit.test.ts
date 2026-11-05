@@ -1397,21 +1397,6 @@ test("a profile's history.store replaces the config's and keeps its artifacts", 
     'reeval.yaml',
   )
   assert.equal(selectProfile(yaml, 'ci', {})?.history?.store.name, 's3://runs')
-  const mine = {
-    name: 'mine',
-    listRuns: async () => [],
-    readRun: async () => null,
-    writeRun: async () => ({ ok: false as const }),
-    addFile: async () => {},
-  }
-  const custom = resolveConfig({ profiles: { ci: { history: { store: mine } } } }, '/p')
-  const store = custom.profileHistory.ci?.store
-  assert.equal(store?.kind === 'custom' && store.store, mine)
-  assert.deepEqual(JSON.parse(JSON.stringify(custom)).profileHistory.ci.store, {
-    kind: 'custom',
-    name: 'mine',
-  })
-  assert.deepEqual(custom.profiles.ci, {})
 })
 
 test('an npm install in the sandbox collapses to one line for the judge', () => {
