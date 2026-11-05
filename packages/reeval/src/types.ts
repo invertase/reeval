@@ -756,7 +756,8 @@ export type FakeHarnessDescriptor = {
  * the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
  * (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
  * would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`.
- * `error` ends the turn there with status `error` and that message, as a provider error would.
+ * `error` ends the turn there with status `error` and that message, as a provider error would; one
+ * worded as a provider's credit, quota or rate limit makes the attempt an infra error.
  * `refuseKey` ends it as the model API rejecting the key in that variable would, which makes the
  * attempt an infra error.
  */
@@ -2559,14 +2560,26 @@ export type PrepareFailureRecord = {
 export type ResourceFailureRecord = { cause: 'oom'; kills: number }
 
 /**
+ * The model provider ended a turn, not the agent: out of credit, over its quota, rate limited or
+ * overloaded, with the HTTP status of the last model call the egress gateway brokered when that
+ * call failed (`null` when it didn't, as in a stream that failed inside an HTTP 200, or none was).
+ * The attempt is then an infra error, so `--retry-errors` runs it again.
+ */
+export type ProviderStopRecord = {
+  cause: 'credit' | 'quota' | 'rate_limit' | 'overloaded'
+  status: number | null
+}
+
+/**
  * Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran
- * out of one.
+ * out of one, `provider` when the model provider stopped a turn.
  */
 export type AttemptError = {
   kind: ErrorKind
   message: string
   prepare?: PrepareFailureRecord
   resource?: ResourceFailureRecord
+  provider?: ProviderStopRecord
 }
 
 export type TurnRecord = Pick<

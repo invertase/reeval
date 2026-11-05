@@ -1841,7 +1841,7 @@ evaluate('huge diff', async () => {
   })
 
   test("a turn's error message shows in the summary, agent output and summary.md without -v", async () => {
-    const billing = 'Credit balance is too low to access the Anthropic API'
+    const billing = 'The agent process exited with code 139: Segmentation fault'
     const p = await project('turn-error', {
       'reeval.config.ts': fakeConfig({ harness: `{ script: [[{ error: '${billing}' }]] }` }),
       'evals/agent.eval.ts': agentEval(`expect(turn.status).toBe('completed')`),

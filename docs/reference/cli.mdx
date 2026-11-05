@@ -149,7 +149,7 @@ reeval run --retry-errors
 reeval run --retry-errors 20261022T172927Z
 ```
 
-`--retry-errors [ref]` reruns a finished (`complete`) run's attempts whose outcome is `infra_error`, a judge call its provider never answered included, with the run's saved settings, as a resume does, and writes them back into that run under the same attempt ids. Its passes and fails stay as they were. A resume restarts infra-errored attempts too, alongside the ones that never finished.
+`--retry-errors [ref]` reruns a finished (`complete`) run's attempts whose outcome is `infra_error`, a judge call its provider never answered and a turn it stopped included, with the run's saved settings, as a resume does, and writes them back into that run under the same attempt ids. Its passes and fails stay as they were. A resume restarts infra-errored attempts too, alongside the ones that never finished.
 
 | Case | Exit | What it prints |
 |---|---|---|
@@ -428,7 +428,7 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 [//]: # (/generated:exit-codes)
 
-`reeval run` exits 0 on a pass, 1 on a fail, and 3 on an infrastructure error. A fail is a failed gated cell, a `budget.duration` stop, or an error outside any attempt. A harness key the model API rejects, at the session start or in a turn, makes the attempt an infrastructure error, and the turn's `c.send()` throws, so no later check or judge runs. A turn in which the key served any call isn't a rejected key, and neither is a 401 the agent's own commands get. An ungated cell can fail on a run that exits 0. Ctrl-C exits 130, and SIGTERM exits 143. Either one cancels the run and writes its record. A second Ctrl-C, or a second SIGTERM, quits at once without a record (a SIGTERM and a Ctrl-C within a second of each other, in either order, as pnpm passes it on, are one press and exit 130); a later `reeval run --resume` finishes that run.
+`reeval run` exits 0 on a pass, 1 on a fail, and 3 on an infrastructure error. A fail is a failed gated cell, a `budget.duration` stop, or an error outside any attempt. A harness key the model API rejects, at the session start or in a turn, or a turn the model provider stopped (out of credit, over its quota, rate limited or overloaded), makes the attempt an infrastructure error, and the turn's `c.send()` throws, so no later check or judge runs. A turn in which the key served any call isn't a rejected key, and neither is a 401 the agent's own commands get. An ungated cell can fail on a run that exits 0. Ctrl-C exits 130, and SIGTERM exits 143. Either one cancels the run and writes its record. A second Ctrl-C, or a second SIGTERM, quits at once without a record (a SIGTERM and a Ctrl-C within a second of each other, in either order, as pnpm passes it on, are one press and exit 130); a later `reeval run --resume` finishes that run.
 
 `reeval doctor` exits 1 when a check fails. A warning alone exits 0.
 

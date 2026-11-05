@@ -1195,6 +1195,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.provider-stop',
+    area: 'Harnesses',
+    name: 'A turn the model provider stopped (credit, quota, rate limit, overload) makes the attempt an infra error, with its cause in `error.provider`',
+    fixtures: ['harness/provider-stop-is-infra'],
+    unit: ['reeval/test/gateway.test.ts'],
+  },
+  {
     id: 'ports',
     area: 'Sandbox',
     name: 'Ports: through the tunnel, or published without the gateway',

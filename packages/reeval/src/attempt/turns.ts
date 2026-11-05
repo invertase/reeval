@@ -1,6 +1,7 @@
 import { TURN_EDITED } from '../assert.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { changedBetween, diffSinceSnapshot, workspaceBlobs } from '../diff.ts'
+import { ProviderStopError } from '../harness/provider-stop.ts'
 import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
@@ -150,7 +151,7 @@ export function turnSender(
       }
     })
     const timedBefore = a.record.timings.agentMs
-    const { raw, rejectedKey, reasoningMs, agentMs, ...sent } = await a
+    const { raw, rejectedKey, providerStop, reasoningMs, agentMs, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
@@ -205,8 +206,10 @@ export function turnSender(
     const count = (...types: string[]) =>
       result.transcript.filter((e) => types.includes(e.type)).length
     const failure = result.transcript.find((e) => e.type === 'error')
-    // The agent never got to work, so checks on its workspace say nothing about it.
-    const infra = timedOut || (result.status !== 'aborted' && rejectedKey)
+    // The agent never got to work, or its provider stopped it, so checks on its workspace say
+    // nothing about it.
+    const stopped = result.status === 'aborted' ? undefined : providerStop
+    const infra = timedOut || (result.status !== 'aborted' && rejectedKey) || stopped?.message
     // The diff counts every write, the shell's too. The turn's own files are the ones that moved
     // since it started, so the eval's c.exec and c.writeFile between turns aren't in them.
     let changes: Awaited<ReturnType<typeof diffSinceSnapshot>> | undefined
@@ -244,7 +247,7 @@ export function turnSender(
     }
     if (infra) {
       // Fails the attempt even when the eval's body catches it, like a failed start.
-      const error = new InfraError(infra)
+      const error = !timedOut && stopped ? new ProviderStopError(stopped) : new InfraError(infra)
       a.startFailure ??= { error }
       throw error
     }

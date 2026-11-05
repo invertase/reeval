@@ -193,7 +193,7 @@
       "required": ["model", "question", "stateOptions", "text"]
     },
     "AttemptError": {
-      "description": "Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran out of one.",
+      "description": "Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran out of one, `provider` when the model provider stopped a turn.",
       "type": "object",
       "properties": {
         "kind": {
@@ -204,6 +204,9 @@
         },
         "prepare": {
           "$ref": "#/$defs/PrepareFailureRecord"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderStopRecord"
         },
         "resource": {
           "$ref": "#/$defs/ResourceFailureRecord"
@@ -2831,6 +2834,26 @@
         }
       },
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
+    },
+    "ProviderStopRecord": {
+      "description": "The model provider ended a turn, not the agent: out of credit, over its quota, rate limited or overloaded, with the HTTP status of the last model call the egress gateway brokered when that call failed (`null` when it didn't, as in a stream that failed inside an HTTP 200, or none was). The attempt is then an infra error, so `--retry-errors` runs it again.",
+      "type": "object",
+      "properties": {
+        "cause": {
+          "enum": ["credit", "overloaded", "quota", "rate_limit"]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": ["cause", "status"]
     },
     "ResolvedJudgeStateOptions": {
       "description": "The inputs one judge call saw, every key set (`false` when off); `artifacts` is recorded apart.",
