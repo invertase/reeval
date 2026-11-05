@@ -138,6 +138,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     usage: tokenUsageSchema.nullable(),
     model: z.string().nullable(),
     stream: z.literal(true).optional(),
+    role: z.enum(['main', 'side']).optional(),
   }),
 ])
 

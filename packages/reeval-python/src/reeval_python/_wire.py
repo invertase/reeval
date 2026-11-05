@@ -2028,6 +2028,13 @@ class TranscriptEventModelCall(TypedDict):
     model: str | None
     # `POST api.anthropic.com/v1/messages`: the method, host and path.
     request: str
+    # `main` for one of the agent's own steps, `side` for a call its CLI made around them: a
+    # session title, a web search's own model call, Antigravity's Flash Lite calls. A call is
+    # `main` when its tokens are one of the turn's steps' as the harness reported them.
+    # Otherwise it's `side` when its request declared at most one tool while another call in the
+    # attempt declared more, or when another model served it than served the turn's other calls,
+    # and `main` when neither holds. Absent in records from before roles.
+    role: NotRequired[Literal["main", "side"]]
     # The response's HTTP status; null when none came.
     status: float | None
     # Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time.

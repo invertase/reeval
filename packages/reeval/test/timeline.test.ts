@@ -111,10 +111,12 @@ describe('modelCallEvents', () => {
     status: 200,
     usage: null,
     model: null,
+    tools: null,
     ...(stream ? { stream } : {}),
   })
+  const turn = { startedAt: 1000, durationMs: 2000, model: null, steps: [] }
   test('places the calls that started in the turn on its clock', () => {
-    const events = modelCallEvents([call(900), call(1500, true), call(9000)], 1000, 2000)
+    const events = modelCallEvents([call(900), call(1500, true), call(9000)], turn)
     assert.deepEqual(events, [
       {
         ts: new Date(1500).toISOString(),
@@ -127,8 +129,52 @@ describe('modelCallEvents', () => {
         usage: null,
         model: null,
         stream: true,
+        role: 'main',
       },
     ])
+  })
+
+  const tokens = (input: number, output: number) => ({
+    input,
+    output,
+    cacheRead: 0,
+    cacheWrite: 0,
+    reasoning: null,
+  })
+  const at = (startedAt: number, fields: Partial<ModelCall>): ModelCall => ({
+    ...call(startedAt),
+    request: 'POST api.example.com/v1/messages',
+    ...fields,
+  })
+  const roles = (calls: ModelCall[], over: Partial<typeof turn> = {}) =>
+    modelCallEvents(calls, { ...turn, ...over }).map((e) => e.role)
+
+  test("a call whose tokens are one of the turn's steps is main, however few tools it declared", () => {
+    const calls = [
+      at(1100, { usage: tokens(10, 5), tools: 0 }),
+      at(1200, { usage: tokens(20, 6), tools: 12 }),
+    ]
+    assert.deepEqual(roles(calls, { steps: [tokens(10, 5), tokens(20, 6)] }), ['main', 'main'])
+  })
+
+  test('a call declaring at most one tool beside one declaring more is side', () => {
+    const calls = [
+      at(1100, { usage: tokens(10, 5), tools: 14 }),
+      at(1200, { usage: tokens(30, 2), tools: 1 }),
+      at(1300, { usage: tokens(40, 3), tools: 0 }),
+      at(1400, { usage: null, tools: 14 }),
+    ]
+    assert.deepEqual(roles(calls, { steps: [tokens(10, 5)] }), ['main', 'side', 'side', 'main'])
+  })
+
+  test('with no tools declared anywhere, another model than the turn’s is side', () => {
+    const calls = [
+      at(1100, { model: 'flash', tools: 0 }),
+      at(1200, { model: 'flash-lite', tools: 0 }),
+      at(1300, { model: 'flash', tools: null }),
+    ]
+    assert.deepEqual(roles(calls), ['main', 'side', 'main'])
+    assert.deepEqual(roles(calls, { model: 'flash-lite' }), ['side', 'main', 'side'])
   })
 })
 

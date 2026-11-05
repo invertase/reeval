@@ -277,10 +277,19 @@ function eventSpan(
       return { name: line.type, ms: 0, cat: line.type, args: { message: clip(line.message, 500) } }
     case 'model-call':
       return {
-        name: line.stream ? 'model stream' : 'model call',
+        name: line.stream
+          ? 'model stream'
+          : line.role === 'side'
+            ? 'side model call'
+            : 'model call',
         ms,
         cat: 'model',
-        args: { request: line.request, firstByteMs: line.firstByteMs, model: line.model },
+        args: {
+          request: line.request,
+          firstByteMs: line.firstByteMs,
+          model: line.model,
+          ...(line.role ? { role: line.role } : {}),
+        },
       }
     default:
       return null

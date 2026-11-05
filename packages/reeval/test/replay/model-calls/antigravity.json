@@ -1,0 +1,610 @@
+{
+  "harness": "antigravity",
+  "attempts": [
+    {
+      "eval": "audit",
+      "turns": [
+        {
+          "startMs": 0,
+          "durationMs": 113441,
+          "model": "gemini-3.8-flash-high",
+          "steps": [
+            {
+              "input": 7381,
+              "output": 318,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 282
+            },
+            {
+              "input": 2530,
+              "output": 222,
+              "cacheRead": 5392,
+              "cacheWrite": 0,
+              "reasoning": 180
+            },
+            {
+              "input": 2347,
+              "output": 80,
+              "cacheRead": 5913,
+              "cacheWrite": 0,
+              "reasoning": 56
+            },
+            {
+              "input": 2215,
+              "output": 92,
+              "cacheRead": 6203,
+              "cacheWrite": 0,
+              "reasoning": 56
+            },
+            {
+              "input": 2234,
+              "output": 34,
+              "cacheRead": 6364,
+              "cacheWrite": 0,
+              "reasoning": 10
+            },
+            {
+              "input": 2164,
+              "output": 210,
+              "cacheRead": 6546,
+              "cacheWrite": 0,
+              "reasoning": 148
+            },
+            {
+              "input": 6634,
+              "output": 253,
+              "cacheRead": 8769,
+              "cacheWrite": 0,
+              "reasoning": 215
+            },
+            {
+              "input": 2455,
+              "output": 48,
+              "cacheRead": 13409,
+              "cacheWrite": 0,
+              "reasoning": 10
+            },
+            {
+              "input": 2238,
+              "output": 75,
+              "cacheRead": 13788,
+              "cacheWrite": 0,
+              "reasoning": 37
+            },
+            {
+              "input": 2224,
+              "output": 128,
+              "cacheRead": 13952,
+              "cacheWrite": 0,
+              "reasoning": 86
+            },
+            {
+              "input": 2278,
+              "output": 79,
+              "cacheRead": 14103,
+              "cacheWrite": 0,
+              "reasoning": 49
+            },
+            {
+              "input": 2288,
+              "output": 230,
+              "cacheRead": 14309,
+              "cacheWrite": 0,
+              "reasoning": 129
+            },
+            {
+              "input": 2529,
+              "output": 285,
+              "cacheRead": 14612,
+              "cacheWrite": 0,
+              "reasoning": 259
+            },
+            {
+              "input": 2471,
+              "output": 350,
+              "cacheRead": 15128,
+              "cacheWrite": 0,
+              "reasoning": 293
+            }
+          ]
+        },
+        {
+          "startMs": 113842,
+          "durationMs": 61112,
+          "model": "gemini-3.8-flash-high",
+          "steps": [
+            {
+              "input": 2703,
+              "output": 206,
+              "cacheRead": 15551,
+              "cacheWrite": 0,
+              "reasoning": 182
+            },
+            {
+              "input": 2387,
+              "output": 240,
+              "cacheRead": 16203,
+              "cacheWrite": 0,
+              "reasoning": 186
+            },
+            {
+              "input": 2442,
+              "output": 69,
+              "cacheRead": 16556,
+              "cacheWrite": 0,
+              "reasoning": 28
+            },
+            {
+              "input": 2255,
+              "output": 108,
+              "cacheRead": 16892,
+              "cacheWrite": 0,
+              "reasoning": 71
+            },
+            {
+              "input": 2279,
+              "output": 33,
+              "cacheRead": 17042,
+              "cacheWrite": 0,
+              "reasoning": 9
+            },
+            {
+              "input": 2220,
+              "output": 123,
+              "cacheRead": 17218,
+              "cacheWrite": 0,
+              "reasoning": 102
+            },
+            {
+              "input": 2141,
+              "output": 185,
+              "cacheRead": 19392,
+              "cacheWrite": 0,
+              "reasoning": 146
+            }
+          ]
+        }
+      ],
+      "calls": [
+        {
+          "atMs": 2087,
+          "ms": 1296,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent",
+          "status": 200,
+          "tools": 0,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Execute Multi-Step\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 256,\"candidatesTokenCount\": 4,\"totalTokenCount\": 483,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 256}],\"thoughtsTokenCount\": 223,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.1-flash-lite\",\"responseId\": \"sr_sap2JJrWdo_UPkeOHsQ4\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" Task Sequence\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 256,\"candidatesTokenCount\": 6,\"totalTokenCount\": 485,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 256}],\"thoughtsTokenCount\": 223,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.1-flash-lite\",\"responseId\": \"sr_sap2JJrWdo_UPkeOHsQ4\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":256,\"candidatesTokenCount\":6,\"totalTokenCount\":485,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":256}],\"thoughtsTokenCount\":223,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.1-flash-lite\"}",
+          "expect": {
+            "usage": {
+              "input": 256,
+              "output": 229,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 223
+            },
+            "model": "gemini-3.1-flash-lite-preview",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 2159,
+          "ms": 3990,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Initiating Core Analysis**\\n\\nI've begun dissecting the instructions, focusing on the sequential nature of the tasks. My primary objective is to ensure each step is executed precisely. I'm moving toward an understanding of how to implement each instruction, especially the latter two, while noting the dependencies.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7381,\"totalTokenCount\": 7530,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7381}],\"thoughtsTokenCount\": 149,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"sr_sauG4KNjgytMP_r_b2Ag\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":7381,\"candidatesTokenCount\":36,\"totalTokenCount\":7699,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":7381}],\"thoughtsTokenCount\":282,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7381,\"candidatesTokenCount\": 36,\"totalTokenCount\": 7699,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7381}],\"thoughtsTokenCount\": 282,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"sr_sauG4KNjgytMP_r_b2Ag\"}\r",
+          "expect": {
+            "usage": {
+              "input": 7381,
+              "output": 318,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 282
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 8750,
+          "ms": 7635,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Confirming The Instruction**\\n\\nI've successfully written \\\"AUDIT-PROOF-K9\\\" into the `skill-proof.txt` file located in `/reeval/workspace`. The operation was completed as per the specified instructions.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7640,\"totalTokenCount\": 7736,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7640}],\"thoughtsTokenCount\": 96,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"ub_savmKEKGbo_UP1dTKuA4\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":7640,\"candidatesTokenCount\":42,\"totalTokenCount\":7862,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":7640}],\"thoughtsTokenCount\":180,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7922,\"candidatesTokenCount\": 42,\"totalTokenCount\": 8144,\"cachedContentTokenCount\": 5392,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7922}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 5392}],\"thoughtsTokenCount\": 180,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"ub_savmKEKGbo_UP1dTKuA4\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2530,
+              "output": 222,
+              "cacheRead": 5392,
+              "cacheWrite": 0,
+              "reasoning": 180
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 19712,
+          "ms": 2366,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read_file\",\"args\": {\"Path\": \"/reeval/workspace/notes.txt\"},\"id\": \"call_906819\"},\"thoughtSignature\": \"EtYCCtMCAWkUfRNG9xbZyLya+9rA5NZTL5EBVZnoQxB6SR5lbmU+pq5y1Rknz3eiD3SHreaT4C0BS02AKJ/zdVhNzlFQJhDho/8rTeLPtbo9u0t9O8m90xCIMu1EvGfk9Ju4nFFutT5WgXGb+buhRE8IVkIi6xBTnTegJwQ8sBl5FRq6LaYwCeOe1/rN+DrVgSKcY2G2ILh5lDf3UEzvqwbw8sB1JK3JaIdNloJP414vdBMaSU5MucJM6dinQkF/6KW3aRIA5OwpeTmoKMG4mSL4OCZ/fOoWLI/JXN7Y469MLSJVrvG8W3NVrl/tWZA2w2PZwfp1De/kz9FMDwAmoZHtJFMBT33Hj/lr4YM3hZzbcxA4aF+lEpl7k3Ar/ei99hBjzJ3HkjqqDaHKyNppcIsgQinGEloD5pNB/LN8lnXZvhczfXaDRfzVQNE7+dYWB0yTipa/caO3\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7798,\"candidatesTokenCount\": 24,\"totalTokenCount\": 7878,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7798}],\"thoughtsTokenCount\": 56,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"xL_sap2oDd2hytMPyMSv0Ak\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8260,\"candidatesTokenCount\": 24,\"totalTokenCount\": 8340,\"cachedContentTokenCount\": 5913,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8260}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 5913}],\"thoughtsTokenCount\": 56,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"xL_sap2oDd2hytMPyMSv0Ak\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2347,
+              "output": 80,
+              "cacheRead": 5913,
+              "cacheWrite": 0,
+              "reasoning": 56
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 25134,
+          "ms": 5144,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"edit_file\",\"args\": {\"Target\": \"draft\",\"Replacement\": \"final\",\"Path\": \"/reeval/workspace/notes.txt\"},\"id\": \"call_765207\"},\"thoughtSignature\": \"EtwCCtkCAWkUfRNNywoq4pIfzT+4mfz9Bf88IqJTUnzFEnbSQYiBKiTY+49uQ4zU3Oovr3tlRlg6l0Jry1KRme8aS+nTt6Kx8DREbIjKgHn4Yes+8Xha83xvlhzUJUPNKICBBYSaK1nSRS+EIZPM7wpZZjQOQniloM0F2txFq5DNZqGU2HuoWFmPECTdfVapiMzq92/iIevVmz91fHLS4U4YuWga3hAudGZ7SHda8nAOfyLeN3tTKcRA0UW1HBCuaOWGsWAFk0vJGZ5w0bs0lQcJqyHW2b45EPjdJlfPNZXFLnMliTCzinxmO3BhFoK5rk6rE0bSKECj9GzR6hw/J3g4H0vEu2nqWf4LUWFThU3/ywrjreLAZDHCxmdE6yYyT8n+R8t/Ff0xQxt9qkQ8dHoeurZbKXVLcLftSK+ZyO6GtzL7MKHJE1Tdl/SoPe6VQImjttX9EUyB8uh1OZND\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 7900,\"candidatesTokenCount\": 36,\"totalTokenCount\": 7992,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 7900}],\"thoughtsTokenCount\": 56,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"yb_savykKJG-ytMP2eupgAg\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8418,\"candidatesTokenCount\": 36,\"totalTokenCount\": 8510,\"cachedContentTokenCount\": 6203,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8418}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 6203}],\"thoughtsTokenCount\": 56,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"yb_savykKJG-ytMP2eupgAg\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2215,
+              "output": 92,
+              "cacheRead": 6203,
+              "cacheWrite": 0,
+              "reasoning": 56
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 35880,
+          "ms": 1492,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read_file\",\"args\": {\"Path\": \"/reeval/workspace/notes.txt\"},\"id\": \"call_563226\"},\"thoughtSignature\": \"Ep0BCpoBAWkUfRPeYOBaft02YUpynTc0r81DVMFnTPBP0L/Y9DA2T+Ac+eZyHr9a9p1PMEhqkG5MbISbxQpuXqkWPTCNAV9lJCPndRidxhQzvZrYtjyd5odyQawlUf3u9z/hUoQqLX6v7pMDuxEE6JppkOTscb4bR6vAN8CW9h8VYUNAQAsCBBDa7X8OriUnjPRoxUdcEUn4jvBQADCzew==\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8024,\"candidatesTokenCount\": 24,\"totalTokenCount\": 8058,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8024}],\"thoughtsTokenCount\": 10,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"1L_sap_0F9OsuMYP7pegyAk\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8598,\"candidatesTokenCount\": 24,\"totalTokenCount\": 8632,\"cachedContentTokenCount\": 6364,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8598}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 6364}],\"thoughtsTokenCount\": 10,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"1L_sap_0F9OsuMYP7pegyAk\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2234,
+              "output": 34,
+              "cacheRead": 6364,
+              "cacheWrite": 0,
+              "reasoning": 10
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 41156,
+          "ms": 4009,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Analyzing Command Execution**\\n\\nI've completed step two. Now, I'm focusing intently on step three, specifically scrutinizing the `run_command` parameters and the associated command line. It's: `seq 1 30000 | sed 's/^/line-/'; echo END-OF-OUTPUT-77`. The focus is on ensuring precise execution and how the system treats its parameters.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8126,\"totalTokenCount\": 8274,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8126}],\"thoughtsTokenCount\": 148,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"2b_sasG7KIOuuMYPn-GC0As\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":8126,\"candidatesTokenCount\":62,\"totalTokenCount\":8336,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":8126}],\"thoughtsTokenCount\":148,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8710,\"candidatesTokenCount\": 62,\"totalTokenCount\": 8920,\"cachedContentTokenCount\": 6546,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8710}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 6546}],\"thoughtsTokenCount\": 148,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"2b_sasG7KIOuuMYPn-GC0As\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2164,
+              "output": 210,
+              "cacheRead": 6546,
+              "cacheWrite": 0,
+              "reasoning": 148
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 47594,
+          "ms": 3001,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Analyzing Probe's Output**\\n\\nI've just observed the final output line from the shell command, identifying \\\"END-OF-OUTPUT-77.\\\" I'm now transitioning to Step 4, which involves interacting with the `probe` MCP server. The immediate next action is to utilize its echo tool with the payload \\\"ARG-PAYLOAD-123\\\" and subsequently call its bulk tool.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 14671,\"totalTokenCount\": 14846,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 14671}],\"thoughtsTokenCount\": 175,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"4L_sariQBtj_ytMP0eaz6Ag\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":14671,\"candidatesTokenCount\":38,\"totalTokenCount\":14924,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14671}],\"thoughtsTokenCount\":215,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15403,\"candidatesTokenCount\": 38,\"totalTokenCount\": 15656,\"cachedContentTokenCount\": 8769,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15403}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8769}],\"thoughtsTokenCount\": 215,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"4L_sariQBtj_ytMP0eaz6Ag\"}\r",
+          "expect": {
+            "usage": {
+              "input": 6634,
+              "output": 253,
+              "cacheRead": 8769,
+              "cacheWrite": 0,
+              "reasoning": 215
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 53061,
+          "ms": 1972,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read_file\",\"args\": {\"Path\": \"/home/reeval/.gemini/antigravity-cli/mcp/probe/bulk.json\"},\"id\": \"call_626007\"},\"thoughtSignature\": \"EpYBCpMBAWkUfRONmCxjZhT6ptX1NWHjZmA9Q4Hy9LFIC/TKFb7PWqT4+4Ptumsfh/bNXVGOYMuNIB/RpPMkeh1Jxi7RtEmYQD39uKhm3NQWsz6ecKCkLwXUTXRVo0BsMfsHAlgI6lwurDlfvn8dNwHAWT4u3Tn9SAFIBxR5EbHZ14+WXGrkVUp18sGTgNBxwZPlwxgxCrUf\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 14917,\"candidatesTokenCount\": 38,\"totalTokenCount\": 14965,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 14917}],\"thoughtsTokenCount\": 10,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"5b_saqu7IvjcytMPu9bQyAk\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15864,\"candidatesTokenCount\": 38,\"totalTokenCount\": 15912,\"cachedContentTokenCount\": 13409,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15864}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 13409}],\"thoughtsTokenCount\": 10,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"5b_saqu7IvjcytMPu9bQyAk\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2455,
+              "output": 48,
+              "cacheRead": 13409,
+              "cacheWrite": 0,
+              "reasoning": 10
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 56516,
+          "ms": 3380,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read_file\",\"args\": {\"Path\": \"/home/reeval/.gemini/antigravity-cli/mcp/probe/instructions.md\"},\"id\": \"call_570109\"},\"thoughtSignature\": \"EvwBCvkBAWkUfROcLS9Ok819587FvMo26NEozsbdsbdXvvnDUC4v49NBP6niAitlYLnxOUDjvl1unYb4IHOHtHkziQoZA/IFfZExDSDkvwCyeOAZBUo2RlVG8UWsa3o2yeSodlXam4lX66Ze/rqvm++MtJ1Usb0mllajZnyEQCD7fm2t2FZ93konXC2Bgr7dIgFp38EFWIH9J5mwi/29R+Q+fNV63zKlrWrH3LdzbTK2TwjJ0dizUKrZckQFHbGyWeFtPsMv0BhAMh2O7cJegsciaV4lqRacZVuWcyD/MM41CvK5XGl67UpIZ1QV+DWyTGMDwaf/CekcNNxptQzB\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15069,\"candidatesTokenCount\": 38,\"totalTokenCount\": 15144,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15069}],\"thoughtsTokenCount\": 37,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"6b_sapH-Ac2FytMPlufswQg\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16026,\"candidatesTokenCount\": 38,\"totalTokenCount\": 16101,\"cachedContentTokenCount\": 13788,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16026}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 13788}],\"thoughtsTokenCount\": 37,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"6b_sapH-Ac2FytMPlufswQg\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2238,
+              "output": 75,
+              "cacheRead": 13788,
+              "cacheWrite": 0,
+              "reasoning": 37
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 62131,
+          "ms": 5033,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"usageMetadata\":{\"promptTokenCount\":15182,\"candidatesTokenCount\":42,\"totalTokenCount\":15310,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":15182}],\"thoughtsTokenCount\":86,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16176,\"candidatesTokenCount\": 42,\"totalTokenCount\": 16304,\"cachedContentTokenCount\": 13952,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16176}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 13952}],\"thoughtsTokenCount\": 86,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"7r_sapKVJ4ndytMP0qCbsQk\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2224,
+              "output": 128,
+              "cacheRead": 13952,
+              "cacheWrite": 0,
+              "reasoning": 86
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 69094,
+          "ms": 4517,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"call_mcp_tool\",\"args\": {\"ServerName\": \"probe\",\"Arguments\": {},\"ToolName\": \"bulk\"},\"id\": \"call_595710\"},\"thoughtSignature\": \"EpECCo4CAWkUfRNsw1u1DggPg/y60B2WjJ6n4897xcbfzXzAmSwsNJKWnPxFAaGHDrd125yYk2LVmnno+Q4qRAxSQVeGVZkRY3TrBZTEn3wWs4edXP7K2GxR1MLgfmwdb4YFBbDihxP4MEdHvqKKejBbVwf4ZiGI9b1wRce7nYhPNB5hwpwFZHEX5A8bAqLKjbFr0r3WPtIJfBO5/fqbWYAnfSao1lEXtPEO/nJsxU5LDGdwF2F6qrbJjinVrukdwOD8QPrhPOGFGcEWnuxFIIcTpt0SP7qxTKz84g8Y5A6h9g2OvtQFwLDi1/lioH5SnRZUKfkxeHNcTW+594ze2fmD1XPdaT6TQsKldBdXXUvpciyu\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15301,\"candidatesTokenCount\": 30,\"totalTokenCount\": 15380,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15301}],\"thoughtsTokenCount\": 49,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"9b_saqafJba-uMYPxrW68A8\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16381,\"candidatesTokenCount\": 30,\"totalTokenCount\": 16460,\"cachedContentTokenCount\": 14103,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16381}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 14103}],\"thoughtsTokenCount\": 49,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"9b_saqafJba-uMYPxrW68A8\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2278,
+              "output": 79,
+              "cacheRead": 14103,
+              "cacheWrite": 0,
+              "reasoning": 49
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 76732,
+          "ms": 15768,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Inspecting Output File**\\n\\nI'm now focused on examining the bulk tool's output, specifically the end of the file located at `/home/reeval/.gemini/antigravity-cli/brain/f2c9cec5-bb74-4316-8ef0-5a9b4332ce6e/.system_generated/steps/22/output.txt`. The goal is to determine the final line.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15468,\"totalTokenCount\": 15597,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15468}],\"thoughtsTokenCount\": 129,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"_b_sarflDtnCytMP3qaKgAo\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":15468,\"candidatesTokenCount\":101,\"totalTokenCount\":15698,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":15468}],\"thoughtsTokenCount\":129,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16597,\"candidatesTokenCount\": 101,\"totalTokenCount\": 16827,\"cachedContentTokenCount\": 14309,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16597}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 14309}],\"thoughtsTokenCount\": 129,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"_b_sarflDtnCytMP3qaKgAo\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2288,
+              "output": 230,
+              "cacheRead": 14309,
+              "cacheWrite": 0,
+              "reasoning": 129
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 96637,
+          "ms": 3739,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Verifying Instruction Compliance**\\n\\nI'm currently focused on verifying that all instructions are correctly interpreted and followed. I'm cross-referencing the prompt's instructions with my action to ensure complete adherence to all requirements, including the correct formatting of the headers and the style guidelines for the summaries. I'm specifically scrutinizing the prompt's directive regarding repeated headers to avoid generating identical entries.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15883,\"totalTokenCount\": 16052,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15883}],\"thoughtsTokenCount\": 169,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"EcDsapGtCZeE1sgPn6S8oAU\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":15883,\"candidatesTokenCount\":26,\"totalTokenCount\":16168,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":15883}],\"thoughtsTokenCount\":259,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 17141,\"candidatesTokenCount\": 26,\"totalTokenCount\": 17426,\"cachedContentTokenCount\": 14612,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 17141}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 14612}],\"thoughtsTokenCount\": 259,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"EcDsapGtCZeE1sgPn6S8oAU\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2529,
+              "output": 285,
+              "cacheRead": 14612,
+              "cacheWrite": 0,
+              "reasoning": 259
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 104603,
+          "ms": 4405,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Verifying Document Status**\\n\\nI've just confirmed the status of `notes.txt`. I used my file editing tool to change \\\"draft\\\" to \\\"final,\\\" and verified the change. Currently, I'm at the stage of running a basic shell command.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16082,\"totalTokenCount\": 16250,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16082}],\"thoughtsTokenCount\": 168,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"GcDsao-PB5K_uMYPy8ykuAk\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"ER-5150`\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16082,\"candidatesTokenCount\": 57,\"totalTokenCount\": 16432,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16082}],\"thoughtsTokenCount\": 293,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"GcDsao-PB5K_uMYPy8ykuAk\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":17599,\"candidatesTokenCount\":57,\"totalTokenCount\":17949,\"cachedContentTokenCount\":15128,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":17599}],\"cacheTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":15128}],\"thoughtsTokenCount\":293,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}",
+          "expect": {
+            "usage": {
+              "input": 2471,
+              "output": 350,
+              "cacheRead": 15128,
+              "cacheWrite": 0,
+              "reasoning": 293
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 114489,
+          "ms": 3506,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Assessing Task Feasibility**\\n\\nI'm currently verifying the availability of tools to fulfill the user's latest request, specifically regarding file modification and web searching capabilities. If a web search tool is not available, I'll indicate this directly.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16444,\"totalTokenCount\": 16539,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16444}],\"thoughtsTokenCount\": 95,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"I8Dsaq7rA_rcytMPscfk0Ak\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":16444,\"candidatesTokenCount\":24,\"totalTokenCount\":16650,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":16444}],\"thoughtsTokenCount\":182,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 18254,\"candidatesTokenCount\": 24,\"totalTokenCount\": 18460,\"cachedContentTokenCount\": 15551,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 18254}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15551}],\"thoughtsTokenCount\": 182,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"I8Dsaq7rA_rcytMPscfk0Ak\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2703,
+              "output": 206,
+              "cacheRead": 15551,
+              "cacheWrite": 0,
+              "reasoning": 182
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 122085,
+          "ms": 4543,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Analyzing File Modification**\\n\\nI'm currently focused on file modification, specifically how `write_file` with append differs from `edit_file` regarding newlines. I need to verify that appending adds a newline correctly. The test case will check if there's a final newline after the write, and then what happens if there's a modification on the next line.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16598,\"totalTokenCount\": 16777,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16598}],\"thoughtsTokenCount\": 179,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"KsDsapqhJI2tytMPst_OiAw\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":16598,\"candidatesTokenCount\":54,\"totalTokenCount\":16838,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":16598}],\"thoughtsTokenCount\":186,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 18590,\"candidatesTokenCount\": 54,\"totalTokenCount\": 18830,\"cachedContentTokenCount\": 16203,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 18590}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16203}],\"thoughtsTokenCount\": 186,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"KsDsapqhJI2tytMPst_OiAw\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2387,
+              "output": 240,
+              "cacheRead": 16203,
+              "cacheWrite": 0,
+              "reasoning": 186
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 128158,
+          "ms": 3041,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"run_command\",\"args\": {\"WaitMsBeforeAsync\": 5000,\"CommandLine\": \"cat -A notes.txt\",\"toolSummary\": \"Cat notes.txt\"},\"id\": \"call_725288\"},\"thoughtSignature\": \"EsgBCsUBAWkUfRPzfHPpVh+738GESqgacfIiVoPKpB05T+6gd0zvxn9N+wE2DSdJbIYDzMoJbEtiiythCb5z0J6iyRKkRNxdlSwywMEJpV4rCQPCPhdK+9KcOhTABAxOXoC5tLqqc2ukCCZxsGFJDEC2PZZrJSKfp7feW+xdTrofMgfmTu1eXQ7i9f5yKrcspuUIiTJqjqqRML737F8g2hncct0NvppIpU2jeVFLocaNi/b9826TrAJV+zrTf4EeFgmyTJRRJtvnDCo=\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16820,\"candidatesTokenCount\": 41,\"totalTokenCount\": 16889,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16820}],\"thoughtsTokenCount\": 28,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"MMDsavrEK6CF1sgP_5zBmAQ\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 18998,\"candidatesTokenCount\": 41,\"totalTokenCount\": 19067,\"cachedContentTokenCount\": 16556,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 18998}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16556}],\"thoughtsTokenCount\": 28,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"MMDsavrEK6CF1sgP_5zBmAQ\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2442,
+              "output": 69,
+              "cacheRead": 16556,
+              "cacheWrite": 0,
+              "reasoning": 28
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 133009,
+          "ms": 3063,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"usageMetadata\":{\"promptTokenCount\":16941,\"candidatesTokenCount\":37,\"totalTokenCount\":17049,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":16941}],\"thoughtsTokenCount\":71,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 19147,\"candidatesTokenCount\": 37,\"totalTokenCount\": 19255,\"cachedContentTokenCount\": 16892,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 19147}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16892}],\"thoughtsTokenCount\": 71,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"NcDsaqz2H9ido_UP8omR8Ag\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2255,
+              "output": 108,
+              "cacheRead": 16892,
+              "cacheWrite": 0,
+              "reasoning": 71
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 138005,
+          "ms": 2310,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read_file\",\"args\": {\"Path\": \"/reeval/workspace/notes.txt\"},\"id\": \"call_633896\"},\"thoughtSignature\": \"EpQBCpEBAWkUfRONA02M0ltehQ9BxaFZEhuPbiNeJFvHc/d5ft8/lMJfDPL8dxr7mrZS+g2g8UO0POPPkm3Zp563gRWW5IzIOwisubaTEhe8iiDLT68LVBkgY9+xJyUiCGIg2QcNCkk40I+c+qrXNI9rC3rfeSFEkwarISVT0dJ9KgsdYbtT4fmxsyM9JNj7DbuI81wdAw==\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 17044,\"candidatesTokenCount\": 24,\"totalTokenCount\": 17077,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 17044}],\"thoughtsTokenCount\": 9,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"OsDsauX8HoSrytMP4vn9yAI\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 19321,\"candidatesTokenCount\": 24,\"totalTokenCount\": 19354,\"cachedContentTokenCount\": 17042,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 19321}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 17042}],\"thoughtsTokenCount\": 9,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"OsDsauX8HoSrytMP4vn9yAI\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2279,
+              "output": 33,
+              "cacheRead": 17042,
+              "cacheWrite": 0,
+              "reasoning": 9
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 141443,
+          "ms": 4711,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"usageMetadata\":{\"promptTokenCount\":17152,\"candidatesTokenCount\":21,\"totalTokenCount\":17275,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":17152}],\"thoughtsTokenCount\":102,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 19438,\"candidatesTokenCount\": 21,\"totalTokenCount\": 19561,\"cachedContentTokenCount\": 17218,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 19438}],\"cacheTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 17218}],\"thoughtsTokenCount\": 102,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"PcDsaobWOo-xytMPy6WDuAs\"}\r",
+          "expect": {
+            "usage": {
+              "input": 2220,
+              "output": 123,
+              "cacheRead": 17218,
+              "cacheWrite": 0,
+              "reasoning": 102
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 149050,
+          "ms": 3432,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent",
+          "status": 200,
+          "tools": 1,
+          "body": "{\n  \"usageMetadata\": {\n    \"promptTokenCount\": 70,\n    \"candidatesTokenCount\": 512,\n    \"totalTokenCount\": 582,\n    \"promptTokensDetails\": [\n      {\n        \"modality\": \"TEXT\",\n        \"tokenCount\": 70\n      }\n    ],\n    \"serviceTier\": \"standard\"\n  },\n  \"modelVersion\": \"gemini-3.1-flash-lite\"\n}",
+          "expect": {
+            "usage": {
+              "input": 70,
+              "output": 512,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": null
+            },
+            "model": "gemini-3.1-flash-lite",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 156342,
+          "ms": 15559,
+          "request": "POST generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Analyzing the Prompt's Actions**\\n\\nI'm focusing on the distinct actions the prompt requires: appending a line to a file and, conditionally, performing a web search. The conditional nature makes the task slightly more complex, depending on the tool's availability.\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 19145,\"totalTokenCount\": 19269,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 19145}],\"thoughtsTokenCount\": 124,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"TMDsauHYNa3hytMP397D6Qs\"}\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" and performed the web search for 'invertase reeval eval runner'.\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 19145,\"candidatesTokenCount\": 39,\"totalTokenCount\": 19330,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 19145}],\"thoughtsTokenCount\": 146,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"TMDsauHYNa3hytMP397D6Qs\"}\r\ndata: {\"usageMetadata\":{\"promptTokenCount\":21533,\"candidatesTokenCount\":39,\"totalTokenCount\":21718,\"cachedContentTokenCount\":19392,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":21533}],\"cacheTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":19392}],\"thoughtsTokenCount\":146,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\"}",
+          "expect": {
+            "usage": {
+              "input": 2141,
+              "output": 185,
+              "cacheRead": 19392,
+              "cacheWrite": 0,
+              "reasoning": 146
+            },
+            "model": "gemini-3.8-flash",
+            "role": "main"
+          }
+        }
+      ]
+    }
+  ]
+}

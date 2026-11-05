@@ -1,0 +1,373 @@
+{
+  "harness": "grok-build",
+  "attempts": [
+    {
+      "eval": "audit",
+      "turns": [
+        {
+          "startMs": 0,
+          "durationMs": 13917,
+          "model": "grok-4.6",
+          "steps": []
+        },
+        {
+          "startMs": 14282,
+          "durationMs": 35290,
+          "model": "grok-4.6",
+          "steps": []
+        }
+      ],
+      "calls": [
+        {
+          "atMs": 1913,
+          "ms": 1385,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":11774,\"input_tokens_details\":{\"cached_tokens\":512},\"output_tokens\":72,\"output_tokens_details\":{\"reasoning_tokens\":23},\"total_tokens\":11846,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":232120000,\"context_details\":{\"input_tokens\":11774,\"output_tokens\":76}}}}",
+          "expect": {
+            "usage": {
+              "input": 11262,
+              "output": 72,
+              "cacheRead": 512,
+              "cacheWrite": 0,
+              "reasoning": 23
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 3326,
+          "ms": 1730,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":12038,\"input_tokens_details\":{\"cached_tokens\":11648},\"output_tokens\":70,\"output_tokens_details\":{\"reasoning_tokens\":21},\"total_tokens\":12108,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":70240000,\"context_details\":{\"input_tokens\":12038,\"output_tokens\":73}}}}",
+          "expect": {
+            "usage": {
+              "input": 390,
+              "output": 70,
+              "cacheRead": 11648,
+              "cacheWrite": 0,
+              "reasoning": 21
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 5172,
+          "ms": 864,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":12176,\"input_tokens_details\":{\"cached_tokens\":12032},\"output_tokens\":39,\"output_tokens_details\":{\"reasoning_tokens\":7},\"total_tokens\":12215,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":65380000,\"context_details\":{\"input_tokens\":12176,\"output_tokens\":42}}}}",
+          "expect": {
+            "usage": {
+              "input": 144,
+              "output": 39,
+              "cacheRead": 12032,
+              "cacheWrite": 0,
+              "reasoning": 7
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 6100,
+          "ms": 1080,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":12238,\"input_tokens_details\":{\"cached_tokens\":12160},\"output_tokens\":72,\"output_tokens_details\":{\"reasoning_tokens\":25},\"total_tokens\":12310,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":66680000,\"context_details\":{\"input_tokens\":12238,\"output_tokens\":76}}}}",
+          "expect": {
+            "usage": {
+              "input": 78,
+              "output": 72,
+              "cacheRead": 12160,
+              "cacheWrite": 0,
+              "reasoning": 25
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 7641,
+          "ms": 1104,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":21548,\"input_tokens_details\":{\"cached_tokens\":12160},\"output_tokens\":27,\"output_tokens_details\":{\"reasoning_tokens\":14},\"total_tokens\":21575,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":250180000,\"context_details\":{\"input_tokens\":21548,\"output_tokens\":30}}}}",
+          "expect": {
+            "usage": {
+              "input": 9388,
+              "output": 27,
+              "cacheRead": 12160,
+              "cacheWrite": 0,
+              "reasoning": 14
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 8769,
+          "ms": 929,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":21808,\"input_tokens_details\":{\"cached_tokens\":21504},\"output_tokens\":41,\"output_tokens_details\":{\"reasoning_tokens\":11},\"total_tokens\":21849,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":116060000,\"context_details\":{\"input_tokens\":21808,\"output_tokens\":45}}}}",
+          "expect": {
+            "usage": {
+              "input": 304,
+              "output": 41,
+              "cacheRead": 21504,
+              "cacheWrite": 0,
+              "reasoning": 11
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 1887,
+          "ms": 7980,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 1,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"tool_choice\":{\"type\":\"function\"},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"tool_choice\":{\"type\":\"function\"},\"usage\":{\"input_tokens\":994,\"input_tokens_details\":{\"cached_tokens\":768},\"output_tokens\":519,\"output_tokens_details\":{\"reasoning_tokens\":482},\"total_tokens\":1513,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":39500000,\"context_details\":{\"input_tokens\":994,\"output_tokens\":526}}}}",
+          "expect": {
+            "usage": {
+              "input": 226,
+              "output": 519,
+              "cacheRead": 768,
+              "cacheWrite": 0,
+              "reasoning": 482
+            },
+            "model": "grok-4.6",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 9718,
+          "ms": 664,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":21864,\"input_tokens_details\":{\"cached_tokens\":21760},\"output_tokens\":23,\"output_tokens_details\":{\"reasoning_tokens\":2},\"total_tokens\":21887,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":112260000,\"context_details\":{\"input_tokens\":21864,\"output_tokens\":26}}}}",
+          "expect": {
+            "usage": {
+              "input": 104,
+              "output": 23,
+              "cacheRead": 21760,
+              "cacheWrite": 0,
+              "reasoning": 2
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 10418,
+          "ms": 1395,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":27013,\"input_tokens_details\":{\"cached_tokens\":21760},\"output_tokens\":130,\"output_tokens_details\":{\"reasoning_tokens\":20},\"total_tokens\":27143,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":221660000,\"context_details\":{\"input_tokens\":27013,\"output_tokens\":134}}}}",
+          "expect": {
+            "usage": {
+              "input": 5253,
+              "output": 130,
+              "cacheRead": 21760,
+              "cacheWrite": 0,
+              "reasoning": 20
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 11879,
+          "ms": 1980,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":27359,\"input_tokens_details\":{\"cached_tokens\":27008},\"output_tokens\":29,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":27388,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":143800000,\"context_details\":{\"input_tokens\":27359,\"output_tokens\":37}}}}",
+          "expect": {
+            "usage": {
+              "input": 351,
+              "output": 29,
+              "cacheRead": 27008,
+              "cacheWrite": 0,
+              "reasoning": 12
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 14377,
+          "ms": 1192,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":27460,\"input_tokens_details\":{\"cached_tokens\":27264},\"output_tokens\":57,\"output_tokens_details\":{\"reasoning_tokens\":37},\"total_tokens\":27517,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":143660000,\"context_details\":{\"input_tokens\":27460,\"output_tokens\":61}}}}",
+          "expect": {
+            "usage": {
+              "input": 196,
+              "output": 57,
+              "cacheRead": 27264,
+              "cacheWrite": 0,
+              "reasoning": 37
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 15584,
+          "ms": 2416,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":27531,\"input_tokens_details\":{\"cached_tokens\":27392},\"output_tokens\":64,\"output_tokens_details\":{\"reasoning_tokens\":9},\"total_tokens\":27595,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":143580000,\"context_details\":{\"input_tokens\":27531,\"output_tokens\":68}}}}",
+          "expect": {
+            "usage": {
+              "input": 139,
+              "output": 64,
+              "cacheRead": 27392,
+              "cacheWrite": 0,
+              "reasoning": 9
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 18069,
+          "ms": 30275,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 1,
+          "body": "{\n  \"model\": \"grok-4.6\",\n  \"text\": {\n    \"format\": {\n      \"type\": \"text\"\n    }\n  },\n  \"usage\": {\n    \"input_tokens\": 145838,\n    \"input_tokens_details\": {\n      \"cached_tokens\": 99968\n    },\n    \"output_tokens\": 1652,\n    \"output_tokens_details\": {\n      \"reasoning_tokens\": 954\n    },\n    \"total_tokens\": 147490,\n    \"num_sources_used\": 0,\n    \"num_server_side_tools_used\": 8,\n    \"cost_in_usd_ticks\": 1916360000,\n    \"server_side_tool_usage_details\": {\n      \"web_search_calls\": 8,\n      \"x_search_calls\": 0,\n      \"x_posts_fetched\": 0,\n      \"x_users_fetched\": 0,\n      \"code_interpreter_calls\": 0,\n      \"file_search_calls\": 0,\n      \"mcp_calls\": 0,\n      \"document_search_calls\": 0,\n      \"image_generation_calls\": 0\n    },\n    \"context_details\": {\n      \"input_tokens\": 46906,\n      \"output_tokens\": 838\n    }\n  }\n}",
+          "expect": {
+            "usage": {
+              "input": 45870,
+              "output": 1652,
+              "cacheRead": 99968,
+              "cacheWrite": 0,
+              "reasoning": 954
+            },
+            "model": "grok-4.6",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 48358,
+          "ms": 1179,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":28175,\"input_tokens_details\":{\"cached_tokens\":27520},\"output_tokens\":30,\"output_tokens_details\":{\"reasoning_tokens\":5},\"total_tokens\":28205,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":152500000,\"context_details\":{\"input_tokens\":28175,\"output_tokens\":38}}}}",
+          "expect": {
+            "usage": {
+              "input": 655,
+              "output": 30,
+              "cacheRead": 27520,
+              "cacheWrite": 0,
+              "reasoning": 5
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        }
+      ]
+    },
+    {
+      "eval": "aborted",
+      "turns": [
+        {
+          "startMs": 0,
+          "durationMs": 47852,
+          "model": null,
+          "steps": []
+        }
+      ],
+      "calls": [
+        {
+          "atMs": 1447,
+          "ms": 3841,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 1,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"tool_choice\":{\"type\":\"function\"},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"tool_choice\":{\"type\":\"function\"},\"usage\":{\"input_tokens\":916,\"input_tokens_details\":{\"cached_tokens\":768},\"output_tokens\":342,\"output_tokens_details\":{\"reasoning_tokens\":324},\"total_tokens\":1258,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":27320000,\"context_details\":{\"input_tokens\":916,\"output_tokens\":349}}}}",
+          "expect": {
+            "usage": {
+              "input": 148,
+              "output": 342,
+              "cacheRead": 768,
+              "cacheWrite": 0,
+              "reasoning": 324
+            },
+            "model": "grok-4.6",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 1462,
+          "ms": 20052,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":11696,\"input_tokens_details\":{\"cached_tokens\":512},\"output_tokens\":877,\"output_tokens_details\":{\"reasoning_tokens\":78},\"total_tokens\":12573,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":278860000,\"context_details\":{\"input_tokens\":11696,\"output_tokens\":883}}}}",
+          "expect": {
+            "usage": {
+              "input": 11184,
+              "output": 877,
+              "cacheRead": 512,
+              "cacheWrite": 0,
+              "reasoning": 78
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 21592,
+          "ms": 2309,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":{\"input_tokens\":12720,\"input_tokens_details\":{\"cached_tokens\":11648},\"output_tokens\":105,\"output_tokens_details\":{\"reasoning_tokens\":57},\"total_tokens\":12825,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":85980000,\"context_details\":{\"input_tokens\":12720,\"output_tokens\":112}}}}",
+          "expect": {
+            "usage": {
+              "input": 1072,
+              "output": 105,
+              "cacheRead": 11648,
+              "cacheWrite": 0,
+              "reasoning": 57
+            },
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 23916,
+          "ms": 20939,
+          "request": "POST api.x.ai/v1/responses",
+          "status": 200,
+          "tools": 25,
+          "body": "data: {\"type\":\"response.created\",\"response\":{\"model\":\"grok-4.6\",\"text\":{\"format\":{\"type\":\"text\"}},\"usage\":null}}",
+          "expect": {
+            "usage": null,
+            "model": "grok-4.6",
+            "role": "main"
+          }
+        }
+      ]
+    }
+  ]
+}

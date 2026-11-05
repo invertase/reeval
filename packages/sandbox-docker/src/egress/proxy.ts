@@ -6,7 +6,7 @@ import { Duplex, type Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
 import zlib from 'node:zlib'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
-import { requestedEffort } from './effort.ts'
+import { requestFacts } from './effort.ts'
 import { link } from './mux.ts'
 import {
   createPolicyCheck,
@@ -38,6 +38,7 @@ import {
   unsubstituted,
 } from './substitution.ts'
 import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
+import { MODEL_FIELD, usageReader } from './usage.ts'
 import { webSocketScrubber } from './websocket.ts'
 
 export type EgressProxyOptions = {
@@ -150,12 +151,18 @@ export type EgressRequestEvent = {
   /** Set on a request that is one of the agent's `modelCalls`. */
   modelCall?: true
   /**
-   * On a model call, each usage field the response body named with its last value
-   * (`input_tokens`, `cache_read_input_tokens`, `promptTokenCount`, …); absent when it named none.
+   * On a model call, the usage fields of the response body's usage objects, each with its last
+   * value (`input_tokens`, `cache_read_input_tokens`, `promptTokenCount`, …); absent when it named
+   * none.
    */
   responseUsage?: Record<string, number>
-  /** On a model call, the first `"model"` or `"modelId"` its response body names. */
+  /** On a model call, the first `"model"`, `"modelId"` or `"modelVersion"` its response body names. */
   usageModel?: string
+  /**
+   * How many tools the request body declared, when the gateway read it (as for `requestEffort`)
+   * and it was a JSON object.
+   */
+  requestTools?: number
   /** As the sandbox sent them: placeholders, never real values. */
   requestHeaders?: Headers
   /** As the sandbox got them, scrubbed. */
@@ -264,6 +271,7 @@ type RequestTracker = {
         | 'status'
         | 'reason'
         | 'requestEffort'
+        | 'requestTools'
         | 'responseModel'
         | 'responseEffort'
         | 'responseProvider'
@@ -283,15 +291,8 @@ type Response = http.ServerResponse
 /** Which parts of a response body the gateway reads as it flows. */
 type Reads = { model?: boolean; usage?: boolean }
 
-/**
- * The usage fields of the model APIs the agents call: Anthropic's Messages, OpenAI's Responses
- * and Chat Completions (and the APIs shaped like them), and Gemini's `usageMetadata`.
- */
-const USAGE_FIELD =
-  /"(input_tokens|output_tokens|cache_read_input_tokens|cache_creation_input_tokens|prompt_tokens|completion_tokens|cached_tokens|reasoning_tokens|promptTokenCount|candidatesTokenCount|cachedContentTokenCount|thoughtsTokenCount)"\s*:\s*(\d+)/g
-
-/** How much of a chunk's end the usage reader keeps, so a field split between chunks is seen. */
-const USAGE_CARRY = 64
+/** How much of a chunk's end the model reader keeps, so a field split between chunks is seen. */
+const MODEL_CARRY = 256
 
 /** A TLS record's first byte when it carries a handshake, as a ClientHello does. */
 const TLS_HANDSHAKE = 0x16
@@ -1382,31 +1383,24 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   }
 
   /**
-   * Records the last value of each usage field the response body names, reading alongside its
-   * flow: a stream's later events repeat its counts or replace them with the final ones
-   * (Anthropic's `message_delta`, Gemini's last chunk, the Responses API's `response.completed`).
-   * Inside a JSON string the quotes are escaped, so text that merely mentions a field doesn't
-   * match.
+   * Records the response body's usage (`usageReader`) and the first model it names, reading
+   * alongside its flow.
    */
   function readUsage(up: Readable, t: RequestTracker) {
-    const usage: Record<string, number> = {}
+    const read = usageReader()
     let carry = ''
     let seen = 0
     let model: string | undefined
     up.on('data', (chunk: Buffer) => {
-      const text = carry + chunk.toString('utf8')
+      const text = chunk.toString('utf8')
       if (!model && seen <= MODEL_WINDOW) {
-        model = /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(text)?.[1]
+        model = MODEL_FIELD.exec(carry + text)?.[1]
         if (model) t.set({ usageModel: model })
+        carry = (carry + text).slice(-MODEL_CARRY)
       }
       seen += chunk.length
-      let found = false
-      for (const m of text.matchAll(USAGE_FIELD)) {
-        usage[m[1] as string] = Number(m[2])
-        found = true
-      }
-      if (found) t.set({ responseUsage: { ...usage } })
-      carry = text.slice(-USAGE_CARRY)
+      const usage = read(text)
+      if (usage) t.set({ responseUsage: usage })
     })
   }
 
@@ -1429,8 +1423,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       },
       flush(done) {
         if (size <= EFFORT_LIMIT) {
-          const effort = requestedEffort(Buffer.concat(chunks).toString('utf8'))
+          const { effort, tools } = requestFacts(Buffer.concat(chunks).toString('utf8'))
           if (effort) t.set({ requestEffort: effort })
+          if (tools !== undefined) t.set({ requestTools: tools })
         }
         done()
       },

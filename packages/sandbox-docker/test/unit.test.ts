@@ -38,7 +38,7 @@ import {
 } from '../src/docker-cli.ts'
 import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
-import { requestedEffort } from '../src/egress/effort.ts'
+import { requestedEffort, requestFacts } from '../src/egress/effort.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import {
   createPolicyCheck,
@@ -381,6 +381,17 @@ describe('requested effort', () => {
     assert.equal(requestedEffort('{"reasoning":{"effort":{"level":"high"}}}'), undefined)
     assert.equal(requestedEffort('{"reasoning":["high"]}'), undefined)
     assert.equal(requestedEffort('reasoning_effort=high'), undefined)
+  })
+
+  test("the tools a request declares, in each API's shape", () => {
+    const tools = (body: object | string) =>
+      requestFacts(typeof body === 'string' ? body : JSON.stringify(body)).tools
+    assert.equal(tools({ tools: [{ name: 'Bash' }, { name: 'Read' }, { type: 'web_search' }] }), 3)
+    assert.equal(tools({ tools: [{ functionDeclarations: [{}, {}] }, { googleSearch: {} }] }), 3)
+    assert.equal(tools({ tools: { functionDeclarations: [{}, {}, {}, {}] } }), 4)
+    assert.equal(tools({ model: 'gpt-5.6-luna', input: [] }), 0)
+    assert.equal(tools('[]'), undefined)
+    assert.equal(tools('not json'), undefined)
   })
 })
 

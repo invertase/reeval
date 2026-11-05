@@ -14,7 +14,9 @@ import type {
   HarnessDescriptor,
   JudgeOptions,
   ResolvedSnapshot,
+  TokenUsage,
   Turn,
+  TurnRecord,
 } from '../types.ts'
 import type { ProgressUpdate } from '../ui/events.ts'
 import type { McpStartupLog } from './mcp-startup.ts'
@@ -103,6 +105,8 @@ export type Attempt = {
   stepBlobs: Map<string, Buffer>
   /** Where the attempt's snapshots are written, beside its staging record. */
   readonly snapshotDir: string
+  /** The tokens of each step the harness reported, by turn record; never written. */
+  turnSteps: Map<TurnRecord, TokenUsage[]>
 }
 
 export function createAttempt(
@@ -166,6 +170,7 @@ export function createAttempt(
     capturePages: new Map(),
     stepBlobs: new Map(),
     snapshotDir,
+    turnSteps: new Map(),
   }
   return a
 }

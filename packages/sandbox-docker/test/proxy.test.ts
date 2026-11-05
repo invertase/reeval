@@ -165,6 +165,27 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
           setTimeout(() => out.end(delta.slice(cut)), 20)
         }, 50)
       }
+      if (req.url === '/generate') {
+        // Gemini's generateContent: one pretty-printed body that names its model `modelVersion`,
+        // after its usage.
+        out.writeHead(200, { 'content-type': 'application/json' })
+        const body = JSON.stringify(
+          {
+            candidates: [{ content: { parts: [{ text: 'hi' }] } }],
+            usageMetadata: {
+              promptTokenCount: 70,
+              candidatesTokenCount: 512,
+              promptTokensDetails: [{ modality: 'TEXT', tokenCount: 70 }],
+            },
+            modelVersion: 'gemini-3.1-flash-lite',
+          },
+          null,
+          2,
+        )
+        const cut = body.indexOf('candidatesTokenCount')
+        out.write(body.slice(0, cut))
+        return setTimeout(() => out.end(body.slice(cut)), 20)
+      }
       if (req.url === '/language-model') {
         // Vercel AI Gateway's language-model protocol streams AI SDK stream parts.
         out.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -2780,6 +2801,34 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       assert.ok(e.firstByteMs !== undefined && e.firstByteMs >= 45, `first byte ${e.firstByteMs}`)
       assert.ok(e.firstByteMs <= e.ms)
       assert.equal(e.responseModel, undefined, 'not a modelResponses endpoint')
+      assert.equal(e.requestTools, 0)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("a model call's model from Gemini's modelVersion, and the tools its request declared", async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelCalls: [{ host: HOST, path: { exact: '/generate' }, method: ['POST'] }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/generate',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: JSON.stringify({
+          tools: [{ functionDeclarations: [{ name: 'a' }, { name: 'b' }] }, { googleSearch: {} }],
+        }),
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.ok(e?.type === 'request')
+      assert.equal(e.usageModel, 'gemini-3.1-flash-lite')
+      assert.deepEqual(e.responseUsage, { promptTokenCount: 70, candidatesTokenCount: 512 })
+      assert.equal(e.requestTools, 3)
     } finally {
       gw.close()
     }

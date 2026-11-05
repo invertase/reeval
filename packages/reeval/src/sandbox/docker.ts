@@ -131,6 +131,7 @@ export function gatewayGlue(options: SandboxOptions) {
         status: event.status ?? null,
         usage: callUsage(event.responseUsage),
         model: model ?? (ok ? event.usageModel : undefined) ?? null,
+        tools: event.requestTools ?? null,
         ...(brokering?.modelStream ? { stream: true as const } : {}),
       })
     }

@@ -198,7 +198,12 @@ export function recordTimeline(a: Attempt, sandbox: Sandbox | undefined): void {
   for (const turn of a.record.turns) {
     const events = [
       ...inferDurations(turn.transcript, turn.durationMs),
-      ...modelCallEvents(calls, Date.parse(turn.startedAt), turn.durationMs),
+      ...modelCallEvents(calls, {
+        startedAt: Date.parse(turn.startedAt),
+        durationMs: turn.durationMs,
+        model: turn.model,
+        steps: a.turnSteps.get(turn) ?? [],
+      }),
     ].sort((x, y) => x.atMs - y.atMs)
     turn.transcript = events
     turn.timeSplit = timeSplit(events, turn.durationMs)
