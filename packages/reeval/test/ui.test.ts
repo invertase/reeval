@@ -349,6 +349,45 @@ describe('plain renderer', () => {
     )
   })
 
+  test('a gateway that names its upstreams: the list says who served the agent and the judge', () => {
+    const served: RunRecord = {
+      ...record,
+      evals: record.evals.map((e) =>
+        e.name !== 'writes greet.js'
+          ? e
+          : {
+              ...e,
+              attempts: e.attempts.map((a) => ({
+                ...a,
+                upstreams: [
+                  { provider: 'Anthropic', calls: 2 },
+                  { provider: 'Amazon Bedrock', calls: 1 },
+                ],
+                judgements: [
+                  {
+                    question: 'Accurate summary?',
+                    verdict: 'pass' as const,
+                    score: 0.9,
+                    threshold: 0.8,
+                    model: 'openrouter/google/gemini-2.5-flash',
+                    gateway: 'openrouter',
+                    upstream: 'Google',
+                  },
+                ],
+              })),
+            },
+      ),
+    }
+    const events = interleaved.map((e) => (e.type === 'run-end' ? { ...e, record: served } : e))
+    const out = render(events, options()).split('\n')
+    const row = out.findIndex((l) => l.startsWith('├─ ✓ writes greet.js'))
+    assert.deepEqual(out.slice(row, row + 3), [
+      '├─ ✓ writes greet.js              1 of 1 run passed',
+      '│    Passed on fake.',
+      '│    Worth knowing: served by Anthropic 2 · Amazon Bedrock 1; judge served by Google 1',
+    ])
+  })
+
   test('stream: every prefixed line prints as it happens, interleaved', () => {
     const out = render(interleaved, options({ logOrder: 'stream' })).split('\n')
     assert.deepEqual(out.slice(2, 17), [

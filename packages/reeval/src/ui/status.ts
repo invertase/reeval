@@ -29,8 +29,9 @@
 // - Errors that aren't a check's: `✗ 2 runs hit an infrastructure error`, then the message.
 // - `Worth knowing:` the eval's remarks, each its brief unless the detail is full, then each check
 //   that needed its retries (`"label" passed on try 2 of 3.`) and the first capture whose page had
-//   errors (`2 page errors in capture "home" → <file>`, with `(+N more captures)`); one item prints
-//   on the `Worth knowing:` line itself.
+//   errors (`2 page errors in capture "home" → <file>`, with `(+N more captures)`), then the
+//   upstream providers a gateway named (`served by Anthropic 2; judge served by Google 1`, a line
+//   per harness when several); one item prints on the `Worth knowing:` line itself.
 //
 // Only the cells that decide the outcome count: the gated ones, or every cell of a study.
 import stringWidth from 'string-width'
@@ -53,7 +54,7 @@ import {
   type QuestionResult,
   type SuiteResult,
 } from '../view/suite.ts'
-import { checkLabel, pairedStats, statsLine } from './layout.ts'
+import { checkLabel, pairedStats, statsLine, upstreamTexts } from './layout.ts'
 import { shownRemarks } from './remarks.ts'
 
 /** `failing`: still running, with a run that already failed; its outcome isn't decided yet. */
@@ -807,7 +808,9 @@ export function evalRow(
         : `${passed} of ${plural(ran, counted)} passed`
   const cases = e.cases ?? []
   const failedEval = iconOf(e) === 'fail'
-  const notes = ran ? [...retriedLines(decide), ...pageErrorNotes(decide)] : []
+  const notes = ran
+    ? [...retriedLines(decide), ...pageErrorNotes(decide), ...upstreamTexts(cells)]
+    : []
   const caseOf = new Map(cases.flatMap((k) => k.cells.map((c) => [c, k.label] as const)))
   const answers = [
     ...questionLines(e.questions ?? []),

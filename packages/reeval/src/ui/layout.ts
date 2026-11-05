@@ -688,7 +688,7 @@ function upstreamList(counts: Upstreams): string {
  * Which upstream providers a gateway said served each harness's calls and its judge's, a line per
  * harness, so a run OpenRouter spread over several shows it. None where the gateway named none.
  */
-function upstreamLines(c: Colors, cells: CellResult[], indent: number): string[] {
+export function upstreamTexts(cells: CellResult[]): string[] {
   const by = new Map<string, { agent: Upstreams; judge: Upstreams }>()
   for (const cell of cells) {
     if (!cell.upstreams && !cell.judgeUpstreams) continue
@@ -703,9 +703,12 @@ function upstreamLines(c: Colors, cells: CellResult[], indent: number): string[]
       ...(judge.length ? [`judge served by ${upstreamList(judge)}`] : []),
     ]
     const label = by.size > 1 ? `${harness}  ` : ''
-    return `${' '.repeat(indent)}${c.dim(`${label}${parts.join('; ')}`)}`
+    return `${label}${parts.join('; ')}`
   })
 }
+
+const upstreamLines = (c: Colors, cells: CellResult[], indent: number): string[] =>
+  upstreamTexts(cells).map((text) => `${' '.repeat(indent)}${c.dim(text)}`)
 
 /**
  * One line pointing at the first capture whose page had page errors, and at the file that lists
