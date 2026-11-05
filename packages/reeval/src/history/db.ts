@@ -17,7 +17,13 @@ import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
-import { type ClassContext, classifyCall, skillDirSkill, skillUses } from './tool-class.ts'
+import {
+  type ClassContext,
+  classifyCall,
+  skillDirSkill,
+  skillsWritten,
+  skillUses,
+} from './tool-class.ts'
 import { targetText, toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
@@ -509,6 +515,26 @@ export function toolCalls(transcript: string): ToolCall[] {
   return calls
 }
 
+/**
+ * The skills whose `SKILL.md` an attempt wrote: by a file-editing tool that created or rewrote it,
+ * or by a shell command (a redirect, `tee`, `cp` and the like).
+ */
+function skillsAuthored(transcript: string, calls: ToolCall[]): Set<string> {
+  const authored = new Set(calls.flatMap((t) => skillsWritten(t.tool, t.text)))
+  for (const line of transcript.split('\n')) {
+    if (!line.includes('"file-edit"')) continue
+    let event: Record<string, unknown>
+    try {
+      event = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (event?.type !== 'file-edit' || (event.kind !== 'create' && event.kind !== 'write')) continue
+    for (const name of skillsWritten('write', String(event.path ?? ''))) authored.add(name)
+  }
+  return authored
+}
+
 /** `classifyCall`, but a call its heuristic can't read counts as workspace: one transcript line can't stop the sync. */
 function classifyOrWorkspace(
   tool: string,
@@ -822,10 +848,13 @@ function insertRun(
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
+      const transcript = transcripts.get(a.key)
+      const calls = transcript ? toolCalls(transcript) : []
+      const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
       const found = new Map<string, { source: string; path: string | null }>()
       for (const c of a.context) {
         const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
-        if (skill && !skills.includes(skill) && !found.has(skill)) {
+        if (skill && !skills.includes(skill) && !authored.has(skill) && !found.has(skill)) {
           found.set(skill, { source: 'skill-dir', path: c.path })
         }
         run(
@@ -867,7 +896,6 @@ function insertRun(
           x.durationMs ?? null,
         )
       }
-      const transcript = transcripts.get(a.key)
       const ctx: ClassContext = {
         skills,
         skillDirs: SKILL_DIRS,
@@ -876,7 +904,7 @@ function insertRun(
         mcp: env?.mcp ?? [],
         verify: a.checks.map((c) => c.command),
       }
-      for (const t of transcript ? toolCalls(transcript) : []) {
+      for (const t of calls) {
         const call = classifyOrWorkspace(t.tool, t.text, ctx)
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -895,7 +923,7 @@ function insertRun(
         }
         for (const { skill, source } of call.skills) {
           // A failed call names a skill that may not exist; a placed one does.
-          if (source !== 'placed' && t.ok === false) continue
+          if (source !== 'placed' && (t.ok === false || authored.has(skill))) continue
           run(
             'INSERT INTO skill_uses VALUES (?, ?, ?, ?, ?)',
             record.runId,

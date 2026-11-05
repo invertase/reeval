@@ -254,12 +254,78 @@ const SKILL_SEGMENT = /(?:^|\/)skills\/([^/\s*?[{}]+)(\/[^\s]*)?/g
 const inSkillDir = (prefix: string, dirs: readonly string[]) =>
   dirs.some((d) => prefix === d || prefix.endsWith(`/${d}`))
 
+/** A non-shell tool that changes files rather than reading them. */
+const EDIT_TOOL = /write|edit|patch|create|delete|remove|move|rename|replace/i
+/** Shell commands whose arguments it creates, changes or removes. */
+const CHANGING = new Set(['rm', 'rmdir', 'mkdir', 'touch', 'mv', 'cp', 'tee', 'ln', 'install'])
+const SEPARATOR = new Set([';', '|', '&'])
+const REDIRECT = /^\d*>>?$/
+
+/**
+ * A shell command's words, split into the ones it reads and the ones it writes: a redirect's
+ * target, every argument of `rm`, `mkdir`, `touch`, `mv`, `cp`, `tee` and the like, and the
+ * files of a `sed -i`.
+ */
+function shellAccess(words: string[]): { read: string[]; written: string[] } {
+  const read: string[] = []
+  const written: string[] = []
+  let changing = false
+  let start = true
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i] as string
+    if (SEPARATOR.has(w)) {
+      changing = false
+      start = true
+      continue
+    }
+    if (REDIRECT.test(w)) {
+      if (i + 1 < words.length) written.push(words[++i] as string)
+      continue
+    }
+    const glued = /^\d*>>?(.+)$/.exec(w)
+    if (glued) {
+      written.push(glued[1] as string)
+      continue
+    }
+    if (start) {
+      if (/^\w+=/.test(w) || w === 'sudo' || w === 'env') continue
+      start = false
+      const name = w.replace(/^.*\//, '')
+      changing = CHANGING.has(name) || (name === 'sed' && words.slice(i).some(isInPlace))
+    }
+    ;(changing ? written : read).push(w)
+  }
+  return { read, written }
+}
+
+const isInPlace = (w: string) => /^-[a-zA-Z]*i/.test(w) || w.startsWith('--in-place')
+
+/** The words of one call that read files, and the ones that write them. */
+function callAccess(tool: string, target: string): { read: string[]; written: string[] } {
+  if (SHELL_TOOL.test(tool)) {
+    return shellAccess(readWords(commandWords(withoutWrittenText(target))))
+  }
+  return EDIT_TOOL.test(tool) ? { read: [], written: [target] } : { read: [target], written: [] }
+}
+
+/**
+ * The skills whose `SKILL.md` one call writes: a skill the agent authors is its own work, not a
+ * skill it found.
+ */
+export function skillsWritten(tool: string, target: string): string[] {
+  return callAccess(tool, target).written.flatMap((word) => {
+    const m = /(?:^|\/)skills\/([^/\s*?[{}]+)\/SKILL\.md$/.exec(normalize(word))
+    return m && !(m[1] as string).startsWith('.') ? [m[1] as string] : []
+  })
+}
+
 /**
  * The skills one tool call used, by source: the placed ones as {@link skillsUsed} finds them,
  * then any other a dedicated load named, any `skills/<name>/SKILL.md` it read (in one of `dirs`,
  * each agent's skill directories, or elsewhere) and any file under one of `found`, the skills the
  * attempt's context had in those directories. A path under some other `skills/<name>` isn't a
- * skill: `skills/r0/contract-probe` is a directory of skills, not a skill named `r0`.
+ * skill: `skills/r0/contract-probe` is a directory of skills, not a skill named `r0`. Nor is a
+ * file the call writes.
  */
 export function skillUses(
   tool: string,
@@ -277,10 +343,7 @@ export function skillUses(
     if (name && !GLOB.test(name) && !/\s/.test(name) && !isPlaced(name)) uses.set(name, 'skill-dir')
     return [...uses].map(([skill, source]) => ({ skill, source }))
   }
-  const words = SHELL_TOOL.test(tool)
-    ? readWords(commandWords(withoutWrittenText(target)))
-    : [target]
-  for (const word of words) {
+  for (const word of callAccess(tool, target).read) {
     const w = normalize(word)
     if (!w.includes('skills/')) continue
     for (const m of w.matchAll(SKILL_SEGMENT)) {

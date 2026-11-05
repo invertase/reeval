@@ -565,6 +565,49 @@ evaluate('loads', { environments: skilled }, async (c) => {
     assert.deepEqual(await query(p.dir, 'SELECT skill FROM skill_reads'), [])
   })
 
+  const unplacedProject = async (name: string, tools: unknown[], files = {}) => {
+    const p = await project(name, {
+      'reeval.config.ts': fakeConfig({
+        harness: `{ tools: ${JSON.stringify(tools)}, files: ${JSON.stringify(files)} }`,
+      }),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const bare = defineEnvironment('bare', { sandbox: fakeSandbox() })
+evaluate('control', { environments: bare }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    return query(p.dir, 'SELECT skill, source, reads FROM skill_reads ORDER BY skill')
+  }
+  const shell = (command: string) => ({ tool: 'shell', input: { command }, output: '' })
+  const read = (path: string) => ({ tool: 'read', input: { path }, output: '' })
+  const installed = read('.cursor/skills/installed/SKILL.md')
+
+  test('writing a SKILL.md is not using the skill, and the skill the agent wrote is not found', async () => {
+    const rows = await unplacedProject(
+      'query-skill-writes',
+      [
+        shell('mkdir -p .agents/skills/mine && printf x > .agents/skills/mine/SKILL.md'),
+        shell("cat > .claude/skills/heredoc/SKILL.md <<'EOF'\n# heredoc\nEOF"),
+        shell('echo x | tee .claude/skills/teed/SKILL.md'),
+        shell('rm -rf .claude/skills/gone/SKILL.md'),
+        shell("sed -i 's/a/b/' .claude/skills/sedded/SKILL.md"),
+        { tool: 'Write', input: { file_path: '.claude/skills/written/SKILL.md' }, output: '' },
+        read('.agents/skills/mine/SKILL.md'),
+        read('.agents/skills/created/SKILL.md'),
+        installed,
+      ],
+      { '.agents/skills/created/SKILL.md': '# created\n' },
+    )
+    assert.deepEqual(
+      rows,
+      [{ skill: 'installed', source: 'skill-dir', reads: 1 }],
+      'only the skill a setup step installed and the agent read counts (canary: it does)',
+    )
+  })
+
   test('a shell word with an unbalanced [ is read literally, not as a regex', async () => {
     const commands = ['echo [foo', 'node -e "a[0"', 'cat {a[0,b}', 'ls {*,b[}']
     const tools = commands.map((command) => ({ tool: 'shell', input: { command }, output: '' }))
