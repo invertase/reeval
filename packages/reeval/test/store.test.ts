@@ -47,10 +47,18 @@ describe('s3Store', () => {
     const puts = s3.requests.filter((r) => r.method === 'PUT').map((r) => r.key)
     assert.equal(puts.at(-1), `ci/runs/2026-11/${RUN}.json`, 'the record lands last')
     assert.equal(
-      s3.requests.find((r) => r.key.endsWith(`${RUN}.json`))?.headers['if-none-match'],
+      s3.requests.find((r) => r.method === 'PUT' && r.key.endsWith(`${RUN}.json`))?.headers[
+        'if-none-match'
+      ],
       '*',
     )
+    const before = s3.requests.length
     assert.deepEqual(await store.writeRun(run, {}), { ok: false })
+    assert.deepEqual(
+      s3.requests.slice(before).filter((r) => r.method === 'PUT'),
+      [],
+      'a second create writes no file',
+    )
     assert.deepEqual(await store.listRuns(), [{ runId: RUN, version: created.version }])
     const read = await store.readRun(RUN)
     assert.equal(Buffer.from(read?.record ?? []).toString(), '{"v":1}')
@@ -200,8 +208,14 @@ describe('recording to s3()', () => {
       s3.objects.set(key as string, { bytes: b, etag: `${object.etag}-${r.status}-${b.length}` })
     }
     swap({ ...record, branch: 'elsewhere' } as RunRecord)
+    const files = [...s3.objects.keys()].filter((k) => k.startsWith(`${key?.slice(0, -5)}/`))
+    assert.ok(files.length > 0)
+    for (const file of files) s3.objects.set(file, { bytes: Buffer.from('stored'), etag: 'stored' })
     const refused = await runCli(dir, ['record', '--profile', 'ci', record.runId], { env: env() })
     assert.equal(refused.code, 3, refused.stdout + refused.stderr)
+    for (const file of files) {
+      assert.equal(String(s3.objects.get(file)?.bytes), 'stored', `${file} isn't overwritten`)
+    }
     assert.match(
       refused.stderr,
       new RegExp(

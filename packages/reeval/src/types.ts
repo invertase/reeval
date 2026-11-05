@@ -2340,8 +2340,8 @@ export type HistoryStore = {
   /** One run, with its version; null when the store doesn't have it. */
   readRun(runId: string): Promise<(StoredRun & { version: string }) | null>
   /**
-   * Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there.
-   * With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.
+   * Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there,
+   * having written none of its files, so the stored run's stay as they are. With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.
    */
   writeRun(
     run: StoredRun,

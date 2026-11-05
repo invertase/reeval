@@ -173,6 +173,8 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
     async writeRun(run: StoredRun, options: { replaces?: string }) {
       await mark()
       const key = runKey(run.runId)
+      // The conditional write below refuses a second create too, but only after the files.
+      if (!options.replaces && (await s3().exists(`${key}.json`))) return { ok: false }
       for (const [path, bytes] of run.files) await put(`${key}/${path}`, bytes)
       let version: string
       try {
