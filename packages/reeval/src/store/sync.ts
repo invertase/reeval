@@ -5,9 +5,10 @@ import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { debugRoot } from '../debug/files.ts'
 import { UsageError } from '../errors.ts'
 import { filesUnder, recordFile, replaceable, runDir } from '../history/files.ts'
-import type { RunRecord } from '../history/types.ts'
+import type { RunDebug, RunRecord } from '../history/types.ts'
 import { randomSuffix, sha256 } from '../ids.ts'
 import type { HistoryStore, ResolvedHistory, S3StoreDescriptor, StoredRun } from '../types.ts'
 import { S3_ENV_DEFAULTS, unsafePath } from './resolve.ts'
@@ -328,4 +329,65 @@ export async function pullStore(
     s.at = at
   })
   return { pulled, cachedAt: at }
+}
+
+export type DebugPull = {
+  /** What the record says was uploaded; null when the run was recorded without debug data. */
+  debug: RunDebug | null
+  downloaded: number
+  bytes: number
+  /** Files already in `.reeval/debug/<run>` with the bytes the record names. */
+  present: number
+}
+
+/**
+ * Downloads the debug data the copy's record of `runId` names into `.reeval/debug/<run>`, where
+ * `-v`'s readers, `reeval report` and `debug.keep`'s pruning find a run's own. A pull never does:
+ * only this, for one run asked for. Each file is checked against the record's hash.
+ */
+export async function pullDebug(
+  history: RemoteHistory,
+  root: string,
+  runId: string,
+): Promise<DebugPull> {
+  const store = storeOf(history)
+  const { debug } = JSON.parse(
+    (await readFile(recordFile(history.dir, runId))).toString(),
+  ) as RunRecord
+  const result: DebugPull = { debug: debug ?? null, downloaded: 0, bytes: 0, present: 0 }
+  const target = join(debugRoot(root), runId)
+  for (const ref of debug?.files ?? []) {
+    const parts = ref.path.split('/')
+    if (parts.some((p) => p === '' || p === '.' || p === '..' || p.includes('\\'))) {
+      throw new StoreError(`${runId}'s record names a debug file outside its run: ${ref.path}`)
+    }
+    const file = join(target, ...parts)
+    const local = await readFile(file).catch(() => null)
+    if (local && sha256(local) === ref.sha256) {
+      result.present++
+      continue
+    }
+    let bytes: Uint8Array | null
+    try {
+      bytes = await tries(() => store.readFile(runId, `debug/${ref.path}`))
+    } catch (error) {
+      if (error instanceof UsageError) throw error
+      throw new StoreError(
+        `couldn't download ${runId}'s debug/${ref.path} from ${store.name}: ${reason(error, history)}`,
+      )
+    }
+    if (!bytes) throw new StoreError(`${store.name} has no debug/${ref.path} for ${runId}`)
+    if (sha256(bytes) !== ref.sha256) {
+      throw new StoreError(
+        `${runId}'s debug/${ref.path} in ${store.name} doesn't match the hash in its record`,
+      )
+    }
+    await mkdir(dirname(file), { recursive: true })
+    const tmp = `${file}.${randomSuffix(6)}`
+    await writeFile(tmp, bytes)
+    await rename(tmp, file)
+    result.downloaded++
+    result.bytes += bytes.length
+  }
+  return result
 }

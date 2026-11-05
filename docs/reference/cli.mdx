@@ -284,9 +284,11 @@ reeval checkout [run] [dir]   A git worktree at the run's commit, with its workt
 [//]: # (generated:cli-help:sync)
 
 ```text
-reeval sync                   Upload the runs recorded to history.store that didn't upload
+reeval sync [--debug run...]  Upload the runs recorded to history.store that didn't upload
                               (kept in .reeval/store/<id>/pending), then download the runs
                               recorded elsewhere; exit 3 if the store fails
+  --debug                     Then download each run's debug data (default latest), which a
+                              pull leaves in the store, into .reeval/debug/<run>
   --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
 ```
 

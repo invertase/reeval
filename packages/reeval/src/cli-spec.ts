@@ -62,6 +62,7 @@ export const FLAGS = {
   bare: { type: 'boolean' },
   online: { type: 'boolean' },
   offline: { type: 'boolean' },
+  debug: { type: 'boolean' },
   'all-branches': { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
@@ -248,12 +249,14 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   sync: {
-    flags: ['profile'],
-    positionals: 0,
+    flags: ['profile', 'debug'],
+    positionals: Number.POSITIVE_INFINITY,
     help: `
-  reeval sync                   Upload the runs recorded to history.store that didn't upload
+  reeval sync [--debug run...]  Upload the runs recorded to history.store that didn't upload
                                 (kept in .reeval/store/<id>/pending), then download the runs
                                 recorded elsewhere; exit 3 if the store fails
+    --debug                     Then download each run's debug data (default latest), which a
+                                pull leaves in the store, into .reeval/debug/<run>
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   query: {

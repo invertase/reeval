@@ -620,6 +620,64 @@ describe('debug data to s3()', () => {
     assert.equal(recordIn(runId).debug?.level, 'all')
   })
 
+  test("reeval sync --debug downloads one run's debug data on another machine, checked", async () => {
+    const { runId, attempt } = await runOnce()
+    const lines = '{"method":"POST","url":"https://api.example.com/v1/responses"}\n'
+    writeFileSync(join(debugDir(), runId, attempt, 'requests.ndjson'), lines)
+    const r = await runCli(dir, ['record', '--profile', 'requests', runId], { env: env() })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const other = await project('store-debug-other', {
+      'reeval.config.ts': readFileSync(join(dir, 'reeval.config.ts'), 'utf8'),
+    })
+    const local = join(other.dir, '.reeval/debug', runId, attempt, 'requests.ndjson')
+    const sync = (...args: string[]) =>
+      runCli(other.dir, ['sync', '--profile', 'requests', ...args], { env: env() })
+    const pulled = await sync()
+    assert.equal(pulled.code, 0, pulled.stdout + pulled.stderr)
+    assert.equal(existsSync(join(other.dir, '.reeval/debug')), false, 'a pull downloads none')
+    const got = await sync('--debug', runId)
+    assert.equal(got.code, 0, got.stdout + got.stderr)
+    assert.match(
+      got.stdout,
+      new RegExp(
+        `^downloaded 1 debug file of ${runId} \\([\\d.]+ KB\\) into \\.reeval/debug/${runId}$`,
+        'm',
+      ),
+    )
+    assert.equal(readFileSync(local, 'utf8'), lines)
+    const again = await sync('--debug', runId)
+    assert.match(
+      again.stdout,
+      new RegExp(`^${runId}'s debug data is already in \\.reeval/debug/${runId}$`, 'm'),
+    )
+
+    rmSync(join(other.dir, '.reeval/debug'), { recursive: true })
+    const key = `dbg/debug/${month(runId)}/${runId}/${attempt}/requests.ndjson`
+    const object = s3.objects.get(key) as { bytes: Buffer; etag: string }
+    s3.objects.set(key, { ...object, bytes: Buffer.from('{"tampered":true}\n') })
+    const tampered = await sync('--debug', runId)
+    s3.objects.set(key, object)
+    assert.equal(tampered.code, 3, tampered.stdout + tampered.stderr)
+    assert.match(
+      tampered.stderr,
+      /debug\/\S+requests\.ndjson in s3:\/\/reeval-runs\/dbg doesn't match the hash in its record/,
+    )
+    assert.equal(existsSync(local), false)
+
+    const unrecorded = await runOnce()
+    const here = await runCli(dir, ['sync', '--profile', 'requests', '--debug', unrecorded.runId], {
+      env: env(),
+    })
+    assert.equal(here.code, 0, here.stdout + here.stderr)
+    assert.match(
+      here.stdout,
+      /isn't in s3:\/\/reeval-runs\/dbg: it ran here, so its debug data is in \.reeval\/debug\//,
+    )
+    const bare = await sync(runId)
+    assert.notEqual(bare.code, 0)
+    assert.match(bare.stderr, /reeval sync takes runs with --debug only/)
+  })
+
   test('a run that failed to upload keeps its debug data for reeval sync', async () => {
     const { runId, attempt } = await runOnce()
     writeFileSync(join(debugDir(), runId, attempt, 'requests.ndjson'), '{"n":1}\n')

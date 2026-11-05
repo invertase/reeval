@@ -2353,6 +2353,11 @@ export type HistoryStore = {
    * before the record. `readRun` needn't return debug files: no reader asks for them.
    */
   addFile(runId: string, path: string, bytes: Uint8Array): Promise<void>
+  /**
+   * One file `addFile` wrote, by the same path; null when the store doesn't have it. `reeval sync
+   * --debug` reads a run's debug data back with it.
+   */
+  readFile(runId: string, path: string): Promise<Uint8Array | null>
 }
 
 export type HistoryConfig = {

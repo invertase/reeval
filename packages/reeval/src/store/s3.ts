@@ -96,6 +96,14 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
     if (!RUN_ID.test(runId)) throw new UsageError(`${runId} isn't a run id`)
     return `${base}runs/${month(runId)}/${runId}`
   }
+  /** A file beside the run, or under `debug/` its debug data, which is kept apart from `runs/`. */
+  const fileKey = (runId: string, path: string) => {
+    const key = runKey(runId)
+    const debug = /^debug\/(.+)$/.exec(path)?.[1]
+    return debug
+      ? `${base}debug/${key.slice(base.length + 'runs/'.length)}/${debug}`
+      : `${key}/${path}`
+  }
   const put = async (key: string, bytes: Uint8Array | string, condition?: [string, string]) => {
     const headers = new Headers({ 'Content-Type': contentType(key) })
     if (condition) headers.set(condition[0], condition[1])
@@ -206,14 +214,10 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
       return { ok: true, version }
     },
     async addFile(runId, path, bytes) {
-      const debug = /^debug\/(.+)$/.exec(path)?.[1]
-      const key = runKey(runId)
-      await put(
-        debug
-          ? `${base}debug/${key.slice(base.length + 'runs/'.length)}/${debug}`
-          : `${key}/${path}`,
-        bytes,
-      )
+      await put(fileKey(runId, path), bytes)
+    },
+    async readFile(runId, path) {
+      return (await get(fileKey(runId, path)))?.bytes ?? null
     },
   }
 }

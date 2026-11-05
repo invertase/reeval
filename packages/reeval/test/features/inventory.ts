@@ -1769,7 +1769,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history.debug',
     area: 'Records and studio',
-    name: "`history.debug`: each attempt's `requests.ndjson` (`'requests'`) or all its debug data (`'all'`) uploads with the run to a remote store under a `debug/` prefix of its own, rescanned for secrets (a finding leaves the file out and names it in `record.debug.dropped`), staged so `reeval sync` still uploads it after `.reeval/debug` is pruned; refused on `local()`",
+    name: "`history.debug`: each attempt's `requests.ndjson` (`'requests'`) or all its debug data (`'all'`) uploads with the run to a remote store under a `debug/` prefix of its own, rescanned for secrets (a finding leaves the file out and names it in `record.debug.dropped`), staged so `reeval sync` still uploads it after `.reeval/debug` is pruned; refused on `local()`. `reeval sync --debug <run>` downloads one run's back into `.reeval/debug/<run>`, hash-checked; a pull never does",
     unit: ['reeval/test/store.test.ts'],
   },
   {

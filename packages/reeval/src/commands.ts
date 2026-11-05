@@ -3,6 +3,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { debugRoot } from './debug/files.ts'
 import { git, gitText } from './git.ts'
 import { listRuns, type RecordResult, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -30,6 +31,7 @@ import {
   notUploaded,
   pendingDir,
   pendingRuns,
+  pullDebug,
   pullStore,
   type RemoteHistory,
   StoreError,
@@ -56,6 +58,7 @@ export type HistoryFlags = {
   verbose?: boolean[]
   trace?: boolean
   out?: string
+  debug?: boolean
 }
 
 export class CommandError extends Error {
@@ -252,10 +255,19 @@ async function recordRemote(
  * `reeval sync`: uploads every run recorded into the store's copy that didn't upload, then pulls
  * the runs recorded elsewhere into it.
  */
-export async function syncCommand(ctx: Ctx): Promise<number> {
+export async function syncCommand(ctx: Ctx, refs: string[] = []): Promise<number> {
   const history = ctx.config.history
+  if (refs.length && !ctx.flags.debug) {
+    throw new CommandError(
+      'reeval sync takes runs with --debug only: reeval sync --debug <run> downloads their debug data',
+    )
+  }
   if (!isRemote(history)) {
-    ctx.out(`history.store is local(): runs are recorded in ${rel(history.dir)}, nothing to sync`)
+    ctx.out(
+      ctx.flags.debug
+        ? `history.store is local(): each run's debug data stays in ${rel(debugRoot(ctx.config.root))}, nothing to download`
+        : `history.store is local(): runs are recorded in ${rel(history.dir)}, nothing to sync`,
+    )
     return 0
   }
   const runs = await pendingRuns(history)
@@ -279,7 +291,31 @@ export async function syncCommand(ctx: Ctx): Promise<number> {
   ctx.out(
     `${runs.length ? `uploaded ${runs.length}` : 'nothing to upload'}, pulled ${pulled} run(s) from ${history.store.name}`,
   )
+  if (ctx.flags.debug) {
+    for (const ref of refs.length ? refs : ['latest']) {
+      ctx.out(await downloadDebug(ctx.config, history, ref))
+    }
+  }
   return 0
+}
+
+/** `reeval sync --debug <run>`: one run's debug data from the store, into `.reeval/debug/<run>`. */
+async function downloadDebug(config: ResolvedConfig, history: RemoteHistory, ref: string) {
+  const entry = await pick(config, ref)
+  const where = rel(join(debugRoot(config.root), entry.runId))
+  if (!entry.recorded) {
+    return `${entry.runId} isn't in ${history.store.name}: it ran here, so its debug data is in ${where} until reeval clean removes it`
+  }
+  const got = await pullDebug(history, config.root, entry.runId)
+  if (!got.debug) {
+    return `${entry.runId} was recorded without debug data: set history.debug to 'requests' or 'all' for the runs it records`
+  }
+  const dropped = got.debug.dropped?.length
+    ? ` (${got.debug.dropped.length} left out when it was recorded: they looked like they held a secret)`
+    : ''
+  if (!got.downloaded) return `${entry.runId}'s debug data is already in ${where}${dropped}`
+  const kb = (got.bytes / 1024).toFixed(1)
+  return `downloaded ${got.downloaded} debug file${got.downloaded === 1 ? '' : 's'} of ${entry.runId} (${kb} KB) into ${where}${dropped}`
 }
 
 export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {

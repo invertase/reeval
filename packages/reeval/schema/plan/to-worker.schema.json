@@ -1382,41 +1382,6 @@
         }
       ]
     },
-    "HistoryStore": {
-      "description": "Run history kept anywhere, for a TypeScript config: `history: { store: myStore }`. reeval hands it runs it has already masked and scanned for secrets, and keeps a copy in `.reeval/store/` that every history command reads. `reeval.yaml` names only `local` and `s3`.",
-      "type": "object",
-      "properties": {
-        "addFile": {
-          "description": "Adds or replaces one file beside a stored run: a saved analysis, the run's remarks, or with `history.debug` its debug data, under `debug/` (`debug/<eval>/<cell>/<n>/requests.ndjson`), before the record. `readRun` needn't return debug files: no reader asks for them.",
-          "type": "object",
-          "properties": {},
-          "required": []
-        },
-        "listRuns": {
-          "description": "Every run in the store.",
-          "type": "object",
-          "properties": {},
-          "required": []
-        },
-        "name": {
-          "description": "Names the store in messages and keys its copy in `.reeval/store/`, e.g. `gcs:my-bucket`.",
-          "type": "string"
-        },
-        "readRun": {
-          "description": "One run, with its version; null when the store doesn't have it.",
-          "type": "object",
-          "properties": {},
-          "required": []
-        },
-        "writeRun": {
-          "description": "Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there. With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.",
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      "required": ["addFile", "listRuns", "name", "readRun", "writeRun"]
-    },
     "HostFile": {
       "description": "A file on the host, read when an attempt starts. Made by the `file` helper.",
       "type": "object",
