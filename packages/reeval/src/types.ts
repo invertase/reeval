@@ -2723,6 +2723,11 @@ export type ResolvedHistory = {
    */
   dir: string
   artifacts: ArtifactLevel
+  /**
+   * Which recorded runs the history commands list: a remote store holds every branch's, so it
+   * lists those whose commit HEAD reaches unless `--all-branches` asks for all. `local()` has none.
+   */
+  scope?: 'reachable' | 'all'
   store: ResolvedStore & {
     /** The store in messages: `local` or `s3://<bucket>/<prefix>`. */
     name: string

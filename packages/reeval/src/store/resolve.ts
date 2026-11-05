@@ -202,6 +202,7 @@ export function resolveHistory(
     return {
       dir: join(storeStateDir(root, id), 'history'),
       artifacts,
+      scope: 'reachable',
       store: { kind: 's3', descriptor: s3, name: s3Name(s3) },
     }
   }

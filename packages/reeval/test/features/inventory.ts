@@ -1761,6 +1761,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/store.test.ts', 'reeval/test/pack.test.ts'],
   },
   {
+    id: 'history.store.read',
+    area: 'Records and studio',
+    name: "Reading a remote store: the history commands pull new runs into its copy (at most once a minute, `--offline` skips it, `reeval sync` always), list the runs HEAD reaches unless `--all-branches`, find any branch's run by id, show the copy when the store is unreachable (exit 3 with none), empty a copy of another bucket, and `reeval checkout` fetches a commit the clone lacks",
+    unit: ['reeval/test/store.test.ts'],
+  },
+  {
     id: 'history.logs',
     area: 'Records and studio',
     name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',

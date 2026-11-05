@@ -16,6 +16,7 @@ import {
   newRows,
   pickBaseline,
   type Reachability,
+  RefError,
   resolveRun,
   stackChanges,
   unreachable,
@@ -28,6 +29,7 @@ import {
   notUploaded,
   pendingDir,
   pendingRuns,
+  pullStore,
   type RemoteHistory,
   StoreError,
   type Uploaded,
@@ -61,16 +63,37 @@ export class CommandError extends Error {
 
 type Ctx = { config: ResolvedConfig; flags: HistoryFlags; out: (s: string) => void }
 
-const recorded = (config: ResolvedConfig) => listRuns(config.root, config.history.dir, true)
+/** Recorded runs; from a remote store, those HEAD reaches unless `--all-branches` (`scoped`). */
+async function recorded(config: ResolvedConfig, scoped = true): Promise<HistoryEntry[]> {
+  const runs = await listRuns(config.root, config.history.dir, true)
+  if (!scoped || config.history.scope !== 'reachable') return runs
+  const reach = await reachability(
+    config.root,
+    runs.map((e) => e.git?.sha),
+  )
+  return runs.filter((e) => !unreachable(e, reach))
+}
 const scratch = (config: ResolvedConfig) => listRuns(config.root, scratchDir(config.root), false)
 
 /** Recorded runs plus scratch runs that weren't recorded, sorted by run id. */
-export async function allRuns(config: ResolvedConfig): Promise<HistoryEntry[]> {
-  const kept = await recorded(config)
+export async function allRuns(config: ResolvedConfig, scoped = true): Promise<HistoryEntry[]> {
+  const kept = await recorded(config, scoped)
   const ids = new Set(kept.map((e) => e.runId))
   return [...kept, ...(await scratch(config)).filter((e) => !ids.has(e.runId))].sort((a, b) =>
     a.runId < b.runId ? -1 : 1,
   )
+}
+
+/** The run `ref` names; a run id or SHA also finds a remote store's runs on other branches. */
+async function pick(config: ResolvedConfig, ref = 'latest', entries?: HistoryEntry[]) {
+  const scoped = entries ?? (await allRuns(config))
+  try {
+    return resolveRun(scoped, ref)
+  } catch (error) {
+    if (!(error instanceof RefError) || config.history.scope !== 'reachable') throw error
+    if (/^latest(?:~\d+)?$/.test(ref)) throw error
+    return resolveRun(await allRuns(config, false), ref)
+  }
 }
 
 export async function lines(root: string, args: string[]): Promise<string[] | null> {
@@ -209,7 +232,10 @@ async function recordRemote(
   ].join('\n')
 }
 
-/** `reeval sync`: uploads every run recorded into the store's copy that didn't upload. */
+/**
+ * `reeval sync`: uploads every run recorded into the store's copy that didn't upload, then pulls
+ * the runs recorded elsewhere into it.
+ */
 export async function syncCommand(ctx: Ctx): Promise<number> {
   const history = ctx.config.history
   if (!isRemote(history)) {
@@ -232,10 +258,10 @@ export async function syncCommand(ctx: Ctx): Promise<number> {
   if (failed.length) {
     throw new StoreError(notUploaded(new StoreError(failed.join('\n')), rel(pendingDir(history))))
   }
+  const { pulled, unreachable } = await pullStore(history, { force: true })
+  if (unreachable) throw new StoreError(`couldn't read ${history.store.name}: ${unreachable}`)
   ctx.out(
-    runs.length
-      ? `${runs.length} run(s) in ${history.store.name}`
-      : `nothing to upload to ${history.store.name}`,
+    `${runs.length ? `uploaded ${runs.length}` : 'nothing to upload'}, pulled ${pulled} run(s) from ${history.store.name}`,
   )
   return 0
 }
@@ -258,7 +284,7 @@ export async function historyView(
   if (!(limit > 0))
     throw new CommandError(`--limit must be a number above 0 (got ${options.limit})`)
   const shown = entries.slice(-limit).map((e) => e.git?.sha)
-  const reach = await reachability(config.root, shown)
+  const reach = config.history.scope ? null : await reachability(config.root, shown)
   const view = history(entries, { filter: options.filter || undefined, limit, reach })
   return { ...view, stopped: await stoppedRuns(config) }
 }
@@ -323,7 +349,7 @@ const recordOf = (config: ResolvedConfig, entry: HistoryEntry) =>
 
 /** The record of the run `ref` names (default latest), recorded or scratch. */
 export async function showRecord(config: ResolvedConfig, ref?: string) {
-  return recordOf(config, resolveRun(await allRuns(config), ref))
+  return recordOf(config, await pick(config, ref))
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
@@ -346,7 +372,7 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
           : `${live.runId} is still running: reeval show reads the record it writes when it ends. reeval studio shows it live.`,
       )
   }
-  const entry = resolveRun(entries, ref)
+  const entry = await pick(config, ref, entries)
   const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
   const run = await readRecord(join(dir, `${entry.runId}.json`))
   if (ctx.flags.trace) {
@@ -381,7 +407,8 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
  */
 export async function compareView(config: ResolvedConfig, refs: string[]) {
   const { root } = config
-  const entries = await allRuns(config)
+  // Every recorded run: a pair named by id, or head's recorded ancestor, may be on another branch.
+  const entries = await allRuns(config, false)
   let base: HistoryEntry | null
   let head: HistoryEntry
   let reach: Reachability
@@ -390,7 +417,7 @@ export async function compareView(config: ResolvedConfig, refs: string[]) {
     head = resolveRun(entries, refs[1])
     reach = await reachability(root, [base.git?.sha, head.git?.sha])
   } else {
-    head = resolveRun(entries, refs[0] ?? 'latest')
+    head = await pick(config, refs[0] ?? 'latest')
     reach = await reachability(root, [head.git?.sha])
     // Ancestry of head's commit, or of HEAD when that commit was rebased away.
     const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
@@ -456,15 +483,23 @@ export const regressions = (rows: CompareRow[]) =>
         !r.canceled?.includes('head')),
   )
 
+/** Fetches a commit from `origin` (a run recorded on another machine, or a branch not fetched). */
+async function fetched(root: string, sha: string, present: () => Promise<boolean>) {
+  if ((await git(root, ['remote', 'get-url', 'origin'])).code !== 0) return false
+  if ((await git(root, ['fetch', '--quiet', 'origin', sha])).code !== 0) return false
+  return present()
+}
+
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */
 export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { root } = ctx.config
-  const entry = resolveRun(await allRuns(ctx.config), args[0] ?? 'latest')
+  const entry = await pick(ctx.config, args[0] ?? 'latest')
   const dir = entry.recorded ? ctx.config.history.dir : scratchDir(root)
   const run = await readRecord(join(dir, `${entry.runId}.json`))
   if (!run.git) throw new CommandError(`${run.runId} didn't run in a git repository`)
   const { sha } = run.git
-  if ((await git(root, ['cat-file', '-e', `${sha}^{commit}`])).code !== 0) {
+  const present = async () => (await git(root, ['cat-file', '-e', `${sha}^{commit}`])).code === 0
+  if (!(await present()) && !(await fetched(root, sha, present))) {
     throw new CommandError(
       `Commit ${sha.slice(0, 12)} isn't in this clone (rebased or not fetched). Fetch it, then try again.`,
     )
@@ -480,7 +515,7 @@ export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number>
     })
     if (!bytes) {
       throw new CommandError(
-        `${rel(patchPath)} is missing, but the record says the run's uncommitted changes are in it. ${entry.recorded ? "Restore it from git, where it's committed with the record, then try again." : "It's gone from .reeval/runs, so those changes can't be recreated."}`,
+        `${rel(patchPath)} is missing, but the record says the run's uncommitted changes are in it. ${entry.recorded ? (isRemote(ctx.config.history) ? `Delete ${rel(ctx.config.history.dir)} and reeval sync downloads the store's runs again.` : "Restore it from git, where it's committed with the record, then try again.") : "It's gone from .reeval/runs, so those changes can't be recreated."}`,
       )
     }
     if (sha256(bytes) !== patchRef.sha256) {

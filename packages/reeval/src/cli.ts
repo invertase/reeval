@@ -71,7 +71,7 @@ import {
 import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
 import { localStudio } from './store/resolve.ts'
-import { storeCredentials } from './store/sync.ts'
+import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
 import type { CursorEfforts, ResolvedConfig, RunContext, SandboxDescriptor } from './types.ts'
@@ -89,6 +89,9 @@ const HISTORY_COMMANDS = {
   analyze: 1,
   sync: 1,
 }
+
+/** The commands that pull a remote store's new runs into its copy before reading it. */
+const PULLS = { history: 1, show: 1, compare: 1, checkout: 1, query: 1, analyze: 1, mcp: 1 }
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
@@ -210,12 +213,12 @@ async function run(argv: string[]): Promise<number> {
   if (command === 'mcp') {
     // On stdio, stdout carries the protocol: anything the config prints goes to stderr.
     if (!values.http) console.log = console.info = console.debug = console.error
-    const config = await historyConfig(configPath, 'mcp', values.profile)
+    const config = await historyConfig(configPath, 'mcp', values.profile, values)
     const { mcpCommand } = await import('./mcp/command.ts')
     return mcpCommand({ config, flags: values, version })
   }
   if (command in HISTORY_COMMANDS) {
-    const config = await historyConfig(configPath, command, values.profile)
+    const config = await historyConfig(configPath, command, values.profile, values)
     const commands = await import('./commands.ts')
     const ctx = { config, flags: values, out: (s: string) => console.log(s) }
     switch (command as keyof typeof HISTORY_COMMANDS) {
@@ -255,11 +258,27 @@ async function historyConfig(
   configPath: string | undefined,
   command: string,
   flag: string | undefined,
+  values: Flags = {},
 ): Promise<ResolvedConfig> {
   loadEnvFiles(configPath)
   const named = flag ?? (process.env.REEVAL_PROFILE || undefined)
-  const config = await loadConfig(configPath, command, named)
-  return withProfileHistory(config, selectProfile(config, flag))
+  const loaded = await loadConfig(configPath, command, named)
+  const config = withProfileHistory(loaded, selectProfile(loaded, flag))
+  if (!config.history.scope) return config
+  const history = values['all-branches']
+    ? { ...config.history, scope: 'all' as const }
+    : config.history
+  if (isRemote(history) && command in PULLS && !values.offline) {
+    const { cachedAt, unreachable } = await pullStore(history)
+    if (unreachable) {
+      console.error(
+        yellow(
+          `${history.store.name} is unreachable (${unreachable}); showing the runs pulled at ${cachedAt}`,
+        ),
+      )
+    }
+  }
+  return { ...config, history }
 }
 
 /** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
