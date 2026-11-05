@@ -138,10 +138,37 @@ function checkS3(store: Record<string, unknown>, where: string, file: string): S
   return out
 }
 
-/** The store's id: keys its copy in `.reeval/store/`, from what names the bucket and its prefix. */
+/** The store's id: keys its copy in `.reeval/store/`, from where the store is. */
 function storeId(parts: unknown): string {
   return sha256(JSON.stringify(parts)).slice(0, 12)
 }
+
+/**
+ * Where an `s3()` store is now: its bucket, endpoint and prefix, each variable read as `s3Settings`
+ * reads it, so pointing a variable at another bucket gives another copy. A variable that isn't set
+ * stays its name; `s3Settings` refuses it once the store is used.
+ */
+function s3Location(s3: S3StoreDescriptor, env: NodeJS.ProcessEnv = process.env) {
+  const read = (name: string | undefined) => (name && env[name]) || null
+  const endpoint = s3.endpoint ?? read(s3.env?.endpoint ?? 'AWS_ENDPOINT_URL_S3')
+  return {
+    kind: 's3',
+    bucket: s3.bucket ?? read(s3.env?.bucket) ?? { env: s3.env?.bucket },
+    endpoint: endpoint?.replace(/\/+$/, '') ?? {
+      region:
+        s3.region ??
+        read(s3.env?.region) ??
+        env.AWS_REGION ??
+        env.AWS_DEFAULT_REGION ??
+        'us-east-1',
+    },
+    prefix: s3.prefix ?? '',
+  }
+}
+
+/** A store path that can't name a file under its run: an empty, `.` or `..` part, or a `\`. */
+export const unsafePath = (path: string) =>
+  path.split('/').some((p) => p === '' || p === '.' || p === '..' || p.includes('\\'))
 
 export function s3Name(store: S3StoreDescriptor): string {
   const bucket = store.bucket ?? `$${store.env?.bucket}`
@@ -193,12 +220,7 @@ export function resolveHistory(
   }
   if (kind === 's3') {
     const s3 = checkS3(store as Record<string, unknown>, at, file)
-    const id = storeId({
-      kind: 's3',
-      bucket: s3.bucket ?? { env: s3.env?.bucket },
-      endpoint: s3.endpoint ?? { env: s3.env?.endpoint ?? null },
-      prefix: s3.prefix ?? '',
-    })
+    const id = storeId(s3Location(s3))
     return {
       dir: join(storeStateDir(root, id), 'history'),
       artifacts,

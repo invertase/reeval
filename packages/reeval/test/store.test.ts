@@ -14,6 +14,7 @@ import { after, before, describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
 import { encodeRecord } from '../src/history/files.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { resolveHistory } from '../src/store/resolve.ts'
 import { s3Settings, s3Store } from '../src/store/s3.ts'
 import { fakeConfig, project, runCli, tempDir } from './helpers.ts'
 import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
@@ -359,6 +360,23 @@ describe('recording to s3()', () => {
   })
 })
 
+test("the copy is keyed on where the store's variables point now", () => {
+  const dir = (env: Record<string, string>) => {
+    const saved = { ...process.env }
+    Object.assign(process.env, env)
+    try {
+      const store = { kind: 's3', env: { bucket: 'RUNS_BUCKET', endpoint: 'RUNS_ENDPOINT' } }
+      return resolveHistory({ store }, 'history', 'reeval.yaml', '/p', 'evals/.history').dir
+    } finally {
+      process.env = saved
+    }
+  }
+  const one = dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://s3.example.com' })
+  assert.equal(dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://s3.example.com/' }), one)
+  assert.notEqual(dir({ RUNS_BUCKET: 'two', RUNS_ENDPOINT: 'https://s3.example.com' }), one)
+  assert.notEqual(dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://r2.example.com' }), one)
+})
+
 describe('reading from s3()', () => {
   let s3: FakeS3
   let a: string
@@ -477,25 +495,36 @@ describe('reading from s3()', () => {
     assert.match(offline.stdout, /No recorded runs yet/)
   })
 
-  test('a copy of another bucket is emptied, and refused while runs wait to upload', async () => {
-    const file = join(storeDir(b), 'pulled.json')
-    const state = JSON.parse(readFileSync(file, 'utf8'))
-    writeFileSync(file, JSON.stringify({ ...state, location: 'https://elsewhere/bucket/' }))
-    writeFileSync(join(storeDir(b), 'history', '20260101T000000Z_0000000_x_zzzz.json'), '{}')
-    const shown = await listed(b, '--all-branches')
-    assert.deepEqual(shown.ids, [ids.main, ids.feature, ids.later])
-    assert.equal(
-      existsSync(join(storeDir(b), 'history', '20260101T000000Z_0000000_x_zzzz.json')),
-      false,
-    )
-    writeFileSync(file, JSON.stringify({ ...state, location: 'https://elsewhere/bucket/' }))
-    mkdirSync(join(storeDir(b), 'pending'), { recursive: true })
-    writeFileSync(join(storeDir(b), 'pending', ids.main as string), '')
-    const refused = await runCli(b, ['history', '--profile', 'ci'], { env: env() })
-    assert.equal(refused.code, 3, refused.stdout + refused.stderr)
+  test('a pull skips a run whose files fail their hashes, and keys outside the run', async () => {
+    const runId = ids.main as string
+    const base = `runs/${runId.slice(0, 4)}-${runId.slice(4, 6)}/${runId}`
+    const record = s3.objects.get(`${base}.json`) as { bytes: Buffer; etag: string }
+    const run = JSON.parse(String(record.bytes)) as RunRecord
+    const wrong = { path: 'summary.md', sha256: '0'.repeat(64), bytes: 1 }
+    const bad = encodeRecord({ ...run, git: { ...run.git, worktreePatch: wrong } } as RunRecord)
+    s3.objects.set(`${base}.json`, { bytes: bad, etag: 'tampered' })
+    s3.objects.set(`${base}/a/../evil.txt`, { bytes: Buffer.from('evil'), etag: 'evil' })
+    const skipped = await runCli(b, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(skipped.code, 0, skipped.stdout + skipped.stderr)
+    assert.match(skipped.stdout, /pulled 0 run\(s\)/)
     assert.match(
-      refused.stderr,
-      /1 run\(s\) recorded to https:\/\/elsewhere\/bucket\/ haven't uploaded/,
+      skipped.stderr,
+      new RegExp(
+        `warning: skipped ${runId} from s3://reeval-runs: summary\\.md doesn't match the hash in its record, so the next pull reads it again`,
+      ),
     )
+    assert.match(
+      skipped.stderr,
+      /warning: skipped \S+\/a\/\.\.\/evil\.txt in s3:\/\/reeval-runs: a key with an empty, \. or \.\. part can't be read back/,
+    )
+    const copy = readFileSync(join(storeDir(b), 'history', `${runId}.json`))
+    assert.ok(copy.equals(record.bytes), 'the copy keeps what it had')
+    s3.objects.set(`${base}.json`, { ...record, etag: 'next' })
+    const pulled = await runCli(b, ['sync', '--profile', 'ci'], { env: env() })
+    s3.objects.delete(`${base}/a/../evil.txt`)
+    assert.equal(pulled.code, 0, pulled.stdout + pulled.stderr)
+    assert.match(pulled.stdout, /pulled 1 run\(s\)/)
+    assert.doesNotMatch(pulled.stderr, /doesn't match/)
+    assert.equal(existsSync(join(storeDir(b), 'history', 'evil.txt')), false)
   })
 })

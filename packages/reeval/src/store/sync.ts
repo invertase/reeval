@@ -7,9 +7,9 @@ import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { UsageError } from '../errors.ts'
 import { recordFile, replaceable, runDir } from '../history/files.ts'
-import { randomSuffix } from '../ids.ts'
+import { randomSuffix, sha256 } from '../ids.ts'
 import type { HistoryStore, ResolvedHistory, S3StoreDescriptor, StoredRun } from '../types.ts'
-import { S3_ENV_DEFAULTS } from './resolve.ts'
+import { S3_ENV_DEFAULTS, unsafePath } from './resolve.ts'
 import { s3Settings, s3Store } from './s3.ts'
 
 /** A run the store didn't take: the store or the network failed, or it holds another version. */
@@ -187,8 +187,8 @@ export function notUploaded(error: Error, pending: string): string {
   return message
 }
 
-/** What the copy holds: when it was last pulled, from where, and each run's version. */
-type Pulled = { at: string | null; location: string; versions: Record<string, string> }
+/** What the copy holds: when it was last pulled, and each run's version. */
+type Pulled = { at: string | null; versions: Record<string, string> }
 
 const pulledFile = (history: RemoteHistory) => join(dirname(history.dir), 'pulled.json')
 
@@ -203,26 +203,12 @@ async function readPulled(history: RemoteHistory): Promise<Pulled | null> {
 }
 
 async function savePulled(history: RemoteHistory, change: (state: Pulled) => void) {
-  const state = (await readPulled(history)) ?? {
-    at: null,
-    location: location(history),
-    versions: {},
-  }
+  const state = (await readPulled(history)) ?? { at: null, versions: {} }
   change(state)
   await mkdir(dirname(history.dir), { recursive: true })
   const tmp = `${pulledFile(history)}.${randomSuffix(6)}`
   await writeFile(tmp, `${JSON.stringify(state)}\n`)
   await rename(tmp, pulledFile(history))
-}
-
-/**
- * Where the store is, resolved: the id of `.reeval/store/<id>` hashes the variable names an
- * `s3()` reads its endpoint and bucket from, so a copy remembers their values.
- */
-function location(history: RemoteHistory): string {
-  if (history.store.kind === 'custom') return history.store.name
-  const { endPoint, bucket } = s3Settings(history.store.descriptor)
-  return `${endPoint}/${bucket}/${history.store.descriptor.prefix ?? ''}`
 }
 
 /** Puts a run the store holds into the copy, its files first and its record last. */
@@ -231,12 +217,18 @@ async function writeCopy(history: RemoteHistory, run: StoredRun) {
   const staging = join(history.dir, `.tmp-${randomSuffix(8)}`)
   try {
     for (const [path, bytes] of run.files) {
+      if (unsafePath(path)) {
+        warn(
+          `skipped ${path} in ${storeOf(history).name}'s ${run.runId}: it isn't a path under the run`,
+        )
+        continue
+      }
       const file = join(staging, ...path.split('/'))
       await mkdir(dirname(file), { recursive: true })
       await writeFile(file, bytes)
     }
     await rm(runDir(history.dir, run.runId), { recursive: true, force: true })
-    if (run.files.size) await rename(staging, runDir(history.dir, run.runId))
+    if (existsSync(staging)) await rename(staging, runDir(history.dir, run.runId))
     const tmp = join(history.dir, `.tmp-${randomSuffix(8)}.json`)
     await writeFile(tmp, run.record)
     await rename(tmp, recordFile(history.dir, run.runId))
@@ -245,32 +237,43 @@ async function writeCopy(history: RemoteHistory, run: StoredRun) {
   }
 }
 
+const warn = (message: string) => process.stderr.write(`warning: ${message}\n`)
+
+/**
+ * The run's files that don't match the hash its record names for them. The record names its
+ * files as `{ path, sha256 }` wherever they're attached; `debug`'s are under `.reeval/debug`.
+ */
+function mismatched(run: StoredRun): string[] {
+  const named = new Map<string, string>()
+  const walk = (value: unknown, top: boolean) => {
+    if (Array.isArray(value)) for (const v of value) walk(v, false)
+    else if (value && typeof value === 'object') {
+      const o = value as Record<string, unknown>
+      if (typeof o.path === 'string' && typeof o.sha256 === 'string') named.set(o.path, o.sha256)
+      for (const [key, v] of Object.entries(o)) if (!(top && key === 'debug')) walk(v, false)
+    }
+  }
+  walk(JSON.parse(Buffer.from(run.record).toString()), true)
+  return [...run.files]
+    .filter(([path, bytes]) => named.has(path) && sha256(bytes) !== named.get(path))
+    .map(([path]) => path)
+}
+
 export type Pull = { pulled: number; cachedAt: string | null; unreachable?: string }
 
 /**
  * Brings the copy up to date with the store, at most once a minute unless `force`: every run
  * whose version it hasn't seen, except one still waiting to upload from here. A store it can't
  * reach leaves the copy as it was, with `unreachable` saying why; with no copy yet, that's a
- * StoreError. A copy of another bucket (its variables changed) is emptied first.
+ * StoreError. A run whose files don't match the hashes its record names (read while it was being
+ * replaced) is left for the next pull, with a warning.
  */
 export async function pullStore(
   history: RemoteHistory,
   options: { force?: boolean; maxAgeMs?: number } = {},
 ): Promise<Pull> {
   const store = storeOf(history)
-  const where = location(history)
-  let state = await readPulled(history)
-  if (state && state.location !== where) {
-    const waiting = await pendingRuns(history)
-    if (waiting.length) {
-      throw new StoreError(
-        `${waiting.length} run(s) recorded to ${state.location} haven't uploaded, and history.store is ${where} now. Upload them with the old settings (reeval sync), or delete ${dirname(history.dir)} to drop them`,
-      )
-    }
-    await rm(history.dir, { recursive: true, force: true })
-    await rm(pulledFile(history), { force: true })
-    state = null
-  }
+  const state = await readPulled(history)
   const fresh = state?.at && Date.now() - Date.parse(state.at) < (options.maxAgeMs ?? 60_000)
   if (fresh && !options.force) return { pulled: 0, cachedAt: state?.at ?? null }
   const seen = state?.versions ?? {}
@@ -283,6 +286,13 @@ export async function pullStore(
       if (seen[runId] === version && existsSync(recordFile(history.dir, runId))) continue
       const run = await tries(() => store.readRun(runId))
       if (!run) continue
+      const changed = mismatched(run)
+      if (changed.length) {
+        warn(
+          `skipped ${runId} from ${store.name}: ${changed.join(', ')} ${changed.length === 1 ? "doesn't" : "don't"} match the hash in its record, so the next pull reads it again`,
+        )
+        continue
+      }
       await writeCopy(history, run)
       await savePulled(history, (s) => {
         s.versions[runId] = run.version
@@ -297,7 +307,6 @@ export async function pullStore(
   const at = new Date().toISOString()
   await savePulled(history, (s) => {
     s.at = at
-    s.location = where
   })
   return { pulled, cachedAt: at }
 }
