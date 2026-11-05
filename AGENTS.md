@@ -31,7 +31,7 @@ pnpm docs:gen && pnpm docs:check     # after any user-visible change
 - **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
  table gives it (a plan case or a fixture), an `inventory.ts` entry (unit tests count by file) and
  `pnpm features:matrix --write`.
-- **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
+- **A user-visible change** updates its entry in `docs/reference/` (see [Adding a feature](#adding-a-feature)).
 - **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
  `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
  the Zod schema, and only the compiler sees it. A field's docs go in the type's TSDoc, not a
@@ -502,10 +502,10 @@ once per harness by `perHarness` in `features.test.ts`; don't copy the directory
 
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
-updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
-reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs:gen` and `pnpm docs:check`
-(below). If the change affects how agents should write evals, update the reeval skill in
-`skills/reeval/SKILL.md` (or the reference under `references/` that covers it) too.
+updates its page in the docs' Reference tab (`docs/reference/`), only through generated blocks,
+inline corrections to existing text, or the bare entry `pnpm docs:check` requires. Then run
+`pnpm build && pnpm docs:gen` and `pnpm docs:check` (below). `skills/reeval/` takes inline
+corrections only. Elliot writes new prose in the docs and the skill.
 
 ### Docs
 
