@@ -271,6 +271,63 @@ describe('the harness reads them after each turn', () => {
     assert.equal(parts.at(-1)?.type, 'finish')
   })
 
+  test("a turn with a thought and an MCP result agy saved to its step's file carries both", async () => {
+    const id = 'a1b2c3d4-0000-4000-8000-000000000001'
+    const step = (fields: Record<string, unknown>) =>
+      JSON.stringify({ event: 'step_update', step_update: { conversation_id: id, ...fields } })
+    const mcp = (state: string) =>
+      step({
+        step_index: 3,
+        state,
+        step_type: 'tool',
+        tool_name: 'call_mcp_tool',
+        tool_info: {
+          name: 'call_mcp_tool',
+          parameters: { Arguments: {}, ServerName: 'probe', ToolName: 'bulk' },
+        },
+      })
+    const result = JSON.stringify({
+      event: 'result',
+      result: { conversation_id: id, status: 'SUCCESS', response: 'ok' },
+    })
+    const sandbox = fakeSandbox({
+      turns: [
+        {
+          stdout: [
+            step({ step_index: 2, state: 'DONE', step_type: 'agent_response', text_delta: 'ok' }),
+            mcp('ACTIVE'),
+            mcp('DONE'),
+            result,
+            // After the result, agy's events are raw: none can need a saved output.
+            mcp('DONE'),
+          ].join('\n'),
+        },
+      ],
+      run: () => ({
+        exitCode: 0,
+        stdout: JSON.stringify([{ step: 2, text: 'Call the bulk tool.', durationMs: 40 }]),
+        stderr: '',
+      }),
+    })
+    const bulk = 'bulk-line-0001\nBULK-END-MARKER-5150\n'
+    sandbox.files.set(
+      `/root/.gemini/antigravity-cli/brain/${id}/.system_generated/steps/3/output.txt`,
+      bulk,
+    )
+    const parts = visible(await runTurn(await start(sandbox), 'go'))
+    const thought = parts.find((p) => p.type === 'reasoning-delta')
+    assert.equal(thought?.type === 'reasoning-delta' && thought.delta, 'Call the bulk tool.')
+    const results = parts.filter((p) => p.type === 'tool-result')
+    assert.deepEqual(
+      results.map((r) => [r.result, r.providerMetadata]),
+      [[bulk, { antigravity: { toolOutput: { view: 'full' } } }]],
+    )
+    const types = parts.map((p) => p.type)
+    assert.ok(types.indexOf('tool-result') < types.indexOf('reasoning-start'))
+    assert.ok(types.indexOf('reasoning-end') < types.indexOf('finish'))
+    assert.equal(types.at(-1), 'finish')
+  })
+
   test('an aborted turn reads nothing', async () => {
     const sandbox = fakeSandbox({
       turns: [{ stdout: fixture('thoughts-turn-1.ndjson') }],
