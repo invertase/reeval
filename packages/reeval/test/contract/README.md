@@ -48,6 +48,131 @@ anything.
    `REEVAL_UPDATE_FORMATS=1 REEVAL_UPDATE_CAPTURES=1` to learn its format and capture its replays.
 4. Its secret in `contract.yml`, and its latest version in `scripts/drift/latest-images.sh`.
 5. Once the harness loads plugins, its row's `plugin` field (below).
+6. Its telemetry declaration (below).
+
+## Telemetry
+
+Each harness declares, for every telemetry signal, what its record captures against ground truth
+(the gateway's decrypted wire, the native stream and the sandbox's files), in
+[`telemetry.ts`](./telemetry.ts): `captured` (equal to ground truth), `partial` (incomplete or
+reshaped), `dropped` (produced but not recorded) or `n/p` (not produced by the CLI or provider).
+`?` marks a cell whose ground truth couldn't be read. This is engineering detail, kept out of the
+public docs and the harness matrix.
+
+`../contract-telemetry.test.ts` fails when a catalog harness misses a declaration for any signal,
+and when this table is stale (`REEVAL_UPDATE_SNAPSHOTS=1` rewrites it). A PR that closes a gap
+updates its own cells. The states are what a telemetry-parity check against the wire holds a row
+to: a `captured` or `partial` signal must be in the record, and a `dropped` one must not, so a gap
+that closes fails until its cell says so.
+
+[//]: # (generated:telemetry)
+
+| Signal | Cursor | Claude Code | Codex | Antigravity | OpenCode | Goose | pi | fx | Grok Build |
+|---|---|---|---|---|---|---|---|---|---|
+| Main-call tokens per turn | captured? [1] | captured | captured | captured | partial [2] | **dropped** [3] | captured | partial [4] | captured |
+| Fresh input vs cache read | captured? [5] | captured | captured | captured | **dropped** [6] | **dropped** [7] | captured | **dropped** [8] | captured |
+| Cache write | captured? [5] | captured | captured | n/p | captured [9] | **dropped** | n/p | n/p | n/p |
+| Reasoning tokens | n/p | **dropped** [10] | captured | captured | captured | **dropped** [11] | captured | **dropped** [12] | captured |
+| Reasoning text | captured | captured | n/p [13] | **dropped** [14] | n/p [15] | captured | captured | n/p | captured |
+| Per-call usage | **dropped** [16] | **dropped** [17] | **dropped** [18] | **dropped** [19] | **dropped** [20] | **dropped** [21] | **dropped** [17] | **dropped** [11] | **dropped** [22] |
+| Side-call usage (titles, search) | **dropped**? [23] | **dropped** [24] | n/p [25] | **dropped** [26] | **dropped** [27] | **dropped** [28] | n/p | n/p | **dropped** [29] |
+| Served model (gateway) | **dropped**? [30] | **dropped** [31] | captured | captured | captured | captured | captured | captured | captured |
+| Provider or CLI cost | n/p | **dropped** [32] | n/p | n/p | **dropped** [33] | **dropped** [34] | n/p | n/p | **dropped** [35] |
+| Usage on an aborted turn | **dropped** [36] | captured | **dropped** [37] | partial [38] | **dropped** [39] | **dropped** | captured | **dropped** | **dropped** [40] |
+| Transcript of an aborted turn | captured | captured | captured | captured | **dropped** [41] | **dropped** [41] | captured | **dropped** [41] | **dropped** [41] |
+| Large shell output | **dropped** [42] | partial [43] | captured [44] | partial [43] | partial [43] | partial [43] | partial [43] | captured [44] | partial [43] |
+| Large MCP result | **dropped** [45] | partial [46] | captured | **dropped** [47] | partial [48] | captured | partial [43] | partial [49] | partial [50] |
+| Small MCP args and result | captured | captured | captured | captured | partial [51] | partial [52] | partial [53] | partial [54] | captured |
+| Context window used and size | n/p | **dropped** | **dropped** [55] | n/p | **dropped** [56] | **dropped** [56] | n/p | n/p | **dropped** |
+| System prompt and tool count | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] | **dropped** [57] |
+| Retries, 429s, rate-limit headers | **dropped**? [23] | **dropped** [58] | **dropped** [59] | n/p | n/p | n/p | n/p | n/p | n/p |
+| Compaction | n/p? [60] | n/p? [60] | n/p? [61] | n/p? [60] | n/p? [60] | n/p? [62] | n/p? [60] | n/p? [60] | n/p? [60] |
+
+1. From the SDK only; reeval totals it, since the raw `totalTokens` counts cache reads twice.
+2. Fresh input is 0: `tokenUsage` subtracts cache reads from an already-uncached `inputTokens`.
+3. `usage: null` (ACP's is the last call's); `sessions.db`'s `usage_ledger` has every call.
+4. On Chat Completions, input counts cache reads as fresh.
+5. From the SDK only.
+6. Fresh input lands as 0, so the split is lost (see main-call tokens).
+7. `usage_ledger.cache_read_tokens`.
+8. ACP sends no cache field; the wire's `prompt_tokens_details.cached_tokens`.
+9. On Anthropic; Gemini writes none.
+10. `thinking_tokens` in `message_delta`, the session JSONL and `modelUsage`; the catalog's `reasoningTokens: false`.
+11. On the wire only.
+12. On Chat Completions, the wire's `completion_tokens_details.reasoning_tokens` only.
+13. Its `config.toml` sets no `model_reasoning_summary`, so reasoning comes back encrypted.
+14. On the wire, none in the transcript.
+15. On Gemini its config sends no `includeThoughts`; Anthropic returned no visible thinking.
+16. The SDK and `agent-store` keep turn totals only.
+17. In the raw `finish-step` parts.
+18. The rollout JSONL's `token_count` events.
+19. Turn totals only.
+20. `opencode.db`'s `session_message.data.tokens`.
+21. `usage_ledger`, one row per model call.
+22. On the wire, and per turn in `usage.json`.
+23. The wire is protobuf.
+24. `WebSearch` is its own `/v1/messages` call, in `modelUsage` only.
+25. Web search is `POST /v1/alpha/search`, which carries no usage.
+26. The title and web-search calls on Flash Lite: the model's in `servedModels`, its tokens aren't.
+27. The session-title call.
+28. The session-naming call, on the wire only (not in `usage_ledger`).
+29. `session_title` and the server-side `web_search` call, the larger share of a searching attempt's cost.
+30. The gateway can't read the protobuf requests; the record has the SDK's turn model.
+31. The gateway doesn't read Anthropic responses; the record has the CLI's turn model.
+32. `result.modelUsage[*].costUSD`.
+33. ACP `usage_update.cost`, and `opencode.db`.
+34. ACP `usage_update.cost`, and `usage_ledger.cost` (estimated).
+35. `usage.cost_in_usd_ticks` on every response, and `usage.json`.
+36. `usage: null`.
+37. `usage: null`; the rollout JSONL has each call's `last_token_usage`.
+38. Kept, without the title call's.
+39. `usage: null`; `opencode.db` has the calls' tokens.
+40. `usage: null`; `sessions/<cwd>/<id>/usage.json` has the turn's.
+41. No parts: harness-acp drops what it buffered when it abandons the turn.
+42. `""`; the full output is in `~/.cursor/projects/*/agent-tools/*.txt`.
+43. The CLI's truncated view, which the model saw; the full output is spilled to disk.
+44. More than the model saw: the transcript has the full output.
+45. `""`; spilled like the shell output.
+46. A "saved to …" notice, which the model saw; the result is in `tool-results/`.
+47. `""`; the result is in `brain/<id>/.system_generated/steps/<n>/output.txt`.
+48. Cut short with no end marker; the full result is in `tool-output/`.
+49. A pointer the model follows with `read_tool_result`.
+50. Cut short.
+51. The result keeps its `{metadata, output}` wrapper.
+52. The result keeps its ACP `content[]` wrapper.
+53. The result keeps its `{output, details}` wrapper.
+54. The result keeps its `{server, tool, result}` wrapper.
+55. The rollout's `model_context_window`.
+56. ACP `usage_update.used` and `size`.
+57. On the wire; the record keeps no request shape.
+58. `anthropic-ratelimit-*` headers on every call.
+59. `x-ratelimit-*` headers on every call, and the rollout's rate limits.
+60. No contract run compacts context.
+61. No contract run compacts context; the rollout would show it.
+62. No contract run compacts context; `usage_ledger.is_compaction` would show it.
+
+| Signal | What the record holds when captured |
+|---|---|
+| Main-call tokens per turn | turn `usage` input and output: the sum of the turn's main model calls |
+| Fresh input vs cache read | turn `usage.input` uncached, `usage.cacheRead` apart |
+| Cache write | turn `usage.cacheWrite` |
+| Reasoning tokens | turn `usage.reasoning` |
+| Reasoning text | non-empty `reasoning` events when the wire carries reasoning text |
+| Per-call usage | each model call's usage, not only the turn's |
+| Side-call usage (titles, search) | usage of calls outside the agent loop (titles, web search), apart from the main calls' |
+| Served model (gateway) | the attempt's `servedModels`, from the model calls' responses |
+| Provider or CLI cost | the cost the provider or the CLI reports, never reeval's own price table |
+| Usage on an aborted turn | a timed-out turn's `usage`, equal to the calls the wire shows |
+| Transcript of an aborted turn | a timed-out turn's events: the tool calls whose requests the wire shows |
+| Large shell output | a ~300 KB command's output in its tool event: full, or marked truncated or spilled |
+| Large MCP result | a ~60 KB MCP result in its tool event: full, or marked truncated or spilled |
+| Small MCP args and result | an MCP call's arguments and result text, without the CLI's own wrapper |
+| Context window used and size | the context occupancy and window size the CLI reports |
+| System prompt and tool count | each model call's system prompt size and tool count |
+| Retries, 429s, rate-limit headers | retried calls, 429s and the provider's rate-limit headers |
+| Compaction | a compaction event when the CLI compacts context |
+
+[//]: # (/generated:telemetry)
 
 ## Plugins
 
