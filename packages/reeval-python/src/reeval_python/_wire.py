@@ -1240,7 +1240,8 @@ class GitWorkspace(TypedDict):
 
 
 # Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its
-# provider's key, and reports no usage (its ACP server counts one call).
+# provider's key, and reads each turn's usage from Goose's `usage_ledger` (its ACP server counts
+# one call).
 class GooseHarnessDescriptor(TypedDict):
     # Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.
     effort: NotRequired[str]

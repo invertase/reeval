@@ -1270,7 +1270,7 @@
       "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
-      "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its provider's key, and reports no usage (its ACP server counts one call).",
+      "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its provider's key, and reads each turn's usage from Goose's `usage_ledger` (its ACP server counts one call).",
       "type": "object",
       "properties": {
         "effort": {

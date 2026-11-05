@@ -359,9 +359,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.anthropic.com'],
     apiHost: 'api.anthropic.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^claude-haiku-4-5/,
     wireModel: /^claude-haiku-4-5/,
   },
@@ -375,9 +373,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^gpt-5\.4-mini/,
     wireModel: /^gpt-5\.4-mini/,
   },
@@ -392,9 +388,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.x.ai'],
     apiHost: 'api.x.ai',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^grok-4\.6/,
     wireModel: /^grok-4\.6/,
   },
@@ -749,9 +743,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /claude-haiku-4\.5/,
     wireModel: /claude-haiku-4\.5/,
   },

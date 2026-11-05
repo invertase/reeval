@@ -1006,7 +1006,8 @@ export type OpenCodeHarnessDescriptor = {
 }
 /**
  * Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its
- * provider's key, and reports no usage (its ACP server counts one call).
+ * provider's key, and reads each turn's usage from Goose's `usage_ledger` (its ACP server counts
+ * one call).
  */
 export type GooseHarnessDescriptor = {
   kind: 'goose'
