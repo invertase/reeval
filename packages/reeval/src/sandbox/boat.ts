@@ -47,11 +47,17 @@ export type BoatClient = {
     sshEndpoint?: string | null
     hostKey?: string
   }>
-  sandboxes(p: { namePrefix?: string; limit?: number; cursor?: string }): Promise<{
+  sandboxes(
+    p: { namePrefix?: string; limit?: number; cursor?: string },
+    init?: { signal?: AbortSignal },
+  ): Promise<{
     sandboxes: BoatSandboxInfo[]
     pageInfo?: { nextCursor: string | null; hasMore: boolean }
   }>
-  deleteSandbox(p: { sandboxId: string; xAsciiConfirmDelete: string }): Promise<unknown>
+  deleteSandbox(
+    p: { sandboxId: string; xAsciiConfirmDelete: string },
+    init?: { signal?: AbortSignal },
+  ): Promise<unknown>
   limits(
     p?: Record<string, never>,
     init?: { signal?: AbortSignal },
@@ -180,6 +186,8 @@ export const runPrefix = (sandbox: Pick<BoatSandboxDescriptor, 'prefix'>, runId:
 const READY_TIMEOUT_MS = 120_000
 /** How long a check of the account may wait on Boat, so an unreachable API can't stall a plan. */
 const LIMITS_TIMEOUT_MS = 15_000
+/** How long a run's cleanup may wait on one account, so an unreachable API can't stall a resume. */
+const CLEANUP_TIMEOUT_MS = 15_000
 /** Boat's states a sandbox never leaves for `ready`; 'cancelled' answers 404 after it's reported. */
 const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
@@ -212,9 +220,9 @@ async function untilReady(
 }
 
 /** Deletes a sandbox; one already gone is deleted. */
-async function deleteSandbox(api: BoatClient, id: string): Promise<void> {
+async function deleteSandbox(api: BoatClient, id: string, signal?: AbortSignal): Promise<void> {
   try {
-    await api.deleteSandbox({ sandboxId: id, xAsciiConfirmDelete: id })
+    await api.deleteSandbox({ sandboxId: id, xAsciiConfirmDelete: id }, { signal })
   } catch (error) {
     if (status(error) !== 404) throw error
   }
@@ -358,11 +366,18 @@ export async function createBoatSandbox(
 }
 
 /** Every sandbox on `sandbox`'s account whose name starts with `prefix`, across pages. */
-async function sandboxesNamed(api: BoatClient, prefix: string): Promise<BoatSandboxInfo[]> {
+async function sandboxesNamed(
+  api: BoatClient,
+  prefix: string,
+  signal: AbortSignal,
+): Promise<BoatSandboxInfo[]> {
   const found: BoatSandboxInfo[] = []
   let cursor: string | undefined
   do {
-    const page = await api.sandboxes({ namePrefix: prefix, limit: 100, ...(cursor && { cursor }) })
+    const page = await api.sandboxes(
+      { namePrefix: prefix, limit: 100, ...(cursor && { cursor }) },
+      { signal },
+    )
     found.push(...page.sandboxes.filter((s) => s.name.startsWith(prefix)))
     cursor = page.pageInfo?.hasMore ? (page.pageInfo.nextCursor ?? undefined) : undefined
   } while (cursor)
@@ -385,8 +400,9 @@ export async function removeRunSandboxes(
     seen.add(key)
     const api = await boatClient(sandbox).catch(() => null)
     if (!api) continue
-    const left = await sandboxesNamed(api, prefix).catch(() => [])
-    await Promise.all(left.map((s) => deleteSandbox(api, s.id).catch(() => {})))
+    const signal = AbortSignal.timeout(CLEANUP_TIMEOUT_MS)
+    const left = await sandboxesNamed(api, prefix, signal).catch(() => [])
+    await Promise.all(left.map((s) => deleteSandbox(api, s.id, signal).catch(() => {})))
   }
 }
 
