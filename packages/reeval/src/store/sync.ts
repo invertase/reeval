@@ -6,7 +6,8 @@ import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { UsageError } from '../errors.ts'
 import { recordFile, replaceable, runDir } from '../history/files.ts'
-import type { HistoryStore, ResolvedHistory } from '../types.ts'
+import type { HistoryStore, ResolvedHistory, S3StoreDescriptor } from '../types.ts'
+import { S3_ENV_DEFAULTS } from './resolve.ts'
 import { s3Settings, s3Store } from './s3.ts'
 
 /** A run the store didn't take: the store or the network failed, or it holds another version. */
@@ -77,11 +78,25 @@ async function tries<T>(work: () => Promise<T>, waits = [1000, 4000]): Promise<T
   }
 }
 
-const reason = (error: unknown) => {
+/**
+ * Why a store call failed. A refused key names the variables `s3()` read it from: R2 answers an
+ * unknown access key id with a bare `401 Unauthorized`, S3 and MinIO with a 403.
+ */
+const reason = (error: unknown, history: RemoteHistory) => {
   const e = error as { message?: string; code?: string; statusCode?: number; cause?: unknown }
   const cause = (e.cause as { code?: string; message?: string } | undefined)?.code
   const status = e.statusCode ? ` (${e.statusCode}${e.code ? ` ${e.code}` : ''})` : ''
-  return `${e.message ?? String(error)}${status}${cause ? ` (${cause})` : ''}`
+  const keys =
+    (e.statusCode === 401 || e.statusCode === 403) && history.store.kind === 's3'
+      ? `: ${keyHint(history.store.descriptor)}`
+      : ''
+  return `${e.message ?? String(error)}${status}${cause ? ` (${cause})` : ''}${keys}`
+}
+
+const keyHint = (descriptor: S3StoreDescriptor) => {
+  const id = descriptor.env?.accessKeyId ?? S3_ENV_DEFAULTS.accessKeyId
+  const secret = descriptor.env?.secretAccessKey ?? S3_ENV_DEFAULTS.secretAccessKey
+  return `check that ${id} and ${secret} hold a key with access to the bucket`
 }
 
 export type Uploaded = 'uploaded' | 'replaced' | 'already'
@@ -113,7 +128,7 @@ export async function uploadRun(history: RemoteHistory, runId: string): Promise<
     })
   } catch (error) {
     if (error instanceof UsageError || error instanceof StoreError) throw error
-    throw new StoreError(`couldn't upload ${runId} to ${store.name}: ${reason(error)}`)
+    throw new StoreError(`couldn't upload ${runId} to ${store.name}: ${reason(error, history)}`)
   }
 }
 

@@ -49,6 +49,8 @@ export async function fakeS3(
     requests.push({ method, key, headers: req.headers })
     if (failing > 0) {
       failing--
+      // R2 answers an access key id it doesn't know with a bare 401.
+      if (failStatus === 401) return fail(res, 401, 'Unauthorized', 'Unauthorized')
       return fail(res, failStatus, 'ServiceUnavailable', 'injected failure')
     }
     if (!String(req.headers.authorization ?? '').includes(`Credential=${accessKey}/`)) {

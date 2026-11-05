@@ -240,6 +240,26 @@ describe('recording to s3()', () => {
     assert.match(idle.stdout, /nothing to upload to s3:\/\/reeval-runs\/ci/)
   })
 
+  test('a refused key, 403 or R2 401, names the variables and is not retried', async () => {
+    const wrong = await runCli(dir, ['run', '--profile', 'ci', '--record'], {
+      env: { ...env(), AWS_ACCESS_KEY_ID: 'AKIAWRONG' },
+    })
+    assert.equal(wrong.code, 3, wrong.stdout + wrong.stderr)
+    assert.match(
+      wrong.stdout,
+      /\(403 InvalidAccessKeyId\): check that AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY hold a key with access to the bucket\. The run is kept in /,
+    )
+    const requests = s3.requests.length
+    s3.failNext(100, 401)
+    const r2 = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
+    s3.failNext(0)
+    assert.equal(r2.code, 3, r2.stdout + r2.stderr)
+    assert.match(r2.stderr, /Unauthorized \(401 Unauthorized\): check that AWS_ACCESS_KEY_ID and /)
+    assert.equal(s3.requests.length - requests, 1, 'a 401 is not retried')
+    const synced = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(synced.code, 0, synced.stdout + synced.stderr)
+  })
+
   test('one failed try is retried', async () => {
     const before = remoteRecords().length
     s3.failNext(1)
