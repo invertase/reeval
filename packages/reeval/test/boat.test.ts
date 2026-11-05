@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { symlinkSync } from 'node:fs'
+import { type AddressInfo, createServer, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { checkBoat, removeRunSandboxes, runPrefix } from '../src/sandbox/boat.ts'
@@ -17,10 +18,14 @@ before(async () => {
 })
 after(() => api.close())
 
-/** Runs `body` with this process's environment pointed at the fake API under `key`. */
-async function pointedAt<T>(key: string | undefined, body: () => Promise<T>): Promise<T> {
+/** Runs `body` with this process's environment pointed at `url` (the fake API) under `key`. */
+async function pointedAt<T>(
+  key: string | undefined,
+  body: () => Promise<T>,
+  url = api.url,
+): Promise<T> {
   const saved = { url: process.env.BOAT_BASE_URL, key: process.env.BOAT_API_KEY }
-  process.env.BOAT_BASE_URL = api.url
+  process.env.BOAT_BASE_URL = url
   if (key === undefined) delete process.env.BOAT_API_KEY
   else process.env.BOAT_API_KEY = key
   try {
@@ -91,6 +96,19 @@ describe("a run's cleanup", () => {
     await pointedAt(api.key, () => removeRunSandboxes('run-b', [boat()]))
     await pointedAt(api.key, () => removeRunSandboxes('run-a', [createBoat({ prefix: 'team' })()]))
     assert.deepEqual(api.live(), [])
+  })
+
+  test('gives up on an API that never answers', { timeout: 60_000 }, async () => {
+    const held: Socket[] = []
+    const silent = createServer((socket) => held.push(socket))
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${(silent.address() as AddressInfo).port}`
+    try {
+      await pointedAt(api.key, () => removeRunSandboxes('run-a', [boat()]), url)
+    } finally {
+      for (const socket of held) socket.destroy()
+      silent.close()
+    }
   })
 })
 
