@@ -406,7 +406,12 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
       ? null
       : turns.reduce((n: number, ms) => n + (ms ?? 0), 0)
   const toolDurations = events.flatMap((e) =>
-    'durationMs' in e && typeof e.durationMs === 'number' ? [e.durationMs] : [],
+    e.type !== 'model-call' &&
+    'durationMs' in e &&
+    typeof e.durationMs === 'number' &&
+    !('durationInferred' in e && e.durationInferred)
+      ? [e.durationMs]
+      : [],
   )
   const stalledTools = events.filter((e) => 'stalled' in e && e.stalled).length
   return {
@@ -1073,9 +1078,11 @@ async function attemptEvidence(
       error: turnError(t.transcript),
       ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
       ...(t.reasoningMs !== undefined ? { reasoningMs: t.reasoningMs } : {}),
+      ...(t.timeSplit ? { timeSplit: t.timeSplit } : {}),
       text: turnText(t.text),
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
+    ...(record?.timeSplit ? { timeSplit: record.timeSplit } : {}),
     ...(record?.captureUse ? { captureUse: record.captureUse } : {}),
     timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     activity: record

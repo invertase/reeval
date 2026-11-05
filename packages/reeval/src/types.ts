@@ -34,6 +34,11 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /**
+         * Set when the harness never reported the call's end, so `durationMs` runs to the next
+         * event's `atMs` (the turn's end for the last).
+         */
+        durationInferred?: true
         /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
         subagent?: string
       })
@@ -51,6 +56,11 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /**
+         * Set when the harness never reported the call's end, so `durationMs` runs to the next
+         * event's `atMs` (the turn's end for the last).
+         */
+        durationInferred?: true
         /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
         subagent?: string
       }
@@ -63,6 +73,11 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /**
+         * Set when the harness never reported the call's end, so `durationMs` runs to the next
+         * event's `atMs` (the turn's end for the last).
+         */
+        durationInferred?: true
         /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
         subagent?: string
       }
@@ -77,13 +92,53 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /**
+         * Set when the harness never reported the call's end, so `durationMs` runs to the next
+         * event's `atMs` (the turn's end for the last).
+         */
+        durationInferred?: true
         /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
         subagent?: string
       }
     | { type: 'error'; message: string }
     /** A step that failed while the turn went on: a model call the harness retried. */
     | { type: 'retry'; message: string }
+    | ModelCallEvent
   )
+
+/**
+ * One of the agent's calls to its model API, as the egress gateway saw it (in a sandbox behind
+ * it, such as Docker's): when it started, when its response's first byte came (on a streamed call,
+ * about its first token) and when it ended, with the tokens and the model its response named.
+ * Cursor sends a whole turn over one long stream to `api2.cursor.sh` (`AgentService/RunSSE`),
+ * so a Cursor turn has one call, with `stream: true`, its tool calls inside it and its tokens
+ * only in the turn's `usage`.
+ */
+export type ModelCallEvent = {
+  type: 'model-call'
+  /** `POST api.anthropic.com/v1/messages`: the method, host and path. */
+  request: string
+  /** The response's HTTP status; null when none came. */
+  status: number | null
+  durationMs: number
+  /** Milliseconds from the call's start to its response body's first byte; null when none came. */
+  firstByteMs: number | null
+  /** The tokens its response body named; null when it named none (Cursor's are protobuf). */
+  usage: TokenUsage | null
+  /** The model that served it, from its request or response; null when neither named one. */
+  model: string | null
+  /** Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time. */
+  stream?: true
+  /**
+   * `main` for one of the agent's own steps, `side` for a call its CLI made around them: a
+   * session title, a web search's own model call, Antigravity's Flash Lite calls. A call is
+   * `main` when its tokens are one of the turn's steps' as the harness reported them. Otherwise
+   * it's `side` when its request declared at most one tool while another call in the attempt
+   * declared more, or when another model served it than served the turn's other calls, and `main`
+   * when neither holds. Absent in records from before roles.
+   */
+  role?: 'main' | 'side'
+}
 
 /** The transcript events a harness may be unable to report. */
 export type WebEventType = 'web-search' | 'web-fetch'
@@ -309,6 +364,24 @@ export type TokenUsage = {
   cacheRead: number
   cacheWrite: number
   reasoning: number | null
+}
+
+/**
+ * Where a turn's time went, in ms, summing to its `durationMs`. Each moment counts once, as the
+ * first of: `waitingMs`, a background job the agent waited on (from the call that started it
+ * through the polls that checked on it), `toolMs`, a tool call, `modelMs`, a model call, and
+ * `otherMs`, the rest (the harness's own work, and time between calls). `modelMs` is null when
+ * the turn's model calls weren't seen one by one: on a sandbox without the egress gateway, and
+ * on Cursor, whose turn is one stream; that time is in `otherMs`. Which calls wait is a heuristic
+ * over the transcript: a shell call run in the background (`run_in_background`, a trailing `&`,
+ * `nohup`, or the command a Cursor terminal file names), then `sleep` and `wait` commands, output
+ * tools (`BashOutput`, `TaskOutput`) and reads of a Cursor terminal file.
+ */
+export type TimeSplit = {
+  modelMs: number | null
+  toolMs: number
+  waitingMs: number
+  otherMs: number
 }
 
 /** One agent turn. Immutable once `c.send()` resolves. */
@@ -695,9 +768,16 @@ export type FakeHarnessDescriptor = {
   effort?: string
   /**
    * Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true;
-   * null reports a call whose result never came.
+   * null reports a call whose result never came. `durationMs` defaults to 0; null reports a call
+   * whose end the harness never said.
    */
-  tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean | null }>
+  tools?: Array<{
+    tool: string
+    input: unknown
+    output: unknown
+    ok?: boolean | null
+    durationMs?: number | null
+  }>
   /** Files and message used instead when the environment gives the agent a skill. */
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
@@ -2599,6 +2679,8 @@ export type TurnRecord = Pick<
   mcpStartup?: McpStartup[]
   /** See the run record's `turns[].reasoningMs`. */
   reasoningMs?: number | null
+  /** See the run record's `turns[].timeSplit`. */
+  timeSplit?: TimeSplit
 }
 
 /**
@@ -3001,6 +3083,8 @@ export type EvalRecord = {
   upstreams?: Array<{ provider: string; calls: number }>
   /** See `AttemptRecord.reportedCostUsd`. */
   reportedCostUsd?: number
+  /** See `AttemptRecord.timeSplit`. */
+  timeSplit?: TimeSplit
   /**
    * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
    * (`<stem>.artifacts/<name>.png`) so redact never touches them.

@@ -330,6 +330,8 @@ export type EffortCounters = {
   tools: number | null
   agentMs: number | null
   tokens: number | null
+  /** Median time waiting on background jobs; omitted when no attempt recorded where its time went. */
+  waitingMs?: number
 }
 
 export type PooledArm = {
@@ -573,6 +575,7 @@ function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
     tools: effort.tools.median,
     agentMs: effort.agentMs.median,
     tokens: effort.tokens?.median ?? null,
+    ...(effort.split ? { waitingMs: effort.split.waitingMs } : {}),
   }
 }
 

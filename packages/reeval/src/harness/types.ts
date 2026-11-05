@@ -30,6 +30,11 @@ export type HarnessResult = {
   /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
   /**
+   * The tokens of each step the harness reported, in order, which tell the turn's own model
+   * calls from its CLI's side calls. Not recorded.
+   */
+  steps?: TokenUsage[]
+  /**
    * The turn's error, naming the variable, when the model API rejected the harness's credential:
    * the attempt is then an infra error, not the agent's failure.
    */

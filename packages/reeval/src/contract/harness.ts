@@ -174,6 +174,7 @@ export const fakeHarnessSchema = z.strictObject({
         input: z.unknown(),
         output: z.unknown(),
         ok: z.boolean().nullable().optional(),
+        durationMs: z.number().nonnegative().nullable().optional(),
       }),
     )
     .optional(),

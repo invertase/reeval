@@ -4,6 +4,35 @@
   "title": "TranscriptLine",
   "$ref": "#/$defs/TranscriptLine",
   "$defs": {
+    "TokenUsage": {
+      "description": "The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.",
+      "type": "object",
+      "properties": {
+        "cacheRead": {
+          "type": "number"
+        },
+        "cacheWrite": {
+          "type": "number"
+        },
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"]
+    },
     "TranscriptLine": {
       "anyOf": [
         {
@@ -22,6 +51,10 @@
             },
             "atMs": {
               "type": "number"
+            },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "const": true
             },
             "durationMs": {
               "anyOf": [
@@ -90,6 +123,10 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "const": true
+            },
             "durationMs": {
               "anyOf": [
                 {
@@ -156,6 +193,10 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "const": true
+            },
             "durationMs": {
               "anyOf": [
                 {
@@ -208,6 +249,10 @@
           "properties": {
             "atMs": {
               "type": "number"
+            },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "const": true
             },
             "durationMs": {
               "anyOf": [
@@ -306,6 +351,94 @@
             }
           },
           "required": ["atMs", "durationMs", "text", "ts", "turn", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": "number"
+            },
+            "firstByteMs": {
+              "description": "Milliseconds from the call's start to its response body's first byte; null when none came.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "model": {
+              "description": "The model that served it, from its request or response; null when neither named one.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "request": {
+              "description": "`POST api.anthropic.com/v1/messages`: the method, host and path.",
+              "type": "string"
+            },
+            "role": {
+              "description": "`main` for one of the agent's own steps, `side` for a call its CLI made around them: a session title, a web search's own model call, Antigravity's Flash Lite calls. A call is `main` when its tokens are one of the turn's steps' as the harness reported them. Otherwise it's `side` when its request declared at most one tool while another call in the attempt declared more, or when another model served it than served the turn's other calls, and `main` when neither holds. Absent in records from before roles.",
+              "enum": ["main", "side"]
+            },
+            "status": {
+              "description": "The response's HTTP status; null when none came.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "stream": {
+              "description": "Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time.",
+              "const": true
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "model-call"
+            },
+            "usage": {
+              "description": "The tokens its response body named; null when it named none (Cursor's are protobuf).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TokenUsage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "firstByteMs",
+            "model",
+            "request",
+            "status",
+            "ts",
+            "turn",
+            "type",
+            "usage"
+          ]
         },
         {
           "type": "object",

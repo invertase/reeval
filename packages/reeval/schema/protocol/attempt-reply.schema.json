@@ -727,6 +727,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -779,6 +784,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -821,6 +831,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -858,6 +873,11 @@
           "properties": {
             "atMs": {
               "type": "number"
+            },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
             },
             "durationMs": {
               "type": ["number", "null"]
@@ -941,6 +961,73 @@
             }
           },
           "required": ["atMs", "message", "ts", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": "number"
+            },
+            "firstByteMs": {
+              "description": "Milliseconds from the call's start to its response body's first byte; null when none came.",
+              "type": ["number", "null"]
+            },
+            "model": {
+              "description": "The model that served it, from its request or response; null when neither named one.",
+              "type": ["string", "null"]
+            },
+            "request": {
+              "description": "`POST api.anthropic.com/v1/messages`: the method, host and path.",
+              "type": "string"
+            },
+            "role": {
+              "description": "`main` for one of the agent's own steps, `side` for a call its CLI made around them: a session title, a web search's own model call, Antigravity's Flash Lite calls. A call is `main` when its tokens are one of the turn's steps' as the harness reported them. Otherwise it's `side` when its request declared at most one tool while another call in the attempt declared more, or when another model served it than served the turn's other calls, and `main` when neither holds. Absent in records from before roles.",
+              "type": "string",
+              "enum": ["main", "side"]
+            },
+            "status": {
+              "description": "The response's HTTP status; null when none came.",
+              "type": ["number", "null"]
+            },
+            "stream": {
+              "description": "Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time.",
+              "type": "boolean",
+              "const": true
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "model-call"
+            },
+            "usage": {
+              "description": "The tokens its response body named; null when it named none (Cursor's are protobuf).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TokenUsage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "firstByteMs",
+            "model",
+            "request",
+            "status",
+            "ts",
+            "type",
+            "usage"
+          ],
           "additionalProperties": false
         }
       ]

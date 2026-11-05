@@ -453,7 +453,13 @@ describe('toolTarget and toolCalls', () => {
 const replayRoot = join(testDir, 'replay')
 const harnesses = existsSync(replayRoot)
   ? readdirSync(replayRoot, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && d.name !== 'formats' && d.name !== 'telemetry')
+      .filter(
+        (d) =>
+          d.isDirectory() &&
+          d.name !== 'formats' &&
+          d.name !== 'telemetry' &&
+          d.name !== 'model-calls',
+      )
       .map((d) => d.name)
       .sort()
   : []

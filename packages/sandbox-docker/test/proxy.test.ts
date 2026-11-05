@@ -139,6 +139,53 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         out.write(event.slice(0, cut))
         return setTimeout(() => out.end(`${event.slice(cut)}data: [DONE]\n\n`), 20)
       }
+      if (req.url === '/messages') {
+        // Anthropic's Messages stream, 50ms after its headers: the prompt's counts and a first
+        // output count in message_start, the final output count in message_delta, split between
+        // two writes, after text that mentions a count inside a JSON string.
+        out.writeHead(200, { 'content-type': 'text/event-stream' })
+        const event = (e: object) => `data: ${JSON.stringify(e)}\n\n`
+        const start = event({
+          type: 'message_start',
+          message: {
+            model: 'claude-sonnet-5',
+            usage: {
+              input_tokens: 12,
+              cache_read_input_tokens: 400,
+              cache_creation_input_tokens: 30,
+              output_tokens: 1,
+            },
+          },
+        })
+        const text = event({ type: 'content_block_delta', delta: { text: '"output_tokens": 99' } })
+        const delta = event({ type: 'message_delta', usage: { output_tokens: 250 } })
+        const cut = delta.indexOf('250') + 1
+        return setTimeout(() => {
+          out.write(start + text + delta.slice(0, cut))
+          setTimeout(() => out.end(delta.slice(cut)), 20)
+        }, 50)
+      }
+      if (req.url === '/generate') {
+        // Gemini's generateContent: one pretty-printed body that names its model `modelVersion`,
+        // after its usage.
+        out.writeHead(200, { 'content-type': 'application/json' })
+        const body = JSON.stringify(
+          {
+            candidates: [{ content: { parts: [{ text: 'hi' }] } }],
+            usageMetadata: {
+              promptTokenCount: 70,
+              candidatesTokenCount: 512,
+              promptTokensDetails: [{ modality: 'TEXT', tokenCount: 70 }],
+            },
+            modelVersion: 'gemini-3.1-flash-lite',
+          },
+          null,
+          2,
+        )
+        const cut = body.indexOf('candidatesTokenCount')
+        out.write(body.slice(0, cut))
+        return setTimeout(() => out.end(body.slice(cut)), 20)
+      }
       if (req.url === '/language-model') {
         // Vercel AI Gateway's language-model protocol streams AI SDK stream parts.
         out.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -1789,7 +1836,13 @@ describe('brokered secrets through the proxy', () => {
       assert.equal(r.status, 200)
       const [decrypted] = await settled(1)
       assert.deepEqual(
-        { ...decrypted, ms: 0, requestHeaders: undefined, responseHeaders: undefined },
+        {
+          ...decrypted,
+          ms: 0,
+          firstByteMs: 0,
+          requestHeaders: undefined,
+          responseHeaders: undefined,
+        },
         {
           type: 'request',
           method: 'POST',
@@ -1803,6 +1856,7 @@ describe('brokered secrets through the proxy', () => {
           substituted: ['GEMINI_API_KEY'],
           credentials: [],
           ms: 0,
+          firstByteMs: 0,
           status: 200,
           requestHeaders: undefined,
           responseHeaders: undefined,
@@ -2210,7 +2264,13 @@ describe('brokered secrets through the proxy', () => {
             assert.equal(reachedUpstream().includes(SECRET), false)
             const [event] = await requests(1)
             assert.deepEqual(
-              { ...event, ms: 0, requestHeaders: undefined, responseHeaders: undefined },
+              {
+                ...event,
+                ms: 0,
+                firstByteMs: 0,
+                requestHeaders: undefined,
+                responseHeaders: undefined,
+              },
               {
                 type: 'request',
                 method: 'GET',
@@ -2225,6 +2285,7 @@ describe('brokered secrets through the proxy', () => {
                 substituted: [],
                 credentials: [],
                 ms: 0,
+                firstByteMs: 0,
                 requestHeaders: undefined,
                 responseHeaders: undefined,
               },
@@ -2707,6 +2768,88 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       assert.equal(e?.type === 'request' && e.responseModel, 'anthropic/claude-haiku-4.5')
       assert.equal(e?.type === 'request' && e.responseProvider, 'Anthropic')
       assert.equal(e?.type === 'request' && e.responseCost, 0.00042)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a model call: its first byte, the last count of each usage field and its model', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelCalls: [{ host: HOST, path: { exact: '/messages' }, method: ['POST'] }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/messages',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.ok(e?.type === 'request')
+      assert.equal(e.modelCall, true)
+      assert.equal(e.usageModel, 'claude-sonnet-5')
+      assert.deepEqual(e.responseUsage, {
+        input_tokens: 12,
+        cache_read_input_tokens: 400,
+        cache_creation_input_tokens: 30,
+        output_tokens: 250,
+      })
+      assert.ok(e.firstByteMs !== undefined && e.firstByteMs >= 45, `first byte ${e.firstByteMs}`)
+      assert.ok(e.firstByteMs <= e.ms)
+      assert.equal(e.responseModel, undefined, 'not a modelResponses endpoint')
+      assert.equal(e.requestTools, 0)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("a model call's model from Gemini's modelVersion, and the tools its request declared", async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelCalls: [{ host: HOST, path: { exact: '/generate' }, method: ['POST'] }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/generate',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: JSON.stringify({
+          tools: [{ functionDeclarations: [{ name: 'a' }, { name: 'b' }] }, { googleSearch: {} }],
+        }),
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.ok(e?.type === 'request')
+      assert.equal(e.usageModel, 'gemini-3.1-flash-lite')
+      assert.deepEqual(e.responseUsage, { promptTokenCount: 70, candidatesTokenCount: 512 })
+      assert.equal(e.requestTools, 3)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a request off the model calls reads no usage', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, { onEvent: (e) => events.push(e) })
+    try {
+      gw.proxy.addTransformations([brokered])
+      await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/messages',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      const e = await requestEvent(events)
+      assert.ok(e?.type === 'request')
+      assert.equal(e.modelCall, undefined)
+      assert.equal(e.responseUsage, undefined)
+      assert.ok(e.firstByteMs !== undefined, 'every decrypted response has its first byte timed')
     } finally {
       gw.close()
     }

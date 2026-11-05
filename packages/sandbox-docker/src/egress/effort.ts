@@ -40,13 +40,42 @@ function walk(value: unknown, keys: readonly string[], at: string[], out: Found[
  * undefined when it carries none or isn't JSON.
  */
 export function requestedEffort(body: string): string | undefined {
+  return requestFacts(body).effort
+}
+
+/**
+ * The tools a request body declares: Anthropic's and OpenAI's `tools` list counts each entry,
+ * and Gemini's (a list, or one object) each of its `functionDeclarations`. 0 when it declares
+ * none.
+ */
+function toolCount(body: Record<string, unknown>): number {
+  const declared = (entry: unknown): number => {
+    if (!entry || typeof entry !== 'object') return 1
+    const record = entry as Record<string, unknown>
+    const functions = record.functionDeclarations ?? record.function_declarations
+    return Array.isArray(functions) ? functions.length : 1
+  }
+  const { tools } = body
+  if (Array.isArray(tools)) return tools.reduce((n: number, t) => n + declared(t), 0)
+  return tools && typeof tools === 'object' ? declared(tools) : 0
+}
+
+/**
+ * A model call's request body, read once: its reasoning settings (`requestedEffort`) and how
+ * many tools it declares. Both undefined when it isn't a JSON object.
+ */
+export function requestFacts(body: string): { effort?: string; tools?: number } {
   let parsed: unknown
   try {
     parsed = JSON.parse(body)
   } catch {
-    return undefined
+    return {}
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
   const found: Found[] = []
   for (const path of PATHS) walk(parsed, path.split('.'), [], found)
-  return found.length ? found.map((f) => `${f.path}=${f.value}`).join(' ') : undefined
+  return {
+    ...(found.length ? { effort: found.map((f) => `${f.path}=${f.value}`).join(' ') } : {}),
+    tools: toolCount(parsed as Record<string, unknown>),
+  }
 }

@@ -57,6 +57,7 @@ export {
   removeContainerDetached,
 } from './docker-cli.ts'
 export { contextFiles, dockerignoreMatcher } from './dockerignore.ts'
+export { requestFacts } from './egress/effort.ts'
 export {
   CA_PATH,
   type Gateway,
@@ -100,6 +101,7 @@ export {
   sshArgv,
   sshTransport,
 } from './egress/transport.ts'
+export { MODEL_FIELD, usageReader } from './egress/usage.ts'
 export {
   dockerSeccompFile,
   ENGINES,

@@ -4,6 +4,7 @@
 // aren't reeval's to know.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
+import type { TimeSplit } from '../types.ts'
 import { formatTokens, totalTokens } from '../usage.ts'
 
 /** Below this two-sided p, an effort difference is an effect. */
@@ -21,6 +22,8 @@ export type EffortSample = {
   filesChanged: number
   /** Total tokens when this attempt reported usage; omitted when the harness dropped it. */
   tokens?: number
+  /** Where its agent time went; omitted for an attempt recorded without it. */
+  split?: TimeSplit
 }
 export type Spread = { median: number; q1: number; q3: number }
 /** One cell's effort over its counted attempts (passes and fails; infra errors and skips aren't). */
@@ -34,6 +37,11 @@ export type CellEffort = {
   filesChanged: number
   /** Over the counted attempts that reported usage; omitted when none did. */
   tokens?: Spread
+  /**
+   * Median model, tool, waiting and other time over the counted attempts that have a split;
+   * omitted when none does. `modelMs` is null when any of them saw no model calls.
+   */
+  split?: TimeSplit
 }
 
 /**
@@ -77,13 +85,14 @@ export type EffortContrast = {
 }
 
 export const effortSample = (
-  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage' | 'changedFiles'>,
+  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage' | 'changedFiles' | 'timeSplit'>,
 ): EffortSample => ({
   tools: a.activity.tools,
   agentMs: a.timings.agentMs,
   fileEdits: a.activity.fileEdits,
   filesChanged: filesChanged(a.changedFiles),
   ...(a.usage ? { tokens: totalTokens(a.usage) } : {}),
+  ...(a.timeSplit ? { split: a.timeSplit } : {}),
 })
 
 /** The files the workspace diff changed, a collapsed directory counting each of its files. */
@@ -102,9 +111,23 @@ const spread = (values: number[]): Spread => ({
 export const tokenValues = (samples: EffortSample[]): number[] =>
   samples.flatMap((s) => (s.tokens === undefined ? [] : [s.tokens]))
 
+/** The samples' median split, `modelMs` null when any sample's is; undefined when none has one. */
+export function splitOf(samples: EffortSample[]): TimeSplit | undefined {
+  const splits = samples.flatMap((s) => (s.split ? [s.split] : []))
+  if (splits.length === 0) return undefined
+  const mid = (f: (s: TimeSplit) => number) => median(splits.map(f)) ?? 0
+  return {
+    modelMs: splits.every((s) => s.modelMs !== null) ? mid((s) => s.modelMs ?? 0) : null,
+    toolMs: mid((s) => s.toolMs),
+    waitingMs: mid((s) => s.waitingMs),
+    otherMs: mid((s) => s.otherMs),
+  }
+}
+
 export function effortOf(samples: EffortSample[]): CellEffort | null {
   if (samples.length === 0) return null
   const tokens = tokenValues(samples)
+  const split = splitOf(samples)
   return {
     n: samples.length,
     tools: spread(samples.map((s) => s.tools)),
@@ -112,6 +135,7 @@ export function effortOf(samples: EffortSample[]): CellEffort | null {
     fileEdits: median(samples.map((s) => s.fileEdits)) ?? 0,
     filesChanged: median(samples.map((s) => s.filesChanged)) ?? 0,
     ...(tokens.length ? { tokens: spread(tokens) } : {}),
+    ...(split ? { split } : {}),
   }
 }
 
@@ -251,6 +275,18 @@ export function formatSeconds(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
 
+/**
+ * `model 1m 05s · tools 12s · waiting 1m 21s · other 3m 22s`: model left out when unknown,
+ * waiting when there was none.
+ */
+export const splitLabel = (s: TimeSplit) =>
+  [
+    ...(s.modelMs === null ? [] : [`model ${formatSeconds(s.modelMs)}`]),
+    `tools ${formatSeconds(s.toolMs)}`,
+    ...(s.waitingMs > 0 ? [`waiting ${formatSeconds(s.waitingMs)}`] : []),
+    `other ${formatSeconds(s.otherMs)}`,
+  ].join(' · ')
+
 const formatP = (p: number | null) =>
   p === null ? '' : ` (p = ${p < 0.001 ? '<0.001' : p.toFixed(3)})`
 
@@ -308,8 +344,22 @@ export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'
     ? `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)} · tokens ${formatTokens(e.tokens.median)}`
     : `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)}`
 
-/** The same cell between two runs: `tools 44 → 10 (×0.23) · agent 45s → 21s (×0.47)`. */
+/**
+ * The same cell between two runs: `tools 44 → 10 (×0.23) · agent 45s → 21s (×0.47)`, then
+ * `waiting 0s → 1m 21s` when either side waited on a background job.
+ */
 export function effortChangeLabel(
+  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split'>,
+  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens' | 'split'>,
+): string {
+  const waited = base.split && head.split && (base.split.waitingMs || head.split.waitingMs)
+  const waiting = waited
+    ? ` · waiting ${formatSeconds(base.split?.waitingMs ?? 0)} → ${formatSeconds(head.split?.waitingMs ?? 0)}`
+    : ''
+  return `${effortCore(base, head)}${waiting}`
+}
+
+function effortCore(
   base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
   head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
 ): string {

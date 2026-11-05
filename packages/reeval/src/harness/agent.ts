@@ -336,6 +336,7 @@ export function createAgentHarness(
           servedModel = null
           finishMetadata = undefined
           let stepUsage: TokenUsage | null = null
+          const steps: TokenUsage[] = []
           // A turn whose stream reported no usage takes what its CLI stored for the turn's model
           // calls: an aborted turn's stream ends before the usage it would have sent.
           const finish = async (
@@ -389,6 +390,7 @@ export function createAgentHarness(
               // An adapter that doesn't say takes the gateway's word: the turn's last brokered call.
               model: servedModel ?? sandbox.servedRequests?.().slice(servedBefore).at(-1) ?? null,
               unreported: catalog.unreported?.(finishMetadata) ?? [],
+              steps,
               reasoningMs: reasoningTime(catalog.reasoning, transcript, usage),
               startedAt: new Date(startedAt).toISOString(),
               durationMs: Date.now() - startedAt,
@@ -408,7 +410,9 @@ export function createAgentHarness(
               parts.push({ ms, part: part as StampedPart['part'] })
               traceStreamPart(part as StampedPart['part'], ms, tools)
               if (part.type === 'finish-step') {
-                stepUsage = addUsage(stepUsage, tokenUsage(part.usage as Usage))
+                const step = tokenUsage(part.usage as Usage)
+                if (step) steps.push(step)
+                stepUsage = addUsage(stepUsage, step)
               }
             }
             const reported = await result.totalUsage

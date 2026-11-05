@@ -1,0 +1,390 @@
+{
+  "harness": "claude-code",
+  "attempts": [
+    {
+      "eval": "audit",
+      "turns": [
+        {
+          "startMs": 0,
+          "durationMs": 39932,
+          "model": "claude-sonnet-5-5",
+          "steps": [
+            {
+              "input": 2,
+              "output": 143,
+              "cacheRead": 15494,
+              "cacheWrite": 0,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 155,
+              "cacheRead": 15980,
+              "cacheWrite": 0,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 188,
+              "cacheRead": 16263,
+              "cacheWrite": 0,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 179,
+              "cacheRead": 16263,
+              "cacheWrite": 1378,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 33,
+              "cacheRead": 17641,
+              "cacheWrite": 296,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 143,
+              "cacheRead": 17937,
+              "cacheWrite": 584,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 284,
+              "cacheRead": 18521,
+              "cacheWrite": 185,
+              "reasoning": null
+            }
+          ]
+        },
+        {
+          "startMs": 40316,
+          "durationMs": 29041,
+          "model": "claude-sonnet-5-5",
+          "steps": [
+            {
+              "input": 2,
+              "output": 261,
+              "cacheRead": 18706,
+              "cacheWrite": 384,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 58,
+              "cacheRead": 19090,
+              "cacheWrite": 720,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 149,
+              "cacheRead": 19810,
+              "cacheWrite": 1369,
+              "reasoning": null
+            }
+          ]
+        }
+      ],
+      "calls": [
+        {
+          "atMs": 5286,
+          "ms": 1832,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 12,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkBz47nJrZ6SmvyS5fw4\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15494,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}       }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15494,\"output_tokens\":143,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}      }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 143,
+              "cacheRead": 15494,
+              "cacheWrite": 0,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 9237,
+          "ms": 1752,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkBzM1HXQt4AR59oXGNV\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15980,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}            }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15980,\"output_tokens\":155,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}             }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 155,
+              "cacheRead": 15980,
+              "cacheWrite": 0,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 12969,
+          "ms": 2635,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkBzcukCuhXPu4BCcWTo\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":16263,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}            }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":16263,\"output_tokens\":188,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}        }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 188,
+              "cacheRead": 16263,
+              "cacheWrite": 0,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 17307,
+          "ms": 2054,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkBzwYRQ9va1iQCJKZem\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1378,\"cache_read_input_tokens\":16263,\"cache_creation\":{\"ephemeral_5m_input_tokens\":1378,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":17,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}      }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1378,\"cache_read_input_tokens\":16263,\"output_tokens\":179,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]} }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 179,
+              "cacheRead": 16263,
+              "cacheWrite": 1378,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 21519,
+          "ms": 1258,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC1FXes4A9J7K8xC1T8\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":296,\"cache_read_input_tokens\":17641,\"cache_creation\":{\"ephemeral_5m_input_tokens\":296,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":24,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}           }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":296,\"cache_read_input_tokens\":17641,\"output_tokens\":33,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}             }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 33,
+              "cacheRead": 17641,
+              "cacheWrite": 296,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 27250,
+          "ms": 2594,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC1g3o77vfxEEpRYKGJ\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":584,\"cache_read_input_tokens\":17937,\"cache_creation\":{\"ephemeral_5m_input_tokens\":584,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":9,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}             }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":584,\"cache_read_input_tokens\":17937,\"output_tokens\":143,\"output_tokens_details\":{\"thinking_tokens\":18}},\"context_management\":{\"applied_edits\":[]}}",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 143,
+              "cacheRead": 17937,
+              "cacheWrite": 584,
+              "reasoning": 18
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 32127,
+          "ms": 3640,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC22tvJN45f6UMiVN4q\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":185,\"cache_read_input_tokens\":18521,\"cache_creation\":{\"ephemeral_5m_input_tokens\":185,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":284,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}        }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":185,\"cache_read_input_tokens\":18521,\"output_tokens\":284,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}             }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 284,
+              "cacheRead": 18521,
+              "cacheWrite": 185,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 44258,
+          "ms": 3555,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 14,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC2w3xieq1wtQtMzd3u\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":384,\"cache_read_input_tokens\":18706,\"cache_creation\":{\"ephemeral_5m_input_tokens\":384,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":8,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}          }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":384,\"cache_read_input_tokens\":18706,\"output_tokens\":261,\"output_tokens_details\":{\"thinking_tokens\":65}},\"context_management\":{\"applied_edits\":[]} }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 261,
+              "cacheRead": 18706,
+              "cacheWrite": 384,
+              "reasoning": 65
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 51051,
+          "ms": 2188,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC3RuYxeaAJm2Rn6hcq\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":720,\"cache_read_input_tokens\":19090,\"cache_creation\":{\"ephemeral_5m_input_tokens\":720,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":24,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}          }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":720,\"cache_read_input_tokens\":19090,\"output_tokens\":58,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}        }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 58,
+              "cacheRead": 19090,
+              "cacheWrite": 720,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 55993,
+          "ms": 7943,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 1,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC3o42bFoyXGzQK81Q3\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2880,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"diagnostics\":null,\"context_management\":null}   }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":12872,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1037,\"output_tokens_details\":{\"thinking_tokens\":0},\"server_tool_use\":{\"web_search_requests\":1,\"web_fetch_requests\":0}},\"context_management\":{\"applied_edits\":[]}  }",
+          "expect": {
+            "usage": {
+              "input": 12872,
+              "output": 1037,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "side"
+          }
+        },
+        {
+          "atMs": 65654,
+          "ms": 2038,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 15,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC4WNTv4LigkbwPAXu4\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1369,\"cache_read_input_tokens\":19810,\"cache_creation\":{\"ephemeral_5m_input_tokens\":1369,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":149,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}               }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1369,\"cache_read_input_tokens\":19810,\"output_tokens\":149,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}          }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 149,
+              "cacheRead": 19810,
+              "cacheWrite": 1369,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        }
+      ]
+    },
+    {
+      "eval": "aborted",
+      "turns": [
+        {
+          "startMs": 0,
+          "durationMs": 44911,
+          "model": "claude-sonnet-5-5",
+          "steps": [
+            {
+              "input": 2,
+              "output": 1379,
+              "cacheRead": 15373,
+              "cacheWrite": 0,
+              "reasoning": null
+            },
+            {
+              "input": 2,
+              "output": 1263,
+              "cacheRead": 15373,
+              "cacheWrite": 1444,
+              "reasoning": null
+            }
+          ]
+        }
+      ],
+      "calls": [
+        {
+          "atMs": 6745,
+          "ms": 12674,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 12,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC8faTM8RmYqdViQhLK\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15373,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":6,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}   }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":15373,\"output_tokens\":1379,\"output_tokens_details\":{\"thinking_tokens\":284}},\"context_management\":{\"applied_edits\":[]}     }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 1379,
+              "cacheRead": 15373,
+              "cacheWrite": 0,
+              "reasoning": 284
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 23800,
+          "ms": 10380,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 12,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkC9vadhc9XjnKxRhuu8\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1444,\"cache_read_input_tokens\":15373,\"cache_creation\":{\"ephemeral_5m_input_tokens\":1444,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":16,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}     }\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1444,\"cache_read_input_tokens\":15373,\"output_tokens\":1263,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}        }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 1263,
+              "cacheRead": 15373,
+              "cacheWrite": 1444,
+              "reasoning": 0
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        },
+        {
+          "atMs": 36715,
+          "ms": 8203,
+          "request": "POST api.anthropic.com/v1/messages",
+          "status": 200,
+          "tools": 12,
+          "body": "data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\",\"id\":\"msg_011CgkCAsdZJKSAQ6YujNYYG\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":1464,\"cache_read_input_tokens\":16817,\"cache_creation\":{\"ephemeral_5m_input_tokens\":1464,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":7,\"service_tier\":\"standard\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"input_transformations\":[],\"diagnostics\":null,\"context_management\":null}  }",
+          "expect": {
+            "usage": {
+              "input": 2,
+              "output": 7,
+              "cacheRead": 16817,
+              "cacheWrite": 1464,
+              "reasoning": null
+            },
+            "model": "claude-sonnet-5-5",
+            "role": "main"
+          }
+        }
+      ]
+    }
+  ]
+}

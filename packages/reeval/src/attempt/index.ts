@@ -23,6 +23,7 @@ import {
   recordEgress,
   recordFailure,
   recordOom,
+  recordTimeline,
   writeRecord,
 } from './record.ts'
 import { startSession } from './session.ts'
@@ -157,6 +158,7 @@ async function attemptBody(
       await takeSnapshot(a, sandbox, 'final', 'teardown')
     }
     await sandbox?.destroy()
+    recordTimeline(a, sandbox)
     if (sandbox) {
       debug.log(
         'teardown',

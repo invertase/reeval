@@ -23,6 +23,7 @@ import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
+import { callUsage, type ModelCall } from '../model-calls.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
@@ -101,14 +102,13 @@ export function gatewayGlue(options: SandboxOptions) {
   const askedModel = brokering?.askedModel
   const upstream = brokering?.upstream
   const upstreams = new Map<string, number>()
+  const calls: ModelCall[] = []
   let cost: number | undefined
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
-    if (event.type === 'dns' || event.credentials.length === 0) return
-    if (event.status !== undefined) brokeredStatuses.push(event.status)
-    // A refused or failed call was served by nothing, whatever it names.
-    if (event.status !== undefined && (event.status < 200 || event.status > 299)) return
+    if (event.type === 'dns') return
+    const ok = event.status === undefined || (event.status >= 200 && event.status <= 299)
     const request = {
       method: event.method,
       host: event.host,
@@ -120,7 +120,24 @@ export function gatewayGlue(options: SandboxOptions) {
       ...(event.responseCost !== undefined ? { responseCost: event.responseCost } : {}),
       ...(event.requestHeaders ? { headers: event.requestHeaders } : {}),
     }
-    const model = servedModel?.(request)
+    // A refused or failed call was served by nothing, whatever it names.
+    const model = ok ? servedModel?.(request) : undefined
+    if (event.modelCall) {
+      calls.push({
+        startedAt: Date.now() - event.ms,
+        ms: event.ms,
+        firstByteMs: event.firstByteMs ?? null,
+        request: `${request.method} ${request.host}${request.path}`,
+        status: event.status ?? null,
+        usage: callUsage(event.responseUsage),
+        model: model ?? (ok ? event.usageModel : undefined) ?? null,
+        tools: event.requestTools ?? null,
+        ...(brokering?.modelStream ? { stream: true as const } : {}),
+      })
+    }
+    if (event.credentials.length === 0) return
+    if (event.status !== undefined) brokeredStatuses.push(event.status)
+    if (!ok) return
     if (model) served.push(model)
     const wanted = askedModel?.(request)
     if (wanted) asked.push(wanted)
@@ -152,6 +169,7 @@ export function gatewayGlue(options: SandboxOptions) {
     ...(brokering && {
       endpoints: brokering.endpoints,
       ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
+      ...(brokering.modelCalls ? { modelCalls: brokering.modelCalls } : {}),
       ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
       ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
       onRefused: ({ method, url }: { method: string; url: string }) =>
@@ -173,6 +191,7 @@ export function gatewayGlue(options: SandboxOptions) {
       reportedCostUsd: () => cost,
     }),
     ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
+    ...(brokering?.modelCalls && { modelCalls: () => [...calls] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

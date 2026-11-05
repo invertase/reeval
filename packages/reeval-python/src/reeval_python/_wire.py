@@ -1022,6 +1022,7 @@ class ExecResult(TypedDict):
 
 
 class FakeHarnessDescriptorToolsItem(TypedDict):
+    durationMs: NotRequired[float | None]
     input: Any
     ok: NotRequired[bool | None]
     output: Any
@@ -1103,7 +1104,8 @@ class FakeHarnessDescriptor(TypedDict):
     # The fake agent's final message on every turn; default `Done.`.
     text: NotRequired[str]
     # Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to
-    # true; null reports a call whose result never came.
+    # true; null reports a call whose result never came. `durationMs` defaults to 0; null
+    # reports a call whose end the harness never said.
     tools: NotRequired[list[FakeHarnessDescriptorToolsItem]]
     # Each turn's recorded agent time, exactly, whatever the wall clock says: a test can compare
     # agent time without scheduling jitter, which four runs a side can tell apart.
@@ -1922,6 +1924,9 @@ class TranscriptEventFileEdit(TypedDict):
     # Line counts, or null when the harness didn't send the content (e.g. deletes).
     added: float | None
     atMs: float
+    # Set when the harness never reported the call's end, so `durationMs` runs to the next
+    # event's `atMs` (the turn's end for the last).
+    durationInferred: NotRequired[Literal[True]]
     durationMs: float | None
     # `write` is a whole-file write whose result doesn't say whether the file existed before
     # (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).
@@ -1940,6 +1945,9 @@ class TranscriptEventFileEdit(TypedDict):
 
 class TranscriptEventWebSearch(TypedDict):
     atMs: float
+    # Set when the harness never reported the call's end, so `durationMs` runs to the next
+    # event's `atMs` (the turn's end for the last).
+    durationInferred: NotRequired[Literal[True]]
     durationMs: float | None
     # Whether the search succeeded. Absent means it did; null means the harness never reported
     # its result.
@@ -1959,6 +1967,9 @@ class TranscriptEventWebSearch(TypedDict):
 
 class TranscriptEventWebFetch(TypedDict):
     atMs: float
+    # Set when the harness never reported the call's end, so `durationMs` runs to the next
+    # event's `atMs` (the turn's end for the last).
+    durationInferred: NotRequired[Literal[True]]
     durationMs: float | None
     # Whether the fetch succeeded; null when the harness never reported its result.
     ok: bool | None
@@ -1975,6 +1986,9 @@ class TranscriptEventWebFetch(TypedDict):
 
 class TranscriptEventTool(TypedDict):
     atMs: float
+    # Set when the harness never reported the call's end, so `durationMs` runs to the next
+    # event's `atMs` (the turn's end for the last).
+    durationInferred: NotRequired[Literal[True]]
     durationMs: float | None
     input: Any
     # Whether the call succeeded; null when the harness never reported its result.
@@ -2005,12 +2019,38 @@ class TranscriptEventRetry(TypedDict):
     type: Literal["retry"]
 
 
+class TranscriptEventModelCall(TypedDict):
+    atMs: float
+    durationMs: float
+    # Milliseconds from the call's start to its response body's first byte; null when none came.
+    firstByteMs: float | None
+    # The model that served it, from its request or response; null when neither named one.
+    model: str | None
+    # `POST api.anthropic.com/v1/messages`: the method, host and path.
+    request: str
+    # `main` for one of the agent's own steps, `side` for a call its CLI made around them: a
+    # session title, a web search's own model call, Antigravity's Flash Lite calls. A call is
+    # `main` when its tokens are one of the turn's steps' as the harness reported them.
+    # Otherwise it's `side` when its request declared at most one tool while another call in the
+    # attempt declared more, or when another model served it than served the turn's other calls,
+    # and `main` when neither holds. Absent in records from before roles.
+    role: NotRequired[Literal["main", "side"]]
+    # The response's HTTP status; null when none came.
+    status: float | None
+    # Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time.
+    stream: NotRequired[Literal[True]]
+    ts: str
+    type: Literal["model-call"]
+    # The tokens its response body named; null when it named none (Cursor's are protobuf).
+    usage: TokenUsage | None
+
+
 # Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is
 # wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when
 # the harness never reported the end. Long shell or edit calls set `stalled: true`. A call the
 # harness never reported a result for (the turn ended or was cut short first) has `ok: null`: it
 # isn't known to have failed, and no failure count includes it.
-TranscriptEvent: TypeAlias = "TranscriptEvent1 | TranscriptEventFileEdit | TranscriptEventWebSearch | TranscriptEventWebFetch | TranscriptEventTool | TranscriptEventError | TranscriptEventRetry"
+TranscriptEvent: TypeAlias = "TranscriptEvent1 | TranscriptEventFileEdit | TranscriptEventWebSearch | TranscriptEventWebFetch | TranscriptEventTool | TranscriptEventError | TranscriptEventRetry | TranscriptEventModelCall"
 
 
 # A turn as data, as a record or another language's runner carries it: `Turn` without its
@@ -2103,11 +2143,13 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "caseJson",
         "costUsd",
         "delayMs",
+        "durationInferred",
         "durationMs",
         "exitCode",
         "failWith",
         "failedRequests",
         "finalUrl",
+        "firstByteMs",
         "flakeRate",
         "identityFile",
         "ignoreAbort",

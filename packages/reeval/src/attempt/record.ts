@@ -7,12 +7,14 @@ import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { ProviderStopError } from '../harness/provider-stop.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
+import { modelCallEvents } from '../model-calls.ts'
 import { sandboxProvider } from '../options.ts'
 import { redactJson, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
+import { inferDurations, sumSplits, timeSplit } from '../view/timeline.ts'
 import { checkFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
@@ -185,6 +187,32 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   if (upstreams.length) a.record.upstreams = upstreams
   const cost = sandbox?.reportedCostUsd?.()
   if (cost !== undefined) a.record.reportedCostUsd = cost
+}
+
+/**
+ * Each turn's model calls and inferred tool durations in its transcript, and where its time
+ * went. After teardown, so a stream that outlived its turn (Cursor's) has ended.
+ */
+export function recordTimeline(a: Attempt, sandbox: Sandbox | undefined): void {
+  const calls = sandbox?.modelCalls?.() ?? []
+  for (const turn of a.record.turns) {
+    const events = inferDurations(
+      [
+        ...turn.transcript,
+        ...modelCallEvents(calls, {
+          startedAt: Date.parse(turn.startedAt),
+          durationMs: turn.durationMs,
+          model: turn.model,
+          steps: a.turnSteps.get(turn) ?? [],
+        }),
+      ].sort((x, y) => x.atMs - y.atMs),
+      turn.durationMs,
+    )
+    turn.transcript = events
+    turn.timeSplit = timeSplit(events, turn.durationMs)
+  }
+  const split = sumSplits(a.record.turns.map((t) => t.timeSplit))
+  if (split) a.record.timeSplit = split
 }
 
 /**

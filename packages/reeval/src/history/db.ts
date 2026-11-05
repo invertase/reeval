@@ -159,7 +159,7 @@ CREATE TABLE attempts (
   last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
   reasoning_effort TEXT, served_reasoning_effort TEXT, files_changed INTEGER, reasoning_ms INTEGER,
-  case_key TEXT,
+  case_key TEXT, model_ms INTEGER, tool_ms INTEGER, waiting_ms INTEGER, other_ms INTEGER,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -268,7 +268,8 @@ CREATE VIEW drift AS SELECT * FROM drift_m;
 -- the run that ended the streak (null: it never failed).
 CREATE VIEW check_streaks AS SELECT * FROM check_streaks_m;
 
--- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
+-- Tool calls, agent time and where it went (model, tool, waiting, other), and tokens per cell, and
+-- a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
 
 -- Each pair of arms (cells a and b) on one harness and sandbox, when an eval has two variants or
@@ -477,7 +478,8 @@ export function toolCalls(transcript: string): ToolCall[] {
       target: toolTarget(event.input, String(event.tool ?? '')),
       text: targetText(event.input, String(event.tool ?? '')),
       ok: event.ok === null ? null : event.ok !== false,
-      durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
+      durationMs:
+        typeof event.durationMs === 'number' && !event.durationInferred ? event.durationMs : null,
     })
   })
   return calls
@@ -752,7 +754,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(33).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(37).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -786,6 +788,10 @@ function insertRun(
         filesChanged(a.changedFiles),
         a.activity.reasoningMs,
         a.case ?? null,
+        a.timeSplit?.modelMs ?? null,
+        a.timeSplit?.toolMs ?? null,
+        a.timeSplit?.waitingMs ?? null,
+        a.timeSplit?.otherMs ?? null,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
