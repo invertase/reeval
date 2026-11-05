@@ -35,7 +35,7 @@
   "config runs best of 6": "UsageError: runs.bestOf in reeval.config.ts must be an odd whole number of 3 or more, so one side always has a majority, e.g. runs: { bestOf: 3 } (got 6)",
   "yaml: include null": "UsageError: include in reeval.yaml must be a list (got null)",
   "yaml: a typo in history": "UsageError: Unknown option \"artifact\" in history in reeval.yaml. Did you mean \"artifacts\"?",
-  "yaml: history.dir": "UsageError: history.dir in reeval.yaml: the folder is the local store's option now. Write store: { kind: local, dir: \"runs\" }.",
+  "yaml: history.dir": "UsageError: Unknown option \"dir\" in history in reeval.yaml. Use store, artifacts.",
   "yaml: history.store.dir a number": "UsageError: history.store.dir in reeval.yaml must be a string (got 3)",
   "yaml: history.store of an unknown kind": "UsageError: history.store in reeval.yaml is a store of kind \"s4\", which reeval doesn't have: use local(), or s3({ bucket: 'my-runs' }) from reeval/store/s3. Did you mean 's3'?",
   "history.store a string": "UsageError: history.store in reeval.config.ts must be local(), or s3({ bucket: 'my-runs' }) from reeval/store/s3: reeval keeps runs in a local folder or an S3-compatible bucket (got \"s3://runs\")",

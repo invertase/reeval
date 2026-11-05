@@ -166,15 +166,6 @@ export function resolveHistory(
     )
   }
   const history = (value ?? {}) as HistoryConfig & Record<string, unknown>
-  if ('dir' in history) {
-    const dir = JSON.stringify(history.dir)
-    const store = /\.ya?ml$/.test(file)
-      ? `store: { kind: local, dir: ${dir} }`
-      : `store: local({ dir: ${dir} }), with local from reeval/store/local`
-    throw new UsageError(
-      `${where}.dir in ${file}: the folder is the local store's option now. Write ${store}.`,
-    )
-  }
   unknownKey(history, HISTORY_KEYS, where, file)
   const artifacts: ArtifactLevel = history.artifacts ?? base?.artifacts ?? 'failures'
   if (!ARTIFACTS.includes(artifacts)) {
