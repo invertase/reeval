@@ -45,12 +45,21 @@ function commandOf(e: TranscriptEvent): string | null {
   return typeof command === 'string' ? command.trim() : null
 }
 
+const strings = (v: unknown): string[] =>
+  typeof v === 'string'
+    ? [v]
+    : v && typeof v === 'object'
+      ? Object.values(v).flatMap(strings)
+      : []
+
 const textOf = (v: unknown) => (typeof v === 'string' ? v : (JSON.stringify(v) ?? ''))
 
 /** The command a Cursor terminal file's header names, from a read of it. */
 function terminalCommand(e: TranscriptEvent): string | null {
   if (e.type !== 'tool') return null
-  const match = TERMINAL_COMMAND.exec(textOf(e.output))
+  const match = strings(e.output)
+    .map((text) => TERMINAL_COMMAND.exec(text))
+    .find(Boolean)
   if (!match?.[1]) return null
   try {
     return String(JSON.parse(match[1])).trim()
@@ -78,10 +87,14 @@ function polls(e: TranscriptEvent): boolean {
 
 const endOf = (e: ToolLike) => e.atMs + (e.durationMs ?? 0)
 
+/** Work that ends a wait no poll has checked yet: an edit, or another command. */
+const works = (e: ToolLike) => e.type === 'file-edit' || commandOf(e) !== null
+
 /**
  * The background jobs the agent waited on, a heuristic over the transcript: a span opens at a
- * call run in the background or a poll, takes in each poll after it, and closes at the next
- * other tool call. A background call no poll followed isn't waited on.
+ * call run in the background or a poll and takes in each poll after it. Until its first poll,
+ * lookups (reads, searches) leave it open and an edit or another command drops it; after it,
+ * the next call that isn't a poll closes it. A background call no poll followed isn't waited on.
  */
 export function waitSpans(events: readonly TranscriptEvent[]): WaitSpan[] {
   const named = new Set(events.map(terminalCommand).filter((c): c is string => c !== null))
@@ -98,8 +111,9 @@ export function waitSpans(events: readonly TranscriptEvent[]): WaitSpan[] {
       open.polls.push(i)
       open.endMs = Math.max(open.endMs, endOf(e))
     } else if (backgrounded(e, named)) {
-      if (!open) open = { startMs: e.atMs, endMs: endOf(e), background: i, polls: [] }
-    } else close()
+      if (open?.polls.length) close()
+      open ??= { startMs: e.atMs, endMs: endOf(e), background: i, polls: [] }
+    } else if (open?.polls.length || works(e)) close()
   })
   close()
   return spans
