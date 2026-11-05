@@ -10,10 +10,19 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { ServedModel, Upstream } from '../harness/agents.ts'
+import { anthropicPath, apiHost, type GatewayApi, openaiPath } from './api.ts'
 import { everyModel, notGemini } from './effort.ts'
 import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
-export const OPENROUTER_HOST = 'openrouter.ai'
+export const OPENROUTER_API: GatewayApi = {
+  origin: 'https://openrouter.ai',
+  openai: 'https://openrouter.ai/api/v1',
+  anthropic: 'https://openrouter.ai/api',
+}
+
+export const OPENROUTER_HOST = apiHost(OPENROUTER_API)
+
+const openai = (endpoint: string) => openaiPath(OPENROUTER_API, endpoint)
 export const OPENROUTER_KEY = 'OPENROUTER_API_KEY'
 
 const onOpenRouter = (path: string, method: 'GET' | 'POST' = 'POST') =>
@@ -66,18 +75,21 @@ export const anthropicOnOpenRouter = (model: string) =>
  * makes none of its `/api/claude_code/*` calls.
  */
 function claudeCode(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/messages')]
+  const calls = [onOpenRouter(anthropicPath(OPENROUTER_API, '/v1/messages'))]
   return {
-    ...route([...calls, onOpenRouter('/api/v1/messages/count_tokens')], calls),
+    ...route(
+      [...calls, onOpenRouter(anthropicPath(OPENROUTER_API, '/v1/messages/count_tokens'))],
+      calls,
+    ),
     authAs: 'ANTHROPIC_AUTH_TOKEN',
-    authEnv: { ANTHROPIC_BASE_URL: `https://${OPENROUTER_HOST}/api` },
+    authEnv: { ANTHROPIC_BASE_URL: OPENROUTER_API.anthropic },
     modelId: anthropicOnOpenRouter,
   }
 }
 
 /** Codex on a Responses API provider at OpenRouter, whose ids name the provider (`openai/…`). */
 function codex(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/responses')]
+  const calls = [onOpenRouter(openai('/responses'))]
   return { ...route(calls, calls), modelId: under('openai') }
 }
 
@@ -85,9 +97,9 @@ function codex(): GatewayRoute {
  * Goose on its `openrouter` provider: Chat Completions, and the model list it fetches each turn.
  */
 function goose(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  const calls = [onOpenRouter(openai('/chat/completions'))]
   return {
-    ...route([...calls, onOpenRouter('/api/v1/models', 'GET')], calls),
+    ...route([...calls, onOpenRouter(openai('/models'), 'GET')], calls),
     modelId: under('google'),
   }
 }
@@ -119,7 +131,7 @@ function opencode(): GatewayRoute {
  * the model list pi would fetch to fit that catalog to the key.
  */
 function pi(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  const calls = [onOpenRouter(openai('/chat/completions'))]
   return { ...route(calls, calls), modelId: under('google') }
 }
 
@@ -128,7 +140,7 @@ function pi(): GatewayRoute {
  * by `env_key`; it then calls nothing on xAI's API.
  */
 function grokBuild(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  const calls = [onOpenRouter(openai('/chat/completions'))]
   return { ...route(calls, calls), modelId: under('x-ai') }
 }
 
@@ -137,13 +149,14 @@ function grokBuild(): GatewayRoute {
  * relay, and an OpenAI id as `openai/<id>`. fx sends no `reasoning_effort` to a configured provider.
  */
 function fx(): GatewayRoute {
-  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  const calls = [onOpenRouter(openai('/chat/completions'))]
   return { ...route(calls, calls), modelId: under('openai') }
 }
 
 /** OpenRouter: the harnesses reeval runs there, and why it doesn't run the rest. */
 export const OPENROUTER_GATEWAY: RoutingGateway = {
   name: 'OpenRouter',
+  api: OPENROUTER_API,
   routes: {
     'claude-code': claudeCode,
     codex,

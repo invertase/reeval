@@ -78,7 +78,7 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
 /** OpenCode's id for `model` on `gateway`, as that gateway's route writes it. */
 export function openCodeModelOn(model: string, gateway: string): string {
   if (gateway === 'vertex') return openCodeVertexId(model)
-  return gateway === 'vercel' || gateway === 'openrouter' ? `${gateway}/${model}` : model
+  return isRoutingGateway(gateway) ? `${gateway}/${model}` : model
 }
 
 /** Why the API behind `gateway` answers OpenCode's `effort` on `model` with a 400, or undefined. */

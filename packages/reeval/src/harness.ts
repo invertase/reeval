@@ -1,6 +1,6 @@
 // `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
 import { splitModel } from '@reeval/harness-opencode/providers'
-import { directOffPin } from './contract/gateway.ts'
+import { directOffPin, ROUTING_GATEWAY_NAMES } from './contract/gateway.ts'
 import { FACTORY, harnessProblem } from './contract/harness.ts'
 import { UsageError } from './errors.ts'
 import type {
@@ -92,9 +92,9 @@ export function opencodeModelError(model: unknown): string | undefined {
   if (typeof model !== 'string' || !model) {
     return `needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${JSON.stringify(model)})`
   }
-  for (const gateway of ['vercel', 'openrouter']) {
+  for (const gateway of ROUTING_GATEWAY_NAMES) {
     if (model.startsWith(`${gateway}/`)) {
-      return `${gateway === 'openrouter' ? 'an' : 'a'} ${gateway}/… id would bypass the config's gateway list: write the model as '${model.slice(gateway.length + 1)}' and add ${gateway}() to gateway (got ${JSON.stringify(model)})`
+      return `${/^[aeiou]/.test(gateway) ? 'an' : 'a'} ${gateway}/… id would bypass the config's gateway list: write the model as '${model.slice(gateway.length + 1)}' and add ${gateway}() to gateway (got ${JSON.stringify(model)})`
     }
   }
   // The provider table gates direct() only: on a gateway any <provider>/<model> runs.

@@ -23,8 +23,7 @@ import {
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
-import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
-import { isRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
+import { isRoutingGateway, onRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
 import type { BrokeredToken } from '../gateway/token.ts'
 import {
   FX_VERCEL_CALL,
@@ -1138,22 +1137,26 @@ export const AGENTS: Record<AgentKind, Agent> = {
     },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
-      (await import('@reeval/harness-goose')).createGoose({
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
+      const goose = await import('@reeval/harness-goose')
+      const provider = onRoutingGateway(descriptor, {
+        vercel: goose.AI_GATEWAY_PROVIDER,
+        openrouter: goose.OPENROUTER_PROVIDER,
+      })
+      return goose.createGoose({
         ...(vertex ? { vertex } : {}),
-        ...(auth[VERCEL_KEY]
-          ? { auth, provider: (await import('@reeval/harness-goose')).AI_GATEWAY_PROVIDER }
-          : auth[OPENROUTER_KEY]
-            ? { auth, provider: (await import('@reeval/harness-goose')).OPENROUTER_PROVIDER }
-            : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
-              { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
+        ...(provider
+          ? { auth, provider }
+          : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
+            { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
         model,
         ...(descriptor.kind === 'goose' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
         requireCredentialBrokering: true,
-      }),
+      })
+    },
   },
   pi: {
     ...LAYOUTS.pi,
@@ -1169,21 +1172,25 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, vertex }) =>
-      (await import('@reeval/harness-pi')).createPi({
-        ...(auth[VERCEL_KEY]
-          ? { auth, gateway: (await import('@reeval/harness-pi')).PI_AI_GATEWAY }
-          : auth[OPENROUTER_KEY]
-            ? { auth, gateway: (await import('@reeval/harness-pi')).PI_OPENROUTER }
-            : {
-                // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-                auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
-                ...(vertex ? { vertex } : {}),
-              }),
+    adapter: async ({ auth, mcpServers, descriptor, vertex }) => {
+      const pi = await import('@reeval/harness-pi')
+      const gateway = onRoutingGateway(descriptor, {
+        vercel: pi.PI_AI_GATEWAY,
+        openrouter: pi.PI_OPENROUTER,
+      })
+      return pi.createPi({
+        ...(gateway
+          ? { auth, gateway }
+          : {
+              // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
+              auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+              ...(vertex ? { vertex } : {}),
+            }),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
-      }),
+      })
+    },
   },
   codex: {
     ...LAYOUTS.codex,
@@ -1216,21 +1223,23 @@ export const AGENTS: Record<AgentKind, Agent> = {
     },
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
-      (await import('@reeval/harness-codex')).createCodex({
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) => {
+      const codex = await import('@reeval/harness-codex')
+      const provider = onRoutingGateway(descriptor, {
+        vercel: codex.AI_GATEWAY_PROVIDER,
+        openrouter: codex.OPENROUTER_PROVIDER,
+      })
+      return codex.createCodex({
         auth,
-        ...(auth[VERCEL_KEY]
-          ? { provider: (await import('@reeval/harness-codex')).AI_GATEWAY_PROVIDER }
-          : auth[OPENROUTER_KEY]
-            ? { provider: (await import('@reeval/harness-codex')).OPENROUTER_PROVIDER }
-            : {}),
+        ...(provider ? { provider } : {}),
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
         ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         requireCredentialBrokering: true,
-      }),
+      })
+    },
   },
   fx: {
     ...LAYOUTS.fx,
@@ -1252,7 +1261,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model,
-        ...(auth[OPENROUTER_KEY] ? { provider: 'openrouter' as const } : {}),
+        // On Vercel AI Gateway, the model id picks fx's own provider.
+        ...onRoutingGateway(descriptor, {
+          vercel: {},
+          openrouter: { provider: 'openrouter' as const },
+        }),
         // On Vertex AI, the route's project and region.
         ...(env?.FX_VERTEX_PROJECT
           ? { vertex: { project: env.FX_VERTEX_PROJECT, location: env.FX_VERTEX_LOCATION ?? '' } }
@@ -1293,11 +1306,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
             }
           : {
               auth,
-              ...(auth[VERCEL_KEY]
-                ? { provider: grok.AI_GATEWAY_PROVIDER }
-                : auth[OPENROUTER_KEY]
-                  ? { provider: grok.OPENROUTER_PROVIDER }
-                  : {}),
+              ...onRoutingGateway(descriptor, {
+                vercel: { provider: grok.AI_GATEWAY_PROVIDER },
+                openrouter: { provider: grok.OPENROUTER_PROVIDER },
+              }),
             }),
         model,
         ...(plugins.length

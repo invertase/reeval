@@ -16,6 +16,7 @@ import {
   type EgressEvent,
   type EgressProxy,
   type EgressProxyOptions,
+  headerCost,
 } from '../src/egress/proxy.ts'
 import type { RequestTransformation } from '../src/egress/rules.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
@@ -182,6 +183,11 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
             ),
           20,
         )
+      }
+      if (req.url === '/header-cost/chat/completions') {
+        // A gateway that names the call's cost in a response header, not the body.
+        out.writeHead(200, { 'content-type': 'application/json', 'x-call-cost': '0.0031' })
+        return out.end(JSON.stringify({ model: 'claude-sonnet', choices: [] }))
       }
       if (req.url === '/chat/completions') {
         // OpenRouter's Chat Completions stream: each chunk names the upstream provider, and the
@@ -2728,6 +2734,47 @@ describe('the model a response names, on a modelResponses endpoint', () => {
     } finally {
       gw.close()
     }
+  })
+
+  const costFrom = async (costHeaders: readonly string[] | undefined, path: string) => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: path } }],
+      ...(costHeaders ? { costHeaders } : {}),
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path,
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      return e?.type === 'request' ? e.responseCost : undefined
+    } finally {
+      gw.close()
+    }
+  }
+
+  test("a call's cost from a response header costHeaders names", async () => {
+    assert.equal(
+      await costFrom(['x-other', 'X-Call-Cost'], '/header-cost/chat/completions'),
+      0.0031,
+    )
+    assert.equal(await costFrom(undefined, '/header-cost/chat/completions'), undefined)
+  })
+
+  test("the body's cost wins over a header's", async () => {
+    assert.equal(await costFrom(['x-call-cost'], '/chat/completions'), 0.00042)
+  })
+
+  test('headerCost reads the first header set to a number', () => {
+    assert.equal(headerCost({ 'x-a': 'n/a', 'x-b': ['0.5', '9'] }, ['x-a', 'x-b']), 0.5)
+    assert.equal(headerCost({ 'x-a': '' }, ['x-a']), undefined)
+    assert.equal(headerCost({ 'x-a': '1' }), undefined)
   })
 
   const effortBody = JSON.stringify({
