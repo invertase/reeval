@@ -69,11 +69,14 @@ async function filesUnder(dir: string, at = ''): Promise<Array<[string, Uint8Arr
   return out
 }
 
-/** Where a failed try is retried: a network error or a 5xx, never a refusal or a conflict. */
+/**
+ * Where a failed try is retried: a 5xx, or `fetch` failing to reach the store. A refusal, a
+ * conflict or a bug fails at once.
+ */
 function transient(error: unknown): boolean {
-  if (error instanceof UsageError || error instanceof StoreError) return false
-  const status = (error as { statusCode?: number }).statusCode
-  return status === undefined || status >= 500
+  const status = (error as { statusCode?: unknown } | null)?.statusCode
+  if (typeof status === 'number') return status >= 500
+  return error instanceof TypeError && error.message === 'fetch failed'
 }
 
 /** Three tries, a second apart and then four, for a store or network that failed once. */
