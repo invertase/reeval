@@ -2,7 +2,7 @@
 // in a history folder, is marked in `pending/`, and is uploaded from there. A run that didn't
 // upload stays marked until `reeval sync` uploads it.
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { debugRoot } from '../debug/files.ts'
@@ -52,30 +52,52 @@ export const debugStaging = (history: RemoteHistory, runId: string) =>
   join(dirname(history.dir), 'debug', runId)
 
 /**
- * The runs marked for upload. A marker whose run never reached the copy (the recording stopped in
- * between) is dropped: there's nothing to upload.
+ * How old a marker with no record in the copy must be before it's dropped. `record` marks a run
+ * before writing it into the copy, so a younger one can be another process's recording.
  */
-export async function pendingRuns(history: RemoteHistory): Promise<string[]> {
+const ORPHAN_MARKER_MS = 10 * 60_000
+
+/**
+ * The runs marked for upload, and in `recording` the marked runs with no record in the copy yet.
+ * A marker older than `ORPHAN_MARKER_MS` with no record (the recording stopped in between) is
+ * dropped: there's nothing to upload.
+ */
+async function markers(history: RemoteHistory): Promise<{ ready: string[]; recording: string[] }> {
   const names = await readdir(pendingDir(history)).catch(() => [])
-  const runs: string[] = []
+  const ready: string[] = []
+  const recording: string[] = []
   for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
-    if (existsSync(recordFile(history.dir, name))) runs.push(name)
+    if (existsSync(recordFile(history.dir, name))) {
+      ready.push(name)
+      continue
+    }
+    const marked = await stat(join(pendingDir(history), name)).catch(() => null)
+    if (marked && Date.now() - marked.mtimeMs < ORPHAN_MARKER_MS) recording.push(name)
     else {
       await unmarkPending(history, name)
       await rm(debugStaging(history, name), { recursive: true, force: true })
     }
   }
-  return runs
+  return { ready, recording }
+}
+
+/** The runs marked for upload that are in the copy, ready to upload. */
+export async function pendingRuns(history: RemoteHistory): Promise<string[]> {
+  return (await markers(history)).ready
 }
 
 /**
  * Where a failed try is retried: a 5xx, or `fetch` failing to reach the store. A refusal, a
- * conflict or a bug fails at once.
+ * conflict or a bug fails at once. Node's `fetch` throws `TypeError: fetch failed`, with the
+ * system error as its cause; Bun's, in the compiled binary, a `TypeError` with the system error's
+ * `code` (`ECONNREFUSED`, `ECONNRESET`, `ENOTFOUND`) on it.
  */
-function transient(error: unknown): boolean {
+export function transient(error: unknown): boolean {
   const status = (error as { statusCode?: unknown } | null)?.statusCode
   if (typeof status === 'number') return status >= 500
-  return error instanceof TypeError && error.message === 'fetch failed'
+  if (!(error instanceof TypeError)) return false
+  const { code } = error as { code?: unknown }
+  return error.message === 'fetch failed' || (typeof code === 'string' && /^E[A-Z]+$/.test(code))
 }
 
 /** Three tries, a second apart and then four, for a store or network that failed once. */
@@ -279,6 +301,17 @@ function mismatched(run: StoredRun): string[] {
     .map(([path]) => path)
 }
 
+/** Checks `history`'s store answers, without listing or pulling it; a StoreError when it doesn't. */
+export async function checkStore(history: RemoteHistory): Promise<void> {
+  const store = storeOf(history)
+  try {
+    await tries(() => store.check())
+  } catch (error) {
+    if (error instanceof UsageError) throw error
+    throw new StoreError(`couldn't read ${store.name}: ${reason(error, history)}`)
+  }
+}
+
 export type Pull = { pulled: number; cachedAt: string | null; unreachable?: string }
 
 /**
@@ -297,7 +330,8 @@ export async function pullStore(
   const fresh = state?.at && Date.now() - Date.parse(state.at) < (options.maxAgeMs ?? 60_000)
   if (fresh && !options.force) return { pulled: 0, cachedAt: state?.at ?? null }
   const seen = state?.versions ?? {}
-  const waiting = new Set(await pendingRuns(history))
+  const { ready, recording } = await markers(history)
+  const waiting = new Set([...ready, ...recording])
   let pulled = 0
   try {
     const runs = await tries(() => store.listRuns())

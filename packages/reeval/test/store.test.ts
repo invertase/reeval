@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
@@ -16,7 +17,8 @@ import { encodeRecord } from '../src/history/files.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { resolveHistory } from '../src/store/resolve.ts'
 import { s3Settings, s3Store } from '../src/store/s3.ts'
-import { fakeConfig, project, runCli, tempDir } from './helpers.ts'
+import { transient } from '../src/store/sync.ts'
+import { fakeConfig, noSignals, project, runCli, tempDir } from './helpers.ts'
 import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
 
 const RUN = '20261105T120000Z_abcdef0_elliot_k3f9'
@@ -284,9 +286,15 @@ describe('recording to s3()', () => {
     assert.equal(synced.code, 0, synced.stdout + synced.stderr)
   })
 
-  test('a marker whose run never reached the copy is dropped, and a bug is not retried', async () => {
+  test('a stale marker whose run never reached the copy is dropped, and a bug is not retried', async () => {
     const orphan = join(storeDir(), 'pending', RUN)
     writeFileSync(orphan, '')
+    const young = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(young.code, 0, young.stdout + young.stderr)
+    assert.match(young.stdout, /nothing to upload/)
+    assert.ok(existsSync(orphan), "a fresh marker can be another process's recording, so it stays")
+    const old = new Date(Date.now() - 11 * 60_000)
+    utimesSync(orphan, old, old)
     const sync = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
     assert.equal(sync.code, 0, sync.stdout + sync.stderr)
     assert.match(sync.stdout, /nothing to upload/)
@@ -318,6 +326,33 @@ describe('recording to s3()', () => {
       save.stderr,
       /reeval analyze --save writes into a local\(\) history, and history\.store in reeval\.config\.ts keeps runs in s3:\/\/reeval-runs\/ci\. Drop --save/,
     )
+  })
+
+  test('sync --push-only uploads and checks the store without listing it', async () => {
+    const recorded = await runCli(dir, ['run', '--profile', 'ci', '--record'], { env: env() })
+    assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+    const requests = s3.requests.length
+    const r = await runCli(dir, ['sync', '--profile', 'ci', '--push-only'], { env: env() })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /^nothing to upload to s3:\/\/reeval-runs\/ci, which answers; pulled nothing \(--push-only\)$/m,
+    )
+    const made = s3.requests.slice(requests)
+    assert.ok(made.length > 0, 'it reaches the store')
+    assert.ok(
+      made.every((q) => q.key === 'ci/reeval-store.json'),
+      made.map((q) => `${q.method} ${q.key}`).join(', '),
+    )
+    s3.failNext(3, 503)
+    const down = await runCli(dir, ['sync', '--profile', 'ci', '--push-only'], { env: env() })
+    assert.equal(down.code, 3, down.stdout + down.stderr)
+    assert.match(down.stderr, /couldn't read s3:\/\/reeval-runs\/ci: /)
+    const both = await runCli(dir, ['sync', '--profile', 'ci', '--push-only', '--debug'], {
+      env: env(),
+    })
+    assert.equal(both.code, 2, both.stdout + both.stderr)
+    assert.match(both.stderr, /--debug downloads, and --push-only does not/)
   })
 
   test('one failed try is retried', async () => {
@@ -624,6 +659,23 @@ describe('debug data to s3()', () => {
     assert.ok(![...s3.objects.values()].some((o) => String(o.bytes).includes(key)))
   })
 
+  test('re-recording a run whose debug folder was pruned says so', async () => {
+    const { runId, attempt } = await runOnce()
+    writeFileSync(join(debugDir(), runId, attempt, 'requests.ndjson'), '{"method":"GET"}\n')
+    const first = await runCli(dir, ['record', '--profile', 'requests', runId], { env: env() })
+    assert.equal(first.code, 0, first.stdout + first.stderr)
+    rmSync(join(debugDir(), runId), { recursive: true, force: true })
+    const again = await runCli(dir, ['record', '--profile', 'requests', runId], { env: env() })
+    assert.equal(again.code, 2, again.stdout + again.stderr)
+    assert.match(
+      again.stderr,
+      new RegExp(
+        `${runId} is already recorded with different content \\(its debug data differs: \\.reeval/debug/${runId} was pruned or changed since it was recorded`,
+      ),
+    )
+    assert.doesNotMatch(again.stderr, /--artifacts/)
+  })
+
   test("'all' uploads debug.log too", async () => {
     const { runId, attempt } = await runOnce()
     const r = await runCli(dir, ['record', '--profile', 'all', runId], { env: env() })
@@ -703,4 +755,83 @@ describe('debug data to s3()', () => {
     assert.deepEqual(uploaded(runId), [`${attempt}/requests.ndjson`])
     assert.equal(existsSync(join(storeDir(), 'debug', runId)), false)
   })
+})
+
+test("a network failure is retried on Node's fetch and on Bun's", () => {
+  const node = new TypeError('fetch failed', {
+    cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1'), { code: 'ECONNREFUSED' }),
+  })
+  const bun = (code: string, message: string) => Object.assign(new TypeError(message), { code })
+  assert.equal(transient(node), true)
+  assert.equal(
+    transient(
+      bun(
+        'ECONNREFUSED',
+        'ECONNREFUSED: Unable to connect. Is the computer able to access the url?',
+      ),
+    ),
+    true,
+  )
+  assert.equal(
+    transient(bun('ECONNRESET', 'ECONNRESET: The socket connection was closed unexpectedly.')),
+    true,
+  )
+  assert.equal(transient(bun('ENOTFOUND', 'getaddrinfo ENOTFOUND nonexistent.invalid')), true)
+  assert.equal(
+    transient(Object.assign(new Error('Service Unavailable'), { statusCode: 503 })),
+    true,
+  )
+  assert.equal(transient(Object.assign(new Error('Forbidden'), { statusCode: 403 })), false)
+  assert.equal(transient(new TypeError("Cannot read properties of undefined (reading 'x')")), false)
+  assert.equal(transient(Object.assign(new Error('boom'), { code: 'ECONNRESET' })), false)
+})
+
+describe('a canceled run with --record', { skip: noSignals }, () => {
+  let s3: FakeS3
+  let dir: string
+  let started: string
+  before(async () => {
+    s3 = await fakeS3()
+    started = join(tempDir('store-signal-flag'), 'started')
+    const p = await project('store-signal', {
+      'reeval.config.ts': fakeConfig({
+        extra: `profiles: {
+    ci: { history: { store: { kind: 's3', bucket: '${s3.bucket}', endpoint: '${s3.url}' } } },
+  },`,
+      }),
+      'evals/slow.eval.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+evaluate('slow', async (c) => {
+  writeFileSync(${JSON.stringify(started)}, '')
+  await new Promise((_, reject) => c.signal.addEventListener('abort', () => reject(c.signal.reason)))
+})
+`,
+    })
+    dir = p.dir
+  })
+  after(() => s3.close())
+
+  for (const [signal, code] of [
+    ['SIGINT', 130],
+    ['SIGTERM', 143],
+  ] as const) {
+    test(`exits ${code} after ${signal}, not the store's 3, and uploads nothing`, async () => {
+      rmSync(started, { force: true })
+      s3.failNext(100, 503)
+      let pid = 0
+      const run = runCli(dir, ['run', '--profile', 'ci', '--record'], {
+        env: { ...keyEnv(s3), CI: 'false', GITHUB_ACTIONS: 'false' },
+        onOutput: (_, id) => {
+          pid = id
+          return true
+        },
+      })
+      while (!existsSync(started)) await new Promise((resolve) => setTimeout(resolve, 50))
+      process.kill(pid, signal)
+      const r = await run
+      s3.failNext(0)
+      assert.equal(r.code, code, r.stdout + r.stderr)
+      assert.ok(![...s3.objects.keys()].some((k) => k.startsWith('runs/')))
+    })
+  }
 })

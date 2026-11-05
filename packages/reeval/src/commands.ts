@@ -25,6 +25,7 @@ import {
 import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import {
+  checkStore,
   debugStaging,
   isRemote,
   markPending,
@@ -59,6 +60,7 @@ export type HistoryFlags = {
   trace?: boolean
   out?: string
   debug?: boolean
+  'push-only'?: boolean
 }
 
 export class CommandError extends Error {
@@ -262,6 +264,11 @@ export async function syncCommand(ctx: Ctx, refs: string[] = []): Promise<number
       'reeval sync takes runs with --debug only: reeval sync --debug <run> downloads their debug data',
     )
   }
+  if (ctx.flags.debug && ctx.flags['push-only']) {
+    throw new CommandError(
+      'reeval sync --debug downloads, and --push-only does not: drop one of them',
+    )
+  }
   if (!isRemote(history)) {
     ctx.out(
       ctx.flags.debug
@@ -285,6 +292,13 @@ export async function syncCommand(ctx: Ctx, refs: string[] = []): Promise<number
   }
   if (failed.length) {
     throw new StoreError(notUploaded(new StoreError(failed.join('\n')), rel(pendingDir(history))))
+  }
+  if (ctx.flags['push-only']) {
+    await checkStore(history)
+    ctx.out(
+      `${runs.length ? `uploaded ${runs.length}` : 'nothing to upload'} to ${history.store.name}, which answers; pulled nothing (--push-only)`,
+    )
+    return 0
   }
   const { pulled, unreachable } = await pullStore(history, { force: true })
   if (unreachable) throw new StoreError(`couldn't read ${history.store.name}: ${unreachable}`)

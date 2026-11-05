@@ -219,5 +219,6 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
     async readFile(runId, path) {
       return (await get(fileKey(runId, path)))?.bytes ?? null
     },
+    check: mark,
   }
 }
