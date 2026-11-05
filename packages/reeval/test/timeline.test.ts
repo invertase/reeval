@@ -12,6 +12,7 @@ import {
   waitRoles,
   waitSpans,
 } from '../src/view/timeline.ts'
+import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 
 const at = (atMs: number) => ({ ts: new Date(atMs).toISOString(), atMs })
 const tool = (
@@ -134,7 +135,12 @@ describe('modelCallEvents', () => {
 describe('inferDurations', () => {
   test('a call with no reported end runs to the next event, the last to the turn end', () => {
     const events = inferDurations(
-      [tool(100, 'read', {}, null), model(150, 10), tool(400, 'read', {}), tool(700, 'grep', {}, null)],
+      [
+        tool(100, 'read', {}, null),
+        model(150, 10),
+        tool(400, 'read', {}),
+        tool(700, 'grep', {}, null),
+      ],
       1000,
     )
     assert.deepEqual(
@@ -199,7 +205,12 @@ describe('waitSpans and timeSplit', () => {
   })
 
   test('model calls count when no tool or wait covers them; a stream never does', () => {
-    const events = [model(0, 500), tool(400, 'read', {}, 200), model(600, 300), model(0, 5000, true)]
+    const events = [
+      model(0, 500),
+      tool(400, 'read', {}, 200),
+      model(600, 300),
+      model(0, 5000, true),
+    ]
     assert.deepEqual(segments(events, 1000), [
       { kind: 'model', startMs: 0, endMs: 400 },
       { kind: 'tool', startMs: 400, endMs: 600 },
@@ -239,5 +250,52 @@ describe('waitSpans and timeSplit', () => {
     assert.deepEqual(sumSplits([a, a]), { modelMs: 20, toolMs: 2, waitingMs: 4, otherMs: 6 })
     assert.equal(sumSplits([a, { ...a, modelMs: null }])?.modelMs, null)
     assert.equal(sumSplits([undefined]), undefined)
+  })
+})
+
+describe('a run records where each turn went', () => {
+  test('waiting on a backgrounded job, and a tool call whose end was never reported', async () => {
+    const harness = `{
+      tools: [{ tool: 'read', input: { path: 'a.txt' }, output: '', durationMs: null }],
+      script: [[{ exec: 'sleep 2 > /dev/null 2>&1 &' }, { exec: 'sleep 1' }]],
+    }`
+    const p = await project('time-split', {
+      'reeval.config.ts': fakeConfig({ harness }),
+      'evals/w.eval.ts': `import { evaluate } from 'reeval'
+evaluate('waits', async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const { evals, read } = readRun(p.dir)
+    const attempt = evals[0]?.trial
+    assert.ok(attempt?.timeSplit)
+    const turn = attempt.turns[0]
+    assert.deepEqual(attempt.timeSplit, turn?.timeSplit)
+    const { modelMs, toolMs, waitingMs, otherMs } = attempt.timeSplit
+    assert.equal(modelMs, null, 'the fake sandbox has no gateway to see model calls')
+    assert.ok(waitingMs >= 1000, `waited ${waitingMs}ms`)
+    assert.equal(toolMs + waitingMs + otherMs, turn?.durationMs)
+    assert.ok(attempt.files.transcript)
+    const transcript = read(attempt.files.transcript.path)
+    const readCall = transcript
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+      .find((e) => e.tool === 'read')
+    assert.equal(readCall.durationInferred, true)
+    assert.equal(typeof readCall.durationMs, 'number')
+    assert.match(read('summary.md'), /- Agent time: tools .* · waiting [\d.]+s · other /)
+    const effort = await runCli(p.dir, [
+      'query',
+      'SELECT model_s_median, waiting_s_median FROM effort',
+      '--json',
+    ])
+    assert.equal(effort.code, 0, effort.stderr)
+    const [row] = JSON.parse(effort.stdout)
+    assert.equal(row.model_s_median, null)
+    assert.ok(row.waiting_s_median >= 1, JSON.stringify(row))
   })
 })

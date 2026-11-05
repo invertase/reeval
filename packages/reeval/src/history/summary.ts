@@ -2,7 +2,7 @@ import { clip, fenced, formatDuration, plural } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
-import { filesChanged } from '../view/effort.ts'
+import { filesChanged, splitLabel } from '../view/effort.ts'
 import { checkLabels, checkTries, commandLine, labeledJudgments } from '../view/judgments.ts'
 import {
   evalMarkOutcome,
@@ -192,11 +192,13 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
       `- Prompt (${turn.status}, ${formatDuration(turn.durationMs)}): ${clip(cell(turn.prompt), 200)}`,
     )
     if (turn.error) lines.push(`  - Error: ${clip(cell(turn.error), 500)}`)
+    if (turn.timeSplit && a.turns.length > 1) lines.push(`  - Spent: ${splitLabel(turn.timeSplit)}`)
   }
   const t = a.timings
   lines.push(
     `- Time: setup ${formatDuration(t.setupMs)} · agent ${formatDuration(t.agentMs)} · checks ${formatDuration(t.checksMs)} · judge ${formatDuration(t.judgeMs)}`,
   )
+  if (a.timeSplit) lines.push(`- Agent time: ${splitLabel(a.timeSplit)}`)
   const act = a.activity
   const web = (n: number | null, what: string) =>
     n === null ? `${what} not reported` : `${n} ${what}`

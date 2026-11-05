@@ -1829,6 +1829,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/replay-telemetry.test.ts'],
   },
   {
+    id: 'effort.time-split',
+    area: 'Records and studio',
+    name: "Where each turn's and attempt's agent time went (`timeSplit`: model calls, tool calls, waiting on background jobs, other), the egress gateway's `model-call` transcript events, and tool durations inferred from the next event, in summary.md, the run's effort table, `reeval compare -v` and `reeval query effort`",
+    unit: ['reeval/test/timeline.test.ts', 'sandbox-docker/test/proxy.test.ts'],
+  },
+  {
     id: 'effort.files-changed',
     area: 'Records and studio',
     name: "Each turn's files changed from the workspace diff, a file the shell wrote included, on its turn line, in `debug.log` and beside the edit tool calls in summary.md and the studio",

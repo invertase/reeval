@@ -1620,7 +1620,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     const out = responseHeaders(headers, own, creds, plan)
     t?.set({ responseHeaders: plainHeaders(out) })
-    const cost = readsModel ? headerCost(headers, options.costHeaders) : undefined
+    const cost = reads.model ? headerCost(headers, options.costHeaders) : undefined
     if (cost !== undefined) t?.set({ responseCost: cost })
     res.writeHead(status, out)
     responseBody(up, plan, t, reads)

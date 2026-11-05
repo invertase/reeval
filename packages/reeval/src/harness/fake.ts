@@ -135,7 +135,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               input: tool.input,
               output: tool.output,
               ok: tool.ok === undefined ? true : tool.ok,
-              durationMs: 0,
+              durationMs: tool.durationMs === undefined ? 0 : tool.durationMs,
             })
           }
           if (flaked) {

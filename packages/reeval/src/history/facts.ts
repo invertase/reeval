@@ -49,7 +49,8 @@ CREATE TABLE effort_m (
   separated INTEGER, time_separated INTEGER, tokens_separated INTEGER,
   verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT,
   context_calls_median REAL, dependency_calls_median REAL, web_calls_median REAL,
-  verify_calls_median REAL, workspace_calls_median REAL
+  verify_calls_median REAL, workspace_calls_median REAL,
+  model_s_median REAL, tool_s_median REAL, waiting_s_median REAL, other_s_median REAL
 );
 CREATE TABLE contrasts_m (
   run_id TEXT, eval_key TEXT, harness TEXT, sandbox TEXT, a_key TEXT, b_key TEXT,
@@ -153,6 +154,10 @@ type Attempt = {
   cache_read_tokens: number | null
   cache_write_tokens: number | null
   reasoning_tokens: number | null
+  model_ms: number | null
+  tool_ms: number | null
+  waiting_ms: number | null
+  other_ms: number | null
 }
 
 /** Each fingerprint part's name in `drift.changed` and its `cells` column; every part has one. */
@@ -328,7 +333,8 @@ export function deriveFacts(db: DatabaseSync): void {
   const attempts = rowsOf<Attempt>(
     db.prepare(
       `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, case_key, tools, agent_ms, file_edits, files_changed,
-        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens
+        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
+        model_ms, tool_ms, waiting_ms, other_ms
        FROM attempts ORDER BY run_id, rowid`,
     ),
   )
@@ -371,6 +377,16 @@ export function deriveFacts(db: DatabaseSync): void {
         fileEdits: a.file_edits,
         filesChanged: a.files_changed,
         ...(tokens !== undefined ? { tokens } : {}),
+        ...(a.tool_ms !== null
+          ? {
+              split: {
+                modelMs: a.model_ms,
+                toolMs: a.tool_ms,
+                waitingMs: a.waiting_ms ?? 0,
+                otherMs: a.other_ms ?? 0,
+              },
+            }
+          : {}),
       },
     ])
   }
@@ -458,6 +474,10 @@ export function deriveFacts(db: DatabaseSync): void {
       tokens_verdict: vs?.tokensVerdict ?? null,
       tokens_note: vs?.tokensNote ?? null,
       ...classMedians(c),
+      model_s_median: own?.split?.modelMs == null ? null : s1(own.split.modelMs),
+      tool_s_median: own?.split ? s1(own.split.toolMs) : null,
+      waiting_s_median: own?.split ? s1(own.split.waitingMs) : null,
+      other_s_median: own?.split ? s1(own.split.otherMs) : null,
     }
   })
   insertAll(db, 'effort_m', effortRows)
