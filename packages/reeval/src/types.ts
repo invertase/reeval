@@ -817,7 +817,7 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
-  /** US dollars the fake agent says every turn cost, as a harness that reports its cost does. */
+  /** US dollars the fake agent says every turn cost, as a harness that reports its cost does; 0 reports none. */
   costUsd?: number
   /** Tokens the fake agent reports for every turn, as `turn.usage`; without it, null. */
   usage?: {

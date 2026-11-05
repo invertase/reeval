@@ -70,7 +70,8 @@ function traceStreamPart(
 /**
  * Each turn's cost from what the harness reports on its finish: a session's running total, as
  * Claude Code's is, less what its earlier turns reported. A total that fell, or a session other
- * than the attempt's first, can't be split into turns, so that turn has no reported cost.
+ * than the attempt's first, can't be split into turns, so that turn has no reported cost; nor
+ * has one the harness put at $0, which it says for a model its own prices don't list.
  */
 export function turnCosts(
   reported: Agent['reportedCost'],
@@ -91,7 +92,7 @@ export function turnCosts(
       before = said.usd
       if (fell) return undefined
     }
-    return { usd, basis: 'reported', source }
+    return usd > 0 ? { usd, basis: 'reported', source } : undefined
   }
 }
 

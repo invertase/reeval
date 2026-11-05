@@ -102,7 +102,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             durationMs: descriptor.turnMs ?? Date.now() - startedAt,
             transcript,
             usage: descriptor.usage ?? null,
-            ...(descriptor.costUsd === undefined
+            ...(!descriptor.costUsd
               ? {}
               : { cost: { usd: descriptor.costUsd, basis: 'reported' as const, source: 'fake' } }),
             model: descriptor.servedModel ?? null,

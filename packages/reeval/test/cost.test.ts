@@ -733,6 +733,20 @@ describe('record costs', () => {
     assert.deepEqual(priceRecord(run, pricer), run, 'pricing a priced record changes nothing')
   })
 
+  test('a reported $0 is no cost, so the tokens are estimated', () => {
+    const run = priceRecord(
+      record(
+        [{ turns: [turn('claude-sonnet-5')], reportedCostUsd: 0 }],
+        [{ model: 'claude-sonnet-5', costUsd: 0, usage }],
+      ),
+      pricer,
+    )
+    const attempt = run.evals[0]?.attempts[0]
+    const estimated = { usd: 0.0074, basis: 'estimated', source: 'models.dev 2026-11-05' }
+    assert.deepEqual(attempt?.cost, estimated)
+    assert.deepEqual(attempt?.judgements[0]?.cost, estimated)
+  })
+
   test('formats dollars to two significant figures under $1 and says what was estimated', () => {
     assert.equal(
       formatCost({ usd: 0.2574, basis: 'estimated', source: 'x', unpriced: 1 }),
@@ -769,7 +783,7 @@ describe('record costs', () => {
     }
   })
 
-  test("a session's total that fell, or another session, is no reported cost", () => {
+  test("a session's total that fell, another session or a reported $0 is no reported cost", () => {
     const said = (costUsd: number, sessionId = 's1') => ({ 'claude-code': { costUsd, sessionId } })
     const fell = turnCosts(claudeCodeCost, 'claude-code')
     assert.equal(fell(said(0.03))?.usd, 0.03)
@@ -778,7 +792,16 @@ describe('record costs', () => {
     const other = turnCosts(claudeCodeCost, 'claude-code')
     assert.equal(other(said(0.02))?.usd, 0.02)
     assert.equal(other(said(0.05, 's2')), undefined, 'a fork may carry the old total')
+    const free = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(free(said(0)), undefined)
+    assert.equal(free(said(0)), undefined, 'an unchanged total is no reported cost')
+    assert.equal(free({ 'claude-code': { sessionId: 's1' } }), undefined)
     const pi = turnCosts(piCost, 'pi')
-    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), { usd: 0.002, basis: 'reported', source: 'pi' })
+    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), {
+      usd: 0.002,
+      basis: 'reported',
+      source: 'pi',
+    })
+    assert.equal(pi({ pi: { costUsd: 0 } }), undefined, "a model outside pi's prices is estimated")
   })
 })

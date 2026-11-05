@@ -1,5 +1,6 @@
 // Each turn, attempt, judge call, cell and run's cost in a record. A cost the harness or gateway
-// reported wins; else reeval estimates the tokens at list prices (prices.ts) and says so. A model
+// reported wins, unless it's $0, which a harness says for a model it has no price for; else reeval
+// estimates the tokens at list prices (prices.ts) and says so. A model
 // with no price gets no cost, never $0, and a sum counts what it left out in `unpriced`.
 import { priceFor, usdOf } from '../cost.ts'
 import { loadPrices, type Price, type Prices } from '../prices.ts'
@@ -41,7 +42,7 @@ function estimate(
 /** The turns' costs as the attempt's, unless some turn that used tokens has none. */
 function attemptCost(a: AttemptRecord): CostUsd | undefined {
   if (a.cost) return a.cost
-  if (a.reportedCostUsd !== undefined) {
+  if (a.reportedCostUsd) {
     return { usd: a.reportedCostUsd, basis: 'reported', source: 'openrouter' }
   }
   const total = sumCosts(a.turns.map((t) => ({ cost: t.cost, used: used(t.usage) })))
@@ -51,7 +52,7 @@ function attemptCost(a: AttemptRecord): CostUsd | undefined {
 
 function judgmentCost(j: JudgmentRecord, pricer: Pricer | null): CostUsd | undefined {
   if (j.cost) return j.cost
-  if (j.costUsd !== undefined) return { usd: j.costUsd, basis: 'reported', source: 'openrouter' }
+  if (j.costUsd) return { usd: j.costUsd, basis: 'reported', source: 'openrouter' }
   return estimate(j.usage, j.resolvedModel ?? j.model, pricer)
 }
 
@@ -61,7 +62,7 @@ export function needsPricing(record: RunRecord): boolean {
     e.attempts.some(
       (a) =>
         a.turns.some((t) => !t.cost && used(t.usage)) ||
-        a.judgements.some((j) => !j.cost && j.costUsd === undefined && used(j.usage)),
+        a.judgements.some((j) => !j.cost && !j.costUsd && used(j.usage)),
     ),
   )
 }
