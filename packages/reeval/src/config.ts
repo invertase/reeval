@@ -832,16 +832,25 @@ function checkConcurrency(value: unknown, where: string): number {
   return n
 }
 
-/** `--concurrency`, then `REEVAL_CONCURRENCY`, then `concurrency` in the config, then the default. */
+/** `--concurrency`, then `REEVAL_CONCURRENCY`, then `concurrency` in the config, or undefined. */
+export function givenConcurrency(
+  config: ResolvedConfig,
+  flag: string | undefined,
+  env = process.env,
+): number | undefined {
+  if (flag !== undefined) return checkConcurrency(flag, '--concurrency')
+  if (env.REEVAL_CONCURRENCY) return checkConcurrency(env.REEVAL_CONCURRENCY, 'REEVAL_CONCURRENCY')
+  return config.concurrency
+}
+
+/** {@link givenConcurrency}, else the default for `capacity`. */
 export async function resolveConcurrency(
   config: ResolvedConfig,
   flag: string | undefined,
   capacity: () => Promise<Capacity>,
   env = process.env,
 ): Promise<number> {
-  if (flag !== undefined) return checkConcurrency(flag, '--concurrency')
-  if (env.REEVAL_CONCURRENCY) return checkConcurrency(env.REEVAL_CONCURRENCY, 'REEVAL_CONCURRENCY')
-  return config.concurrency ?? defaultConcurrency(await capacity())
+  return givenConcurrency(config, flag, env) ?? defaultConcurrency(await capacity())
 }
 
 function resolveJudge(

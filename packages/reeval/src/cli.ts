@@ -9,7 +9,9 @@ import type { EvalQuestions, questionRunner } from './compare/questions.ts'
 import {
   configLabel,
   configPathFor,
+  defaultConcurrency,
   findConfig,
+  givenConcurrency,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -17,7 +19,6 @@ import {
   type PlannedJudge,
   parseDuration,
   requireConfig,
-  resolveConcurrency,
   runJudgeModel,
   selectProfile,
   UsageError,
@@ -501,17 +502,17 @@ async function runCommand(
     ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
+  const ctx = await startRun(setup)
   const startedWith: RunInvocation | undefined = resumed
     ? (resumed.saved ?? undefined)
     : {
         ...(setup.runs === undefined ? {} : { runs: setup.runs }),
         ...(setup.profile ? { profile: setup.profile.name } : {}),
-        ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
+        ...(explicit === undefined ? {} : { concurrency: ctx.concurrency }),
         filters: savedFilters(setup.config.root, filters),
         tags: runFlags.tag ?? [],
         ...(runFlags.trait?.length ? { traits: runFlags.trait } : {}),
       }
-  const ctx = await startRun(setup)
   invocation.runId = ctx.runId
   const githubOut = process.env.GITHUB_OUTPUT
   if (githubOut) await appendFile(githubOut, `run-id=${ctx.runId}\n`).catch(() => {})
@@ -795,11 +796,7 @@ async function prepareRun(
     ),
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
-  const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    // Sized from where the first sandbox that runs off the host runs (the Docker or Podman VM)
-    // when it answers, as a real run is, so --dry-run shows the same.
-    return (await sandboxCapacity(sandboxes)) ?? hostCapacity()
-  })
+  const concurrency = givenConcurrency(config, flags.concurrency)
   return {
     output,
     config,
@@ -807,7 +804,15 @@ async function prepareRun(
     runs,
     tags: [...(flags.tag ?? []), ...(profile?.tags ?? [])],
     traits: traitFlags(flags.trait),
-    concurrency,
+    sandboxes,
+    /**
+     * The run's concurrency. Without one given, it's sized from where the first sandbox that
+     * runs off the host runs (the Docker or Podman VM, the Boat account) when it answers, as a
+     * real run is, so --dry-run shows the same; a resume reads it once the stopped run's
+     * sandboxes are gone, since they count against it.
+     */
+    sizeRun: async () =>
+      concurrency ?? defaultConcurrency((await sandboxCapacity(sandboxes)) ?? hostCapacity()),
     budget: profile?.budget ?? config.budget,
     record: profile?.record ?? config.record,
     dryRun: !!flags['dry-run'],
@@ -859,7 +864,8 @@ async function startRun({
   runs,
   tags,
   traits,
-  concurrency,
+  sandboxes,
+  sizeRun,
   verbosity,
   configFile,
   resume,
@@ -885,10 +891,13 @@ async function startRun({
       ? { record: target.previous, artifacts: target.previousArtifacts }
       : await loadPrevious(stagingDir(config.root, target.runId))
     if (!dryRun) {
-      try {
-        await cleanupRun(target.runId)
-      } catch {}
+      await cleanupRun(target.runId).catch(() => {})
+      // Boat finds a run's VMs only under a descriptor's account and prefix; per-eval ones wait
+      // for the plan (executeRun).
+      const boats = sandboxes.filter((s) => s.kind === 'boat')
+      if (boats.length) await cleanupRun(target.runId, boats).catch(() => {})
     }
+    const concurrency = await sizeRun()
     const { unfoldCases } = await import('./history/cases.ts')
     const previous = aside.record ?? target.previous
     return {
@@ -936,6 +945,7 @@ async function startRun({
     runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
   }
   if (!dryRun) await sweep(config.root)
+  const concurrency = await sizeRun()
   return {
     runId,
     // Workers create it with their first record; a run that never starts leaves nothing behind.
@@ -1303,12 +1313,14 @@ async function executeRun(
     })
     if (setup.dryRun) return false
     if (continuing) {
-      // startRun cleared this machine before the plan named the Macs the run's VMs were on.
+      // startRun cleared this machine and the config's Boat accounts before the plan named the
+      // Macs and the evals' own Boat accounts the run's VMs were on.
       const away = new Map<string, SandboxDescriptor>()
       for (const { attempt } of planned) {
-        if (attempt.sandbox.kind === 'tart' && attempt.sandbox.hosts) {
-          away.set(JSON.stringify(attempt.sandbox.hosts), attempt.sandbox)
-        }
+        const { sandbox } = attempt
+        if (sandbox.kind === 'tart' && sandbox.hosts)
+          away.set(JSON.stringify(sandbox.hosts), sandbox)
+        if (sandbox.kind === 'boat') away.set(JSON.stringify(sandbox), sandbox)
       }
       if (away.size) await cleanupRun(runId, [...away.values()]).catch(() => {})
     }

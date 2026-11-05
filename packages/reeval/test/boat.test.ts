@@ -9,6 +9,7 @@ import { checkBoat, removeRunSandboxes, runPrefix } from '../src/sandbox/boat.ts
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { project, readRun, runCli, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
+import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
 let api: FakeBoat
 before(async () => {
@@ -36,10 +37,10 @@ async function pointedAt<T>(key: string | undefined, body: () => Promise<T>): Pr
 }
 
 /** Creates a sandbox on the fake API as Boat's own client would. */
-const create = (name: string) =>
-  fetch(`${api.url}/sandboxes`, {
+const create = (name: string, on = api) =>
+  fetch(`${on.url}/sandboxes`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${api.key}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${on.key}`, 'content-type': 'application/json' },
     body: JSON.stringify({ name, type: 'small' }),
   })
 
@@ -90,6 +91,83 @@ describe("a run's cleanup", () => {
     await pointedAt(api.key, () => removeRunSandboxes('run-b', [boat()]))
     await pointedAt(api.key, () => removeRunSandboxes('run-a', [createBoat({ prefix: 'team' })()]))
     assert.deepEqual(api.live(), [])
+  })
+})
+
+describe('--resume of a stopped run', () => {
+  // Machines that never start fail the resumed attempt at once, which is all these need of it.
+  let down: FakeBoat
+  before(async () => {
+    down = await fakeBoat(
+      async () => {
+        throw new Error('no machine')
+      },
+      { maxActive: 4 },
+    )
+  })
+  after(() => down.close())
+
+  const evalFile = (options: string) => `
+import { evaluate } from 'reeval'
+import { createBoat } from 'reeval/sandbox/boat'
+evaluate('reaches', ${options}async (c) => {
+  await c.exec('true')
+})
+`
+  const config = (sandbox: string) => `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { boat } from 'reeval/sandbox/boat'
+export default defineConfig({
+  harnesses: fakeHarness({ script: [[{ exec: 'true' }]] }),
+  ${sandbox}
+  egress: 'allow-all',
+})
+`
+
+  /**
+   * Resumes a stopped run that left a VM named `left` on the fake API: the calls the resume
+   * made, and where among them it deleted that VM.
+   */
+  async function resume(name: string, files: Record<string, string>, left: string) {
+    const p = await project(name, files)
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    const made = await create(left, down)
+    assert.equal(made.status, 201)
+    const { sandbox } = (await made.json()) as { sandbox: { id: string } }
+    down.requests.length = 0
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID], {
+      env: { BOAT_BASE_URL: down.url, BOAT_API_KEY: down.key },
+    })
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.deepEqual(down.live(), [])
+    const calls = down.requests.map((q) => q.call)
+    const deleted = calls.indexOf(`DELETE /sandboxes/${sandbox.id}`)
+    assert.ok(deleted >= 0, calls.join('\n'))
+    assert.ok(deleted < calls.indexOf('POST /sandboxes'), calls.join('\n'))
+    return { calls, deleted }
+  }
+
+  test("deletes the config's Boat VMs it left before reading the account's capacity", async () => {
+    const left = `${runPrefix(boat(), SEEDED_RUN_ID)}dead00`
+    const { calls, deleted } = await resume(
+      'boat-resume-config',
+      { 'reeval.config.ts': config('sandbox: boat(),'), 'evals/a.eval.ts': evalFile('') },
+      left,
+    )
+    assert.ok(deleted < calls.indexOf('GET /limits'), calls.join('\n'))
+  })
+
+  test("deletes an eval's own Boat VMs it left before any attempt starts", async () => {
+    const left = `${runPrefix(createBoat({ prefix: 'own' })(), SEEDED_RUN_ID)}dead00`
+    await resume(
+      'boat-resume-eval',
+      {
+        'reeval.config.ts': config(''),
+        'evals/a.eval.ts': evalFile(`{ sandbox: createBoat({ prefix: 'own' })() }, `),
+      },
+      left,
+    )
   })
 })
 
