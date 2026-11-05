@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
@@ -272,6 +272,42 @@ describe('recording to s3()', () => {
     assert.equal(s3.requests.length - requests, 1, 'a 401 is not retried')
     const synced = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
     assert.equal(synced.code, 0, synced.stdout + synced.stderr)
+  })
+
+  test('a marker whose run never reached the copy is dropped, and a bug is not retried', async () => {
+    const orphan = join(storeDir(), 'pending', RUN)
+    writeFileSync(orphan, '')
+    const sync = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(sync.code, 0, sync.stdout + sync.stderr)
+    assert.match(sync.stdout, /nothing to upload to s3:\/\/reeval-runs\/ci/)
+    assert.equal(existsSync(orphan), false)
+
+    const marker = s3.objects.get('ci/reeval-store.json') as { bytes: Buffer; etag: string }
+    s3.objects.set('ci/reeval-store.json', { bytes: Buffer.from('not json'), etag: 'x' })
+    const requests = s3.requests.length
+    const r = await runCli(dir, ['run', '--profile', 'ci', '--record'], { env: env() })
+    s3.objects.set('ci/reeval-store.json', marker)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    const reads = s3.requests.slice(requests).filter((q) => q.key === 'ci/reeval-store.json')
+    assert.equal(reads.length, 1, 'a marker that is not JSON is read once, not retried')
+    const synced = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(synced.code, 0, synced.stdout + synced.stderr)
+  })
+
+  test('the keys can be in .env.local, and analyze --save is refused', async () => {
+    writeFileSync(
+      join(dir, '.env.local'),
+      `AWS_ACCESS_KEY_ID=${s3.accessKey}\nAWS_SECRET_ACCESS_KEY=${s3.secretKey}\n`,
+    )
+    const sync = await runCli(dir, ['sync', '--profile', 'ci'], { env: { CI: 'false' } })
+    rmSync(join(dir, '.env.local'))
+    assert.equal(sync.code, 0, sync.stdout + sync.stderr)
+    const save = await runCli(dir, ['analyze', '--profile', 'ci', '--save'], { env: env() })
+    assert.equal(save.code, 2, save.stdout + save.stderr)
+    assert.match(
+      save.stderr,
+      /reeval analyze --save writes into a local\(\) history, and history\.store in reeval\.config\.ts keeps runs in s3:\/\/reeval-runs\/ci\. Drop --save/,
+    )
   })
 
   test('one failed try is retried', async () => {
