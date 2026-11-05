@@ -287,9 +287,9 @@ export const harnesses: HarnessRow[] = [
     },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    // Its ACP server reports the last model call's usage; the adapter reads the turn's from
+    // Goose's usage_ledger instead.
+    tokens: true,
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
@@ -505,9 +505,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
     apiHost: 'aiplatform.googleapis.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
   },
@@ -595,9 +593,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
   },
@@ -698,9 +694,7 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['openrouter.ai'],
     apiHost: 'openrouter.ai',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
     upstream: true,

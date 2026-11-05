@@ -4,8 +4,11 @@
  */
 export const GOOSE_LAUNCHER_EXECUTABLE = 'reeval-goose'
 
+/** Goose's private home, which its bootstrap sets as `HOME`, under the sandbox home. */
+export const GOOSE_HOME = '.ai-sdk-harness/.harness-bootstrap/goose/home'
+
 /** Where the launcher goes, under the sandbox home. */
-export const GOOSE_LAUNCHER_PATH = `.ai-sdk-harness/.harness-bootstrap/goose/home/.local/bin/${GOOSE_LAUNCHER_EXECUTABLE}`
+export const GOOSE_LAUNCHER_PATH = `${GOOSE_HOME}/.local/bin/${GOOSE_LAUNCHER_EXECUTABLE}`
 
 /**
  * The variable that holds Vertex AI's variables (project, location and credentials file), as a

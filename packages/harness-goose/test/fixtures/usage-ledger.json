@@ -1,0 +1,220 @@
+{
+  "_": "Goose 1.56.0 usage_ledger from a two-turn gemini-3.8-flash attempt (sessions.db), with the wire totals of each turn's model calls (Gemini usageMetadata, the session-naming call left out: Goose keeps no row for it).",
+  "schema": "CREATE TABLE usage_ledger ( id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, created_timestamp INTEGER NOT NULL, model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost REAL, cost_source TEXT, is_compaction INTEGER DEFAULT 0 )",
+  "rows": [
+    {
+      "id": 1,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901059,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 3885,
+      "output_tokens": 212,
+      "total_tokens": 4097,
+      "cache_read_tokens": null,
+      "cache_write_tokens": null,
+      "cost": 0.00370875,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 2,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901074,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 4373,
+      "output_tokens": 1757,
+      "total_tokens": 6130,
+      "cache_read_tokens": null,
+      "cache_write_tokens": null,
+      "cost": 0.0098685,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 3,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901076,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 7880,
+      "output_tokens": 106,
+      "total_tokens": 7986,
+      "cache_read_tokens": 4420,
+      "cache_write_tokens": null,
+      "cost": 0.003324,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 4,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901078,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 8089,
+      "output_tokens": 137,
+      "total_tokens": 8226,
+      "cache_read_tokens": 5858,
+      "cache_write_tokens": null,
+      "cost": 0.00262635,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 5,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901081,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 8888,
+      "output_tokens": 132,
+      "total_tokens": 9020,
+      "cache_read_tokens": 6078,
+      "cache_write_tokens": null,
+      "cost": 0.00305835,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 6,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901084,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 9155,
+      "output_tokens": 19,
+      "total_tokens": 9174,
+      "cache_read_tokens": 6869,
+      "cache_write_tokens": null,
+      "cost": 0.002300925,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 7,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901089,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 30210,
+      "output_tokens": 483,
+      "total_tokens": 30693,
+      "cache_read_tokens": 9276,
+      "cache_write_tokens": null,
+      "cost": 0.01820745,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 8,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901099,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 25946,
+      "output_tokens": 978,
+      "total_tokens": 26924,
+      "cache_read_tokens": 3765,
+      "cache_write_tokens": null,
+      "cost": 0.020585625,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 9,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901103,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 27901,
+      "output_tokens": 405,
+      "total_tokens": 28306,
+      "cache_read_tokens": 23906,
+      "cache_write_tokens": null,
+      "cost": 0.00630795,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 10,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901115,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 29396,
+      "output_tokens": 1230,
+      "total_tokens": 30626,
+      "cache_read_tokens": 25859,
+      "cache_write_tokens": null,
+      "cost": 0.009204674999999999,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 11,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901117,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 31872,
+      "output_tokens": 39,
+      "total_tokens": 31911,
+      "cache_read_tokens": 29397,
+      "cache_write_tokens": null,
+      "cost": 0.004207275,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 12,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901120,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 31986,
+      "output_tokens": 104,
+      "total_tokens": 32090,
+      "cache_read_tokens": 29822,
+      "cache_write_tokens": null,
+      "cost": 0.00424965,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 13,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901124,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 32183,
+      "output_tokens": 26,
+      "total_tokens": 32209,
+      "cache_read_tokens": 29937,
+      "cache_write_tokens": null,
+      "cost": 0.004027275,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    },
+    {
+      "id": 14,
+      "session_id": "20261105_1",
+      "created_timestamp": 1793901138,
+      "model": "gemini-3.8-flash",
+      "input_tokens": 32238,
+      "output_tokens": 1239,
+      "total_tokens": 33477,
+      "cache_read_tokens": 30134,
+      "cache_write_tokens": null,
+      "cost": 0.008484299999999998,
+      "cost_source": "estimated",
+      "is_compaction": 0
+    }
+  ],
+  "turns": [
+    {
+      "rows": [1, 7],
+      "wire": {
+        "input": 39979,
+        "cacheRead": 32501,
+        "output": 2846
+      }
+    },
+    {
+      "rows": [8, 14],
+      "wire": {
+        "input": 38702,
+        "cacheRead": 172820,
+        "output": 4021
+      }
+    }
+  ]
+}

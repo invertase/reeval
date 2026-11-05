@@ -8,6 +8,7 @@ import {
 import { createACP } from '@ai-sdk/harness-acp'
 import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils'
 import {
+  GOOSE_HOME,
   GOOSE_LAUNCHER,
   GOOSE_LAUNCHER_ENV,
   GOOSE_LAUNCHER_EXECUTABLE,
@@ -15,6 +16,7 @@ import {
 } from './goose-launcher.ts'
 import { GooseStreamTranslator } from './goose-stream.ts'
 import { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
+import { GooseLedger } from './goose-usage.ts'
 
 export const GOOSE_HARNESS_ID = 'goose'
 /** The Goose release the bootstrap installs, checked against its published sha256s. */
@@ -199,8 +201,9 @@ export function gooseEnv(
  * model is a Gemini id such as `gemini-3.8-flash`) or another {@link GooseProvider}. Thin config
  * over `@ai-sdk/harness-acp`.
  *
- * Goose's ACP `PromptResponse.usage` is its last model call's, not the turn's, so turns report no
- * usage here rather than an undercount (see {@link GooseStreamTranslator}).
+ * Goose's ACP `PromptResponse.usage` is its last model call's, not the turn's, so the translator
+ * drops it (see {@link GooseStreamTranslator}); each turn's usage is read instead from Goose's
+ * `usage_ledger` in the sandbox, one row per model call (see {@link GooseLedger}).
  */
 export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuiltinTools> {
   const provider = settings.provider ?? GEMINI_PROVIDER
@@ -266,16 +269,25 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
         )
       }
       const session = await acp.doStart(options)
+      const { abortSignal } = options
+      const home = await resolveSandboxHomeDir({
+        sandbox: options.sandboxSession,
+        ...(abortSignal ? { abortSignal } : {}),
+      })
       // After the bootstrap, which installs Goose's bin directory; the first turn runs it.
-      await writeLauncher(options.sandboxSession, options.abortSignal)
-      return translated(session, mcpServers)
+      await writeLauncher(options.sandboxSession, home, abortSignal)
+      const ledger = new GooseLedger(options.sandboxSession, `${home}/${GOOSE_HOME}`)
+      return translated(session, mcpServers, ledger)
     },
   }
 }
 
 /** Writes the launcher where `harness-acp` runs its executable from, executable. */
-async function writeLauncher(sandbox: Experimental_SandboxSession, abortSignal?: AbortSignal) {
-  const home = await resolveSandboxHomeDir({ sandbox, ...(abortSignal ? { abortSignal } : {}) })
+async function writeLauncher(
+  sandbox: Experimental_SandboxSession,
+  home: string,
+  abortSignal?: AbortSignal,
+) {
   const path = `${home}/${GOOSE_LAUNCHER_PATH}`
   await sandbox.run({
     command: `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf('/')))}`,
@@ -298,17 +310,50 @@ export function gooseConfig(servers: Record<string, Record<string, unknown>>) {
 }
 
 type Session = Awaited<ReturnType<HarnessV1['doStart']>>
-type Emit = (part: { type: string; [key: string]: unknown }) => void
+type Part = { type: string; [key: string]: unknown }
+type Emit = (part: Part) => void
+type Control = { done: PromiseLike<void> }
 
-/** The session, with each turn's parts through a fresh {@link GooseStreamTranslator}. */
-function translated(session: Session, mcpServers: readonly string[]): Session {
-  const turn = (run: (options: never) => unknown) => (options: { emit: Emit }) => {
-    const translator = new GooseStreamTranslator({ mcpServers })
-    return run({
-      ...options,
-      emit: (part: Parameters<Emit>[0]) => options.emit(translator.push(part)),
-    } as never)
-  }
+/**
+ * The session, with each turn's parts through a fresh {@link GooseStreamTranslator}, and its
+ * usage from Goose's ledger: the `finish` part is held until the turn is done, then sent with the
+ * usage of the model calls the turn added to the ledger. The stream ends when `done` settles, so
+ * `done` waits for that read.
+ */
+export function translated(
+  session: Session,
+  mcpServers: readonly string[],
+  ledger: GooseLedger,
+): Session {
+  const turn =
+    (run: (options: never) => Promise<Control>) =>
+    async (options: { emit: Emit; abortSignal?: AbortSignal }) => {
+      const translator = new GooseStreamTranslator({ mcpServers })
+      await ledger.beforeTurn(options.abortSignal)
+      let finish: Part | undefined
+      const control = await run({
+        ...options,
+        emit: (part: Part) => {
+          const out = translator.push(part)
+          if (out.type === 'finish') finish = out
+          else options.emit(out)
+        },
+      } as never)
+      const done = Promise.resolve(control.done).then(
+        async () => {
+          if (!finish) return
+          const usage = options.abortSignal?.aborted
+            ? undefined
+            : await ledger.afterTurn(options.abortSignal)
+          options.emit(usage ? { ...finish, totalUsage: usage } : finish)
+        },
+        (error: unknown) => {
+          if (finish) options.emit(finish)
+          throw error
+        },
+      )
+      return { ...control, done }
+    }
   return new Proxy(session, {
     get(target, key, receiver) {
       const value = Reflect.get(target, key, receiver)

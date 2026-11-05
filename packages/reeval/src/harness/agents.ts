@@ -1124,7 +1124,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     platforms: ['linux', 'darwin'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
-    // Goose's ACP server reports usage for its last model call only, which the adapter drops.
+    // The adapter reads each turn's usage from Goose's usage_ledger, which counts thinking tokens
+    // in the output without splitting them out.
     reasoningTokens: false,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.

@@ -2337,6 +2337,29 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/goose-reports-usage',
+    tiers: ['real'],
+    realHarness: 'goose',
+    env: 'plain',
+    canary: /expected \{ input: \d+.* to be null/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      const turns = attempt?.turns ?? []
+      assert.equal(turns.length, 2)
+      assert.ok((attempt?.activity.tools ?? 0) >= 1, JSON.stringify(attempt?.activity))
+      for (const t of turns) {
+        assert.ok(t.usage && t.usage.input + t.usage.cacheRead > 1000, 'the system prompt counts')
+        // The ledger counts thinking tokens in the output, not apart.
+        assert.equal(t.usage.reasoning, null)
+      }
+      assert.equal(
+        attempt?.usage?.output,
+        turns.reduce((n, t) => n + (t.usage?.output ?? 0), 0),
+        "the attempt's total is its turns'",
+      )
+    },
+  },
+  {
     dir: 'harness/claude-code-plugin',
     tiers: ['fake', 'docker'],
     image: 'claude-code',

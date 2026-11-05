@@ -1311,6 +1311,14 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.goose-usage',
+    area: 'Harnesses',
+    name: "Goose's tokens per turn, read after each turn from the model calls it added to Goose's `usage_ledger` (its ACP usage is the last call's)",
+    fixtures: ['harness/goose-reports-usage'],
+    unit: ['harness-goose/test/usage.test.ts'],
+    real: ['contract › tokens recorded where the harness reports them'],
+  },
+  {
     id: 'harness.pi',
     area: 'Harnesses',
     name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers',
