@@ -183,6 +183,20 @@ describe('waitSpans and timeSplit', () => {
     })
   })
 
+  test('a backgrounded sleep starts a job rather than polling one', () => {
+    const events = [
+      tool(0, 'shell', { command: 'sleep 5 > /dev/null 2>&1 &' }, 5),
+      tool(10, 'shell', { command: 'sleep 1' }, 1000),
+    ]
+    assert.deepEqual(
+      [...waitRoles(events)],
+      [
+        [0, 'background'],
+        [1, 'poll'],
+      ],
+    )
+  })
+
   test('a backgrounded server no poll checked on is not waiting', () => {
     const events = [
       tool(0, 'shell', { command: 'npm run dev &' }, 20),
