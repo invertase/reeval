@@ -70,7 +70,7 @@ import {
   brokeringFor,
 } from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
-import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
+import { capText, OUTPUT_CAP, transcriptLines } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, stackChanges } from '../src/history/views.ts'
@@ -1085,6 +1085,53 @@ test('huge single outputs keep their head and tail, with a marker and hash', () 
   assert.ok(capped.endsWith('z'.repeat(1000)))
   assert.match(capped, /\[reeval: truncated \d+ of 220000 characters, sha256 [0-9a-f]{64}\]/)
   assert.equal(capText('small'), 'small')
+})
+
+test("transcript.jsonl marks a tool output it cut with the whole output's size", () => {
+  const tool = (output: unknown, extra: Record<string, unknown> = {}) => ({
+    ts: '2026-01-01T00:00:00.000Z',
+    atMs: 0,
+    type: 'tool',
+    toolCallId: 't',
+    tool: 'bash',
+    input: {},
+    output,
+    ok: true,
+    durationMs: 1,
+    ...extra,
+  })
+  const turn = (transcript: unknown[]) => ({
+    prompt: 'go',
+    startedAt: '2026-01-01T00:00:00.000Z',
+    durationMs: 1,
+    status: 'completed',
+    transcript,
+  })
+  const tools = (transcript: unknown[]) =>
+    transcriptLines({ turns: [turn(transcript)] } as never)
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.type === 'tool')
+  const big = `é${'x'.repeat(OUTPUT_CAP)}`
+  const [cut, small, structured, adapter] = tools([
+    tool(big),
+    tool('ok'),
+    tool([{ type: 'text', text: big }]),
+    tool(big, { outputTruncated: { bytes: 5_000_000 } }),
+  ])
+  assert.deepEqual(cut.outputTruncated, { bytes: OUTPUT_CAP + 2 })
+  assert.match(cut.output, /\[reeval: truncated \d+ of 131073 characters, sha256 [0-9a-f]{64}\]/)
+  assert.deepEqual([small.output, small.outputTruncated], ['ok', undefined])
+  assert.equal(
+    structured.outputTruncated.bytes,
+    Buffer.byteLength(JSON.stringify([{ type: 'text', text: big }], null, 2)),
+  )
+  assert.deepEqual(
+    adapter.outputTruncated,
+    { bytes: 5_000_000 },
+    'the larger size the adapter read',
+  )
 })
 
 test('findConfig takes the nearest config at or above the directory, like Vitest and ESLint', () => {

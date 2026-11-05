@@ -2583,7 +2583,7 @@ export const features: Feature[] = [
     dir: 'harness/tool-output-cut',
     tiers: ['fake', 'docker'],
     env: 'plain',
-    canary: /to contain 'line-15000/,
+    canary: /to match object \{ outputView: 'full'/,
     record: ({ run, runDir }) => {
       const transcript = landed(run)?.files.transcript?.path ?? ''
       const shell = readFileSync(join(runDir, transcript), 'utf8')
@@ -2591,8 +2591,10 @@ export const features: Feature[] = [
         .split('\n')
         .map((l) => JSON.parse(l))
         .find((e) => e.type === 'tool' && e.tool === 'shell')
-      assert.deepEqual([shell?.outputView, shell?.outputTruncated], ['model', { bytes: 318_911 }])
-      assert.ok(shell.output.length < 140_000, 'the record keeps the cut output')
+      assert.deepEqual(shell?.outputTruncated, { bytes: 318_911 })
+      assert.match(shell.output, /^line-1\n[\s\S]*\n\[reeval: truncated \d+ of 318911 characters/)
+      assert.match(shell.output, /END-OF-OUTPUT-77\n$/)
+      assert.ok(!shell.output.includes('\nline-15000\n'), 'the middle is cut')
     },
   },
   {

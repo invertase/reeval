@@ -1480,10 +1480,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.tool-output',
     area: 'Harnesses',
-    name: "A tool's output in the transcript: `outputView` says whether it's what the model saw or the whole output, each text past 128 KiB keeps its first and last half with `outputTruncated`, and output Cursor and Antigravity saved to a file is read back",
+    name: "A tool's output in the transcript: `outputView` says whether it's what the model saw or the whole output, `outputTruncated` marks one `transcript.jsonl` or the adapter cut, and output Cursor and Antigravity saved to a file is read back",
     fixtures: ['harness/tool-output-cut'],
     unit: [
       'reeval/test/harness.test.ts',
+      'reeval/test/unit.test.ts',
       'harness-cursor-sdk/test/stream.test.ts',
       'harness-cursor-sdk/test/unit.test.ts',
       'harness-antigravity/test/harness.test.ts',

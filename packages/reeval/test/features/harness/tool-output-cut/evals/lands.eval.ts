@@ -6,7 +6,6 @@ evaluate('lands', { environments: plain }, async (c) => {
   const shell = turn.transcript.find((e) => e.type === 'tool' && e.tool === 'shell')
   expect(shell).toMatchObject({
     outputView: 'model',
-    outputTruncated: { bytes: 318_911 },
-    output: expect.stringMatching(/^line-1\n.*\n\[… 187839 bytes cut …\]\n.*END-OF-OUTPUT-77\n$/s),
+    output: expect.stringMatching(/\nline-15000\n.*END-OF-OUTPUT-77\n$/s),
   })
 })

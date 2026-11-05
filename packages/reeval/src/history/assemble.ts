@@ -360,7 +360,15 @@ export function transcriptLines(record: EvalRecord): string {
         const raw =
           typeof event.output === 'string' ? event.output : JSON.stringify(event.output, null, 2)
         if (raw !== undefined && raw.length > OUTPUT_CAP) {
-          lines.push(JSON.stringify({ turn: index, ...event, output: capText(raw) }))
+          const bytes = Math.max(event.outputTruncated?.bytes ?? 0, Buffer.byteLength(raw))
+          lines.push(
+            JSON.stringify({
+              turn: index,
+              ...event,
+              output: capText(raw),
+              outputTruncated: { bytes },
+            }),
+          )
           continue
         }
       }

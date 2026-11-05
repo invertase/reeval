@@ -89,7 +89,6 @@ import {
 import { noDefaultEffort, withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { fitToolOutput, TOOL_OUTPUT_MAX_BYTES } from '../src/harness/tool-output.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import {
   antigravity,
@@ -2885,48 +2884,6 @@ describe('what a tool event shows: the model view or the full output', () => {
         ['line-1\nEND\n', 'full'],
         ['no', 'model'],
       ],
-    )
-  })
-})
-
-describe('fitToolOutput: the transcript keeps at most 128 KiB of each text in a tool output', () => {
-  const tool = (output: unknown, extra: Partial<Extract<TranscriptEvent, { type: 'tool' }>> = {}) =>
-    ({
-      type: 'tool',
-      id: 't',
-      tool: 'bash',
-      input: {},
-      output,
-      ok: true,
-      ...extra,
-    }) as TranscriptEvent
-
-  test('its first and last half, a line saying how much was cut, and the whole size', () => {
-    const text = `${'h'.repeat(100)}${'m'.repeat(56)}${'t'.repeat(100)}`
-    const fitted = fitToolOutput(tool(text), 64)
-    assert.ok(fitted.type === 'tool')
-    assert.equal(fitted.output, `${'h'.repeat(32)}\n[… 192 bytes cut …]\n${'t'.repeat(32)}`)
-    assert.deepEqual(fitted.outputTruncated, { bytes: 256 })
-    assert.equal(TOOL_OUTPUT_MAX_BYTES, 128 * 1024)
-  })
-
-  test('each text in structured output, with its JSON size; a split character is dropped', () => {
-    const output = [{ type: 'text', text: `xé${'y'.repeat(10)}` }, { n: 1 }]
-    const fitted = fitToolOutput(tool(output), 4)
-    assert.ok(fitted.type === 'tool')
-    assert.deepEqual(fitted.output, [{ type: 'text', text: 'x\n[… 10 bytes cut …]\nyy' }, { n: 1 }])
-    assert.equal(fitted.outputTruncated?.bytes, Buffer.byteLength(JSON.stringify(output)))
-  })
-
-  test("output within the cap is untouched; the harness's larger size is kept", () => {
-    const small = tool('ok')
-    assert.equal(fitToolOutput(small), small)
-    const fitted = fitToolOutput(tool('x'.repeat(10), { outputTruncated: { bytes: 5_000 } }), 4)
-    assert.ok(fitted.type === 'tool')
-    assert.deepEqual(fitted.outputTruncated, { bytes: 5_000 })
-    assert.equal(
-      fitToolOutput({ type: 'text', text: 'x'.repeat(10) } as TranscriptEvent, 4).type,
-      'text',
     )
   })
 })

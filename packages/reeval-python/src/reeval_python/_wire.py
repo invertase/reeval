@@ -1984,9 +1984,10 @@ class TranscriptEventWebFetch(TypedDict):
     url: str
 
 
-# Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last 64
-# KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8 (its
-# JSON's, for structured output).
+# Set when `output` is only part of the output, with a line where the rest was cut:
+# `transcript.jsonl` keeps the first 96K and last 16K characters of one past 128K (of its JSON,
+# for structured output), and the harness adapter keeps the first and last 512 KiB of a saved
+# output past 1 MiB. `bytes` is the whole output's size in UTF-8.
 class TranscriptEventToolOutputTruncated(TypedDict):
     bytes: float
 
@@ -2001,9 +2002,10 @@ class TranscriptEventTool(TypedDict):
     # Whether the call succeeded; null when the harness never reported its result.
     ok: bool | None
     output: Any
-    # Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last 64
-    # KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8 (its
-    # JSON's, for structured output).
+    # Set when `output` is only part of the output, with a line where the rest was cut:
+    # `transcript.jsonl` keeps the first 96K and last 16K characters of one past 128K (of its
+    # JSON, for structured output), and the harness adapter keeps the first and last 512 KiB of
+    # a saved output past 1 MiB. `bytes` is the whole output's size in UTF-8.
     outputTruncated: NotRequired[TranscriptEventToolOutputTruncated]
     # What `output` holds: `model`, the result as the harness gave it to the model; `full`, the
     # tool's whole output, which can be more than the model saw (the harness cut it for the

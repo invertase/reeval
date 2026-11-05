@@ -94,9 +94,10 @@ export type TranscriptEvent = EventTime &
          */
         outputView?: 'model' | 'full'
         /**
-         * Set when `output` was cut: each text in it longer than 128 KiB keeps its first and last
-         * 64 KiB, with a line saying how much was cut. `bytes` is the whole output's size in UTF-8
-         * (its JSON's, for structured output).
+         * Set when `output` is only part of the output, with a line where the rest was cut:
+         * `transcript.jsonl` keeps the first 96K and last 16K characters of one past 128K (of its
+         * JSON, for structured output), and the harness adapter keeps the first and last 512 KiB
+         * of a saved output past 1 MiB. `bytes` is the whole output's size in UTF-8.
          */
         outputTruncated?: { bytes: number }
         /** Whether the call succeeded; null when the harness never reported its result. */
