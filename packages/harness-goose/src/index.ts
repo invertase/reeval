@@ -25,4 +25,5 @@ export {
 } from './goose-harness.ts'
 export { GooseStreamTranslator } from './goose-stream.ts'
 export { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
+export { gooseStoredUsageCommand, gooseUsageMark, parseGooseStoredUsage } from './goose-usage.ts'
 export { VERSION } from './version.ts'

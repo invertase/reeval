@@ -35,4 +35,9 @@ export {
 } from './opencode-providers.ts'
 export { OpenCodeStreamTranslator, openCodeTurnUsage } from './opencode-stream.ts'
 export { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-tools.ts'
+export {
+  OPENCODE_DB,
+  openCodeStoredUsageCommand,
+  parseOpenCodeStoredUsage,
+} from './opencode-usage.ts'
 export { VERSION } from './version.ts'

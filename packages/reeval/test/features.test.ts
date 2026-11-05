@@ -2567,6 +2567,42 @@ export const features: Feature[] = [
     timeoutMs: { fake: 180_000 },
   },
   {
+    dir: 'harness/stuck-turn-kept',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'fail',
+      error: { kind: 'timeout', message: /^The eval timed out$/ },
+    },
+    canary: /expected 'completed' to be 'aborted'/,
+    record({ run, runDir }) {
+      const attempt = landed(run)
+      const [turn] = attempt?.turns ?? []
+      assert.equal(turn?.status, 'aborted')
+      assert.deepEqual(turn?.usage, {
+        input: 120,
+        output: 30,
+        cacheRead: 400,
+        cacheWrite: 0,
+        reasoning: 10,
+      })
+      const lines = readFileSync(join(runDir, attempt?.files.transcript?.path ?? ''), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l))
+      const shell = lines.find((e) => e.type === 'tool' && e.tool === 'shell')
+      assert.equal(shell?.output, 'step-1\n')
+      assert.ok(lines.some((e) => e.type === 'file-edit' && e.path.endsWith('notes.txt')))
+      assert.ok(
+        lines.some((e) => e.type === 'error' && /reeval stopped waiting/.test(e.message)),
+        'the note says why the turn ends there',
+      )
+    },
+    // Lands waits a 4s eval timeout and the 3s grace; the canary waits the 15s fake delay, on
+    // top of FAKE_TIMEOUT_MS's Windows load.
+    timeoutMs: { fake: 180_000 },
+  },
+  {
     dir: 'harness/rejected-key-is-infra',
     tiers: ['fake', 'docker'],
     env: 'plain',

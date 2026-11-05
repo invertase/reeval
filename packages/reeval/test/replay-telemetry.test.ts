@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { CodexStreamTranslator } from '@reeval/harness-codex'
-import { tokenUsage } from '../src/harness/agent.ts'
+import { harnessUsage, tokenUsage } from '../src/harness/agent.ts'
 import { AGENTS } from '../src/harness/agents.ts'
 import { normalizeStream, reasoningTime } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
@@ -138,5 +138,38 @@ describe("telemetry: Codex's subagent calls", () => {
   test('twin: an unknown collab item is not one', () => {
     const raw = read('codex-subagent').replaceAll('"collab_tool_call"', '"collab_unknown"')
     assert.deepEqual(calls(raw), [])
+  })
+})
+
+describe("telemetry: usage read back from a CLI's store", () => {
+  test('the harnesses that store usage per model call read it back, the others none', () => {
+    const readers = Object.entries(AGENTS).flatMap(([id, a]) => ('storedUsage' in a ? [id] : []))
+    assert.deepEqual(readers.sort(), ['codex', 'goose', 'grok-build', 'opencode'])
+  })
+  test("a store's counts are reeval's: input uncached, reasoning inside the output", () => {
+    assert.deepEqual(
+      harnessUsage({
+        inputTokens: { total: 116_749, noCache: 15, cacheRead: 101_399, cacheWrite: 15_335 },
+        outputTokens: { total: 338, text: 218, reasoning: 120 },
+      }),
+      { input: 15, output: 338, cacheRead: 101_399, cacheWrite: 15_335, reasoning: 120 },
+    )
+    assert.deepEqual(
+      harnessUsage({
+        inputTokens: { total: 10_623, noCache: undefined, cacheRead: 3900, cacheWrite: undefined },
+        outputTokens: { total: 1847, text: undefined, reasoning: undefined },
+      }),
+      { input: 6723, output: 1847, cacheRead: 3900, cacheWrite: 0, reasoning: null },
+    )
+  })
+  test('twin: a store that counted nothing is no usage, not zero', () => {
+    const none = { total: undefined, noCache: undefined, cacheRead: undefined }
+    assert.equal(
+      harnessUsage({
+        inputTokens: { ...none, cacheWrite: undefined },
+        outputTokens: { total: undefined, text: undefined, reasoning: undefined },
+      }),
+      null,
+    )
   })
 })

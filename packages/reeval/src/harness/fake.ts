@@ -9,7 +9,7 @@ import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
 import { fakeBootstrapScript } from './fake-bootstrap.ts'
 import { providerStop } from './provider-stop.ts'
-import type { Harness } from './types.ts'
+import type { Harness, HarnessResult } from './types.ts'
 
 const lineCount = (text: string) =>
   text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0
@@ -68,6 +68,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       const files = (skilled ? descriptor.withSkill?.files : undefined) ?? descriptor.files ?? {}
       const reply = (skilled ? descriptor.withSkill?.text : undefined) ?? descriptor.text ?? 'Done.'
       const flaked = Math.random() < (descriptor.flakeRate ?? 0)
+      let running: ((note: TranscriptEvent) => HarnessResult) | undefined
       return {
         async send(prompt, signal) {
           const startedAt = Date.now()
@@ -91,7 +92,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
                 ]
               : []),
           ]
-          const done = (text: string, status: 'completed' | 'aborted' | 'error') => ({
+          const done = (
+            text: string,
+            status: 'completed' | 'aborted' | 'error',
+          ): HarnessResult => ({
             text,
             status,
             startedAt: new Date(startedAt).toISOString(),
@@ -102,6 +106,8 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             unreported: [],
             ...(descriptor.turnMs === undefined ? {} : { agentMs: descriptor.turnMs }),
           })
+          // Cut off, the turn keeps what it did so far, as a real adapter's does.
+          running = (note) => ({ ...done('', 'aborted'), transcript: [...transcript, note] })
           const write = async (path: string, content: string) => {
             const time = at()
             const before = await sandbox.readFile(path)
@@ -208,6 +214,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           const text = scripted ?? reply
           transcript.push({ ...at(), type: 'text', text, durationMs: 0 })
           return done(text, 'completed')
+        },
+        stopped: async (note) => {
+          if (!running) throw new Error('No turn is running')
+          return running(note)
         },
         async close() {},
       }

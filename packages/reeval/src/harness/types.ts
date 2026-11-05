@@ -41,6 +41,17 @@ export type HarnessResult = {
 /** One agent conversation in one sandbox. Each `send` is the next turn. */
 export interface HarnessSession {
   send(prompt: string, signal: AbortSignal): Promise<HarnessResult>
+  /**
+   * The running turn as far as it got, for a turn that didn't stop when aborted and that reeval
+   * stopped waiting for: what the agent streamed, with `note` (why reeval stopped waiting) last,
+   * and the usage its CLI stored.
+   */
+  stopped?(note: TranscriptEvent): Promise<HarnessResult>
+  /**
+   * Reads the usage the running turn's CLI stored so far, for the turn's result: reeval calls it
+   * when the attempt is cut off, before it removes the sandbox the store is in.
+   */
+  salvage?(): Promise<void>
   close(): Promise<void>
 }
 

@@ -1450,6 +1450,19 @@ export const inventory: InventoryFeature[] = [
     unit: ['harness-cursor-sdk/test/stream.test.ts'],
   },
   {
+    id: 'harness.stuck-turn-kept',
+    area: 'Harnesses',
+    name: "A turn that doesn't stop when cut off keeps its events and its CLI's stored usage",
+    fixtures: ['harness/stuck-turn-kept'],
+    unit: [
+      'reeval/test/replay-telemetry.test.ts',
+      'harness-codex/test/usage.test.ts',
+      'harness-goose/test/stored-usage.test.ts',
+      'harness-grok-build/test/usage.test.ts',
+      'harness-opencode/test/usage.test.ts',
+    ],
+  },
+  {
     id: 'harness.transcripts',
     area: 'Harnesses',
     name: 'Transcripts, normalized per harness',
