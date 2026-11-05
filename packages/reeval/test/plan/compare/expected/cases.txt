@@ -19,4 +19,4 @@ evals/cases.eval.ts › one case is not pooled  a/-/docker        control       
                                               case only         a/-/docker ×1, b/-/docker ×1
 excluded: —
 image docker · cursor · 3 evals
-  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)

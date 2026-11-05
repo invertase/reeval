@@ -16,7 +16,7 @@ export const HARNESS_PACKAGES: Record<
   | 'grok-build',
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
-  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.8' },
+  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.9' },
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.176', patch: 'a9d56a8c' },
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.15' },
   opencode: { name: '@reeval/harness-opencode', version: '0.2.16' },
