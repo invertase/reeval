@@ -739,7 +739,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="durationMs" type="number"></Property>
 
 <Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]; reasoningMs?: number | null; timeSplit?: TimeSplit}>">
-  `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's streamed reasoning took, null when the harness can't time it.
+  `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's reasoning took, null when the harness can't time it.
 </Property>
 
 <Property name="timeSplit" type="TimeSplit" optional>

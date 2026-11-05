@@ -102,6 +102,20 @@ describe('the stored thoughts, read by the script that runs in the sandbox', () 
     )
   })
 
+  test('a payload cut off mid-varint leaves its step untimed, and the others timed', async () => {
+    await database([
+      [1, Uint8Array.from([0x08, 0x96])],
+      [8, plannerStep(3, 876_001_208)],
+    ])
+    assert.deepEqual(
+      read(0).map((t) => [t.step, t.durationMs]),
+      [
+        [1, null],
+        [8, 3876],
+      ],
+    )
+  })
+
   test('twin: without the database the thoughts stand, untimed', () => {
     assert.deepEqual(
       read(0).map((t) => [t.step, t.durationMs]),

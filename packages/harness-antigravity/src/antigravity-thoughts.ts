@@ -39,7 +39,10 @@ try {
 } catch {}
 function varint(b, i) {
   let n = 0, shift = 1
-  for (;;) { const c = b[i++]; n += (c & 127) * shift; shift *= 128; if (c < 128) return [n, i] }
+  for (;;) {
+    if (i >= b.length) throw new Error('truncated varint')
+    const c = b[i++]; n += (c & 127) * shift; shift *= 128; if (c < 128) return [n, i]
+  }
 }
 function field(b, want) {
   let i = 0
@@ -59,17 +62,22 @@ try {
     const { DatabaseSync } = require('node:sqlite')
     const db = new DatabaseSync(dir + '/conversations/' + id + '.db', { readOnly: true })
     for (const row of db.prepare('SELECT idx, step_payload FROM steps WHERE idx >= ?').all(Number(from))) {
-      const t = thoughts.get(row.idx)
-      const planner = t && row.step_payload && field(row.step_payload, 20)
-      const d = planner instanceof Uint8Array ? field(planner, 11) : undefined
-      if (!(d instanceof Uint8Array)) continue
-      t.durationMs = Math.round((field(d, 1) ?? 0) * 1000 + (field(d, 2) ?? 0) / 1e6)
+      try {
+        const t = thoughts.get(row.idx)
+        const planner = t && row.step_payload && field(row.step_payload, 20)
+        const d = planner instanceof Uint8Array ? field(planner, 11) : undefined
+        if (!(d instanceof Uint8Array)) continue
+        t.durationMs = Math.round((field(d, 1) ?? 0) * 1000 + (field(d, 2) ?? 0) / 1e6)
+      } catch {}
     }
     db.close()
   }
 } catch {}
 process.stdout.write(JSON.stringify([...thoughts.values()]))
 `
+
+/** How long reading the stored thoughts gets, past which the turn stands without them. */
+const THOUGHTS_READ_MS = 10_000
 
 /** The command that prints a conversation's stored thoughts, from `fromStep` on. */
 export function antigravityThoughtsCommand(o: {
@@ -109,10 +117,11 @@ export async function readAntigravityThoughts(
   sandbox: Pick<SandboxSession, 'run'>,
   o: { home: string; conversationId: string; fromStep: number; abortSignal?: AbortSignal },
 ): Promise<AntigravityThought[]> {
+  const timeout = AbortSignal.timeout(THOUGHTS_READ_MS)
   try {
     const { exitCode, stdout } = await sandbox.run({
       command: antigravityThoughtsCommand(o),
-      ...(o.abortSignal ? { abortSignal: o.abortSignal } : {}),
+      abortSignal: o.abortSignal ? AbortSignal.any([o.abortSignal, timeout]) : timeout,
     })
     return exitCode === 0 ? parseAntigravityThoughts(stdout) : []
   } catch {
