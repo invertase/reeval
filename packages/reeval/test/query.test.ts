@@ -608,6 +608,19 @@ evaluate('control', { environments: bare }, async (c) => {
     )
   })
 
+  test("an agent CLI's built-in skills are not skill use, in a control cell or any other", async () => {
+    const rows = await unplacedProject('query-skill-builtin', [
+      read('/root/.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md'),
+      shell('cat ~/.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md'),
+      installed,
+    ])
+    assert.deepEqual(
+      rows,
+      [{ skill: 'installed', source: 'skill-dir', reads: 1 }],
+      'the built-in skill has no row; the installed one does (canary)',
+    )
+  })
+
   test('a shell word with an unbalanced [ is read literally, not as a regex', async () => {
     const commands = ['echo [foo', 'node -e "a[0"', 'cat {a[0,b}', 'ls {*,b[}']
     const tools = commands.map((command) => ({ tool: 'shell', input: { command }, output: '' }))

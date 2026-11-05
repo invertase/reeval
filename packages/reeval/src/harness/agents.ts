@@ -71,6 +71,8 @@ export type Layout = {
   harnessSkillDir: string
   /** Other skill directories the agent reads, in the workspace and under `~/`, that reeval never places into. */
   alsoReadsSkillDirs?: readonly string[]
+  /** Where the agent CLI keeps the skills it ships with, under `~/`: never an eval's skill use. */
+  builtinSkillDirs?: readonly string[]
   /**
    * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
    * environment's skills and MCP servers (so names can clash), or `namespaced` under the
@@ -938,6 +940,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
+    builtinSkillDirs: ['.gemini/antigravity-cli/builtin/skills'],
     pluginPlacement: 'namespaced',
     // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
     pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
@@ -1720,6 +1723,11 @@ export const SKILL_DIRS: readonly string[] = [
       ...(l.alsoReadsSkillDirs ?? []),
     ]),
   ),
+]
+
+/** Every agent CLI's own skill directories (`builtinSkillDirs`), as a path's tail. */
+export const BUILTIN_SKILL_DIRS: readonly string[] = [
+  ...new Set(Object.values(LAYOUTS).flatMap((l) => l.builtinSkillDirs ?? [])),
 ]
 
 /** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */

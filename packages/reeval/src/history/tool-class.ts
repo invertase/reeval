@@ -4,6 +4,7 @@
 // workspace. A heuristic over the call's tool name and target, documented as one. Shell
 // commands are split into words first, so an exclusion such as `-not -path '*/node_modules/*'`
 // isn't counted as a read of what it excludes.
+import { BUILTIN_SKILL_DIRS } from '../harness/agents.ts'
 import { SKILL_LOAD_TOOLS } from './tool-target.ts'
 
 export type ToolClass = 'context' | 'dependency' | 'web' | 'verify' | 'workspace'
@@ -325,7 +326,7 @@ export function skillsWritten(tool: string, target: string): string[] {
  * each agent's skill directories, or elsewhere) and any file under one of `found`, the skills the
  * attempt's context had in those directories. A path under some other `skills/<name>` isn't a
  * skill: `skills/r0/contract-probe` is a directory of skills, not a skill named `r0`. Nor is a
- * file the call writes.
+ * file the call writes, or a skill an agent CLI ships with (`BUILTIN_SKILL_DIRS`).
  */
 export function skillUses(
   tool: string,
@@ -350,6 +351,7 @@ export function skillUses(
       const name = m[1] as string
       if (name.startsWith('.') || uses.has(name) || isPlaced(name)) continue
       const prefix = w.slice(0, (m.index ?? 0) + m[0].indexOf('skills/') + 'skills'.length)
+      if (inSkillDir(prefix.replace(/^~\//, ''), BUILTIN_SKILL_DIRS)) continue
       const inDir = inSkillDir(prefix.replace(/^~\//, ''), dirs)
       if (m[2] === '/SKILL.md') uses.set(name, inDir ? 'skill-dir' : 'elsewhere')
       else if (inDir && m[2] && m[2] !== '/' && found.includes(name)) uses.set(name, 'skill-dir')
