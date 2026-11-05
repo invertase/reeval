@@ -727,6 +727,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -779,6 +784,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -821,6 +831,11 @@
             "atMs": {
               "type": "number"
             },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
+            },
             "durationMs": {
               "type": ["number", "null"]
             },
@@ -858,6 +873,11 @@
           "properties": {
             "atMs": {
               "type": "number"
+            },
+            "durationInferred": {
+              "description": "Set when the harness never reported the call's end, so `durationMs` runs to the next event's `atMs` (the turn's end for the last).",
+              "type": "boolean",
+              "const": true
             },
             "durationMs": {
               "type": ["number", "null"]
@@ -941,6 +961,68 @@
             }
           },
           "required": ["atMs", "message", "ts", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": "number"
+            },
+            "firstByteMs": {
+              "description": "Milliseconds from the call's start to its response body's first byte; null when none came.",
+              "type": ["number", "null"]
+            },
+            "model": {
+              "description": "The model that served it, from its request or response; null when neither named one.",
+              "type": ["string", "null"]
+            },
+            "request": {
+              "description": "`POST api.anthropic.com/v1/messages`: the method, host and path.",
+              "type": "string"
+            },
+            "status": {
+              "description": "The response's HTTP status; null when none came.",
+              "type": ["number", "null"]
+            },
+            "stream": {
+              "description": "Set on a call that carries the whole turn (Cursor's), so it isn't counted as model time.",
+              "type": "boolean",
+              "const": true
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "model-call"
+            },
+            "usage": {
+              "description": "The tokens its response body named; null when it named none (Cursor's are protobuf).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TokenUsage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "firstByteMs",
+            "model",
+            "request",
+            "status",
+            "ts",
+            "type",
+            "usage"
+          ],
           "additionalProperties": false
         }
       ]

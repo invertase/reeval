@@ -1,7 +1,7 @@
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
-import type { ExecResult } from '../types.ts'
 import type { ModelCall } from '../model-calls.ts'
+import type { ExecResult } from '../types.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }
 

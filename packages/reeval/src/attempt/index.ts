@@ -21,9 +21,9 @@ import {
   attemptError,
   judgeErrorsMessage,
   recordEgress,
-  recordTimeline,
   recordFailure,
   recordOom,
+  recordTimeline,
   writeRecord,
 } from './record.ts'
 import { startSession } from './session.ts'

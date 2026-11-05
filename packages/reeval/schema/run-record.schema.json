@@ -618,6 +618,10 @@
             "$ref": "#/$defs/StartRetry"
           }
         },
+        "timeSplit": {
+          "description": "The turns' `timeSplit` added up, its `modelMs` null when any turn's is. Absent when no turn has one.",
+          "$ref": "#/$defs/TimeSplit"
+        },
         "timings": {
           "$ref": "#/$defs/PhaseTimings"
         },
@@ -681,6 +685,10 @@
               },
               "text": {
                 "type": "string"
+              },
+              "timeSplit": {
+                "description": "Where the turn's time went: its model calls, tool calls, the background jobs it waited on, and the rest, summing to `durationMs` (`TimeSplit`). Absent in records from before reeval split it.",
+                "$ref": "#/$defs/TimeSplit"
               },
               "unreported": {
                 "description": "Event types the harness can't report; see `Turn.unreported`.",
@@ -3982,6 +3990,32 @@
         }
       },
       "required": ["error", "waitedMs"]
+    },
+    "TimeSplit": {
+      "description": "Where a turn's time went, in ms, summing to its `durationMs`. Each moment counts once, as the first of: `waitingMs`, a background job the agent waited on (from the call that started it through the polls that checked on it), `toolMs`, a tool call, `modelMs`, a model call, and `otherMs`, the rest (the harness's own work, and time between calls). `modelMs` is null when the turn's model calls weren't seen one by one: on a sandbox without the egress gateway, and on Cursor, whose turn is one stream; that time is in `otherMs`. Which calls wait is a heuristic over the transcript: a shell call run in the background (`run_in_background`, a trailing `&`, `nohup`, or the command a Cursor terminal file names), then `sleep` and `wait` commands, output tools (`BashOutput`, `TaskOutput`) and reads of a Cursor terminal file.",
+      "type": "object",
+      "properties": {
+        "modelMs": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "otherMs": {
+          "type": "number"
+        },
+        "toolMs": {
+          "type": "number"
+        },
+        "waitingMs": {
+          "type": "number"
+        }
+      },
+      "required": ["modelMs", "otherMs", "toolMs", "waitingMs"]
     },
     "TokenUsage": {
       "description": "The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.",

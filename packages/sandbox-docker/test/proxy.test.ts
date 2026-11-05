@@ -1815,7 +1815,13 @@ describe('brokered secrets through the proxy', () => {
       assert.equal(r.status, 200)
       const [decrypted] = await settled(1)
       assert.deepEqual(
-        { ...decrypted, ms: 0, firstByteMs: 0, requestHeaders: undefined, responseHeaders: undefined },
+        {
+          ...decrypted,
+          ms: 0,
+          firstByteMs: 0,
+          requestHeaders: undefined,
+          responseHeaders: undefined,
+        },
         {
           type: 'request',
           method: 'POST',
@@ -2237,7 +2243,13 @@ describe('brokered secrets through the proxy', () => {
             assert.equal(reachedUpstream().includes(SECRET), false)
             const [event] = await requests(1)
             assert.deepEqual(
-              { ...event, ms: 0, firstByteMs: 0, requestHeaders: undefined, responseHeaders: undefined },
+              {
+                ...event,
+                ms: 0,
+                firstByteMs: 0,
+                requestHeaders: undefined,
+                responseHeaders: undefined,
+              },
               {
                 type: 'request',
                 method: 'GET',

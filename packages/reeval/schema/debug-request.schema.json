@@ -14,6 +14,10 @@
         "at": {
           "type": "string"
         },
+        "firstByteMs": {
+          "description": "Milliseconds from the request's start to its response body's first byte, when it had one.",
+          "type": "number"
+        },
         "host": {
           "type": "string"
         },

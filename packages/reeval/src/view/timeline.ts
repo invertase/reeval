@@ -3,7 +3,10 @@
 // segmented timeline whose totals are the turn's `timeSplit`. Browser-safe: the studio draws it.
 import type { TimeSplit, TranscriptEvent } from '../types.ts'
 
-type ToolLike = Extract<TranscriptEvent, { type: 'file-edit' | 'web-search' | 'web-fetch' | 'tool' }>
+type ToolLike = Extract<
+  TranscriptEvent,
+  { type: 'file-edit' | 'web-search' | 'web-fetch' | 'tool' }
+>
 
 export type SegmentKind = 'waiting' | 'tool' | 'model' | 'other'
 
@@ -11,7 +14,12 @@ export type SegmentKind = 'waiting' | 'tool' | 'model' | 'other'
 export type Segment = { kind: SegmentKind; startMs: number; endMs: number }
 
 /** A background job the agent waited on: the call that started it (or the first poll), to the last poll's end. */
-export type WaitSpan = { startMs: number; endMs: number; background: number | null; polls: number[] }
+export type WaitSpan = {
+  startMs: number
+  endMs: number
+  background: number | null
+  polls: number[]
+}
 
 const isToolLike = (e: TranscriptEvent): e is ToolLike =>
   e.type === 'file-edit' || e.type === 'web-search' || e.type === 'web-fetch' || e.type === 'tool'
@@ -20,7 +28,10 @@ const isToolLike = (e: TranscriptEvent): e is ToolLike =>
  * The events with each tool call's missing `durationMs` run to the next event's `atMs` (the
  * turn's end for the last), flagged `durationInferred`.
  */
-export function inferDurations(events: readonly TranscriptEvent[], turnMs: number): TranscriptEvent[] {
+export function inferDurations(
+  events: readonly TranscriptEvent[],
+  turnMs: number,
+): TranscriptEvent[] {
   return events.map((e, i) => {
     if (!isToolLike(e) || e.durationMs !== null) return e
     const next = events.slice(i + 1).find((n) => n.type !== 'model-call' && n.atMs > e.atMs)
@@ -46,11 +57,7 @@ function commandOf(e: TranscriptEvent): string | null {
 }
 
 const strings = (v: unknown): string[] =>
-  typeof v === 'string'
-    ? [v]
-    : v && typeof v === 'object'
-      ? Object.values(v).flatMap(strings)
-      : []
+  typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : []
 
 const textOf = (v: unknown) => (typeof v === 'string' ? v : (JSON.stringify(v) ?? ''))
 
@@ -74,7 +81,9 @@ function backgrounded(e: TranscriptEvent, named: ReadonlySet<string>): boolean {
   if (input.run_in_background === true || input.is_background === true) return true
   const command = commandOf(e)
   if (command === null) return false
-  return /(^|[^&])&$/.test(command) || /(^|[\s;&|])(nohup|setsid)\s/.test(command) || named.has(command)
+  return (
+    /(^|[^&])&$/.test(command) || /(^|[\s;&|])(nohup|setsid)\s/.test(command) || named.has(command)
+  )
 }
 
 function polls(e: TranscriptEvent): boolean {

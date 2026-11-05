@@ -1613,11 +1613,22 @@
           "type": "string"
         },
         "tools": {
-          "description": "Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true; null reports a call whose result never came.",
+          "description": "Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true; null reports a call whose result never came. `durationMs` defaults to 0; null reports a call whose end the harness never said.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
+              "durationMs": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "input": {},
               "ok": {
                 "type": ["boolean", "null"]

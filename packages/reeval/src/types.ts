@@ -759,9 +759,16 @@ export type FakeHarnessDescriptor = {
   effort?: string
   /**
    * Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true;
-   * null reports a call whose result never came.
+   * null reports a call whose result never came. `durationMs` defaults to 0; null reports a call
+   * whose end the harness never said.
    */
-  tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean | null }>
+  tools?: Array<{
+    tool: string
+    input: unknown
+    output: unknown
+    ok?: boolean | null
+    durationMs?: number | null
+  }>
   /** Files and message used instead when the environment gives the agent a skill. */
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */

@@ -9,6 +9,16 @@ export default defineConfig({
   harnesses: fakeHarness(),
   environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
-    model: fakeAnalysis({ output: () => ({ tldr: 'corpus', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'corpus' } }) }),
+    model: fakeAnalysis({
+      output: () => ({
+        tldr: 'corpus',
+        whatHappened: [],
+        results: [],
+        why: [],
+        anomalies: [],
+        actions: [],
+        confidence: { overall: 'low', why: 'corpus' },
+      }),
+    }),
   },
 })
