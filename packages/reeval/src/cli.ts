@@ -708,7 +708,7 @@ async function runCommand(
     const line = await recordCmd(config, record.runId, { ...flags, ...allow, ...level }).catch(
       (error: Error) => {
         if (error.name !== 'StoreError') throw error
-        code = EXIT.infra
+        if (code !== EXIT.interrupted && code !== EXIT.terminated) code = EXIT.infra
         invocation.machineState = true
         return red(`reeval: ${redactSecrets(error.message)}`)
       },
