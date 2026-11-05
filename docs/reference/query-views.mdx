@@ -57,7 +57,7 @@ Each built-in view returns one kind of row.
 | `measure_effects` | `run_id`, `eval_key`, `pooled`, `harness`, `variant`, `cell_key`, `control`, `measure`, `label`, `variant_value`, `control_value`, `estimate`, `lo`, `hi`, `p`, `verdict`, `leaning`, `text`, `needed`, `unit`, `started_at`, `branch` |
 | `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first`, `case_key` |
 | `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
-| `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
+| `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `source`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgment_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
 
 [//]: # (/generated:query-views)
@@ -138,7 +138,7 @@ reeval query "SELECT variant, measure, label, verdict, text, needed FROM measure
 
 ## `skill_reads`
 
-`skill_reads` lists one row per attempt and placed skill.
+`skill_reads` lists one row per attempt and skill, placed or not.
 
 ```bash title="Query"
 reeval query "SELECT skill, reads, read_line FROM skill_reads"
@@ -267,11 +267,12 @@ In `evals`, `declared` is `todo` for an `evaluate.todo`, `skip` for an eval decl
 | `env_skills` | `run_id`, `environment`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `cases`, `declared` |
+| `found_skills` | `run_id`, `attempt_key`, `skill`, `source`, `path` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |
 | `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first`, `case_key` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
-| `skill_uses` | `run_id`, `attempt_key`, `line`, `skill` |
+| `skill_uses` | `run_id`, `attempt_key`, `line`, `skill`, `source` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
 | `votes` | `run_id`, `eval_key`, `question`, `cut`, `held`, `pair_run`, `a`, `b`, `winner`, `swapped`, `reason`, `case_key` |
 

@@ -474,6 +474,7 @@ describe('the Antigravity harness', () => {
       rulesFile: ANTIGRAVITY_WORKSPACE_RULES_FILE,
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
+      builtinSkillDirs: ['.gemini/antigravity-cli/builtin/skills'],
       pluginPlacement: 'namespaced',
       pluginHookEvents: Object.keys(ANTIGRAVITY_HOOK_EVENTS),
     })

@@ -20,7 +20,7 @@ import {
   withinLimits,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
-import { AGENTS, type AgentKind } from '../src/harness/agents.ts'
+import { AGENTS, type AgentKind, SKILL_DIRS } from '../src/harness/agents.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import { toolCalls } from '../src/history/db.ts'
 import { classifyCall, skillsUsed } from '../src/history/tool-class.ts'
@@ -622,7 +622,13 @@ describe("every harness's skill use", () => {
         'contract-probe',
       ])
       assert.ok(!call.target.startsWith('{'), `${call.target} is a named input, not the JSON`)
-      const ctx = { skills: ['contract-probe'], files: [], mcp: [], verify: [] }
+      const ctx = {
+        skills: ['contract-probe'],
+        skillDirs: SKILL_DIRS,
+        files: [],
+        mcp: [],
+        verify: [],
+      }
       assert.equal(classifyCall(call.tool, call.text, ctx).class, 'context')
     })
   }

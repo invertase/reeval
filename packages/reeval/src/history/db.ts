@@ -7,6 +7,7 @@ import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
 import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
+import { SKILL_DIRS } from '../harness/agents.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import type { JSONValue } from '../types.ts'
@@ -16,14 +17,20 @@ import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
-import { type ClassContext, classifyCall, skillsUsed } from './tool-class.ts'
+import {
+  type ClassContext,
+  classifyCall,
+  skillDirSkill,
+  skillsWritten,
+  skillUses,
+} from './tool-class.ts'
 import { targetText, toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 23
+const DB_VERSION = 24
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -197,11 +204,21 @@ CREATE TABLE tool_calls (
 CREATE TABLE context_reads (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, path TEXT NOT NULL
 );
--- Each placed skill a tool call used, by the call's line: by toHaveCalledSkill's rule, a load by
--- name (Claude Code's Skill, OpenCode's and fx's skill, Goose's load_skill) or a target under
--- skills/<name>.
+-- Each skill a tool call used, by the call's line: a load by name (Claude Code's Skill, OpenCode's
+-- and fx's skill, Goose's load_skill) or a target under skills/<name>. source: placed (by the
+-- environment's skills or a plugin, by toHaveCalledSkill's rule), skill-dir (another skill in a
+-- skill directory some agent reads: a setup step, the workspace or a package manager put it there)
+-- or elsewhere (a skills/<name>/SKILL.md read anywhere else, such as a package cache).
 CREATE TABLE skill_uses (
-  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, skill TEXT NOT NULL
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, skill TEXT NOT NULL,
+  source TEXT NOT NULL
+);
+-- Each skill an attempt had or used that its environment didn't place: in an agent's skill
+-- directory when the context was taken (source skill-dir, with its SKILL.md's path), or only seen
+-- in a tool call (that call's source, and a null path).
+CREATE TABLE found_skills (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, skill TEXT NOT NULL, source TEXT NOT NULL,
+  path TEXT
 );
 -- Each stdio MCP server start in each attempt's turns (turn from 1): ms from spawning it to its
 -- answer to initialize, null when it never answered.
@@ -227,6 +244,7 @@ CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
 CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
 CREATE INDEX context_reads_by_attempt ON context_reads (run_id, attempt_key);
 CREATE INDEX skill_uses_by_attempt ON skill_uses (run_id, attempt_key);
+CREATE INDEX found_skills_by_attempt ON found_skills (run_id, attempt_key);
 CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
 `
 
@@ -299,25 +317,37 @@ CREATE VIEW question_pairs AS SELECT * FROM question_pairs_m;
 -- pooled (comparable runs, and across evals), observed (over time), not_measured (one level).
 CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
 
--- Whether each attempt read each skill its environment placed, and at which transcript line: the
--- tool calls skill_uses has for it. An attempt whose record has tool calls but whose transcript
--- wasn't kept (or couldn't be read) is left out: unknown, not unread.
+-- Whether each attempt read each skill it had, and at which transcript line: the tool calls
+-- skill_uses has for it. A cell's skills are the ones its environment placed (source placed, with
+-- their placement) and the ones any of its attempts found (skill-dir or elsewhere, as found_skills
+-- has them), so a found skill an attempt never opened reads 0. An attempt whose record has tool
+-- calls but whose transcript wasn't kept (or couldn't be read) is left out: unknown, not unread.
 CREATE VIEW skill_reads AS
+  WITH skills AS (
+    SELECT c.run_id, c.eval_key, c.key AS cell_key, s.name AS skill, s.placement,
+      'placed' AS source
+    FROM cells c JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
+      AND s.digest = c.environment_digest
+    UNION ALL
+    SELECT a.run_id, a.eval_key, a.cell_key, f.skill, NULL AS placement,
+      CASE WHEN MAX(f.source = 'skill-dir') THEN 'skill-dir' ELSE 'elsewhere' END AS source
+    FROM found_skills f JOIN attempts a ON a.run_id = f.run_id AND a.key = f.attempt_key
+    GROUP BY a.run_id, a.eval_key, a.cell_key, f.skill
+  )
   SELECT a.run_id, a.eval_key, a.cell_key, a.key AS attempt_key, a.id AS attempt_id, c.variant,
-    s.name AS skill, s.placement,
+    s.skill, s.placement, s.source,
     (SELECT MIN(u.line) FROM skill_uses u WHERE u.run_id = a.run_id AND u.attempt_key = a.key
-      AND u.skill = s.name) AS read_line,
+      AND u.skill = s.skill) AS read_line,
     (SELECT COUNT(*) FROM skill_uses u WHERE u.run_id = a.run_id AND u.attempt_key = a.key
-      AND u.skill = s.name) AS reads
+      AND u.skill = s.skill) AS reads
   FROM attempts a
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
-  JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
-    AND s.digest = c.environment_digest
+  JOIN skills s ON s.run_id = a.run_id AND s.eval_key = a.eval_key AND s.cell_key = a.cell_key
   WHERE a.tools = 0
     OR EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key);
 
--- Tool calls per attempt by class: context (a placed skill, rules file or other placed file, a
--- skill load, an MCP tool of the environment), dependency (node_modules, site-packages, vendor,
+-- Tool calls per attempt by class: context (a skill, placed or found, a rules file or other
+-- placed file, an MCP tool of the environment), dependency (node_modules, site-packages, vendor,
 -- --help), web, verify (a command the eval's checks run, or test/build/lint/tsc) and workspace.
 -- A heuristic: shell commands are split into words and exclusions are not counted.
 CREATE VIEW context_use AS
@@ -485,14 +515,37 @@ export function toolCalls(transcript: string): ToolCall[] {
   return calls
 }
 
+/**
+ * The skills whose `SKILL.md` an attempt wrote: by a file-editing tool that created or rewrote it,
+ * or by a shell command (a redirect, `tee`, `cp` and the like).
+ */
+function skillsAuthored(transcript: string, calls: ToolCall[]): Set<string> {
+  const authored = new Set(calls.flatMap((t) => skillsWritten(t.tool, t.text)))
+  for (const line of transcript.split('\n')) {
+    if (!line.includes('"file-edit"')) continue
+    let event: Record<string, unknown>
+    try {
+      event = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (event?.type !== 'file-edit' || (event.kind !== 'create' && event.kind !== 'write')) continue
+    for (const name of skillsWritten('write', String(event.path ?? ''))) authored.add(name)
+  }
+  return authored
+}
+
 /** `classifyCall`, but a call its heuristic can't read counts as workspace: one transcript line can't stop the sync. */
 function classifyOrWorkspace(
   tool: string,
   target: string,
   ctx: ClassContext,
-): ReturnType<typeof classifyCall> & { skills: string[] } {
+): ReturnType<typeof classifyCall> & { skills: ReturnType<typeof skillUses> } {
   try {
-    return { ...classifyCall(tool, target, ctx), skills: skillsUsed(tool, target, ctx.skills) }
+    return {
+      ...classifyCall(tool, target, ctx),
+      skills: skillUses(tool, target, ctx.skills, ctx.skillDirs, ctx.found),
+    }
   } catch {
     return { class: 'workspace', files: [], skills: [] }
   }
@@ -795,7 +848,15 @@ function insertRun(
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
+      const transcript = transcripts.get(a.key)
+      const calls = transcript ? toolCalls(transcript) : []
+      const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
+      const found = new Map<string, { source: string; path: string | null }>()
       for (const c of a.context) {
+        const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
+        if (skill && !skills.includes(skill) && !authored.has(skill) && !found.has(skill)) {
+          found.set(skill, { source: 'skill-dir', path: c.path })
+        }
         run(
           'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -835,14 +896,15 @@ function insertRun(
           x.durationMs ?? null,
         )
       }
-      const transcript = transcripts.get(a.key)
       const ctx: ClassContext = {
         skills,
+        skillDirs: SKILL_DIRS,
+        found: [...found.keys()],
         files: a.context.map((c) => c.path).filter((p) => declaredContext(p, skills)),
         mcp: env?.mcp ?? [],
         verify: a.checks.map((c) => c.command),
       }
-      for (const t of transcript ? toolCalls(transcript) : []) {
+      for (const t of calls) {
         const call = classifyOrWorkspace(t.tool, t.text, ctx)
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -859,9 +921,32 @@ function insertRun(
         for (const path of call.files) {
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
         }
-        for (const skill of call.skills) {
-          run('INSERT INTO skill_uses VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, skill)
+        for (const { skill, source } of call.skills) {
+          // A failed call names a skill that may not exist; a placed one does.
+          if (source !== 'placed' && (t.ok === false || authored.has(skill))) continue
+          run(
+            'INSERT INTO skill_uses VALUES (?, ?, ?, ?, ?)',
+            record.runId,
+            a.key,
+            t.line,
+            skill,
+            source,
+          )
+          const had = found.get(skill)
+          if (source !== 'placed' && had?.source !== 'skill-dir') {
+            found.set(skill, { source, path: had?.path ?? null })
+          }
         }
+      }
+      for (const [skill, f] of found) {
+        run(
+          'INSERT INTO found_skills VALUES (?, ?, ?, ?, ?)',
+          record.runId,
+          a.key,
+          skill,
+          f.source,
+          f.path,
+        )
       }
       for (const q of a.answers ?? []) {
         run(
@@ -1048,6 +1133,7 @@ const DATA_TABLES = [
   'tool_calls',
   'context_reads',
   'skill_uses',
+  'found_skills',
   'mcp_startup',
   'assertions',
   'cell_checks',

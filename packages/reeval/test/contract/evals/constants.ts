@@ -2,6 +2,19 @@
 
 /** Only the placed skill knows it: the agent can write it only after reading the skill. */
 export const SKILL_PROOF = 'PROBE-7F3K-QUILL'
+/** Only the skill a setup step installs knows it. */
+export const INSTALLED_PROOF = 'INSTALLED-2Q8W-WREN'
+/** The workspace skill directories the setup step installs it into: every agent reads one. */
+export const INSTALLED_DIRS = [
+  '.agents/skills',
+  '.claude/skills',
+  '.cursor/skills',
+  '.opencode/skills',
+  '.goose/skills',
+  '.pi/skills',
+  '.fx/skills',
+  '.grok/skills',
+]
 /** Only the rules know it. */
 export const RULES_WORD = 'TANGERINE-41'
 /** What the command in the edit-and-run prompt prints; the agent must run it to see it. */

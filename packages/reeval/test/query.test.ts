@@ -7,8 +7,15 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
+import { SKILL_DIRS } from '../src/harness/agents.ts'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
-import { type ClassContext, classifyCall, skillsUsed } from '../src/history/tool-class.ts'
+import {
+  type ClassContext,
+  classifyCall,
+  skillDirSkill,
+  skillsUsed,
+  skillUses,
+} from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
@@ -558,6 +565,62 @@ evaluate('loads', { environments: skilled }, async (c) => {
     assert.deepEqual(await query(p.dir, 'SELECT skill FROM skill_reads'), [])
   })
 
+  const unplacedProject = async (name: string, tools: unknown[], files = {}) => {
+    const p = await project(name, {
+      'reeval.config.ts': fakeConfig({
+        harness: `{ tools: ${JSON.stringify(tools)}, files: ${JSON.stringify(files)} }`,
+      }),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const bare = defineEnvironment('bare', { sandbox: fakeSandbox() })
+evaluate('control', { environments: bare }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    return query(p.dir, 'SELECT skill, source, reads FROM skill_reads ORDER BY skill')
+  }
+  const shell = (command: string) => ({ tool: 'shell', input: { command }, output: '' })
+  const read = (path: string) => ({ tool: 'read', input: { path }, output: '' })
+  const installed = read('.cursor/skills/installed/SKILL.md')
+
+  test('writing a SKILL.md is not using the skill, and the skill the agent wrote is not found', async () => {
+    const rows = await unplacedProject(
+      'query-skill-writes',
+      [
+        shell('mkdir -p .agents/skills/mine && printf x > .agents/skills/mine/SKILL.md'),
+        shell("cat > .claude/skills/heredoc/SKILL.md <<'EOF'\n# heredoc\nEOF"),
+        shell('echo x | tee .claude/skills/teed/SKILL.md'),
+        shell('rm -rf .claude/skills/gone/SKILL.md'),
+        shell("sed -i 's/a/b/' .claude/skills/sedded/SKILL.md"),
+        { tool: 'Write', input: { file_path: '.claude/skills/written/SKILL.md' }, output: '' },
+        read('.agents/skills/mine/SKILL.md'),
+        read('.agents/skills/created/SKILL.md'),
+        installed,
+      ],
+      { '.agents/skills/created/SKILL.md': '# created\n' },
+    )
+    assert.deepEqual(
+      rows,
+      [{ skill: 'installed', source: 'skill-dir', reads: 1 }],
+      'only the skill a setup step installed and the agent read counts (canary: it does)',
+    )
+  })
+
+  test("an agent CLI's built-in skills are not skill use, in a control cell or any other", async () => {
+    const rows = await unplacedProject('query-skill-builtin', [
+      read('/root/.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md'),
+      shell('cat ~/.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md'),
+      installed,
+    ])
+    assert.deepEqual(
+      rows,
+      [{ skill: 'installed', source: 'skill-dir', reads: 1 }],
+      'the built-in skill has no row; the installed one does (canary)',
+    )
+  })
+
   test('a shell word with an unbalanced [ is read literally, not as a regex', async () => {
     const commands = ['echo [foo', 'node -e "a[0"', 'cat {a[0,b}', 'ls {*,b[}']
     const tools = commands.map((command) => ({ tool: 'shell', input: { command }, output: '' }))
@@ -840,6 +903,7 @@ describe('reeval query plumbing', () => {
 describe('tool-call classes', () => {
   const ctx: ClassContext = {
     skills: ['fui-new'],
+    skillDirs: SKILL_DIRS,
     files: [
       '~/.agents/skills/fui-new/SKILL.md',
       '~/.agents/skills/fui-new/references/react.md',
@@ -910,7 +974,69 @@ describe('tool-call classes', () => {
     assert.equal(cls('shell', 'curl -s https://example.com/docs').class, 'web')
     assert.equal(cls('web_fetch', 'https://example.com').class, 'web')
     assert.equal(cls('edit', 'src/App.tsx').class, 'workspace')
-    assert.equal(cls('read', '~/.agents/skills/other/SKILL.md').class, 'workspace')
+    assert.equal(cls('read', 'docs/skills.md').class, 'workspace')
+  })
+
+  test('a skill the environment did not place is context too, by where it was', () => {
+    assert.equal(cls('read', '~/.agents/skills/other/SKILL.md').class, 'context')
+    assert.equal(cls('Skill', 'other').class, 'context')
+    const uses = (tool: string, target: string) => skillUses(tool, target, ['fui-new'], SKILL_DIRS)
+    assert.deepEqual(uses('read', '/workspace/.claude/skills/relic-routing/SKILL.md'), [
+      { skill: 'relic-routing', source: 'skill-dir' },
+    ])
+    const command =
+      'cat .cursor/skills/relic-routing/references/params.md ~/.agents/skills/fui-new/SKILL.md'
+    assert.deepEqual(
+      skillUses('shell', command, ['fui-new'], SKILL_DIRS, ['relic-routing']),
+      [
+        { skill: 'fui-new', source: 'placed' },
+        { skill: 'relic-routing', source: 'skill-dir' },
+      ],
+      'a file under a skill the context had',
+    )
+    assert.deepEqual(
+      uses('shell', command),
+      [{ skill: 'fui-new', source: 'placed' }],
+      'a file under some other skills/<name> may be a directory of skills',
+    )
+    assert.deepEqual(uses('shell', 'cd ~/.agents/skills/r0/contract-probe'), [])
+    assert.deepEqual(
+      uses(
+        'read',
+        '/home/reeval/.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills/g/SKILL.md',
+      ),
+      [{ skill: 'g', source: 'skill-dir' }],
+      "an adapter's private home is the agent's home",
+    )
+    assert.deepEqual(
+      uses('read', '/root/.pub-cache/hosted/pub.dev/relic-1.2.0/skills/relic-routing/SKILL.md'),
+      [{ skill: 'relic-routing', source: 'elsewhere' }],
+      'a SKILL.md outside the skill directories, such as a package cache',
+    )
+    assert.deepEqual(
+      uses('read', '/root/.pub-cache/hosted/pub.dev/relic-1.2.0/skills/relic-routing/README.md'),
+      [],
+      'elsewhere, only the SKILL.md is a skill',
+    )
+    assert.deepEqual(uses('Skill', 'dart:relic-routing'), [
+      { skill: 'dart:relic-routing', source: 'skill-dir' },
+    ])
+    assert.deepEqual(uses('Skill', 'house:fui-new'), [{ skill: 'fui-new', source: 'placed' }])
+    for (const listing of [
+      'ls .claude/skills',
+      'ls .claude/skills/relic-routing',
+      'cat .claude/skills/*/SKILL.md',
+      'find . -not -path "*/.claude/skills/x/*"',
+    ]) {
+      assert.deepEqual(uses('shell', listing), [], listing)
+    }
+    assert.equal(
+      skillDirSkill('.claude/skills/relic-routing/SKILL.md', SKILL_DIRS),
+      'relic-routing',
+    )
+    assert.equal(skillDirSkill('~/.agents/skills/x/SKILL.md', SKILL_DIRS), 'x')
+    assert.equal(skillDirSkill('.claude/skills/x/references/a.md', SKILL_DIRS), undefined)
+    assert.equal(skillDirSkill('~/.cursor/skills-cursor/x/SKILL.md', SKILL_DIRS), undefined)
   })
 
   test('glob words never throw: [ is literal, and braces hold globs, not regexes', () => {

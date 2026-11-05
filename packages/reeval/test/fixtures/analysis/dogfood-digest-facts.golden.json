@@ -717,7 +717,7 @@
   {
     "id": "F24",
     "kind": "skill-reads",
-    "note": "Attempts that read their placed skill (a tool call on skills/<name>/), and the transcript lines of the first read.",
+    "note": "Attempts that read each skill they had (a load by name, or a tool call on skills/<name>/), and the transcript lines of the first read. source: placed by the environment, found in a skill directory the agent reads (skill-dir: a setup step, the workspace or a package manager put it there), or a SKILL.md read elsewhere (such as a package cache).",
     "cells": [
       {
         "cell": "es-good",
@@ -740,7 +740,7 @@
   {
     "id": "F25",
     "kind": "context-use",
-    "note": "Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.",
+    "note": "Tool calls per counted attempt by class (context: a skill, placed or found, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.",
     "cells": [
       {
         "run": "r1",

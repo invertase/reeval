@@ -653,23 +653,31 @@ export async function buildDigestKeepingDropped(
     })
   }
 
-  // Did each attempt read the skills its environment placed?
+  // Did each attempt read the skills it had, placed or found?
   const reads = q<{
     run_id: string
     eval_key: string
     cell_key: string
     skill: string
+    source: string
     attempts: number
     read: number
   }>(
-    `SELECT run_id, eval_key, cell_key, skill, COUNT(*) AS attempts, SUM(read_line IS NOT NULL) AS read,
-       GROUP_CONCAT(DISTINCT read_line) AS lines
+    `SELECT run_id, eval_key, cell_key, skill, source, COUNT(*) AS attempts,
+       SUM(read_line IS NOT NULL) AS read, GROUP_CONCAT(DISTINCT read_line) AS lines
      FROM skill_reads WHERE run_id IN (${runList}) AND eval_key IN (${evalList})
      GROUP BY run_id, eval_key, cell_key, skill ORDER BY run_id, eval_key, cell_key, skill`,
   )
   const byCell = new Map<
     string,
-    { cell: string; skill: string; attempts: number; read: number; lines: Set<number> }
+    {
+      cell: string
+      skill: string
+      source: string
+      attempts: number
+      read: number
+      lines: Set<number>
+    }
   >()
   for (const r of reads) {
     const cell = cellTag(r.run_id, r.eval_key, r.cell_key)
@@ -677,6 +685,7 @@ export async function buildDigestKeepingDropped(
     const entry = byCell.get(id) ?? {
       cell,
       skill: r.skill,
+      source: r.source,
       attempts: 0,
       read: 0,
       lines: new Set(),
@@ -691,10 +700,11 @@ export async function buildDigestKeepingDropped(
   }
   if (byCell.size) {
     fact('skill-reads', {
-      note: 'Attempts that read their placed skill (a tool call on skills/<name>/), and the transcript lines of the first read.',
+      note: 'Attempts that read each skill they had (a load by name, or a tool call on skills/<name>/), and the transcript lines of the first read. source: placed by the environment, found in a skill directory the agent reads (skill-dir: a setup step, the workspace or a package manager put it there), or a SKILL.md read elsewhere (such as a package cache).',
       cells: [...byCell.values()].map((c) => ({
         cell: c.cell,
         skill: c.skill,
+        ...(c.source === 'placed' ? {} : { source: c.source }),
         read: `${c.read}/${c.attempts}`,
         firstReadAtLines: [...c.lines].sort((a, b) => a - b),
       })),
@@ -735,7 +745,7 @@ export async function buildDigestKeepingDropped(
       attemptNs.set(id, [...new Set([...(attemptNs.get(id) ?? []), r.n])])
     }
     fact('context-use', {
-      note: 'Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.',
+      note: 'Tool calls per counted attempt by class (context: a skill, placed or found, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.',
       cells: [...useOf].map(([id, u]) => {
         const [runId, evalKey, cellKey] = id.split('\0') as [string, string, string]
         const ns = (attemptNs.get(id) ?? []).sort((a, b) => a - b)

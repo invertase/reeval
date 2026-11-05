@@ -1,5 +1,13 @@
 import { defineEnvironment, type HarnessOption, type PluginPart, type Turn } from 'reeval'
-import { BLOCKED_HOST, COMMAND, PLANTED, PLUGIN_AGENT, RULES_WORD, reach } from './constants.ts'
+import {
+  BLOCKED_HOST,
+  COMMAND,
+  INSTALLED_DIRS,
+  PLANTED,
+  PLUGIN_AGENT,
+  RULES_WORD,
+  reach,
+} from './constants.ts'
 
 // What every harness in the contract gets, and the signals the checks read. The prompts are one
 // short turn each and name the exact action; the checks read what the model can't fake: a file a
@@ -9,6 +17,18 @@ export * from './constants.ts'
 
 export const skilled = defineEnvironment('skilled', ({ skill }) => ({
   skills: [skill.local('../skills/contract-probe')],
+}))
+/**
+ * No `skills`: a setup step copies the skill into every agent's workspace skill directory, as a
+ * package manager's skill installer (`dart run skills get --all`) does.
+ */
+export const installed = defineEnvironment('installed', ({ file }) => ({
+  files: { '~/.reeval-contract/contract-installed/SKILL.md': file('../installed/SKILL.md') },
+  setup: [
+    {
+      run: `for d in ${INSTALLED_DIRS.join(' ')}; do mkdir -p "$d" && cp -r ~/.reeval-contract/contract-installed "$d/"; done`,
+    },
+  ],
 }))
 export const ruled = defineEnvironment('ruled', {
   rules: `# House rules\n\nThe house codeword is ${RULES_WORD}. When anyone asks for the house codeword, write it (the codeword only) into a file named codeword.txt in the workspace root.\n`,
@@ -44,6 +64,8 @@ export const plugged = defineEnvironment('plugged', ({ plugin }) => {
 export const prompts = {
   skill:
     'Use your contract-probe skill: do exactly what it says, then stop. Keep your reply short.',
+  installed:
+    'Use your contract-installed skill: do exactly what it says, then stop. Keep your reply short.',
   rules: 'What is the house codeword? Follow your house rules for it, then stop.',
   mcp: 'Call the house_stamp tool of the stamp MCP server once, then reply with what it returned.',
   editAndRun: `In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: ${COMMAND}. Then stop.`,
@@ -80,6 +102,25 @@ export const withFakeMcp: HarnessOption = (inherited) =>
   inherited.map((h) =>
     h.kind === 'fake' && h.script
       ? { ...h, script: h.script.map((steps) => [{ mcp: 'stamp/house_stamp' }, ...steps]) }
+      : h,
+  )
+
+/**
+ * For the installed-skill eval: the fake agent also reads the skill from Cursor's workspace skill
+ * directory (other environments have none, so it can't be in every turn's script).
+ */
+export const withFakeInstalled: HarnessOption = (inherited) =>
+  inherited.map((h) =>
+    h.kind === 'fake' && h.script
+      ? {
+          ...h,
+          script: h.script.map((steps) => [
+            {
+              exec: `grep -o 'INSTALLED-[A-Z0-9-]*' .cursor/skills/contract-installed/SKILL.md > installed-proof.txt`,
+            },
+            ...steps,
+          ]),
+        }
       : h,
   )
 

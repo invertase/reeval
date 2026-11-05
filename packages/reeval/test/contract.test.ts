@@ -213,7 +213,7 @@ const envOf: Record<string, string> = {
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
-const CONTRACT_ATTEMPTS = 23
+const CONTRACT_ATTEMPTS = 25
 
 export const behaviors: Behavior[] = [
   {
@@ -232,6 +232,30 @@ export const behaviors: Behavior[] = [
         seen.some((p) => row.skillContext.test(p)),
         `no ${row.skillContext} in the context: ${JSON.stringify(seen)}`,
       )
+    },
+  },
+  {
+    name: 'skill a setup step installed, used and counted',
+    canary: true,
+    async check(ran, row) {
+      const a = checkAndCanary(
+        ran,
+        row,
+        'installed skill',
+        'installed',
+        /expected null to be 'INSTALLED-2Q8W-WREN'/,
+      )
+      const env = ran.run.environments.find((e) => e.name === 'installed')
+      assert.deepEqual(env?.skills, [], 'reeval placed no skill')
+      const r = await runCli(ran.project, [
+        'query',
+        `SELECT skill, source, reads FROM skill_reads WHERE attempt_key = '${a.key}' AND skill = 'contract-installed'`,
+        '--json',
+      ])
+      assert.equal(r.code, 0, r.stderr)
+      const [read] = JSON.parse(r.stdout) as Array<{ source: string; reads: number }>
+      assert.equal(read?.source, 'skill-dir', `skill_reads: ${r.stdout}`)
+      assert.ok((read?.reads ?? 0) > 0, `the skill's use isn't in skill_reads: ${r.stdout}`)
     },
   },
   {

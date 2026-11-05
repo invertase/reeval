@@ -69,6 +69,10 @@ export type Layout = {
   workspaceSkillDir: string
   /** Where the adapter puts harness-placed skills, under `~/`; the fake agent writes them there. */
   harnessSkillDir: string
+  /** Other skill directories the agent reads, in the workspace and under `~/`, that reeval never places into. */
+  alsoReadsSkillDirs?: readonly string[]
+  /** Where the agent CLI keeps the skills it ships with, under `~/`: never an eval's skill use. */
+  builtinSkillDirs?: readonly string[]
   /**
    * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
    * environment's skills and MCP servers (so names can clash), or `namespaced` under the
@@ -936,6 +940,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
+    builtinSkillDirs: ['.gemini/antigravity-cli/builtin/skills'],
     pluginPlacement: 'namespaced',
     // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
     pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
@@ -948,6 +953,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
+    alsoReadsSkillDirs: ['.claude/skills', '.agents/skills'],
     pluginPlacement: 'flat',
     pluginUnpack: OPENCODE_PLUGIN_UNPACK,
   },
@@ -957,6 +963,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.goose/skills',
     harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills',
+    alsoReadsSkillDirs: ['.agents/skills', '.claude/skills'],
     pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
@@ -993,6 +1000,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.grok/skills',
     harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills',
+    alsoReadsSkillDirs: ['.agents/skills', '.claude/skills'],
     pluginPlacement: 'namespaced',
   },
 }
@@ -1702,6 +1710,25 @@ const FAKE_LAYOUT: Layout = {
   harnessSkillDir: '.agents/skills',
   pluginPlacement: 'flat',
 }
+
+/**
+ * Every skill directory some agent reads, as a path's tail (`.claude/skills`, `.config/goose/skills`):
+ * a skill under one is the agent's to load, whoever put it there.
+ */
+export const SKILL_DIRS: readonly string[] = [
+  ...new Set(
+    [FAKE_LAYOUT, ...Object.values(LAYOUTS)].flatMap((l) => [
+      l.workspaceSkillDir,
+      l.harnessSkillDir.replace(/^\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/home\//, ''),
+      ...(l.alsoReadsSkillDirs ?? []),
+    ]),
+  ),
+]
+
+/** Every agent CLI's own skill directories (`builtinSkillDirs`), as a path's tail. */
+export const BUILTIN_SKILL_DIRS: readonly string[] = [
+  ...new Set(Object.values(LAYOUTS).flatMap((l) => l.builtinSkillDirs ?? [])),
+]
 
 /** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */
 export function layoutOf(descriptor: HarnessDescriptor): Layout {

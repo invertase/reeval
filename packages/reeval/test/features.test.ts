@@ -539,6 +539,33 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'skills/setup-installed',
+    tiers: ['fake', 'docker'],
+    env: 'installed',
+    canary: /expected skill-like calls matching house-farewell/,
+    record: async ({ run, project, tier }) => {
+      assert.deepEqual(skills(run), [], 'reeval placed no skill')
+      const r = await runCli(project, [
+        'query',
+        'SELECT skill, source, reads FROM skill_reads ORDER BY eval_key, skill',
+        '--json',
+      ])
+      assert.equal(r.code, 0, r.stderr)
+      const rows = (
+        JSON.parse(r.stdout) as Array<{ skill: string; source: string; reads: number }>
+      ).map((x) => [x.skill, x.source, x.reads])
+      // The canary's attempt and the check's, each opening house-greeting. Only an isolated
+      // sandbox takes the context, which also lists the installed skill nobody opened.
+      const unread = tier === 'fake' ? [] : [['house-farewell', 'skill-dir', 0]]
+      assert.deepEqual(rows, [
+        ...unread,
+        ['house-greeting', 'skill-dir', 1],
+        ...unread,
+        ['house-greeting', 'skill-dir', 1],
+      ])
+    },
+  },
+  {
     dir: 'skills/workspace-placement',
     tiers: ['fake', 'docker'],
     env: 'greeting',
