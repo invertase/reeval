@@ -151,6 +151,35 @@ describe('auth', () => {
     assert.equal(calls, 1)
   })
 
+  test('a body that breaks off is tried again; one that is not JSON is not', async () => {
+    const replies: Array<() => Response> = [
+      () =>
+        new Response(
+          new ReadableStream({
+            start: (c) => c.error(new TypeError('terminated')),
+          }),
+        ),
+      () => Response.json(catalogBody),
+    ]
+    let calls = 0
+    const flaky = (async () => replies[calls++]?.()) as unknown as typeof fetch
+    assert.deepEqual(
+      await fetchCursorModelCatalog({ apiKey: 'reset' }, { fetch: flaky, ...noWait }),
+      catalogBody.items,
+    )
+    assert.equal(calls, 2)
+    let html = 0
+    const page = (async () => {
+      html++
+      return new Response('<html>')
+    }) as unknown as typeof fetch
+    await assert.rejects(
+      fetchCursorModelCatalog({ apiKey: 'html' }, { fetch: page, ...noWait }),
+      (e: unknown) => e instanceof CursorCatalogError && !e.transient,
+    )
+    assert.equal(html, 1)
+  })
+
   test('a request with no response is cut off at its timeout, and is transient', async (t) => {
     const fake = ((_url: string, init: RequestInit) =>
       new Promise((_resolve, reject) => {

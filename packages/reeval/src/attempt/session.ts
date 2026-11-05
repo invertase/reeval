@@ -509,6 +509,7 @@ export async function startWithRetry<S extends { close(): Promise<void> }>(
       onRetry({ error: error.message, waitedMs: Date.now() - startedAt })
       debugLog('harness', `${error.message}; starting it once more`)
       await new Promise((resolve) => setTimeout(resolve, transientDelayMs))
+      signal.throwIfAborted()
       continue
     } finally {
       clearTimeout(timer)

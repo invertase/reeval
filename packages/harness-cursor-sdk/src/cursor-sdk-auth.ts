@@ -140,7 +140,16 @@ async function readCatalog(
       res.status >= 500,
     )
   }
-  const body = (await res.json()) as { items?: unknown } | unknown[]
+  let body: { items?: unknown } | unknown[]
+  try {
+    body = (await res.json()) as typeof body
+  } catch (error) {
+    const unreadable = (error as Error).name === 'SyntaxError'
+    throw new CursorCatalogError(
+      `Cursor's model catalog request failed: ${unreadable ? 'the response is not JSON' : (error as Error).message}`,
+      !unreadable,
+    )
+  }
   const items = Array.isArray(body) ? body : (body as { items?: unknown }).items
   if (!Array.isArray(items))
     throw new CursorCatalogError("Cursor's model catalog has no items", false)

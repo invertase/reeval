@@ -264,7 +264,7 @@
 | Remark `flaky-check`: a flaky cell’s check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more | ✓ 1 | — | — | — | — | — |
 | Remark `slow-mcp-start`: a stdio MCP server took 2s or more to answer `initialize`, or never did, counted over the turns that recorded it; prints in every run | ✓ 1 | — | — | — | — | — |
 | Eval files load as TypeScript, ESM, CommonJS and JSON (extensionless, circular, top-level await), each file in a process of its own; a broken tsconfig or syntax error fails loudly | ✓ 2 | — | — | — | — | — |
-| A harness session that doesn't become ready within `startTimeout` (default 90s) is retried once, then an infra error; its sandbox goes and the other attempts carry on | ✓ 1 | — | — | — | — | — |
+| A harness session that doesn't become ready within `startTimeout` (default 90s), or whose start failed transiently (Cursor's model catalog unreachable), is retried once, then an infra error; its sandbox goes and the other attempts carry on | ✓ 3 | — | — | — | — | — |
 | A worker that dies, throws or runs out of memory fails its attempts; a CLI that crashes or is killed takes its workers and sandboxes with it | ✓ 1 | — | — | — | — | — |
 | Exit codes 0, 1, 2, 3, 130 and 143 | ✓ 1 | — | — | — | — | — |
 | Exit code precedence (a failure and an infra error in one run) | ✓ 1 | — | — | — | — | — |
