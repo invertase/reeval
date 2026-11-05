@@ -1841,6 +1841,7 @@ export const inventory: InventoryFeature[] = [
     name: "Skill use of skills reeval didn't place (a setup step, the workspace or a package cache put them there): `skill_reads` and `skill_uses` by `source` (`placed`, `skill-dir`, `elsewhere`), from a native load or a path under an agent's skill directory",
     fixtures: ['skills/setup-installed'],
     unit: ['reeval/test/query.test.ts'],
+    real: ['contract › skill a setup step installed, used and counted'],
   },
   {
     id: 'query.noise',
