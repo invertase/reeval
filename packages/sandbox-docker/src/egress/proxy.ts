@@ -94,6 +94,12 @@ export type EgressProxyOptions = {
    */
   costHeaders?: readonly string[]
   /**
+   * The agent's model calls: each one's event is marked `modelCall`, and the gateway reads the
+   * token counts its response body names (the last value of each usage field it knows) as
+   * `responseUsage`, and the first model it names as `usageModel`.
+   */
+  modelCalls?: readonly EndpointMatch[]
+  /**
    * Requests the gateway answers itself, never sending them upstream: e.g. a token exchange whose
    * answer is a placeholder the gateway then swaps for a real token on the model calls.
    */
@@ -136,6 +142,20 @@ export type EgressRequestEvent = {
   /** Credential headers the gateway set (the harness's key), by name. */
   credentials: string[]
   ms: number
+  /**
+   * Milliseconds from the request to its response body's first byte reaching the sandbox: on a
+   * streamed model call, about the time to its first token. Absent when no body came.
+   */
+  firstByteMs?: number
+  /** Set on a request that is one of the agent's `modelCalls`. */
+  modelCall?: true
+  /**
+   * On a model call, each usage field the response body named with its last value
+   * (`input_tokens`, `cache_read_input_tokens`, `promptTokenCount`, …); absent when it named none.
+   */
+  responseUsage?: Record<string, number>
+  /** On a model call, the first `"model"` or `"modelId"` its response body names. */
+  usageModel?: string
   /** As the sandbox sent them: placeholders, never real values. */
   requestHeaders?: Headers
   /** As the sandbox got them, scrubbed. */
@@ -248,6 +268,9 @@ type RequestTracker = {
         | 'responseEffort'
         | 'responseProvider'
         | 'responseCost'
+        | 'modelCall'
+        | 'responseUsage'
+        | 'usageModel'
       >
     >,
   ): void
@@ -256,6 +279,19 @@ type RequestTracker = {
 }
 /** HTTP/1.1 and HTTP/2 compatibility responses share this surface. */
 type Response = http.ServerResponse
+
+/** Which parts of a response body the gateway reads as it flows. */
+type Reads = { model?: boolean; usage?: boolean }
+
+/**
+ * The usage fields of the model APIs the agents call: Anthropic's Messages, OpenAI's Responses
+ * and Chat Completions (and the APIs shaped like them), and Gemini's `usageMetadata`.
+ */
+const USAGE_FIELD =
+  /"(input_tokens|output_tokens|cache_read_input_tokens|cache_creation_input_tokens|prompt_tokens|completion_tokens|cached_tokens|reasoning_tokens|promptTokenCount|candidatesTokenCount|cachedContentTokenCount|thoughtsTokenCount)"\s*:\s*(\d+)/g
+
+/** How much of a chunk's end the usage reader keeps, so a field split between chunks is seen. */
+const USAGE_CARRY = 64
 
 /** A TLS record's first byte when it carries a handshake, as a ClientHello does. */
 const TLS_HANDSHAKE = 0x16
@@ -591,6 +627,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         event.sent += n
       },
       received: (n) => {
+        if (n > 0 && event.firstByteMs === undefined) event.firstByteMs = Date.now() - startedAt
         event.received += n
       },
     }
@@ -1055,6 +1092,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     exchange?: DerivedTokens
     /** Whether its response names the model that served it. */
     readsModel?: boolean
+    /** Whether it's a model call, whose response's usage the gateway reads. */
+    readsUsage?: boolean
   } {
     // An absolute-form target names its own host, which the upstream honors over Host.
     if (!path.startsWith('/') && !(method === 'OPTIONS' && path === '*')) {
@@ -1134,12 +1173,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       path,
       headers: {},
     })
-    // Uncompressed responses, so the scrubber, the tokenizer and the model reader see them.
+    const readsUsage = onEndpoint(options.modelCalls ?? [], {
+      host: target.host,
+      method,
+      path,
+      headers: {},
+    })
+    // Uncompressed responses, so the scrubber, the tokenizer and the model and usage readers see them.
     if (
       scrubbedInBodies(own).length ||
       credentialValues(rules, target.host).length ||
       exchange ||
-      readsModel
+      readsModel ||
+      readsUsage
     ) {
       delete substituted.headers['accept-encoding']
     }
@@ -1159,6 +1205,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       credentials: replaced,
       ...(exchange ? { exchange } : {}),
       ...(readsModel ? { readsModel } : {}),
+      ...(readsUsage ? { readsUsage } : {}),
     }
   }
 
@@ -1226,9 +1273,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up: Readable,
     plan: ScrubPlan,
     t?: RequestTracker,
-    readsModel = false,
+    reads: Reads = {},
   ): Readable {
-    if (readsModel && t) readModel(up, t)
+    if (reads.model && t) readModel(up, t)
+    if (reads.usage && t) readUsage(up, t)
     const into = (from: Readable, to: Transform) => {
       from.once('error', (error) => to.destroy(error))
       return from.pipe(to)
@@ -1331,6 +1379,35 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       if (cost) t.set({ responseCost: Number(cost[1]) })
     }
     up.on('data', onData)
+  }
+
+  /**
+   * Records the last value of each usage field the response body names, reading alongside its
+   * flow: a stream's later events repeat its counts or replace them with the final ones
+   * (Anthropic's `message_delta`, Gemini's last chunk, the Responses API's `response.completed`).
+   * Inside a JSON string the quotes are escaped, so text that merely mentions a field doesn't
+   * match.
+   */
+  function readUsage(up: Readable, t: RequestTracker) {
+    const usage: Record<string, number> = {}
+    let carry = ''
+    let seen = 0
+    let model: string | undefined
+    up.on('data', (chunk: Buffer) => {
+      const text = carry + chunk.toString('utf8')
+      if (!model && seen <= MODEL_WINDOW) {
+        model = /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(text)?.[1]
+        if (model) t.set({ usageModel: model })
+      }
+      seen += chunk.length
+      let found = false
+      for (const m of text.matchAll(USAGE_FIELD)) {
+        usage[m[1] as string] = Number(m[2])
+        found = true
+      }
+      if (found) t.set({ responseUsage: { ...usage } })
+      carry = text.slice(-USAGE_CARRY)
+    })
   }
 
   /** Most of a request body the gateway reads for its reasoning settings: a long session's. */
@@ -1445,14 +1522,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         via: 'decrypted',
         requestHeaders: plainHeaders(req.headers),
       })
-    const { headers, path, own, names, credentials, refused, exchange, readsModel } = transformed(
-      target,
-      method,
-      asked,
-      sent,
-      req.httpVersion,
-    )
-    t.set({ substituted: names, credentials })
+    const { headers, path, own, names, credentials, refused, exchange, readsModel, readsUsage } =
+      transformed(target, method, asked, sent, req.httpVersion)
+    t.set({ substituted: names, credentials, ...(readsUsage ? { modelCall: true } : {}) })
+    const reads: Reads = { model: !!readsModel, usage: !!readsUsage }
     if (refused) {
       t.refuse(refused.reason)
       req.resume()
@@ -1497,7 +1570,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         url,
         ...(exchange ? { exchange } : {}),
         ...(t ? { t } : {}),
-        readsModel: !!readsModel,
+        reads,
       })
     }
     const stream = session.request({
@@ -1516,7 +1589,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     stream.once('response', (h) => {
       const status = Number(h[':status'])
       if (exchange) return tokenized(exchange, url, status, h, stream, res, own, creds, t)
-      if (!respond(status, h, stream, res, own, creds, url, t, readsModel)) return
+      if (!respond(status, h, stream, res, own, creds, url, t, reads)) return
       stream.once('trailers', (trailers) =>
         res.addTrailers(scrubbedHeaders(trailers, [...own, ...creds]) as Record<string, string>),
       )
@@ -1538,7 +1611,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     creds: Substitution[],
     url: string,
     t?: RequestTracker,
-    readsModel = false,
+    reads: Reads = {},
   ): boolean {
     const plan = scrubPlan(status, headers, own, creds)
     if (plan.refuse) {
@@ -1550,7 +1623,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const cost = readsModel ? headerCost(headers, options.costHeaders) : undefined
     if (cost !== undefined) t?.set({ responseCost: cost })
     res.writeHead(status, out)
-    responseBody(up, plan, t, readsModel)
+    responseBody(up, plan, t, reads)
       .once('error', () => res.destroy())
       .pipe(res)
     return true
@@ -1566,14 +1639,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       url: string
       exchange?: DerivedTokens
       t?: RequestTracker
-      readsModel?: boolean
+      reads?: Reads
     },
   ) {
     const { own, creds, url, exchange, t } = to
     upstream.once('response', (up) => {
       const status = up.statusCode ?? 502
       if (exchange) return tokenized(exchange, url, status, up.headers, up, res, own, creds, t)
-      if (!respond(status, up.headers, up, res, own, creds, url, t, to.readsModel)) return
+      if (!respond(status, up.headers, up, res, own, creds, url, t, to.reads)) return
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {
           res.addTrailers(

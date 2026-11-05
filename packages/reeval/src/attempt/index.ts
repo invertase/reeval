@@ -21,6 +21,7 @@ import {
   attemptError,
   judgeErrorsMessage,
   recordEgress,
+  recordTimeline,
   recordFailure,
   recordOom,
   writeRecord,
@@ -153,6 +154,7 @@ async function attemptBody(
       await takeSnapshot(a, sandbox, 'final', 'teardown')
     }
     await sandbox?.destroy()
+    recordTimeline(a, sandbox)
     if (sandbox) {
       debug.log(
         'teardown',

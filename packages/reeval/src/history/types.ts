@@ -26,6 +26,7 @@ import type {
   SetupProcess,
   Snapshot,
   StartRetry,
+  TimeSplit,
   TokenUsage,
   TurnStatus,
   VmImage,
@@ -270,7 +271,18 @@ export type AttemptRecord = {
      * script's.
      */
     reasoningMs?: number | null
+    /**
+     * Where the turn's time went: its model calls, tool calls, the background jobs it waited on,
+     * and the rest, summing to `durationMs` (`TimeSplit`). Absent in records from before reeval
+     * split it.
+     */
+    timeSplit?: TimeSplit
   }>
+  /**
+   * The turns' `timeSplit` added up, its `modelMs` null when any turn's is. Absent when no turn
+   * has one.
+   */
+  timeSplit?: TimeSplit
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
   /**

@@ -88,6 +88,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
     subagent: z.string().optional(),
+    durationInferred: z.literal(true).optional(),
   }),
   z.strictObject({
     ...at,
@@ -99,6 +100,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
     subagent: z.string().optional(),
+    durationInferred: z.literal(true).optional(),
   }),
   z.strictObject({
     ...at,
@@ -109,6 +111,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
     subagent: z.string().optional(),
+    durationInferred: z.literal(true).optional(),
   }),
   z.strictObject({
     ...at,
@@ -121,9 +124,21 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
     subagent: z.string().optional(),
+    durationInferred: z.literal(true).optional(),
   }),
   z.strictObject({ ...at, type: z.literal('error'), message: z.string() }),
   z.strictObject({ ...at, type: z.literal('retry'), message: z.string() }),
+  z.strictObject({
+    ...at,
+    type: z.literal('model-call'),
+    request: z.string(),
+    status: nullableNumber,
+    durationMs: z.number(),
+    firstByteMs: nullableNumber,
+    usage: tokenUsageSchema.nullable(),
+    model: z.string().nullable(),
+    stream: z.literal(true).optional(),
+  }),
 ])
 
 export const turnDataSchema = z.strictObject({

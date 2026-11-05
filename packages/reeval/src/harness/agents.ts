@@ -209,6 +209,13 @@ export type Agent = Layout & {
   /** Requests whose response body names the model that served them, for `servedModel`. */
   modelResponses?: readonly EndpointMatch[]
   /**
+   * The agent's model calls besides `modelResponses` (which are model calls too): the egress
+   * gateway times each one and reads its tokens, for the transcript's `model-call` events.
+   */
+  modelCalls?: readonly EndpointMatch[]
+  /** Set when one model call carries a whole turn, its tool calls inside it (Cursor's stream). */
+  modelStream?: true
+  /**
    * Set for an agent on `@ai-sdk/harness-acp`, whose `stream-start` names the ACP session's model:
    * the one the agent was configured with, not the one that served the turn. Its turns record
    * what the gateway read from the model calls instead.
@@ -272,6 +279,7 @@ export type ModelSpecific = Pick<
   'credential' | 'endpoints' | 'servedModel' | 'askedModel' | 'upstream'
 > & {
   modelResponses?: readonly EndpointMatch[]
+  modelCalls?: readonly EndpointMatch[]
   hosts: readonly string[]
 }
 
@@ -378,6 +386,13 @@ const geminiServedModel: ServedModel = ({ host, path }) =>
     ? /^\/v1beta\/models\/([^/:]+):streamGenerateContent$/.exec(path)?.[1]
     : undefined
 
+/** Cursor's agent stream: one call per turn, which carries the turn's model output and tool calls. */
+const CURSOR_RUN = {
+  host: 'api2.cursor.sh',
+  path: { exact: '/agent.v1.AgentService/RunSSE' },
+  method: ['POST'],
+} as const satisfies EndpointMatch
+
 /** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
 const CURSOR_EXCHANGE = {
   host: 'api2.cursor.sh',
@@ -422,6 +437,7 @@ export function opencodeForModel(
     credential: provider.env,
     endpoints: providerEndpoints(provider),
     ...(modelResponses.length ? { modelResponses } : {}),
+    modelCalls: providerEndpoints(provider).filter((e) => e.method.includes('POST')),
     servedModel: (request) => providerServedModel(provider, request),
     hosts: [...providerHosts(provider), 'mcp.exa.ai'],
   }
@@ -972,6 +988,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The SDK trades the key for session tokens at the same endpoint as the CLI, and sends the
     // tokens to api2.cursor.sh only (its agent stream included, over HTTP/1.1 through the proxy).
     endpoints: [CURSOR_EXCHANGE],
+    modelCalls: [CURSOR_RUN],
+    modelStream: true,
     tokens: {
       endpoint: CURSOR_EXCHANGE,
       fields: ['accessToken', 'refreshToken'],
@@ -1008,6 +1026,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     fallbackCredentials: ['CLAUDE_CODE_OAUTH_TOKEN'],
     // What the CLI sends the key on, with non-essential traffic off.
     // Anything else gets a 403 from the gateway and a warning that names the request.
+    modelCalls: [{ host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] }],
     endpoints: [
       { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
       { host: 'api.anthropic.com', path: { exact: '/v1/messages/count_tokens' }, method: ['POST'] },
@@ -1060,6 +1079,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // Its model calls (the main model, and a lite one for titles) and its web searches, which a
     // lite model answers from Google Search.
     endpoints: ANTIGRAVITY_ENDPOINTS,
+    modelCalls: ANTIGRAVITY_ENDPOINTS,
     // The CLI opens both in every session. Neither `enableTelemetry: false` nor any other
     // setting or variable in the binary stops them.
     expectedBlocked: {
@@ -1129,6 +1149,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
+    modelCalls: GEMINI_ENDPOINTS,
     // Goose 1.56.0 refreshes its model catalog from models.dev/api.json in every session, and
     // falls back to the one it bundles when that's refused.
     expectedBlocked: {
@@ -1170,6 +1191,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The only request pi sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,
+    modelCalls: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
     adapter: async ({ auth, mcpServers, descriptor, vertex }) => {
@@ -1716,6 +1738,9 @@ export type Brokering = {
   servedModel?: ServedModel
   askedModel?: ServedModel
   modelResponses?: readonly EndpointMatch[]
+  /** Every model call: the agent's `modelCalls` and `modelResponses`. */
+  modelCalls?: readonly EndpointMatch[]
+  modelStream?: true
   upstream?: Upstream
   localResponses?: readonly LocalResponse[]
 }
@@ -1729,8 +1754,9 @@ export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Bro
   const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
-  const { localResponses } = agent
+  const { localResponses, modelStream } = agent
   const credential = credentialIn(agent)
+  const modelCalls = [...(agent.modelCalls ?? []), ...(modelResponses ?? [])]
   return {
     credential,
     endpoints,
@@ -1738,6 +1764,8 @@ export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Bro
     ...(servedModel ? { servedModel } : {}),
     ...(askedModel ? { askedModel } : {}),
     ...(modelResponses ? { modelResponses } : {}),
+    ...(modelCalls.length ? { modelCalls } : {}),
+    ...(modelStream ? { modelStream } : {}),
     ...(upstream ? { upstream } : {}),
     ...(localResponses?.length ? { localResponses } : {}),
   }
