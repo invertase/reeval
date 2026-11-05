@@ -148,9 +148,7 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     turnTokens: captured,
     cacheRead: captured,
     cacheWrite: captured,
-    reasoningTokens: dropped(
-      "`thinking_tokens` in `message_delta`, the session JSONL and `modelUsage`; the catalog's `reasoningTokens: false`",
-    ),
+    reasoningTokens: captured,
     reasoningText: captured,
     perCallUsage: dropped('in the raw `finish-step` parts'),
     sideCallUsage: dropped('`WebSearch` is its own `/v1/messages` call, in `modelUsage` only'),
@@ -176,8 +174,8 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     cacheWrite: captured,
     reasoningTokens: captured,
     reasoningText: {
-      state: 'not-produced',
-      note: 'its `config.toml` sets no `model_reasoning_summary`, so reasoning comes back encrypted',
+      state: 'captured',
+      note: 'the summary `model_reasoning_summary = "auto"` asks for',
     },
     perCallUsage: dropped("the rollout JSONL's `token_count` events"),
     sideCallUsage: {
@@ -232,8 +230,8 @@ export const TELEMETRY: Record<AgentKind, Row> = {
     cacheWrite: { state: 'captured', note: 'on Anthropic; Gemini writes none' },
     reasoningTokens: captured,
     reasoningText: {
-      state: 'not-produced',
-      note: 'on Gemini its config sends no `includeThoughts`; Anthropic returned no visible thinking',
+      state: 'captured',
+      note: 'on Gemini; Anthropic returned no visible thinking',
     },
     perCallUsage: dropped("`opencode.db`'s `session_message.data.tokens`"),
     sideCallUsage: dropped('the session-title call'),

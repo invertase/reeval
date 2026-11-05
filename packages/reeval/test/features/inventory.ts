@@ -1852,6 +1852,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: "What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks, null (`n/a`) where the harness can't time it",
     unit: ['reeval/test/replay-telemetry.test.ts'],
+    real: ["contract › the model's reasoning recorded where the harness gets it"],
   },
   {
     id: 'effort.time-split',
