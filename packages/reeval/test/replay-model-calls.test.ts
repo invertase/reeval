@@ -35,11 +35,11 @@ const HARNESS: Record<string, HarnessDescriptor> = {
   'claude-code': { kind: 'claude-code', model: 'claude-sonnet-5-5' },
   codex: { kind: 'codex', model: 'gpt-5.6-luna' },
   fx: { kind: 'fx', model: 'gpt-5.5' },
-  goose: { kind: 'goose', model: 'gemini-3.8-flash' },
+  goose: { kind: 'goose', model: 'google/gemini-3.8-flash' },
   'grok-build': { kind: 'grok-build', model: 'grok-4.6' },
   opencode: { kind: 'opencode', model: 'google/gemini-3.8-flash' },
   'opencode-anthropic': { kind: 'opencode', model: 'anthropic/claude-sonnet-5-5' },
-  pi: { kind: 'pi', model: 'gemini-3.8-flash' },
+  pi: { kind: 'pi', model: 'google/gemini-3.8-flash' },
 } as Record<string, HarnessDescriptor>
 
 /** The body as the gateway reads it: in chunks that split its fields. */

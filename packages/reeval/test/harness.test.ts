@@ -228,6 +228,45 @@ describe('where each harness reads what the environment gives it', () => {
     }
   })
 
+  test("Goose's and pi's model calls are their provider's POST requests, on every provider", () => {
+    const calls = (
+      h: Parameters<typeof brokeringFor>[0],
+      method: string,
+      host: string,
+      path: string,
+    ) => onEndpoint(brokeringFor(h)?.modelCalls ?? [], { method, host, path, headers: {} })
+    const gemini = '/v1beta/models/gemini-3.8-flash:streamGenerateContent'
+    for (const h of [goose({ model: 'google/m' }), pi({ model: 'google/m' })]) {
+      assert.ok(calls(h, 'POST', 'generativelanguage.googleapis.com', gemini), h.kind)
+    }
+    assert.ok(
+      !calls(
+        goose({ model: 'google/m' }),
+        'GET',
+        'generativelanguage.googleapis.com',
+        '/v1beta/models',
+      ),
+    )
+    assert.ok(calls(goose({ model: 'anthropic/m' }), 'POST', 'api.anthropic.com', '/v1/messages'))
+    assert.ok(!calls(goose({ model: 'anthropic/m' }), 'GET', 'api.anthropic.com', '/v1/models'))
+    assert.ok(calls(goose({ model: 'openai/m' }), 'POST', 'api.openai.com', '/v1/chat/completions'))
+    assert.ok(calls(goose({ model: 'xai/m' }), 'POST', 'api.x.ai', '/v1/chat/completions'))
+    for (const provider of ['anthropic', 'openai', 'xai', 'mistral']) {
+      const table = piProvider(provider)
+      assert.ok(!('refused' in table), provider)
+      const b = brokeringFor(pi({ model: `${provider}/m` }))
+      for (const e of table.endpoints.filter((e) => e.method.includes('POST'))) {
+        assert.ok(
+          b?.modelCalls?.some(
+            (c) => c.host === e.host && JSON.stringify(c.path) === JSON.stringify(e.path),
+          ),
+          provider,
+        )
+      }
+      assert.ok((b?.modelCalls?.length ?? 0) > 0, provider)
+    }
+  })
+
   test('OpenCode, Goose and pi have no key of their own: only their model names one', () => {
     for (const kind of ['opencode', 'goose', 'pi'] as const) {
       assert.equal(AGENTS[kind].credential, undefined, kind)

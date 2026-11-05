@@ -542,6 +542,10 @@ const withoutProvider = (model: string) => model.slice(model.indexOf('/') + 1)
 /** reeval's name for a provider's key where it isn't the agent's: Google's, which the judge reads too. */
 const HOST_CREDENTIAL: Record<string, string> = { google: 'GOOGLE_GENERATIVE_AI_API_KEY' }
 
+/** A provider's model calls: the POST requests among those its key is sent on. */
+const modelCallsOf = (endpoints: readonly EndpointMatch[]) =>
+  endpoints.filter((e) => e.method?.includes('POST'))
+
 /** The model a response from `hosts`' model calls names. */
 const respondedOn =
   (...hosts: string[]): ServedModel =>
@@ -568,6 +572,7 @@ export function piForModel(model: string): ModelSpecific {
     credential: HOST_CREDENTIAL[id] ?? provider.credentialEnv,
     authAs: provider.credentialEnv,
     endpoints,
+    modelCalls: modelCallsOf(endpoints),
     ...(modelResponses.length ? { modelResponses } : {}),
     // The Responses API's on OpenAI's own host also names the effort that served it.
     servedModel: (request) =>
@@ -654,7 +659,7 @@ export const GOOSE_PROVIDERS = Object.keys(GOOSE_DIRECT)
 export function gooseForModel(model: string): ModelSpecific {
   const direct = GOOSE_DIRECT[providerOf(model)]
   if (!direct) throw new InfraError(`goose(): ${directProviderRefusal('goose', model)}`)
-  return direct
+  return { ...direct, modelCalls: modelCallsOf(direct.endpoints) }
 }
 
 /** Why pi or Goose can't run `model` on its provider's own key, or undefined when it can. */
