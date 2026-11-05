@@ -1,6 +1,7 @@
 // Recording to a remote store: a run lands in the store's copy (`.reeval/store/<id>/history`) as
 // in a history folder, is marked in `pending/`, and is uploaded from there. A run that didn't
 // upload stays marked until `reeval sync` uploads it.
+import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -43,9 +44,18 @@ export function storeCredentials(history: ResolvedHistory): void {
 /** `.reeval/store/<id>/pending`: the runs recorded into the copy that haven't uploaded yet. */
 export const pendingDir = (history: RemoteHistory) => join(dirname(history.dir), 'pending')
 
+/**
+ * The runs marked for upload. A marker whose run never reached the copy (the recording stopped in
+ * between) is dropped: there's nothing to upload.
+ */
 export async function pendingRuns(history: RemoteHistory): Promise<string[]> {
   const names = await readdir(pendingDir(history)).catch(() => [])
-  return names.filter((n) => !n.startsWith('.')).sort()
+  const runs: string[] = []
+  for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
+    if (existsSync(recordFile(history.dir, name))) runs.push(name)
+    else await unmarkPending(history, name)
+  }
+  return runs
 }
 
 async function filesUnder(dir: string, at = ''): Promise<Array<[string, Uint8Array]>> {
@@ -132,15 +142,26 @@ export async function uploadRun(history: RemoteHistory, runId: string): Promise<
   }
 }
 
-export async function markPending(history: RemoteHistory, runId: string): Promise<void> {
+/**
+ * Marks `runId` for upload. It's marked before it's written into the copy, so a recording that
+ * stops in between leaves it marked; true if it was marked already.
+ */
+export async function markPending(history: RemoteHistory, runId: string): Promise<boolean> {
+  const marker = join(pendingDir(history), runId)
+  if (existsSync(marker)) return true
   await mkdir(pendingDir(history), { recursive: true })
-  await writeFile(join(pendingDir(history), runId), '')
+  await writeFile(marker, '')
+  return false
+}
+
+export async function unmarkPending(history: RemoteHistory, runId: string): Promise<void> {
+  await rm(join(pendingDir(history), runId), { force: true })
 }
 
 /** Uploads `runId` and unmarks it; a failure leaves it marked, for `reeval sync`. */
 export async function uploadPending(history: RemoteHistory, runId: string): Promise<Uploaded> {
   const result = await uploadRun(history, runId)
-  await rm(join(pendingDir(history), runId), { force: true })
+  await unmarkPending(history, runId)
   return result
 }
 

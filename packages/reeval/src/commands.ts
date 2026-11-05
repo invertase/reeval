@@ -31,6 +31,7 @@ import {
   type RemoteHistory,
   StoreError,
   type Uploaded,
+  unmarkPending,
   uploadPending,
 } from './store/sync.ts'
 import type { ResolvedConfig } from './types.ts'
@@ -133,15 +134,22 @@ export async function record(
   flags: HistoryFlags,
 ): Promise<string> {
   const remote = isRemote(config.history) ? config.history : null
-  const result = await recordRun({
-    root: config.root,
-    historyDir: config.history.dir,
-    runId,
-    artifacts: parseLevel(flags.artifacts, config.history.artifacts),
-    allowIncomplete: flags['allow-incomplete'],
-    skipSecretScan: flags['skip-secret-scan'],
-    committed: !remote,
-  })
+  const marked = remote ? await markPending(remote, runId) : true
+  let result: RecordResult
+  try {
+    result = await recordRun({
+      root: config.root,
+      historyDir: config.history.dir,
+      runId,
+      artifacts: parseLevel(flags.artifacts, config.history.artifacts),
+      allowIncomplete: flags['allow-incomplete'],
+      skipSecretScan: flags['skip-secret-scan'],
+      committed: !remote,
+    })
+  } catch (error) {
+    if (remote && !marked) await unmarkPending(remote, runId)
+    throw error
+  }
   if (remote) return recordRemote(remote, runId, result)
   const where = rel(result.recordPath)
   const ignored =
@@ -179,12 +187,12 @@ async function recordRemote(
   result: RecordResult,
 ): Promise<string> {
   const name = history.store.name
-  await markPending(history, runId)
   let uploaded: Uploaded
   try {
     uploaded = await uploadPending(history, runId)
   } catch (error) {
     if (!(error instanceof StoreError)) throw error
+    await markPending(history, runId)
     throw new StoreError(notUploaded(error, rel(pendingDir(history))))
   }
   const kb = (result.bytes / 1024).toFixed(1)
