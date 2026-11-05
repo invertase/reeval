@@ -59,7 +59,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   calls, agent time and, when both sides reported usage, tokens, which often shows a skill's
   effect before pass@1 does:
   `effort  tools  time  tokens` / `plain  54  1m 39s  2,890k` / `with-house-greeting  3  6.6s  57k`.
-  A cell without usage (Goose) is left out of the token sample only; if either side then
+  A cell without usage is left out of the token sample only; if either side then
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
   `runs: 4` a cell, as lift does (below it lift shows only a direction and effort can't be tested; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.

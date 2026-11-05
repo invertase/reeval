@@ -40,7 +40,7 @@ const record = (value: unknown): Record<string, unknown> => (isObjectLike(value)
  *   whose name Goose rewrites is named as reeval names it: `probe:stamp`'s tool, which Goose
  *   reports from extension `probe_stamp`, is `mcp__probe:stamp__house_stamp`.
  * - The `finish` part's usage is dropped: Goose's ACP `PromptResponse.usage` is its last model
- *   call's, not the turn's, and an undercount is worse than none.
+ *   call's, not the turn's. The session puts back the turn's from Goose's ledger, where it can.
  * - A failed model call, which Goose sends as a message in its error template, is an `error`
  *   part instead of the turn's text, so the turn fails rather than completing.
  */

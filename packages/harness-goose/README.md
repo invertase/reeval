@@ -36,6 +36,11 @@ const agent = new HarnessAgent({
   extension's `load_skill` is in the catalog under its own name. Any other call is named from
   Goose's `_meta.goose.toolCall`: an MCP server's as `mcp__<server>__<tool>`, Goose's own by its
   name.
-- **Usage.** None. Goose's ACP `PromptResponse.usage` is its last model call's, not the turn's
-  (a 4-call turn that used 16,253 input tokens reported 4,179), so the `finish` part's usage is
-  dropped rather than passed on as an undercount.
+- **Usage.** Goose's ACP `PromptResponse.usage` is its last model call's, not the turn's (a
+  4-call turn that used 16,253 input tokens reported 4,179), so it's dropped. Instead, the
+  session holds the turn's `finish` part until the turn is done, reads the rows the turn added
+  to Goose's `usage_ledger` (`~/.local/share/goose/sessions/sessions.db`, one row per model call,
+  with one `node -e` on `node:sqlite` in the sandbox, `GooseLedger`) and sends it with their sum:
+  `input` the whole prompt, `cacheRead` its cached part, `output` with the thinking tokens in it
+  (the ledger doesn't count them apart, so `reasoning` is unknown). The rows go in the usage's
+  `raw`. A ledger it can't read leaves the turn's usage unknown.

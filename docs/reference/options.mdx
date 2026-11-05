@@ -167,7 +167,7 @@ Each value of `harnesses` reads the environment's `rules`, `skills`, and `mcp` s
 | [Claude Code](/configuration/agents/claude-code) | `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [Antigravity](/configuration/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [OpenCode](/configuration/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
-| [Goose](/configuration/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
+| [Goose](/configuration/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
 | [pi](/configuration/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
 | [Codex](/configuration/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [fx](/configuration/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
@@ -222,7 +222,7 @@ Each turn's `usage` is null when the harness reports no tokens.
 - **Antigravity:** `input` excludes cache reads, `cacheRead` holds those reads, and `cacheWrite` is 0. `output` includes thinking tokens, and `reasoning` holds that count.
 - **Codex:** one `usage` for the turn. `input` is uncached input, and `cacheRead` and `cacheWrite` hold cached input. `reasoning` is part of `output`.
 - **OpenCode:** one total for the whole turn.
-- **Goose:** always null. The adapter drops the session token count, which covers the last model call and would undercount the turn.
+- **Goose:** summed over the turn's model calls. `reasoning` is part of `output`.
 - **pi:** the sum of each model call's tokens, reasoning tokens included.
 - **fx:** summed over the turn's model calls. `reasoning` is part of `output`.
 - **Grok Build:** summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`.

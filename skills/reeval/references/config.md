@@ -57,7 +57,7 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `claudeCode({ model, effort? })` | `ANTHROPIC_API_KEY`, else a subscription's `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`) | `effort` is the Agent SDK's `/effort` |
 | `antigravity({ model, effort? })` | `GEMINI_API_KEY` (a Gemini API key) | e.g. `gemini-3.8-flash-medium`; `effort` is `agy --effort` |
 | `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex (on `direct()`; it runs through `vertex()`), Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills`. `effort` is refused where the model's API answers it with a 400 (any value on `anthropic/claude-haiku-4-5`, `openai/gpt-4.1` or `google/gemini-2.5-flash`, any but `high` on `openai/gpt-5-pro`), and such a model runs with none by default; on `openrouter()` nothing is refused |
-| `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
+| `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT` |
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
 | `fx({ model, effort? })` | `OPENAI_API_KEY` for a bare id, `AI_GATEWAY_API_KEY` on `vercel()`, `OPENROUTER_API_KEY` on `openrouter()`, or none on `vertex()` | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs only on `vercel()` or `openrouter()` in `gateway`, a bare OpenAI id (`gpt-5.5`) on OpenAI, which must accept function tools without `reasoning_effort` (not `gpt-5.6` or later), a Gemini id (`google/gemini-3.8-flash`) on `vertex()`. `effort` (`reasoning_effort`) only on `vertex()`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
@@ -77,7 +77,7 @@ In `reeval query` those are `reasoning_effort` (`cells`, `attempts`) and
 result block's effort table) is always the measured tool-call, time and token metric.
 
 Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
-harness's own endpoints. Every harness but Goose reports tokens, which reeval records per turn,
+harness's own endpoints. Every harness reports tokens, which reeval records per turn,
 attempt and run (no prices).
 
 `gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
