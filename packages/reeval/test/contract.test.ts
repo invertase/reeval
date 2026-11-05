@@ -80,6 +80,7 @@ const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => nam
 function tagsLeftOut(row: HarnessRow): string[] {
   const out = row.mcp === false ? ['mcp'] : []
   if (!row.effort) out.push('effort')
+  if (!row.reasoningModel) out.push('reasoning')
   if (!row.plugin) return [...out, 'plugin']
   if (!row.plugin.parts.includes('hooks')) out.push('plugin-hooks')
   if (!row.plugin.parts.includes('agents')) out.push('plugin-agents')
@@ -91,6 +92,7 @@ function tagsLeftOut(row: HarnessRow): string[] {
 const TAGGED = {
   mcp: 2,
   effort: 1,
+  reasoning: 1,
   plugin: 10,
   'plugin-hooks': 2,
   'plugin-agents': 2,
@@ -213,7 +215,7 @@ const envOf: Record<string, string> = {
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
-const CONTRACT_ATTEMPTS = 25
+const CONTRACT_ATTEMPTS = 26
 
 export const behaviors: Behavior[] = [
   {
@@ -473,6 +475,24 @@ export const behaviors: Behavior[] = [
         plain.some((c) => !effort.asked.test(c.requestEffort ?? '')),
         `edit and run: every model call asked for ${effort.asked}: ${JSON.stringify(plain.map((c) => c.requestEffort))}`,
       )
+    },
+  },
+  {
+    name: 'reasoning text and time recorded',
+    canary: false,
+    skips: (row) =>
+      row.reasoningModel ? undefined : `the ${row.id} row has no model that shows its thinking`,
+    check(ran) {
+      const a = evalNamed(ran.run, 'reasoning').attempts[0]
+      assert.ok(a, 'the reasoning eval has no attempt')
+      assert.equal(a.outcome, 'pass', `reasoning: ${detail(a)}`)
+      const blocks = transcriptOf(ran, a).flatMap((e) => (e.type === 'reasoning' ? [e] : []))
+      assert.ok(
+        blocks.some((b) => b.text.trim()),
+        `${a.key}: no reasoning text in the transcript`,
+      )
+      for (const t of a.turns as TurnRecord[])
+        assert.ok((t.reasoningMs ?? 0) > 0, `${a.key}: a turn's reasoningMs is ${t.reasoningMs}`)
     },
   },
   {

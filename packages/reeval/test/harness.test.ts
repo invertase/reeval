@@ -89,7 +89,7 @@ import {
 import { noDefaultEffort, withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { normalizeStream } from '../src/harness/transcript.ts'
+import { normalizeStream, reasoningTime } from '../src/harness/transcript.ts'
 import {
   antigravity,
   claudeCode,
@@ -2103,6 +2103,35 @@ describe('Antigravity transcripts', () => {
         ['tool', 'read', 'stat /nope.txt: no such file', false],
       ],
     )
+  })
+
+  test('a recovered thought is placed where its metadata says, timed as agy stored it', () => {
+    const thought = (id: string, ms: number, antigravity: Record<string, unknown>) => [
+      { ms, part: { type: 'reasoning-start', id, providerMetadata: { antigravity } } },
+      { ms, part: { type: 'reasoning-delta', id, delta: `thought ${id}` } },
+      { ms, part: { type: 'reasoning-end', id } },
+    ]
+    const events = normalizeStream(
+      [
+        call('b', 'bash', { command: 'ls' }),
+        result('b', 'a.txt'),
+        ...thought('r1', 900, { step: 3, startedBeforeMs: 870, durationMs: 4 }),
+        ...thought('r2', 900, { step: 5, startedBeforeMs: 2000, durationMs: null }),
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => [e.type, e.atMs, e.durationMs]),
+      [
+        ['reasoning', 0, null],
+        ['tool', 10, 10],
+        ['reasoning', 30, 4],
+      ],
+    )
+    // Antigravity's catalog times recovered reasoning; a harness whose reasoning arrives whole doesn't.
+    assert.equal(reasoningTime('recovered', events.slice(2), null), 4)
+    assert.equal(reasoningTime('recovered', events, null), null)
+    assert.equal(reasoningTime('whole', events.slice(2), null), null)
   })
 })
 

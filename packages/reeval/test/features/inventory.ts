@@ -1259,6 +1259,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/harness.test.ts'],
   },
   {
+    id: 'harness.antigravity-reasoning',
+    area: 'Harnesses',
+    name: "Antigravity's reasoning text and time, read back after each turn from agy's stored conversation (its stream-json has neither)",
+    real: ['contract › reasoning text and time recorded'],
+    unit: [
+      'harness-antigravity/test/thoughts.test.ts',
+      'reeval/test/harness.test.ts',
+      'reeval/test/replay-telemetry.test.ts',
+    ],
+  },
+  {
     id: 'harness.opencode',
     area: 'Harnesses',
     name: "`opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers",
@@ -1872,7 +1883,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort.telemetry',
     area: 'Records and studio',
-    name: "What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks, null (`n/a`) where the harness can't time it",
+    name: "What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks or recovered with their time, null (`n/a`) where the harness can't time it",
     unit: ['reeval/test/replay-telemetry.test.ts'],
     real: ["contract › the model's reasoning recorded where the harness gets it"],
   },

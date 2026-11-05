@@ -626,7 +626,7 @@
           "$ref": "#/$defs/PhaseTimings"
         },
         "turns": {
-          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's streamed reasoning took, null when the harness can't time it.",
+          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's reasoning took, null when the harness can't time it.",
           "type": "array",
           "items": {
             "type": "object",

@@ -184,10 +184,12 @@ export type Agent = Layout & {
   unreported?: (harnessMetadata: unknown) => WebEventType[]
   /**
    * How the agent's reasoning reaches reeval, which decides whether a turn's reasoning time is
-   * measured: `streamed`, as the model produces it, so each block is timed; `whole`, each block
-   * only once it's done (Codex's reasoning items), so its time is unknown; `none`, never (the
-   * model's thinking stays inside the CLI), so its time is unknown too. Reasoning tokens are
-   * apart from this: they come from the turn's usage.
+   * measured: `streamed`, as the model produces it, so each block is timed; `recovered`, read
+   * back from the agent's stored conversation after the turn, with the time the agent stored
+   * for each block (Antigravity's `thinking_duration`); `whole`, each block only once it's done
+   * (Codex's reasoning items), so its time is unknown; `none`, never (the model's thinking stays
+   * inside the CLI), so its time is unknown too. Reasoning tokens are apart from this: they come
+   * from the turn's usage.
    */
   reasoning: ReasoningDelivery
   /**
@@ -302,7 +304,7 @@ export type StoredUsage = {
 }
 
 /** How an agent's reasoning reaches reeval; see `Agent.reasoning`. */
-export type ReasoningDelivery = 'streamed' | 'whole' | 'none'
+export type ReasoningDelivery = 'streamed' | 'recovered' | 'whole' | 'none'
 
 /** What a Gemini CLI's adapter takes to run on Vertex AI from Application Default Credentials. */
 export type AdapterVertex = { project: string; location: string; credentialsFile: string }
@@ -1109,8 +1111,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     keychainTrust: true,
     platforms: ['linux', 'darwin'],
-    // agy's stream-json has no thinking content, only each step's `thinking_tokens`.
-    reasoning: 'none',
+    // agy's stream-json has only each step's `thinking_tokens`; the adapter reads the thought
+    // summaries and their `thinking_duration` from agy's stored conversation after each turn.
+    reasoning: 'recovered',
     reasoningTokens: true,
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',

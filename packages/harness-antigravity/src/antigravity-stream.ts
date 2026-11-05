@@ -1,6 +1,7 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { JSONValue } from '@ai-sdk/provider'
 import type { AntigravitySavedStep } from './antigravity-saved-output.ts'
+import type { AntigravityThought } from './antigravity-thoughts.ts'
 import { projectToolCall } from './antigravity-tools.ts'
 
 /**
@@ -166,11 +167,47 @@ export class AntigravityStreamTranslator {
   private readonly turn: number
   /** A resumed conversation's result counts turns before this process. */
   private readonly resumed: boolean
+  private readonly now: () => number
+  /**
+   * When each model step's first event arrived (epoch ms), where its thinking ended, and when the
+   * event before it did, before which its thinking can't have started.
+   */
+  private readonly replySeenAt = new Map<number, { at: number; after: number | undefined }>()
+  private lastEventAt: number | undefined
+  private thoughts: AntigravityThought[] = []
 
-  constructor(options: { turn: number; conversationId?: string | undefined }) {
+  constructor(options: {
+    turn: number
+    conversationId?: string | undefined
+    now?: () => number
+  }) {
     this.turn = options.turn
     this.conversationId = options.conversationId
     this.resumed = options.conversationId !== undefined
+    this.now = options.now ?? Date.now
+  }
+
+  /** Whether a stdout line is the turn's `result`, which ends the turn's parts. */
+  static isResult(line: string): boolean {
+    try {
+      return (JSON.parse(line.trim()) as AntigravityEvent | null)?.event === 'result'
+    } catch {
+      return false
+    }
+  }
+
+  /** This turn's first model step, from which its stored thoughts are read; undefined: none. */
+  get firstReplyStep(): number | undefined {
+    const steps = [...this.replySeenAt.keys()]
+    return steps.length ? Math.min(...steps) : undefined
+  }
+
+  /**
+   * The thoughts agy stored for this turn's steps, read back after the process exited. They go
+   * out as reasoning blocks before the turn ends, each placed by its `harnessMetadata`.
+   */
+  recover(thoughts: readonly AntigravityThought[]) {
+    this.thoughts = thoughts.filter((t) => this.replySeenAt.has(t.step))
   }
 
   /**
@@ -207,6 +244,7 @@ export class AntigravityStreamTranslator {
     }
     parts.push({ type: 'raw', rawValue: event })
     this.stepOpen = stepOpenAfter(this.stepOpen, parts)
+    this.lastEventAt = this.now()
     return parts
   }
 
@@ -215,6 +253,7 @@ export class AntigravityStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
+    this.emitThoughts(parts)
     this.closeBlocks(parts)
     this.closeStep(parts, options.aborted ? 'aborted' : `exit ${options.exitCode}`)
     if (!options.aborted) {
@@ -241,6 +280,35 @@ export class AntigravityStreamTranslator {
     if (this.started) return
     this.started = true
     parts.push({ type: 'stream-start', ...(modelId ? { modelId } : {}) })
+  }
+
+  /**
+   * Each recovered thought as a reasoning block, timed by agy's `thinking_duration`. It's placed
+   * to end as its step's first event arrived (at least 1 ms before, so it sorts ahead of that
+   * event), but never before the event ahead of it: agy's clock and the stream's differ by a few ms.
+   */
+  private emitThoughts(parts: HarnessV1StreamPart[]) {
+    const now = this.now()
+    for (const t of [...this.thoughts].sort((a, b) => a.step - b.step)) {
+      const seen = this.replySeenAt.get(t.step)
+      const endedAt = seen?.at ?? now
+      const startedAt = endedAt - Math.max(t.durationMs ?? 0, 1)
+      const id = `reasoning-${t.step}`
+      parts.push({
+        type: 'reasoning-start',
+        id,
+        harnessMetadata: {
+          antigravity: {
+            step: t.step,
+            startedBeforeMs: now - Math.max(startedAt, seen?.after ?? startedAt),
+            durationMs: t.durationMs,
+          },
+        },
+      })
+      parts.push({ type: 'reasoning-delta', id, delta: t.text })
+      parts.push({ type: 'reasoning-end', id })
+    }
+    this.thoughts = []
   }
 
   private id(step: number) {
@@ -347,6 +415,8 @@ export class AntigravityStreamTranslator {
     const index = s.step_index ?? -1
     this.conversationId ??= s.conversation_id
     if (s.step_type === 'agent_response') {
+      if (!this.replySeenAt.has(index))
+        this.replySeenAt.set(index, { at: this.now(), after: this.lastEventAt })
       this.settleFailure(parts, true)
       if (this.reply && this.reply.index !== index) this.settleReply(parts)
       this.reply ??= { index, deltas: [] }
@@ -401,6 +471,7 @@ export class AntigravityStreamTranslator {
 
   private result(parts: HarnessV1StreamPart[], r: AntigravityResult) {
     this.conversationId = r.conversation_id || this.conversationId
+    this.emitThoughts(parts)
     this.settleReply(parts)
     // After a failed call, agy's `response` has every attempt's text run together.
     if (!this.sawText && !this.retried && !this.failure && r.response) {

@@ -56,6 +56,13 @@ export {
   toUsage,
 } from './antigravity-stream.ts'
 export {
+  ANTIGRAVITY_DATA_DIR,
+  type AntigravityThought,
+  antigravityThoughtsCommand,
+  parseAntigravityThoughts,
+  readAntigravityThoughts,
+} from './antigravity-thoughts.ts'
+export {
   ANTIGRAVITY_BUILTIN_TOOLS,
   type AntigravityBuiltinTools,
   type ProjectedToolCall,

@@ -69,6 +69,8 @@ export const prompts = {
   rules: 'What is the house codeword? Follow your house rules for it, then stop.',
   mcp: 'Call the house_stamp tool of the stamp MCP server once, then reply with what it returned.',
   editAndRun: `In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: ${COMMAND}. Then stop.`,
+  reasoning:
+    'Think it through before you act: which of 91, 97 and 221 are prime? With your file editing tool, write only the primes, one per line, to primes.txt. Then stop.',
   key: 'Reply with the single word OK. Do not run any tools.',
   egress: `Run this exact shell command once, then stop: ${reach(BLOCKED_HOST)}`,
   pluginSkill:
