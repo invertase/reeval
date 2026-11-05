@@ -9,6 +9,7 @@ load the reeval skill in [`skills/reeval/SKILL.md`](./skills/reeval/SKILL.md). A
 another eval language runtime (Dart, Go, …) should load
 [`.agents/skills/add-a-language/SKILL.md`](./.agents/skills/add-a-language/SKILL.md). The
 [README](./README.md) has the pitch.
+Harness work: [add a harness](./.agents/skills/add-harness/SKILL.md), [bump a harness pin](./.agents/skills/bump-harness/SKILL.md), [audit a harness's telemetry](./.agents/skills/telemetry-audit/SKILL.md).
 
 ## Before you finish
 
@@ -97,6 +98,11 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
   "previously", "after #123", "captured from 1.2.11"), leftover reasoning, or stale names.
   License headers, generated-file markers and `/* c8 ignore */` with a current reason stay.
   Git is the history.
+- **User docs take corrections, not additions.** `docs/` and `skills/reeval/` take only inline
+  factual corrections and generated blocks: no new headings, sections, paragraphs or notes.
+  Maintainer knowledge goes in AGENTS.md or `.agents/skills/`, and explanations go in the PR body.
+- **No studio work until its overhaul.** Leave `packages/studio-web` and `reeval studio` alone,
+  beyond the minimum a change elsewhere needs to compile.
 - `@vitest/expect` and `@vitest/utils` are pinned to exactly the same version, and only
   `packages/reeval/src/engine` imports them (`test/manifest.test.ts` and `test/engine.test.ts`
   hold both). `@vitest/utils` is Vitest's internal package and isn't semver-safe alone, so bump
