@@ -10,11 +10,16 @@ import { GROK_BUILD_BUILTIN_TOOLS, type GrokBuildBuiltinTools } from './grok-bui
 export const GROK_BUILD_HARNESS_ID = 'grok-build'
 /** The Grok Build release the bootstrap installs, checked against npm's published sha512s. */
 export const GROK_CLI_VERSION = '1.0.70'
-/** The `dist.integrity` of `@xai-official/grok-linux-<arch>@<version>`, its native build. */
+/**
+ * The `dist.integrity` of `@xai-official/grok-<platform>@<version>`, its native builds: Linux's
+ * for each arch, and macOS's for Apple Silicon (a Tart VM).
+ */
 export const GROK_CLI_INTEGRITY = {
   x64: 'sha512-rElshycz/6SgPSkiFGtKHA4vSVOI8qQ6d0jFeu4I92hXCMfvxgMiOvNSzuBhm2P8Jd+4rNGAty2zW0VwmgHSeA==',
   arm64:
     'sha512-rH0TfWOT/Ca/sBMtAJJ+GJ9UyZlr/TkTqIHq8FL7o+ZTzJMBWvCv40JC4T/XuwEZ3WMmxOHGiPap7H9B4SbDSw==',
+  'darwin-arm64':
+    'sha512-TvzZ4b6YwpiK7UybJGJ4AXxAD7fz8Y912Q0tsY6VkoDFRgpxIUWBdbp6Ax8ICJn1REf7qnsLcRRuyiaOTwJbmg==',
 } as const
 /** The credential the adapter uses by default: an xAI API key. */
 export const GROK_CREDENTIAL_ENV = 'XAI_API_KEY'
@@ -116,17 +121,19 @@ exec "$(dirname "$0")/grok" "$@" stdio
 `
 
 /**
- * Downloads the pinned native build for the sandbox's arch from npm, checks its sha512, and
+ * Downloads the pinned native build for the sandbox's OS and arch from npm, checks its sha512, and
  * unpacks its brotli-compressed binary into `~/.local/bin`, as the npm package's postinstall does;
  * then writes `grok-acp` beside it.
  */
 export const GROK_INSTALL_COMMAND = `set -eu
-case "$(uname -m)" in
-  x86_64|amd64) arch=x64 sri=${GROK_CLI_INTEGRITY.x64} ;;
-  aarch64|arm64) arch=arm64 sri=${GROK_CLI_INTEGRITY.arm64} ;;
-  *) echo "Grok Build has no Linux build for $(uname -m)" >&2; exit 1 ;;
+case "$(uname -s) $(uname -m)" in
+  "Linux x86_64"|"Linux amd64") build=linux-x64 sri=${GROK_CLI_INTEGRITY.x64} ;;
+  "Linux aarch64"|"Linux arm64") build=linux-arm64 sri=${GROK_CLI_INTEGRITY.arm64} ;;
+  "Darwin arm64") build=darwin-arm64 sri=${GROK_CLI_INTEGRITY['darwin-arm64']} ;;
+  "Darwin "*) echo "reeval runs Grok Build on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
+  *) echo "Grok Build has no build for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
-curl -fsSL --retry 3 -o grok.tgz "https://registry.npmjs.org/@xai-official/grok-linux-$arch/-/grok-linux-$arch-${GROK_CLI_VERSION}.tgz"
+curl -fsSL --retry 3 -o grok.tgz "https://registry.npmjs.org/@xai-official/grok-$build/-/grok-$build-${GROK_CLI_VERSION}.tgz"
 node -e 'const h = "sha512-" + require("crypto").createHash("sha512").update(require("fs").readFileSync("grok.tgz")).digest("base64"); if (h !== process.argv[1]) { console.error("grok.tgz does not match its sha512"); process.exit(1) }' "$sri"
 rm -rf package && tar -xzf grok.tgz package/bin/grok.br && rm grok.tgz
 node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], require("zlib").brotliDecompressSync(fs.readFileSync("package/bin/grok.br")), { mode: 0o755 })' "$HOME/.local/bin/grok"

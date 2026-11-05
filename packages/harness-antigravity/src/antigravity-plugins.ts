@@ -78,17 +78,20 @@ export function antigravityPluginInstall(cli: string, dir: string, installed: st
   return `set -eu
 ${shellQuote(cli)} plugin install ${shellQuote(dir)}
 front() { head -n 1 "$1" | grep -q '^---$'; }
+put() { cat "$1.reeval" > "$1" && rm "$1.reeval"; }
+after_first() { { IFS= read -r l < "$1" || :; printf '%s\\n%s\\n' "$l" "$2"; tail -n +2 "$1"; } > "$1.reeval" && put "$1"; }
+before() { t=$1; shift; { printf '%s\\n' "$@"; cat "$t"; } > "$t.reeval" && put "$t"; }
 for f in ${at}/skills/*/SKILL.md; do
   [ -f "$f" ] || continue
   grep -q '^name:' "$f" && continue
   skill=$(basename "$(dirname "$f")")
-  if front "$f"; then sed -i "1a name: $skill" "$f"; else sed -i "1i ---\\nname: $skill\\n---" "$f"; fi
+  if front "$f"; then after_first "$f" "name: $skill"; else before "$f" --- "name: $skill" ---; fi
 done
 for f in ${at}/rules/*.md ${at}/rules/*.mdc; do
   [ -f "$f" ] || continue
   grep -q '^trigger:' "$f" && continue
-  if ! front "$f"; then sed -i '1i ---\\ntrigger: always_on\\n---\\n' "$f"
-  elif grep -q '^alwaysApply: *true' "$f"; then sed -i '1a trigger: always_on' "$f"; fi
+  if ! front "$f"; then before "$f" --- 'trigger: always_on' --- ''
+  elif grep -q '^alwaysApply: *true' "$f"; then after_first "$f" 'trigger: always_on'; fi
 done`
 }
 

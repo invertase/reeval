@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -46,12 +46,41 @@ test("VERSION is package.json's", () => {
 })
 
 test('the install downloads the pinned release and checks its sha256 on both arches', () => {
-  assert.ok(GOOSE_INSTALL_COMMAND.includes(`/download/v${GOOSE_CLI_VERSION}/goose-$arch-`))
+  assert.ok(GOOSE_INSTALL_COMMAND.includes(`/download/v${GOOSE_CLI_VERSION}/goose-$triple.tar.gz`))
   for (const sha of Object.values(GOOSE_CLI_SHA256)) {
     assert.match(sha, /^[0-9a-f]{64}$/)
     assert.ok(GOOSE_INSTALL_COMMAND.includes(`sha=${sha}`))
   }
   assertChecksSha256(GOOSE_INSTALL_COMMAND, 'goose.tar.gz')
+})
+
+test('each OS and arch picks its own build and checksum, and any other is refused', () => {
+  const picks = GOOSE_INSTALL_COMMAND.slice(
+    GOOSE_INSTALL_COMMAND.indexOf('case '),
+    GOOSE_INSTALL_COMMAND.indexOf('esac') + 4,
+  )
+  const pick = (os: string, arch: string) => {
+    const bin = mkdtempSync(join(tmpdir(), 'uname-'))
+    writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)
+    chmodSync(join(bin, 'uname'), 0o755)
+    return spawnSync('bash', ['-c', `${picks}\necho "$triple $sha"`], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      encoding: 'utf8',
+    })
+  }
+  const sha = GOOSE_CLI_SHA256
+  assert.equal(pick('Linux', 'x86_64').stdout, `x86_64-unknown-linux-gnu ${sha.x86_64}\n`)
+  assert.equal(pick('Linux', 'aarch64').stdout, `aarch64-unknown-linux-gnu ${sha.aarch64}\n`)
+  assert.equal(pick('Darwin', 'arm64').stdout, `aarch64-apple-darwin ${sha['darwin-aarch64']}\n`)
+  const intel = pick('Darwin', 'x86_64')
+  assert.equal(intel.status, 1)
+  assert.equal(
+    intel.stderr,
+    'reeval runs Goose on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+  )
+  const riscv = pick('Linux', 'riscv64')
+  assert.equal(riscv.status, 1)
+  assert.equal(riscv.stderr, 'Goose has no release for Linux riscv64\n')
 })
 
 test('auth is an environment with the Gemini key, or it throws', () => {

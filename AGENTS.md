@@ -362,7 +362,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   its browser test, the other packages) and `packed` (the pack test, then `reeval init` → `reeval run` →
   `reeval doctor` → `reeval studio build` in a fresh project from the tarball, and `reeval doctor`'s Docker
   fix) as parallel jobs. macOS also runs `bootstraps`: `test/tart-darwin.test.ts` bakes the
- Cursor, Claude Code, OpenCode, pi and Codex CLIs' macOS builds on the runner through the fake `tart`, as `tart()` bakes
+ macOS build of every harness's CLI on the runner through the fake `tart`, as `tart()` bakes
  them into an image (no VM and no key). There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
   sandboxes are Linux containers) and its macOS runners have no Docker. Tests that need POSIX
   signals skip on Windows with a reason (`noSignals` in `test/helpers.ts`). Anything reeval writes
@@ -556,7 +556,7 @@ pnpm reeval run --dry-run          # the plan, without running
 
 1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.8`, `claude-code-1.0.176-patch.8c0f3055`,
-   `antigravity-0.1.14`, `opencode-0.2.16`, `goose-0.1.13`, `pi-0.2.9`, `codex-0.1.11`, `fx-0.1.8`, `grok-build-0.1.10`), so
+   `antigravity-0.1.15`, `opencode-0.2.16`, `goose-0.1.14`, `pi-0.2.9`, `codex-0.1.12`, `fx-0.1.9`, `grok-build-0.1.11`), so
    the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
    (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).
 

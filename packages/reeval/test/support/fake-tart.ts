@@ -1,13 +1,14 @@
-// A `tart` on PATH that runs each VM as a directory on this machine, with `sudo`, `ssh` and
-// `lsof` beside it, so the Tart sandbox's lifecycle runs on Linux. Every `tart` call is logged,
+// A `tart` on PATH that runs each VM as a directory on this machine, with `sudo`, `security`,
+// `ssh` and `lsof` beside it, so the Tart sandbox's lifecycle runs on Linux. Every `tart` call is logged,
 // one per line. As in a VM, a `tart exec` command runs apart from the host's `tart`: in a process
 // group of its own, led by a shell above it, so killing `tart exec` leaves it running.
 //
 // FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent, after blocking for
 // FAKE_TART_EXEC_BLOCKS seconds as tart 2.41 does (about 30). FAKE_TART_NO_SUDO=1: `sudo -n` asks
-// for a password. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it (`1`: out of disk).
-// FAKE_TART_PULL_FAILS: `tart pull` fails, saying it. FAKE_TART_CLONE_FAILS: `tart clone` fails,
-// saying it, after starting the VM's directory.
+// for a password. FAKE_TART_NO_TRUST=1: `security add-trusted-cert` is denied, as without a
+// trust-settings authorization rule. FAKE_TART_RUN_FAILS: `tart run` exits at once, saying it
+// (`1`: out of disk). FAKE_TART_PULL_FAILS: `tart pull` fails, saying it.
+// FAKE_TART_CLONE_FAILS: `tart clone` fails, saying it, after starting the VM's directory.
 //
 // {@link fakeTartHosts} adds Macs that `ssh <host>` reaches: each a directory of its own under
 // `hosts/`, with its own VMs, images and log, and its free space, memory and system in files there.
@@ -109,9 +110,15 @@ mkdir -p "$vmtmp"
 args=()
 for a in "$@"; do
   a="\${a//\\/usr\\/local\\/share\\/ca-certificates/$FAKE_TART_DIR/ca}"
+  a="\${a/#\\/usr\\/bin\\/security/$FAKE_TART_DIR/bin/security}"
   args+=("\${a//\\/tmp\\/reeval-egress-forwarder/$vmtmp/reeval-egress-forwarder}")
 done
 exec "\${args[@]}"
+`
+
+const SECURITY = `#!/bin/sh
+[ -n "$FAKE_TART_NO_TRUST" ] && { echo "SecTrustSettingsSetTrustSettings: The authorization was denied since no user interaction was possible." >&2; exit 1; }
+exit 0
 `
 
 // The destination is the first argument that isn't an option; the rest is the remote command
@@ -193,7 +200,13 @@ export function fakeTart(images: string[] = []): {
   const bin = join(dir, 'bin')
   mkdirSync(join(dir, 'vms'), { recursive: true })
   mkdirSync(bin)
-  for (const [name, script] of Object.entries({ tart: TART, sudo: SUDO, ssh: SSH, lsof: LSOF })) {
+  for (const [name, script] of Object.entries({
+    tart: TART,
+    sudo: SUDO,
+    security: SECURITY,
+    ssh: SSH,
+    lsof: LSOF,
+  })) {
     writeFileSync(join(bin, name), script)
     chmodSync(join(bin, name), 0o755)
   }

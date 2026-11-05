@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -27,10 +27,10 @@ test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
 })
 
-test('the install downloads the pinned native build and checks its sha512 on both arches', () => {
+test('the install downloads the pinned native build and checks its sha512 on every build', () => {
   assert.ok(
     GROK_INSTALL_COMMAND.includes(
-      `/@xai-official/grok-linux-$arch/-/grok-linux-$arch-${GROK_CLI_VERSION}.tgz`,
+      `/@xai-official/grok-$build/-/grok-$build-${GROK_CLI_VERSION}.tgz`,
     ),
   )
   for (const sri of Object.values(GROK_CLI_INTEGRITY)) {
@@ -38,6 +38,35 @@ test('the install downloads the pinned native build and checks its sha512 on bot
     assert.ok(GROK_INSTALL_COMMAND.includes(`sri=${sri}`))
   }
   assert.ok(GROK_INSTALL_COMMAND.includes('does not match its sha512'))
+})
+
+test('each OS and arch picks its own build and checksum, and any other is refused', () => {
+  const picks = GROK_INSTALL_COMMAND.slice(
+    GROK_INSTALL_COMMAND.indexOf('case '),
+    GROK_INSTALL_COMMAND.indexOf('esac') + 4,
+  )
+  const pick = (os: string, arch: string) => {
+    const bin = mkdtempSync(join(tmpdir(), 'uname-'))
+    writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)
+    chmodSync(join(bin, 'uname'), 0o755)
+    return spawnSync('bash', ['-c', `${picks}\necho "$build $sri"`], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      encoding: 'utf8',
+    })
+  }
+  const sri = GROK_CLI_INTEGRITY
+  assert.equal(pick('Linux', 'x86_64').stdout, `linux-x64 ${sri.x64}\n`)
+  assert.equal(pick('Linux', 'aarch64').stdout, `linux-arm64 ${sri.arm64}\n`)
+  assert.equal(pick('Darwin', 'arm64').stdout, `darwin-arm64 ${sri['darwin-arm64']}\n`)
+  const intel = pick('Darwin', 'x86_64')
+  assert.equal(intel.status, 1)
+  assert.equal(
+    intel.stderr,
+    'reeval runs Grok Build on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+  )
+  const riscv = pick('Linux', 'riscv64')
+  assert.equal(riscv.status, 1)
+  assert.equal(riscv.stderr, 'Grok Build has no build for Linux riscv64\n')
 })
 
 test('auth is an environment with the xAI key, or it throws', () => {

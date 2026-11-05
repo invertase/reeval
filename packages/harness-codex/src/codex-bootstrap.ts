@@ -31,6 +31,7 @@ case "$(uname -s) $(uname -m)" in
   "Linux x86_64"|"Linux amd64") arch=linux-x64 triple=x86_64-unknown-linux-musl sri=${CODEX_CLI_INTEGRITY.x64} ;;
   "Linux aarch64"|"Linux arm64") arch=linux-arm64 triple=aarch64-unknown-linux-musl sri=${CODEX_CLI_INTEGRITY.arm64} ;;
   "Darwin arm64") arch=darwin-arm64 triple=aarch64-apple-darwin sri=${CODEX_CLI_INTEGRITY['darwin-arm64']} ;;
+  "Darwin "*) echo "reeval runs Codex on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
   *) echo "Codex has no build for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o codex.tgz "https://registry.npmjs.org/@openai/codex/-/codex-${CODEX_CLI_VERSION}-$arch.tgz"

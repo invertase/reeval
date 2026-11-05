@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -312,11 +312,38 @@ describe('command', () => {
 })
 
 describe('bootstrap', () => {
-  test('pins the release and checks its sha256 on both architectures', async () => {
+  test('each OS and arch picks its own build and sha256, and any other is refused', () => {
+    const script = antigravityInstallScript()
+    const picks = script.slice(script.indexOf('case '), script.indexOf('esac') + 4)
+    const pick = (os: string, arch: string) => {
+      const bin = mkdtempSync(join(tmpdir(), 'uname-'))
+      writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)
+      chmodSync(join(bin, 'uname'), 0o755)
+      return spawnSync('bash', ['-c', `${picks}\necho "$build $sha"`], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        encoding: 'utf8',
+      })
+    }
+    const sha = ANTIGRAVITY_CLI_SHA256
+    assert.equal(pick('Linux', 'x86_64').stdout, `linux_x64 ${sha.x64}\n`)
+    assert.equal(pick('Linux', 'aarch64').stdout, `linux_arm64 ${sha.arm64}\n`)
+    assert.equal(pick('Darwin', 'arm64').stdout, `mac_arm64 ${sha['darwin-arm64']}\n`)
+    const intel = pick('Darwin', 'x86_64')
+    assert.equal(intel.status, 1)
+    assert.equal(
+      intel.stderr,
+      'reeval runs Antigravity on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+    )
+    const riscv = pick('Linux', 'riscv64')
+    assert.equal(riscv.status, 1)
+    assert.equal(riscv.stderr, 'The Antigravity CLI has no build for Linux riscv64\n')
+  })
+
+  test('pins the release and checks its sha256 on every build', async () => {
     const script = antigravityInstallScript()
     assert.match(script, new RegExp(`/download/${ANTIGRAVITY_CLI_VERSION.replace(/\./g, '\\.')}/`))
-    assert.ok(script.includes(ANTIGRAVITY_CLI_SHA256.x64))
-    assert.ok(script.includes(ANTIGRAVITY_CLI_SHA256.arm64))
+    for (const sha of Object.values(ANTIGRAVITY_CLI_SHA256))
+      assert.ok(script.includes(`sha=${sha}`))
     assertChecksSha256(script, 'agy.tar.gz')
     assert.match(script, /mv bin\/antigravity bin\/agy/)
     const bootstrap = await getAntigravityBootstrap()
@@ -379,15 +406,14 @@ describe('plugins', () => {
     assert.throws(() => antigravityHooks('house', {}, root), /has no hooks object/)
   })
 
-  test('install: agy plugin install, then names on skills and always-on triggers on rules', {
-    skip: process.platform !== 'linux' && 'the script runs in the Linux sandbox (GNU sed)',
-  }, () => {
+  test('install: agy plugin install, then names on skills and always-on triggers on rules, with no sed', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'agy-plugin-'))
     const installed = join(tmp, 'home', 'house')
     const files: Record<string, string> = {
       'src/skills/plugin-cmd-ship/SKILL.md': 'Ship it.\n',
       'src/skills/named/SKILL.md': '---\nname: named\ndescription: d\n---\nBody.\n',
       'src/skills/fronted/SKILL.md': '---\ndescription: d\n---\nBody.\n',
+      'src/skills/open/SKILL.md': '---',
       'src/rules/plain.md': 'Be kind.\n',
       'src/rules/always.mdc': '---\nalwaysApply: true\n---\nAlways.\n',
       'src/rules/scoped.mdc': '---\nglobs: "*.ts"\n---\nTyped.\n',
@@ -397,11 +423,19 @@ describe('plugins', () => {
       mkdirSync(dirname(join(tmp, path)), { recursive: true })
       writeFileSync(join(tmp, path), content)
     }
+    chmodSync(join(tmp, 'src/rules/plain.md'), 0o600)
     // A stand-in for agy: `plugin install <dir>` copies the plugin where agy would.
     const agy = join(tmp, 'agy')
     writeFileSync(agy, `#!/bin/sh\nmkdir -p "${dirname(installed)}" && cp -r "$3" "${installed}"\n`)
     chmodSync(agy, 0o755)
-    execFileSync('sh', ['-c', antigravityPluginInstall(agy, join(tmp, 'src'), installed)])
+    // GNU and BSD sed disagree on -i and on 1a/1i, and the script runs on Linux and macOS.
+    const bin = join(tmp, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'sed'), '#!/bin/sh\nexit 1\n')
+    chmodSync(join(bin, 'sed'), 0o755)
+    execFileSync('sh', ['-c', antigravityPluginInstall(agy, join(tmp, 'src'), installed)], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    })
     const read = (path: string) => readFileSync(join(installed, path), 'utf8')
     assert.equal(
       read('skills/plugin-cmd-ship/SKILL.md'),
@@ -412,7 +446,9 @@ describe('plugins', () => {
       read('skills/fronted/SKILL.md'),
       '---\nname: fronted\ndescription: d\n---\nBody.\n',
     )
+    assert.equal(read('skills/open/SKILL.md'), '---\nname: open\n')
     assert.equal(read('rules/plain.md'), '---\ntrigger: always_on\n---\n\nBe kind.\n')
+    assert.equal(statSync(join(installed, 'rules/plain.md')).mode & 0o777, 0o600, 'its mode kept')
     assert.equal(
       read('rules/always.mdc'),
       '---\ntrigger: always_on\nalwaysApply: true\n---\nAlways.\n',

@@ -497,9 +497,13 @@ const BUT_CURSOR = BAKED_HARNESSES.filter((h) => h !== 'cursor')
 const TART_HARNESSES = [
   'cursor',
   'claude-code',
+  'antigravity',
   'opencode',
+  'goose',
   'pi',
   'codex',
+  'fx',
+  'grok-build',
 ] as const satisfies readonly BakedHarness[]
 /** A regex for exactly `text`. */
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

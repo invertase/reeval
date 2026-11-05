@@ -63,7 +63,13 @@ test('each OS and arch picks its own build, triple and sha512, and any other is 
   )
   const intel = pick('Darwin', 'x86_64')
   assert.equal(intel.status, 1)
-  assert.equal(intel.stderr, 'Codex has no build for Darwin x86_64\n')
+  assert.equal(
+    intel.stderr,
+    'reeval runs Codex on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+  )
+  const riscv = pick('Linux', 'riscv64')
+  assert.equal(riscv.status, 1)
+  assert.equal(riscv.stderr, 'Codex has no build for Linux riscv64\n')
 })
 
 test('the first turn starts a thread; later ones resume it, the prompt from its file', () => {

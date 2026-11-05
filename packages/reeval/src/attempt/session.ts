@@ -17,7 +17,7 @@ import {
   type ResolvedStep,
   skillFiles,
 } from '../environment/resolve.ts'
-import { brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
+import { agentOf, brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
@@ -517,6 +517,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     image: a.image,
     ...(a.hosts && { hosts: a.hosts }),
     brokering: brokeringFor(spec.harness, spec.vertex),
+    ...(agentOf(spec.harness, spec.vertex)?.keychainTrust && { keychainTrust: true }),
     expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0, spec.vertex)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,

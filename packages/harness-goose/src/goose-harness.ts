@@ -19,9 +19,11 @@ import { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
 export const GOOSE_HARNESS_ID = 'goose'
 /** The Goose release the bootstrap installs, checked against its published sha256s. */
 export const GOOSE_CLI_VERSION = '1.56.0'
+/** Linux's build for each arch, and macOS's for Apple Silicon (a Tart VM). */
 export const GOOSE_CLI_SHA256 = {
   x86_64: '225a929b35b5130fb691eafdb50be236f2c0a150019b53973775938f8f19c281',
   aarch64: '26bcb7d3f55aac485a91d81cbdecd8d90e5af1acadeca6e580b4d58b64a888e4',
+  'darwin-aarch64': '52f3f8d62e3d144c5de70c5c471de39d8b92c24d41d5b3436eb8bab11ba4bc24',
 } as const
 /** The credential the adapter uses by default: a Gemini API key, for Goose's `google` provider. */
 export const GOOSE_CREDENTIAL_ENV = 'GOOGLE_API_KEY'
@@ -109,13 +111,15 @@ export const GOOSE_ENDPOINTS = [
   { host: new URL(GEMINI_API_URL).hostname, path: { regex: '^/v1beta/models$' }, method: ['GET'] },
 ] as const
 
-/** Downloads the pinned release for the sandbox's arch and checks its sha256. */
-export const GOOSE_INSTALL_COMMAND = `case "$(uname -m)" in
-  x86_64|amd64) arch=x86_64 sha=${GOOSE_CLI_SHA256.x86_64} ;;
-  aarch64|arm64) arch=aarch64 sha=${GOOSE_CLI_SHA256.aarch64} ;;
-  *) echo "Goose has no release for $(uname -m)" >&2; exit 1 ;;
+/** Downloads the pinned release for the sandbox's OS and arch and checks its sha256. */
+export const GOOSE_INSTALL_COMMAND = `case "$(uname -s) $(uname -m)" in
+  "Linux x86_64"|"Linux amd64") triple=x86_64-unknown-linux-gnu sha=${GOOSE_CLI_SHA256.x86_64} ;;
+  "Linux aarch64"|"Linux arm64") triple=aarch64-unknown-linux-gnu sha=${GOOSE_CLI_SHA256.aarch64} ;;
+  "Darwin arm64") triple=aarch64-apple-darwin sha=${GOOSE_CLI_SHA256['darwin-aarch64']} ;;
+  "Darwin "*) echo "reeval runs Goose on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
+  *) echo "Goose has no release for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
-curl -fsSL --retry 3 -o goose.tar.gz "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_CLI_VERSION}/goose-$arch-unknown-linux-gnu.tar.gz"
+curl -fsSL --retry 3 -o goose.tar.gz "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_CLI_VERSION}/goose-$triple.tar.gz"
 node -e 'const h = require("crypto").createHash("sha256").update(require("fs").readFileSync("goose.tar.gz")).digest("hex"); if (h !== process.argv[1]) { console.error("goose.tar.gz does not match its sha256"); process.exit(1) }' "$sha"
 tar -xzf goose.tar.gz -C "$HOME/.local/bin" ./goose
 rm goose.tar.gz`

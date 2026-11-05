@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -44,12 +44,41 @@ test("VERSION is package.json's", () => {
 })
 
 test('the install downloads the pinned release and checks its sha256 on both arches', () => {
-  assert.ok(FX_INSTALL_COMMAND.includes(`/download/v${FX_CLI_VERSION}/fx-linux-$arch.tar.gz`))
+  assert.ok(FX_INSTALL_COMMAND.includes(`/download/v${FX_CLI_VERSION}/fx-$build.tar.gz`))
   for (const sha of Object.values(FX_CLI_SHA256)) {
     assert.match(sha, /^[0-9a-f]{64}$/)
     assert.ok(FX_INSTALL_COMMAND.includes(`sha=${sha}`))
   }
   assertChecksSha256(FX_INSTALL_COMMAND, 'fx.tar.gz')
+})
+
+test('each OS and arch picks its own build and checksum, and any other is refused', () => {
+  const picks = FX_INSTALL_COMMAND.slice(
+    FX_INSTALL_COMMAND.indexOf('case '),
+    FX_INSTALL_COMMAND.indexOf('esac') + 4,
+  )
+  const pick = (os: string, arch: string) => {
+    const bin = mkdtempSync(join(tmpdir(), 'uname-'))
+    writeFileSync(join(bin, 'uname'), `#!/bin/sh\n[ "$1" = -s ] && echo ${os} || echo ${arch}\n`)
+    chmodSync(join(bin, 'uname'), 0o755)
+    return spawnSync('bash', ['-c', `${picks}\necho "$build $sha"`], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      encoding: 'utf8',
+    })
+  }
+  const sha = FX_CLI_SHA256
+  assert.equal(pick('Linux', 'x86_64').stdout, `linux-x86_64 ${sha.x86_64}\n`)
+  assert.equal(pick('Linux', 'aarch64').stdout, `linux-aarch64 ${sha.aarch64}\n`)
+  assert.equal(pick('Darwin', 'arm64').stdout, `macos-aarch64 ${sha['darwin-aarch64']}\n`)
+  const intel = pick('Darwin', 'x86_64')
+  assert.equal(intel.status, 1)
+  assert.equal(
+    intel.stderr,
+    'reeval runs fx on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+  )
+  const riscv = pick('Linux', 'riscv64')
+  assert.equal(riscv.status, 1)
+  assert.equal(riscv.stderr, 'fx has no release for Linux riscv64\n')
 })
 
 test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {

@@ -103,6 +103,12 @@ export type Agent = Layout & {
   /** The platforms its bootstrap installs the agent's CLI for: a sandbox on another can't run it. */
   platforms: readonly NodeJS.Platform[]
   /**
+   * Set when its CLI's macOS build verifies TLS with Security.framework (Go, `native-tls`,
+   * `rustls-platform-verifier`), which reads only the keychain's trust settings, not
+   * `SSL_CERT_FILE`: in `tart()` it reaches the gateway only once the gateway's CA is trusted there.
+   */
+  keychainTrust?: true
+  /**
    * Set when its adapter's bridge is a server in the sandbox that the host connects to on the
    * session's first exposed port (`resolveBridgePort`): a session exposing none can't start it.
    */
@@ -1045,7 +1051,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ],
     name: 'Antigravity',
     factory: 'antigravity',
-    platforms: ['linux'],
+    keychainTrust: true,
+    platforms: ['linux', 'darwin'],
     // agy's stream-json has no thinking content, only each step's `thinking_tokens`.
     reasoning: 'none',
     reasoningTokens: true,
@@ -1113,8 +1120,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
+    keychainTrust: true,
     bridgePort: true,
-    platforms: ['linux'],
+    platforms: ['linux', 'darwin'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     // Goose's ACP server reports usage for its last model call only, which the adapter drops.
@@ -1189,6 +1197,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
+    keychainTrust: true,
     platforms: ['linux', 'darwin'],
     // codex exec sends a reasoning item only once it's complete, when it sends one at all.
     reasoning: 'whole',
@@ -1231,7 +1240,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'fx',
     factory: 'fx',
     bridgePort: true,
-    platforms: ['linux'],
+    platforms: ['linux', 'darwin'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: 'provider',
@@ -1261,8 +1270,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
+    keychainTrust: true,
     bridgePort: true,
-    platforms: ['linux'],
+    platforms: ['linux', 'darwin'],
     configuredModelOnStart: true,
     reasoning: 'streamed',
     reasoningTokens: true,
