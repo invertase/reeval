@@ -315,6 +315,17 @@ export const behaviors: Behavior[] = [
         for (const [k, v] of Object.entries(u))
           assert.ok(v === null || v >= 0, `usage ${k} is ${v}`)
       }
+      if (row.tokenSplit) {
+        const usage = JSON.stringify(turns.map((t) => t.usage))
+        assert.ok(
+          turns.every((t) => t.usage?.reasoning != null),
+          `every turn counts reasoning: ${usage}`,
+        )
+        assert.ok(
+          turns.some((t) => (t.usage?.cacheRead ?? 0) > 0),
+          `some turn reads the cache: ${usage}`,
+        )
+      }
     },
   },
   {

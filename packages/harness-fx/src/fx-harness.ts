@@ -4,7 +4,7 @@ import {
   isHarnessAuthenticationEnvironment,
 } from '@ai-sdk/harness/utils'
 import { createACP } from '@ai-sdk/harness-acp'
-import { FxStreamTranslator } from './fx-stream.ts'
+import { FxStreamTranslator, fxCallsSplit, withUsageSplit } from './fx-stream.ts'
 import { FX_BUILTIN_TOOLS, type FxBuiltinTools } from './fx-tools.ts'
 
 export const FX_HARNESS_ID = 'fx'
@@ -52,21 +52,29 @@ export const FX_QUIET_ENV = {
  * request with Node's `fetch`, which honors the proxy (`NODE_USE_ENV_PROXY`) and the gateway's CA.
  *
  * On a Chat Completions call it also adds `FX_RELAY_EFFORT` as `reasoning_effort`, which fx sends
- * a configured provider none of. With `FX_RELAY_GOOGLE=1` it makes Google's Chat Completions
- * stream one fx reads: each tool call's thought signature, which Gemini needs back on the next call
- * and fx drops, is kept by call id and put back (or Google's placeholder for one it never saw); a
- * tool call gets the `index` and the finish the `tool_calls` reason fx needs; and the thinking
- * tokens Google counts in `total_tokens` but not `completion_tokens` (which fx refuses) join
- * `completion_tokens` as its `reasoning_tokens`.
+ * a configured provider none of. It makes every Chat Completions stream one fx reads, going by what
+ * the stream holds: a tool call's thought signature (`extra_content.google`), which the model
+ * needs back on the next call and fx drops, is kept by call id and put back, with the placeholder
+ * for a call it never saw once the stream has sent one; a tool call with no `index` gets one, and
+ * a finish with tool calls the `tool_calls` reason fx needs; and tokens `total_tokens` counts past
+ * `prompt_tokens` and `completion_tokens` (thinking, which fx would refuse) join
+ * `completion_tokens` as its `reasoning_tokens`. A chunk none of that changes passes as it came.
+ *
+ * With `FX_RELAY_USAGE` set, it appends each Chat Completions call's last `usage` object, as fx
+ * reads it, to that file as one JSON line, before fx sees the stream end. fx keeps only
+ * `prompt_tokens` and `completion_tokens` from it, so this is where the turn's cache reads and
+ * reasoning tokens come from (see {@link FxUsageLedger}).
  */
 export const FX_RELAY_PORT = 47823
+/** Where the relay logs each Chat Completions call's usage in the sandbox. */
+export const FX_RELAY_USAGE_FILE = '/tmp/reeval-fx-usage.ndjson'
 const FX_RELAY = `import { createServer } from 'node:http'
 import { Readable, Transform } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
-import { writeFileSync } from 'node:fs'
+import { appendFileSync, writeFileSync } from 'node:fs'
 const [port, upstream, ready] = process.argv.slice(2)
 const effort = process.env.FX_RELAY_EFFORT
-const google = process.env.FX_RELAY_GOOGLE === '1'
+const usageLog = process.env.FX_RELAY_USAGE
 const signatures = new Map()
 const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive'])
 const chat = (req) => req.method === 'POST' && /\\/chat\\/completions(\\?|$)/.test(req.url)
@@ -76,7 +84,7 @@ async function request(req) {
   for await (const piece of req) text += piece
   const body = JSON.parse(text)
   if (effort) body.reasoning_effort = effort
-  if (google) {
+  if (signatures.size) {
     for (const message of body.messages ?? []) {
       for (const call of message.tool_calls ?? []) {
         call.extra_content ??= { google: { thought_signature: signatures.get(call.id) ?? 'skip_thought_signature_validator' } }
@@ -87,6 +95,7 @@ async function request(req) {
 }
 function chunk(data, state) {
   const json = JSON.parse(data)
+  let changed = false
   for (const choice of json.choices ?? []) {
     for (const call of choice.delta?.tool_calls ?? []) {
       const signature = call.extra_content?.google?.thought_signature
@@ -94,23 +103,37 @@ function chunk(data, state) {
       const id = call.id ?? state.last
       if (!state.calls.has(id)) state.calls.set(id, state.calls.size)
       state.last = id
-      call.index ??= state.calls.get(id)
+      if (call.index === undefined) {
+        call.index = state.calls.get(id)
+        changed = true
+      }
     }
-    if (choice.finish_reason === 'stop' && state.calls.size) choice.finish_reason = 'tool_calls'
+    if (choice.finish_reason === 'stop' && state.calls.size) {
+      choice.finish_reason = 'tool_calls'
+      changed = true
+    }
   }
   const usage = json.usage
   const thoughts = usage ? usage.total_tokens - usage.prompt_tokens - usage.completion_tokens : 0
   if (thoughts > 0) {
     usage.completion_tokens += thoughts
     usage.completion_tokens_details = { ...usage.completion_tokens_details, reasoning_tokens: thoughts }
+    changed = true
   }
-  return JSON.stringify(json)
+  if (usage) state.usage = usage
+  return changed ? JSON.stringify(json) : data
+}
+function logUsage(state) {
+  if (!usageLog || !state.usage || state.logged) return
+  state.logged = true
+  try { appendFileSync(usageLog, JSON.stringify(state.usage) + '\\n') } catch {}
 }
 function stream() {
-  const state = { calls: new Map(), last: undefined }
+  const state = { calls: new Map(), last: undefined, usage: undefined, logged: false }
   const decoder = new StringDecoder('utf8')
   let rest = ''
   const line = (text) => {
+    if (text.startsWith('data: [DONE]')) logUsage(state)
     if (!text.startsWith('data: {')) return text
     try { return 'data: ' + chunk(text.slice(6), state) } catch { return text }
   }
@@ -122,20 +145,22 @@ function stream() {
     },
     flush(done) {
       rest += decoder.end()
-      done(null, rest ? line(rest) : '')
+      const last = rest ? line(rest) : ''
+      logUsage(state)
+      done(null, last)
     },
   })
 }
 const server = createServer(async (req, res) => {
   try {
     const headers = Object.entries(req.headers).filter(([k]) => !drop.has(k))
-    const rewrite = chat(req) && (google || effort)
+    const rewrite = chat(req) && (effort || signatures.size)
     const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : rewrite ? await request(req) : Readable.toWeb(req)
     const r = await fetch(upstream + req.url, { method: req.method, headers, body, duplex: 'half' })
     const out = {}
     r.headers.forEach((v, k) => { if (k !== 'content-encoding' && k !== 'content-length') out[k] = v })
     res.writeHead(r.status, out)
-    const events = google && chat(req) && /event-stream/.test(r.headers.get('content-type') ?? '')
+    const events = chat(req) && /event-stream/.test(r.headers.get('content-type') ?? '')
     if (r.body) (events ? Readable.fromWeb(r.body).pipe(stream()) : Readable.fromWeb(r.body)).pipe(res)
     else res.end()
   } catch (error) {
@@ -245,8 +270,8 @@ export function fxEnv(model: string, { provider: asked, vertex, effort }: FxRout
     FX_RELAY_UPSTREAM: vertex
       ? `https://${vertexHost(vertex.location)}`
       : FX_PROVIDERS[configured].url,
-    FX_RELAY_GOOGLE: vertex ? '1' : '',
     FX_RELAY_EFFORT: effort ?? '',
+    FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   }
 }
 
@@ -355,22 +380,99 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
           `The sandbox can't broker ${provider.credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
         )
       }
-      return translated(await acp.doStart(options), mcpServers)
+      const ledger = await FxUsageLedger.open(options.sandboxSession as unknown as LedgerSandbox)
+      return fxSession(await acp.doStart(options), mcpServers, ledger)
     },
   }
 }
 
 type Session = Awaited<ReturnType<HarnessV1['doStart']>>
-type Emit = (part: { type: string; [key: string]: unknown }) => void
+type Part = { type: string; [key: string]: unknown }
+type Emit = (part: Part) => void
+type LedgerSandbox = {
+  readTextFile?: (options: { path: string }) => PromiseLike<string | null>
+}
 
-/** The session, with each turn's parts through a fresh {@link FxStreamTranslator}. */
-function translated(session: Session, mcpServers: readonly string[]): Session {
-  const turn = (run: (options: never) => unknown) => (options: { emit: Emit }) => {
+/**
+ * The relay's usage log ({@link FX_RELAY_USAGE_FILE}), read after each turn: the calls logged
+ * since the last read give the turn's cache reads and reasoning tokens, which fx's prompt
+ * response leaves out on a Chat Completions provider.
+ */
+export class FxUsageLedger {
+  private readonly read: NonNullable<LedgerSandbox['readTextFile']>
+  private seen = 0
+
+  private constructor(read: NonNullable<LedgerSandbox['readTextFile']>) {
+    this.read = read
+  }
+
+  /** Starts after whatever an earlier session in the sandbox logged; none without a file reader. */
+  static async open(sandbox: LedgerSandbox): Promise<FxUsageLedger | undefined> {
+    const { readTextFile } = sandbox
+    if (typeof readTextFile !== 'function') return undefined
+    const ledger = new FxUsageLedger(readTextFile.bind(sandbox))
+    ledger.seen = (await ledger.lines()).length
+    return ledger
+  }
+
+  private async lines() {
+    try {
+      const text = await this.read({ path: FX_RELAY_USAGE_FILE })
+      return (text ?? '').split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
+  /** The turn's `finish` part with the split from the calls logged since the last one. */
+  async settle(finish: Part): Promise<Part> {
+    const lines = await this.lines()
+    const turn = lines.slice(this.seen)
+    this.seen = lines.length
+    const usage = finish.totalUsage as
+      | { inputTokens?: { total?: unknown }; outputTokens?: { total?: unknown } }
+      | undefined
+    const input = usage?.inputTokens?.total
+    const output = usage?.outputTokens?.total
+    if (typeof input !== 'number' || typeof output !== 'number') return finish
+    const split = fxCallsSplit(turn, input, output)
+    return split ? withUsageSplit(finish, split, true) : finish
+  }
+}
+
+/**
+ * The session, with each turn's parts through a fresh {@link FxStreamTranslator}, and with a
+ * ledger, its `finish` part held until the ledger has split its usage.
+ */
+export function fxSession(
+  session: Session,
+  mcpServers: readonly string[],
+  ledger?: FxUsageLedger,
+): Session {
+  const turn = (run: (options: never) => unknown) => async (options: { emit: Emit }) => {
     const translator = new FxStreamTranslator({ mcpServers })
-    return run({
+    let finish: Part | undefined
+    const control = await run({
       ...options,
-      emit: (part: Parameters<Emit>[0]) => options.emit(translator.push(part)),
+      emit: (part: Part) => {
+        const out = translator.push(part)
+        if (ledger && out.type === 'finish') finish = out
+        else options.emit(out)
+      },
     } as never)
+    const done = (control as { done?: unknown } | undefined)?.done
+    if (!ledger || !done) return control
+    // The turn's stream closes when `done` settles, so the held part goes out just before.
+    const settled = Promise.resolve(done).finally(async () => {
+      if (finish) options.emit(await ledger.settle(finish))
+    })
+    return new Proxy(control as object, {
+      get(target, key) {
+        if (key === 'done') return settled
+        const value = Reflect.get(target, key, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
   }
   return new Proxy(session, {
     get(target, key, receiver) {

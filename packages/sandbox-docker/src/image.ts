@@ -23,7 +23,7 @@ export const HARNESS_PACKAGES: Record<
   goose: { name: '@reeval/harness-goose', version: '0.1.14' },
   pi: { name: '@reeval/harness-pi', version: '0.2.9' },
   codex: { name: '@reeval/harness-codex', version: '0.1.12' },
-  fx: { name: '@reeval/harness-fx', version: '0.1.9' },
+  fx: { name: '@reeval/harness-fx', version: '0.1.10' },
   'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.11' },
 }
 

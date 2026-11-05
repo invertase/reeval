@@ -224,7 +224,7 @@ Each turn's `usage` is null when the harness reports no tokens.
 - **OpenCode:** one total for the whole turn.
 - **Goose:** summed over the turn's model calls. `reasoning` is part of `output`.
 - **pi:** the sum of each model call's tokens, reasoning tokens included.
-- **fx:** summed over the turn's model calls. `reasoning` is part of `output`.
+- **fx:** summed over the turn's model calls. `input` excludes cache reads, which `cacheRead` holds, and `reasoning` is part of `output`.
 - **Grok Build:** summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`.
 
 For more information about the token fields, see [`TokenUsage`](/reference/run-record#tokenusage).

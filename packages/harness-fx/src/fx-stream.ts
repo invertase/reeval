@@ -46,6 +46,98 @@ const withSkillName = (part: Part): Part => {
   return { ...part, input: typeof raw === 'string' ? JSON.stringify(named) : named }
 }
 
+/** A turn's cache and reasoning tokens, each unset when nothing counted it. */
+export type FxUsageSplit = {
+  readonly cacheRead?: number | undefined
+  readonly cacheWrite?: number | undefined
+  readonly reasoning?: number | undefined
+}
+
+/**
+ * A `finish` part with `split` in its `totalUsage`, and the uncached input that leaves. A count
+ * the part already has stays, unless `override`.
+ */
+export function withUsageSplit(part: Part, split: FxUsageSplit, override: boolean): Part {
+  const usage = record(part.totalUsage)
+  const input = record(usage.inputTokens)
+  const output = record(usage.outputTokens)
+  const pick = (had: unknown, found: number | undefined) =>
+    found !== undefined && (override || had === undefined) ? found : had
+  const cacheRead = pick(input.cacheRead, split.cacheRead)
+  const cacheWrite = pick(input.cacheWrite, split.cacheWrite)
+  const reasoning = pick(output.reasoning, split.reasoning)
+  const cacheChanged = cacheRead !== input.cacheRead || cacheWrite !== input.cacheWrite
+  if (!cacheChanged && reasoning === output.reasoning) return part
+  const cached =
+    (typeof cacheRead === 'number' ? cacheRead : 0) +
+    (typeof cacheWrite === 'number' ? cacheWrite : 0)
+  return {
+    ...part,
+    totalUsage: {
+      ...usage,
+      inputTokens: cacheChanged
+        ? {
+            ...input,
+            ...(typeof input.total === 'number'
+              ? { noCache: Math.max(input.total - cached, 0) }
+              : {}),
+            cacheRead,
+            cacheWrite,
+          }
+        : input,
+      outputTokens: reasoning === output.reasoning ? output : { ...output, reasoning },
+    },
+  }
+}
+
+/** One Chat Completions call's `usage`, as fx's relay logs it. */
+type ChatUsage = {
+  prompt_tokens?: unknown
+  completion_tokens?: unknown
+  prompt_tokens_details?: { cached_tokens?: unknown; cache_write_tokens?: unknown }
+  completion_tokens_details?: { reasoning_tokens?: unknown }
+}
+
+/**
+ * The cache and reasoning split of a turn whose prompt response counted `input` and `output`
+ * tokens, from the relay's log lines since the last turn: the longest run of the last calls whose
+ * `prompt_tokens` and `completion_tokens` sum to exactly those, so a call left over from a turn cut
+ * short isn't counted. `undefined` when no run does, since then the log isn't this turn's.
+ */
+export function fxCallsSplit(
+  lines: readonly string[],
+  input: number,
+  output: number,
+): FxUsageSplit | undefined {
+  const calls = lines.flatMap((line): ChatUsage[] => {
+    try {
+      const value = JSON.parse(line)
+      return value && typeof value === 'object' ? [value] : []
+    } catch {
+      return []
+    }
+  })
+  const count = (value: unknown) => (typeof value === 'number' ? value : undefined)
+  for (let start = 0; start < calls.length; start++) {
+    const turn = calls.slice(start)
+    const sum = (get: (call: ChatUsage) => unknown) => {
+      const counts = turn.map((call) => count(get(call)))
+      return counts.every((c) => c === undefined)
+        ? undefined
+        : counts.reduce<number>((total, c) => total + (c ?? 0), 0)
+    }
+    if (sum((c) => c.prompt_tokens) !== input || sum((c) => c.completion_tokens) !== output) {
+      continue
+    }
+    return {
+      cacheRead: sum((c) => c.prompt_tokens_details?.cached_tokens),
+      cacheWrite: sum((c) => c.prompt_tokens_details?.cache_write_tokens),
+      reasoning: sum((c) => c.completion_tokens_details?.reasoning_tokens),
+    }
+  }
+  return undefined
+}
+
 /**
  * Fixes up one fx turn's parts from `@ai-sdk/harness-acp`'s bridge:
  *
@@ -57,14 +149,16 @@ const withSkillName = (part: Part): Part => {
  *   since a server's name can itself contain `_`.
  * - A `skill` call names its skill by `location` (`skill:<source>:<n>/<name>`); its input gains
  *   that `name`, which is how reeval reads which skill a load tool loaded.
- * - fx's prompt response counts reasoning as `usage.reasoningTokens`, where ACP says
- *   `thoughtTokens`, so the bridge drops it; the turn's `finish` part's `totalUsage` gets it back.
+ * - fx's prompt response names its usage `reasoningTokens`, `cacheReadTokens` and
+ *   `cacheWriteTokens`, where ACP says `thoughtTokens`, `cachedReadTokens` and
+ *   `cachedWriteTokens`, so the bridge drops them; the turn's `finish` part's `totalUsage` gets
+ *   them back.
  */
 export class FxStreamTranslator {
   private readonly prefixes: ReadonlyArray<readonly [string, string]>
   private readonly outputs = new Map<string, string>()
   private readonly exitCodes = new Map<string, number>()
-  private reasoningTokens: number | undefined
+  private split: FxUsageSplit = {}
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
     this.prefixes = (options.mcpServers ?? [])
@@ -77,7 +171,7 @@ export class FxStreamTranslator {
       this.observe(record(part.rawValue))
       return part
     }
-    if (part.type === 'finish') return this.withReasoning(part)
+    if (part.type === 'finish') return withUsageSplit(part, this.split, false)
     if (
       (part.type !== 'tool-call' && part.type !== 'tool-result' && part.type !== 'tool-error') ||
       typeof part.toolName !== 'string'
@@ -99,20 +193,15 @@ export class FxStreamTranslator {
     }
   }
 
-  private withReasoning(part: Part): Part {
-    const usage = record(part.totalUsage)
-    const output = record(usage.outputTokens)
-    if (this.reasoningTokens === undefined || output.reasoning !== undefined) return part
-    return {
-      ...part,
-      totalUsage: { ...usage, outputTokens: { ...output, reasoning: this.reasoningTokens } },
-    }
-  }
-
   private observe(update: Record<string, unknown>) {
-    const reasoning = record(update.usage).reasoningTokens
-    if (typeof update.stopReason === 'string' && typeof reasoning === 'number') {
-      this.reasoningTokens = reasoning
+    if (typeof update.stopReason === 'string') {
+      const usage = record(update.usage)
+      const count = (key: string) => (typeof usage[key] === 'number' ? usage[key] : undefined)
+      this.split = {
+        cacheRead: count('cacheReadTokens'),
+        cacheWrite: count('cacheWriteTokens'),
+        reasoning: count('reasoningTokens'),
+      }
     }
     const id = update.toolCallId
     if (typeof id !== 'string' || update.sessionUpdate !== 'tool_call_update') return

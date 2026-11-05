@@ -14,10 +14,11 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { AntigravityStreamTranslator } from '@reeval/harness-antigravity'
 import { CodexStreamTranslator } from '@reeval/harness-codex'
 import { CursorSdkStreamTranslator } from '@reeval/harness-cursor-sdk'
-import { FxStreamTranslator } from '@reeval/harness-fx'
+import { FX_RELAY_USAGE_FILE, FxStreamTranslator, FxUsageLedger } from '@reeval/harness-fx'
 import { GooseStreamTranslator } from '@reeval/harness-goose'
 import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
+import { tokenUsage } from '../src/harness/agent.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { promptTokens } from '../src/usage.ts'
@@ -1371,5 +1372,102 @@ describe("replay: Codex's format holds every item, status and failure codex exec
       unknownSignatures('codex', item({ type: 'agent_message', text: 'x', phase: 'final' })),
       [],
     )
+  })
+})
+
+describe("replay: fx on OpenAI's Chat Completions splits each turn's cache reads and reasoning", () => {
+  // An audit run on gpt-5.5: the two turns' prompt responses and finish parts, and the usage of
+  // each of the 12 model calls the gateway saw, as the relay logs them. fx's prompt response
+  // counts cached input as input and leaves out reasoning; the relay's log has both.
+  const fixture = (name: string) =>
+    readFileSync(join(testDir, 'fixtures', `fx-openai-usage.${name}`), 'utf8')
+  const turns = Object.groupBy(parse(fixture('raw.jsonl')), (l) => String(l.turn))
+  const calls = fixture('calls.ndjson').split('\n').filter(Boolean)
+  /** The finish part as the bridge sends it: AI SDK usage with each count's breakdown. */
+  const bridged = (part: Line['part']) => {
+    const usage = part.totalUsage as { inputTokens: number; outputTokens: number }
+    return {
+      ...part,
+      totalUsage: {
+        inputTokens: { total: usage.inputTokens },
+        outputTokens: { total: usage.outputTokens },
+      },
+    }
+  }
+  type Counts = { total?: number; noCache?: number; cacheRead?: number; cacheWrite?: number }
+  const recorded = (part: { totalUsage?: unknown }) => {
+    const { inputTokens: i, outputTokens: o } = part.totalUsage as {
+      inputTokens: Counts
+      outputTokens: { total?: number; reasoning?: number }
+    }
+    return tokenUsage({
+      inputTokens: i.total,
+      inputTokenDetails: { noCacheTokens: i.noCache, cacheReadTokens: i.cacheRead },
+      outputTokens: o.total,
+      outputTokenDetails: { reasoningTokens: o.reasoning },
+    })
+  }
+  /** Each turn's recorded usage, with the relay's log holding `logged(n)` after turn n. */
+  const replayTurns = async (logged: (turn: number) => string[]) => {
+    let turn = -1
+    const ledger = await FxUsageLedger.open({
+      readTextFile: async ({ path }) => {
+        assert.equal(path, FX_RELAY_USAGE_FILE)
+        return turn < 0 ? null : logged(turn).join('\n')
+      },
+    })
+    assert.ok(ledger)
+    const out = []
+    for (turn = 0; turns[String(turn)]; turn++) {
+      const t = new FxStreamTranslator()
+      let finish: Line['part'] | undefined
+      for (const l of turns[String(turn)] ?? []) {
+        const part = t.push((l.part.type === 'finish' ? bridged(l.part) : l.part) as never)
+        if (part.type === 'finish') finish = part as Line['part']
+      }
+      assert.ok(finish)
+      out.push(recorded(await ledger.settle(finish)))
+    }
+    return out
+  }
+  const byTurn = (turn: number) => calls.slice(0, turn === 0 ? 9 : 12)
+
+  test('each turn records fresh input, cache reads and reasoning as the wire billed them', async () => {
+    assert.deepEqual(await replayTurns(byTurn), [
+      { input: 14275, output: 697, cacheRead: 73344, cacheWrite: 0, reasoning: 263 },
+      { input: 1560, output: 441, cacheRead: 44928, cacheWrite: 0, reasoning: 309 },
+    ])
+  })
+
+  test('a call left in the log by a turn cut short is not counted in the next turn', async () => {
+    const leftover = JSON.stringify({ prompt_tokens: 900, completion_tokens: 9 })
+    const usage = await replayTurns((turn) =>
+      turn === 0 ? [leftover, ...byTurn(0)] : [leftover, ...byTurn(1)],
+    )
+    assert.deepEqual(usage[0], {
+      input: 14275,
+      output: 697,
+      cacheRead: 73344,
+      cacheWrite: 0,
+      reasoning: 263,
+    })
+  })
+
+  test("twin: without the relay's log, cache reads count as fresh input and reasoning is unknown", async () => {
+    assert.deepEqual(await replayTurns(() => []), [
+      { input: 87619, output: 697, cacheRead: 0, cacheWrite: 0, reasoning: null },
+      { input: 46488, output: 441, cacheRead: 0, cacheWrite: 0, reasoning: null },
+    ])
+  })
+
+  test("twin: a log that isn't the turn's calls changes nothing", async () => {
+    const usage = await replayTurns((turn) => byTurn(turn).slice(0, -1))
+    assert.deepEqual(usage[0], {
+      input: 87619,
+      output: 697,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: null,
+    })
   })
 })

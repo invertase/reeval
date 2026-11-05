@@ -14,12 +14,15 @@ import {
   FX_CLI_VERSION,
   FX_INSTALL_COMMAND,
   FX_QUIET_ENV,
+  FX_RELAY_USAGE_FILE,
+  FxUsageLedger,
   fxEnv,
   fxProviderOf,
+  fxSession,
   fxSettings,
   fxVertexBaseUrl,
 } from '../src/fx-harness.ts'
-import { FxStreamTranslator, fxMcpSegment } from '../src/fx-stream.ts'
+import { FxStreamTranslator, fxCallsSplit, fxMcpSegment, withUsageSplit } from '../src/fx-stream.ts'
 import { VERSION } from '../src/version.ts'
 
 /** Runs the script's sha256 check on a file, with its digest and with another. */
@@ -91,9 +94,10 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
     FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://api.openai.com',
-    FX_RELAY_GOOGLE: '',
     FX_RELAY_EFFORT: '',
+    FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   })
+  assert.equal(fxEnv('openai/gpt-5.6').FX_RELAY_USAGE, FX_RELAY_USAGE_FILE)
   assert.deepEqual(
     Object.keys(fxEnv('openai/gpt-5.6')).sort(),
     Object.keys(fxEnv('gpt-4.1')).sort(),
@@ -122,8 +126,8 @@ test('on OpenRouter, an OpenRouter id runs on its Chat Completions API through t
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
     FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://openrouter.ai',
-    FX_RELAY_GOOGLE: '',
     FX_RELAY_EFFORT: '',
+    FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   })
   const [file] = fxSettings('openai/gpt-5-mini', { provider: 'openrouter' })
   assert.deepEqual(JSON.parse(file?.content ?? ''), {
@@ -160,8 +164,8 @@ test("on Vertex AI, fx calls the relay's copy of the Chat Completions endpoint w
   const env = fxEnv('google/gemini-3.8-flash', { vertex, effort: 'low' })
   assert.equal(env.FX_PROVIDER, 'vertex')
   assert.equal(env.FX_RELAY_UPSTREAM, 'https://aiplatform.googleapis.com')
-  assert.equal(env.FX_RELAY_GOOGLE, '1')
   assert.equal(env.FX_RELAY_EFFORT, 'low')
+  assert.equal(env.FX_RELAY_USAGE, FX_RELAY_USAGE_FILE)
   assert.equal(
     fxEnv('m', { vertex: { project: 'p', location: 'us-east5' } }).FX_RELAY_UPSTREAM,
     'https://us-east5-aiplatform.googleapis.com',
@@ -244,7 +248,7 @@ const events = (text: string) =>
     .filter((l) => l.startsWith('data: {'))
     .map((l) => JSON.parse(l.slice(6)))
 
-test("the relay makes Google's Chat Completions stream one fx reads, and gives back its signatures", async () => {
+test('the relay makes a stream with thought signatures one fx reads, and gives them back', async () => {
   const call = { id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{}' } }
   const stream = sse(
     {
@@ -267,13 +271,22 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
   )
   await withRelay(
     () => stream,
-    { FX_RELAY_GOOGLE: '1', FX_RELAY_EFFORT: 'low' },
+    {},
     async (url, requests) => {
       const post = (messages: unknown[]) =>
         fetch(`${url}/v1/projects/p/locations/global/endpoints/openapi/chat/completions`, {
           method: 'POST',
           body: JSON.stringify({ model: 'google/gemini-3.8-flash', messages }),
         }).then((r) => r.text())
+      const other = { ...call, id: 'call_unseen' }
+      const before = JSON.stringify({
+        model: 'google/gemini-3.8-flash',
+        messages: [{ role: 'assistant', tool_calls: [other] }],
+      })
+      await fetch(`${url}/v1/chat/completions`, { method: 'POST', body: before }).then((r) =>
+        r.text(),
+      )
+      assert.equal(requests.shift(), before, 'no signature seen yet, so none is added')
       const [first, last] = events(await post([{ role: 'user', content: 'hi' }]))
       assert.equal(first.choices[0].delta.tool_calls[0].index, 0)
       assert.equal(last.choices[0].finish_reason, 'tool_calls')
@@ -283,10 +296,8 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
         total_tokens: 150,
         completion_tokens_details: { reasoning_tokens: 40 },
       })
-      const other = { ...call, id: 'call_unseen' }
       await post([{ role: 'assistant', tool_calls: [call, other] }])
       const sent = JSON.parse(requests[1] ?? '')
-      assert.equal(sent.reasoning_effort, 'low')
       assert.deepEqual(
         sent.messages[0].tool_calls.map(
           (c: { extra_content: { google: { thought_signature: string } } }) =>
@@ -298,14 +309,26 @@ test("the relay makes Google's Chat Completions stream one fx reads, and gives b
   )
 })
 
-test('without FX_RELAY_GOOGLE or FX_RELAY_EFFORT the relay passes calls through as they are', async () => {
-  const stream = sse({
-    choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 5 },
-  })
+test('without FX_RELAY_EFFORT the relay passes a call and a stream fx reads as they are', async () => {
+  const stream = sse(
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'f' } }],
+          },
+        },
+      ],
+    },
+    {
+      choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  )
   await withRelay(
     () => stream,
-    { FX_RELAY_GOOGLE: '', FX_RELAY_EFFORT: '' },
+    { FX_RELAY_EFFORT: '' },
     async (url, requests) => {
       const sent = JSON.stringify({ model: 'gpt-5.5', messages: [] })
       const text = await fetch(`${url}/v1/chat/completions`, { method: 'POST', body: sent }).then(
@@ -317,10 +340,71 @@ test('without FX_RELAY_GOOGLE or FX_RELAY_EFFORT the relay passes calls through 
   )
 })
 
-test('the relay keeps a character its request splits across chunks whole', async () => {
+test("with FX_RELAY_USAGE the relay logs each call's last usage, and passes the stream as it is", async () => {
+  const usage = {
+    prompt_tokens: 5935,
+    completion_tokens: 111,
+    prompt_tokens_details: { cached_tokens: 4736 },
+    completion_tokens_details: { reasoning_tokens: 30 },
+  }
+  const stream = sse(
+    { choices: [{ index: 0, delta: { content: 'hi' } }], usage: null },
+    { choices: [], usage },
+  )
+  const log = join(mkdtempSync(join(tmpdir(), 'fx-usage-')), 'usage.ndjson')
+  await withRelay(
+    () => stream,
+    { FX_RELAY_USAGE: log },
+    async (url) => {
+      const post = () =>
+        fetch(`${url}/v1/chat/completions`, { method: 'POST', body: '{}' }).then((r) => r.text())
+      assert.equal(await post(), stream)
+      // The line is written before the stream's end reaches fx.
+      assert.deepEqual(
+        readFileSync(log, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l)),
+        [usage],
+      )
+      await post()
+      assert.equal(readFileSync(log, 'utf8').split('\n').filter(Boolean).length, 2)
+      await fetch(`${url}/v1/models`).then((r) => r.text())
+      assert.equal(
+        readFileSync(log, 'utf8').split('\n').filter(Boolean).length,
+        2,
+        'only model calls',
+      )
+    },
+  )
+})
+
+test('the relay logs the usage fx reads, with thinking tokens only total_tokens counted', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'fx-usage-')), 'usage.ndjson')
+  await withRelay(
+    // No [DONE]: the stream's end logs it.
+    () =>
+      `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 10, total_tokens: 150 } })}\n\n`,
+    { FX_RELAY_USAGE: log },
+    async (url) => {
+      await fetch(`${url}/v1/projects/p/locations/global/endpoints/openapi/chat/completions`, {
+        method: 'POST',
+        body: '{}',
+      }).then((r) => r.text())
+      assert.deepEqual(JSON.parse(readFileSync(log, 'utf8')), {
+        prompt_tokens: 100,
+        completion_tokens: 50,
+        total_tokens: 150,
+        completion_tokens_details: { reasoning_tokens: 40 },
+      })
+    },
+  )
+})
+
+test('the relay keeps a character its request splits across chunks whole, and adds the effort', async () => {
   await withRelay(
     () => sse({ choices: [] }),
-    { FX_RELAY_GOOGLE: '1' },
+    { FX_RELAY_EFFORT: 'low' },
     async (url, requests) => {
       const content = 'héllo — 日本語 🎉'
       const sent = Buffer.from(
@@ -341,6 +425,7 @@ test('the relay keeps a character its request splits across chunks whole', async
         duplex: 'half',
       } as RequestInit).then((r) => r.text())
       assert.equal(JSON.parse(requests[0] ?? '').messages[0].content, content)
+      assert.equal(JSON.parse(requests[0] ?? '').reasoning_effort, 'low')
     },
   )
 })
@@ -400,6 +485,146 @@ test("the turn's finish usage counts fx's reasoningTokens, which ACP calls thoug
       inputTokens: { total: 26447 },
       outputTokens: { total: 551, text: undefined, reasoning: 391 },
     },
+  })
+})
+
+test("the turn's finish usage counts fx's cacheReadTokens and cacheWriteTokens, which ACP names cachedReadTokens and cachedWriteTokens", () => {
+  const t = new FxStreamTranslator()
+  const usage = { inputTokens: 1000, outputTokens: 50, cacheReadTokens: 700, cacheWriteTokens: 100 }
+  t.push({ type: 'raw', rawValue: { stopReason: 'end_turn', usage } })
+  assert.deepEqual(
+    t.push({
+      type: 'finish',
+      totalUsage: { inputTokens: { total: 1000 }, outputTokens: { total: 50 } },
+    }),
+    {
+      type: 'finish',
+      totalUsage: {
+        inputTokens: { total: 1000, noCache: 200, cacheRead: 700, cacheWrite: 100 },
+        outputTokens: { total: 50 },
+      },
+    },
+  )
+})
+
+const call = (prompt: number, completion: number, cached?: number, reasoning?: number) =>
+  JSON.stringify({
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    ...(cached === undefined ? {} : { prompt_tokens_details: { cached_tokens: cached } }),
+    ...(reasoning === undefined
+      ? {}
+      : { completion_tokens_details: { reasoning_tokens: reasoning } }),
+  })
+
+test("a turn's split is its calls' cached and reasoning tokens, when they sum to fx's totals", () => {
+  const calls = [call(100, 10, 60, 4), call(200, 20, 150, 0)]
+  assert.deepEqual(fxCallsSplit(calls, 300, 30), {
+    cacheRead: 210,
+    cacheWrite: undefined,
+    reasoning: 4,
+  })
+  assert.deepEqual(
+    fxCallsSplit([call(1, 1), ...calls, 'not json'], 300, 30),
+    {
+      cacheRead: 210,
+      cacheWrite: undefined,
+      reasoning: 4,
+    },
+    'a leftover call before the turn is skipped',
+  )
+  assert.deepEqual(
+    fxCallsSplit([call(5, 5)], 5, 5),
+    {
+      cacheRead: undefined,
+      cacheWrite: undefined,
+      reasoning: undefined,
+    },
+    'a provider that counts neither',
+  )
+  assert.equal(fxCallsSplit(calls, 301, 30), undefined)
+  assert.equal(fxCallsSplit(calls.slice(1), 300, 30), undefined)
+  assert.equal(fxCallsSplit([], 0, 0), undefined)
+})
+
+test("the ledger splits each turn from the calls logged since the last, and holds the turn's finish", async () => {
+  let log = [call(7, 7)]
+  const sandbox = { readTextFile: async () => log.join('\n') }
+  const ledger = await FxUsageLedger.open(sandbox)
+  assert.ok(ledger)
+  const finish = (input: number, output: number) => ({
+    type: 'finish',
+    totalUsage: { inputTokens: { total: input }, outputTokens: { total: output } },
+  })
+  log = [...log, call(100, 10, 60, 4)]
+  assert.deepEqual(await ledger.settle(finish(100, 10)), {
+    type: 'finish',
+    totalUsage: {
+      inputTokens: { total: 100, noCache: 40, cacheRead: 60, cacheWrite: undefined },
+      outputTokens: { total: 10, reasoning: 4 },
+    },
+  })
+  log = [...log, call(50, 5, 0, 0)]
+  assert.deepEqual((await ledger.settle(finish(50, 5))).totalUsage, {
+    inputTokens: { total: 50, noCache: 50, cacheRead: 0, cacheWrite: undefined },
+    outputTokens: { total: 5, reasoning: 0 },
+  })
+  assert.deepEqual(await ledger.settle(finish(9, 9)), finish(9, 9), 'nothing logged')
+  assert.equal(await FxUsageLedger.open({}), undefined)
+  const failing = await FxUsageLedger.open({
+    readTextFile: () => Promise.reject(new Error('gone')),
+  })
+  assert.deepEqual(await failing?.settle(finish(1, 1)), finish(1, 1))
+  assert.deepEqual(withUsageSplit(finish(1, 1), {}, true), finish(1, 1))
+})
+
+test("on a Chat Completions provider, a turn's finish goes out once the ledger has split it, before the turn is done", async () => {
+  const log = [call(100, 10, 60, 4)]
+  const emitted: Array<{ type: string; totalUsage?: unknown }> = []
+  let end = () => {}
+  // As harness-acp's turn: it returns the turn's control at once, and `done` settles at its end.
+  const session = {
+    doPromptTurn: async ({ emit }: { emit: (part: unknown) => void }) => {
+      const done = new Promise<void>((resolve) => {
+        end = () => {
+          emit({ type: 'text-delta', delta: 'hi' })
+          emit({
+            type: 'finish',
+            totalUsage: { inputTokens: { total: 100 }, outputTokens: { total: 10 } },
+          })
+          resolve()
+        }
+      })
+      return {
+        done,
+        submit: function (this: unknown) {
+          return this
+        },
+      }
+    },
+  }
+  let reads = 0
+  const ledger = await FxUsageLedger.open({
+    readTextFile: async ({ path }) => {
+      assert.equal(path, FX_RELAY_USAGE_FILE)
+      return reads++ === 0 ? null : log.join('\n')
+    },
+  })
+  const started = fxSession(session as never, [], ledger) as unknown as {
+    doPromptTurn: (o: unknown) => Promise<{ done: Promise<void>; submit: () => unknown }>
+  }
+  const control = await started.doPromptTurn({ emit: (p: never) => emitted.push(p) })
+  assert.deepEqual(emitted, [], 'the turn is still running')
+  assert.ok(control.submit(), "the control's methods still work")
+  end()
+  await control.done
+  assert.deepEqual(
+    emitted.map((p) => p.type),
+    ['text-delta', 'finish'],
+  )
+  assert.deepEqual(emitted[1]?.totalUsage, {
+    inputTokens: { total: 100, noCache: 40, cacheRead: 60, cacheWrite: undefined },
+    outputTokens: { total: 10, reasoning: 4 },
   })
 })
 

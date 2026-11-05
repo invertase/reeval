@@ -119,6 +119,11 @@ export type HarnessRow = {
   mcp?: false
   /** Whether it reports token usage for each turn; checked either way. */
   tokens: boolean
+  /**
+   * Its turns split cache reads and reasoning out of the input and output: every turn counts
+   * reasoning tokens, and some turn reads the provider's prompt cache.
+   */
+  tokenSplit?: true
   /** Why a real harness reports none, for the harness matrix in the README and docs. */
   tokensWhy?: string
   /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
@@ -377,6 +382,7 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
     tokens: true,
+    tokenSplit: true,
     // fx names no model over ACP; the gateway reads the dated snapshot the API answers with.
     servedModel: /^gpt-5\.5-\d{4}-\d{2}-\d{2}$/,
     wireModel: /^gpt-5\.5-\d{4}-\d{2}-\d{2}$/,

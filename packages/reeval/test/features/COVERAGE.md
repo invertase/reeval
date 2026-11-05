@@ -155,7 +155,7 @@
 | Goose's tokens per turn, read after each turn from the model calls it added to Goose's `usage_ledger` (its ACP usage is the last call's) | ✓ 1 | — | — | — | — | ◐ 2 (1 without a canary) |
 | `pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | — |
-| `fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
+| `fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens (cache reads and reasoning from the relay's log of each Chat Completions call) and its tool names | ✓ 3 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — | — |
 | `effort` on each harness factory: default id, requested vs served, and sent as the model's own setting | ✓ 7 | ✓ 1 | ● 1 | ● 1 | — | ◐ 1 (1 without a canary) |
 | An unset `effort` runs at `medium` on every harness and model that takes one, recorded and noted in the plan where it can't; Cursor's `effort` and `params` checked against its model catalog at plan time | ✓ 3 | ✓ 3 | — | — | — | — |
