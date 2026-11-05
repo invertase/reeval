@@ -1,9 +1,11 @@
 // Whether reeval still needs its patch to @ai-sdk/harness-claude-code (pnpm-workspace.yaml's
 // patchedDependencies): the newest adapter from npm, key-free. It replays a real captured turn
 // (packages/reeval/test/fixtures/claude-code-bridge/) through that version's own bridge, as
-// captured and with a plugin's SessionStart hook reporting before system/init.
-//   Upstream reports the served model unpatched: it fixed the bug, so drop the patch (exit 1).
-//   The patch no longer applies, or applied doesn't report the model: rebase it (exit 1).
+// captured and with a plugin's SessionStart hook reporting before system/init. The patch fixes two
+// bugs: the bridge loses the served model, and it counts the turn's thinking tokens as text.
+//   Upstream reports the served model and the thinking tokens unpatched: it fixed both, so drop
+//   the patch (exit 1).
+//   The patch no longer applies, or applied doesn't fix both: rebase it (exit 1).
 //   Otherwise the patch is still needed and still works on the newest version (exit 0).
 //   node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
 // REEVAL_DRIFT_CLAUDE_CODE_VERSION names a version instead of the newest. Appends a line to
@@ -45,6 +47,25 @@ const servedModel = async (dir) => {
   }
   return MODEL
 }
+/** The thinking tokens the captured turn's result reports. */
+const THINKING = 204
+/** The reasoning tokens the bridge in `dir` gives the captured turn, or undefined. */
+const reasoningTokens = async (dir) => {
+  const bridge = join(dir, 'dist/bridge/index.mjs')
+  const parts = await replayBridge({ bridge, start, messages })
+  return parts.at(-1)?.totalUsage?.outputTokens?.reasoning
+}
+/** What the bridge in `dir` still gets wrong, or none. */
+const bugs = async (dir) => {
+  const model = await servedModel(dir)
+  const reasoning = await reasoningTokens(dir)
+  return [
+    ...(model === MODEL ? [] : [`loses the served model (reports ${model})`]),
+    ...(reasoning === THINKING
+      ? []
+      : [`drops the turn's ${THINKING} thinking tokens (reports ${reasoning})`]),
+  ]
+}
 
 const report = (ok, line) => {
   console.log(line)
@@ -65,10 +86,11 @@ try {
   execFileSync('tar', ['-xzf', tarball], { cwd: tmp })
   const pkg = join(tmp, 'package')
 
-  if ((await servedModel(pkg)) === MODEL)
+  const unpatched = await bugs(pkg)
+  if (!unpatched.length)
     report(
       false,
-      `${latest} reports the served model unpatched: upstream fixed it. Drop ${patchFile} and its patchedDependencies entry, and bump from ${pinned}.`,
+      `${latest} reports the served model and the thinking tokens unpatched: upstream fixed both. Drop ${patchFile} and its patchedDependencies entry, and bump from ${pinned}.`,
     )
 
   // pnpm applies a patch only at its exact lines, where git apply would move a hunk.
@@ -76,15 +98,15 @@ try {
   if (apply.status !== 0 || /\(offset -?\d+ lines?\)/.test(apply.stderr))
     report(
       false,
-      `${patchFile} doesn't apply to ${latest}, which still loses the served model: rebase it with pnpm patch.\n${apply.stderr}`,
+      `${patchFile} doesn't apply to ${latest}, which still ${unpatched.join(' and ')}: rebase it with pnpm patch.\n${apply.stderr}`,
     )
-  const patched = await servedModel(pkg)
-  if (patched !== MODEL)
-    report(false, `${patchFile} applies to ${latest} but its bridge still reports ${patched}`)
+  const patched = await bugs(pkg)
+  if (patched.length)
+    report(false, `${patchFile} applies to ${latest} but its bridge still ${patched.join(' and ')}`)
 
   report(
     true,
-    `still needed: ${latest} loses the served model, and ${patchFile} (pinned ${pinned}) applies to it and fixes it.`,
+    `still needed: ${latest} ${unpatched.join(' and ')}, and ${patchFile} (pinned ${pinned}) applies to it and fixes it.`,
   )
 } finally {
   rmSync(tmp, { recursive: true, force: true })

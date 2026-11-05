@@ -156,6 +156,12 @@ export type HarnessRow = {
    * effort eval out.
    */
   effort?: { value: string; asked: RegExp }
+  /**
+   * What the run records of the model's reasoning, on some turn: its tokens (`usage.reasoning`
+   * above 0) and its text (a non-empty `reasoning` event in a transcript). Unset, the row leaves
+   * the reasoning check out.
+   */
+  reasoning?: { tokens: boolean; text: boolean }
 }
 
 export const harnesses: HarnessRow[] = [
@@ -221,6 +227,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /^claude-haiku-5-5/,
     wireModel: null,
     effort: { value: 'low', asked: /^output_config\.effort=low thinking\.type=adaptive$/ },
+    reasoning: { tokens: true, text: true },
   },
   {
     id: 'opencode',
@@ -242,6 +249,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
     effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
+    reasoning: { tokens: true, text: true },
   },
   {
     // OpenCode on another provider: Anthropic's key, in x-api-key, and its served model from the
@@ -363,6 +371,7 @@ export const harnesses: HarnessRow[] = [
     // `model_reasoning_effort` so Codex's catalog default (`low` on gpt-5.6-sol) never applies.
     servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
     wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
+    reasoning: { tokens: true, text: true },
   },
   {
     // fx on OpenAI's Chat Completions API, as an fx configured provider: a Bearer key, through

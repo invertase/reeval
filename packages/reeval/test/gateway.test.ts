@@ -675,7 +675,7 @@ describe('Vercel AI Gateway routes', () => {
   })
 
   test("OpenCode on Vercel: a Gemini model's effort is its thinking level under providerOptions", () => {
-    const thinking = { thinkingConfig: { thinkingLevel: 'high' } }
+    const thinking = { thinkingConfig: { thinkingLevel: 'high', includeThoughts: true } }
     const gemini = openCodeConfig({ model: 'vercel/google/gemini-3-flash', effort: 'high' })
     assert.deepEqual(gemini.providers?.vercel?.models?.['google/gemini-3-flash']?.body, {
       providerOptions: { google: thinking, vertex: thinking },

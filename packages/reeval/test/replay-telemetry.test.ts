@@ -54,7 +54,7 @@ const REASONING: Record<keyof typeof AGENTS, 'measured' | null> = {
 test('there is a capture for every harness in the catalog', () => {
   const captured = readdirSync(dir)
     .map((f) => f.replace('.raw.jsonl', ''))
-    .filter((n) => !n.endsWith('-subagent'))
+    .filter((n) => !n.endsWith('-subagent') && !n.endsWith('-reasoning'))
   assert.deepEqual(captured.sort(), Object.keys(AGENTS).sort())
 })
 
@@ -101,6 +101,57 @@ test('twin: a streamed block with no end is unknown, not 0', () => {
   const open = events.map((e) => (e.type === 'reasoning' ? { ...e, durationMs: null } : e))
   assert.ok(open.some((e) => e.type === 'reasoning'))
   assert.equal(reasoningTime('streamed', open, null), null)
+})
+
+// `<harness>-reasoning` captures are a one-turn edit eval on the settings that ask for the model's
+// reasoning: Claude Code's bridge counting thinking tokens, Codex with `model_reasoning_summary`,
+// and OpenCode on Gemini at `high` with `includeThoughts`. Each twin is the same harness's capture
+// above, from before those settings.
+const reasoningText = (events: TranscriptEvent[]) =>
+  events.reduce((n, e) => n + (e.type === 'reasoning' ? e.text.length : 0), 0)
+
+describe("telemetry: the model's reasoning where the harness gets it", () => {
+  test("Claude Code counts the turn's thinking tokens apart", () => {
+    assert.equal(AGENTS['claude-code'].reasoningTokens, true)
+    const usage = usageOf(parse(read('claude-code-reasoning')))
+    assert.equal(usage?.reasoning, 87)
+    assert.equal(usage?.output, 830)
+  })
+  test('twin: a bridge that drops them records no reasoning tokens', () => {
+    assert.equal(usageOf(parse(read('claude-code')))?.reasoning, null)
+  })
+
+  test("Codex's reasoning summaries reach the transcript, whole", () => {
+    const lines = parse(read('codex-reasoning'))
+    assert.ok(reasoningText(normalize(lines)) > 0)
+    const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+    const retranslated = normalize(
+      nativeEvents(read('codex-reasoning'))
+        .flatMap((e) => t.push(JSON.stringify(e)))
+        .map((part, ms) => ({ ms, part: part as Part })),
+    )
+    assert.equal(reasoningText(retranslated), reasoningText(normalize(lines)))
+    assert.ok((usageOf(lines)?.reasoning ?? 0) > 0)
+    assert.equal(reasoningMs('codex', lines), null)
+  })
+  test('twin: without a summary, Codex reasons with no text', () => {
+    const lines = parse(read('codex'))
+    assert.ok((usageOf(lines)?.reasoning ?? 0) > 0)
+    assert.equal(reasoningText(normalize(lines)), 0)
+  })
+
+  test("OpenCode on Gemini streams the model's thoughts at an effort", () => {
+    const lines = parse(read('opencode-reasoning'))
+    assert.ok(reasoningText(normalize(lines)) > 0)
+    assert.ok((usageOf(lines)?.reasoning ?? 0) > 0)
+    const ms = reasoningMs('opencode', lines)
+    assert.ok(typeof ms === 'number' && ms > 0, `${ms}`)
+  })
+  test('twin: an effort without includeThoughts bills thoughts it never shows', () => {
+    const lines = parse(read('opencode'))
+    assert.ok((usageOf(lines)?.reasoning ?? 0) > 0)
+    assert.equal(reasoningText(normalize(lines)), 0)
+  })
 })
 
 describe("telemetry: Claude Code's edits through a subagent", () => {

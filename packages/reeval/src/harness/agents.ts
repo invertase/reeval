@@ -1041,7 +1041,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     bridgePort: true,
     platforms: ['linux', 'darwin'],
     reasoning: 'streamed',
-    reasoningTokens: false,
+    reasoningTokens: true,
     subagentCalls: true,
     credential: 'ANTHROPIC_API_KEY',
     // A Claude subscription's token from `claude setup-token`, which the CLI sends as a Bearer

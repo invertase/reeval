@@ -94,10 +94,10 @@ test("the model's provider calls over HTTP, where the gateway reads the served m
 
 test("effort goes in the request body's own field for the model's provider", () => {
   assert.deepEqual(openCodeEffortBody('google/gemini-3.8-flash', 'low'), {
-    generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
+    generationConfig: { thinkingConfig: { thinkingLevel: 'low', includeThoughts: true } },
   })
   assert.deepEqual(openCodeEffortBody('google-vertex/gemini-3.8-flash', 'low'), {
-    generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
+    generationConfig: { thinkingConfig: { thinkingLevel: 'low', includeThoughts: true } },
   })
   assert.deepEqual(openCodeEffortBody('anthropic/claude-sonnet-5-5', 'high'), {
     output_config: { effort: 'high' },
@@ -108,7 +108,7 @@ test("effort goes in the request body's own field for the model's provider", () 
   assert.deepEqual(openCodeEffortBody('openrouter/google/gemini-3.8-flash', 'medium'), {
     reasoning: { effort: 'medium' },
   })
-  const thinking = { thinkingConfig: { thinkingLevel: 'low' } }
+  const thinking = { thinkingConfig: { thinkingLevel: 'low', includeThoughts: true } }
   assert.deepEqual(openCodeEffortBody('vercel/google/gemini-3.8-flash', 'low'), {
     providerOptions: { google: thinking, vertex: thinking },
   })

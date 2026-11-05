@@ -95,13 +95,14 @@ test('effort is model_reasoning_effort in the config', () => {
   assert.doesNotMatch(buildCodexConfig({}), /model_reasoning_effort/)
 })
 
-test("the config turns off analytics and plugins, and uses reeval's HTTP provider on the key", () => {
+test("the config turns off analytics and plugins, asks for reasoning summaries, and uses reeval's HTTP provider on the key", () => {
   const config = buildCodexConfig({})
   assert.equal(
     config,
     [
       '"analytics" = { "enabled" = false }',
       '"features" = { "plugins" = false }',
+      '"model_reasoning_summary" = "auto"',
       '"model_provider" = "openai-http"',
       '"model_providers" = { "openai-http" = { "name" = "OpenAI", "base_url" = "https://api.openai.com/v1", "env_key" = "OPENAI_API_KEY", "wire_api" = "responses", "supports_websockets" = false } }',
       '',

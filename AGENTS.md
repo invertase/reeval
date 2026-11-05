@@ -221,15 +221,16 @@ with a `Modified from shadcn/ui` line, which is how the notices find it
 
 **Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.176 carries a pnpm patch
 (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model
-when a plugin's `SessionStart` hook reports before `system/init`.
+when a plugin's `SessionStart` hook reports before `system/init`, and counts Anthropic's
+`output_tokens_details.thinking_tokens` as text, where the patch makes them `reasoning`.
 A patch reaches only this workspace, so `reeval` lists the adapter in `devDependencies`
 and tsdown inlines it with its bridge files (`dist/bridge/`), which its bootstrap writes into the
 sandbox. Its image tag and label carry the patch's hash (`HARNESS_PACKAGES`' `patch`, which a test
 holds to the file), so a changed patch rebuilds the image. Bumping the adapter fails `pnpm install`
 (`ERR_PNPM_UNUSED_PATCH`) until the patch is moved or dropped. `test/replay.test.ts` replays a real
 captured turn through the shipped bridge, with and without that hook, and the nightly drift workflow's
-`scripts/drift/claude-code-patch.mjs` fails once the newest upstream reports the model unpatched in
-both (drop the patch) or the patch stops
+`scripts/drift/claude-code-patch.mjs` fails once the newest upstream reports the model in both and
+the thinking tokens unpatched (drop the patch) or the patch stops
 applying (rebase it with `pnpm patch`).
 
 In `packages/reeval`, the tests run `dist/cli.js`, so rebuild after changing `src/`:
@@ -555,7 +556,7 @@ pnpm reeval run --dry-run          # the plan, without running
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
-   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.8`, `claude-code-1.0.176-patch.8c0f3055`,
+   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.8`, `claude-code-1.0.176-patch.a9d56a8c`,
    `antigravity-0.1.15`, `opencode-0.2.16`, `goose-0.1.14`, `pi-0.2.9`, `codex-0.1.12`, `fx-0.1.10`, `grok-build-0.1.11`), so
    the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
    (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).

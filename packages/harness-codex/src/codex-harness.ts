@@ -202,8 +202,8 @@ function toml(value: TomlValue): string {
 }
 
 /**
- * Codex's `config.toml`: the quiet settings (plugins on when the session has some), reeval's
- * provider as the model provider, and the MCP servers. Each top-level key is one line, tables
+ * Codex's `config.toml`: the quiet settings (plugins on when the session has some), reasoning
+ * summaries, reeval's provider as the model provider, and the MCP servers. Each top-level key is one line, tables
  * inline, so nothing depends on section order and `codex plugin add` can append its tables.
  */
 export function buildCodexConfig(options: {
@@ -217,6 +217,9 @@ export function buildCodexConfig(options: {
     ...CODEX_QUIET_CONFIG,
     ...(options.plugins ? { features: { ...CODEX_QUIET_CONFIG.features, plugins: true } } : {}),
     ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
+    // Without it, a Responses call asks for no summary and its reasoning comes back encrypted
+    // only; the summary is written apart from the reasoning, which it leaves as it is.
+    model_reasoning_summary: 'auto',
     model_provider: CODEX_PROVIDER_ID,
     model_providers: {
       [CODEX_PROVIDER_ID]: {
