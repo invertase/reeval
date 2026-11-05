@@ -69,20 +69,29 @@ function traceStreamPart(
 
 /**
  * Each turn's cost from what the harness reports on its finish: a session's running total, as
- * Claude Code's is, less what its earlier turns reported.
+ * Claude Code's is, less what its earlier turns reported. A total that fell, or a session other
+ * than the attempt's first, can't be split into turns, so that turn has no reported cost.
  */
 export function turnCosts(
   reported: Agent['reportedCost'],
   source: string,
 ): (harnessMetadata: unknown) => CostUsd | undefined {
-  const sessions = new Map<string, number>()
+  let session: string | undefined
+  let before = 0
   return (harnessMetadata) => {
     const said = reported?.(harnessMetadata)
     if (!said) return undefined
-    if (said.session === undefined) return { usd: said.usd, basis: 'reported', source }
-    const before = sessions.get(said.session) ?? 0
-    sessions.set(said.session, said.usd)
-    return { usd: Math.max(0, said.usd - before), basis: 'reported', source }
+    let usd = said.usd
+    if (said.session !== undefined) {
+      const same = session === undefined || session === said.session
+      const fell = said.usd < before
+      session ??= said.session
+      if (!same) return undefined
+      usd = Math.round((said.usd - before) * 1e9) / 1e9
+      before = said.usd
+      if (fell) return undefined
+    }
+    return { usd, basis: 'reported', source }
   }
 }
 

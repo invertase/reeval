@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -23,6 +23,7 @@ import { priceRecord, pricerOf } from '../src/history/cost.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { loadPrices, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
+import { tokenUsage } from '../src/usage.ts'
 import { formatCost, formatUsd } from '../src/view/cost.ts'
 
 const FLASH: Price = [0.75, 0.075, 0.75, 3.75]
@@ -744,26 +745,40 @@ describe('record costs', () => {
   })
 
   test("Claude Code's running session total becomes each turn's own cost", () => {
+    // A real two-turn Claude Code attempt on claude-sonnet-5: each turn's delta is exactly its own
+    // tokens at that model's list price.
+    const sonnet: Price = [2, 0.2, 2.5, 10]
+    const finishes = readFileSync(
+      new URL('./fixtures/claude-code-bridge/two-turns-cost.raw.jsonl', import.meta.url),
+      'utf8',
+    )
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l).part)
+      .filter((p) => p.type === 'finish')
+    assert.equal(finishes.length, 2)
     const cost = turnCosts(claudeCodeCost, 'claude-code')
+    for (const finish of finishes) {
+      const usage = tokenUsage(finish.totalUsage)
+      assert.ok(usage)
+      assert.deepEqual(cost(finish.providerMetadata), {
+        usd: Number(usdOf(usage, sonnet).toFixed(9)),
+        basis: 'reported',
+        source: 'claude-code',
+      })
+    }
+  })
+
+  test("a session's total that fell, or another session, is no reported cost", () => {
     const said = (costUsd: number, sessionId = 's1') => ({ 'claude-code': { costUsd, sessionId } })
-    assert.deepEqual(cost(said(0.0207876)), {
-      usd: 0.0207876,
-      basis: 'reported',
-      source: 'claude-code',
-    })
-    assert.equal(cost(said(0.0339271))?.usd.toFixed(7), '0.0131395')
-    assert.equal(cost(said(0.004, 's2'))?.usd, 0.004, 'a new session starts from zero')
-    assert.equal(cost({ 'claude-code': { sessionId: 's1' } }), undefined)
+    const fell = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(fell(said(0.03))?.usd, 0.03)
+    assert.equal(fell(said(0.01)), undefined, 'a reset is unknown, not $0')
+    assert.equal(fell(said(0.015))?.usd, 0.005, 'and counts on from the new total')
+    const other = turnCosts(claudeCodeCost, 'claude-code')
+    assert.equal(other(said(0.02))?.usd, 0.02)
+    assert.equal(other(said(0.05, 's2')), undefined, 'a fork may carry the old total')
     const pi = turnCosts(piCost, 'pi')
-    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), {
-      usd: 0.002,
-      basis: 'reported',
-      source: 'pi',
-    })
-    assert.deepEqual(pi({ pi: { costUsd: 0.003 } }), {
-      usd: 0.003,
-      basis: 'reported',
-      source: 'pi',
-    })
+    assert.deepEqual(pi({ pi: { costUsd: 0.002 } }), { usd: 0.002, basis: 'reported', source: 'pi' })
   })
 })
