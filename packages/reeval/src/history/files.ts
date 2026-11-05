@@ -520,7 +520,6 @@ async function stageDebug(
   root: string,
   runId: string,
   options: NonNullable<RecordOptions['debug']>,
-  skipScan: boolean,
 ): Promise<RunDebug | undefined> {
   const wanted = DEBUG_FILES[options.level]
   const debug: RunDebug = { level: options.level, files: [] }
@@ -528,7 +527,8 @@ async function stageDebug(
   await rm(options.staging, { recursive: true, force: true })
   for (const [path, bytes] of await filesUnder(join(debugRoot(root), runId))) {
     if (!wanted.includes(path.slice(path.lastIndexOf('/') + 1))) continue
-    const findings = skipScan ? [] : scanText(path, Buffer.from(bytes).toString())
+    // Always scanned, even with --skip-secret-scan: a finding drops the file, never the run.
+    const findings = scanText(path, Buffer.from(bytes).toString())
     if (findings.length > 0) {
       dropped.push({ path, note: `${SECRET_NOTE} (${findingSummary(findings)})` })
       continue
@@ -642,9 +642,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     } catch {}
   }
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
-  const debug =
-    options.debug &&
-    (await stageDebug(options.root, runId, options.debug, !!options.skipSecretScan))
+  const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
   if (debug) record.debug = debug
 
   if (!options.skipSecretScan) {

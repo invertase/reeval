@@ -612,6 +612,18 @@ describe('debug data to s3()', () => {
     assert.ok(![...s3.objects.values()].some((o) => String(o.bytes).includes(key)))
   })
 
+  test('--skip-secret-scan still scans the debug data', async () => {
+    const { runId, attempt } = await runOnce()
+    writeFileSync(join(debugDir(), runId, attempt, 'requests.ndjson'), `{"key":"${key}"}\n`)
+    const r = await runCli(dir, ['record', '--profile', 'requests', '--skip-secret-scan', runId], {
+      env: env(),
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^warning: left debug\/\S+requests\.ndjson out of /m)
+    assert.deepEqual(uploaded(runId), [])
+    assert.ok(![...s3.objects.values()].some((o) => String(o.bytes).includes(key)))
+  })
+
   test("'all' uploads debug.log too", async () => {
     const { runId, attempt } = await runOnce()
     const r = await runCli(dir, ['record', '--profile', 'all', runId], { env: env() })
