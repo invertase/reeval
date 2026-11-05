@@ -226,7 +226,6 @@ async function run(argv: string[]): Promise<number> {
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
       case 'analyze': {
-        loadEnvFiles(configPath)
         const { analyzeCommand } = await import('./analysis/command.ts')
         return analyzeCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
@@ -239,13 +238,15 @@ async function run(argv: string[]): Promise<number> {
 
 /**
  * The config a command that reads the history runs on: the profile `--profile`, `REEVAL_PROFILE`
- * or `defaultProfile` picks sets which store it reads, as it does for `reeval run`.
+ * or `defaultProfile` picks sets which store it reads, as it does for `reeval run`. `.env` and
+ * `.env.local` load first, as for `reeval run`: they can hold the store's keys and the profile.
  */
 async function historyConfig(
   configPath: string | undefined,
   command: string,
   flag: string | undefined,
 ): Promise<ResolvedConfig> {
+  loadEnvFiles(configPath)
   const named = flag ?? (process.env.REEVAL_PROFILE || undefined)
   const config = await loadConfig(configPath, command, named)
   const resolved = withProfileHistory(config, selectProfile(config, flag))

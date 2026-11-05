@@ -1546,6 +1546,10 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
     const unknown = await runCli(p.dir, ['show', '--profile', 'nope'])
     assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
     assert.match(unknown.stderr, /Unknown profile "nope"\. Profiles in reeval\.yaml: ci\./)
+    writeFileSync(join(p.dir, '.env'), 'REEVAL_PROFILE=ci\n')
+    const fromEnv = await runCli(p.dir, ['history'])
+    assert.equal(fromEnv.code, 2, fromEnv.stdout + fromEnv.stderr)
+    assert.match(fromEnv.stderr, notYet, 'REEVAL_PROFILE in .env')
   })
 
   test('config errors name the config file that was read, as typed from the current directory', async () => {
