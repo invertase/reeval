@@ -1454,7 +1454,7 @@ evaluate('calls out', async (c) => {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { goose } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
-export default defineConfig({ harnesses: goose({ model: 'gemini-3.8-flash' }), timeout: '90s' })
+export default defineConfig({ harnesses: goose({ model: 'google/gemini-3.8-flash' }), timeout: '90s' })
 `,
         'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
@@ -1514,7 +1514,7 @@ import { vertex } from 'reeval/gateway'
 import { goose } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 export default defineConfig({
-  harnesses: goose({ model: 'gemini-3.8-flash' }),
+  harnesses: goose({ model: 'google/gemini-3.8-flash' }),
   gateway: [vertex({ project: 'reeval-test-project', location: 'global' })],
   environments: defineEnvironment('box', {
     sandbox: docker(),
@@ -1582,7 +1582,7 @@ evaluate('hi', async (c) => {
 
   for (const [factory, harness, model] of [
     ['opencode', 'opencode', 'google/gemini-3.8-flash'],
-    ['pi', 'pi', 'gemini-3.8-flash'],
+    ['pi', 'pi', 'google/gemini-3.8-flash'],
   ] as const) {
     test(
       `${factory}: Gemini refusing the key fails the turn and names the host variable`,

@@ -1,15 +1,19 @@
-no profile · 3 evals · 5 cells · 5 attempts
-evals/a.eval.ts › both harnesses                             cursor:composer-2.5/-/docker                           control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on goose:gemini-3.8-flash
-                                                             goose:gemini-3.8-flash/-/docker                        control  gated  ×1  effort medium
-evals/a.eval.ts › goose only, own id                         gs/-/docker                                            control  gated  ×1  effort medium
-evals/a.eval.ts › goose on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim     control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on goose:gemini-3.8-flash · egress "deny-all" + api2.cursor.sh, *.cursor.sh
-                                                             goose:gemini-3.8-flash/python/docker:python:3.12-slim  control  gated  ×1  effort medium · egress "deny-all" + generativelanguage.googleapis.com
+no profile · 4 evals · 9 cells · 9 attempts
+evals/a.eval.ts › both harnesses                                                                cursor:composer-2.5/-/docker                           control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on goose:gemini-3.8-flash
+                                                                                                goose:gemini-3.8-flash/-/docker                        control  gated  ×1  effort medium
+evals/a.eval.ts › goose only, own id                                                            gs/-/docker                                            control  gated  ×1  effort medium
+evals/a.eval.ts › goose on a toolchain base, under deny-all                                     cursor:composer-2.5/python/docker:python:3.12-slim     control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on goose:gemini-3.8-flash · egress "deny-all" + api2.cursor.sh, *.cursor.sh
+                                                                                                goose:gemini-3.8-flash/python/docker:python:3.12-slim  control  gated  ×1  effort medium · egress "deny-all" + generativelanguage.googleapis.com
+evals/a.eval.ts › goose on other providers, under deny-all: their hosts are the automatic ones  goose:claude-haiku-4-5/-/docker                        control  gated  ×1  effort medium · egress "deny-all" + api.anthropic.com
+                                                                                                goose:gpt-5.4-mini/-/docker                            control  gated  ×1  effort medium · egress "deny-all" + api.openai.com
+                                                                                                goose:grok-4.6/-/docker                                control  gated  ×1  effort medium · egress "deny-all" + api.x.ai
+                                                                                                goose:google/-/docker                                  control  gated  ×1  effort medium · egress "deny-all" + generativelanguage.googleapis.com
 excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)
 image docker · goose · 2 evals
-  base  reeval-sandbox:goose-0.1.14  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:goose-0.1.15  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · cursor · 1 evals
   from python:3.12-slim  reeval-sandbox:cursor-0.1.9-python-3-12-slim-d2938f76  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · goose · 1 evals
-  from python:3.12-slim  reeval-sandbox:goose-0.1.14-python-3-12-slim-d2938f76  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:goose-0.1.15-python-3-12-slim-d2938f76  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

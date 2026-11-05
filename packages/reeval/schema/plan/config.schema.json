@@ -819,7 +819,7 @@
           "pattern": "\\S"
         },
         "brokers": {
-          "description": "In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`, Cursor's when unset) on that agent's endpoints, as its adapter does: the key stays on the host, and `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request. For an agent whose bridge is a server in the sandbox (Claude Code, OpenCode, Goose, fx, Grok Build), it also serves on the session's first exposed port and reaches it from the host, as that adapter's start does.",
+          "description": "In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`, Cursor's when unset) on that agent's endpoints, as its adapter does; OpenCode, Goose and pi take their model's provider's key, so with their layouts it's `FAKE_AGENT_API_KEY`, on no endpoint. The key stays on the host, and `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request. For an agent whose bridge is a server in the sandbox (Claude Code, OpenCode, Goose, fx, Grok Build), it also serves on the session's first exposed port and reaches it from the host, as that adapter's start does.",
           "type": "boolean",
           "const": true
         },
@@ -1349,7 +1349,7 @@
       "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
-      "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",
+      "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its provider's key, and reports no usage (its ACP server counts one call).",
       "type": "object",
       "properties": {
         "effort": {
@@ -1375,9 +1375,9 @@
           "type": "number"
         },
         "model": {
-          "description": "A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.",
+          "description": "`<provider>/<model>`: Goose's `google`, `anthropic`, `openai` or `xai` provider on its own key, or the gateway's id on `vercel()` and `openrouter()`, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
-          "pattern": "^[\\w.-]+$"
+          "pattern": "^[\\w.-]+\\/[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
@@ -1721,7 +1721,7 @@
       "additionalProperties": false
     },
     "PiHarnessDescriptor": {
-      "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs Google models on a Gemini API key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
+      "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs a model on its provider's key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
       "type": "object",
       "properties": {
         "effort": {
@@ -1747,9 +1747,9 @@
           "type": "number"
         },
         "model": {
-          "description": "A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`.",
+          "description": "`<provider>/<model>`: one of pi's providers whose key it sends in a header on a fixed host, or the gateway's id on `vercel()` and `openrouter()`, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
-          "pattern": "^[\\w.-]+$"
+          "pattern": "^[\\w.-]+\\/\\S+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",

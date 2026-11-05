@@ -1,17 +1,17 @@
 ---
 title: "pi harness"
-description: "The pi harness runs pi in the sandbox on a Gemini API key and records its events."
+description: "The pi harness runs pi in the sandbox on its model's provider's API key and records its events."
 ---
 
 `pi()` runs pi in the sandbox as one `pi --mode json` process per turn that resumes the session's conversation. For more information about the sandbox, see [Choose a sandbox](/configuration/sandboxes).
 
-## `GOOGLE_GENERATIVE_AI_API_KEY`
+## `GOOGLE_GENERATIVE_AI_API_KEY` or the model provider's key
 
-`pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+`pi()` reads the key of the model's provider, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…`, `ANTHROPIC_API_KEY` for `anthropic/…` or `MISTRAL_API_KEY` for `mistral/…`, from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
-In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else. A restricted egress policy allows `generativelanguage.googleapis.com`.
+In the sandbox, pi sees a placeholder under the variable it reads (`GEMINI_API_KEY` for the Google key), and reeval swaps the real key into the provider's header on pi's model calls to the provider's host, such as `x-goog-api-key` on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else. A restricted egress policy allows that provider's host.
 
-When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 
@@ -29,7 +29,7 @@ import { pi } from '{{ pkg }}/harness'
 
 export default defineConfig({
   harnesses: pi({
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     effort: 'high',
   }),
 })

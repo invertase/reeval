@@ -100,7 +100,7 @@ function goose(): GatewayRoute {
   const calls = [onOpenRouter(openai('/chat/completions'))]
   return {
     ...route([...calls, onOpenRouter(openai('/models'), 'GET')], calls),
-    modelId: under('google'),
+    modelId: (model) => model,
   }
 }
 
@@ -126,13 +126,17 @@ function opencode(): GatewayRoute {
 }
 
 /**
- * pi on its own `openrouter` provider: Chat Completions, a Bearer key, a model from pi's catalog
- * for OpenRouter, each thinking level sent as OpenRouter's `reasoning.effort`. `--offline` skips
- * the model list pi would fetch to fit that catalog to the key.
+ * pi on a provider of its own on OpenRouter, a Bearer key: an Anthropic model on the Anthropic
+ * Messages API, any other on Chat Completions. A Gemini model runs on pi's own `openrouter`
+ * provider instead, whose thinking level goes as OpenRouter's `reasoning.effort`. `--offline`
+ * skips the model list pi would fetch to fit its catalog to the key.
  */
 function pi(): GatewayRoute {
-  const calls = [onOpenRouter(openai('/chat/completions'))]
-  return { ...route(calls, calls), modelId: under('google') }
+  const calls = [
+    onOpenRouter(openai('/chat/completions')),
+    onOpenRouter(anthropicPath(OPENROUTER_API, '/v1/messages')),
+  ]
+  return { ...route(calls, calls), modelId: (model) => model }
 }
 
 /**
@@ -175,5 +179,10 @@ export const OPENROUTER_GATEWAY: RoutingGateway = {
   // reasoning.effort, which it sends a Gemini model as its thinking level, and Grok Build
   // reasoning_effort (an xAI model's own). Claude Code sends Anthropic's adaptive thinking and effort, which
   // OpenRouter turns into a thinking budget for a model that takes neither (Haiku 4.5).
-  unprovenEffort: { 'claude-code': everyModel, goose: notGemini, opencode: notGemini },
+  unprovenEffort: {
+    'claude-code': everyModel,
+    goose: notGemini,
+    opencode: notGemini,
+    pi: notGemini,
+  },
 }

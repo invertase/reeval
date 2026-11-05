@@ -21,7 +21,7 @@ import { turnCosts } from '../src/harness/agent.ts'
 import { claudeCodeCost, piCost } from '../src/harness/agents.ts'
 import { priceRecord, pricerOf } from '../src/history/cost.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { loadPrices, type Price, type Prices } from '../src/prices.ts'
+import { loadPrices, modelLimits, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
 import { tokenUsage } from '../src/usage.ts'
 import { formatCost, formatUsd } from '../src/view/cost.ts'
@@ -138,7 +138,7 @@ describe('priceFor', () => {
         {
           id: 'e',
           cell: cell('pi:gemini-3.8-flash'),
-          harness: { kind: 'pi', model: 'gemini-3.8-flash' },
+          harness: { kind: 'pi', model: 'google/gemini-3.8-flash' },
         },
       ],
       [],
@@ -450,6 +450,47 @@ describe('loadPrices', () => {
       file: null,
       modelsDev: { fetchedAt: '2026-10-23T06:00:00Z', stale: false },
     })
+  })
+
+  test("modelLimits: a gateway model's under its gateway id or its provider's, from one fetch; a cache without limits is fetched again", async (t) => {
+    const haiku = {
+      name: 'Claude Haiku 4.5',
+      reasoning: true,
+      modalities: { input: ['text', 'image', 'pdf'] },
+      limit: { context: 200_000, output: 64_000 },
+      cost: { input: 1, output: 5 },
+    }
+    const catalog = {
+      anthropic: { models: { 'claude-haiku-4-5': haiku } },
+      openrouter: {
+        models: {
+          'mistral/devstral-2': {
+            limit: { context: 256_000, output: 8_000 },
+            cost: CATALOG.mistral.models.other.cost,
+          },
+          'no/limits': { cost: { input: 1, output: 1 } },
+        },
+      },
+    }
+    const s = await server('answer', gzipSync(JSON.stringify(catalog)))
+    t.after(s.stop)
+    const { dir } = cache()
+    seed(dir, '2026-10-23T06:00:00Z')
+    assert.deepEqual(await modelLimits('anthropic/claude-haiku-4.5', now, s.source), {
+      name: 'Claude Haiku 4.5',
+      reasoning: true,
+      input: ['text', 'image'],
+      contextWindow: 200_000,
+      maxTokens: 64_000,
+    })
+    assert.deepEqual(await modelLimits('mistral/devstral-2', now, s.source), {
+      reasoning: false,
+      input: ['text'],
+      contextWindow: 256_000,
+      maxTokens: 8_000,
+    })
+    assert.equal(await modelLimits('no/limits', now, s.source), undefined)
+    assert.equal(s.hits.length, 1)
   })
 
   test('a corrupt cache, or one dated in the future, is fetched again', async (t) => {

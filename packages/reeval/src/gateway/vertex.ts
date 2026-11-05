@@ -419,9 +419,9 @@ export function vertexModelProbe(
 
 /**
  * Why Vertex AI can't serve a routed harness's model, or undefined when it can: fx's Chat
- * Completions endpoint and OpenCode's `google-vertex` provider serve Google's models, and Claude
- * only over Anthropic's own API there; Claude Code's `sonnet` and `opusplan` aliases name a
- * retiring model there.
+ * Completions endpoint, OpenCode's `google-vertex` provider and pi's serve Google's models, and
+ * Claude only over Anthropic's own API there, which reeval doesn't route Goose's Claude calls to;
+ * Claude Code's `sonnet` and `opusplan` aliases name a retiring model there.
  * A bare fx id is OpenAI's everywhere else, so only a bare `gemini-…` one is taken as Google's.
  */
 export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undefined {
@@ -431,6 +431,13 @@ export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undef
     return provider === 'google' || provider === 'google-vertex'
       ? undefined
       : `OpenCode reaches Vertex AI only on its google-vertex provider, which serves Google's models, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
+  }
+  if (provider === 'google' && (h.kind === 'pi' || h.kind === 'goose')) return undefined
+  if (h.kind === 'pi') {
+    return `pi reaches Vertex AI only on its google-vertex provider, whose catalog has Google's models only, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
+  }
+  if (h.kind === 'goose') {
+    return `Goose's gcp_vertex_ai provider calls a claude-* model on Anthropic's API on Vertex AI, which reeval doesn't route for Goose yet, so it runs Google's models only there, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
   }
   if (h.kind !== 'fx') return undefined
   if (provider === 'google' || (!provider && /^gemini-/.test(h.model))) return undefined

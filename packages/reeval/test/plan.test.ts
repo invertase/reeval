@@ -514,6 +514,7 @@ const vite = defineEnvironment('vite-app', { traits: { stack: 'vite' } })
         ],
         ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
         ['pi:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
+        ['pi:claude-haiku-4.5', { name: 'vercel', skipped: [] }],
         ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
     )
@@ -752,6 +753,60 @@ evaluate('refused', ${where === 'eval' ? `{ harnesses: ${harness} }, ` : ''}asyn
     }
   })
 
+  test("pi or Goose on a provider they don't run direct, or on Vertex AI with another provider's model, exits 2 at plan time", async () => {
+    for (const [factory, model, gateway, refusal] of [
+      [
+        'pi',
+        'amazon-bedrock/anthropic.claude-haiku-4-5',
+        'direct',
+        /on pi:anthropic\.claude-haiku-4-5: no gateway in the list can serve it \(direct: pi's amazon-bedrock provider can't run here: it signs its requests with AWS credentials, not a key in a header, so not amazon-bedrock\/anthropic\.claude-haiku-4-5/,
+      ],
+      [
+        'pi',
+        'nope/m',
+        'direct',
+        /\(direct: pi has no provider "nope" that reads a key, so not nope\/m/,
+      ],
+      [
+        'goose',
+        'mistral/devstral-2',
+        'direct',
+        /\(direct: reeval runs Goose on its own key for its google, anthropic, openai, xai providers, so not mistral\/devstral-2/,
+      ],
+      [
+        'pi',
+        'anthropic/claude-haiku-4-5',
+        'vertex',
+        /pins gateway 'vertex', which can't serve it \(pi reaches Vertex AI only on its google-vertex provider, whose catalog has Google's models only, not "anthropic\/claude-haiku-4-5"/,
+      ],
+      [
+        'goose',
+        'anthropic/claude-haiku-4-5',
+        'vertex',
+        /pins gateway 'vertex', which can't serve it \(Goose's gcp_vertex_ai provider calls a claude-\* model on Anthropic's API on Vertex AI, which reeval doesn't route for Goose yet/,
+      ],
+    ] as const) {
+      const p = await project(`refused-${factory}-${model.split('/')[0]}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { vercel, vertex, direct } from 'reeval/gateway'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({
+  gateway: ${gateway === 'direct' ? '[direct()]' : "[direct(), vercel(), vertex({ project: 'p', location: 'global' })]"},
+  harnesses: ${factory}({ model: '${model}'${gateway === 'direct' ? '' : `, gateway: '${gateway}'`} }),
+})
+`,
+        'evals/r.eval.ts': `import { evaluate } from 'reeval'
+evaluate('refused', async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'], {
+        env: { AI_GATEWAY_API_KEY: 'k', GOOGLE_CLOUD_PROJECT: '' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, refusal)
+    }
+  })
+
   test('an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
       [
@@ -761,12 +816,12 @@ evaluate('refused', ${where === 'eval' ? `{ harnesses: ${harness} }, ` : ''}asyn
       ],
       [
         'goose',
-        'gemini-3.8-flash',
+        'google/gemini-3.8-flash',
         /evaluate\("streams"\) on goose:gemini-3\.8-flash: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
       [
         'pi',
-        'gemini-3.8-flash',
+        'google/gemini-3.8-flash',
         /evaluate\("streams"\) on pi:gemini-3\.8-flash: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
       [
@@ -835,7 +890,7 @@ export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
     const config = (factory: string) => `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-export default defineConfig({ harnesses: ${factory}({ model: 'gemini-3.8-flash' }) })
+export default defineConfig({ harnesses: ${factory}({ model: 'google/gemini-3.8-flash' }) })
 `
     const evals = (local: string) => `import { defineEnvironment, evaluate } from 'reeval'
 const tools = defineEnvironment('tools', ({ mcp }) => ({
@@ -939,7 +994,7 @@ evaluate('reviews', { environments: review }, async () => {})
       ],
       [
         'goose',
-        'gemini-3.8-flash',
+        'google/gemini-3.8-flash',
         'Goose',
         'review',
         "Goose can't load the review plugin's hooks \\(hooks/hooks.json\\): use only: \\['skills'\\], or leave the plugin out of this cell",
@@ -1002,7 +1057,7 @@ evaluate('reviews', { environments: review }, async () => {})
 
   test("Goose refuses a plugin MCP server it keys like one in mcp; Claude Code's namespaced name plans", async () => {
     for (const [factory, model, refused] of [
-      ['goose', 'gemini-3.8-flash', true],
+      ['goose', 'google/gemini-3.8-flash', true],
       ['claudeCode', 'claude-sonnet-5', false],
     ] as const) {
       const p = await project(`plugin-server-key-${factory}`, {
@@ -1054,7 +1109,7 @@ evaluate('reviews', { environments: review }, async () => {})
         ],
         [
           'pi',
-          'gemini-3.8-flash',
+          'google/gemini-3.8-flash',
           "{ plugins: [plugin.local('../plugins/review')] }",
           "pi can't load the review plugin's agents \\(agents/\\) and rules \\(rules/\\): use only: \\['skills', 'commands', 'mcp'\\], or leave the plugin out of this cell",
         ],
@@ -1066,7 +1121,7 @@ evaluate('reviews', { environments: review }, async () => {})
         ],
         [
           'pi',
-          'gemini-3.8-flash',
+          'google/gemini-3.8-flash',
           "{ mcp: { review_docs: mcp.stdio('docs') }, plugins: [plugin.local('../plugins/review', { only: ['mcp'] })] }",
           'pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one',
         ],

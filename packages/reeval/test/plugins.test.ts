@@ -843,7 +843,7 @@ test("Codex's plugin sync hosts are expected blocks only in a session with plugi
     'chatgpt.com',
   ])
   assert.deepEqual(expectedBlockedFor({ kind: 'fake', layout: 'codex' } as never, false), undefined)
-  const goose = { kind: 'goose', model: 'gemini-3.8-flash' } as const
+  const goose = { kind: 'goose', model: 'google/gemini-3.8-flash' } as const
   assert.deepEqual(expectedBlockedFor(goose, false)?.hosts, ['models.dev'])
   assert.deepEqual(expectedBlockedFor(goose, true)?.hosts, ['models.dev'])
 })

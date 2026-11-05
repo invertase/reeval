@@ -7,15 +7,18 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   AI_GATEWAY_PROVIDER,
+  ANTHROPIC_PROVIDER,
   createGoose,
+  GEMINI_PROVIDER,
   GOOSE_CLI_SHA256,
   GOOSE_CLI_VERSION,
-  GOOSE_CREDENTIAL_ENV,
   GOOSE_INSTALL_COMMAND,
   GOOSE_QUIET_ENV,
   gooseConfig,
   gooseEnv,
+  OPENAI_PROVIDER,
   OPENROUTER_PROVIDER,
+  XAI_PROVIDER,
 } from '../src/goose-harness.ts'
 import {
   GOOSE_LAUNCHER,
@@ -40,6 +43,8 @@ function assertChecksSha256(script: string, file: string) {
 }
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+
+const GEMINI = { auth: { GOOGLE_API_KEY: 'AIza-k' }, provider: GEMINI_PROVIDER }
 
 test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
@@ -83,21 +88,21 @@ test('each OS and arch picks its own build and checksum, and any other is refuse
   assert.equal(riscv.stderr, 'Goose has no release for Linux riscv64\n')
 })
 
-test('auth is an environment with the Gemini key, or it throws', () => {
+test("auth is an environment with the provider's key, or it throws", () => {
   assert.throws(
-    () => createGoose({ auth: {}, model: 'm' }),
-    /Goose auth must be an environment object with GOOGLE_API_KEY/,
+    () => createGoose({ auth: {}, provider: GEMINI_PROVIDER, model: 'm' }),
+    /Goose auth must be an environment object with GOOGLE_API_KEY \(a Gemini API key\)/,
   )
-  const harness = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'm' })
+  assert.throws(
+    () => createGoose({ auth: { GOOGLE_API_KEY: 'k' }, model: 'm' }),
+    /needs a provider/,
+  )
+  const harness = createGoose({ ...GEMINI, model: 'm' })
   assert.equal(harness.harnessId, 'goose')
 })
 
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
-  const harness = createGoose({
-    auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' },
-    model: 'm',
-    requireCredentialBrokering: true,
-  })
+  const harness = createGoose({ ...GEMINI, model: 'm', requireCredentialBrokering: true })
   await assert.rejects(
     harness.doStart({ sandboxSession: { run: async () => ({}) } } as never),
     /The sandbox can't broker GOOGLE_API_KEY .* so the key stays out of it/,
@@ -107,19 +112,22 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
 const OFF_VERTEX = { REEVAL_GOOSE_ENV: '{}', GOOSE_THINKING_EFFORT: '' }
 
 test('effort is GOOSE_THINKING_EFFORT', () => {
-  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash' }), {
+  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', provider: GEMINI_PROVIDER }), {
     ...GOOSE_QUIET_ENV,
     ...OFF_VERTEX,
     GOOSE_PROVIDER: 'google',
     GOOSE_MODEL: 'gemini-3.8-flash',
   })
-  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', effort: 'high' }), {
-    ...GOOSE_QUIET_ENV,
-    ...OFF_VERTEX,
-    GOOSE_PROVIDER: 'google',
-    GOOSE_MODEL: 'gemini-3.8-flash',
-    GOOSE_THINKING_EFFORT: 'high',
-  })
+  assert.deepEqual(
+    gooseEnv({ model: 'gemini-3.8-flash', provider: GEMINI_PROVIDER, effort: 'high' }),
+    {
+      ...GOOSE_QUIET_ENV,
+      ...OFF_VERTEX,
+      GOOSE_PROVIDER: 'google',
+      GOOSE_MODEL: 'gemini-3.8-flash',
+      GOOSE_THINKING_EFFORT: 'high',
+    },
+  )
 })
 
 test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key", () => {
@@ -132,7 +140,7 @@ test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel'
   assert.throws(
     () =>
       createGoose({
-        auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' },
+        auth: GEMINI.auth,
         provider: AI_GATEWAY_PROVIDER,
         model: 'm',
       }),
@@ -160,6 +168,28 @@ test("on OpenRouter, Goose runs its openrouter provider on OpenRouter's key", ()
   )
 })
 
+test("on Anthropic's, OpenAI's or xAI's API, Goose runs that provider on its own key", () => {
+  for (const [provider, key] of [
+    [ANTHROPIC_PROVIDER, 'ANTHROPIC_API_KEY'],
+    [OPENAI_PROVIDER, 'OPENAI_API_KEY'],
+    [XAI_PROVIDER, 'XAI_API_KEY'],
+  ] as const) {
+    assert.equal(provider.credentialEnv, key)
+    assert.deepEqual(gooseEnv({ model: 'm', provider }), {
+      ...GOOSE_QUIET_ENV,
+      ...OFF_VERTEX,
+      GOOSE_PROVIDER: provider.id,
+      GOOSE_MODEL: 'm',
+    })
+    assert.throws(
+      () => createGoose({ auth: GEMINI.auth, provider, model: 'm' }),
+      new RegExp(`with ${key} \\(an? ${provider.name} key\\)`),
+    )
+    const harness = createGoose({ auth: { [key]: 'k' }, provider, model: 'm' })
+    assert.equal(harness.harnessId, 'goose')
+  }
+})
+
 test('on Vertex AI, Goose runs its gcp_vertex_ai provider on a credentials file, with no key', () => {
   const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', vertex }), {
@@ -178,9 +208,9 @@ test('on Vertex AI, Goose runs its gcp_vertex_ai provider on a credentials file,
 })
 
 test('the image bakes one bootstrap for every provider, model and effort', async () => {
-  const gemini = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'unused' })
+  const gemini = createGoose({ ...GEMINI, model: 'unused' })
   for (const effort of ['medium', 'high']) {
-    const at = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'm', effort })
+    const at = createGoose({ ...GEMINI, model: 'm', effort })
     assert.deepEqual(await at.getBootstrap?.({}), await gemini.getBootstrap?.({}), effort)
   }
   const vercel = createGoose({
@@ -195,6 +225,14 @@ test('the image bakes one bootstrap for every provider, model and effort', async
   })
   assert.deepEqual(await vercel.getBootstrap?.({}), await gemini.getBootstrap?.({}))
   assert.deepEqual(await openrouter.getBootstrap?.({}), await gemini.getBootstrap?.({}))
+  for (const [provider, key] of [
+    [ANTHROPIC_PROVIDER, 'ANTHROPIC_API_KEY'],
+    [OPENAI_PROVIDER, 'OPENAI_API_KEY'],
+    [XAI_PROVIDER, 'XAI_API_KEY'],
+  ] as const) {
+    const direct = createGoose({ auth: { [key]: 'k' }, provider, model: 'm' })
+    assert.deepEqual(await direct.getBootstrap?.({}), await gemini.getBootstrap?.({}), key)
+  }
   const vertex = createGoose({
     auth: {},
     model: 'gemini-3.8-flash',
@@ -227,7 +265,7 @@ async function started(harness: ReturnType<typeof createGoose>) {
 }
 
 test("off Vertex AI, none of its variables is set, so the eval's own values reach the agent", async () => {
-  const env = await started(createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'm' }))
+  const env = await started(createGoose({ ...GEMINI, model: 'm' }))
   for (const name of ['GCP_PROJECT_ID', 'GCP_LOCATION', 'GOOGLE_APPLICATION_CREDENTIALS']) {
     assert.equal(env[name], undefined, name)
   }

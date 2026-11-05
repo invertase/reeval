@@ -45,14 +45,14 @@ const AGENTS = [
   },
   {
     name: 'goose',
-    rows: ['goose'],
+    rows: ['goose', 'goose-anthropic', 'goose-openai', 'goose-xai'],
     file: 'packages/harness-goose/src/goose-harness.ts',
     pin: 'GOOSE_CLI_VERSION',
     github: 'aaif-goose/goose',
   },
   {
     name: 'pi',
-    rows: ['pi'],
+    rows: ['pi', 'pi-anthropic', 'pi-openai', 'pi-xai'],
     file: 'packages/harness-pi/src/pi-bootstrap.ts',
     pin: 'PI_CLI_VERSION',
     npm: '@earendil-works/pi-coding-agent',

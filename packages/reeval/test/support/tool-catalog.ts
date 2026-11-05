@@ -6,7 +6,7 @@
 import { projectToolCall as antigravityTool } from '@reeval/harness-antigravity'
 import { projectToolCall as cursorTool } from '@reeval/harness-cursor-sdk'
 import type { AgentKind } from '../../src/harness/agents.ts'
-import { agentFor } from '../../src/harness/agents.ts'
+import { agentAuth, agentFor } from '../../src/harness/agents.ts'
 import type { TranscriptEvent } from '../../src/types.ts'
 import { type HarnessRow, harnesses, harnessOf } from './harnesses.ts'
 
@@ -41,7 +41,7 @@ export async function catalogOf(row: HarnessRow): Promise<Catalog> {
   const kind = harness as AgentKind
   const agent = agentFor({ kind, model: row.model ?? '' } as never)
   const adapter = await agent.adapter({
-    auth: { [agent.credential]: 'probe' },
+    auth: agentAuth(agent, { [agent.credential]: 'probe' }),
     descriptor: { kind, model: row.model ?? '' },
     model: row.model ?? '',
     plugins: [],

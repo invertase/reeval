@@ -104,8 +104,9 @@ export function opencodeModelError(model: unknown): string | undefined {
 }
 
 /**
- * Goose, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
- * provider, or on `vercel()` as `google/<model>` with Vercel's key. `effort` is
+ * Goose, with the model's provider's key: `model` is `<provider>/<model>` on Goose's `google`,
+ * `anthropic`, `openai` or `xai` provider; on `vercel()` and `openrouter()` it is the gateway's
+ * id, with the gateway's key. `effort` is
  * `GOOSE_THINKING_EFFORT`, and isn't taken on `vercel()`. `id` names the cell; it defaults to
  * `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
  */
@@ -113,11 +114,13 @@ export const goose = (options: Options<GooseHarnessDescriptor>): GooseHarnessDes
   make('goose', options)
 
 /**
- * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider,
- * or as `google/<model>` on `vercel()` (Vercel's Chat Completions API, with Vercel's key) or on
- * `openrouter()` (pi's `openrouter` provider, with OpenRouter's key). `effort` is pi's `--thinking`
- * flag, which reaches a Gemini model as its own thinking level on each. `id` names the cell; it
- * defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
+ * pi, with the model's provider's key: `model` is `<provider>/<model>` on one of pi's providers
+ * whose key it sends in a header on a fixed host; on `vercel()` and `openrouter()` it is the
+ * gateway's id, with the gateway's key (an
+ * Anthropic model on the gateway's Anthropic Messages API, any other on its Chat Completions API).
+ * `effort` is pi's `--thinking` flag, which reaches a Gemini model as its own thinking level on
+ * each, and isn't taken for another model on either. `id` names the cell; it defaults to
+ * `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
  */
 export const pi = (options: Options<PiHarnessDescriptor>): PiHarnessDescriptor =>
   make('pi', options)

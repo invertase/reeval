@@ -506,7 +506,7 @@ evaluate('a', async () => {})
     const config = await configOf(
       'keys',
       `{ harnesses: cursor({ model: 'composer-2.5' }),
-         profiles: { alt: { defaults: { harnesses: pi({ model: 'gemini-3.8-flash' }) } } } }`,
+         profiles: { alt: { defaults: { harnesses: pi({ model: 'google/gemini-3.8-flash' }) } } } }`,
     )
     const none = await checkKeys(config, deps(), false, '.env.local')
     assert.deepEqual(statuses(none), ['fail', 'warn'])
@@ -1030,8 +1030,8 @@ evaluate('a', async () => {})
          profiles: {
            agy: { defaults: { harnesses: antigravity({ model: 'gemini-3.8-flash-low' }) } },
            oc: { defaults: { harnesses: opencode({ model: 'google-vertex/gemini-3.8-flash' }) } },
-           goose: { defaults: { harnesses: goose({ model: 'gemini-3.8-flash' }) } },
-           pi: { defaults: { harnesses: pi({ model: 'gemini-3.8-pro' }) } },
+           goose: { defaults: { harnesses: goose({ model: 'google/gemini-3.8-flash' }) } },
+           pi: { defaults: { harnesses: pi({ model: 'google/gemini-3.8-pro' }) } },
          } }`,
     )
     const asked: string[] = []

@@ -32,9 +32,9 @@ export const profiles = {
   // GOOGLE_GENERATIVE_AI_API_KEY, for the agent (its model's provider picks the key) and the judge
   opencode: inDocker(opencode({ model: 'google/gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
   // GOOGLE_GENERATIVE_AI_API_KEY, for the agent and the judge
-  goose: inDocker(goose({ model: 'gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
+  goose: inDocker(goose({ model: 'google/gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
   // GOOGLE_GENERATIVE_AI_API_KEY, for the agent and the judge
-  pi: inDocker(pi({ model: 'gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
+  pi: inDocker(pi({ model: 'google/gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
   // GEMINI_API_KEY, and GOOGLE_GENERATIVE_AI_API_KEY for the judge (the same key works for both)
   antigravity: inDocker(
     antigravity({ model: 'gemini-3.8-flash-medium' }),

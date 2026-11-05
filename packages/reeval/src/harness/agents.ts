@@ -1,5 +1,6 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+import type { GooseProvider } from '@reeval/harness-goose'
 import type { OpenCodeMcpServer } from '@reeval/harness-opencode'
 import {
   providerEndpoints,
@@ -9,6 +10,7 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
+import { type PiProvider, piProvider } from '@reeval/harness-pi/providers'
 import type {
   BakedHarness,
   DerivedTokens,
@@ -41,6 +43,7 @@ import {
   type VertexChat,
   type VertexSettings,
 } from '../gateway/vertex.ts'
+import { modelLimits } from '../prices.ts'
 import { capabilitiesOf, sandboxKind, suggestedSandbox, takesHarness } from '../sandbox/kinds.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
@@ -142,7 +145,10 @@ export type Agent = Layout & {
   localResponses?: readonly LocalResponse[]
   /** Where Vertex's Chat Completions API is, for an agent that calls it on Vertex (Grok Build). */
   vertexChat?: VertexChat
-  /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
+  /**
+   * The variable the adapter takes the credential as, when not its own name: a gateway's key, or
+   * the one the CLI reads (pi reads Google's key as `GEMINI_API_KEY`).
+   */
   authAs?: string
   /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
   authEnv?: Readonly<Record<string, string>>
@@ -309,6 +315,19 @@ export type StoredUsage = {
   mark?: (raw: unknown) => string | undefined
 }
 
+/**
+ * An agent's catalog entry: what `ModelSpecific` names comes only from `forModel` for an agent
+ * that runs on any of several providers' keys (OpenCode, Goose, pi), with no credential of its own.
+ */
+export type CatalogEntry =
+  | Agent
+  | (Omit<Agent, keyof ModelSpecific | 'forModel'> &
+      Partial<Pick<Agent, keyof ModelSpecific>> & {
+        credential?: undefined
+        endpoints?: undefined
+        forModel: NonNullable<Agent['forModel']>
+      })
+
 /** How an agent's reasoning reaches reeval; see `Agent.reasoning`. */
 export type ReasoningDelivery = 'streamed' | 'recovered' | 'whole' | 'none'
 
@@ -318,7 +337,7 @@ export type AdapterVertex = { project: string; location: string; credentialsFile
 /** The part of an agent's catalog entry its model's provider decides. */
 export type ModelSpecific = Pick<
   Agent,
-  'credential' | 'endpoints' | 'servedModel' | 'askedModel' | 'upstream'
+  'credential' | 'authAs' | 'endpoints' | 'servedModel' | 'askedModel' | 'upstream'
 > & {
   modelResponses?: readonly EndpointMatch[]
   modelCalls?: readonly EndpointMatch[]
@@ -512,6 +531,141 @@ export function opencodeVars(model: string, env: NodeJS.ProcessEnv = process.env
   const resolved = resolveOpenCodeProvider(model, env)
   if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
   return resolved.vars
+}
+
+/** The `<provider>` a pi or Goose model id, `<provider>/<model>`, names. */
+const providerOf = (model: string) => model.slice(0, Math.max(model.indexOf('/'), 0))
+
+/** The model id pi or Goose asks its provider for: the id without its `<provider>/`. */
+const withoutProvider = (model: string) => model.slice(model.indexOf('/') + 1)
+
+/** reeval's name for a provider's key where it isn't the agent's: Google's, which the judge reads too. */
+const HOST_CREDENTIAL: Record<string, string> = { google: 'GOOGLE_GENERATIVE_AI_API_KEY' }
+
+/** The model a response from `hosts`' model calls names. */
+const respondedOn =
+  (...hosts: string[]): ServedModel =>
+  (request) =>
+    hosts.includes(request.host) && request.method === 'POST' ? request.responseModel : undefined
+
+/**
+ * pi on the model's provider (`xai/grok-4.5` is xAI's), from the table probed on the pinned pi
+ * (harness-pi's pi-provider-table.ts): its key, the requests pi sends it on, their hosts, and the
+ * served model from a Gemini API's URL or the response body. Throws naming why reeval can't run a
+ * provider pi has, or that pi has none of that name.
+ */
+export function piForModel(model: string): ModelSpecific {
+  const id = providerOf(model)
+  const provider = piProvider(id)
+  if ('refused' in provider) throw new InfraError(`pi(): ${directProviderRefusal('pi', model)}`)
+  const endpoints = provider.endpoints.map(({ host, method, path }) => ({ host, method, path }))
+  const hosts = [...new Set(endpoints.map((e) => e.host))]
+  const inUrl = provider.endpoints.some((e) => e.api === 'google-generative-ai')
+  const modelResponses = provider.endpoints
+    .filter((e) => e.api !== 'google-generative-ai')
+    .map(({ host, method, path }) => ({ host, method, path }))
+  return {
+    credential: HOST_CREDENTIAL[id] ?? provider.credentialEnv,
+    authAs: provider.credentialEnv,
+    endpoints,
+    ...(modelResponses.length ? { modelResponses } : {}),
+    // The Responses API's on OpenAI's own host also names the effort that served it.
+    servedModel: (request) =>
+      openaiServedModel(request) ??
+      (inUrl && hosts.includes(request.host)
+        ? /\/models\/([^/:]+):streamGenerateContent$/.exec(request.path)?.[1]
+        : undefined) ??
+      respondedOn(...hosts)(request),
+    hosts,
+  }
+}
+
+/** A provider pi runs on its own key; throws naming why reeval can't run one. */
+function keyed(provider: PiProvider | { refused: string }): PiProvider {
+  if ('refused' in provider) throw new InfraError(`pi(): ${provider.refused}`)
+  return provider
+}
+
+/** Anthropic's Messages API, whose response names the model that served it. */
+const ANTHROPIC_MESSAGES = [
+  { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/** OpenAI's Chat Completions API, whose response names the model that served it. */
+const OPENAI_CHAT = [
+  { host: 'api.openai.com', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/** xAI's Chat Completions API, which Goose's OpenAI-compatible `xai` provider calls. */
+const XAI_CHAT = [
+  { host: 'api.x.ai', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/**
+ * Goose on each provider reeval brokers its key for (Goose's `google`, `anthropic`, `openai` and
+ * `xai`): its model calls and the model list it fetches.
+ */
+const GOOSE_DIRECT: Record<string, ModelSpecific> = {
+  google: {
+    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    authAs: 'GOOGLE_API_KEY',
+    endpoints: GOOSE_ENDPOINTS,
+    servedModel: geminiServedModel,
+    hosts: ['generativelanguage.googleapis.com'],
+  },
+  anthropic: {
+    credential: 'ANTHROPIC_API_KEY',
+    authAs: 'ANTHROPIC_API_KEY',
+    endpoints: [
+      ...ANTHROPIC_MESSAGES,
+      { host: 'api.anthropic.com', path: { exact: '/v1/models' }, method: ['GET'] },
+    ],
+    modelResponses: ANTHROPIC_MESSAGES,
+    servedModel: respondedOn('api.anthropic.com'),
+    hosts: ['api.anthropic.com'],
+  },
+  // Chat Completions, and the Responses API for OpenAI's reasoning models.
+  openai: {
+    credential: 'OPENAI_API_KEY',
+    authAs: 'OPENAI_API_KEY',
+    endpoints: [
+      ...OPENAI_CHAT,
+      ...OPENAI_MODEL_ENDPOINTS,
+      { host: 'api.openai.com', path: { exact: '/v1/models' }, method: ['GET'] },
+    ],
+    modelResponses: [...OPENAI_CHAT, ...OPENAI_MODEL_ENDPOINTS],
+    servedModel: (request) => openaiServedModel(request) ?? respondedOn('api.openai.com')(request),
+    hosts: ['api.openai.com'],
+  },
+  xai: {
+    credential: 'XAI_API_KEY',
+    authAs: 'XAI_API_KEY',
+    endpoints: [...XAI_CHAT, { host: 'api.x.ai', path: { exact: '/v1/models' }, method: ['GET'] }],
+    modelResponses: XAI_CHAT,
+    servedModel: xaiServedModel,
+    hosts: ['api.x.ai'],
+  },
+}
+
+/** The Goose providers reeval runs on their own keys, for messages. */
+export const GOOSE_PROVIDERS = Object.keys(GOOSE_DIRECT)
+
+/** Goose on the model's provider; throws naming the providers reeval brokers a key for. */
+export function gooseForModel(model: string): ModelSpecific {
+  const direct = GOOSE_DIRECT[providerOf(model)]
+  if (!direct) throw new InfraError(`goose(): ${directProviderRefusal('goose', model)}`)
+  return direct
+}
+
+/** Why pi or Goose can't run `model` on its provider's own key, or undefined when it can. */
+export function directProviderRefusal(kind: 'pi' | 'goose', model: string): string | undefined {
+  if (kind === 'goose') {
+    return GOOSE_DIRECT[providerOf(model)]
+      ? undefined
+      : `reeval runs Goose on its own key for its ${GOOSE_PROVIDERS.join(', ')} providers, so not ${model}: where Goose's other providers send their keys isn't probed yet. Run it through a gateway`
+  }
+  const provider = piProvider(providerOf(model))
+  return 'refused' in provider ? `${provider.refused}, so not ${model}` : undefined
 }
 
 /** Codex's `config.toml` `[mcp_servers]` shape. */
@@ -1039,7 +1193,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
 }
 
 /** Every real agent reeval can drive, by harness kind. */
-export const AGENTS: Record<AgentKind, Agent> = {
+export const AGENTS: Record<AgentKind, CatalogEntry> = {
   cursor: {
     ...LAYOUTS.cursor,
     pluginParts: PLUGIN_PARTS,
@@ -1184,10 +1338,6 @@ export const AGENTS: Record<AgentKind, Agent> = {
       const m = await import('@reeval/harness-opencode')
       return { command: m.openCodeStoredUsageCommand, parse: m.parseOpenCodeStoredUsage }
     },
-    // Google's, for what names no model; forModel gives the model's provider's.
-    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    endpoints: GEMINI_ENDPOINTS,
-    servedModel: geminiServedModel,
     // The requests the pinned CLI sends each provider's key on (its model, and the same model for
     // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
@@ -1226,30 +1376,32 @@ export const AGENTS: Record<AgentKind, Agent> = {
         mark: m.gooseUsageMark,
       }
     },
-    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The requests Goose sends the key on, with session naming off.
-    endpoints: GOOSE_ENDPOINTS,
-    modelCalls: GEMINI_ENDPOINTS,
+    // The model's provider's: the requests Goose sends its key on, with session naming off.
+    forModel: gooseForModel,
+    modelId: withoutProvider,
     // Goose 1.56.0 refreshes its model catalog from models.dev/api.json in every session, and
     // falls back to the one it bundles when that's refused.
     expectedBlocked: {
       hosts: ['models.dev'],
       why: "Goose's model catalog refresh, which no setting turns off",
     },
-    servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const goose = await import('@reeval/harness-goose')
-      const provider = onRoutingGateway(descriptor, {
-        vercel: goose.AI_GATEWAY_PROVIDER,
-        openrouter: goose.OPENROUTER_PROVIDER,
-      })
+      const direct: Record<string, GooseProvider> = {
+        google: goose.GEMINI_PROVIDER,
+        anthropic: goose.ANTHROPIC_PROVIDER,
+        openai: goose.OPENAI_PROVIDER,
+        xai: goose.XAI_PROVIDER,
+      }
+      const provider =
+        onRoutingGateway(descriptor, {
+          vercel: goose.AI_GATEWAY_PROVIDER,
+          openrouter: goose.OPENROUTER_PROVIDER,
+        }) ?? direct[providerOf(descriptor.model)]
       return goose.createGoose({
-        ...(vertex ? { vertex } : {}),
-        ...(provider
-          ? { auth, provider }
-          : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
-            { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
+        ...(vertex ? { vertex } : provider ? { provider } : {}),
+        auth,
         model,
         ...(descriptor.kind === 'goose' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
@@ -1269,26 +1421,26 @@ export const AGENTS: Record<AgentKind, Agent> = {
     reasoning: 'streamed',
     reasoningTokens: true,
     reportedCost: piCost,
-    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request pi sends the key on; --offline stops its startup network operations.
-    endpoints: GEMINI_ENDPOINTS,
-    modelCalls: GEMINI_ENDPOINTS,
-    servedModel: geminiServedModel,
+    // The model's provider's: the only requests pi sends its key on, since --offline stops its
+    // startup network operations.
+    forModel: piForModel,
+    modelId: withoutProvider,
     mcpServers: piMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, vertex }) => {
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const pi = await import('@reeval/harness-pi')
       const gateway = onRoutingGateway(descriptor, {
         vercel: pi.PI_AI_GATEWAY,
         openrouter: pi.PI_OPENROUTER,
       })
+      const modelInfo =
+        gateway && model && !model.startsWith('google/') ? await modelLimits(model) : undefined
       return pi.createPi({
+        auth,
         ...(gateway
-          ? { auth, gateway }
-          : {
-              // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-              auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
-              ...(vertex ? { vertex } : {}),
-            }),
+          ? { gateway, ...(modelInfo ? { modelInfo } : {}) }
+          : vertex
+            ? { vertex }
+            : { provider: keyed(piProvider(providerOf(descriptor.model))) }),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
@@ -1719,6 +1871,7 @@ export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Ag
     // The route stands in for forModel: it decides the credential, endpoints and hosts there.
     return { ...routed, ...route(process.env) }
   }
+  if (agent.credential === undefined) return { ...agent, ...agent.forModel(h.model) }
   return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
 }
 
@@ -1857,12 +2010,19 @@ export type Brokering = {
   localResponses?: readonly LocalResponse[]
 }
 
+/**
+ * The key the fake agent brokers with `layout`, and where: the agent's own, or, for one that takes
+ * its model's provider's key, a key of the fake's own on no endpoint.
+ */
+export function fakeBrokering(layout: AgentKind = 'cursor'): Brokering {
+  const { credential, endpoints } = AGENTS[layout]
+  return credential === undefined
+    ? { credential: 'FAKE_AGENT_API_KEY', endpoints: [] }
+    : { credential, endpoints }
+}
+
 export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Brokering | undefined {
-  if (h.kind === 'fake') {
-    if (!h.brokers) return undefined
-    const { credential, endpoints } = AGENTS[h.layout ?? 'cursor']
-    return { credential, endpoints }
-  }
+  if (h.kind === 'fake') return h.brokers ? fakeBrokering(h.layout) : undefined
   const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent

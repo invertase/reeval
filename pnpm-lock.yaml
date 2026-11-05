@@ -785,7 +785,7 @@ importers:
         specifier: workspace:0.1.10
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.14
+        specifier: workspace:0.1.15
         version: link:../harness-goose
       '@reeval/harness-grok-build':
         specifier: workspace:0.1.11
@@ -841,7 +841,7 @@ importers:
         specifier: workspace:0.1.10
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.14
+        specifier: workspace:0.1.15
         version: link:../harness-goose
       '@reeval/harness-grok-build':
         specifier: workspace:0.1.11

@@ -75,7 +75,7 @@ Use the project's package manager (its lockfile), and pick the harness the user 
 | Claude Code | `claude-code` | `ANTHROPIC_API_KEY` |
 | Codex | `codex` | `OPENAI_API_KEY` |
 | Antigravity | `antigravity` | `GEMINI_API_KEY` |
-| OpenCode, Goose, pi | `opencode`, `goose`, `pi` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| OpenCode, Goose, pi | `opencode`, `goose`, `pi` | The model's provider's key, e.g. `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` |
 
 ```bash
 npm init -y                                  # only if there's no package.json

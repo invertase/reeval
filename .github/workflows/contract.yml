@@ -40,7 +40,7 @@ jobs:
       REEVAL_TEST_REAL: '1'
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row, or the ones asked for; one without its key fails, naming the variable.
-      REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build' }}
+      REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,goose-anthropic,goose-openai,goose-xai,pi,pi-anthropic,pi-openai,pi-xai,codex,fx,grok-build' }}
       # The @cursor/sdk shape and the real-tier fixtures on Cursor: on the default list, or on a
       # latest leg that names the cursor row (drift.yml's, after a new @cursor/sdk).
       CURSOR_CHECKS: ${{ inputs.harnesses == '' || (inputs.versions == 'latest' && contains(format(',{0},', inputs.harnesses), ',cursor,')) }}

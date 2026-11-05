@@ -1305,7 +1305,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.goose',
     area: 'Harnesses',
-    name: "`goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names, with Vertex AI's variables set only for Goose on Vertex AI, so the eval's own reach the agent",
+    name: "`goose()`: Goose over ACP on a brokered provider's key, its image, rules, skills, MCP extensions and tool names, with Vertex AI's variables set only for Goose on Vertex AI, so the eval's own reach the agent",
     fixtures: [
       'harness/rules:goose',
       'harness/workspace-skills:goose',
@@ -1332,7 +1332,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.pi',
     area: 'Harnesses',
-    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers',
+    name: "`pi()`: pi in the sandbox (`pi --mode json`) on a brokered provider's key, with per-call tokens and stdio and HTTP MCP servers",
     fixtures: [
       'harness/rules:pi',
       'harness/workspace-skills:pi',
@@ -1345,6 +1345,19 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/plan.test.ts',
       'harness-pi/test/unit.test.ts',
       'harness-pi/test/stream.test.ts',
+    ],
+  },
+  {
+    id: 'harness.pi-goose.providers',
+    area: 'Harnesses',
+    name: "`pi()` and `goose()` with `<provider>/<model>`: Google, Anthropic or OpenAI on that provider's own key, with only that key brokered, its hosts automatic and its served model recorded; other providers refused at plan time",
+    fixtures: ['harness/pi-provider-key', 'harness/goose-provider-key'],
+    plan: ['pi/pi', 'goose/goose'],
+    unit: [
+      'reeval/test/plan.test.ts',
+      'reeval/test/harness.test.ts',
+      'harness-pi/test/unit.test.ts',
+      'harness-goose/test/unit.test.ts',
     ],
   },
   {

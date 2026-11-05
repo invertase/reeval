@@ -9,8 +9,10 @@ type BuiltinTool = HarnessV1BuiltinTool<any, any>
  * Goose's developer extension, from its ACP `tool_call` updates: the title is
  * `<tool> · <target>` (`shell · cat a.txt`), which `@ai-sdk/harness-acp` matches by prefix.
  * write and edit take `path`, not the common `file_path`, so they aren't common tools.
- * `load_skill` is the skills extension's, which loads a skill by name. Its other tools keep
- * Goose's own names (see GooseStreamTranslator).
+ * `load_skill` is the skills extension's, which loads a skill by name, and `load` the summon
+ * extension's, which loads a source (a skill, recipe or subagent) by name, or lists them without
+ * one. `tree` is the developer extension's directory listing. Its other tools keep Goose's own
+ * names (see GooseStreamTranslator).
  */
 export const GOOSE_BUILTIN_TOOLS = {
   bash: {
@@ -37,6 +39,14 @@ export const GOOSE_BUILTIN_TOOLS = {
   },
   load_skill: {
     ...tool({ title: 'load_skill', inputSchema: z.looseObject({ name: z.string() }) }),
+    toolUseKind: 'readonly',
+  },
+  load: {
+    ...tool({ title: 'load', inputSchema: z.looseObject({ source: z.string().optional() }) }),
+    toolUseKind: 'readonly',
+  },
+  tree: {
+    ...tool({ title: 'tree', inputSchema: z.looseObject({ path: z.string().optional() }) }),
     toolUseKind: 'readonly',
   },
 } as const satisfies Record<string, BuiltinTool>

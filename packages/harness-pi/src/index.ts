@@ -1,4 +1,4 @@
-// `@reeval/harness-pi`: pi on a Gemini API key, Vertex AI, Vercel AI Gateway or OpenRouter, as an AI SDK harness, in the sandbox.
+// `@reeval/harness-pi`: pi on its providers' API keys, Vertex AI, Vercel AI Gateway or OpenRouter, as an AI SDK harness, in the sandbox.
 export {
   getPiBootstrap,
   PI_BOOTSTRAP_DIR,
@@ -11,12 +11,8 @@ export {
   buildPiMcpConfig,
   createPi,
   escapePiConfigValue,
-  GEMINI_API_KEY_HEADER,
-  GEMINI_API_URL,
   PI_AGENT_DIR,
   PI_AI_GATEWAY,
-  PI_CREDENTIAL_ENV,
-  PI_ENDPOINTS,
   PI_HARNESS_ID,
   PI_HOME_SKILLS_DIR,
   PI_INSTRUCTIONS_FILE,
@@ -28,9 +24,18 @@ export {
   type PiGateway,
   type PiHarnessSettings,
   type PiMcpServer,
+  type PiModelInfo,
   type PiVertex,
   piGatewayEndpoints,
 } from './pi-harness.ts'
+export { PI_PROVIDERS, PI_REFUSED_PROVIDERS, PROBED_VERSION } from './pi-provider-table.ts'
+export {
+  type PiEndpoint,
+  type PiKeyHeader,
+  type PiProvider,
+  piProvider,
+  type RefusedPiProvider,
+} from './pi-providers.ts'
 export { type PiEvent, PiStreamTranslator, type PiUsage, toUsage } from './pi-stream.ts'
 export { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'
 export { VERSION } from './version.ts'

@@ -859,7 +859,8 @@ export type FakeHarnessDescriptor = {
     | 'grok-build'
   /**
    * In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`, Cursor's
-   * when unset) on that agent's endpoints, as its adapter does: the key stays on the host, and
+   * when unset) on that agent's endpoints, as its adapter does; OpenCode, Goose and pi take their
+   * model's provider's key, so with their layouts it's `FAKE_AGENT_API_KEY`, on no endpoint. The key stays on the host, and
    * `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those
    * endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request.
    * For an agent whose bridge is a server in the sandbox (Claude Code, OpenCode, Goose, fx, Grok
@@ -1004,8 +1005,8 @@ export type OpenCodeHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
- * on a Gemini API key, and reports no usage (its ACP server counts one call).
+ * Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its
+ * provider's key, and reports no usage (its ACP server counts one call).
  */
 export type GooseHarnessDescriptor = {
   kind: 'goose'
@@ -1014,7 +1015,10 @@ export type GooseHarnessDescriptor = {
    * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
    */
   gateway?: GatewayName
-  /** A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`. */
+  /**
+   * `<provider>/<model>`: Goose's `google`, `anthropic`, `openai` or `xai` provider on its own key,
+   * or the gateway's id on `vercel()` and `openrouter()`, e.g. `google/gemini-3.8-flash`.
+   */
   model: string
   /**
    * Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.
@@ -1031,8 +1035,8 @@ export type GooseHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
- * Google models on a Gemini API key and reports each model call's tokens. It takes stdio and
+ * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs a
+ * model on its provider's key and reports each model call's tokens. It takes stdio and
  * HTTP MCP servers, not SSE ones.
  */
 export type PiHarnessDescriptor = {
@@ -1042,7 +1046,10 @@ export type PiHarnessDescriptor = {
    * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
    */
   gateway?: GatewayName
-  /** A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`. */
+  /**
+   * `<provider>/<model>`: one of pi's providers whose key it sends in a header on a fixed host, or
+   * the gateway's id on `vercel()` and `openrouter()`, e.g. `google/gemini-3.8-flash`.
+   */
   model: string
   /**
    * Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that

@@ -39,7 +39,7 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
-import { AGENTS } from '../src/harness/agents.ts'
+import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
 import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
@@ -2353,6 +2353,36 @@ export const features: Feature[] = [
       )
     },
   },
+  ...(
+    [
+      ['harness/pi-provider-key', 'pi-anthropic', /^claude-haiku-4-5/, 'api.anthropic.com'],
+      ['harness/goose-provider-key', 'goose-openai', /^gpt-5\.4-mini/, 'api.openai.com'],
+    ] as const
+  ).map(
+    ([dir, realHarness, served, host]): Feature => ({
+      dir,
+      tiers: ['real'],
+      realHarness,
+      env: 'closed',
+      canary: /to have a length of 2 but got 1/,
+      record: ({ run }) => {
+        const attempt = landed(run)
+        assert.ok(
+          attempt?.servedModels?.some((m) => served.test(m)),
+          JSON.stringify(attempt?.servedModels),
+        )
+        assert.ok(
+          attempt?.egress?.contacted.some((h) => h.host === host),
+          JSON.stringify(attempt?.egress),
+        )
+        assert.deepEqual(
+          (attempt?.egress?.blocked ?? []).filter((h) => h.host === host),
+          [],
+          'the provider host was not refused',
+        )
+      },
+    }),
+  ),
   {
     dir: 'harness/goose-eval-env',
     tiers: ['real'],
@@ -3347,8 +3377,8 @@ export const features: Feature[] = [
       return {
         ...fake.env,
         REEVAL_TEST_TART_ANY_HOST: '1',
-        REEVAL_FIXTURE_CREDENTIAL: AGENTS[layout].credential,
-        [AGENTS[layout].credential]: 'key_tart_fixture',
+        REEVAL_FIXTURE_CREDENTIAL: fakeBrokering(layout).credential,
+        [fakeBrokering(layout).credential]: 'key_tart_fixture',
       }
     },
     record: ({ project, runDir }) => {

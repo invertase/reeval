@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { GooseStreamTranslator } from '../src/goose-stream.ts'
+import { GOOSE_BUILTIN_TOOLS } from '../src/goose-tools.ts'
 
 type Part = { type: string; [key: string]: unknown }
 
@@ -45,6 +46,18 @@ test('names a call from its tool_call metadata, and drops the usage', () => {
   }
   assert.equal(finish.totalUsage.inputTokens?.total, undefined)
   assert.equal(finish.totalUsage.outputTokens?.total, undefined)
+})
+
+test("the skills and summon extensions' loaders are named, and in the catalog", () => {
+  const loaders = names(
+    turn([...call('s1', 'load_skill', 'skills'), ...call('s2', 'load', 'summon')]),
+  )
+  assert.deepEqual(loaders, ['load_skill', 'load'])
+  for (const name of loaders) assert.ok(name in GOOSE_BUILTIN_TOOLS, name)
+})
+
+test("the developer extension's tree is in the catalog, as a read", () => {
+  assert.equal(GOOSE_BUILTIN_TOOLS.tree.toolUseKind, 'readonly')
 })
 
 test("a server whose name Goose rewrites, such as a plugin's, is named as reeval names it", () => {

@@ -108,17 +108,24 @@ const BOOTSTRAPS: Record<
   goose: {
     name: 'Goose',
     cli: 'goose',
-    adapter: async () =>
-      (await import('@reeval/harness-goose')).createGoose({
+    adapter: async () => {
+      const goose = await import('@reeval/harness-goose')
+      return goose.createGoose({
         auth: { GOOGLE_API_KEY: 'unused' },
+        provider: goose.GEMINI_PROVIDER,
         model: 'unused',
-      }),
+      })
+    },
   },
   pi: {
     name: 'pi',
     cli: 'pi',
-    adapter: async () =>
-      (await import('@reeval/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
+    adapter: async () => {
+      const pi = await import('@reeval/harness-pi')
+      const provider = pi.piProvider('google')
+      if ('refused' in provider) throw new Error(provider.refused)
+      return pi.createPi({ auth: { GEMINI_API_KEY: 'unused' }, provider })
+    },
   },
   codex: {
     name: 'Codex',
