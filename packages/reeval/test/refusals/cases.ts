@@ -2367,6 +2367,19 @@ environments:
       route([DIRECT], opencode({ model: '302ai/m' })),
     ],
     [
+      'route: goose on a provider reeval has not probed, on direct alone',
+      route([DIRECT], goose({ model: 'mistral/devstral-2' })),
+    ],
+    [
+      'route: goose on a provider reeval has not probed, on vercel',
+      route([VERCEL], goose({ model: 'mistral/devstral-2' })),
+    ],
+    [
+      'route: pi on a provider its table refuses, on direct alone',
+      route([DIRECT], pi({ model: 'amazon-bedrock/anthropic.claude-haiku-4-5' })),
+    ],
+    ['route: pi on an unknown provider, on direct alone', route([DIRECT], pi({ model: 'nope/m' }))],
+    [
       'ts: openrouter with fallbacks',
       config({ gateway: [{ kind: 'openrouter', fallbacks: true }] }),
     ],
