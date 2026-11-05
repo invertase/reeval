@@ -11,7 +11,7 @@ import { Readable, Writable } from 'node:stream'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
 import { agentFor } from '../src/harness/agents.ts'
-import { askHarness, INIT_HARNESSES, initCommand, planInit } from '../src/init.ts'
+import { askHarness, configSource, INIT_HARNESSES, initCommand, planInit } from '../src/init.ts'
 import { pkgRoot, runCli, tempDir } from './helpers.ts'
 
 const { name: pkg, version } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
@@ -118,6 +118,15 @@ describe('reeval init', () => {
     assert.match(p.read('reeval.config.ts'), /include: \['evals\/\*\*\/\*\.eval\.ts'\]/)
     const again = await runCli(p.dir, ['init', '--harness', 'codex', '--bare'])
     for (const file of BARE) assert.match(again.stdout, new RegExp(`skip +${file}`), file)
+  })
+
+  test("the config names the key of the analysis model's provider", () => {
+    const keyLine = (src: string) => src.match(/reeval analyze explains a run, with (.+)\.$/m)?.[1]
+    assert.equal(keyLine(configSource(pkg, 'cursor')), 'GOOGLE_GENERATIVE_AI_API_KEY')
+    const anthropic = configSource(pkg, 'cursor', 'anthropic/claude-sonnet-5')
+    assert.equal(keyLine(anthropic), 'ANTHROPIC_API_KEY')
+    assert.match(anthropic, /^ {2}analysis: \{ model: 'anthropic\/claude-sonnet-5' \},$/m)
+    assert.equal(keyLine(configSource(pkg, 'codex', 'openai/gpt-5.5')), 'OPENAI_API_KEY')
   })
 
   test('Next names an install only when reeval is not installed and listed yet', async () => {

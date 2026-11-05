@@ -11,7 +11,7 @@ import type { Flags } from './cli-spec.ts'
 import { CONFIG_FILES } from './config.ts'
 import { UsageError } from './errors.ts'
 import { type AgentKind, agentFor } from './harness/agents.ts'
-import { RECOMMENDED_ANALYSIS_MODEL } from './judge/index.ts'
+import { judgeCredentials, modelKeyOptions, RECOMMENDED_ANALYSIS_MODEL } from './judge/index.ts'
 import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
 import { withoutBom } from './text.ts'
@@ -49,8 +49,8 @@ const keyOf = (h: { kind: AgentKind; model: string }) => agentFor(descriptorOf(h
 /** The cell id an offered agent runs as, e.g. `opencode:gemini-3.8-flash`. */
 const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf(h))
 
-/** The key that calls `analysis.model` directly. */
-const ANALYSIS_KEY = 'GOOGLE_GENERATIVE_AI_API_KEY'
+/** The key that calls an analysis model directly, or what would route it when none can. */
+const analysisKeyOf = (model: string) => judgeCredentials(model)[0] ?? modelKeyOptions(model)
 
 const CHOICES: InitChoice[] = INIT_HARNESSES.map((h) => h.kind)
 const DEFAULT_CHOICE: InitChoice = 'cursor'
@@ -80,7 +80,11 @@ function harnessOf(choice: InitChoice) {
   return h
 }
 
-export function configSource(pkg: string, choice: InitChoice): string {
+export function configSource(
+  pkg: string,
+  choice: InitChoice,
+  analysisModel = RECOMMENDED_ANALYSIS_MODEL,
+): string {
   const h = harnessOf(choice)
   return `import { defineConfig } from '${pkg}'
 import { ${h.factory} } from '${pkg}/harness'
@@ -90,8 +94,8 @@ export default defineConfig({
   harnesses: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
   timeout: '15m',
   // For c.judge, add a judge, e.g. judge: { model: '${RECOMMENDED_ANALYSIS_MODEL}' }.
-  // reeval analyze explains a run, with ${ANALYSIS_KEY}.
-  analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' },
+  // reeval analyze explains a run, with ${analysisKeyOf(analysisModel)}.
+  analysis: { model: '${analysisModel}' },
   defaultProfile: { ci: 'pr' },
   profiles: {
     // PR runs in CI: one attempt per cell, no variants.
