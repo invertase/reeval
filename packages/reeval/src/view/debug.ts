@@ -58,6 +58,8 @@ export type DebugRequest = {
   /** Brokered secrets and the harness credential swapped in, by name. */
   substituted: string[]
   ms: number
+  /** Milliseconds from the request's start to its response body's first byte, when it had one. */
+  firstByteMs?: number
   /**
    * On a request the gateway sent the harness's key on, or a model call whose response it reads,
    * the reasoning settings its JSON body carried, as

@@ -1,6 +1,7 @@
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
 import type { ExecResult } from '../types.ts'
+import type { ModelCall } from '../model-calls.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }
 
@@ -54,6 +55,8 @@ export interface Sandbox {
   upstreams?(): Array<{ provider: string; calls: number }>
   /** The same gateway's cost for those requests so far, in US dollars; undefined when it named none. */
   reportedCostUsd?(): number | undefined
+  /** With credential brokering: the agent's model calls so far, in the order they ended. */
+  modelCalls?(): ModelCall[]
   /** With credential brokering: the HTTP status of each brokered request so far, in order. */
   brokeredStatuses?(): number[]
   /**
