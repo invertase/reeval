@@ -612,7 +612,7 @@
           ]
         },
         "startRetries": {
-          "description": "Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).",
+          "description": "Harness session starts that didn't become ready within `startTimeout`, or failed on a transient error (a 5xx or a network error), and were started again (at most one).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/StartRetry"
@@ -3977,15 +3977,15 @@
       ]
     },
     "StartRetry": {
-      "description": "A harness session start that timed out and was started again.",
+      "description": "A harness session start that timed out, or failed on a transient error, and was started again.",
       "type": "object",
       "properties": {
         "error": {
-          "description": "`<harness kind>: session did not become ready within <startTimeout>`.",
+          "description": "`<harness kind>: session did not become ready within <startTimeout>`, or the transient error the start failed on, such as `Cursor harness failed to start: Cursor's model catalog request failed: HTTP 502 (tried 3 times)`.",
           "type": "string"
         },
         "waitedMs": {
-          "description": "How long it waited before giving up on that start.",
+          "description": "How long it waited before giving up on that start, or until that start failed.",
           "type": "number"
         }
       },

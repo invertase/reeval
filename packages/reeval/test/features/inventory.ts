@@ -2143,8 +2143,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.start-timeout',
     area: 'CLI and runner',
-    name: "A harness session that doesn't become ready within `startTimeout` (default 90s) is retried once, then an infra error; its sandbox goes and the other attempts carry on",
-    unit: ['reeval/test/engine.test.ts'],
+    name: "A harness session that doesn't become ready within `startTimeout` (default 90s), or whose start failed transiently (Cursor's model catalog unreachable), is retried once, then an infra error; its sandbox goes and the other attempts carry on",
+    unit: [
+      'reeval/test/engine.test.ts',
+      'reeval/test/unit.test.ts',
+      'harness-cursor-sdk/test/unit.test.ts',
+    ],
   },
   {
     id: 'engine.failures',

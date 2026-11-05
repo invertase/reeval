@@ -763,7 +763,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="judgements" type="JudgmentRecord[]"></Property>
 
 <Property name="startRetries" type="StartRetry[]" optional>
-  Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
+  Harness session starts that didn't become ready within `startTimeout`, or failed on a transient error (a 5xx or a network error), and were started again (at most one).
 </Property>
 
 <Property name="retries" type="AttemptRetry[]" optional>
@@ -1200,7 +1200,7 @@ An `AssertionRecord` is one settled `expect` or `expect.require` call on `Attemp
 
 ## `StartRetry`
 
-A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harness kind>: session did not become ready within <startTimeout>`. `waitedMs` is how long that start waited.
+A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harness kind>: session did not become ready within <startTimeout>`, or the transient error (a 5xx or a network error) the start failed on. `waitedMs` is how long that start waited, or ran until it failed.
 
 ## `CellCheck`
 

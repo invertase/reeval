@@ -2970,11 +2970,15 @@ export type JudgeInput = {
   retries?: JudgeRetry[]
 }
 
-/** A harness session start that timed out and was started again. */
+/** A harness session start that timed out, or failed on a transient error, and was started again. */
 export type StartRetry = {
-  /** `<harness kind>: session did not become ready within <startTimeout>`. */
+  /**
+   * `<harness kind>: session did not become ready within <startTimeout>`, or the transient error
+   * the start failed on, such as `Cursor harness failed to start: Cursor's model catalog request
+   * failed: HTTP 502 (tried 3 times)`.
+   */
   error: string
-  /** How long it waited before giving up on that start. */
+  /** How long it waited before giving up on that start, or until that start failed. */
   waitedMs: number
 }
 
@@ -3068,7 +3072,7 @@ export type EvalRecord = {
    * included, which its judgment key is numbered by.
    */
   judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
-  /** Session starts that didn't become ready in time and were started again. */
+  /** Session starts that didn't become ready in time, or failed on a transient error, and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings
   /** Skills, rules and MCP config visible to the agent, by content hash. */

@@ -9,6 +9,7 @@ export {
   CURSOR_BACKEND_URL,
   CURSOR_SDK_CREDENTIAL_ENV,
   CURSOR_SDK_MODEL_CATALOG_ENV,
+  CursorCatalogError,
   type CursorSdkAuthentication,
   type CursorSdkCredentials,
   type CursorSdkModelEntry,

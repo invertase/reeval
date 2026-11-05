@@ -28,6 +28,7 @@ import { capabilitiesOf, sandboxKind } from '../sandbox/kinds.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { writeTar } from '../tarball.ts'
 import { clip, formatDuration } from '../text.ts'
+import type { StartRetry } from '../types.ts'
 import { asCheck } from './checks.ts'
 import { timeMcpServers } from './mcp-startup.ts'
 import { type Attempt, setupAllowance, startTimeoutMs } from './state.ts'
@@ -463,40 +464,84 @@ async function writePluginMcp(
   }
 }
 
+/** How long a start that failed on a transient error waits before it's tried again. */
+const TRANSIENT_START_DELAY_MS = 2_000
+
 /**
- * Starts the harness session within its `startTimeout`. A start that doesn't become ready in time
- * is aborted (and closed, should it finish later) and started once more: a stuck bootstrap is
- * usually transient, and nothing has run yet, so the retry can't change what the attempt
- * measures. A second timeout is an infra error; a start that fails outright isn't retried.
+ * Starts a harness session within `timeoutMs`, at most twice. A start that doesn't become ready in
+ * time is aborted (and closed, should it finish later) and started once more, and so is one that
+ * fails on a transient {@link InfraError} (a 5xx or a network error): nothing has run yet, so the
+ * retry can't change what the attempt measures. Each retry is passed to `onRetry` to record. A
+ * second timeout or transient failure, or any other failure, is the attempt's infra error.
  */
-async function startHarness(
-  a: Attempt,
-  harness: Harness,
-  box: Sandbox,
-  options: Parameters<Harness['start']>[2],
-): Promise<HarnessSession> {
-  const { harness: descriptor } = a.spec
-  const ms = startTimeoutMs(descriptor)
-  const late = `${descriptor.kind}: session did not become ready within ${formatDuration(ms)}`
+export async function startWithRetry<S extends { close(): Promise<void> }>(
+  start: (signal: AbortSignal) => Promise<S>,
+  {
+    kind,
+    timeoutMs,
+    signal,
+    onRetry,
+    transientDelayMs = TRANSIENT_START_DELAY_MS,
+  }: {
+    kind: string
+    timeoutMs: number
+    signal: AbortSignal
+    onRetry: (retry: StartRetry) => void
+    transientDelayMs?: number
+  },
+): Promise<S> {
+  const late = `${kind}: session did not become ready within ${formatDuration(timeoutMs)}`
   for (let tries = 1; ; tries++) {
     const stop = new AbortController()
     let timer: NodeJS.Timeout | undefined
     const timedOut = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), ms)
+      timer = setTimeout(() => resolve(null), timeoutMs)
     })
-    const starting = harness.start(box, AbortSignal.any([a.signal, stop.signal]), options)
-    const session = await Promise.race([starting, timedOut]).finally(() => clearTimeout(timer))
+    const startedAt = Date.now()
+    const starting = start(AbortSignal.any([signal, stop.signal]))
+    let session: S | null
+    try {
+      session = await Promise.race([starting, timedOut])
+    } catch (error) {
+      signal.throwIfAborted()
+      if (!(error instanceof InfraError) || !error.transient) throw error
+      if (tries === 2) throw new InfraError(`${error.message} (tried twice)`)
+      onRetry({ error: error.message, waitedMs: Date.now() - startedAt })
+      debugLog('harness', `${error.message}; starting it once more`)
+      await new Promise((resolve) => setTimeout(resolve, transientDelayMs))
+      signal.throwIfAborted()
+      continue
+    } finally {
+      clearTimeout(timer)
+    }
     if (session) return session
     stop.abort(new InfraError(late))
     starting.then(
       (s) => s.close().catch(() => {}),
       () => {},
     )
-    a.signal.throwIfAborted()
+    signal.throwIfAborted()
     if (tries === 2) throw new InfraError(`${late} (tried twice)`)
-    a.record.startRetries = [{ error: late, waitedMs: ms }]
+    onRetry({ error: late, waitedMs: timeoutMs })
     debugLog('harness', `${late}; starting it once more`)
   }
+}
+
+function startHarness(
+  a: Attempt,
+  harness: Harness,
+  box: Sandbox,
+  options: Parameters<Harness['start']>[2],
+): Promise<HarnessSession> {
+  const { harness: descriptor } = a.spec
+  return startWithRetry((signal) => harness.start(box, signal, options), {
+    kind: descriptor.kind,
+    timeoutMs: startTimeoutMs(descriptor),
+    signal: a.signal,
+    onRetry: (retry) => {
+      a.record.startRetries = [...(a.record.startRetries ?? []), retry]
+    },
+  })
 }
 
 /**

@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
-import { writeFiles } from '../src/attempt/session.ts'
+import { startWithRetry, writeFiles } from '../src/attempt/session.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
 import { regressions } from '../src/commands.ts'
 import {
@@ -90,7 +90,7 @@ import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
-import type { Sandbox } from '../src/sandbox/types.ts'
+import { InfraError, type Sandbox } from '../src/sandbox/types.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
 import type { EvalOptions, ExecResult, Outcome, ResolvedProfile } from '../src/types.ts'
@@ -2780,4 +2780,84 @@ test('selectProfile: --profile, then REEVAL_PROFILE, then defaultProfile', () =>
     () => selectProfile(config, 'nope', {}),
     /Unknown profile "nope"\. Profiles in reeval\.config\.ts: pr, dev, nightly\./,
   )
+})
+
+describe('a harness session start', () => {
+  type Session = { close(): Promise<void> }
+  const session: Session = { close: async () => {} }
+  const options = (retries: unknown[]) => ({
+    kind: 'cursor',
+    timeoutMs: 5_000,
+    signal: new AbortController().signal,
+    onRetry: (r: unknown) => retries.push(r),
+    transientDelayMs: 0,
+  })
+  const failing = (errors: Error[]) => {
+    let starts = 0
+    return {
+      starts: () => starts,
+      start: async () => {
+        const error = errors[starts++]
+        if (error) throw error
+        return session
+      },
+    }
+  }
+  const http502 = () =>
+    new InfraError(
+      "Cursor harness failed to start: Cursor's model catalog request failed: HTTP 502",
+      { transient: true },
+    )
+
+  test('that fails on a transient error is started once more, and the retry is recorded', async () => {
+    const retries: Array<{ error: string; waitedMs: number }> = []
+    const s = failing([http502()])
+    assert.equal(await startWithRetry(s.start, options(retries)), session)
+    assert.equal(s.starts(), 2)
+    assert.deepEqual(
+      retries.map((r) => r.error),
+      ["Cursor harness failed to start: Cursor's model catalog request failed: HTTP 502"],
+    )
+  })
+
+  test('that fails on a transient error twice is an infra error that says so', async () => {
+    const retries: unknown[] = []
+    const s = failing([http502(), http502()])
+    await assert.rejects(
+      startWithRetry(s.start, options(retries)),
+      (e: unknown) =>
+        e instanceof InfraError &&
+        e.message ===
+          "Cursor harness failed to start: Cursor's model catalog request failed: HTTP 502 (tried twice)",
+    )
+    assert.equal(s.starts(), 2)
+    assert.equal(retries.length, 1)
+  })
+
+  test('that fails on anything else is not retried', async () => {
+    const retries: unknown[] = []
+    const s = failing([new InfraError('Cursor harness failed to start: HTTP 401')])
+    await assert.rejects(startWithRetry(s.start, options(retries)), /HTTP 401$/)
+    const plain = failing([new Error('bug')])
+    await assert.rejects(startWithRetry(plain.start, options(retries)), /^Error: bug$/)
+    assert.equal(s.starts() + plain.starts(), 2)
+    assert.deepEqual(retries, [])
+  })
+
+  test('that times out, then fails on a transient error, has had its two starts', async () => {
+    const retries: Array<{ error: string }> = []
+    let starts = 0
+    const start = async () => {
+      if (starts++ === 0) return new Promise<never>(() => {})
+      throw http502()
+    }
+    await assert.rejects(
+      startWithRetry(start, { ...options(retries), timeoutMs: 20 }),
+      /HTTP 502 \(tried twice\)$/,
+    )
+    assert.deepEqual(
+      retries.map((r) => r.error),
+      ['cursor: session did not become ready within 20ms'],
+    )
+  })
 })

@@ -82,4 +82,10 @@ export const hasNetworkSession = (s: Sandbox): s is NetworkSandbox => 'network' 
 /** A failure of the sandbox or harness infrastructure, as opposed to the agent's work. */
 export class InfraError extends Error {
   override name = 'InfraError'
+  /** Another try may succeed: a 5xx, a network error or a timeout, not a refused key or a bad config. */
+  readonly transient: boolean
+  constructor(message: string, options: { transient?: boolean } = {}) {
+    super(message)
+    this.transient = options.transient ?? false
+  }
 }

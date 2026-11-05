@@ -319,7 +319,10 @@ export type AttemptRecord = {
     maxToolMs: number | null
   }
   judgements: JudgmentRecord[]
-  /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
+  /**
+   * Harness session starts that didn't become ready within `startTimeout`, or failed on a transient
+   * error (a 5xx or a network error), and were started again (at most one).
+   */
   startRetries?: StartRetry[]
   /**
    * The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran
