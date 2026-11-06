@@ -14,7 +14,7 @@ import {
   removeRunSandboxes,
   runPrefix,
 } from '../src/sandbox/boat.ts'
-import { type HarnessBake, installHarness } from '../src/sandbox/tart-bake.ts'
+import { type HarnessBake, installHarness } from '../src/sandbox/harness-install.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { project, readRun, runCli, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'

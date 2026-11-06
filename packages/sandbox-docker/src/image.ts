@@ -1,8 +1,25 @@
+import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+
 /**
- * The harness adapters an image can bake. Each pin must match the exact dependency (or
- * `workspace:<version>` for this repo's own adapters); a test enforces it. `patch` is the first 8
- * hex of the sha256 of the adapter's pnpm patch (`patchedDependencies` in pnpm-workspace.yaml),
- * whose bridge the image bakes; a test holds it to the patch file.
+ * How a harness's CLI gets into a machine: Docker's images, Tart's baked images and `boat()`'s VMs
+ * all run its adapter's bootstrap.
+ */
+export type HarnessBootstrap = {
+  /** How progress and errors name the harness. */
+  readonly name: string
+  /** The binary the bootstrap leaves under `~/.ai-sdk-harness`, or the package it installs. */
+  readonly cli: string
+  /** For an adapter that leaves no binary: a command that prints what it installed. */
+  readonly probe?: string
+  /** The adapter, with placeholder auth: only its bootstrap is read. */
+  readonly adapter: () => Promise<HarnessAgentAdapter>
+}
+
+/**
+ * The harness adapters an image can bake, and each one's bootstrap. Each pin must match the exact
+ * dependency (or `workspace:<version>` for this repo's own adapters); a test enforces it. `patch`
+ * is the first 8 hex of the sha256 of the adapter's pnpm patch (`patchedDependencies` in
+ * pnpm-workspace.yaml), whose bridge the image bakes; a test holds it to the patch file.
  */
 export const HARNESS_PACKAGES: Record<
   | 'cursor'
@@ -14,17 +31,121 @@ export const HARNESS_PACKAGES: Record<
   | 'codex'
   | 'fx'
   | 'grok-build',
-  { readonly name: string; readonly version: string; readonly patch?: string }
+  {
+    readonly name: string
+    readonly version: string
+    readonly patch?: string
+    readonly bootstrap: HarnessBootstrap
+  }
 > = {
-  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.9' },
-  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.176', patch: 'a9d56a8c' },
-  antigravity: { name: '@reeval/harness-antigravity', version: '0.1.15' },
-  opencode: { name: '@reeval/harness-opencode', version: '0.2.16' },
-  goose: { name: '@reeval/harness-goose', version: '0.1.15' },
-  pi: { name: '@reeval/harness-pi', version: '0.2.9' },
-  codex: { name: '@reeval/harness-codex', version: '0.1.12' },
-  fx: { name: '@reeval/harness-fx', version: '0.1.10' },
-  'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.11' },
+  cursor: {
+    name: '@reeval/harness-cursor-sdk',
+    version: '0.1.9',
+    bootstrap: {
+      name: 'Cursor',
+      cli: '@cursor/sdk',
+      probe: `node -p "'@cursor/sdk ' + require(process.env.HOME + '/.ai-sdk-harness/.harness-bootstrap/cursor-sdk/node_modules/@cursor/sdk/package.json').version"`,
+      adapter: async () => (await import('@reeval/harness-cursor-sdk')).createCursorSdk(),
+    },
+  },
+  'claude-code': {
+    name: '@ai-sdk/harness-claude-code',
+    version: '1.0.176',
+    patch: 'a9d56a8c',
+    bootstrap: {
+      name: 'Claude Code',
+      cli: 'claude',
+      adapter: async () => (await import('@ai-sdk/harness-claude-code')).createClaudeCode(),
+    },
+  },
+  antigravity: {
+    name: '@reeval/harness-antigravity',
+    version: '0.1.15',
+    bootstrap: {
+      name: 'Antigravity',
+      cli: 'agy',
+      adapter: async () => (await import('@reeval/harness-antigravity')).createAntigravity(),
+    },
+  },
+  opencode: {
+    name: '@reeval/harness-opencode',
+    version: '0.2.16',
+    bootstrap: {
+      name: 'OpenCode',
+      cli: 'opencode',
+      adapter: async () =>
+        (await import('@reeval/harness-opencode')).createOpenCode({
+          auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
+          model: 'google/unused',
+        }),
+    },
+  },
+  goose: {
+    name: '@reeval/harness-goose',
+    version: '0.1.15',
+    bootstrap: {
+      name: 'Goose',
+      cli: 'goose',
+      adapter: async () => {
+        const goose = await import('@reeval/harness-goose')
+        return goose.createGoose({
+          auth: { GOOGLE_API_KEY: 'unused' },
+          provider: goose.GEMINI_PROVIDER,
+          model: 'unused',
+        })
+      },
+    },
+  },
+  pi: {
+    name: '@reeval/harness-pi',
+    version: '0.2.9',
+    bootstrap: {
+      name: 'pi',
+      cli: 'pi',
+      adapter: async () => {
+        const pi = await import('@reeval/harness-pi')
+        const provider = pi.piProvider('google')
+        if ('refused' in provider) throw new Error(provider.refused)
+        return pi.createPi({ auth: { GEMINI_API_KEY: 'unused' }, provider })
+      },
+    },
+  },
+  codex: {
+    name: '@reeval/harness-codex',
+    version: '0.1.12',
+    bootstrap: {
+      name: 'Codex',
+      cli: 'codex',
+      adapter: async () =>
+        (await import('@reeval/harness-codex')).createCodex({ auth: { OPENAI_API_KEY: 'unused' } }),
+    },
+  },
+  fx: {
+    name: '@reeval/harness-fx',
+    version: '0.1.10',
+    bootstrap: {
+      name: 'fx',
+      cli: 'fx',
+      adapter: async () =>
+        (await import('@reeval/harness-fx')).createFx({
+          auth: { AI_GATEWAY_API_KEY: 'unused' },
+          model: 'unused/unused',
+        }),
+    },
+  },
+  'grok-build': {
+    name: '@reeval/harness-grok-build',
+    version: '0.1.11',
+    bootstrap: {
+      name: 'Grok Build',
+      cli: 'grok',
+      adapter: async () =>
+        (await import('@reeval/harness-grok-build')).createGrokBuild({
+          auth: { XAI_API_KEY: 'unused' },
+          model: 'unused',
+        }),
+    },
+  },
 }
 
 /** A harness whose CLI an image can bake. */

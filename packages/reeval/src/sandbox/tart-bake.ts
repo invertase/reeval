@@ -2,27 +2,14 @@
 // pinned pnpm and the harness's CLI with the same bootstrap Docker's images bake, and keeps the
 // stopped VM as a local Tart image that each attempt clones (copy-on-write on APFS). The
 // bootstrap's marker is in that image, so an attempt's harness finds its CLI and skips the install.
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
-import {
-  adapterVersion,
-  bakedHarnessName,
-  bakedRecipe,
-  bakeHarness,
-  type DockerSession,
-  isBakedHarness,
-  PNPM_VERSION,
-} from '@reeval/sandbox-docker'
+import { bakeKey, PNPM_VERSION } from '@reeval/sandbox-docker'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
-import { fakeBootstrapId, fakeBootstrapScript } from '../harness/fake-bootstrap.ts'
 import type { HarnessDescriptor, TartSandboxDescriptor } from '../types.ts'
+import { type HarnessBake, harnessBake, installHarness } from './harness-install.ts'
 import type { TartTarget } from './tart-cli.ts'
 
-/**
- * How reeval bakes a Tart image, beyond the adapter and pnpm: bump it when that changes what a
- * baked image holds, so every image baked before is baked anew on its next use.
- */
-const TART_BAKE_REVISION = 1
 /** How long a baked VM gets to shut down cleanly, so its disk holds everything the bake wrote. */
 const SHUTDOWN_S = 120
 /**
@@ -34,86 +21,6 @@ const LEFTOVER_STOPPED_MS = 10 * 60_000
 const LEFTOVER_RUNNING_MS = 60 * 60_000
 /** A bake's VM: the image it makes, `-bake-`, and when it started (base-36 ms) and a nonce. */
 const BAKE_VM = /^reeval-sandbox-.+-bake-([0-9a-z]{8,})-[0-9a-f]{4}$/
-
-/**
- * What a harness bakes into a Tart image, or installs in a `boat()` VM as it starts: its name in
- * the image's, and how to install it.
- */
-export type HarnessBake = {
-  /** The harness and its adapter version (with the patch hash, as Docker's tags have it). */
-  label: string
-  /** The harness kind, which every bake of it starts its label with. */
-  kind: string
-  /** How progress names it. */
-  name: string
-  /** Whether the image gets reeval's pinned pnpm, which the harness bridges install with. */
-  pnpm: boolean
-  /** A hash of what the bake runs, so a changed bootstrap bakes anew without a version bump. */
-  recipe: () => Promise<string>
-  /** Installs the CLI in `session` and returns the version it installed. */
-  install: (session: DockerSession) => Promise<string>
-}
-
-/** The bake `harness` needs in `tart()` or `boat()`; null for a fake agent with nothing to install. */
-export function harnessBake(harness: HarnessDescriptor): HarnessBake | null {
-  if (harness.kind === 'fake') {
-    const command = harness.bootstrap
-    if (!command) return null
-    return {
-      label: `fake-${fakeBootstrapId(command)}`,
-      kind: 'fake',
-      name: "the fake agent's bootstrap",
-      pnpm: false,
-      recipe: async () => fakeBootstrapScript(command),
-      async install(session) {
-        const r = await session.run({ command: fakeBootstrapScript(command) })
-        if (r.exitCode !== 0) {
-          throw new Error(
-            `The fake agent's bootstrap exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
-          )
-        }
-        return 'fake'
-      },
-    }
-  }
-  const kind = harness.kind
-  if (!isBakedHarness(kind)) return null
-  return {
-    label: `${kind}-${adapterVersion(kind)}`,
-    kind,
-    name: bakedHarnessName(kind),
-    pnpm: true,
-    recipe: () => bakedRecipe(kind),
-    install: (session) => bakeHarness(session, kind),
-  }
-}
-
-/**
- * Installs what `bake` puts in a Tart image or a `boat()` VM, as the session's user: reeval's
- * pinned pnpm when it asks for it (into `pnpmPrefix`, or npm's global prefix), then the CLI.
- * Returns the CLI's version.
- */
-export async function installHarness(
-  session: DockerSession,
-  bake: HarnessBake,
-  o: { pnpmPrefix?: string; signal?: AbortSignal; log?: (line: string) => void } = {},
-): Promise<string> {
-  if (bake.pnpm) {
-    o.log?.(`Installing pnpm ${PNPM_VERSION}`)
-    const prefix = o.pnpmPrefix ? ` --prefix ${q(o.pnpmPrefix)}` : ''
-    const r = await session.run({
-      command: `npm install --global --no-fund --no-audit${prefix} pnpm@${PNPM_VERSION} && pnpm --version`,
-      ...(o.signal && { abortSignal: o.signal }),
-    })
-    if (r.exitCode !== 0) {
-      throw new Error(
-        `npm install pnpm@${PNPM_VERSION} exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
-      )
-    }
-  }
-  o.log?.(`Installing ${bake.name}`)
-  return bake.install(session)
-}
 
 /**
  * Which preflight target `sandbox` and `harness` are: one per image, user (the home a bake
@@ -138,24 +45,21 @@ const slug = (image: string) =>
 
 /**
  * The local Tart image `bake` makes from `sandbox`'s image: the harness and adapter, the base, and
- * a hash of what the bake starts from (an OCI digest, or a local VM's {@link tartSource}
- * fingerprint), the user it installs as, its recipe, pnpm and {@link TART_BAKE_REVISION}, so a
- * change to any of them bakes anew.
+ * the {@link bakeKey} of what the bake starts from (an OCI digest, or a local VM's
+ * {@link tartSource} fingerprint), the user it installs as, its recipe and pnpm.
  */
 export async function bakedTartImage(
   sandbox: TartSandboxDescriptor,
   bake: HarnessBake,
   source: string | null,
 ): Promise<string> {
-  const inputs = [
-    TART_BAKE_REVISION,
+  const hash = bakeKey(
     PNPM_VERSION,
     sandbox.image,
     source ?? '',
     sandbox.ssh?.user ?? '',
     await bake.recipe(),
-  ]
-  const hash = createHash('sha256').update(inputs.join('\0')).digest('hex').slice(0, 8)
+  )
   return `reeval-sandbox-${bake.label}-${slug(sandbox.image)}-${hash}`
 }
 

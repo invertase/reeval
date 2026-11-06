@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createHarnessSandboxTemplate, type HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+import { createHarnessSandboxTemplate } from '@ai-sdk/harness/agent'
 import {
   failureCause,
   failureMessage,
@@ -18,6 +18,8 @@ import { type Engine, engineSpec } from './engine.ts'
 import {
   BASE_IMAGE,
   type BakedHarness,
+  HARNESS_PACKAGES,
+  type HarnessBootstrap,
   harnessLabel,
   imageFor,
   LABEL,
@@ -73,112 +75,31 @@ export const NODE_IMAGE =
   /^FROM (\S+)$/m.exec(readFileSync(join(DOCKER_CONTEXT, 'Dockerfile'), 'utf8'))?.[1] ?? 'node'
 
 /**
- * How reeval bakes a harness into an image, beyond the build context and the adapter: bump it when
- * that changes what a baked image holds, so every image baked before rebuilds on its next use.
+ * How reeval bakes a harness into a Docker or Tart image, beyond the build context, the adapter and
+ * the inputs each passes {@link bakeKey}: bump it when that changes what a baked image holds, so
+ * every image baked before rebuilds on its next use.
  */
 const BAKE_REVISION = 2
 
 /**
- * The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. The hash
- * covers the toolchain layer and {@link BAKE_REVISION} too, so a change to the sandbox user, paths
- * or how the harness is baked builds anew.
+ * The hash a baked image's name ends with: {@link BAKE_REVISION} and what the bake starts from and
+ * runs, so a change to any of them bakes anew.
  */
-export const harnessImageFor = (harness: BakedHarness, from: string) =>
-  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(`${BAKE_REVISION}\0${toolchainDockerfile(from)}`).slice(0, 8)}`
+export const bakeKey = (...inputs: readonly string[]) =>
+  sha256([BAKE_REVISION, ...inputs].join('\0')).slice(0, 8)
 
 /**
- * How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves
- * (or, for an adapter without one, a command that prints what it installed).
+ * The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. Its
+ * {@link bakeKey} covers the toolchain layer, so a change to the sandbox user or paths builds anew.
  */
-const BOOTSTRAPS: Record<
-  BakedHarness,
-  {
-    name: string
-    cli: string
-    version?: string
-    adapter: () => Promise<HarnessAgentAdapter>
-  }
-> = {
-  cursor: {
-    name: 'Cursor',
-    cli: '@cursor/sdk',
-    version: `node -p "'@cursor/sdk ' + require(process.env.HOME + '/.ai-sdk-harness/.harness-bootstrap/cursor-sdk/node_modules/@cursor/sdk/package.json').version"`,
-    adapter: async () => (await import('@reeval/harness-cursor-sdk')).createCursorSdk(),
-  },
-  'claude-code': {
-    name: 'Claude Code',
-    cli: 'claude',
-    adapter: async () => (await import('@ai-sdk/harness-claude-code')).createClaudeCode(),
-  },
-  antigravity: {
-    name: 'Antigravity',
-    cli: 'agy',
-    adapter: async () => (await import('@reeval/harness-antigravity')).createAntigravity(),
-  },
-  opencode: {
-    name: 'OpenCode',
-    cli: 'opencode',
-    adapter: async () =>
-      (await import('@reeval/harness-opencode')).createOpenCode({
-        auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
-        model: 'google/unused',
-      }),
-  },
-  goose: {
-    name: 'Goose',
-    cli: 'goose',
-    adapter: async () => {
-      const goose = await import('@reeval/harness-goose')
-      return goose.createGoose({
-        auth: { GOOGLE_API_KEY: 'unused' },
-        provider: goose.GEMINI_PROVIDER,
-        model: 'unused',
-      })
-    },
-  },
-  pi: {
-    name: 'pi',
-    cli: 'pi',
-    adapter: async () => {
-      const pi = await import('@reeval/harness-pi')
-      const provider = pi.piProvider('google')
-      if ('refused' in provider) throw new Error(provider.refused)
-      return pi.createPi({ auth: { GEMINI_API_KEY: 'unused' }, provider })
-    },
-  },
-  codex: {
-    name: 'Codex',
-    cli: 'codex',
-    adapter: async () =>
-      (await import('@reeval/harness-codex')).createCodex({
-        auth: { OPENAI_API_KEY: 'unused' },
-      }),
-  },
-  fx: {
-    name: 'fx',
-    cli: 'fx',
-    adapter: async () =>
-      (await import('@reeval/harness-fx')).createFx({
-        auth: { AI_GATEWAY_API_KEY: 'unused' },
-        model: 'unused/unused',
-      }),
-  },
-  'grok-build': {
-    name: 'Grok Build',
-    cli: 'grok',
-    adapter: async () =>
-      (await import('@reeval/harness-grok-build')).createGrokBuild({
-        auth: { XAI_API_KEY: 'unused' },
-        model: 'unused',
-      }),
-  },
-}
+export const harnessImageFor = (harness: BakedHarness, from: string) =>
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${bakeKey(toolchainDockerfile(from))}`
 
 /**
  * The adapter whose bootstrap `harness`'s image bakes. An attempt whose adapter asks for any other
  * bootstrap reinstalls the CLI at start, which a restricted egress policy can refuse.
  */
-export const bakedAdapter = (harness: BakedHarness) => BOOTSTRAPS[harness].adapter()
+export const bakedAdapter = (harness: BakedHarness) => HARNESS_PACKAGES[harness].bootstrap.adapter()
 
 /** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */
 const profilePathScript = () =>
@@ -484,7 +405,7 @@ export async function buildImage(
     from && digest && resolved && 'local' in resolved && !resolved.local && !from.includes('@')
       ? `${from}@${digest}`
       : from
-  const bootstrap = BOOTSTRAPS[harness]
+  const { bootstrap } = HARNESS_PACKAGES[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
   // Empty on a base only this machine has, which nothing pulls, so a base's own label isn't kept.
@@ -556,7 +477,7 @@ export async function buildImage(
   let agentVersion: string
   try {
     agentVersion = await bake(session, bootstrap)
-    log(`${bootstrap.name} ${bootstrap.version ? '' : 'CLI '}${agentVersion}`)
+    log(`${bootstrap.name} ${bootstrap.probe ? '' : 'CLI '}${agentVersion}`)
     await dockerOk(
       [
         'commit',
@@ -611,14 +532,14 @@ export async function buildImage(
  * and returns the CLI version it installed.
  */
 export const bakeHarness = (session: DockerSession, harness: BakedHarness) =>
-  bake(session, BOOTSTRAPS[harness])
+  bake(session, HARNESS_PACKAGES[harness].bootstrap)
 
 /**
  * A hash of the bootstrap `harness`'s adapter applies (its files and commands): it changes
  * whenever what the bootstrap installs does, version bump or not.
  */
 export async function bakedRecipe(harness: BakedHarness): Promise<string> {
-  const adapter = await BOOTSTRAPS[harness].adapter()
+  const adapter = await HARNESS_PACKAGES[harness].bootstrap.adapter()
   const recipe = await adapter.getBootstrap?.({})
   if (!recipe) return 'none'
   const files = [...recipe.files]
@@ -631,19 +552,16 @@ export async function bakedRecipe(harness: BakedHarness): Promise<string> {
 }
 
 /** The harness's name, as a bake's progress says it. */
-export const bakedHarnessName = (harness: BakedHarness) => BOOTSTRAPS[harness].name
+export const bakedHarnessName = (harness: BakedHarness) => HARNESS_PACKAGES[harness].bootstrap.name
 
 /** Runs the harness bootstrap in `session` and returns the CLI version it installed. */
-async function bake(
-  session: DockerSession,
-  bootstrap: (typeof BOOTSTRAPS)[BakedHarness],
-): Promise<string> {
+async function bake(session: DockerSession, bootstrap: HarnessBootstrap): Promise<string> {
   const template = await createHarnessSandboxTemplate({
     harnesses: [await bootstrap.adapter()],
     sandboxConfig: { workDir: WORKSPACE_DIR },
   })
   await template?.prepare({ session })
-  let probe = bootstrap.version
+  let probe = bootstrap.probe
   if (!probe) {
     const found = await session.run({
       command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
@@ -653,7 +571,7 @@ async function bake(
     probe = `'${bin}' --version`
   }
   const version = await session.run({ command: probe })
-  if (bootstrap.version && version.exitCode !== 0) {
+  if (bootstrap.probe && version.exitCode !== 0) {
     throw new Error(
       `The harness bootstrap did not install ${bootstrap.cli}:\n${tail(version.stderr)}`,
     )

@@ -16,6 +16,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  bakeKey,
   dockerfileBases,
   dockerfileKey,
   dockerfileTag,
@@ -1437,6 +1438,19 @@ describe('image recipes', () => {
     assert.equal(r.status, 1)
     assert.match(r.stderr, /reeval: build cwd nope isn't a directory in the source/)
     assert.equal(existsSync(join(src, 'ran.txt')), false, 'no command ran from elsewhere')
+  })
+
+  test("a bake key is 8 hex of the bake revision and its inputs, in order; a from-image's name ends with one", () => {
+    const key = bakeKey('a', 'b')
+    assert.match(key, /^[0-9a-f]{8}$/)
+    assert.equal(bakeKey('a', 'b'), key)
+    for (const other of [bakeKey('b', 'a'), bakeKey('a', 'c'), bakeKey('a')]) {
+      assert.notEqual(other, key)
+    }
+    assert.match(
+      harnessImageFor('cursor', 'node:24'),
+      /^reeval-sandbox:cursor-.+-node-24-[0-9a-f]{8}$/,
+    )
   })
 
   test('a from with whitespace or a line break is refused, not written into the Dockerfile', () => {

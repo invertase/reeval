@@ -34,8 +34,11 @@ CLI with its own NDJSON stream; Antigravity for one that recovers data from disk
    `adapter`. Then the `kind` in `src/contract/harness.ts`, the helper in `src/harness.ts`,
    `src/types.ts` and `src/init.ts`. Run `pnpm --filter reeval typecheck` and
    `pnpm --filter reeval schema:check`.
-3. **Image and pin.** Add the harness to `HARNESS_PACKAGES` in
-   `packages/sandbox-docker/src/image.ts` (`reeval-sandbox:<harness>-<adapter version>`), to
+3. **Image and pin.** Add the harness, with its `bootstrap` (its name, the CLI it leaves, a
+   `probe` for an adapter that leaves no binary, and the adapter on placeholder auth), to
+   `HARNESS_PACKAGES` in `packages/sandbox-docker/src/image.ts`
+   (`reeval-sandbox:<harness>-<adapter version>`). Docker's image, Tart's bake and `boat()`'s
+   install all run that bootstrap. Then add it to
    `.github/actions/sandbox-images`, and the CLI pin to `scripts/drift/versions.mjs` (`AGENTS`)
    and `scripts/drift/latest-images.sh`. `pnpm images <harness>` builds it.
 4. **Contract row** in `packages/reeval/test/support/harnesses.ts`, a case in
