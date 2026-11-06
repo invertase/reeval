@@ -73,7 +73,9 @@ Usage:
                                 in the extracted project
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
                                 does, from its start; exit with the run's exit code (default: the
-                                run in progress; a URL is read with GET as NDJSON)
+                                run in progress; a URL is read with GET as NDJSON). On a terminal,
+                                reeval run's interactive list: q detaches (exit 0) and the run goes
+                                on; x pressed twice cancels a run on this host
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run
   reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that

@@ -218,7 +218,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
                                 does, from its start; exit with the run's exit code (default: the
-                                run in progress; a URL is read with GET as NDJSON)
+                                run in progress; a URL is read with GET as NDJSON). On a terminal,
+                                reeval run's interactive list: q detaches (exit 0) and the run goes
+                                on; x pressed twice cancels a run on this host
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run`,
   },

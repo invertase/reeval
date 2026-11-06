@@ -53,6 +53,7 @@ import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import {
+  CANCEL_SIGNAL,
   completedKeysFor,
   erroredAttempts,
   eventsFile,
@@ -610,14 +611,27 @@ async function attachCommand(
   configPath: string | undefined,
 ): Promise<number> {
   let source: string
-  if (target && (isEventsUrl(target) || existsSync(target))) source = target
-  else source = (await resolveAttach(dirname(requireConfig(configPath)), target)).file
+  // Where the run's live.json is, which is what lets x cancel it: a stream in a project's
+  // `.reeval/events/` is that project's run, any other this project's when there is one.
+  let root = configPath === undefined ? undefined : dirname(configPath)
+  if (target && (isEventsUrl(target) || existsSync(target))) {
+    source = target
+    const inEvents = isEventsUrl(target)
+      ? null
+      : /^(.*)[\\/]\.reeval[\\/]events[\\/][^\\/]+\.ndjson$/.exec(resolve(target))
+    if (inEvents?.[1]) root = inEvents[1]
+  } else {
+    root = dirname(requireConfig(configPath))
+    source = (await resolveAttach(root, target)).file
+  }
   const { attach } = await import('./attach.ts')
   return attach({
     source,
+    ...(root === undefined ? {} : { root }),
     out: process.stdout,
     columns: process.stdout.columns,
     colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
+    tty: { stdout: process.stdout, stdin: process.stdin },
     output: (verbosity) =>
       resolveOutput({
         flags: {
@@ -630,6 +644,7 @@ async function attachCommand(
         env: process.env,
         isTTY: !!process.stdout.isTTY,
         agent: detectAgent().name,
+        stdinTTY: !!process.stdin.isTTY,
       }),
   })
 }
@@ -1887,6 +1902,13 @@ async function executeRun(
         }
         process.on('SIGINT', onSignal)
         process.on('SIGTERM', onSignal)
+        // `reeval attach`'s cancel: a first Ctrl-C only, never the second that quits without a
+        // record, however many viewers send it.
+        if (process.platform !== 'win32') {
+          process.on(CANCEL_SIGNAL, () => {
+            if (!interrupted && !finishing) onSignal('SIGINT')
+          })
+        }
       },
     })
     cutShort = interrupted

@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { attach } from '../src/attach.ts'
-import { openEventStream } from '../src/events.ts'
+import { EventStreamError, openEventStream } from '../src/events.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { writeLiveProgress } from '../src/live.ts'
 import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
@@ -1287,6 +1291,42 @@ test('the interactive list counts against the planned total too', async () => {
   assert.equal(store?.get().counts.total, 4)
 })
 
+test('the interactive list takes a burst of events in one update, as attach replays a stream', async () => {
+  let store: ListStore | undefined
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: {} as never,
+    stdin: {} as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    load: async () => ({
+      mountList: (o) => {
+        store = o.store
+        return { waitUntilExit: () => new Promise(() => {}), unmount: () => {} }
+      },
+    }),
+  })
+  for (const e of interleaved.slice(0, 3)) renderer.onEvent(e)
+  await new Promise((resolve) => setImmediate(resolve))
+  let updates = 0
+  store?.subscribe(() => updates++)
+  for (let turn = 1; turn <= 2000; turn++) {
+    renderer.onEvent(progress(GREET, s(turn), { kind: 'turn-start', turn }))
+  }
+  assert.equal(updates, 0, 'nothing is drawn while the burst comes in')
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(updates, 1, 'one update for the whole burst')
+  const detail = store?.get().files.flatMap((f) => f.rows.flatMap((r) => r.detail))
+  assert.ok(
+    detail?.some((l) => l.text.includes('turn 2000')),
+    JSON.stringify(detail?.map((l) => l.text)),
+  )
+  renderer.close()
+})
+
 describe('reeval attach', () => {
   /** What a renderer draws from `events`, as `reeval run` feeds them. */
   const direct = (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {
@@ -1351,5 +1391,371 @@ describe('reeval attach', () => {
       (await attached(withLongMessage, output, 1)).text,
       direct(withLongMessage, output, 1),
     )
+  })
+
+  /** A terminal on both stdin and stdout, as Ink reads keys from and draws on it. */
+  const terminal = () => {
+    let drawn = ''
+    const stdout = Object.assign(new EventEmitter(), {
+      isTTY: true,
+      columns: 100,
+      rows: 40,
+      write: (chunk: string, done?: () => void) => {
+        drawn += chunk
+        done?.()
+        return true
+      },
+    })
+    let data: string | null = null
+    const raw: boolean[] = []
+    const stdin = Object.assign(new EventEmitter(), {
+      isTTY: true,
+      setEncoding() {},
+      setRawMode(on: boolean) {
+        raw.push(on)
+      },
+      resume() {},
+      pause() {},
+      ref() {},
+      unref() {},
+      read() {
+        const chunk = data
+        data = null
+        return chunk
+      },
+    })
+    /** What the terminal shows has `text`, drawn since `from`. */
+    const shows = (text: string, from = 0) => stripAnsi(drawn.slice(from)).includes(text)
+    return {
+      tty: { stdout: stdout as never, stdin: stdin as never },
+      raw,
+      reading: () => stdin.listenerCount('readable') > 0,
+      shows,
+      /** Presses `key` once the list reads keys, and waits until it has drawn `then`. */
+      press: async (key: string, then?: string) => {
+        await until(() => stdin.listenerCount('readable') > 0)
+        const from = drawn.length
+        data = key
+        stdin.emit('readable')
+        if (then) await until(() => shows(then, from))
+      },
+    }
+  }
+  /** Until `ready()`, checked every few milliseconds, for at most 10s. */
+  const until = async (ready: () => boolean) => {
+    for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
+    }
+  }
+  const listed = options({
+    statusLine: true,
+    interactive: true,
+    outputLogs: 'none',
+    heartbeatMs: 0,
+  })
+  const streamOf = (file: string, append = false) =>
+    openEventStream({
+      file,
+      append,
+      header: { reeval: '0.1.0', runId: 'run-1', startedAt: '', harness: 'cursor', verbosity: 0 },
+      warn: (message) => assert.fail(message),
+    })
+  /** A project whose run-1 is this process, as its live.json says, with its stream in events/. */
+  const liveProject = (over: { phase?: 'cancelling' | 'finishing'; ago?: number } = {}) => {
+    const root = tempDir('ui-attach')
+    const live = writeLiveProgress({
+      dir: join(root, '.reeval', 'staging', 'run-1'),
+      runId: 'run-1',
+      startedAt: new Date(),
+      planned: [],
+      now: () => new Date(Date.now() - (over.ago ?? 0)),
+    })
+    live.stop()
+    if (over.phase) live.phase(over.phase)
+    return { root, file: join(root, '.reeval', 'events', 'run-1.ndjson') }
+  }
+  /** What `reeval run` leaves in the scrollback once its list is quit. */
+  const quitList = async (events: ReevalEvent[]) => {
+    let text = ''
+    const renderer = new InteractiveRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      stdout: {} as never,
+      stdin: {} as never,
+      colors: colors(false),
+      output: listed,
+      harness: 'cursor',
+      load: async () => ({
+        mountList: () => ({ waitUntilExit: async () => {}, unmount: () => {} }),
+      }),
+    })
+    for (const e of events) renderer.onEvent(e)
+    renderer.close()
+    await renderer.wait()
+    return text
+  }
+
+  test('on a terminal, draws the list and keeps it up until q, then leaves what reeval run does', async () => {
+    const file = join(tempDir('ui-events'), 'events.ndjson')
+    const stream = streamOf(file)
+    for (const e of interleaved) stream.write(e)
+    await stream.end(1)
+    const { tty, shows, press } = terminal()
+    let text = ''
+    let done = false
+    const run = attach({
+      source: file,
+      out: { write: (chunk: string) => (text += chunk) },
+      output: () => listed,
+      tty,
+    }).finally(() => {
+      done = true
+    })
+    await until(() => shows('q quit'))
+    assert.equal(done, false, 'the list stays up once the stream has ended')
+    await press('q')
+    assert.equal(await run, 1, "the run's exit code")
+    assert.equal(text, await quitList(interleaved))
+  })
+
+  test('on a terminal, q detaches from a run in progress and x twice cancels it by its pid', async () => {
+    const { root, file } = liveProject()
+    const stream = streamOf(file)
+    for (const e of interleaved.slice(0, 5)) stream.write(e)
+    const { tty, shows, press } = terminal()
+    let text = ''
+    const signaled: number[] = []
+    try {
+      const run = attach({
+        source: file,
+        root,
+        out: { write: (chunk: string) => (text += chunk) },
+        output: () => listed,
+        tty,
+        follow: { pollMs: 10 },
+        signalRun: (pid) => signaled.push(pid),
+      })
+      await until(() => shows('q detach · x cancel the run'))
+      await press('x', 'Press x again to cancel the run.')
+      assert.deepEqual(signaled, [], 'one x only asks')
+      await press('x', 'q detach')
+      assert.deepEqual(signaled, [process.pid], "the run's own process, from the header")
+      await press('q')
+      assert.equal(await run, 0, 'detaching exits 0')
+      assert.deepEqual(signaled, [process.pid], 'q never signals the run')
+      assert.ok(text.endsWith('Detached from run run-1; it goes on.\n'), text)
+    } finally {
+      await stream.end(0)
+    }
+  })
+
+  test("on a terminal, x is offered only when the run's live.json vouches for the stream's pid", async () => {
+    const cases: Record<string, (root: string) => void> = {
+      'no live.json': (root) => rmSync(join(root, '.reeval', 'staging'), { recursive: true }),
+      'another process (a reused pid)': (root) => {
+        const path = join(root, '.reeval', 'staging', 'run-1', 'live.json')
+        const live = JSON.parse(readFileSync(path, 'utf8'))
+        writeFileSync(path, JSON.stringify({ ...live, pid: process.pid + 1 }))
+      },
+      canceling: (root) => {
+        writeLiveProgress({
+          dir: join(root, '.reeval', 'staging', 'run-1'),
+          runId: 'run-1',
+          startedAt: new Date(),
+          planned: [],
+        }).phase('cancelling')
+      },
+      'a stale heartbeat': (root) => {
+        writeLiveProgress({
+          dir: join(root, '.reeval', 'staging', 'run-1'),
+          runId: 'run-1',
+          startedAt: new Date(),
+          planned: [],
+          now: () => new Date(Date.now() - 60_000),
+        }).stop()
+      },
+    }
+    for (const [name, spoil] of Object.entries(cases)) {
+      const { root, file } = liveProject()
+      spoil(root)
+      const stream = streamOf(file)
+      for (const e of interleaved.slice(0, 5)) stream.write(e)
+      const { tty, shows, press } = terminal()
+      let text = ''
+      const signaled: number[] = []
+      try {
+        const run = attach({
+          source: file,
+          root,
+          out: { write: (chunk: string) => (text += chunk) },
+          output: () => listed,
+          tty,
+          follow: { pollMs: 10 },
+          signalRun: (pid) => signaled.push(pid),
+        })
+        await until(() => shows('q detach'))
+        assert.ok(!shows('x cancel'), name)
+        await press('x')
+        await press('x')
+        await press('q')
+        assert.equal(await run, 0, name)
+        assert.deepEqual(signaled, [], name)
+        assert.ok(!shows('Press x again'), name)
+        if (name !== 'canceling') {
+          assert.ok(text.endsWith('Detached from run run-1.\n'), `${name}: ${text}`)
+        }
+      } finally {
+        await stream.end(0)
+      }
+    }
+  })
+
+  test('on a terminal, x checks again at the press: an owner Ctrl-C or a dead pid since sends nothing', async () => {
+    for (const since of ['canceled', 'died'] as const) {
+      const { root, file } = liveProject()
+      const stream = streamOf(file)
+      for (const e of interleaved.slice(0, 5)) stream.write(e)
+      const { tty, shows, press } = terminal()
+      let text = ''
+      let alive = true
+      const signaled: number[] = []
+      try {
+        const run = attach({
+          source: file,
+          root,
+          out: { write: (chunk: string) => (text += chunk) },
+          output: () => listed,
+          tty,
+          // Asleep while the pid dies, so the follow doesn't end the stream before the press.
+          follow: { pollMs: 60_000, alive: () => alive },
+          signalRun: (pid) => signaled.push(pid),
+        })
+        await until(() => shows('x cancel the run'))
+        await press('x', 'Press x again')
+        if (since === 'canceled') {
+          writeLiveProgress({
+            dir: join(root, '.reeval', 'staging', 'run-1'),
+            runId: 'run-1',
+            startedAt: new Date(),
+            planned: [],
+          }).phase('cancelling')
+        } else alive = false
+        await press('x', "The run can't be canceled from here now.")
+        assert.deepEqual(signaled, [], since)
+        await press('q')
+        assert.equal(await run, 0, since)
+        assert.ok(text.endsWith('Detached from run run-1.\n'), `${since}: ${text}`)
+      } finally {
+        await stream.end(0)
+      }
+    }
+  })
+
+  test("on a terminal, a stream cut off as its run's process dies takes the list down and fails", async () => {
+    const { root, file } = liveProject()
+    const stream = streamOf(file)
+    for (const e of interleaved.slice(0, 5)) stream.write(e)
+    const { tty, raw, reading, shows } = terminal()
+    let alive = true
+    try {
+      const run = attach({
+        source: file,
+        root,
+        out: { write: () => true },
+        output: () => listed,
+        tty,
+        follow: { pollMs: 10, alive: () => alive },
+      })
+      await until(() => shows('q detach'))
+      alive = false
+      await assert.rejects(run, EventStreamError)
+      assert.equal(raw.at(-1), false, 'the terminal is back out of raw mode')
+      assert.equal(reading(), false, 'nothing reads keys any more')
+    } finally {
+      await stream.end(0)
+    }
+  })
+
+  test('on a terminal, a run on another host offers no cancel and names that host on its paths', async () => {
+    const remote = (file: string) => {
+      const [head = '', ...rest] = readFileSync(file, 'utf8').split('\n')
+      writeFileSync(
+        file,
+        [JSON.stringify({ ...JSON.parse(head), host: 'build-7' }), ...rest].join('\n'),
+      )
+    }
+    const going = liveProject()
+    const stream = streamOf(going.file)
+    for (const e of interleaved.slice(0, 5)) stream.write(e)
+    remote(going.file)
+    const signaled: number[] = []
+    let text = ''
+    try {
+      const { tty, shows, press } = terminal()
+      const run = attach({
+        source: going.file,
+        root: going.root,
+        out: { write: (chunk: string) => (text += chunk) },
+        output: () => listed,
+        tty,
+        follow: { pollMs: 10 },
+        signalRun: (pid) => signaled.push(pid),
+      })
+      await until(() => shows('q detach'))
+      assert.ok(!shows('x cancel'))
+      await press('x')
+      await press('x')
+      await press('q')
+      assert.equal(await run, 0)
+      assert.deepEqual(signaled, [], 'nothing reaches a run on another host')
+      assert.ok(text.endsWith('Detached from run run-1.\n'), 'whether it goes on is unknown here')
+    } finally {
+      await stream.end(0)
+    }
+
+    const ended = join(tempDir('ui-events'), 'events.ndjson')
+    const done = streamOf(ended)
+    for (const e of interleaved) done.write(e)
+    await done.end(1)
+    remote(ended)
+    const { tty, shows, press } = terminal()
+    text = ''
+    const run = attach({
+      source: ended,
+      out: { write: (chunk: string) => (text += chunk) },
+      output: () => listed,
+      tty,
+    })
+    await until(() => shows('q quit'))
+    await press('q')
+    assert.equal(await run, 1)
+    assert.match(
+      text,
+      /^Browse it: reeval studio · summary \.reeval\/runs\/run-1\/summary\.md \(on build-7\)$/m,
+    )
+    assert.notEqual(hostname(), 'build-7')
+  })
+
+  test('on a terminal, a resumed run prints the first list as it ended, then browses the resume', async () => {
+    const file = join(tempDir('ui-events'), 'events.ndjson')
+    const first = streamOf(file)
+    for (const e of interleaved) first.write(e)
+    await first.end(1)
+    const resume = streamOf(file, true)
+    for (const e of interleaved) resume.write(e)
+    await resume.end(0)
+    const { tty, shows, press } = terminal()
+    let text = ''
+    const run = attach({
+      source: file,
+      out: { write: (chunk: string) => (text += chunk) },
+      output: () => listed,
+      tty,
+    })
+    const once = await quitList(interleaved)
+    await until(() => text === once)
+    await until(() => shows('q quit'))
+    await press('q')
+    assert.equal(await run, 0, "the resume's exit code")
+    assert.equal(text, once + once)
   })
 })
