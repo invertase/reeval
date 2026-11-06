@@ -72,6 +72,7 @@ export const FLAGS = {
   events: { type: 'boolean' },
   'events-file': { type: 'string' },
   'events-url': { type: 'string' },
+  bundle: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -118,6 +119,7 @@ const RUN_FLAGS: FlagName[] = [
   'events',
   'events-file',
   'events-url',
+  'bundle',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -194,7 +196,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --events                    Also write the run's output events as NDJSON for reeval attach, to
                                 .reeval/events/<run>.ndjson; a resume appends to it
     --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
-    --events-url <url>          Also POST them to url, in batches of NDJSON lines`,
+    --events-url <url>          Also POST them to url, in batches of NDJSON lines
+    --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new
+                                temporary directory, check its files, install from its lockfile and
+                                exit 2 before any attempt when its plan or files differ; .reeval/ is
+                                in the extracted project`,
   },
   attach: {
     flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
@@ -205,6 +211,17 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 run in progress; a URL is read with GET as NDJSON)
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run`,
+  },
+  bundle: {
+    flags: ['profile', 'runs', 'tag', 'trait', 'out'],
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
+                                reeval run --bundle runs elsewhere; never node_modules or .env
+                                values (it names the .env files' variables and the secrets it needs)
+    --profile <name>            Plan with a profile, as reeval run does; --runs, --tag and --trait
+                                also plan as they do there
+    --out <file>                Where to write it (default <project>.bundle.tar.gz here)`,
   },
   clean: {
     flags: ['keep', 'images', 'staging'],

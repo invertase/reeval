@@ -3,6 +3,7 @@
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
 
+import type { BundleManifest } from '../bundle/types.ts'
 import { foldCases } from '../history/cases.ts'
 import type { RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
@@ -25,6 +26,7 @@ export type ShapeName =
   | 'cli-invocation'
   | 'capture-page'
   | 'run-events'
+  | 'bundle-manifest'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -56,6 +58,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'cli-invocation': [],
   'capture-page': [],
   'run-events': [],
+  'bundle-manifest': [],
 }
 
 /**
@@ -72,6 +75,7 @@ export const SCHEMA_VERSIONS = {
   remarks: 1,
   'capture-page': 1,
   'run-events': 1,
+  'bundle-manifest': 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -200,3 +204,7 @@ export const readableCapturePage = (
   page: CapturePageFile,
   what = 'This capture',
 ): CapturePageFile => fillDefaults('capture-page', upgrade('capture-page', page, what))
+
+/** A bundle's `manifest.json` as `reeval run --bundle` sees it; one from a newer reeval throws. */
+export const readableBundleManifest = (manifest: BundleManifest, what = 'This bundle'): BundleManifest =>
+  fillDefaults('bundle-manifest', upgrade('bundle-manifest', manifest, what))

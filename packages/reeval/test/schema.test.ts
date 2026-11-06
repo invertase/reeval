@@ -262,6 +262,7 @@ describe('read defaults', () => {
       'debug-request': [],
       'cli-invocation': [],
       'capture-page': [],
+      'bundle-manifest': [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {
