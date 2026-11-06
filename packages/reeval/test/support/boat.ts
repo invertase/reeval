@@ -283,6 +283,9 @@ export const dockerMachines: Machines = async (name) => {
     '--rm',
     '--label',
     `${BOAT_VM_LABEL}=${name}`,
+    // A VM's root reads every process's environment, which the marker kill looks in.
+    '--cap-add',
+    'SYS_PTRACE',
     '-p',
     '127.0.0.1::22',
     BOAT_VM_IMAGE,

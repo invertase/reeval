@@ -46,7 +46,13 @@ import { boat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
-import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
+import {
+  BOAT_VM_LABEL,
+  buildBoatVmImage,
+  dockerMachines,
+  type FakeBoat,
+  fakeBoat,
+} from './support/boat.ts'
 import { seedModelsDev } from './support/cost.ts'
 import {
   fakeDigest,
@@ -4921,6 +4927,68 @@ evaluate('installs', async (c) => {
     'the VM was deleted',
   )
   boatCleanedUp(run)
+})
+
+test('boat(): a command the canceled attempt aborts is killed in the VM, not only on the host', {
+  skip: skipTier('docker'),
+  timeout: 180_000,
+}, async () => {
+  buildBoatVmImage()
+  const saved = { url: process.env.BOAT_BASE_URL, key: process.env.BOAT_API_KEY }
+  process.env.BOAT_BASE_URL = boatApi.url
+  process.env.BOAT_API_KEY = boatApi.key
+  const runId = 'abort-kills-in-vm'
+  const attempt = new AbortController()
+  const { createBoatSandbox } = await import('../src/sandbox/boat.ts')
+  const box = await createBoatSandbox(boat(), {
+    runId,
+    timeoutMs: 120_000,
+    signal: attempt.signal,
+    env: {},
+    egress: { policy: 'allow-all', auto: [] },
+  })
+  try {
+    const name = boatApi.live().find((n) => n.startsWith(runPrefix(boat(), runId)))
+    const container = execFileSync('docker', [
+      'ps',
+      '-q',
+      '--filter',
+      `label=${BOAT_VM_LABEL}=${name}`,
+    ])
+      .toString()
+      .trim()
+    assert.ok(container, `the fake VM of ${name} is running`)
+    const sleeping = () =>
+      spawnSync('docker', ['exec', container, 'pgrep', '-f', 'sleep 271']).status === 0
+    const running = box.exec('sleep 271', { signal: attempt.signal })
+    running.catch(() => {})
+    for (const until = Date.now() + 30_000; !sleeping(); ) {
+      assert.ok(Date.now() < until, 'the command started in the VM')
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    attempt.abort()
+    const returned = await Promise.race([
+      running.then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+      new Promise((r) => setTimeout(() => r('still waiting'), 20_000)),
+    ])
+    assert.equal(returned, 'rejected', 'the aborted command returned')
+    for (const until = Date.now() + 20_000; sleeping(); ) {
+      assert.ok(Date.now() < until, 'the command is still running in the VM')
+      await new Promise((r) => setTimeout(r, 200))
+    }
+  } finally {
+    await box.destroy()
+    for (const [k, v] of [
+      ['BOAT_BASE_URL', saved.url],
+      ['BOAT_API_KEY', saved.key],
+    ] as const) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
 })
 
 test('every feature fixture is in the table, with one check and a canary', () => {
