@@ -145,7 +145,7 @@ export const GOOSE_INSTALL_COMMAND = `case "$(uname -s) $(uname -m)" in
   "Linux x86_64"|"Linux amd64") triple=x86_64-unknown-linux-gnu sha=${GOOSE_CLI_SHA256.x86_64} ;;
   "Linux aarch64"|"Linux arm64") triple=aarch64-unknown-linux-gnu sha=${GOOSE_CLI_SHA256.aarch64} ;;
   "Darwin arm64") triple=aarch64-apple-darwin sha=${GOOSE_CLI_SHA256['darwin-aarch64']} ;;
-  "Darwin "*) echo "reeval runs Goose on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
+  "Darwin "*) echo "reeval runs Goose on macOS on Apple Silicon only, not $(uname -m)" >&2; exit 1 ;;
   *) echo "Goose has no release for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o goose.tar.gz "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_CLI_VERSION}/goose-$triple.tar.gz"

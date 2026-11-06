@@ -8,8 +8,8 @@ import {
 import type { AttemptDebug } from '../debug/attempt.ts'
 import { egressLabel, isRestricted, setupEgress } from '../egress.ts'
 import { gatewayGlue, sessionSandbox } from './docker.ts'
+import { harnessBake, installHarness } from './harness-install.ts'
 import type { SandboxOptions } from './index.ts'
-import { harnessBake, installHarness } from './tart-bake.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
 /** How long installing the harness's CLI in a new machine may take. */

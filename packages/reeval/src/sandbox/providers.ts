@@ -22,6 +22,7 @@ import type {
   TartSandboxDescriptor,
   VmImage,
 } from '../types.ts'
+import { harnessBake } from './harness-install.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
 import {
   type PrepareContext,
@@ -30,7 +31,7 @@ import {
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
-import { harnessBake, tartBakeKey } from './tart-bake.ts'
+import { tartBakeKey } from './tart-bake.ts'
 import { LOCAL_TART, type TartTarget } from './tart-cli.ts'
 import type { HostProbe, PreparedHost } from './tart-hosts.ts'
 

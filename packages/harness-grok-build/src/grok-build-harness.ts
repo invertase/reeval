@@ -130,7 +130,7 @@ case "$(uname -s) $(uname -m)" in
   "Linux x86_64"|"Linux amd64") build=linux-x64 sri=${GROK_CLI_INTEGRITY.x64} ;;
   "Linux aarch64"|"Linux arm64") build=linux-arm64 sri=${GROK_CLI_INTEGRITY.arm64} ;;
   "Darwin arm64") build=darwin-arm64 sri=${GROK_CLI_INTEGRITY['darwin-arm64']} ;;
-  "Darwin "*) echo "reeval runs Grok Build on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
+  "Darwin "*) echo "reeval runs Grok Build on macOS on Apple Silicon only, not $(uname -m)" >&2; exit 1 ;;
   *) echo "Grok Build has no build for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o grok.tgz "https://registry.npmjs.org/@xai-official/grok-$build/-/grok-$build-${GROK_CLI_VERSION}.tgz"

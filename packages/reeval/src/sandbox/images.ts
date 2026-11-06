@@ -38,6 +38,7 @@ import type {
   TartSandboxDescriptor,
   VmImage,
 } from '../types.ts'
+import { type HarnessBake, harnessBake } from './harness-install.ts'
 import { prepareAll } from './preflight.ts'
 import {
   imageHarness,
@@ -55,7 +56,7 @@ import {
   dockerKey,
   vmImage,
 } from './providers.ts'
-import { bakedTartImage, type HarnessBake, harnessBake, tartBakeKey } from './tart-bake.ts'
+import { bakedTartImage, tartBakeKey } from './tart-bake.ts'
 import type { MissingImage } from './tart-images.ts'
 
 /**

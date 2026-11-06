@@ -12,8 +12,9 @@ import {
 import { join } from 'node:path'
 import { after, afterEach, before, describe, test } from 'node:test'
 import { resolveBridgePort } from '@ai-sdk/harness/utils'
-import { adapterVersion, BRIDGE_PORT } from '@reeval/sandbox-docker'
+import { adapterVersion, BRIDGE_PORT, bakeKey, PNPM_VERSION } from '@reeval/sandbox-docker'
 import { fakeBootstrapScript } from '../src/harness/fake-bootstrap.ts'
+import { type HarnessBake, harnessBake } from '../src/sandbox/harness-install.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import type { SandboxProvider } from '../src/sandbox/provider.ts'
 import { bakedImage, createProviders } from '../src/sandbox/providers.ts'
@@ -30,8 +31,6 @@ import {
   bakedTartImage,
   bakeTartImage,
   deleteBakedImages,
-  type HarnessBake,
-  harnessBake,
   tartBakeKey,
 } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
@@ -611,6 +610,10 @@ describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script'
     const name = (o: Partial<TartSandboxDescriptor> = {}, b = bake, source = fakeDigest(IMAGE)) =>
       bakedTartImage(vm(o), b, source)
     const base = await name()
+    assert.ok(
+      base.endsWith(`-${bakeKey(PNPM_VERSION, IMAGE, fakeDigest(IMAGE), '', await bake.recipe())}`),
+      `${base} ends with the bake key Docker's from-images use`,
+    )
     assert.notEqual(await name({}, bake, fakeDigest('other')), base)
     assert.notEqual(await name({ ssh: { key: '/k', user: 'me' } }), base)
     assert.notEqual(await name({}, { ...bake, recipe: async () => 'other' }), base)
