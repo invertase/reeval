@@ -1327,6 +1327,30 @@ test('the interactive list takes a burst of events in one update, as attach repl
   renderer.close()
 })
 
+test('a list closed mid-burst, as attach does when a resume follows, leaves the rows it had', async () => {
+  let store: ListStore | undefined
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: {} as never,
+    stdin: {} as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    load: async () => ({
+      mountList: (o) => {
+        store = o.store
+        return { waitUntilExit: () => new Promise(() => {}), unmount: () => {} }
+      },
+    }),
+  })
+  for (const e of interleaved.slice(0, 3)) renderer.onEvent(e)
+  renderer.close()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(store?.get().files.some((f) => f.rows.length > 0))
+})
+
 test("nothing the interactive list draws shows a secret: an eval's name, an attempt's error", async () => {
   const token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
   const written: string[] = []
