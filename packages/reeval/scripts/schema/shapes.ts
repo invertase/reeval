@@ -90,6 +90,13 @@ export const SHAPES: PersistedShape[] = [
     where: "What the browser saw on one c.capture(): an attempt's artifacts/<name>.capture.json",
     versionField: 'schemaVersion',
   },
+  {
+    name: 'bundle-manifest',
+    file: 'src/bundle/types.ts',
+    type: 'BundleManifest',
+    where: 'manifest.json at the root of a reeval bundle archive, read by reeval run --bundle',
+    versionField: 'schemaVersion',
+  },
 ]
 
 /** Where the plan shapes' snapshots live: `schema/plan/<name>.schema.json`. */

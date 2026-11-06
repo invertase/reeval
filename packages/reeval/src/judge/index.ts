@@ -1,6 +1,11 @@
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from '../gateway/routes.ts'
-import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
+import {
+  VERCEL_KEY,
+  VERCEL_OIDC,
+  vercelBaseUrlProblem,
+  vercelCredentialProblem,
+} from '../gateway/vercel.ts'
 import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt, redactSecrets } from '../redact.ts'
@@ -172,9 +177,10 @@ export function judgeRoute(
     )
   }
   if (gateway === 'openrouter') return { kind: 'openrouter' }
-  return direct && key === direct.key
-    ? { kind: 'direct', provider, pkg: direct.pkg }
-    : { kind: 'gateway' }
+  if (direct && key === direct.key) return { kind: 'direct', provider, pkg: direct.pkg }
+  const base = vercelBaseUrlProblem(env)
+  if (base) throw new Error(`${what} "${model}": ${base}`)
+  return { kind: 'gateway' }
 }
 
 /** A verdict plus the transient failures retried on the way to it. */

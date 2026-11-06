@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { createServer as createHttpsServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
+import { networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
@@ -13,6 +15,10 @@ import {
   LABEL,
   PLATFORM,
 } from '@reeval/sandbox-docker'
+import {
+  createCertificateAuthority,
+  issueServerCertificate,
+} from '../../sandbox-docker/src/egress/cert.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { assertKeyRejected, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { startRegistry } from './support/registry.ts'
@@ -25,6 +31,15 @@ const dockerReady = (() => {
     return false
   }
 })()
+
+/** The host's own IPv4 address off Docker's bridges: the egress gateway never reaches loopback. */
+const hostAddress = () => {
+  const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
+    (list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => ({ name, ...a })),
+  )
+  const bridge = /^(docker|br-|veth)/
+  return (addresses.find((a) => !bridge.test(a.name)) ?? addresses[0])?.address ?? '127.0.0.1'
+}
 
 const liveContainers = (runId: string) =>
   execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
@@ -1722,6 +1737,87 @@ evaluate('hi', async (c) => {
       assert.equal(r.code, 3, out)
       assertKeyRejected(p.dir, 'OPENAI_API_KEY')
       assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+    },
+  )
+
+  test(
+    'codex on vercel() at AI_GATEWAY_BASE_URL: the call reaches that gateway, with the token swapped in at the egress gateway',
+    harnessImage('codex'),
+    async () => {
+      const ca = createCertificateAuthority()
+      const caFile = join(tempDir('gateway-ca'), 'ca.pem')
+      writeFileSync(caFile, ca.cert)
+      const ip = hostAddress()
+      const leaf = issueServerCertificate(ca, ip)
+      const calls: { method?: string; url?: string; auth?: string }[] = []
+      const server = createHttpsServer(
+        { cert: leaf.cert, key: leaf.key.export({ type: 'pkcs8', format: 'pem' }) },
+        (req, res) => {
+          calls.push({ method: req.method, url: req.url, auth: req.headers.authorization })
+          req.resume()
+          res.writeHead(401, { 'content-type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              error: { message: 'Invalid API key', type: 'invalid_request_error' },
+            }),
+          )
+        },
+      )
+      await new Promise<void>((resolve) => server.listen(0, '0.0.0.0', resolve))
+      const { port } = server.address() as AddressInfo
+      try {
+        const p = await project('docker-codex-gateway-base-url', {
+          'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { vercel } from 'reeval/gateway'
+import { codex } from 'reeval/harness'
+export default defineConfig({
+  harnesses: codex({ model: 'gpt-5.4-mini' }),
+  gateway: [vercel()],
+  egress: 'deny-all',
+  timeout: '3m',
+})
+`,
+          'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('hi', async (c) => {
+  await c.send('Reply with the word hi.').catch(() => {})
+  const found = await c.exec('grep -rl run-token-not-real "$HOME" /reeval /tmp 2>/dev/null; true')
+  expect(found.stdout).toBe('')
+  const config = await c.exec('cat ~/.codex/config.toml').then((r) => r.stdout)
+  expect(config).toContain('"https://${ip}:${port}/proxy/v1"')
+})
+`,
+        })
+        const token = 'run-token-not-real-0000000000000000'
+        const env = {
+          AI_GATEWAY_API_KEY: token,
+          AI_GATEWAY_BASE_URL: `https://${ip}:${port}/proxy`,
+          NODE_EXTRA_CA_CERTS: caFile,
+          REEVAL_DEBUG: '1',
+        }
+        const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+          env,
+          timeoutMs: 300_000,
+        })
+        const out = r.stdout + r.stderr
+        assert.ok(calls.length > 0, out)
+        assert.deepEqual(
+          [...new Set(calls.map((c) => `${c.method} ${c.url} ${c.auth}`))],
+          [`POST /proxy/v1/responses Bearer ${token}`],
+          'only the model call, with the real token',
+        )
+        assert.match(
+          out,
+          new RegExp(
+            `reeval:egress POST https://${ip.replaceAll('.', '\\.')}(:${port})?/proxy/v1/responses HTTP/[\\d.]+ \\(set authorization\\)`,
+          ),
+        )
+        assert.match(out, /turn 1 error: The API rejected AI_GATEWAY_API_KEY: set a valid key/)
+        assert.equal(r.code, 3, out)
+        assertKeyRejected(p.dir, 'AI_GATEWAY_API_KEY')
+        assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+      } finally {
+        server.close()
+      }
     },
   )
 

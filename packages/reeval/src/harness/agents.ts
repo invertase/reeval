@@ -29,12 +29,13 @@ import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { isRoutingGateway, onRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
 import type { BrokeredToken } from '../gateway/token.ts'
 import {
-  FX_VERCEL_CALL,
-  FX_VERCEL_ENDPOINTS,
   fxAskedModel,
-  servedOnVercel,
+  fxVercelCall,
+  fxVercelEndpoints,
+  servedOn,
   VERCEL_HOST,
   VERCEL_KEY,
+  vercelApi,
 } from '../gateway/vercel.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
@@ -900,10 +901,10 @@ export function fxForModel(model: string): ModelSpecific {
   }
   return {
     credential: VERCEL_KEY,
-    endpoints: FX_VERCEL_ENDPOINTS,
-    modelResponses: [FX_VERCEL_CALL],
-    servedModel: servedOnVercel,
-    askedModel: fxAskedModel,
+    endpoints: fxVercelEndpoints(),
+    modelResponses: [fxVercelCall()],
+    servedModel: servedOn(),
+    askedModel: fxAskedModel(),
     hosts: [VERCEL_HOST],
   }
 }
@@ -1433,8 +1434,9 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     mcpServers: piMcpServers,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const pi = await import('@reeval/harness-pi')
+      const api = vercelApi()
       const gateway = onRoutingGateway(descriptor, {
-        vercel: pi.PI_AI_GATEWAY,
+        vercel: { ...pi.PI_AI_GATEWAY, openai: api.openai, anthropic: api.anthropic },
         openrouter: pi.PI_OPENROUTER,
       })
       const modelInfo =
@@ -1494,7 +1496,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     adapter: async ({ auth, mcpServers, descriptor, plugins }) => {
       const codex = await import('@reeval/harness-codex')
       const provider = onRoutingGateway(descriptor, {
-        vercel: codex.AI_GATEWAY_PROVIDER,
+        vercel: { ...codex.AI_GATEWAY_PROVIDER, baseUrl: vercelApi().openai },
         openrouter: codex.OPENROUTER_PROVIDER,
       })
       return codex.createCodex({
@@ -1533,7 +1535,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
         model,
         // On Vercel AI Gateway, the model id picks fx's own provider.
         ...onRoutingGateway(descriptor, {
-          vercel: {},
+          vercel: { gatewayUrl: vercelApi().origin },
           openrouter: { provider: 'openrouter' as const },
         }),
         // On Vertex AI, the route's project and region.
@@ -1581,7 +1583,9 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
           : {
               auth,
               ...onRoutingGateway(descriptor, {
-                vercel: { provider: grok.AI_GATEWAY_PROVIDER },
+                vercel: {
+                  provider: { ...grok.AI_GATEWAY_PROVIDER, baseUrl: vercelApi().openai },
+                },
                 openrouter: { provider: grok.OPENROUTER_PROVIDER },
               }),
             }),

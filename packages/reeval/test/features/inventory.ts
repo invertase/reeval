@@ -337,6 +337,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway.vercel-base-url',
+    area: 'Config and selection',
+    name: "`AI_GATEWAY_BASE_URL`: `vercel()`'s calls sent to another gateway with Vercel's API, path and all, for Claude Code, Codex, pi, fx and Grok Build and the judge, analysis and captures, the key brokered on its host only, which joins the automatic egress hosts, Goose and OpenCode falling past it, and a URL that isn't `https://` refused at plan time",
+    plan: ['gateway/vercel-base-url'],
+    unit: ['reeval/test/gateway.test.ts', 'reeval/test/plan.test.ts', 'reeval/test/docker.test.ts'],
+  },
+  {
     id: 'gateway.openrouter',
     area: 'Config and selection',
     name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi on OpenRouter with one brokered key, fallback past it for Cursor and Antigravity and for `effort` the model would not read, the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
@@ -407,6 +414,12 @@ export const inventory: InventoryFeature[] = [
     name: "`--dry-run --json`'s `inputs`: the host files the run reads, by kind and eval: what each file's and the config's load read and imported, the lockfiles, and what the environments and sandboxes name, local skill and plugin folders walked with placement's exclusions, symlinks out of them followed and warned about, and a Dockerfile's build context",
     plan: ['inputs/inputs'],
     unit: ['reeval/test/engine-worker.test.ts', 'reeval/test/inputs.test.ts'],
+  },
+  {
+    id: 'run.bundle',
+    area: 'Config and selection',
+    name: "`reeval bundle` and `reeval run --bundle`: the dry run's plan and `inputs` as one `.tar.gz` with a `manifest.json` (reeval version, arguments, git commit and dirty flag, each file's sha256, the `.env` files' variable names and the secret names, never values or `node_modules`), rooted at the git repository when the project reads outside itself; run from it, the files are checked against the manifest, the lockfile installed and the plan and inputs compared before any attempt, naming each missing or differing file",
+    unit: ['reeval/test/bundle.test.ts', 'reeval/test/cli.test.ts', 'reeval/test/schema.test.ts'],
   },
   {
     id: 'plan.cost',

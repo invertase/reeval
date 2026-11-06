@@ -16,6 +16,7 @@ import {
   loadConfig,
   malformedCredentials,
   missingCredentials,
+  neededCredentials,
   type PlannedJudge,
   parseDuration,
   requireConfig,
@@ -271,8 +272,50 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'clean') return cleanCommand(values, configPath)
   if (command === 'attach') return attachCommand(values, filters[0], configPath)
+  if (command === 'bundle') {
+    const { bundleCommand } = await import('./bundle/index.ts')
+    return bundleCommand(values, filters, configPath, argv.slice(1), (s) => console.log(s))
+  }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run reeval --help.`)
+  if (values.bundle !== undefined) return bundleRun(values, filters)
   return runCommand(values, configPath, filters)
+}
+
+/**
+ * `reeval run --bundle`: the bundle's own filters, profile, tags, traits and runs, from the
+ * project it extracts to. Other run flags (`--json`, `--record`, `--concurrency`, …) apply as given.
+ */
+async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
+  const planning = (
+    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors'] as const
+  )
+    .filter((f) => flags[f] !== undefined)
+    .map((f) => `--${f}`)
+  if (filters.length || planning.length) {
+    throw new UsageError(
+      `--bundle runs the bundle with the filters, profile, tags, traits and runs it was made with: leave out ${[...(filters.length ? ['filters'] : []), ...planning].join(', ')}.`,
+    )
+  }
+  const file = flags.bundle as string
+  const log = (s: string) => (flags.json ? console.error(s) : console.log(s))
+  const { openBundle } = await import('./bundle/index.ts')
+  const opened = await openBundle(file, log)
+  if (opened.exit !== undefined) return opened.exit
+  const { args } = opened.manifest
+  log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
+  process.chdir(opened.project)
+  return runCommand(
+    {
+      ...flags,
+      bundle: undefined,
+      ...(args.profile ? { profile: args.profile } : {}),
+      tag: args.tags,
+      trait: args.traits,
+      ...(args.runs ? { runs: args.runs } : {}),
+    },
+    opened.config,
+    args.filters,
+  )
 }
 
 /**
@@ -329,7 +372,8 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `reeval clean`: removes local debug data and snapshots, all of them or all but the newest
- * `--keep` runs', and with `--staging` every stopped run's staging.
+ * `--keep` runs', with `--staging` every stopped run's staging, and with `--bundles` every copy
+ * `run --bundle` extracted whose process has ended.
  */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
@@ -361,6 +405,15 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   if (streams.length) {
     console.log(
       `Removed the event streams of ${streams.length} finished run${streams.length === 1 ? '' : 's'} from .reeval/events`,
+    )
+  }
+  if (flags.bundles) {
+    const { removeExtractedBundles } = await import('./bundle/index.ts')
+    const removed = await removeExtractedBundles()
+    console.log(
+      removed.length
+        ? `Removed ${removed.length} extracted bundle${removed.length === 1 ? '' : 's'}: ${removed.join(', ')}`
+        : 'No extracted bundles to remove',
     )
   }
   if (flags.images) {
@@ -1483,7 +1536,16 @@ async function executeRun(
         kind: 'lockfile' as const,
       }))
       const inputs = planInputs(config.root, [...setup.configInputs, ...locks], skipped)
-      const doc = planDocument(plan, skipped, excluded, images, inputs)
+      const running = skipped.filter((p) => !p.attempt.plan.skip)
+      const secrets = new Set(running.flatMap((p) => p.attempt.secretVars))
+      const needed = neededCredentials(config, {
+        harnesses: plan.harnessDescriptors,
+        sandboxes: plan.sandboxes,
+        profile,
+        judges: running.flatMap((p) => (p.attempt.judge ? [p.attempt.judge] : [])),
+      })
+      for (const { names } of needed) for (const name of names) secrets.add(name)
+      const doc = planDocument(plan, skipped, excluded, images, inputs, [...secrets].sort())
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }

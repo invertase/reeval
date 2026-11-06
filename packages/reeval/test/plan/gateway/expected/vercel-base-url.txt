@@ -1,0 +1,24 @@
+no profile · 2 evals · 8 cells · 8 attempts
+hint: gateway: cursor:composer-2.5 falls back to direct (vercel can't serve it: Cursor's agent only calls Cursor's own API)
+hint: gateway: goose:gemini-3.8-flash falls back to direct (vercel can't serve it: Goose's vercel_ai_gateway provider has ai-gateway.vercel.sh built in, so reeval can't send its calls to AI_GATEWAY_BASE_URL (https://gw.example/proxy))
+evals/g.eval.ts › greets  claude-code:claude-sonnet-5-5/-/docker  control  gated  ×1  effort medium · gateway: claude-code:claude-sonnet-5-5 → vercel at https://gw.example/proxy · gateway: codex:gpt-5.4-mini → vercel at https://gw.example/proxy · gateway: cursor:composer-2.5 → direct (fallback) · gateway: goose:gemini-3.8-flash → direct (fallback) · gateway: pi:gemini-3.8-flash → vercel at https://gw.example/proxy · gateway: pi:claude-haiku-4.5 → vercel at https://gw.example/proxy · gateway: grok-build:grok-4.6 → vercel at https://gw.example/proxy · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: pi:claude-haiku-4.5 none (reeval doesn't send pi's effort to anthropic/claude-haiku-4.5 through Vercel AI Gateway yet) · efforts differ: medium on claude-code:claude-sonnet-5-5, codex:gpt-5.4-mini, goose:gemini-3.8-flash, pi:gemini-3.8-flash, grok-build:grok-4.6; not checked on cursor:composer-2.5; none on pi:claude-haiku-4.5
+                          codex:gpt-5.4-mini/-/docker             control  gated  ×1  effort medium
+                          cursor:composer-2.5/-/docker            control  gated  ×1
+                          goose:gemini-3.8-flash/-/docker         control  gated  ×1  effort medium
+                          pi:gemini-3.8-flash/-/docker            control  gated  ×1  effort medium
+                          pi:claude-haiku-4.5/-/docker            control  gated  ×1
+                          grok-build:grok-4.6/-/docker            control  gated  ×1  effort medium
+evals/g.eval.ts › pinned  b/-/docker                              control  gated  ×1  gateway: b → direct
+excluded: —
+image docker · claude-code · 1 evals
+  base  reeval-sandbox:claude-code-1.0.176-patch.a9d56a8c  (reeval's image: built when missing or when its base changed)
+image docker · codex · 1 evals
+  base  reeval-sandbox:codex-0.1.12  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 2 evals
+  base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)
+image docker · goose · 1 evals
+  base  reeval-sandbox:goose-0.1.15  (reeval's image: built when missing or when its base changed)
+image docker · pi · 1 evals
+  base  reeval-sandbox:pi-0.2.9  (reeval's image: built when missing or when its base changed)
+image docker · grok-build · 1 evals
+  base  reeval-sandbox:grok-build-0.1.11  (reeval's image: built when missing or when its base changed)

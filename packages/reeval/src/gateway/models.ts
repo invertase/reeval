@@ -16,6 +16,7 @@ import type {
   ResolvedProfile,
 } from '../types.ts'
 import { gatewayHelper, notListed } from './resolve.ts'
+import { vercelBaseUrlProblem } from './vercel.ts'
 import { vertexModelRefusal } from './vertex.ts'
 
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
@@ -51,6 +52,18 @@ export const gatewayScope = (
  * naming each gateway tried.
  */
 export function resolveModelGateway(
+  model: JudgeModel | FakeAnalysisModel | undefined,
+  pin: GatewayName | GatewayDescriptor | undefined,
+  scope: GatewayScope,
+  what: string,
+): GatewayName | undefined {
+  const gateway = pickGateway(model, pin, scope, what)
+  const problem = gateway === 'vercel' ? vercelBaseUrlProblem() : undefined
+  if (problem) throw new UsageError(`${what} "${model}": ${problem}`)
+  return gateway
+}
+
+function pickGateway(
   model: JudgeModel | FakeAnalysisModel | undefined,
   pin: GatewayName | GatewayDescriptor | undefined,
   scope: GatewayScope,

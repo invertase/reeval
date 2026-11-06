@@ -921,6 +921,17 @@ function runModelGateway(
 /** A judge an attempt resolves: its `'provider/model'` and the gateway its calls go through. */
 export type PlannedJudge = NonNullable<AttemptMeta['judge']>
 
+type CredentialOptions = {
+  harnesses?: HarnessDescriptor[]
+  profile?: ResolvedProfile | null
+  /** The `'provider/model'`s that answer questions. */
+  questionModels?: string[]
+  /** The judges the planned attempts resolve, each with the gateway it goes through. */
+  judges?: PlannedJudge[]
+  /** The planned attempts' sandboxes, whose accounts some read a key for. */
+  sandboxes?: readonly SandboxDescriptor[]
+}
+
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
  * plans (default: the config's), the run's judge and the judges its attempts resolve, the models
@@ -929,32 +940,33 @@ export type PlannedJudge = NonNullable<AttemptMeta['judge']>
 export function missingCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: {
-    harnesses?: HarnessDescriptor[]
-    profile?: ResolvedProfile | null
-    /** The `'provider/model'`s that answer questions. */
-    questionModels?: string[]
-    /** The judges the planned attempts resolve, each with the gateway it goes through. */
-    judges?: PlannedJudge[]
-    /** The planned attempts' sandboxes, whose accounts some read a key for. */
-    sandboxes?: readonly SandboxDescriptor[]
-  } = {},
+  options: CredentialOptions = {},
 ): string[] {
-  const missing: string[] = []
+  return neededCredentials(config, options)
+    .filter(({ names }) => !names.some((k) => env[k]))
+    .map(({ line }) => line)
+}
+
+/**
+ * Each credential the run needs, as `missingCredentials` names it, whether it's set or not:
+ * `names` are the variables any one of which provides it.
+ */
+export function neededCredentials(
+  config: ResolvedConfig,
+  options: CredentialOptions = {},
+): Array<{ names: string[]; line: string }> {
+  const needed: Array<{ names: string[]; line: string }> = []
+  const add = (names: string[], line: string) => {
+    if (!needed.some((n) => n.line === line)) needed.push({ names, line })
+  }
   for (const s of options.sandboxes ?? []) {
-    if (s.kind !== 'boat' || env[s.apiKey.from]) continue
-    const line = `${s.apiKey.from} (for boat())`
-    if (!missing.includes(line)) missing.push(line)
+    if (s.kind === 'boat') add([s.apiKey.from], `${s.apiKey.from} (for boat())`)
   }
   // A harness that takes any one of several keys (Claude Code's API key or subscription token)
   // names them all.
-  const keys = new Map(
-    (options.harnesses ?? config.harness)
-      .map(harnessCredentials)
-      .filter((names) => names.length > 0)
-      .map((names) => [names.join(' or '), names]),
-  )
-  for (const [line, names] of keys) if (!names.some((k) => env[k])) missing.push(line)
+  for (const names of (options.harnesses ?? config.harness).map(harnessCredentials)) {
+    if (names.length) add(names, names.join(' or '))
+  }
   const judge = runJudgeModel(config, options.profile)
   const models = [
     ...(typeof judge === 'string'
@@ -977,24 +989,23 @@ export function missingCredentials(
   for (const { model, gateway, what } of models) {
     if (gateway === 'vertex') {
       const gateways = gatewayScope(config, options.profile).gateways
-      const line = `${VERTEX_PROJECT_ENV} (for vertex()) for ${what}, "${model}"`
       const hasProject = gateways.some((g) => g.kind === 'vertex' && g.project)
-      if (!hasProject && !env[VERTEX_PROJECT_ENV] && !missing.includes(line)) missing.push(line)
+      if (!hasProject) {
+        add([VERTEX_PROJECT_ENV], `${VERTEX_PROJECT_ENV} (for vertex()) for ${what}, "${model}"`)
+      }
       continue
     }
     const keys = judgeCredentials(model, gateway)
     const once = `${keys.join(' ')}\0${model}`
     if (named.has(once)) continue
     named.add(once)
-    if (!keys.some((k) => env[k])) {
-      missing.push(`${modelKeyOptions(model, gateway)} for ${what}, "${model}"`)
-    }
+    add(keys, `${modelKeyOptions(model, gateway)} for ${what}, "${model}"`)
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
   for (const [name, from] of secretSources(vars)) {
-    if (!env[from]) missing.push(from === name ? name : `${from} (for ${name})`)
+    add([from], from === name ? name : `${from} (for ${name})`)
   }
-  return missing
+  return needed
 }
 
 /**

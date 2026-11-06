@@ -36,7 +36,12 @@ import {
   resolveModelGateway,
 } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
-import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
+import {
+  VERCEL_BASE_URL,
+  VERCEL_KEY,
+  vercelBaseUrlProblem,
+  vercelCredentialProblem,
+} from './gateway/vercel.ts'
 import {
   VERTEX_PROJECT_ENV,
   type VertexSettings,
@@ -773,13 +778,21 @@ const noKey = (who: string, gateway: GatewayName | undefined) =>
     ? `${who}: on vertex(), with a token from Application Default Credentials (the vertex check)`
     : `${who} needs no key`
 
-/** A model no gateway in the list serves: the plan refuses it, so the check names why. */
-const unservedModel = (id: string, error: unknown, required: boolean): Check => ({
-  id,
-  status: required ? 'fail' : 'warn',
-  summary: (error as Error).message,
-  fix: 'add vercel() to gateway in the config',
-})
+/**
+ * A model no gateway in the list serves, or one on `vercel()` at an `AI_GATEWAY_BASE_URL` it
+ * can't call: the plan refuses it, so the check names why.
+ */
+const unservedModel = (id: string, error: unknown, required: boolean): Check => {
+  const summary = (error as Error).message
+  return {
+    id,
+    status: required ? 'fail' : 'warn',
+    summary,
+    fix: summary.includes(VERCEL_BASE_URL)
+      ? `set ${VERCEL_BASE_URL} to the gateway's https:// URL, or unset it`
+      : 'add vercel() to gateway in the config',
+  }
+}
 
 export async function checkJudge(
   config: ResolvedConfig,
@@ -907,6 +920,15 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
         status: 'fail',
         summary: expired,
         fix: `run vercel env pull, or add ${VERCEL_KEY}=... to ${envFile}`,
+      })
+    }
+    const base = vercelBaseUrlProblem(deps.env)
+    if (base) {
+      checks.push({
+        id: 'gateway',
+        status: 'fail',
+        summary: base,
+        fix: `set ${VERCEL_BASE_URL} to the gateway's https:// URL in ${envFile}, or unset it`,
       })
     }
   }

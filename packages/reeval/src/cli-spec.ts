@@ -19,6 +19,7 @@ export const FLAGS = {
   keep: { type: 'string' },
   images: { type: 'boolean' },
   staging: { type: 'boolean' },
+  bundles: { type: 'boolean' },
   json: { type: 'boolean' },
   md: { type: 'boolean' },
   all: { type: 'boolean' },
@@ -74,6 +75,7 @@ export const FLAGS = {
   events: { type: 'boolean' },
   'events-file': { type: 'string' },
   'events-url': { type: 'string' },
+  bundle: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -121,6 +123,7 @@ const RUN_FLAGS: FlagName[] = [
   'events',
   'events-file',
   'events-url',
+  'bundle',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -160,8 +163,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
-                                with --json, as one JSON document (every cell, what's excluded and
-                                the host files the run reads, in inputs)
+                                with --json, as one JSON document (every cell, what's excluded, the
+                                host files the run reads, in inputs, and the variables its secrets
+                                come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
@@ -202,7 +206,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --events                    Also write the run's output events as NDJSON for reeval attach, to
                                 .reeval/events/<run>.ndjson; a resume appends to it
     --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
-    --events-url <url>          Also POST them to url, in batches of NDJSON lines`,
+    --events-url <url>          Also POST them to url, in batches of NDJSON lines
+    --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new
+                                temporary directory, check its files, install from its lockfile and
+                                exit 2 before any attempt when its plan or files differ; .reeval/ is
+                                in the extracted project`,
   },
   attach: {
     flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
@@ -214,8 +222,20 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run`,
   },
+  bundle: {
+    flags: ['profile', 'runs', 'tag', 'trait', 'out'],
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
+                                reeval run --bundle runs elsewhere; never node_modules or a .env
+                                file (it names their variables and the secrets the run needs), and
+                                exit 2 when a file it would carry holds a secret
+    --profile <name>            Plan with a profile, as reeval run does; --runs, --tag and --trait
+                                also plan as they do there
+    --out <file>                Where to write it (default <project>.bundle.tar.gz here)`,
+  },
   clean: {
-    flags: ['keep', 'images', 'staging'],
+    flags: ['keep', 'images', 'staging', 'bundles'],
     positionals: 0,
     help: `
   reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
@@ -225,7 +245,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
     --staging                   Also delete every stopped run's staging (.reeval/staging), so
-                                reeval run --resume can no longer finish it`,
+                                reeval run --resume can no longer finish it
+    --bundles                   Also delete the copies reeval run --bundle extracted into the
+                                temporary directory, each with its run's .reeval/, but a running one's`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan', 'profile'],
