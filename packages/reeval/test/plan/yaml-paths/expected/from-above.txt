@@ -2,5 +2,5 @@ no profile · 1 evals · 1 cells · 1 attempts
 evals/p.eval.ts › uses the config  fake/base/docker:docker  control  gated  ×1  files NOTES.md
 excluded: —
 image docker:docker · cursor · 1 evals
-  dockerfile docker/Dockerfile  reeval-dockerfile:docker-0bfd8c5bc4b89797  (docker build (layer cache), tagged by content hash)
-  harness                       reeval-dockerfile:docker-0bfd8c5bc4b89797  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
+  dockerfile docker/Dockerfile  reeval-dockerfile:docker-4f8fc4320879a1bd  (docker build (layer cache), tagged by content hash)
+  harness                       reeval-dockerfile:docker-4f8fc4320879a1bd  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
