@@ -52,7 +52,6 @@ import {
   sandboxHelpers,
   sandboxKind,
 } from './sandbox/kinds.ts'
-import { tartTagWarning } from './sandbox/tart-ref.ts'
 import { COMPARE_RUNS } from './stats.ts'
 import type {
   CaptureOptions,
@@ -1213,8 +1212,7 @@ export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
         }
       }
     }
-    const tag = a.sandbox.kind === 'tart' ? tartTagWarning(a.sandbox.image) : null
-    if (tag) out.add(tag)
+    for (const warning of sandboxKind(a.sandbox).planWarnings?.(a.sandbox) ?? []) out.add(warning)
   }
   return [...out]
 }

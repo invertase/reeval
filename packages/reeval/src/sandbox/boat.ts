@@ -10,10 +10,12 @@ import { pathToFileURL } from 'node:url'
 import { connectSsh, SANDBOX_USER } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
+import type { Check } from '../doctor.ts'
 import { egressLabel } from '../egress.ts'
-import { registerSecret } from '../redact.ts'
+import { redactSecrets, registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
+import type { DoctorContext } from './kinds.ts'
 import { PrepareError } from './provider.ts'
 import { startSandbox } from './start.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
@@ -519,4 +521,57 @@ export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: str
       false,
     )
   }
+}
+
+/** `reeval doctor`: the OpenSSH client, and each Boat account and machine size `sandboxes` use. */
+export async function boatDoctor(
+  sandboxes: readonly BoatSandboxDescriptor[],
+  ctx: DoctorContext,
+): Promise<Check[]> {
+  const accounts = new Map<string, BoatSandboxDescriptor>()
+  for (const sandbox of sandboxes) {
+    accounts.set(`${sandbox.apiKey.from}\0${sandbox.type ?? 'small'}`, sandbox)
+  }
+  if (!accounts.size) return []
+  const missing = await ctx.deps.missingSshTool()
+  const checks: Check[] = [
+    missing
+      ? {
+          id: 'ssh',
+          status: 'fail',
+          summary: `boat() runs every command over SSH, and there's no ${missing} on PATH`,
+          fix: 'install an OpenSSH client (openssh-client on Debian and Ubuntu)',
+        }
+      : { id: 'ssh', status: 'ok', summary: 'an OpenSSH client for boat()' },
+  ]
+  for (const sandbox of accounts.values()) {
+    const key = sandbox.apiKey.from
+    const type = sandbox.type ?? 'small'
+    if (!ctx.deps.env[key]) {
+      checks.push({
+        id: 'boat',
+        status: 'fail',
+        summary: `boat() needs a Boat API key in ${key}, which isn't set`,
+        fix: `set ${key} in ${ctx.envFile}`,
+      })
+      continue
+    }
+    try {
+      await ctx.deps.boatAccount(sandbox, ctx.root, ctx.online)
+      checks.push({
+        id: 'boat',
+        status: 'ok',
+        summary: ctx.online
+          ? `Boat takes the key in ${key} and starts ${type} machines`
+          : `the Boat SDK loads, and ${key} is set (--online asks Boat whether it takes the key)`,
+      })
+    } catch (error) {
+      checks.push({
+        id: 'boat',
+        status: 'fail',
+        summary: redactSecrets((error as Error).message),
+      })
+    }
+  }
+  return checks
 }

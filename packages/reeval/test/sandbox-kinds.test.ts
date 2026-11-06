@@ -1,10 +1,12 @@
 // The sandbox kind registry: every kind answers for itself, and what planning and the attempt ask
 // of a sandbox (egress, brokering, a harness session, the platform) comes from its capabilities.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { describe, test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { setupAllowance } from '../src/attempt/index.ts'
-import { resolveConfig } from '../src/config.ts'
+import { neededCredentials, resolveConfig } from '../src/config.ts'
 import { SANDBOX_EGRESS } from '../src/egress.ts'
 import { agentSandboxProblem } from '../src/harness/agent.ts'
 import { AGENTS } from '../src/harness/agents.ts'
@@ -21,10 +23,17 @@ import {
   sandboxKind,
   suggestedSandbox,
 } from '../src/sandbox/kinds.ts'
+import { kindOf, type MachineProvider } from '../src/sandbox/machine.ts'
+import { MACHINE_PROVIDERS } from '../src/sandbox/machines.ts'
 import { classifyTart, createProviders, tartHostProblem } from '../src/sandbox/providers.ts'
 import { docker, fakeSandbox, podman, tart } from '../src/sandbox.ts'
 import { boat } from '../src/sandbox-boat.ts'
-import type { SandboxDescriptor } from '../src/types.ts'
+import type {
+  BoatSandboxDescriptor,
+  ResolvedConfig,
+  SandboxDescriptor,
+  TartSandboxDescriptor,
+} from '../src/types.ts'
 
 const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
@@ -279,5 +288,99 @@ describe('the Tart provider', () => {
     assert.equal(classifyTart(new Error('No space left on device')).cause, 'enospc')
     assert.equal(classifyTart(new Error('connection reset by peer')).class, 'transient')
     assert.equal(classifyTart(new Error('image not found')).class, 'config')
+  })
+})
+
+const tartVm = (o: Partial<TartSandboxDescriptor> = {}): TartSandboxDescriptor => ({
+  kind: 'tart',
+  image: 'ghcr.io/cirruslabs/macos-sequoia-base:latest',
+  ...o,
+})
+const boatVm = (o: Partial<BoatSandboxDescriptor> = {}): BoatSandboxDescriptor => ({
+  kind: 'boat',
+  apiKey: { kind: 'secret', from: 'BOAT_API_KEY' },
+  prefix: 'reeval-',
+  ...o,
+})
+
+describe('machine providers', () => {
+  test("a provider's free machines are the run's capacity, at least one", async () => {
+    let free: number | null = 0
+    const machine: MachineProvider<BoatSandboxDescriptor> = {
+      ...MACHINE_PROVIDERS[1],
+      capacity: async () => (free === null ? null : { machines: free }),
+    }
+    const kind = kindOf(machine)
+    assert.deepEqual(await kind.capacity?.(boatVm()), { cpus: 1, memoryBytes: 1e9 })
+    free = 3
+    assert.deepEqual(await kind.capacity?.(boatVm()), { cpus: 3, memoryBytes: 3e9 })
+    free = null
+    assert.equal(await kind.capacity?.(boatVm()), null)
+    assert.equal(SANDBOX_KINDS.tart.capacity, undefined)
+  })
+
+  test("cleanup is given Boat's accounts at the start, and other Macs once the plan names them", () => {
+    assert.deepEqual(SANDBOX_KINDS.boat.cleanupScope?.(boatVm()), {
+      key: JSON.stringify(boatVm()),
+      atStart: true,
+    })
+    assert.equal(SANDBOX_KINDS.tart.cleanupScope?.(tartVm()), null)
+    assert.deepEqual(SANDBOX_KINDS.tart.cleanupScope?.(tartVm({ hosts: ['mac-1'] })), {
+      key: '["mac-1"]',
+      atStart: false,
+    })
+    for (const kind of [SANDBOX_KINDS.docker, SANDBOX_KINDS.fake]) {
+      assert.equal(kind.cleanupScope, undefined)
+    }
+  })
+
+  test("a run needs boat()'s key, once, and no other sandbox's", () => {
+    const config = { harness: [], judge: {}, env: {}, profiles: {} } as unknown as ResolvedConfig
+    const lines = neededCredentials(config, {
+      harnesses: [],
+      sandboxes: [boatVm(), boatVm({ type: 'large' }), tartVm(), { kind: 'fake' }],
+    }).map((c) => c.line)
+    assert.ok(lines.includes('BOAT_API_KEY (for boat())'))
+    assert.equal(lines.filter((l) => l.includes('for boat()')).length, 1)
+  })
+
+  test('the plan warns of a moving Tart tag, and nothing else asks for warnings', () => {
+    assert.match(SANDBOX_KINDS.tart.planWarnings?.(tartVm())[0] ?? '', /moving tag "latest"/)
+    assert.deepEqual(
+      SANDBOX_KINDS.tart.planWarnings?.(tartVm({ image: `ghcr.io/a/b@sha256:${'a'.repeat(64)}` })),
+      [],
+    )
+    assert.equal(SANDBOX_KINDS.boat.planWarnings, undefined)
+  })
+
+  test('only a Tart sandbox on hosts reads a cap from preflight', () => {
+    assert.equal(SANDBOX_KINDS.tart.attemptCap?.(tartVm()), null)
+    assert.equal(typeof SANDBOX_KINDS.tart.attemptCap?.(tartVm({ hosts: ['mac-1'] })), 'function')
+    assert.equal(SANDBOX_KINDS.boat.attemptCap, undefined)
+    assert.ok(SANDBOX_KINDS.boat.doctor, "boat()'s account checks")
+    assert.equal(SANDBOX_KINDS.tart.doctor, undefined)
+  })
+
+  test('the run has a prepare provider for every machine provider, under its kind', () => {
+    const providers = createProviders()
+    for (const machine of MACHINE_PROVIDERS) {
+      assert.equal(providers[machine.kind]?.kind, machine.kind)
+    }
+  })
+
+  test('code outside the sandbox modules asks the kinds table, not a machine kind by name', () => {
+    const src = fileURLToPath(new URL('../src/', import.meta.url))
+    const files = [
+      'cli.ts',
+      'config.ts',
+      'doctor.ts',
+      'evaluate.ts',
+      'options.ts',
+      'attempt/environment.ts',
+    ]
+    for (const file of files) {
+      const text = readFileSync(`${src}${file}`, 'utf8')
+      assert.doesNotMatch(text, /\.kind [!=]== '(tart|boat)'/, file)
+    }
   })
 })

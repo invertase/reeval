@@ -81,7 +81,7 @@ import {
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
-import { capabilitiesOf, cleanupRun, sandboxCapacity } from './sandbox/kinds.ts'
+import { capabilitiesOf, cleanupRun, sandboxCapacity, sandboxKind } from './sandbox/kinds.ts'
 import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip } from './text.ts'
@@ -1158,10 +1158,11 @@ async function startRun({
       : await loadPrevious(stagingDir(config.root, target.runId))
     if (!dryRun) {
       await cleanupRun(target.runId).catch(() => {})
-      // Boat finds a run's VMs only under a descriptor's account and prefix; per-eval ones wait
-      // for the plan (executeRun).
-      const boats = sandboxes.filter((s) => s.kind === 'boat')
-      if (boats.length) await cleanupRun(target.runId, boats).catch(() => {})
+      // A kind that finds a run's machines only under a descriptor (Boat's account) gets the
+      // config's here; per-eval ones, and those cleanup reaches only once planned, wait for the
+      // plan (executeRun).
+      const scoped = sandboxes.filter((s) => sandboxKind(s).cleanupScope?.(s)?.atStart)
+      if (scoped.length) await cleanupRun(target.runId, scoped).catch(() => {})
     }
     const concurrency = await sizeRun()
     const { unfoldCases } = await import('./history/cases.ts')
@@ -1610,9 +1611,8 @@ async function executeRun(
       const away = new Map<string, SandboxDescriptor>()
       for (const { attempt } of planned) {
         const { sandbox } = attempt
-        if (sandbox.kind === 'tart' && sandbox.hosts)
-          away.set(JSON.stringify(sandbox.hosts), sandbox)
-        if (sandbox.kind === 'boat') away.set(JSON.stringify(sandbox), sandbox)
+        const scope = sandboxKind(sandbox).cleanupScope?.(sandbox)
+        if (scope) away.set(`${sandbox.kind}\0${scope.key}`, sandbox)
       }
       if (away.size) await cleanupRun(runId, [...away.values()]).catch(() => {})
     }

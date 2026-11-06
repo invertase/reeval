@@ -10,7 +10,6 @@ import { loadConfig } from '../src/config.ts'
 import {
   type Check,
   checkAnalysis,
-  checkBoat,
   checkDocker,
   checkEgress,
   checkEnvFiles,
@@ -20,6 +19,7 @@ import {
   checkJudge,
   checkKeys,
   checkRuntime,
+  checkSandboxes,
   checkVertex,
   configuredUses,
   type DoctorDeps,
@@ -99,7 +99,7 @@ export default defineConfig({
       sandbox: u.sandbox,
     }))
     const rows = (over: Partial<DoctorDeps>, online = false) =>
-      checkBoat(config, deps(over), online, { uses }, '.env.local')
+      checkSandboxes(config, deps(over), online, { uses }, '.env.local')
     const asked: Array<[string, boolean]> = []
     const ok = await rows(
       {
@@ -137,7 +137,7 @@ export default defineConfig({
       "boat() needs a Boat API key in TEAM_BOAT_KEY, which isn't set",
     )
     noSecret(failing)
-    const docker = await checkBoat(
+    const docker = await checkSandboxes(
       await configOf('no-boat', `{ harnesses: fakeHarness(), sandbox: docker() }`),
       deps(),
       false,

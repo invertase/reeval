@@ -61,10 +61,11 @@ import {
   RECOMMENDED_JUDGE_MODEL,
   setGatewayKey,
 } from './judge/index.ts'
-import { harnessId, sandboxId } from './options.ts'
+import { harnessId, sandboxId, sandboxProvider } from './options.ts'
 import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
+import { SANDBOX_KINDS, type SandboxKind } from './sandbox/kinds.ts'
 import { plural } from './text.ts'
 import type {
   BoatSandboxDescriptor,
@@ -302,59 +303,20 @@ const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
         .filter((u) => !u.profile)
         .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox }))
 
-/** The OpenSSH client and each Boat account the planned evals use, when any uses `boat()`. */
-export async function checkBoat(
+/** Each sandbox kind's own checks of the sandboxes the planned evals use, in the kinds' order. */
+export async function checkSandboxes(
   config: ResolvedConfig,
   deps: DoctorDeps,
   online: boolean,
   planned: Planned,
   envFile: string,
 ): Promise<Check[]> {
-  const accounts = new Map<string, BoatSandboxDescriptor>()
-  for (const { sandbox } of usesOf(config, planned)) {
-    if (sandbox.kind !== 'boat') continue
-    accounts.set(`${sandbox.apiKey.from}\0${sandbox.type ?? 'small'}`, sandbox)
-  }
-  if (!accounts.size) return []
-  const missing = await deps.missingSshTool()
-  const checks: Check[] = [
-    missing
-      ? {
-          id: 'ssh',
-          status: 'fail',
-          summary: `boat() runs every command over SSH, and there's no ${missing} on PATH`,
-          fix: 'install an OpenSSH client (openssh-client on Debian and Ubuntu)',
-        }
-      : { id: 'ssh', status: 'ok', summary: 'an OpenSSH client for boat()' },
-  ]
-  for (const sandbox of accounts.values()) {
-    const key = sandbox.apiKey.from
-    const type = sandbox.type ?? 'small'
-    if (!deps.env[key]) {
-      checks.push({
-        id: 'boat',
-        status: 'fail',
-        summary: `boat() needs a Boat API key in ${key}, which isn't set`,
-        fix: `set ${key} in ${envFile}`,
-      })
-      continue
-    }
-    try {
-      await deps.boatAccount(sandbox, config.root, online)
-      checks.push({
-        id: 'boat',
-        status: 'ok',
-        summary: online
-          ? `Boat takes the key in ${key} and starts ${type} machines`
-          : `the Boat SDK loads, and ${key} is set (--online asks Boat whether it takes the key)`,
-      })
-    } catch (error) {
-      checks.push({
-        id: 'boat',
-        status: 'fail',
-        summary: redactSecrets((error as Error).message),
-      })
-    }
+  const used = usesOf(config, planned).map((u) => u.sandbox)
+  const checks: Check[] = []
+  for (const [name, kind] of Object.entries(SANDBOX_KINDS) as Array<[string, SandboxKind]>) {
+    const own = used.filter((s) => s.kind === name)
+    if (!kind.doctor || !own.length) continue
+    checks.push(...(await kind.doctor(own, { deps, root: config.root, online, envFile })))
   }
   return checks
 }
@@ -386,11 +348,7 @@ const PODMAN_FIX: Partial<Record<NodeJS.Platform, string>> = {
 
 /** The engines the config's container sandboxes run on, Docker first. */
 const enginesOf = (config: ResolvedConfig): Engine[] => {
-  const used = new Set(
-    configuredUses(config).flatMap((u) =>
-      u.sandbox.kind === 'docker' ? [u.sandbox.engine ?? 'docker'] : [],
-    ),
-  )
+  const used = new Set(configuredUses(config).map((u) => sandboxProvider(u.sandbox)))
   return (['docker', 'podman'] as const).filter((e) => used.has(e))
 }
 
@@ -1473,7 +1431,7 @@ export async function doctor(
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
-    checks.push(...(await checkBoat(config, deps, online, planned, envFile)))
+    checks.push(...(await checkSandboxes(config, deps, online, planned, envFile)))
     checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
