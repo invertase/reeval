@@ -31,6 +31,7 @@ import {
 import { UsageError } from './errors.ts'
 import { bodyHash, caseJson } from './eval-source.ts'
 import { evalId } from './ids.ts'
+import { environmentInputs } from './inputs.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { type PlannedEval, planEval } from './plan-eval.ts'
@@ -375,6 +376,17 @@ function prepare(
         hooks = of(n)
       }
       const test: TestOptions = { ...options, ...hooks }
+      if (spec) {
+        const { root } = getRunContext().config
+        const found = environmentInputs(spec.environment.layers, spec.sandbox, root)
+        const { attempt } = options
+        const warnings = [...new Set([...attempt.plan.warnings, ...found.warnings])]
+        test.attempt = {
+          ...attempt,
+          plan: { ...attempt.plan, warnings },
+          ...(getRunContext().inputs ? { inputs: found.inputs } : {}),
+        }
+      }
       if (spec && test.gate && spec.sandbox.kind === 'tart' && spec.sandbox.hosts) {
         const gate = { ...test.gate, limits: { ...test.gate.limits } }
         const before = test.ready

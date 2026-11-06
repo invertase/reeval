@@ -3542,6 +3542,11 @@ export type AttemptMeta = {
   plugins?: string[]
   /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
   pluginBuilds?: PluginSource[]
+  /**
+   * The host files it reads, by absolute path: its environment's and sandbox's, then what its
+   * file's load read. Set only when the run context asks for `inputs`.
+   */
+  inputs?: LocalInput[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
@@ -3612,6 +3617,44 @@ export type RunContext = {
    * for the run's key; unset before then, or without a key.
    */
   cursorEfforts?: CursorEfforts
+  /** `reeval run --dry-run --json`: each attempt lists the host files it reads in `inputs`. */
+  inputs?: boolean
+}
+
+/**
+ * What a host file is to the run: `eval` the eval file, `module` a file its load imported, `read`
+ * one it read, `tsconfig` a tsconfig.json it loaded under, `config` and `env-file` the config
+ * and its `.env` files, `lockfile` a lockfile reeval records, and the rest what the environment
+ * or sandbox names: `file` (`file()` and `directory()`), `rules`, `workspace` (a local `git()`),
+ * `skill`, `plugin`, `npm` (a local package spec), `marketplace` (a local one),
+ * `dockerfile`, `docker-context` and `plugin-build` (a local plugin's build context).
+ */
+export type LocalInputKind =
+  | 'eval'
+  | 'module'
+  | 'read'
+  | 'tsconfig'
+  | 'config'
+  | 'env-file'
+  | 'lockfile'
+  | 'file'
+  | 'rules'
+  | 'workspace'
+  | 'skill'
+  | 'plugin'
+  | 'npm'
+  | 'marketplace'
+  | 'dockerfile'
+  | 'docker-context'
+  | 'plugin-build'
+
+/** One host file or directory a run reads. */
+export type LocalInput = {
+  /** Absolute; a directory for a `workspace`, `npm` or `marketplace` source. */
+  path: string
+  kind: LocalInputKind
+  /** The symlink, inside a skill or plugin, it was reached through, when it's outside that folder. */
+  via?: string
 }
 
 /**

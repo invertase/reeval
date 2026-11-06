@@ -3,7 +3,14 @@
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -54,6 +61,19 @@ const stubbedCatalog = (dir: string, items: unknown[] = CURSOR_MODELS) => {
     },
     reads: () => readFileSync(log, 'utf8').split('\n').filter(Boolean),
   }
+}
+/**
+ * The links and files git leaves out: the skill's symlinks (to a file and a directory outside
+ * it, one inside, one broken), a `.env` file and a lockfile.
+ */
+const linkInputs = (dir: string) => {
+  const guide = join(dir, 'skills/guide')
+  symlinkSync('../../../shared/notes.md', join(guide, 'references/notes.md'))
+  symlinkSync('../../shared/more', join(guide, 'more'))
+  symlinkSync('ref.md', join(guide, 'references/alias.md'))
+  symlinkSync('missing.md', join(guide, 'references/broken.md'))
+  writeFileSync(join(dir, '.env'), 'GREETING=hello\n')
+  writeFileSync(join(dir, 'package-lock.json'), '{}\n')
 }
 const modelsDev = async (dir: string) => {
   const { seedModelsDev } = await import('./support/cost.ts')
@@ -290,6 +310,7 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },
+  { dir: 'inputs', name: 'inputs', args: [], env: NO_DOCKER, inputs: true, prepare: linkInputs },
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
   { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
@@ -395,7 +416,7 @@ describe('plan snapshots', { concurrency: CLIS }, () => {
     test(`${c.dir}: ${c.name}`, async () => {
       matchFile(
         `plan/${c.dir}/expected/${c.name}.txt`,
-        renderPlan(await planJson(c), { cost: c.cost ?? false }),
+        renderPlan(await planJson(c), { cost: c.cost ?? false, inputs: c.inputs ?? false }),
       )
     })
   }
@@ -418,6 +439,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'evals',
       'excluded',
       'images',
+      'inputs',
     ])
     assert.match(plan.runId ?? '', /^\d{8}T\d{6}Z_/)
     assert.ok(plan.concurrency >= 1)

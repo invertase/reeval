@@ -2761,6 +2761,10 @@
           "description": "What Cursor's model catalog says of each planned Cursor model's effort, as preflight read it for the run's key; unset before then, or without a key.",
           "$ref": "#/$defs/CursorEfforts"
         },
+        "inputs": {
+          "description": "`reeval run --dry-run --json`: each attempt lists the host files it reads in `inputs`.",
+          "type": "boolean"
+        },
         "profile": {
           "anyOf": [
             {

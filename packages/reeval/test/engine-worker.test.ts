@@ -104,6 +104,44 @@ declarePlanned(['b', 'c'], ['lang', 'os'])
     assert.deepEqual(c.exits, [0])
   })
 
+  test("with inputs asked for, puts what the file's load read first in each attempt's inputs", async () => {
+    const c = fakeChannel()
+    startWorker(c.channel)
+    const { root, file, run } = evalFile(`
+import { readFileSync } from 'node:fs'
+import { NAME } from './helper.ts'
+readFileSync(new URL('./data.json', import.meta.url))
+registerTest(NAME, { mode: 'run', attempt: { name: 'a' } }, async () => {})
+registerTest('b', { mode: 'run', attempt: { name: 'b', inputs: [{ path: '/x', kind: 'file' }] } }, async () => {})
+registerTest('todo', { mode: 'todo' }, async () => {})
+`)
+    writeFileSync(join(root, 'evals/helper.ts'), "export const NAME: string = 'a'\n")
+    writeFileSync(join(root, 'evals/data.json'), '{}\n')
+    c.send({ t: 'init', run: { ...run, inputs: true }, file, select: null })
+    await c.exit
+    const loaded = [
+      { path: file, kind: 'eval' },
+      { path: join(root, 'evals/data.json'), kind: 'read' },
+      { path: join(root, 'evals/helper.ts'), kind: 'module' },
+    ]
+    assert.deepEqual(c.sent[1], {
+      t: 'collected',
+      tests: [
+        { index: 0, name: 'a', groups: [], mode: 'run', attempt: { name: 'a', inputs: loaded } },
+        {
+          index: 1,
+          name: 'b',
+          groups: [],
+          mode: 'run',
+          attempt: { name: 'b', inputs: [...loaded, { path: '/x', kind: 'file' }] },
+        },
+        { index: 2, name: 'todo', groups: [], mode: 'todo' },
+      ],
+      harnesses: [],
+      traits: [],
+    })
+  })
+
   test('runs a selection, asking the main process for leases over the channel', async () => {
     const c = fakeChannel()
     startWorker(c.channel)

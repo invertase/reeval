@@ -398,7 +398,7 @@ const filesIn = (dir: string, test: (name: string) => boolean) =>
     : []
 
 /** A skill's name from its `SKILL.md` frontmatter, else its directory's; `loadSkills` checks it. */
-function skillName(dir: string): string {
+export function skillName(dir: string): string {
   const text = readText(join(dir, 'SKILL.md'))
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   try {
@@ -617,19 +617,25 @@ const PART_FILES: Record<PluginPart, (path: string) => boolean> = {
   rules: (p) => p.startsWith('rules/'),
 }
 
+/** Whether a plugin-relative file is placed with only the parts `kept`: the manifest always is. */
+export function pluginKeeps(kept: readonly PluginPart[]): (path: string) => boolean {
+  const dropped = PLUGIN_PARTS.filter((part) => !kept.includes(part)).map((x) => PART_FILES[x])
+  return (path) => !dropped.some((d) => d(path))
+}
+
 /**
  * The files to place, by path relative to the plugin's root: its tree without `.git`, without the
  * parts `only` leaves out, and with the manifest as `readPlugin` gives it.
  */
 export function pluginFiles(p: PluginContents): PluginFile[] {
-  const dropped = PLUGIN_PARTS.filter((part) => !p.kept.includes(part)).map((x) => PART_FILES[x])
+  const keeps = pluginKeeps(p.kept)
   const out: PluginFile[] = []
   const walk = (rel: string) => {
     for (const entry of readdirSync(join(p.dir, rel), { withFileTypes: true })) {
       if (entry.name === '.git') continue
       const path = rel ? `${rel}/${entry.name}` : entry.name
       if (entry.isDirectory()) walk(path)
-      else if (entry.isFile() && path !== PLUGIN_MANIFEST && !dropped.some((d) => d(path))) {
+      else if (entry.isFile() && path !== PLUGIN_MANIFEST && keeps(path)) {
         const full = join(p.dir, path)
         const executable = (statSync(full).mode & 0o100) !== 0
         out.push({

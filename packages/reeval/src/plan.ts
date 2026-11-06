@@ -11,6 +11,7 @@ import { harnessEffort } from './harness/effort.ts'
 import { caseKeyOf } from './history/cases.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
+import { inputPath } from './inputs.ts'
 import { majorityOf } from './options.ts'
 import type { Prices } from './prices.ts'
 import { providerLimit, sandboxKind } from './sandbox/kinds.ts'
@@ -26,6 +27,8 @@ import type {
   ExcludedPair,
   FamilyMeta,
   HarnessDescriptor,
+  LocalInput,
+  LocalInputKind,
   PairFactor,
   PlannedEgress,
   PlannedQuestion,
@@ -782,6 +785,47 @@ export type PlanDocument = {
   evals: PlanEval[]
   excluded: ExcludedEval[]
   images: PlanImage[]
+  /**
+   * The host files the run reads, sorted by path: project-relative, or absolute outside the
+   * project. `evals` are the evals that read one, empty for the project's own (the config, its
+   * `.env` files, lockfiles); `via` the symlink a skill or plugin reached it through.
+   */
+  inputs: PlanInput[]
+}
+
+/** One entry in the plan's `inputs`. */
+export type PlanInput = { path: string; kind: LocalInputKind; evals: string[]; via?: string }
+
+/**
+ * The plan's `inputs`: the project's, then each planned attempt's, one entry per path, under the
+ * first kind it came with other than `read` (a file the load read that the environment names).
+ */
+export function planInputs(
+  root: string,
+  project: readonly LocalInput[],
+  planned: readonly PlannedItem[],
+): PlanInput[] {
+  const byPath = new Map<string, PlanInput>()
+  const add = (input: LocalInput, id?: string) => {
+    const path = inputPath(root, input.path)
+    let entry = byPath.get(path)
+    if (!entry) {
+      entry = {
+        path,
+        kind: input.kind,
+        evals: [],
+        ...(input.via ? { via: inputPath(root, input.via) } : {}),
+      }
+      byPath.set(path, entry)
+    } else if (entry.kind === 'read' && input.kind !== 'read') {
+      entry.kind = input.kind
+      if (input.via) entry.via = inputPath(root, input.via)
+    }
+    if (id !== undefined && !entry.evals.includes(id)) entry.evals.push(id)
+  }
+  for (const input of project) add(input)
+  for (const { id, attempt } of planned) for (const input of attempt.inputs ?? []) add(input, id)
+  return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
 export function planDocument(
@@ -789,6 +833,7 @@ export function planDocument(
   planned: PlannedItem[],
   excluded: ExcludedEval[],
   images: PlanImage[],
+  inputs: PlanInput[] = [],
 ): PlanDocument {
   const evals = new Map<string, PlanEval & { family?: FamilyMeta }>()
   for (const { id, file, attempt } of planned) {
@@ -869,6 +914,7 @@ export function planDocument(
     evals: foldPlanCases([...evals.values()], planned),
     excluded,
     images,
+    inputs,
   }
 }
 
