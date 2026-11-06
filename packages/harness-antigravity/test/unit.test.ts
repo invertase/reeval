@@ -333,7 +333,7 @@ describe('bootstrap', () => {
     assert.equal(intel.status, 1)
     assert.equal(
       intel.stderr,
-      'reeval runs Antigravity on macOS in tart(), which needs Apple Silicon, not x86_64\n',
+      'reeval runs Antigravity on macOS on Apple Silicon only, not x86_64\n',
     )
     const riscv = pick('Linux', 'riscv64')
     assert.equal(riscv.status, 1)

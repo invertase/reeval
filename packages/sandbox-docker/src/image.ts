@@ -60,7 +60,7 @@ export const HARNESS_PACKAGES: Record<
   },
   antigravity: {
     name: '@reeval/harness-antigravity',
-    version: '0.1.15',
+    version: '0.1.16',
     bootstrap: {
       name: 'Antigravity',
       cli: 'agy',
@@ -82,7 +82,7 @@ export const HARNESS_PACKAGES: Record<
   },
   goose: {
     name: '@reeval/harness-goose',
-    version: '0.1.15',
+    version: '0.1.16',
     bootstrap: {
       name: 'Goose',
       cli: 'goose',
@@ -112,7 +112,7 @@ export const HARNESS_PACKAGES: Record<
   },
   codex: {
     name: '@reeval/harness-codex',
-    version: '0.1.12',
+    version: '0.1.13',
     bootstrap: {
       name: 'Codex',
       cli: 'codex',
@@ -122,7 +122,7 @@ export const HARNESS_PACKAGES: Record<
   },
   fx: {
     name: '@reeval/harness-fx',
-    version: '0.1.10',
+    version: '0.1.11',
     bootstrap: {
       name: 'fx',
       cli: 'fx',
@@ -135,7 +135,7 @@ export const HARNESS_PACKAGES: Record<
   },
   'grok-build': {
     name: '@reeval/harness-grok-build',
-    version: '0.1.11',
+    version: '0.1.12',
     bootstrap: {
       name: 'Grok Build',
       cli: 'grok',

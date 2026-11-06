@@ -60,10 +60,7 @@ test('each OS and arch picks its own build and checksum, and any other is refuse
   assert.equal(pick('Darwin', 'arm64').stdout, `darwin-arm64 ${sri['darwin-arm64']}\n`)
   const intel = pick('Darwin', 'x86_64')
   assert.equal(intel.status, 1)
-  assert.equal(
-    intel.stderr,
-    'reeval runs Grok Build on macOS in tart(), which needs Apple Silicon, not x86_64\n',
-  )
+  assert.equal(intel.stderr, 'reeval runs Grok Build on macOS on Apple Silicon only, not x86_64\n')
   const riscv = pick('Linux', 'riscv64')
   assert.equal(riscv.status, 1)
   assert.equal(riscv.stderr, 'Grok Build has no build for Linux riscv64\n')

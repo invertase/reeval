@@ -31,7 +31,7 @@ case "$(uname -s) $(uname -m)" in
   "Linux x86_64"|"Linux amd64") build=linux_x64; sha=${ANTIGRAVITY_CLI_SHA256.x64} ;;
   "Linux aarch64"|"Linux arm64") build=linux_arm64; sha=${ANTIGRAVITY_CLI_SHA256.arm64} ;;
   "Darwin arm64") build=mac_arm64; sha=${ANTIGRAVITY_CLI_SHA256['darwin-arm64']} ;;
-  "Darwin "*) echo "reeval runs Antigravity on macOS in tart(), which needs Apple Silicon, not $(uname -m)" >&2; exit 1 ;;
+  "Darwin "*) echo "reeval runs Antigravity on macOS on Apple Silicon only, not $(uname -m)" >&2; exit 1 ;;
   *) echo "The Antigravity CLI has no build for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL --retry 3 -o agy.tar.gz "${RELEASES}/${version}/agy_cli_$build.tar.gz"
