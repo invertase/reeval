@@ -1,0 +1,257 @@
+// Sandbox image tags across machines: `prepareImage` against a fake `docker` CLI whose builds give
+// each machine its own image ids, as real builds do (they aren't reproducible), and whose registry
+// is a directory both machines share. The same inputs must give the same tags everywhere, and a
+// tag one machine pushed must be what another pulls instead of building.
+import assert from 'node:assert/strict'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, test } from 'node:test'
+import {
+  contextHash,
+  harnessImageFor,
+  harnessLabel,
+  imageFor,
+  LABEL,
+  registryProblem,
+  registryRef,
+} from '@reeval/sandbox-docker'
+import { createBuilds, prepareImage } from '../src/sandbox/prepare.ts'
+import type { DockerSandboxDescriptor } from '../src/types.ts'
+import { fakeConfig, project, runCli, tempDir } from './helpers.ts'
+
+const FAKE_DOCKER = `#!/usr/bin/env node
+const { createHash, randomUUID } = require('node:crypto')
+const fs = require('node:fs')
+const path = require('node:path')
+const args = process.argv.slice(2)
+const machine = process.env.FAKE_MACHINE
+const local = path.join(process.env.FAKE_STATE, machine)
+const registry = path.join(process.env.FAKE_STATE, 'registry')
+fs.mkdirSync(local, { recursive: true })
+fs.mkdirSync(registry, { recursive: true })
+const file = (dir, ref) => path.join(dir, encodeURIComponent(ref) + '.json')
+const read = (dir, ref) => (fs.existsSync(file(dir, ref)) ? JSON.parse(fs.readFileSync(file(dir, ref), 'utf8')) : null)
+const write = (dir, ref, image) => fs.writeFileSync(file(dir, ref), JSON.stringify(image))
+const fresh = (labels) => ({ labels, id: 'sha256:' + createHash('sha256').update(machine + randomUUID()).digest('hex') })
+const fail = (message) => { process.stderr.write(message + '\\n'); process.exit(1) }
+const flag = (name) => args.filter((a, i) => args[i - 1] === name)
+if (args[0] === 'image' && args[1] === 'inspect') {
+  const ref = args.at(-1)
+  const image = read(local, ref)
+  if (!image) fail('Error: No such image: ' + ref)
+  process.stdout.write(args[3].includes('config')
+    ? JSON.stringify({ config: { Labels: image.labels }, id: image.id, repoDigests: null })
+    : '2026-11-06T00:00:00Z\\n')
+} else if (args[0] === 'image' && args[1] === 'rm') {
+  fs.rmSync(file(local, args[2]), { force: true })
+} else if (args[0] === 'build') {
+  if (args.at(-1) === '-') fs.readFileSync(0)
+  const labels = Object.fromEntries(flag('--label').map((l) => l.split('=')))
+  const base = flag('--build-arg').find((a) => a.startsWith('REEVAL_BASE='))?.slice('REEVAL_BASE='.length)
+  const dockerfile = flag('--file')[0]
+  const inherited = base && dockerfile && fs.readFileSync(dockerfile, 'utf8').includes('REEVAL_BASE') ? read(local, base)?.labels : {}
+  const tag = flag('--tag')[0]
+  write(local, tag, fresh({ ...inherited, ...labels }))
+  fs.appendFileSync(path.join(process.env.FAKE_STATE, machine + '-builds.log'), tag + '\\n')
+} else if (args[0] === 'tag') {
+  const image = read(local, args[1])
+  if (!image) fail('Error: No such image: ' + args[1])
+  write(local, args[2], image)
+} else if (args[0] === 'push') {
+  const image = read(local, args[1])
+  if (!image) fail('Error: No such image: ' + args[1])
+  write(registry, args[1], image)
+} else if (args[0] === 'pull') {
+  const image = read(registry, args.at(-1))
+  if (!image) fail('Error response from daemon: manifest unknown')
+  write(local, args.at(-1), image)
+} else if (args[0] === 'buildx') {
+  fail('ERROR: no registry in this test')
+}
+`
+
+const harness = 'cursor'
+const reevalImage = imageFor(harness)
+
+function world() {
+  const dir = tempDir('reeval-image-keys-')
+  const bin = join(dir, 'bin')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'docker'), FAKE_DOCKER, { mode: 0o755 })
+  const state = join(dir, 'state')
+  const project = join(dir, 'project')
+  mkdirSync(project)
+  const env = { PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: state }
+  /** One machine: its own images, whose ids are its own, and the shared registry. */
+  const machine = (name: string) => {
+    const local = join(state, name)
+    mkdirSync(local, { recursive: true })
+    const seed = (ref: string, labels: Record<string, string>) =>
+      writeFileSync(
+        join(local, `${encodeURIComponent(ref)}.json`),
+        JSON.stringify({ labels, id: `sha256:${name}-${ref}`.padEnd(71, '0') }),
+      )
+    return {
+      seed,
+      /** Seeds reeval's own image for the harness, as `reeval image build` left it here. */
+      seedReeval: () =>
+        seed(reevalImage, {
+          [LABEL.context]: contextHash(),
+          [LABEL.agentVersion]: '1.0.0',
+          [LABEL.harness]: harnessLabel(harness),
+        }),
+      builds: () => {
+        const log = join(state, `${name}-builds.log`)
+        return existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+      },
+      has: (ref: string) => existsSync(join(local, `${encodeURIComponent(ref)}.json`)),
+      prepare: async (
+        sandbox: Omit<DockerSandboxDescriptor, 'kind'>,
+        options: { registry?: string; push?: boolean } = {},
+      ) => {
+        const saved = { ...process.env }
+        Object.assign(process.env, env, { FAKE_MACHINE: name })
+        try {
+          return await prepareImage(
+            { kind: 'docker', ...sandbox },
+            harness,
+            project,
+            AbortSignal.timeout(30_000),
+            createBuilds(options),
+          )
+        } finally {
+          process.env = saved
+        }
+      },
+    }
+  }
+  return { project, machine }
+}
+
+describe('sandbox image tags are content keys', () => {
+  test('an install layer on reeval image: the same tag on two machines whose image ids differ', async () => {
+    const { machine } = world()
+    const a = machine('a')
+    const b = machine('b')
+    a.seedReeval()
+    b.seedReeval()
+    const install = ['apt-get install -y jq']
+    const onA = await a.prepare({ install })
+    const onB = await b.prepare({ install })
+    assert.match(onA.ref, /^reeval-install:[0-9a-f]{16}$/)
+    assert.equal(onB.ref, onA.ref)
+    assert.notEqual(onB.id, onA.id, 'each machine built its own image')
+    // Canary: other commands are another layer.
+    assert.notEqual((await b.prepare({ install: ['true'] })).ref, onA.ref)
+  })
+
+  test('a Dockerfile FROM ${REEVAL_BASE} and an install layer on it: the same tags on both machines', async () => {
+    const { project, machine } = world()
+    const dockerfile = join(project, 'tools', 'Dockerfile')
+    mkdirSync(join(project, 'tools'))
+    writeFileSync(dockerfile, 'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nRUN true\n')
+    const a = machine('a')
+    const b = machine('b')
+    a.seedReeval()
+    b.seedReeval()
+    const onA = await a.prepare({ dockerfile, install: ['echo hi'] })
+    const onB = await b.prepare({ dockerfile, install: ['echo hi'] })
+    assert.equal(onB.ref, onA.ref)
+    assert.equal(onB.base, onA.base)
+    assert.match(onA.base, /^reeval-dockerfile:tools-[0-9a-f]{16}$/)
+    assert.notEqual(onB.id, onA.id)
+  })
+
+  test("a from image's layers hash the digest it was built on, not its id", async () => {
+    const { machine } = world()
+    const from = 'python:3.12-slim'
+    const baked = harnessImageFor(harness, from)
+    const labels = (digest: string) => ({
+      [LABEL.fromDigest]: digest,
+      [LABEL.agentVersion]: '1.0.0',
+    })
+    const a = machine('a')
+    const b = machine('b')
+    const c = machine('c')
+    a.seed(baked, labels(`sha256:${'1'.repeat(64)}`))
+    b.seed(baked, labels(`sha256:${'1'.repeat(64)}`))
+    c.seed(baked, labels(`sha256:${'2'.repeat(64)}`))
+    const onA = await a.prepare({ from, install: ['echo hi'] })
+    assert.equal((await b.prepare({ from, install: ['echo hi'] })).ref, onA.ref)
+    // Canary: a build on what the tag named later is another base.
+    assert.notEqual((await c.prepare({ from, install: ['echo hi'] })).ref, onA.ref)
+  })
+
+  test('one machine pushes its images; another pulls them instead of building; a registry without them is a build', async () => {
+    const { machine } = world()
+    const registry = 'registry.test:5000/team/reeval'
+    const install = ['echo hi']
+    const a = machine('a')
+    a.seedReeval()
+    const pushed = await a.prepare({ install }, { registry, push: true })
+    assert.deepEqual(a.builds(), [pushed.ref], 'machine a built the install layer')
+
+    const b = machine('b')
+    const pulled = await b.prepare({ install }, { registry })
+    assert.deepEqual(b.builds(), [], 'machine b built nothing')
+    assert.equal(pulled.ref, pushed.ref)
+    assert.equal(pulled.id, pushed.id, "machine b has machine a's image")
+    assert.ok(b.has(reevalImage), "reeval's image came from the registry too")
+
+    // Canary: commands nobody pushed are built.
+    const c = machine('c')
+    const other = await c.prepare({ install: ['echo other'] }, { registry })
+    assert.deepEqual(c.builds(), [other.ref])
+    // Canary: without --push, nothing reaches the registry.
+    const d = machine('d')
+    d.seedReeval()
+    const local = await d.prepare({ install: ['echo local'] }, { registry })
+    const e = machine('e')
+    e.seedReeval()
+    await e.prepare({ install: ['echo local'] }, { registry })
+    assert.deepEqual(e.builds(), [local.ref])
+  })
+
+  test("the registry tag pins content the local tag doesn't", () => {
+    const registry = 'localhost:5000/reeval/'
+    const install = {
+      ref: 'reeval-install:0123456789abcdef',
+      key: 'reeval-install:0123456789abcdef',
+    }
+    assert.equal(
+      registryRef(registry, install),
+      'localhost:5000/reeval/reeval-install:0123456789abcdef',
+    )
+    const one = registryRef(registry, { ref: reevalImage, key: `${reevalImage}+aaaa` })
+    const two = registryRef(registry, { ref: reevalImage, key: `${reevalImage}+bbbb` })
+    assert.match(one, new RegExp(`^localhost:5000/reeval/${reevalImage}-[0-9a-f]{12}$`))
+    assert.notEqual(one, two, 'a new reeval base is a new registry tag')
+    assert.equal(registryProblem('ghcr.io/acme/reeval'), null)
+    assert.equal(registryProblem('localhost:5000'), null)
+    assert.match(registryProblem('https://ghcr.io/acme') ?? '', /without a scheme/)
+    assert.match(registryProblem('ghcr.io/acme/reeval:latest') ?? '', /without a scheme, tag/)
+  })
+})
+
+describe('--registry and --push', () => {
+  test('--push needs --registry, and --registry is a registry prefix', async () => {
+    const p = await project('image-registry-flags', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+    })
+    const push = await runCli(p.dir, ['image', 'build', '--push'])
+    assert.equal(push.code, 2, push.stdout + push.stderr)
+    assert.match(push.stderr, /--push needs --registry/)
+    for (const args of [
+      ['image', 'build', '--registry', 'https://ghcr.io/acme'],
+      ['run', '--dry-run', '--registry', 'ghcr.io/acme/reeval:latest'],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, /--registry is a registry and an optional path/)
+    }
+    // Canary: a registry prefix plans as usual.
+    const ok = await runCli(p.dir, ['run', '--dry-run', '--registry', 'localhost:5000/reeval'])
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
+  })
+})

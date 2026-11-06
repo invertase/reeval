@@ -59,9 +59,11 @@ export async function preflight(
     signal?: AbortSignal
     providers?: Record<string, SandboxProvider>
     delays?: number[]
+    /** `--registry`: where a missing image is pulled from before it's built. */
+    registry?: string
   },
 ): Promise<SandboxVersions> {
-  const providers = options.providers ?? createProviders()
+  const providers = options.providers ?? createProviders({ registry: options.registry ?? null })
   const targets = prepareTargets(uses, providers, prepareLabel)
   if (!targets.some((t) => capabilitiesOf(t.sandbox).preflight)) return { images: [] }
   let outcomes: Awaited<ReturnType<typeof prepareAll>>

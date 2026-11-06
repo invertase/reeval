@@ -467,6 +467,8 @@ async function imageBuildCommand(
       const built = await buildImages(targets, root, {
         log: (line) => console.log(dim(line)),
         force: !!flags.force,
+        registry: setup.registry,
+        push: !!flags.push,
       }).catch(refusal('docker', targets, vms.length))
       for (const b of built) {
         outcomes.push(
@@ -856,6 +858,7 @@ async function prepareRun(
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = givenConcurrency(config, flags.concurrency)
+  const registry = await registryFlag(flags)
   return {
     output,
     config,
@@ -877,6 +880,8 @@ async function prepareRun(
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     force: !!flags.force,
+    /** `--registry`: where a missing sandbox image is pulled from before it's built. */
+    registry,
     verbosity: verbosityOf(flags),
     configFile: configLabel(path),
     /** Named in the plan line when the project root isn't the current directory. */
@@ -889,6 +894,20 @@ async function prepareRun(
 }
 
 type Prepared = Awaited<ReturnType<typeof prepareRun>>
+
+/** `--registry`, checked, or null; `--push` needs it. */
+async function registryFlag(flags: Flags): Promise<string | null> {
+  if (flags.push && flags.registry === undefined) {
+    throw new UsageError(
+      '--push needs --registry, the registry to push to, e.g. --registry ghcr.io/acme/reeval',
+    )
+  }
+  if (flags.registry === undefined) return null
+  const { registryProblem } = await import('@reeval/sandbox-docker')
+  const problem = registryProblem(flags.registry)
+  if (problem) throw new UsageError(problem)
+  return flags.registry.replace(/\/+$/, '')
+}
 
 type StartedRun = RunContext & {
   startedAt: Date
@@ -1539,6 +1558,7 @@ async function executeRun(
           root: config.root,
           runId,
           onEvent: (e) => renderer.onEvent({ type: 'prepare', at: Date.now(), ...e }),
+          ...(setup.registry ? { registry: setup.registry } : {}),
         },
       )
     } catch (error) {

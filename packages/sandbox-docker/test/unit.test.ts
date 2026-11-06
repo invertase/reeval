@@ -1349,8 +1349,8 @@ describe('image recipes', () => {
     const onReeval = join(dir, 'reeval.Dockerfile')
     writeFileSync(onReeval, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
     assert.notEqual(
-      dockerfileTag(onReeval, 'claude-code', 'sha256:a').tag,
-      dockerfileTag(onReeval, 'cursor', 'sha256:a').tag,
+      dockerfileTag(onReeval, 'claude-code').tag,
+      dockerfileTag(onReeval, 'cursor').tag,
       "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
   })
@@ -1448,13 +1448,13 @@ describe('image recipes', () => {
     )
   })
 
-  test('install layers are keyed on the base image id and the exact list', () => {
+  test("install layers are keyed on the base's content key and the exact list", () => {
     const steps = [{ run: 'apt-get install -y jq' }]
-    const tag = installLayerTag({ id: 'sha256:a' }, steps)
+    const tag = installLayerTag({ key: 'base-a' }, steps)
     assert.match(tag, /^reeval-install:[0-9a-f]{16}$/)
-    assert.notEqual(installLayerTag({ id: 'sha256:b' }, steps), tag)
-    assert.notEqual(installLayerTag({ id: 'sha256:a' }, [...steps, { run: 'true' }]), tag)
-    assert.equal(installLayerTag({ id: 'sha256:a' }, [{ run: 'apt-get install -y jq' }]), tag)
+    assert.notEqual(installLayerTag({ key: 'base-b' }, steps), tag)
+    assert.notEqual(installLayerTag({ key: 'base-a' }, [...steps, { run: 'true' }]), tag)
+    assert.equal(installLayerTag({ key: 'base-a' }, [{ run: 'apt-get install -y jq' }]), tag)
   })
 })
 

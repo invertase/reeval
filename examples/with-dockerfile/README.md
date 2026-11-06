@@ -31,8 +31,8 @@ so the result already has the agent and is used as is:
 ```text
 images  1 sandbox image (nothing built: --dry-run)
 docker:sqlite · cursor · 1 eval
-  + dockerfile sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-cd0d64c1617074f9))
-  ✓ harness                       reeval-dockerfile:sqlite-<context + reeval image id>  (ready: reeval-sandbox:cursor-0.1.9 built (3fa1c0ba62b4))
+  + dockerfile sqlite/Dockerfile  reeval-dockerfile:sqlite-aa4148364c37c7bd  (to build: not built yet)
+  ✓ harness                       reeval-dockerfile:sqlite-aa4148364c37c7bd  (ready: reeval-sandbox:cursor-0.1.9 built (0eacb8b3a76e))
 ```
 
 The image is tagged by the build context's content, so editing the Dockerfile or `seed.sql`

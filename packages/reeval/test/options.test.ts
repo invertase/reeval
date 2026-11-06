@@ -2175,14 +2175,14 @@ evaluate('fake', { environments: defineEnvironment('host', { sandbox: fakeSandbo
     assert.match(
       out,
       new RegExp(
-        `^docker\\+[0-9a-f]+ · cursor \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
+        `^docker\\+[0-9a-f]+ · cursor \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:[0-9a-f]{16} +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:tools · cursor · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
+        `^docker:tools · cursor · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +(reeval-dockerfile:tools-[0-9a-f]{16}) +\\(.+\\)\\n {2}${st}harness +\\1 +\\(`,
         'm',
       ),
     )

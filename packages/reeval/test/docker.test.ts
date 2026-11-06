@@ -14,6 +14,7 @@ import {
 } from '@reeval/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { assertKeyRejected, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
+import { startRegistry } from './support/registry.ts'
 
 const dockerReady = (() => {
   try {
@@ -726,6 +727,73 @@ evaluate('base', { environments: defineEnvironment('base', { sandbox: docker({ f
       if (ref) spawnSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
     }
   })
+
+  test(
+    '--registry: reeval image build --push pushes the layers; a machine without them pulls them instead of building',
+    docker,
+    async () => {
+      const registry = await startRegistry()
+      const nonce = `${Date.now()}-${process.pid}`
+      const p = await project('docker-registry', {
+        'reeval.config.ts': config('{}'),
+        'evals/a.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const box = defineEnvironment('box', { sandbox: docker({ install: ['echo ${nonce} > /opt/reeval-registry'] }) })
+evaluate('pulled', { environments: box }, async (c) => {
+  expect((await c.exec('cat /opt/reeval-registry')).stdout.trim()).toBe('${nonce}')
+})
+`,
+      })
+      let layer = ''
+      try {
+        const pushed = await runCli(
+          p.dir,
+          ['image', 'build', '--registry', registry.prefix, '--push'],
+          slow,
+        )
+        assert.equal(pushed.code, 0, pushed.stdout + pushed.stderr)
+        layer = /^Installing 1 command\(s\) onto \S+ as (reeval-install:[0-9a-f]{16})$/m.exec(
+          pushed.stdout,
+        )?.[1] as string
+        assert.ok(layer, pushed.stdout)
+        const prefix = registry.prefix.replaceAll('.', '\\.')
+        assert.match(pushed.stdout, new RegExp(`^Pushed ${layer} as ${prefix}/${layer}$`, 'm'))
+        assert.match(
+          pushed.stdout,
+          new RegExp(
+            `^Pushed ${DEFAULT_IMAGE.replaceAll('.', '\\.')} as ${prefix}/${DEFAULT_IMAGE.replaceAll('.', '\\.')}-[0-9a-f]{12}$`,
+            'm',
+          ),
+        )
+
+        // Another machine: the same evals, without the install layer.
+        execFileSync('docker', ['rmi', layer], { stdio: 'ignore' })
+        const counter = countBuilds(p.dir)
+        const r = await runCli(p.dir, ['run', '--ui', 'plain', '--registry', registry.prefix], {
+          env: counter.env,
+          ...slow,
+        })
+        assert.equal(r.code, 0, r.stdout + r.stderr)
+        assert.equal(counter.count(), 0, 'the layer came from the registry, not a build')
+        assert.equal(
+          spawnSync('docker', ['image', 'inspect', layer]).status,
+          0,
+          'the pulled layer is tagged',
+        )
+        assert.equal(readRun(p.dir).run.evals[0]?.outcome, 'pass')
+
+        // Canary: without --registry, a missing layer is built.
+        execFileSync('docker', ['rmi', layer], { stdio: 'ignore' })
+        counter.reset()
+        const built = await runCli(p.dir, ['run', '--ui', 'plain'], { env: counter.env, ...slow })
+        assert.equal(built.code, 0, built.stdout + built.stderr)
+        assert.equal(counter.count(), 1)
+      } finally {
+        registry.close()
+        if (layer) spawnSync('docker', ['rmi', '-f', layer], { stdio: 'ignore' })
+      }
+    },
+  )
 
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`

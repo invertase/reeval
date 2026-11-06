@@ -12,7 +12,7 @@ import {
   outputTail,
   parseBuildOutput,
 } from './build-failure.ts'
-import { docker, dockerOk, imageInfo } from './docker-cli.ts'
+import { docker, dockerOk, type ImageInfo, imageInfo } from './docker-cli.ts'
 import { contextFiles } from './dockerignore.ts'
 import { type Engine, engineSpec } from './engine.ts'
 import {
@@ -399,6 +399,25 @@ export function contextHash(): string {
 }
 
 /**
+ * An image as the layers reeval builds on it see it: its local tag, and its content key, which
+ * their tags hash instead of its image id. Builds aren't reproducible, so the id differs on each
+ * machine; the key is the same wherever the inputs are.
+ */
+export type Layer = { ref: string; key: string }
+
+/** reeval's image for a harness: its tag (the adapter) and its base's build context. */
+export const reevalImageKey = (harness: BakedHarness) => `${imageFor(harness)}+${contextHash()}`
+
+/**
+ * A harness baked onto `from`: its tag and what `from` named when it was built, a registry digest
+ * (or, for a base only this machine has, its image id).
+ */
+export const fromImageKey = (ref: string, digest: string) => `${ref}@${digest}`
+
+/** An image reeval uses as is: its registry digest, or for one only built here, its id. */
+export const imageKey = (info: ImageInfo) => info.repoDigests[0] ?? info.id
+
+/**
  * Bakes a harness's bootstrap (which installs its agent's CLI) into an image, so the image tag
  * pins the CLI build. Rebuild after bumping the adapter. With `from`, the base is that toolchain
  * image instead of reeval's Node image. `log` gets progress lines, `output` the build's full output
@@ -602,10 +621,10 @@ export type InstallStep = { run: string; timeoutMs?: number }
 
 /**
  * The image `docker({ install })` runs in: the commands on top of `parent`, tagged by the parent's
- * id and the exact list, so it's built once. Secrets and the workspace never exist here.
+ * content key and the exact list, so it's built once. Secrets and the workspace never exist here.
  */
-export const installLayerTag = (parent: { id: string }, steps: InstallStep[]) =>
-  `reeval-install:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
+export const installLayerTag = (parent: Pick<Layer, 'key'>, steps: InstallStep[]) =>
+  `reeval-install:${sha256(JSON.stringify({ parent: parent.key, steps })).slice(0, 16)}`
 
 /** The commands as one bash script: in order, from `/`, stopping at the first that fails. */
 export function installScript(steps: InstallStep[]): string {
@@ -629,7 +648,7 @@ export type BuildOutput = { write: (text: string) => void; path: string }
 
 /** Builds the install layer if it's missing. `output` gets the build's output, for a log file. */
 export async function buildInstallLayer(
-  parent: { ref: string; id: string },
+  parent: Layer,
   steps: InstallStep[],
   options: { signal?: AbortSignal; output?: BuildOutput; engine?: Engine } = {},
 ): Promise<string> {
@@ -721,9 +740,9 @@ export type PluginBuildSpec = {
 export const pluginBuildKey = (b: PluginBuildSpec) =>
   sha256(JSON.stringify({ commit: b.commit, tree: b.tree, path: b.path, cwd: b.cwd, run: b.steps }))
 
-/** The image a plugin build makes on `parent`: the parent's id, then the build's hash. */
-export const pluginLayerTag = (parent: { id: string }, b: PluginBuildSpec) =>
-  `reeval-plugin:${parent.id.replace(/^sha256:/, '').slice(0, 12)}-${pluginBuildKey(b).slice(0, 16)}`
+/** The image a plugin build makes on `parent`: the parent's content key, then the build's hash. */
+export const pluginLayerTag = (parent: Pick<Layer, 'key'>, b: PluginBuildSpec) =>
+  `reeval-plugin:${sha256(parent.key).slice(0, 12)}-${pluginBuildKey(b).slice(0, 16)}`
 
 /** Where a plugin layer leaves the plugin's directory. */
 export const pluginBuildDir = (b: PluginBuildSpec) =>
@@ -747,7 +766,7 @@ export const pluginBuildScript = (b: Pick<PluginBuildSpec, 'cwd' | 'steps'>, src
  * plugin's directory at {@link pluginBuildDir}. Secrets and the workspace never exist here.
  */
 export async function buildPluginLayer(
-  parent: { ref: string; id: string },
+  parent: Layer,
   b: PluginBuildSpec,
   options: { name: string; signal?: AbortSignal; output?: BuildOutput; engine?: Engine },
 ): Promise<string> {
@@ -816,16 +835,15 @@ export const usesReevalBase = (dockerfile: string) =>
 /**
  * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
  * of its build context (its directory, less `.dockerignore`) and, for a Dockerfile `FROM
- * ${REEVAL_BASE}`, the id of the harness's image it names, so an edit to any of them, or a rebuilt reeval
- * image, builds anew. `reevalBase` is that id (null when it isn't built).
+ * ${REEVAL_BASE}`, the {@link reevalImageKey} of the harness's image it names, so an edit to any of
+ * them, or a new reeval base, builds anew, and the same files give the same tag on any machine.
  */
 export function dockerfileTag(
   dockerfile: string,
   harness: BakedHarness,
-  reevalBase: string | null = null,
 ): { tag: string; sha256: string } {
   const context = dirname(dockerfile)
-  const base = usesReevalBase(dockerfile) ? `${imageFor(harness)}@${reevalBase ?? 'unbuilt'}` : ''
+  const base = usesReevalBase(dockerfile) ? reevalImageKey(harness) : ''
   const hash = createHash('sha256').update(`${REEVAL_BASE_ARG}=${base}\0`)
   for (const path of contextFiles(context, dockerfile)) {
     const full = join(context, path)
@@ -844,7 +862,7 @@ export function dockerfileTag(
 
 /**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
- * its directory, with `REEVAL_BASE` set to the harness's sandbox image (whose id is `reevalBase`).
+ * its directory, with `REEVAL_BASE` set to the harness's sandbox image.
  * Rebuilds even when the tag exists with `force`, as `reeval image build` does, and then removes the
  * image the tag pointed at before. `name` is the path failures name.
  */
@@ -852,7 +870,6 @@ export async function buildDockerfile(
   dockerfile: string,
   options: {
     harness: BakedHarness
-    reevalBase?: string | null
     name?: string
     signal?: AbortSignal
     output?: BuildOutput
@@ -863,7 +880,7 @@ export async function buildDockerfile(
   },
 ): Promise<string> {
   const { harness, signal, engine } = options
-  const { tag } = dockerfileTag(dockerfile, harness, options.reevalBase ?? null)
+  const { tag } = dockerfileTag(dockerfile, harness)
   const previous = (await imageInfo(tag, engine))?.id
   if (previous && !options.force) return tag
   const build = await docker(
