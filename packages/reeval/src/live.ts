@@ -37,6 +37,8 @@ export type LiveProgressOptions = {
   /** Attempts the run planned that this resume leaves out: kept, as not run unless done. */
   leftOut?: readonly LeftOut[]
   invocation?: RunInvocation
+  /** The event stream file, as {@link LiveProgress}'s `events` names it. */
+  events?: string
   heartbeatMs?: number
   now?: () => Date
 }
@@ -158,6 +160,7 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
       counts: liveCounts(list),
       attempts: list,
       ...(options.invocation ? { invocation: options.invocation } : {}),
+      ...(options.events ? { events: options.events } : {}),
     }
   }
   const write = () => {

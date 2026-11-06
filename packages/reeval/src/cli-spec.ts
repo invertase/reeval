@@ -69,6 +69,9 @@ export const FLAGS = {
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
   'retry-errors': { type: 'string', optional: true },
+  events: { type: 'boolean' },
+  'events-file': { type: 'string' },
+  'events-url': { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -112,6 +115,9 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'resume',
   'retry-errors',
+  'events',
+  'events-file',
+  'events-url',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -184,14 +190,29 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 unique prefix
     --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
                                 the same run; passes and fails stay. Without a ref, the newest
-                                finished run. Exit 2 when the plan or eval source changed since`,
+                                finished run. Exit 2 when the plan or eval source changed since
+    --events                    Also write the run's output events as NDJSON for reeval attach, to
+                                .reeval/events/<run>.ndjson; a resume appends to it
+    --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
+    --events-url <url>          Also POST them to url, in batches of NDJSON lines`,
+  },
+  attach: {
+    flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
+    positionals: 1,
+    help: `
+  reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
+                                does, from its start; exit with the run's exit code (default: the
+                                run in progress; a URL is read with GET as NDJSON)
+    --ui --log-order --log-prefix --output-logs
+                                As for reeval run`,
   },
   clean: {
     flags: ['keep', 'images', 'staging'],
     positionals: 0,
     help: `
-  reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
-                                --keep <n> keeps the newest n runs'
+  reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
+                                and finished runs' event streams (.reeval/events); --keep <n> keeps
+                                the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
