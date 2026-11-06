@@ -14,6 +14,8 @@ export type PlanCase = {
   env?: NodeJS.ProcessEnv
   /** Render the cost estimate and each cell's part of it too. */
   cost?: boolean
+  /** Render the plan's project-relative `inputs` too. */
+  inputs?: boolean
   /** Seed the copied project before `reeval run --dry-run --json`, e.g. leftover staging. */
   prepare?: (dir: string) => void | Promise<void>
 }
@@ -57,7 +59,10 @@ const table = (rows: string[][]) => {
  * The plan as a text matrix for review diffs: one line per cell, without the host-dependent
  * estimate and concurrency.
  */
-export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {}): string {
+export function renderPlan(
+  plan: PlanDocument,
+  options: { cost?: boolean; inputs?: boolean } = {},
+): string {
   const { totals, budget } = plan
   const head = [
     plan.profile ? `profile ${plan.profile.name} (${plan.profile.reason})` : 'no profile',
@@ -161,9 +166,22 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
     ...images,
     ...(options.cost ? costLines(plan) : []),
+    ...(options.inputs ? inputLines(plan) : []),
     '',
   ].join('\n')
 }
+
+/** Outside the project, a path depends on the machine (the temp directory's parents), so it's left out. */
+const inputLines = (plan: PlanDocument) =>
+  table(
+    plan.inputs
+      .filter((i) => !i.path.startsWith('/'))
+      .map((i) => [
+        `input ${i.kind}`,
+        i.path,
+        `${i.symlinkTo ? `-> ${i.symlinkTo} ` : ''}${i.via ? `via ${i.via} ` : ''}[${i.evals.map((e) => e.split(' › ').pop()).join(', ')}]`,
+      ]),
+  )
 
 const range = (r: Range | null) => (r ? `${r.low}–${r.high}` : '—')
 const part = (p: CostPart) => `${range(p.tokens)} tokens $${range(p.usd)}`

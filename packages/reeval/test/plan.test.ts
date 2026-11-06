@@ -3,7 +3,14 @@
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -54,6 +61,19 @@ const stubbedCatalog = (dir: string, items: unknown[] = CURSOR_MODELS) => {
     },
     reads: () => readFileSync(log, 'utf8').split('\n').filter(Boolean),
   }
+}
+/**
+ * The links and files git leaves out: the skill's symlinks (to a file and a directory outside
+ * it, one inside, one broken), a `.env` file and a lockfile.
+ */
+const linkInputs = (dir: string) => {
+  const guide = join(dir, 'skills/guide')
+  symlinkSync('../../../shared/notes.md', join(guide, 'references/notes.md'))
+  symlinkSync('../../shared/more', join(guide, 'more'))
+  symlinkSync('ref.md', join(guide, 'references/alias.md'))
+  symlinkSync('missing.md', join(guide, 'references/broken.md'))
+  writeFileSync(join(dir, '.env'), 'GREETING=hello\n')
+  writeFileSync(join(dir, 'package-lock.json'), '{}\n')
 }
 const modelsDev = async (dir: string) => {
   const { seedModelsDev } = await import('./support/cost.ts')
@@ -203,6 +223,12 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  {
+    dir: 'gateway',
+    name: 'vercel-base-url',
+    args: ['--config', 'reeval.vercel.config.ts'],
+    env: { AI_GATEWAY_BASE_URL: 'https://gw.example/proxy' },
+  },
   { dir: 'gateway-strict', name: 'strict', args: [] },
   { dir: 'gateway-strict', name: 'strict-yaml', args: ['--config', 'reeval.strict.yaml'] },
   { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
@@ -290,6 +316,7 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },
+  { dir: 'inputs', name: 'inputs', args: [], env: NO_DOCKER, inputs: true, prepare: linkInputs },
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
   { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
@@ -395,7 +422,7 @@ describe('plan snapshots', { concurrency: CLIS }, () => {
     test(`${c.dir}: ${c.name}`, async () => {
       matchFile(
         `plan/${c.dir}/expected/${c.name}.txt`,
-        renderPlan(await planJson(c), { cost: c.cost ?? false }),
+        renderPlan(await planJson(c), { cost: c.cost ?? false, inputs: c.inputs ?? false }),
       )
     })
   }
@@ -418,7 +445,10 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'evals',
       'excluded',
       'images',
+      'inputs',
+      'secrets',
     ])
+    assert.deepEqual(plan.secrets, [], 'the fake agent and judge read no secret')
     assert.match(plan.runId ?? '', /^\d{8}T\d{6}Z_/)
     assert.ok(plan.concurrency >= 1)
     assert.equal(
@@ -624,6 +654,43 @@ evaluate('unknown', async () => {})
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+  })
+
+  test("an AI_GATEWAY_BASE_URL the key can't go to exits 2 at plan time, for a harness or the judge on vercel()", async () => {
+    const configs = {
+      harness: `import { defineConfig } from 'reeval'
+import { vercel } from 'reeval/gateway'
+import { codex } from 'reeval/harness'
+export default defineConfig({ harnesses: codex({ model: 'gpt-5.4-mini' }), gateway: [vercel()] })
+`,
+      judge: `import { defineConfig } from 'reeval'
+import { vercel } from 'reeval/gateway'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({
+  harnesses: fakeHarness(),
+  gateway: [vercel()],
+  judge: { model: 'anthropic/claude-haiku-4.5' },
+})
+`,
+    }
+    for (const [name, config] of Object.entries(configs)) {
+      const p = await project(`gateway-base-url-${name}`, {
+        'reeval.config.ts': config,
+        'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('routed', async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'], {
+        env: { AI_GATEWAY_BASE_URL: 'http://gw.example', DOCKER_HOST: NO_DOCKER.DOCKER_HOST },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /AI_GATEWAY_BASE_URL \("http:\/\/gw\.example"\) isn't https:\/\/, and reeval sends the key only over HTTPS\. Set AI_GATEWAY_BASE_URL to an https:\/\/ URL/,
+        name,
+      )
+      assert.doesNotMatch(r.stdout, /at http:/, name)
+    }
   })
 
   test('a judge model no listed gateway serves exits 2 at plan time, naming the one that would', async () => {

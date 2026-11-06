@@ -24,11 +24,19 @@ export {
   buildPluginLayer,
   contextHash,
   DOCKER_CONTEXT,
+  dockerfileBases,
+  dockerfileKey,
   dockerfileTag,
+  fromImageKey,
   harnessImageFor,
   type InstallStep,
+  imageKey,
   installLayerTag,
   installScript,
+  isLocalKey,
+  type Layer,
+  localKey,
+  PLATFORM,
   PLUGIN_BUILDS_DIR,
   type PluginBuildSpec,
   PNPM_VERSION,
@@ -37,6 +45,7 @@ export {
   pluginLayerTag,
   pruneImages,
   REEVAL_BASE_ARG,
+  reevalImageKey,
   resolveFrom,
   sourceTreeHash,
   usesReevalBase,
@@ -129,6 +138,13 @@ export {
   WORKSPACE_DIR,
 } from './image.ts'
 export { MCP_TIMER } from './mcp-timer.ts'
+export {
+  enginePlatform,
+  pullLayer,
+  pushLayer,
+  registryProblem,
+  registryRef,
+} from './registry.ts'
 export {
   createDockerSession,
   DEFAULT_LIMITS,

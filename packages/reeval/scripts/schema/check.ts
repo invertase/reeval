@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readableEventLine } from '../../src/view/events.ts'
 import {
   MIGRATIONS,
   READ_DEFAULTS,
@@ -157,7 +158,7 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses, remarks, capturePages } = corpus()
+  const { records, transcripts, analyses, remarks, capturePages, eventStreams } = corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -168,6 +169,15 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
       if (!line.trim()) continue
       const read = readableTranscriptLine(JSON.parse(line))
       for (const p of validate(shape('transcript-line'), read)) found.add(`line ${i + 1}: ${p}`)
+    }
+    report(file, [...found])
+  }
+  for (const file of eventStreams) {
+    const found = new Set<string>()
+    for (const [i, line] of readFileSync(file, 'utf8').split('\n').entries()) {
+      if (!line.trim()) continue
+      const read = readableEventLine(JSON.parse(line))
+      for (const p of validate(shape('run-events'), read)) found.add(`line ${i + 1}: ${p}`)
     }
     report(file, [...found])
   }

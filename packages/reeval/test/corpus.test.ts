@@ -8,6 +8,7 @@ import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, test } from 'node:test'
 import { analyzeCommand } from '../src/analysis/command.ts'
+import { attach } from '../src/attach.ts'
 import { compareCommand, showCommand } from '../src/commands.ts'
 import { loadConfig } from '../src/config.ts'
 import type { RunTrace } from '../src/history/trace.ts'
@@ -17,7 +18,7 @@ import { countSecrets } from '../src/redact.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { project, runCli, tempDir } from './helpers.ts'
-import { CORPUS_DIR, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
+import { CORPUS_DIR, corpus, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
 import { traceProblems } from './support/trace.ts'
 
@@ -211,6 +212,36 @@ describe('the record corpus', { concurrency: 4 }, () => {
     }
     walk(CORPUS_DIR)
     assert.deepEqual(hits, [])
+  })
+
+  test("every run's event stream replays in reeval attach, ending with its exit code", async () => {
+    const { eventStreams } = corpus()
+    assert.ok(eventStreams.length > 0)
+    for (const file of eventStreams) {
+      const lines = readFileSync(file, 'utf8').trim().split('\n')
+      const exit = JSON.parse(lines.at(-1) as string) as { type: string; code: number }
+      assert.equal(exit.type, 'exit', relative(CORPUS_DIR, file))
+      for (const mode of ['plain', 'agent'] as const) {
+        let text = ''
+        const code = await attach({
+          source: file,
+          out: { write: (chunk: string) => (text += chunk) },
+          output: () => ({
+            mode,
+            statusLine: false,
+            logOrder: 'stream',
+            logPrefix: 'task',
+            outputLogs: 'full',
+            color: false,
+            githubActions: false,
+            heartbeatMs: 0,
+            interactive: false,
+          }),
+        })
+        assert.equal(code, exit.code, `${relative(CORPUS_DIR, file)} (${mode})`)
+        assert.match(text, /Run: /)
+      }
+    }
   })
 
   test('real-harness runs have the transcripts and diffs later readers use', () => {

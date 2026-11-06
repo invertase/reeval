@@ -133,6 +133,8 @@ function routingEntry(name: RoutingGatewayName): GatewayEntry {
           gateway.refusals[h.kind] ?? `reeval doesn't run ${agentName(h)} on ${gateway.name} yet`
         )
       }
+      const here = h.kind === 'fake' ? undefined : gateway.refusedAt?.[h.kind]?.(process.env)
+      if (here) return here
       const effort = harnessEffort(h)
       if (effort !== undefined && h.kind !== 'fake' && gateway.unprovenEffort[h.kind]?.(h.model)) {
         return `reeval doesn't send ${agentName(h)}'s effort (${JSON.stringify(effort)}) to ${h.model} through ${gateway.name} yet: nothing checks the model gets it as its own setting, so drop effort or run ${agentName(h)} on another gateway`

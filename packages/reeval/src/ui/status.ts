@@ -792,6 +792,7 @@ export function evalRow(
   e: EvalResult,
   remarks: Remark[],
   verbose = false,
+  host?: string,
 ): StatusRow {
   const cells = cellsOf(e)
   const decide = deciding(cells)
@@ -851,7 +852,7 @@ export function evalRow(
                 cases: false,
               })),
         ...errorLines(compare ? cells : decide, failedEval),
-        ...(failedEval ? snapshotLines(cells) : []),
+        ...(failedEval ? snapshotLines(cells, host) : []),
         ...answers,
         ...remarkLines(remarks, notes),
       ]
@@ -949,11 +950,11 @@ function questionLines(questions: Array<QuestionResult | AttemptQuestionResult>)
 }
 
 /** Where a failed eval's first failed attempt's final workspace snapshot is, to open it. */
-function snapshotLines(cells: CellResult[]): DetailLine[] {
+function snapshotLines(cells: CellResult[], host?: string): DetailLine[] {
   const [first, ...others] = cells.flatMap((c) => c.snapshots ?? [])
   if (!first) return []
   const more = others.length ? ` (+${others.length} more in summary.md)` : ''
-  return [{ depth: 0, text: `Snapshot: ${first}${more}`, tone: 'dim', only: 'full' }]
+  return [{ depth: 0, text: `Snapshot: ${onHost(first, host)}${more}`, tone: 'dim', only: 'full' }]
 }
 
 /** What `c.observe` recorded, each name's tally on one line, or a line per cell under it. */
@@ -1010,6 +1011,8 @@ export type ListInput = {
   verbose: boolean
   /** Attempts the run planned that this resume's filters left out. */
   notRun?: number
+  /** The host the run is on, when it isn't this one: the paths the list names are there. */
+  host?: string
 }
 
 export function statusList(input: ListInput): StatusList {
@@ -1023,6 +1026,7 @@ export function statusList(input: ListInput): StatusList {
         e,
         shown.filter((r) => r.evalId === e.path),
         input.verbose,
+        input.host,
       ),
     ),
   }))
@@ -1052,5 +1056,8 @@ export function statusList(input: ListInput): StatusList {
 }
 
 /** The pointers under the closing line: the studio and the run's summary.md. */
-export const pointerLine = (summaryPath: string) =>
-  `Browse it: reeval studio · summary ${summaryPath}`
+export const pointerLine = (summaryPath: string, host?: string) =>
+  `Browse it: reeval studio · summary ${onHost(summaryPath, host)}`
+
+/** A path the run printed, marked with the run's host when it's another one's. */
+export const onHost = (path: string, host?: string) => (host ? `${path} (on ${host})` : path)

@@ -225,6 +225,11 @@ export type FxHarnessSettings = {
   /** Where the model runs, off Vertex AI; by default the one {@link fxProviderOf} names. */
   readonly provider?: FxProvider
   /**
+   * Another gateway with AI Gateway's API, such as a proxy in front of it, for the `gateway`
+   * provider: its origin, with any path its API is under. Default AI Gateway's own.
+   */
+  readonly gatewayUrl?: string
+  /**
    * Vertex AI's OpenAI-compatible Chat Completions endpoint in this project and region instead,
    * as the configured provider `vertex`, with no credential: whoever runs the sandbox adds the
    * token to its calls.
@@ -251,13 +256,20 @@ const vertexHost = (location: string) =>
 export const fxVertexBaseUrl = ({ project, location }: FxVertex) =>
   `${relayUrl}/v1/projects/${project}/locations/${location}/endpoints/openapi`
 
-type FxRoute = Pick<FxHarnessSettings, 'provider' | 'vertex' | 'effort'>
+type FxRoute = Pick<FxHarnessSettings, 'provider' | 'vertex' | 'effort' | 'gatewayUrl'>
+
+/** Where `provider`'s calls go: `gatewayUrl` stands in for AI Gateway's own. */
+const providerUrl = (provider: FxProvider, gatewayUrl: string | undefined) =>
+  provider === 'gateway' && gatewayUrl ? gatewayUrl.replace(/\/+$/, '') : FX_PROVIDERS[provider].url
 
 /**
  * fx's process env: quiet flags, the provider, the model and the relay. The same keys for every
  * model, so the bootstrap an image bakes for one provider serves the others.
  */
-export function fxEnv(model: string, { provider: asked, vertex, effort }: FxRoute = {}) {
+export function fxEnv(
+  model: string,
+  { provider: asked, vertex, effort, gatewayUrl }: FxRoute = {},
+) {
   const configured = asked ?? fxProviderOf(model)
   const provider = vertex ? FX_VERTEX_PROVIDER : configured
   return {
@@ -269,7 +281,7 @@ export function fxEnv(model: string, { provider: asked, vertex, effort }: FxRout
     FX_GATEWAY_CHAT_URL: `${relayUrl}${FX_GATEWAY_CHAT_PATH}`,
     FX_RELAY_UPSTREAM: vertex
       ? `https://${vertexHost(vertex.location)}`
-      : FX_PROVIDERS[configured].url,
+      : providerUrl(configured, gatewayUrl),
     FX_RELAY_EFFORT: effort ?? '',
     FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
   }
@@ -326,6 +338,7 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
   }
   const route = {
     ...(vertex ? { vertex } : { provider: providerName }),
+    ...(settings.gatewayUrl ? { gatewayUrl: settings.gatewayUrl } : {}),
     ...(settings.effort ? { effort: settings.effort } : {}),
   }
   const mcpServers = Object.keys(settings.mcpServers ?? {})
@@ -349,7 +362,7 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
       if (!key || !placeholder) return []
       return [
         createCredentialRequestTransformation({
-          matchUrl: provider.url,
+          matchUrl: providerUrl(providerName, settings.gatewayUrl),
           matchHeaders: { Authorization: `Bearer ${placeholder}` },
           transformHeaders: { ...headers, Authorization: `Bearer ${key}` },
         }),

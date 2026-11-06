@@ -19,6 +19,7 @@ export const FLAGS = {
   keep: { type: 'string' },
   images: { type: 'boolean' },
   staging: { type: 'boolean' },
+  bundles: { type: 'boolean' },
   json: { type: 'boolean' },
   md: { type: 'boolean' },
   all: { type: 'boolean' },
@@ -33,6 +34,8 @@ export const FLAGS = {
   profile: { type: 'string' },
   'dry-run': { type: 'boolean' },
   force: { type: 'boolean' },
+  registry: { type: 'string' },
+  push: { type: 'boolean' },
   concurrency: { type: 'string' },
   ui: { type: 'string' },
   'log-order': { type: 'string' },
@@ -69,6 +72,10 @@ export const FLAGS = {
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
   'retry-errors': { type: 'string', optional: true },
+  events: { type: 'boolean' },
+  'events-file': { type: 'string' },
+  'events-url': { type: 'string' },
+  bundle: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -102,6 +109,7 @@ const RUN_FLAGS: FlagName[] = [
   'force',
   'runs',
   'concurrency',
+  'registry',
   'tag',
   'trait',
   'record',
@@ -112,6 +120,10 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'resume',
   'retry-errors',
+  'events',
+  'events-file',
+  'events-url',
+  'bundle',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -151,13 +163,20 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
-                                with --json, as one JSON document (every cell, and what's excluded)
+                                with --json, as one JSON document (every cell, what's excluded, the
+                                host files the run reads, in inputs, and the variables its secrets
+                                come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
+    --registry <prefix>         Pull each sandbox image that isn't built here from this registry
+                                (host[:port]/path, as reeval image build --push left it) before
+                                building it; one it doesn't have, or whose key label or platform
+                                doesn't match, is built as usual. Anyone who can push there chooses
+                                what a matching image holds
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --trait <key=value>         Only cells whose environment's trait is value, or lists it (with
                                 compare, the control's); repeat to combine (AND)
@@ -183,19 +202,56 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 unique prefix
     --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
                                 the same run; passes and fails stay. Without a ref, the newest
-                                finished run. Exit 2 when the plan or eval source changed since`,
+                                finished run. Exit 2 when the plan or eval source changed since
+    --events                    Also write the run's output events as NDJSON for reeval attach, to
+                                .reeval/events/<run>.ndjson; a resume appends to it
+    --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
+    --events-url <url>          Also POST them to url, in batches of NDJSON lines
+    --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new
+                                temporary directory, check its files, install from its lockfile and
+                                exit 2 before any attempt when its plan or files differ; .reeval/ is
+                                in the extracted project`,
+  },
+  attach: {
+    flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
+    positionals: 1,
+    help: `
+  reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
+                                does, from its start; exit with the run's exit code (default: the
+                                run in progress; a URL is read with GET as NDJSON). On a terminal,
+                                reeval run's interactive list: q detaches (exit 0) and the run goes
+                                on; x pressed twice cancels a run on this host. A run that stops
+                                sending heartbeats shows as stalled after 20s and ends attach as
+                                lost after 2m (exit 3)
+    --ui --log-order --log-prefix --output-logs
+                                As for reeval run`,
+  },
+  bundle: {
+    flags: ['profile', 'runs', 'tag', 'trait', 'out'],
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
+                                reeval run --bundle runs elsewhere; never node_modules or a .env
+                                file (it names their variables and the secrets the run needs), and
+                                exit 2 when a file it would carry holds a secret
+    --profile <name>            Plan with a profile, as reeval run does; --runs, --tag and --trait
+                                also plan as they do there
+    --out <file>                Where to write it (default <project>.bundle.tar.gz here)`,
   },
   clean: {
-    flags: ['keep', 'images', 'staging'],
+    flags: ['keep', 'images', 'staging', 'bundles'],
     positionals: 0,
     help: `
-  reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
-                                --keep <n> keeps the newest n runs'
+  reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
+                                and finished runs' event streams (.reeval/events); --keep <n> keeps
+                                the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
     --staging                   Also delete every stopped run's staging (.reeval/staging), so
-                                reeval run --resume can no longer finish it`,
+                                reeval run --resume can no longer finish it
+    --bundles                   Also delete the copies reeval run --bundle extracted into the
+                                temporary directory, each with its run's .reeval/, but a running one's`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan', 'profile'],
@@ -364,7 +420,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: '',
     sub: {
       build: {
-        flags: ['profile', 'dry-run', 'force'],
+        flags: ['profile', 'dry-run', 'force', 'registry', 'push'],
         positionals: Number.POSITIVE_INFINITY,
         help: `
   reeval image build [filter...]
@@ -381,6 +437,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
     --force                     Rebuild every image, pulling each base again (and each tart() tag),
                                 and bake each tart() harness image anew
+    --registry <prefix>         Pull each image that isn't built here from this registry
+                                (host[:port]/path) before building it. Its tags hash the inputs
+                                and the platform, not this machine's image ids; a pulled image is
+                                used only when its ai.reeval.key label and platform match, so the
+                                registry is trusted with the rest. --force builds instead
+    --push                      With --registry, push every image reeval built or pulled for the
+                                evals there (docker or podman push; log in first). Each image
+                                holds its base in full, your own docker({ image }), from or
+                                Dockerfile base included, so push only where those may go
     --dry-run                   List the images, how each is made and how each stands, building
                                 and pulling nothing (a from tag or tart() image is looked up in its
                                 registry, not pulled), and whether the tart() pulls fit the disk`,

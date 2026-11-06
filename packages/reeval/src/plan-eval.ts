@@ -26,7 +26,7 @@ import { caseHash, optionsHash } from './eval-source.ts'
 import { fellBackToDirect, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
-import { vercelCredentialProblem } from './gateway/vercel.ts'
+import { vercelBaseUrl, vercelBaseUrlProblem, vercelCredentialProblem } from './gateway/vercel.ts'
 import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { withDefaultEffort } from './harness/default-effort.ts'
@@ -250,15 +250,17 @@ function planTests(
           const hid = harnessId(harness)
           if (gatewaySet || harness.gateway !== undefined) {
             routes.set(hid, route)
+            const at =
+              route.name === 'vercel' && !vercelBaseUrlProblem() ? vercelBaseUrl() : undefined
             gatewayNotes.push(
-              `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
+              `gateway: ${hid} → ${route.name}${at ? ` at ${at}` : ''}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
             )
           }
           if (route.name === 'direct') return harness
           if (harness.kind !== 'fake') {
             try {
               if (route.name === 'vercel') {
-                const problem = vercelCredentialProblem()
+                const problem = vercelCredentialProblem() ?? vercelBaseUrlProblem()
                 if (problem) throw new UsageError(problem)
               }
               if (route.name === 'vertex') {

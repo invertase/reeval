@@ -61,6 +61,8 @@ export const LABEL = {
   context: 'ai.reeval.context',
   /** On a `from` image: the digest (or, for a local-only base, the image id) it was built on. */
   fromDigest: 'ai.reeval.from-digest',
+  /** On every image reeval builds: its content key, which a registry pull must match. */
+  key: 'ai.reeval.key',
 } as const
 
 /**

@@ -16,6 +16,8 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  dockerfileBases,
+  dockerfileKey,
   dockerfileTag,
   harnessImageFor,
   installLayerTag,
@@ -1313,6 +1315,54 @@ describe('image recipes', () => {
     assert.equal(ignored('src/index.ts'), false)
   })
 
+  test("a Dockerfile's moving bases: FROM, COPY --from and --mount tags; another build arg makes them opaque", () => {
+    const file = join(tmp(), 'Dockerfile')
+    const pinned = `debian@sha256:${'a'.repeat(64)}`
+    writeFileSync(
+      file,
+      [
+        'ARG REEVAL_BASE',
+        'FROM --platform=linux/amd64 node:22 AS build',
+        `FROM ${pinned} AS pinned`,
+        'from scratch',
+        'FROM build AS again',
+        'FROM ${REEVAL_BASE}',
+        'COPY --from=python:3.12 /usr/local/bin/python3 /opt/',
+        'COPY --from=build /a /b',
+        'COPY --from=0 /a /b',
+        'FROM node:22',
+      ].join('\n'),
+    )
+    assert.deepEqual(dockerfileBases(file), { bases: ['node:22', 'python:3.12'], opaque: false })
+    const more = join(tmp(), 'Dockerfile')
+    writeFileSync(
+      more,
+      'FROM \\\n  debian:12 AS one\nRUN --mount=type=bind,from=alpine:3,target=/a true\nCOPY --from=one /a /b\n',
+    )
+    assert.deepEqual(
+      dockerfileBases(more),
+      { bases: ['debian:12', 'alpine:3'], opaque: false },
+      'a continued line and a mount',
+    )
+    for (const text of [
+      'ARG BASE=node:22\nFROM ${BASE}\n',
+      'ARG REEVAL_BASE\nFROM $REEVAL_BASE\nCOPY --from=$TOOLS /a /b\n',
+      'FROM debian:12\nRUN --mount=type=cache,from=${CACHE},target=/c true\n',
+    ]) {
+      writeFileSync(more, text)
+      assert.equal(dockerfileBases(more).opaque, true, text)
+    }
+    // Canary: REEVAL_BASE is the one build arg reeval names itself.
+    writeFileSync(more, 'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\n')
+    assert.deepEqual(dockerfileBases(more), { bases: [], opaque: false })
+    const tag = 'reeval-dockerfile:x-0123456789abcdef'
+    assert.equal(dockerfileKey(tag, []), tag, 'nothing that moves: the tag is the key')
+    assert.notEqual(
+      dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:1' }]),
+      dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:2' }]),
+    )
+  })
+
   test('the Dockerfile tag hashes the Dockerfile and its build context, less .dockerignore', () => {
     const dir = tmp()
     const file = join(dir, 'Dockerfile')
@@ -1349,8 +1399,8 @@ describe('image recipes', () => {
     const onReeval = join(dir, 'reeval.Dockerfile')
     writeFileSync(onReeval, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
     assert.notEqual(
-      dockerfileTag(onReeval, 'claude-code', 'sha256:a').tag,
-      dockerfileTag(onReeval, 'cursor', 'sha256:a').tag,
+      dockerfileTag(onReeval, 'claude-code').tag,
+      dockerfileTag(onReeval, 'cursor').tag,
       "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
   })
@@ -1399,7 +1449,7 @@ describe('image recipes', () => {
     }
   })
 
-  test('the base image and the toolchain layer take Node from the same image, on Node 24 or later', () => {
+  test('the base image and the toolchain layer take Node from the same pinned image, on Node 24 or later', () => {
     const dockerfile = readFileSync(
       fileURLToPath(new URL('../docker/Dockerfile', import.meta.url)),
       'utf8',
@@ -1407,6 +1457,8 @@ describe('image recipes', () => {
     assert.equal(/^FROM (\S+)$/m.exec(dockerfile)?.[1], NODE_IMAGE)
     // Node 22's undici 6 warns that EnvHttpProxyAgent is experimental in every proxied process.
     assert.ok(Number(/^node:(\d+)-/.exec(NODE_IMAGE)?.[1]) >= 24, NODE_IMAGE)
+    // Pinned, so reeval's image keys name its content.
+    assert.match(NODE_IMAGE, /@sha256:[0-9a-f]{64}$/)
   })
 
   test("a CLI's version output becomes a label value that can't add instructions", () => {
@@ -1448,13 +1500,13 @@ describe('image recipes', () => {
     )
   })
 
-  test('install layers are keyed on the base image id and the exact list', () => {
+  test("install layers are keyed on the base's content key and the exact list", () => {
     const steps = [{ run: 'apt-get install -y jq' }]
-    const tag = installLayerTag({ id: 'sha256:a' }, steps)
+    const tag = installLayerTag({ key: 'base-a' }, steps)
     assert.match(tag, /^reeval-install:[0-9a-f]{16}$/)
-    assert.notEqual(installLayerTag({ id: 'sha256:b' }, steps), tag)
-    assert.notEqual(installLayerTag({ id: 'sha256:a' }, [...steps, { run: 'true' }]), tag)
-    assert.equal(installLayerTag({ id: 'sha256:a' }, [{ run: 'apt-get install -y jq' }]), tag)
+    assert.notEqual(installLayerTag({ key: 'base-b' }, steps), tag)
+    assert.notEqual(installLayerTag({ key: 'base-a' }, [...steps, { run: 'true' }]), tag)
+    assert.equal(installLayerTag({ key: 'base-a' }, [{ run: 'apt-get install -y jq' }]), tag)
   })
 })
 

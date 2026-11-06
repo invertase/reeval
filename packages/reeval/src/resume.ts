@@ -38,6 +38,28 @@ export const currentPath = (root: string) => join(root, '.reeval', 'current')
 
 const stagingOf = (root: string, runId: string) => join(root, '.reeval', 'staging', runId)
 
+/** Where `reeval run --events` with no file writes a run's event stream. */
+export const eventsFile = (root: string, runId: string) =>
+  join(root, '.reeval', 'events', `${runId}.ndjson`)
+
+/**
+ * `reeval clean`: deletes `.reeval/events`' streams of runs with no staging left, but the newest
+ * `keep`. Returns the run ids whose streams it deleted.
+ */
+export async function pruneEvents(root: string, keep: number): Promise<string[]> {
+  const dir = join(root, '.reeval', 'events')
+  const staged = new Set(await readdir(join(root, '.reeval', 'staging')).catch(() => []))
+  const finished = (await readdir(dir).catch(() => [] as string[]))
+    .filter((f) => f.endsWith('.ndjson') && RUN_ID.test(f.slice(0, -7)))
+    .map((f) => f.slice(0, -7))
+    .filter((id) => !staged.has(id))
+    .sort()
+    .reverse()
+    .slice(keep)
+  await Promise.all(finished.map((id) => rm(eventsFile(root, id), { force: true })))
+  return finished
+}
+
 export function writeCurrent(root: string, runId: string): void {
   const file = currentPath(root)
   mkdirSync(join(root, '.reeval'), { recursive: true })
@@ -69,6 +91,42 @@ export function processAlive(pid: number, host: string): boolean {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'
   }
+}
+
+/**
+ * The signal `reeval attach` cancels a run with: `reeval run` takes it as a first Ctrl-C, and
+ * ignores it once the run is canceling or finishing.
+ */
+export const CANCEL_SIGNAL = 'SIGUSR2'
+
+/**
+ * Whether `reeval attach` may cancel the run `header` names: its live.json is that same
+ * process, alive on this host, still running attempts and beating. A stream's pid alone could be
+ * another process by now, or a run already canceling, which a signal would quit without a record.
+ */
+export function cancelable(
+  root: string,
+  header: { runId: string; pid: number; host: string },
+  options: { now?: number; alive?: (pid: number, host: string) => boolean } = {},
+): boolean {
+  if (process.platform === 'win32' || header.host !== hostname()) return false
+  if (!(options.alive ?? processAlive)(header.pid, header.host)) return false
+  let progress: ReturnType<typeof readableLiveProgress>
+  try {
+    progress = readableLiveProgress(
+      JSON.parse(readFileSync(join(stagingOf(root, header.runId), LIVE_FILE), 'utf8')),
+    )
+  } catch {
+    return false
+  }
+  if (progress?.phase !== 'running') return false
+  const now = options.now ?? Date.now()
+  return (
+    progress.runId === header.runId &&
+    progress.pid === header.pid &&
+    progress.host === header.host &&
+    now - Date.parse(progress.heartbeatAt) <= STALE_MS
+  )
 }
 
 function readHolder(dir: string): { pid: number; host: string } | null {
@@ -620,6 +678,59 @@ export async function resolveRetry(root: string, ref?: string): Promise<ResumeTa
     )
   }
   return target(found)
+}
+
+/** The run `reeval attach` follows, and its event stream file. */
+export type AttachTarget = { runId: string; file: string; live: boolean }
+
+/**
+ * `reeval attach` with no ref (or `latest`): the run in progress, from staging as `--resume` finds
+ * runs, the one `.reeval/current` names when it's running, else the newest running one. A ref is a
+ * run id or unique prefix of a run in staging or with a stream in `.reeval/events`. Its stream is
+ * the file its live.json names, else its `.reeval/events/<run>.ndjson`.
+ */
+export async function resolveAttach(root: string, ref?: string): Promise<AttachTarget> {
+  const candidates = await listCandidates(root)
+  let runId: string
+  if (ref === undefined || ref === '' || ref === 'latest') {
+    const running = candidates.filter((c) => c.live)
+    const pointer = readCurrent(root)
+    const pick = running.find((c) => c.runId === pointer) ?? running.at(-1)
+    if (!pick) {
+      throw new UsageError(
+        'No run in progress to attach to. reeval attach <run> follows a run by id, or <file|url> a stream; reeval run --events writes one.',
+      )
+    }
+    runId = pick.runId
+  } else {
+    const streams = (await readdir(join(root, '.reeval', 'events')).catch((): string[] => []))
+      .filter((n) => n.endsWith('.ndjson'))
+      .map((n) => n.slice(0, -'.ndjson'.length))
+    const ids = [...new Set([...candidates.map((c) => c.runId), ...streams])]
+      .filter((id) => RUN_ID.test(id))
+      .sort()
+    const byId = ids.includes(ref) ? [ref] : ids.filter((id) => id.startsWith(ref))
+    if (byId.length > 1)
+      throw new RefError(`"${ref}" matches ${byId.length} runs: use more of the id`)
+    const [only] = byId
+    if (!only) {
+      throw new RefError(
+        `No run, stream file or URL matches "${ref}". Pass a run id or a unique prefix of one, a stream file, or leave it out for the run in progress.`,
+      )
+    }
+    runId = only
+  }
+  const live = candidates.find((c) => c.runId === runId)?.live ?? false
+  const named = (await readProgress(stagingOf(root, runId)))?.events
+  const file = named ? resolve(root, named) : eventsFile(root, runId)
+  if (!existsSync(file)) {
+    throw new UsageError(
+      live
+        ? `run ${runId} is running without --events, so it has no event stream to attach to.`
+        : `run ${runId} has no event stream: reeval run --events writes one.`,
+    )
+  }
+  return { runId, file, live }
 }
 
 /** The attempts of a run that ended in an infra error (not a cancel). */

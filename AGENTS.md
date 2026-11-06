@@ -444,7 +444,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
   lockfile). The nightly `drift.yml` tracks those instead. Node majors are ignored too:
   `@types/node` stays on the `engines` floor's line, Node 22, and the base image's `node` on the
-  current LTS, moved by hand with `NODE_IMAGE` in `src/build-image.ts`.
+  current LTS, moved by hand in `packages/sandbox-docker/docker/Dockerfile`'s `FROM` (pinned by
+  digest, which Dependabot moves; `NODE_IMAGE` reads it), since reeval's image keys hash it.
 
 ### Changing what reeval persists
 

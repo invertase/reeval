@@ -71,6 +71,13 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'run-events',
+    file: 'src/view/events.ts',
+    type: 'RunEventLine',
+    where:
+      "One line of a run's event stream, from reeval run --events (.reeval/events/<run>.ndjson by default), read by reeval attach",
+  },
+  {
     name: 'cli-invocation',
     file: 'src/report/types.ts',
     type: 'CliInvocation',
@@ -81,6 +88,13 @@ export const SHAPES: PersistedShape[] = [
     file: 'src/types.ts',
     type: 'CapturePageFile',
     where: "What the browser saw on one c.capture(): an attempt's artifacts/<name>.capture.json",
+    versionField: 'schemaVersion',
+  },
+  {
+    name: 'bundle-manifest',
+    file: 'src/bundle/types.ts',
+    type: 'BundleManifest',
+    where: 'manifest.json at the root of a reeval bundle archive, read by reeval run --bundle',
     versionField: 'schemaVersion',
   },
 ]

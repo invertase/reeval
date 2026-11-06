@@ -7,20 +7,30 @@ import {
   buildInstallLayer,
   buildPluginLayer,
   contextHash,
+  dockerfileBases,
+  dockerfileKey,
   dockerfileTag,
   type Engine,
   engineSpec,
+  fromImageKey,
   harnessImageFor,
   harnessLabel,
   type ImageInfo,
   type InstallStep,
   imageFor,
   imageInfo,
+  imageKey,
   installLayerTag,
+  isLocalKey,
   LABEL,
+  type Layer,
+  localKey,
   type PluginBuildSpec,
   pluginBuildDir,
   pluginLayerTag,
+  pullLayer,
+  pushLayer,
+  reevalImageKey,
   resolveFrom,
   sourceTreeHash,
   usesReevalBase,
@@ -74,12 +84,23 @@ export type Builds = {
   refresh: Refresh
   /** The container CLI every build runs on. */
   engine: Engine
+  /** The registry prefix (`--registry`) a missing image is pulled from before it's built. */
+  registry: string | null
+  /** Push every image reeval built or pulled to {@link registry}: `reeval image build --push`. */
+  push: boolean
+  /** Pushes a layer to {@link registry} once per run. */
+  pushOnce: (layer: Layer, signal: AbortSignal) => Promise<void>
 }
 
 export type Refresh = 'none' | 'check' | 'force'
 
-export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Builds {
+export function createBuilds(options: Partial<Omit<Builds, 'once' | 'pushOnce'>> = {}): Builds {
   const builds = new Map<string, Promise<ImageInfo>>()
+  const pushes = new Map<string, Promise<void>>()
+  const log = options.log ?? (() => {})
+  const retry = options.retry ?? ((step) => step())
+  const engine = options.engine ?? 'docker'
+  const registry = options.registry ?? null
   return {
     once: (ref, build) => {
       let done = builds.get(ref)
@@ -89,11 +110,41 @@ export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Build
       }
       return done
     },
-    retry: options.retry ?? ((step) => step()),
-    log: options.log ?? (() => {}),
+    retry,
+    log,
     refresh: options.refresh ?? 'none',
-    engine: options.engine ?? 'docker',
+    engine,
+    registry,
+    push: !!options.push && registry !== null,
+    pushOnce: (layer, signal) => {
+      let done = pushes.get(layer.ref)
+      if (!done && registry && !onlyHere(layer)) {
+        done = retry(() => pushLayer(registry, layer, { engine, signal })).then((remote) =>
+          log(`Pushed ${layer.ref} as ${remote}`),
+        )
+        pushes.set(layer.ref, done)
+      }
+      return done ?? Promise.resolve()
+    },
   }
+}
+
+/** A layer only this machine can name, or one built on such a layer: never pulled or pushed. */
+const onlyHere = (layer: Layer) => !!layer.local || isLocalKey(layer.key)
+
+/**
+ * `layer` from the run's registry, when there is one and it has it: its image, or null to build
+ * it. A registry that lacks it or can't be reached only costs the build.
+ */
+async function pulled(layer: Layer, b: Builds, signal: AbortSignal): Promise<ImageInfo | null> {
+  if (!b.registry || b.refresh === 'force' || onlyHere(layer)) return null
+  const r = await pullLayer(b.registry, layer, { engine: b.engine, signal })
+  if (!r.pulled) {
+    b.log(`${r.remote} isn't in the registry (${r.reason}): building ${layer.ref}`)
+    return null
+  }
+  b.log(`Pulled ${layer.ref} from ${r.remote}`)
+  return imageInfo(layer.ref, b.engine)
 }
 
 const buildLogger = (root: string, ref: string) => {
@@ -115,7 +166,10 @@ const built = async (ref: string, engine: Engine) => {
   return info
 }
 
-/** reeval's image for the harness: built when it's missing, or when reeval's base context changed. */
+/**
+ * reeval's image for the harness: pulled or built when it's missing, or when reeval's base context
+ * changed.
+ */
 export const reevalImage = (
   harness: BakedHarness,
   root: string,
@@ -124,11 +178,15 @@ export const reevalImage = (
 ) => {
   const ref = imageFor(harness)
   const { engine } = b
+  const current = (info: ImageInfo | null) => info?.labels[LABEL.context] === contextHash()
   return b.once(ref, async () => {
     const info = await imageInfo(ref, engine)
-    const current = info?.labels[LABEL.context] === contextHash()
-    if (info && current && b.refresh !== 'force') return info
-    b.log(info && !current ? `Rebuilding ${ref}: reeval's base image changed` : `Building ${ref}`)
+    if (info && current(info) && b.refresh !== 'force') return info
+    const fetched = await pulled({ ref, key: reevalImageKey(harness) }, b, signal)
+    if (fetched && current(fetched)) return fetched
+    b.log(
+      info && !current(info) ? `Rebuilding ${ref}: reeval's base image changed` : `Building ${ref}`,
+    )
     const output = buildLogger(root, ref)
     const pull = b.refresh === 'force'
     await b.retry(() => buildImage(b.log, { harness, signal, output, pull, engine }))
@@ -147,25 +205,45 @@ async function harnessBase(
   root: string,
   signal: AbortSignal,
   b: Builds,
-): Promise<{ ref: string; info: ImageInfo; dockerfile: AttemptImage['dockerfile'] }> {
+): Promise<Layer & { info: ImageInfo; dockerfile: AttemptImage['dockerfile']; layers: Layer[] }> {
   const { engine } = b
-  const bake = (from: string) => {
+  /**
+   * `from` with the harness baked on. Its key is what `from` named when it was built, unless the
+   * caller knows a key that pins `from`'s content (a Dockerfile's tag).
+   */
+  const bake = async (from: string, key?: string): Promise<Layer & { info: ImageInfo }> => {
     const ref = harnessImageFor(harness, from)
-    return b.once(ref, async () => {
+    const info = await b.once(ref, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(ref, engine)
+      let now: Awaited<ReturnType<typeof resolveFrom>> | null = null
       if (cached && b.refresh === 'check') {
         // `reeval image build` refreshes a tag that moved upstream; a pinned digest never moves.
-        const now = await resolveFrom(from, signal, engine)
+        now = await resolveFrom(from, signal, engine)
         const was = cached.labels[LABEL.fromDigest]
         if ('digest' in now && was && now.digest !== was) {
           b.log(`Rebuilding ${ref}: ${from} moved upstream`)
         } else return cached
       } else if (cached) return cached
+      if (b.registry && b.refresh !== 'force') {
+        now ??= key ? null : await resolveFrom(from, signal, engine)
+        const pin =
+          key ?? (now && 'digest' in now && !now.local ? fromImageKey(ref, now.digest) : null)
+        const fetched = pin ? await pulled({ ref, key: pin }, b, signal) : null
+        if (fetched) return fetched
+      }
       const output = buildLogger(root, ref)
       const pull = b.refresh === 'force'
-      await b.retry(() => buildImage(b.log, { harness, from, signal, output, pull, engine }))
+      await b.retry(() =>
+        buildImage(b.log, { harness, from, signal, output, pull, engine, ...(key ? { key } : {}) }),
+      )
       return built(ref, engine)
     })
+    // An empty key label: built on a base only this machine has.
+    const own =
+      info.labels[LABEL.key] === ''
+        ? localKey(ref, info.id)
+        : fromImageKey(ref, info.labels[LABEL.fromDigest] ?? info.id)
+    return { ref, info, key: key ?? own }
   }
 
   if (sandbox.image) {
@@ -184,47 +262,68 @@ async function harnessBase(
         message: `${name} image ${image} not found. ${fn}({ image }) is used as is, so pull or build it first (or use from or dockerfile to have reeval build it).`,
       })
     })
-    return { ref: image, info, dockerfile: null }
+    return { ref: image, key: imageKey(info), info, dockerfile: null, layers: [] }
   }
   if (sandbox.from) {
-    const ref = harnessImageFor(harness, sandbox.from)
-    return { ref, info: await bake(sandbox.from), dockerfile: null }
+    const baked = await bake(sandbox.from)
+    return { ...baked, dockerfile: null, layers: [baked] }
   }
   if (sandbox.dockerfile) {
     const path = sandbox.dockerfile
-    const reevalBase = usesReevalBase(path)
-      ? (await reevalImage(harness, root, signal, b)).id
-      : null
-    const { tag, sha256 } = dockerfileTag(path, harness, reevalBase)
+    const layers: Layer[] = []
+    if (usesReevalBase(path)) {
+      await reevalImage(harness, root, signal, b)
+      layers.push({ ref: imageFor(harness), key: reevalImageKey(harness) })
+    }
+    const { tag, sha256 } = dockerfileTag(path, harness)
     const dockerfile = { path: projectPath(root, path), sha256 }
     const info = await b.once(tag, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(tag, engine)
       if (cached) return cached
+      // What its moving bases name now. A base behind a build arg, one that doesn't resolve or one
+      // only this machine has makes it this machine's alone: keyed on its id, with no key label.
+      const { bases: refs, opaque } = dockerfileBases(path)
+      const bases = await Promise.all(
+        refs.map(async (ref) => ({ ref, now: await resolveFrom(ref, signal, engine) })),
+      )
+      const shared = !opaque && bases.every(({ now }) => 'digest' in now && !now.local)
+      const key = shared
+        ? dockerfileKey(
+            tag,
+            bases.map(({ ref, now }) => ({ ref, digest: 'digest' in now ? now.digest : '' })),
+          )
+        : ''
+      const fetched = shared ? await pulled({ ref: tag, key }, b, signal) : null
+      if (fetched) return fetched
       b.log(`Building ${dockerfile.path} as ${tag}`)
       const output = buildLogger(root, tag)
       await b.retry(() =>
         buildDockerfile(path, {
           harness,
-          reevalBase,
           name: dockerfile.path,
           signal,
           output,
           force: true,
           pull: b.refresh === 'force',
           engine,
+          key,
         }),
       )
       return built(tag, engine)
     })
+    const key = info.labels[LABEL.key] || localKey(tag, info.id)
     // Built on this harness's image, so its CLI is already there. Any other base, including
     // another harness's image, gets this harness baked on.
+    layers.push({ ref: tag, key })
     if (info.labels[LABEL.harness] === harnessLabel(harness)) {
-      return { ref: tag, info, dockerfile }
+      return { ref: tag, key, info, dockerfile, layers }
     }
-    return { ref: harnessImageFor(harness, tag), info: await bake(tag), dockerfile }
+    const baked = await bake(tag, fromImageKey(harnessImageFor(harness, tag), key))
+    return { ...baked, dockerfile, layers: [...layers, baked] }
   }
-  const ref = imageFor(harness)
-  return { ref, info: await reevalImage(harness, root, signal, b), dockerfile: null }
+  const base = { ref: imageFor(harness), key: reevalImageKey(harness) }
+  const info = await reevalImage(harness, root, signal, b)
+  return { ...base, info, dockerfile: null, layers: [base] }
 }
 
 /** A plugin build baked into an attempt's image: which build, its layer, and where it left the plugin. */
@@ -276,19 +375,27 @@ export async function prepareImage(
     dockerfile: base.dockerfile,
     ...(sandbox.from ? { from: { ref: sandbox.from, digest } } : {}),
   }
-  let parent = { ref: base.ref, id: base.info.id }
+  const local = isLocalKey(base.key)
+  let parent = { ref: base.ref, key: base.key, id: base.info.id }
+  const layers = [...base.layers]
   if (steps.length) {
     const ref = installLayerTag(parent, steps)
+    const on = parent
     const info = await b.once(ref, async () => {
-      const cached = await imageInfo(ref, b.engine)
+      // Its tag is its parent's key, which a forced rebuild of the parent keeps.
+      const force = b.refresh === 'force'
+      const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
+      const fetched = await pulled({ ref, key: ref, local }, b, signal)
+      if (fetched) return fetched
       b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
       const output = buildLogger(root, ref)
       // The user's own commands: a failure is theirs, never retried.
-      await buildInstallLayer(parent, steps, { signal, output, engine: b.engine })
+      await buildInstallLayer(on, steps, { signal, output, engine: b.engine, force })
       return built(ref, b.engine)
     })
-    parent = { ref, id: info.id }
+    parent = { ref, key: ref, id: info.id }
+    layers.push({ ref, key: ref, local })
   }
   const builtPlugins: BuiltPlugin[] = []
   for (const source of plugins) {
@@ -297,12 +404,15 @@ export async function prepareImage(
     const on = parent
     const name = `the build of ${pluginCall(source, root)}`
     const info = await b.once(ref, async () => {
-      const cached = await imageInfo(ref, b.engine)
+      const force = b.refresh === 'force'
+      const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
+      const fetched = await pulled({ ref, key: ref, local }, b, signal)
+      if (fetched) return fetched
       b.log(`Building ${name} onto ${on.ref} as ${ref}`)
       const output = buildLogger(root, ref)
       // The user's own commands: a failure is theirs, never retried.
-      await buildPluginLayer(on, spec, { name, signal, output, engine: b.engine })
+      await buildPluginLayer(on, spec, { name, signal, output, engine: b.engine, force })
       return built(ref, b.engine)
     })
     builtPlugins.push({
@@ -311,8 +421,10 @@ export async function prepareImage(
       dir: pluginBuildDir(spec),
       commit: spec.commit,
     })
-    parent = { ref, id: info.id }
+    parent = { ref, key: ref, id: info.id }
+    layers.push({ ref, key: ref, local })
   }
+  if (b.push) for (const layer of layers) await b.pushOnce(layer, signal)
   return {
     ref: parent.ref,
     id: parent.id,

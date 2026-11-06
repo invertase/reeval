@@ -88,7 +88,7 @@ export async function runEngine(
   const workers = Math.max(1, Math.min(concurrency, specs.length))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
-  const matchesName = (e: { id: string; file: string; attempt?: EngineEval['attempt'] }) =>
+  const matchesName = (e: Named) =>
     (named.has(e.file) || looseFilters.some((f) => matchesFilter(e, f))) &&
     (nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f)))
   const run = options.run
@@ -158,6 +158,9 @@ export async function runEngine(
 }
 
 /** Who a collected test is: its eval id, attempt key, groups and name. */
+/** What a name or cell filter matches an eval on. */
+type Named = { id: string; file: string; attempt?: EngineEval['attempt'] }
+
 function identify(rel: string, test: WireTest) {
   const { attempt } = test
   const group = attempt?.groups ?? test.groups
@@ -175,7 +178,7 @@ const skipped = (test: WireTest) => test.mode === 'skip' || test.mode === 'todo'
  */
 function collectPlan(
   collected: Collected[],
-  matchesName: (e: ReturnType<typeof identify>) => boolean,
+  matchesName: (e: Named) => boolean,
   nameFilters: readonly string[],
   partial: boolean,
 ): CollectedPlan {
@@ -214,7 +217,7 @@ type RunInput = EngineOptions & {
   hide: string[]
   workers: number
   collected: Collected[]
-  matchesName: (e: ReturnType<typeof identify>) => boolean
+  matchesName: (e: Named) => boolean
 }
 
 type FileRun = {

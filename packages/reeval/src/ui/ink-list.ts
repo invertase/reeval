@@ -2,7 +2,9 @@
 // with cases shows `CASES_OPEN` of them, failed and running first, → again all of them), ← steps
 // back and esc folds it. While the run goes, Ctrl-C cancels it and so does q pressed twice; once
 // it has ended, q quits, taking the frame down so `tty.ts` can print the whole list into the
-// scrollback. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
+// scrollback. Following another process's run (`reeval attach`), q and Ctrl-C leave the list at
+// once and the run goes on; x pressed twice cancels the run, while the store says it can be
+// reached. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
 // else loads React.
 import { Box, render, Static, Text, useApp, useInput, useStdout } from 'ink'
 import {
@@ -18,7 +20,7 @@ import { type DetailLine, type StatusRow, shownDetail } from './status.ts'
 import type { ListState, ListStore } from './tty.ts'
 
 const FRAME_MS = 80
-/** How long a first q during the run waits for the second that cancels it. */
+/** How long a first q (x, following another process's run) waits for the second that cancels it. */
 export const CONFIRM_MS = 3000
 
 type Line = { text: string; row: number }
@@ -173,11 +175,20 @@ function windowOf(lines: Line[], selected: number, height: number): Line[] {
 export type ListAppProps = {
   store: ListStore
   colors: Colors
-  /** What Ctrl-C, or q pressed twice, does while the run goes: cancel it. */
-  cancel: () => void
+  /**
+   * Cancels the run: Ctrl-C or q pressed twice while it goes, or x pressed twice under `detach`,
+   * where without it there's no key that cancels. There it returns false when the run could not
+   * be reached after all.
+   */
+  cancel?: () => boolean | undefined
+  /**
+   * Set when the run is another process's: q and Ctrl-C call it while the run goes and take the
+   * list down, leaving the run alone.
+   */
+  detach?: () => void
 }
 
-export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElement {
+export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): ReactElement {
   const state = useSyncExternalStore(store.subscribe, store.get)
   const { exit } = useApp()
   const { stdout } = useStdout()
@@ -187,6 +198,8 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   const [frame, setFrame] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [quitting, setQuitting] = useState(false)
+  const [canceled, setCanceled] = useState(false)
+  const [refused, setRefused] = useState(false)
   const [size, setSize] = useState(() => sizeOf(stdout))
   const rows = rowsOf(state)
   const finished = state.finished
@@ -216,6 +229,10 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
     if (quitting) exit()
   }, [quitting, exit])
 
+  useEffect(() => {
+    if (state.quit) setQuitting(true)
+  }, [state.quit])
+
   // Once the run ends, the first failure (else the first eval with remarks) is selected and open.
   useEffect(() => {
     if (!finished) return
@@ -228,16 +245,35 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
     setFull(false)
   }, [finished, store])
 
+  const cancelable = !!detach && !!cancel && state.cancelable === true && !canceled
+
   useInput((input, key) => {
+    setRefused(false)
     if (finished && (input === 'q' || (key.ctrl && input === 'c'))) {
       setQuitting(true)
       return
     }
-    if (key.ctrl && input === 'c') return cancel()
-    if (input === 'q') {
-      if (confirming) cancel()
-      setConfirming(!confirming)
-      return
+    if (detach && !finished) {
+      if (input === 'q' || (key.ctrl && input === 'c')) {
+        detach()
+        setQuitting(true)
+        return
+      }
+      if (input === 'x' && cancelable) {
+        if (confirming) {
+          if (cancel?.() === false) setRefused(true)
+          else setCanceled(true)
+        }
+        setConfirming(!confirming)
+        return
+      }
+    } else if (!finished) {
+      if (key.ctrl && input === 'c') return cancel?.()
+      if (input === 'q') {
+        if (confirming) cancel?.()
+        setConfirming(!confirming)
+        return
+      }
     }
     const id = rows[selected]?.id ?? null
     // → opens an eval, and on an open one shows its full detail; ← steps back the same way.
@@ -274,7 +310,12 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
   const open = here && here.id === expanded ? here : undefined
   const more = open && !full && hasMore(open.detail)
   const step = more ? '→ more' : '→ open'
-  const keys = finished ? `↑↓ move · ${step} · ← close · q quit` : `↑↓ move · ${step} · q cancel`
+  const keys = finished
+    ? `↑↓ move · ${step} · ← close · q quit`
+    : detach
+      ? `↑↓ move · ${step} · q detach${cancelable ? ' · x cancel the run' : ''}`
+      : `↑↓ move · ${step} · q cancel`
+  const confirm = detach ? 'Press x again to cancel the run.' : 'Press q again to cancel the run.'
   // The phase spins while reeval waits on the run, and settles once it ends.
   const glyph = finished ? c.teal('◆') : c.teal(SPINNER[frame % SPINNER.length] ?? '◆')
   const head = state.phase ? [`  ${glyph}  ${state.phase}`, ' '] : []
@@ -288,7 +329,11 @@ export function ListApp({ store, colors: c, cancel }: ListAppProps): ReactElemen
           c.dim(finished.pointer),
         ]
       : [doneLine(c, state.counts)]),
-    confirming && !finished ? c.yellow('Press q again to cancel the run.') : c.dim(keys),
+    refused && !finished
+      ? c.yellow("The run can't be canceled from here now.")
+      : confirming && !finished && (cancelable || !detach)
+        ? c.yellow(confirm)
+        : c.dim(keys),
   ]
   // One line spare, so Ink never draws a frame as tall as the terminal (it clears the screen then).
   const height = Math.max(3, rowsTall - tall(head, columns) - tall(footer, columns) - 1)
@@ -335,7 +380,15 @@ export function mountList(o: MountOptions): {
   waitUntilExit: () => Promise<unknown>
   unmount: () => void
 } {
-  const app = render(h(ListApp, { store: o.store, colors: o.colors, cancel: o.cancel }), {
+  const props: ListAppProps = {
+    store: o.store,
+    colors: o.colors,
+    ...(o.cancel ? { cancel: o.cancel } : {}),
+    ...(o.detach ? { detach: o.detach } : {}),
+  }
+  // Only an interactive terminal mounts the list, so Ink draws it live even where it detects CI.
+  const app = render(h(ListApp, props), {
+    interactive: true,
     stdout: o.stdout,
     stdin: o.stdin,
     exitOnCtrlC: false,

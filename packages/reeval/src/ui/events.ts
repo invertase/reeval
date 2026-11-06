@@ -1,7 +1,8 @@
 // The terminal output's view of a run. The engine emits these events; nothing in ui/ imports the
 // engine or `@vitest/*`.
 import type { RunRecord } from '../history/types.ts'
-import type { PrepareEvent } from '../sandbox/preflight.ts'
+import type { PrepareTarget } from '../sandbox/preflight.ts'
+import type { PrepareFailure } from '../sandbox/provider.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
 import type { RunRemarks } from '../view/remarks.ts'
@@ -15,7 +16,7 @@ export type EvalResult = {
   group: string[]
   name: string
   /** Absent when the engine did not register an attempt for this result. */
-  attempt: AttemptMeta | undefined
+  attempt?: AttemptMeta
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
   errors: string[]
@@ -23,7 +24,7 @@ export type EvalResult = {
   errorName?: string
   /** `errors` as Vitest prints them (diff, code frame), with ANSI color codes. */
   formattedErrors: string[]
-  meta: EvalMeta | undefined
+  meta?: EvalMeta
   /** A placeholder (`evaluate.todo` or `group.todo`): no body; it's skipped and shown as todo. */
   todo?: true
   /**
@@ -134,8 +135,21 @@ export type RunHeader = {
   record?: string
 }
 
+/** A sandbox preflight prepares, as the terminal names it. */
+export type PrepareTargetView = Pick<PrepareTarget, 'kind' | 'key' | 'label' | 'setBy' | 'runWide'>
+
+/** Preflight's progress as the terminal shows it: plain data, without the prepared handles. */
+export type PrepareView =
+  | { state: 'start'; targets: PrepareTargetView[] }
+  | {
+      state: 'ready' | 'failed'
+      outcome:
+        | { target: PrepareTargetView; ok: true; ms: number }
+        | { target: PrepareTargetView; ok: false; failure: PrepareFailure; ms: number }
+    }
+
 /** What a line about an attempt needs to name it. */
-export type AttemptRef = { id: string; key: string; attempt: AttemptMeta | undefined }
+export type AttemptRef = { id: string; key: string; attempt?: AttemptMeta }
 
 export type ReevalEvent =
   | {
@@ -176,7 +190,7 @@ export type ReevalEvent =
   | { type: 'log'; at: number; key?: string; stream: 'stdout' | 'stderr'; text: string }
   | { type: 'eval-end'; at: number; result: EvalResult }
   /** Preflight preparing the sandboxes: the list, then each one ready or failed. */
-  | ({ type: 'prepare'; at: number } & PrepareEvent)
+  | ({ type: 'prepare'; at: number } & PrepareView)
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {
@@ -198,6 +212,8 @@ export interface Renderer {
   close(): void
   /** Resolves when the output is done with the terminal: the interactive list, once it's quit. */
   wait?(): Promise<void>
+  /** Takes the interactive list down with no key pressed, then prints it as `wait` does. */
+  dismiss?(): Promise<void>
 }
 
 /** Where output goes; `process.stdout` in the CLI, a capture in tests. */

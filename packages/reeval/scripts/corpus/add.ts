@@ -5,12 +5,12 @@
 //   pnpm build && pnpm --filter reeval corpus:add <name> [--note "why"]
 //     records scripts/corpus/project (the fake harness: a compare with questions, an eval with cases, judges, a
 //     failure, an infra error, todo and skipped evals, and a saved analysis) with this build, one run of
-//     about 3,000 lines
+//     about 3,000 lines, and its event stream
 //
 //   pnpm --filter reeval corpus:add <name> --from <project> [--from <project>…] [<runId>…] [--note "why"]
-//     copies runs (every one, or those named), their artifacts and the evals they ran from other
-//     projects, e.g. runs on real harnesses: recorded runs from evals/.history, and runs never
-//     recorded (the harness contract's) from .reeval/runs
+//     copies runs (every one, or those named), their artifacts, event streams and the evals they ran
+//     from other projects, e.g. runs on real harnesses: recorded runs from evals/.history, and runs
+//     never recorded (the harness contract's) from .reeval/runs
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -33,6 +33,8 @@ const RECIPE = join(PACKAGE_DIR, 'scripts/corpus/project')
 const CORPUS = join(PACKAGE_DIR, 'test/fixtures/records')
 const HISTORY = 'evals/.history'
 const SCRATCH = '.reeval/runs'
+/** Where `reeval run --events` writes each run's stream; an entry keeps them in `events/`. */
+const EVENTS = '.reeval/events'
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
 
 /** The corpus's own config: enough for every reader, and nothing that needs a key or Docker. */
@@ -87,7 +89,7 @@ function recordRecipe(): string {
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'corpus recipe')
-  reeval(dir, ['run', '--record'])
+  reeval(dir, ['run', '--record', '--events'])
   const [first] = runsIn(dir)
   reeval(dir, ['analyze', first as string, '--save'])
   return dir
@@ -169,6 +171,11 @@ function main(): number {
     cpSync(join(dir, `${runId}.json`), join(target, HISTORY, `${runId}.json`))
     if (existsSync(join(dir, runId))) {
       cpSync(join(dir, runId), join(target, HISTORY, runId), { recursive: true })
+    }
+    const stream = join(project, EVENTS, `${runId}.ndjson`)
+    if (existsSync(stream)) {
+      mkdirSync(join(target, 'events'), { recursive: true })
+      cpSync(stream, join(target, 'events', `${runId}.ndjson`))
     }
     for (const e of records[i].evals ?? []) files.set(e.file, join(project, e.file))
   }
