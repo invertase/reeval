@@ -1315,7 +1315,7 @@ describe('image recipes', () => {
     assert.equal(ignored('src/index.ts'), false)
   })
 
-  test("a Dockerfile's moving bases: FROM and COPY --from tags, not build args, stages, scratch or digests", () => {
+  test("a Dockerfile's moving bases: FROM, COPY --from and --mount tags; another build arg makes them opaque", () => {
     const file = join(tmp(), 'Dockerfile')
     const pinned = `debian@sha256:${'a'.repeat(64)}`
     writeFileSync(
@@ -1333,7 +1333,28 @@ describe('image recipes', () => {
         'FROM node:22',
       ].join('\n'),
     )
-    assert.deepEqual(dockerfileBases(file), ['node:22', 'python:3.12'])
+    assert.deepEqual(dockerfileBases(file), { bases: ['node:22', 'python:3.12'], opaque: false })
+    const more = join(tmp(), 'Dockerfile')
+    writeFileSync(
+      more,
+      'FROM \\\n  debian:12 AS one\nRUN --mount=type=bind,from=alpine:3,target=/a true\nCOPY --from=one /a /b\n',
+    )
+    assert.deepEqual(
+      dockerfileBases(more),
+      { bases: ['debian:12', 'alpine:3'], opaque: false },
+      'a continued line and a mount',
+    )
+    for (const text of [
+      'ARG BASE=node:22\nFROM ${BASE}\n',
+      'ARG REEVAL_BASE\nFROM $REEVAL_BASE\nCOPY --from=$TOOLS /a /b\n',
+      'FROM debian:12\nRUN --mount=type=cache,from=${CACHE},target=/c true\n',
+    ]) {
+      writeFileSync(more, text)
+      assert.equal(dockerfileBases(more).opaque, true, text)
+    }
+    // Canary: REEVAL_BASE is the one build arg reeval names itself.
+    writeFileSync(more, 'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\n')
+    assert.deepEqual(dockerfileBases(more), { bases: [], opaque: false })
     const tag = 'reeval-dockerfile:x-0123456789abcdef'
     assert.equal(dockerfileKey(tag, []), tag, 'nothing that moves: the tag is the key')
     assert.notEqual(

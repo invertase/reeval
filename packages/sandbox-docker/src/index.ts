@@ -33,7 +33,9 @@ export {
   imageKey,
   installLayerTag,
   installScript,
+  isLocalKey,
   type Layer,
+  localKey,
   PLATFORM,
   PLUGIN_BUILDS_DIR,
   type PluginBuildSpec,
@@ -136,7 +138,13 @@ export {
   WORKSPACE_DIR,
 } from './image.ts'
 export { MCP_TIMER } from './mcp-timer.ts'
-export { pullLayer, pushLayer, registryProblem, registryRef } from './registry.ts'
+export {
+  enginePlatform,
+  pullLayer,
+  pushLayer,
+  registryProblem,
+  registryRef,
+} from './registry.ts'
 export {
   createDockerSession,
   DEFAULT_LIMITS,

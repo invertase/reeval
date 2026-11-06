@@ -3,7 +3,7 @@
 // is a directory both machines share. The same inputs must give the same tags everywhere, and a
 // tag one machine pushed must be what another pulls instead of building.
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
@@ -67,6 +67,8 @@ if (args[0] === 'image' && args[1] === 'inspect') {
   const image = read(registry, args.at(-1))
   if (!image) fail('Error response from daemon: manifest unknown')
   write(local, args.at(-1), image)
+} else if (args[0] === 'version') {
+  process.stdout.write((process.env.FAKE_SERVER_PLATFORM ?? '') + '\\n')
 } else if (args[0] === 'buildx') {
   const digests = path.join(process.env.FAKE_STATE, machine + '-upstream.json')
   const digest = fs.existsSync(digests) ? JSON.parse(fs.readFileSync(digests, 'utf8'))[args.at(-1)] : null
@@ -88,7 +90,7 @@ function world() {
   mkdirSync(project)
   const env = { PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: state, FAKE_PLATFORM: PLATFORM }
   /** One machine: its own images, whose ids are its own, and the shared registry. */
-  const machine = (name: string) => {
+  const machine = (name: string, own: Record<string, string> = {}) => {
     const local = join(state, name)
     mkdirSync(local, { recursive: true })
     const seed = (ref: string, labels: Record<string, string>, dir = local) =>
@@ -124,7 +126,7 @@ function world() {
         } = {},
       ) => {
         const saved = { ...process.env }
-        Object.assign(process.env, env, { FAKE_MACHINE: name })
+        Object.assign(process.env, env, { FAKE_MACHINE: name }, own)
         try {
           return await prepareImage(
             { kind: 'docker', ...sandbox },
@@ -148,7 +150,9 @@ function world() {
       JSON.stringify({ labels, platform, id: `sha256:${'f'.repeat(64)}` }),
     )
   }
-  return { project, machine, publish }
+  const inRegistry = () =>
+    readdirSync(join(state, 'registry')).map((f) => decodeURIComponent(f.replace(/\.json$/, '')))
+  return { project, machine, publish, inRegistry }
 }
 
 describe('sandbox image tags are content keys', () => {
@@ -356,6 +360,93 @@ describe('sandbox image tags are content keys', () => {
     assert.equal(onC.base, onA.base, 'the same files are the same local tag')
     assert.notEqual(onC.ref, onA.ref, 'the install layer hashes the new key')
     assert.ok(c.builds().includes(onC.base), c.builds().join('\n'))
+  })
+  test("a Dockerfile whose bases can't all be named is this machine's alone, and so is every layer on it", async () => {
+    const node = `sha256:${'1'.repeat(64)}`
+    const cases = {
+      'FROM a build arg':
+        'ARG REEVAL_BASE\nARG BASE=node:22\nFROM ${BASE} AS tools\nFROM ${REEVAL_BASE}\nCOPY --from=tools /a /b\n',
+      'a continued COPY --from a build arg':
+        'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nCOPY \\\n  --from=$TOOLS /a /b\n',
+      'a RUN --mount from a build arg':
+        'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nRUN --mount=type=bind,from=${TOOLS},target=/t true\n',
+      "a base that doesn't resolve":
+        'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nCOPY --from=node:23 /a /b\n',
+    }
+    for (const [what, text] of Object.entries(cases)) {
+      const { project, machine, inRegistry } = world()
+      const dockerfile = join(project, 'tools', 'Dockerfile')
+      mkdirSync(join(project, 'tools'))
+      writeFileSync(dockerfile, text)
+      const registry = 'registry.test:5000/reeval'
+      const install = ['echo here']
+      const a = machine('a')
+      a.seedReeval()
+      a.upstream({ 'node:22': node })
+      const onA = await a.prepare({ dockerfile, install }, { registry, push: true })
+      const b = machine('b')
+      b.seedReeval()
+      b.upstream({ 'node:22': node })
+      const onB = await b.prepare({ dockerfile, install }, { registry })
+      assert.ok(b.builds().includes(onB.base), `${what}: b built the Dockerfile`)
+      assert.notEqual(
+        onB.ref,
+        onA.ref,
+        `${what}: the install layer hashes each machine's own image`,
+      )
+      assert.deepEqual(
+        inRegistry().filter((ref) => !ref.includes(reevalImage)),
+        [],
+        `${what}: nothing on it was pushed`,
+      )
+    }
+    // Canary: a resolved base and REEVAL_BASE alone, continued or not, are shared.
+    const { project, machine, inRegistry } = world()
+    const dockerfile = join(project, 'tools', 'Dockerfile')
+    mkdirSync(join(project, 'tools'))
+    writeFileSync(
+      dockerfile,
+      'ARG REEVAL_BASE\nFROM \\\n  ${REEVAL_BASE}\nRUN --mount=type=bind,from=node:22,target=/n true\n',
+    )
+    const a = machine('a')
+    a.seedReeval()
+    a.upstream({ 'node:22': node })
+    const onA = await a.prepare(
+      { dockerfile, install: ['echo here'] },
+      { registry: 'r.test/x', push: true },
+    )
+    assert.ok(
+      inRegistry().some((ref) => ref.includes(onA.ref)),
+      inRegistry().join('\n'),
+    )
+    const b = machine('b')
+    b.seedReeval()
+    b.upstream({ 'node:22': node })
+    assert.equal(
+      (await b.prepare({ dockerfile, install: ['echo here'] }, { registry: 'r.test/x' })).ref,
+      onA.ref,
+    )
+    assert.deepEqual(b.builds(), [])
+  })
+
+  test("a push is under the platform the engine builds for, not this process's", async () => {
+    const { machine, inRegistry } = world()
+    const registry = 'registry.test:5000/reeval'
+    const install = ['echo engine']
+    const remote = { FAKE_SERVER_PLATFORM: 'linux/riscv64', FAKE_PLATFORM: 'linux/riscv64' }
+    const a = machine('a', remote)
+    a.seedReeval()
+    const ref = (await a.prepare({ install }, { registry, push: true })).ref
+    assert.ok(inRegistry().includes(`${registry}/${ref}-linux-riscv64`), inRegistry().join('\n'))
+    // Another engine of that platform pulls it; this process's platform builds its own.
+    const b = machine('b', remote)
+    b.seedReeval()
+    await b.prepare({ install }, { registry })
+    assert.deepEqual(b.builds(), [])
+    const c = machine('c')
+    c.seedReeval()
+    await c.prepare({ install }, { registry })
+    assert.deepEqual(c.builds(), [ref])
   })
 })
 

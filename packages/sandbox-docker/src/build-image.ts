@@ -45,9 +45,9 @@ const OCI_ARCH: Record<string, string> = {
 }
 
 /**
- * The platform the engine builds and pulls for, as `docker image inspect` says it (`.Os/.Architecture`):
- * Linux on this machine's architecture, which Docker Desktop's and Podman's VMs share. Every
- * registry ref carries it, so an image built for one architecture is never another's.
+ * Linux on this process's architecture, as `docker image inspect` names a platform
+ * (`.Os/.Architecture`): what Docker Desktop's and Podman's VMs run, and the fallback when the
+ * engine doesn't say its own (`enginePlatform`).
  */
 export const PLATFORM = `linux/${OCI_ARCH[process.arch] ?? process.arch}`
 
@@ -421,7 +421,12 @@ export function contextHash(): string {
  * their tags hash instead of its image id. Builds aren't reproducible, so the id differs on each
  * machine; the key is the same wherever the inputs are.
  */
-export type Layer = { ref: string; key: string }
+export type Layer = {
+  ref: string
+  key: string
+  /** Built on an image only this machine can name ({@link localKey}): never pulled or pushed. */
+  local?: boolean
+}
 
 /**
  * reeval's image for a harness: its tag (the adapter) and its base's build context, whose `FROM` is
@@ -434,6 +439,15 @@ export const reevalImageKey = (harness: BakedHarness) => `${imageFor(harness)}+$
  * (or, for a base only this machine has, its image id, or a Dockerfile image's own key).
  */
 export const fromImageKey = (ref: string, digest: string) => `${ref}@${digest}`
+
+/**
+ * The key of an image only this machine can name, such as a Dockerfile built on a base that didn't
+ * resolve: its tag and local image id. Nothing keyed on one is pulled or pushed.
+ */
+export const localKey = (ref: string, id: string) => `${ref}@local:${id}`
+
+/** Whether `key` is a {@link localKey}, or a key built on one. */
+export const isLocalKey = (key: string) => key.includes('@local:')
 
 /**
  * An image reeval uses as is: its image id, which is content-addressed, so the same on every machine
@@ -473,8 +487,11 @@ export async function buildImage(
   const bootstrap = BOOTSTRAPS[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
+  // Empty on a base only this machine has, which nothing pulls, so a base's own label isn't kept.
+  const shared = !!resolved && 'local' in resolved && !resolved.local
   const key =
-    options.key ?? (from ? (digest ? fromImageKey(target, digest) : null) : reevalImageKey(harness))
+    options.key ??
+    (from ? (digest && shared ? fromImageKey(target, digest) : '') : reevalImageKey(harness))
   const previous = [
     (await imageInfo(target, engine))?.id,
     from ? null : (await imageInfo(base, engine))?.id,
@@ -544,7 +561,7 @@ export async function buildImage(
       [
         'commit',
         '--change',
-        `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}${key ? ` ${LABEL.key}="${key}"` : ''}`,
+        `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`} ${LABEL.key}="${key}"`,
         '--change',
         `WORKDIR ${SANDBOX_ROOT}`,
         // Not the bootstrap's user: Dockerfiles `FROM ${REEVAL_BASE}` build as root.
@@ -906,33 +923,44 @@ export function dockerfileTag(
 }
 
 /**
- * The images a Dockerfile's `FROM` and `COPY --from` lines name by a tag that can move: not
- * `${REEVAL_BASE}` or any other build arg, an earlier stage, `scratch` or a digest-pinned image.
+ * The images a Dockerfile's `FROM`, `COPY --from` and `--mount=…,from=` name by a tag that can
+ * move: not `${REEVAL_BASE}`, an earlier stage, `scratch` or a digest-pinned image. `opaque` when
+ * one names an image through any other build arg, which only the build resolves.
  */
-export function dockerfileBases(dockerfile: string): string[] {
+export function dockerfileBases(dockerfile: string): { bases: string[]; opaque: boolean } {
   const stages = new Set<string>()
   const bases: string[] = []
+  let opaque = false
+  const reevalBase = new RegExp(`^\\$\\{?${REEVAL_BASE_ARG}\\}?$`)
   const add = (image: string) => {
     const name = image.toLowerCase()
-    if (image.includes('$') || stages.has(name) || name === 'scratch' || /^\d+$/.test(name)) return
+    if (image.includes('$')) {
+      if (!reevalBase.test(image)) opaque = true
+      return
+    }
+    if (stages.has(name) || name === 'scratch' || /^\d+$/.test(name)) return
     if (/@sha256:[0-9a-f]{64}$/.test(image) || bases.includes(image)) return
     bases.push(image)
   }
-  for (const line of readFileSync(dockerfile, 'utf8').split('\n')) {
+  const text = readFileSync(dockerfile, 'utf8').replace(/\\[ \t]*\r?\n/g, ' ')
+  for (const line of text.split('\n')) {
+    if (/^\s*#/.test(line)) continue
     const from = /^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?/i.exec(line)
     if (from?.[1]) {
       add(from[1])
       if (from[2]) stages.add(from[2].toLowerCase())
     }
-    const copy = /^\s*COPY\s.*--from=(\S+)/i.exec(line)
-    if (copy?.[1]) add(copy[1])
+    if (!/^\s*(?:COPY|ADD|RUN)\s/i.test(line)) continue
+    for (const m of line.matchAll(/(?:^|\s)--from=(\S+)/gi)) if (m[1]) add(m[1])
+    for (const m of line.matchAll(/--mount=\S*?\bfrom=([^,\s]+)/gi)) if (m[1]) add(m[1])
   }
-  return bases
+  return { bases, opaque }
 }
 
 /**
  * A Dockerfile image's content key: its tag, plus the digest each of its {@link dockerfileBases}
- * named when it was built, so a base that moved upstream is another image.
+ * named when it was built, so a base that moved upstream is another image. One whose bases can't all
+ * be named this way is keyed on its local image id instead ({@link localKey}).
  */
 export const dockerfileKey = (
   tag: string,

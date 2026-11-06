@@ -21,8 +21,10 @@ import {
   imageInfo,
   imageKey,
   installLayerTag,
+  isLocalKey,
   LABEL,
   type Layer,
+  localKey,
   type PluginBuildSpec,
   pluginBuildDir,
   pluginLayerTag,
@@ -116,7 +118,7 @@ export function createBuilds(options: Partial<Omit<Builds, 'once' | 'pushOnce'>>
     push: !!options.push && registry !== null,
     pushOnce: (layer, signal) => {
       let done = pushes.get(layer.ref)
-      if (!done && registry) {
+      if (!done && registry && !onlyHere(layer)) {
         done = retry(() => pushLayer(registry, layer, { engine, signal })).then((remote) =>
           log(`Pushed ${layer.ref} as ${remote}`),
         )
@@ -127,12 +129,15 @@ export function createBuilds(options: Partial<Omit<Builds, 'once' | 'pushOnce'>>
   }
 }
 
+/** A layer only this machine can name, or one built on such a layer: never pulled or pushed. */
+const onlyHere = (layer: Layer) => !!layer.local || isLocalKey(layer.key)
+
 /**
  * `layer` from the run's registry, when there is one and it has it: its image, or null to build
  * it. A registry that lacks it or can't be reached only costs the build.
  */
 async function pulled(layer: Layer, b: Builds, signal: AbortSignal): Promise<ImageInfo | null> {
-  if (!b.registry || b.refresh === 'force') return null
+  if (!b.registry || b.refresh === 'force' || onlyHere(layer)) return null
   const r = await pullLayer(b.registry, layer, { engine: b.engine, signal })
   if (!r.pulled) {
     b.log(`${r.remote} isn't in the registry (${r.reason}): building ${layer.ref}`)
@@ -233,7 +238,12 @@ async function harnessBase(
       )
       return built(ref, engine)
     })
-    return { ref, info, key: key ?? fromImageKey(ref, info.labels[LABEL.fromDigest] ?? info.id) }
+    // An empty key label: built on a base only this machine has.
+    const own =
+      info.labels[LABEL.key] === ''
+        ? localKey(ref, info.id)
+        : fromImageKey(ref, info.labels[LABEL.fromDigest] ?? info.id)
+    return { ref, info, key: key ?? own }
   }
 
   if (sandbox.image) {
@@ -270,18 +280,19 @@ async function harnessBase(
     const info = await b.once(tag, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(tag, engine)
       if (cached) return cached
-      // What its moving bases name now: a base only this machine has keeps it off the registry.
+      // What its moving bases name now. A base behind a build arg, one that doesn't resolve or one
+      // only this machine has makes it this machine's alone: keyed on its id, with no key label.
+      const { bases: refs, opaque } = dockerfileBases(path)
       const bases = await Promise.all(
-        dockerfileBases(path).map(async (ref) => ({
-          ref,
-          now: await resolveFrom(ref, signal, engine),
-        })),
+        refs.map(async (ref) => ({ ref, now: await resolveFrom(ref, signal, engine) })),
       )
-      const shared = bases.every(({ now }) => 'digest' in now && !now.local)
-      const key = dockerfileKey(
-        tag,
-        bases.map(({ ref, now }) => ({ ref, digest: 'digest' in now ? now.digest : 'unresolved' })),
-      )
+      const shared = !opaque && bases.every(({ now }) => 'digest' in now && !now.local)
+      const key = shared
+        ? dockerfileKey(
+            tag,
+            bases.map(({ ref, now }) => ({ ref, digest: 'digest' in now ? now.digest : '' })),
+          )
+        : ''
       const fetched = shared ? await pulled({ ref: tag, key }, b, signal) : null
       if (fetched) return fetched
       b.log(`Building ${dockerfile.path} as ${tag}`)
@@ -300,7 +311,7 @@ async function harnessBase(
       )
       return built(tag, engine)
     })
-    const key = info.labels[LABEL.key] ?? tag
+    const key = info.labels[LABEL.key] || localKey(tag, info.id)
     // Built on this harness's image, so its CLI is already there. Any other base, including
     // another harness's image, gets this harness baked on.
     layers.push({ ref: tag, key })
@@ -364,6 +375,7 @@ export async function prepareImage(
     dockerfile: base.dockerfile,
     ...(sandbox.from ? { from: { ref: sandbox.from, digest } } : {}),
   }
+  const local = isLocalKey(base.key)
   let parent = { ref: base.ref, key: base.key, id: base.info.id }
   const layers = [...base.layers]
   if (steps.length) {
@@ -374,7 +386,7 @@ export async function prepareImage(
       const force = b.refresh === 'force'
       const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
-      const fetched = await pulled({ ref, key: ref }, b, signal)
+      const fetched = await pulled({ ref, key: ref, local }, b, signal)
       if (fetched) return fetched
       b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
       const output = buildLogger(root, ref)
@@ -383,7 +395,7 @@ export async function prepareImage(
       return built(ref, b.engine)
     })
     parent = { ref, key: ref, id: info.id }
-    layers.push(parent)
+    layers.push({ ref, key: ref, local })
   }
   const builtPlugins: BuiltPlugin[] = []
   for (const source of plugins) {
@@ -395,7 +407,7 @@ export async function prepareImage(
       const force = b.refresh === 'force'
       const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
-      const fetched = await pulled({ ref, key: ref }, b, signal)
+      const fetched = await pulled({ ref, key: ref, local }, b, signal)
       if (fetched) return fetched
       b.log(`Building ${name} onto ${on.ref} as ${ref}`)
       const output = buildLogger(root, ref)
@@ -410,7 +422,7 @@ export async function prepareImage(
       commit: spec.commit,
     })
     parent = { ref, key: ref, id: info.id }
-    layers.push(parent)
+    layers.push({ ref, key: ref, local })
   }
   if (b.push) for (const layer of layers) await b.pushOnce(layer, signal)
   return {

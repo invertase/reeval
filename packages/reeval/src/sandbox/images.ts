@@ -16,6 +16,7 @@ import {
   installLayerTag,
   isTransient,
   LABEL,
+  localKey,
   pluginBuildKey,
   pluginLayerTag,
   REEVAL_BASE_ARG,
@@ -192,10 +193,14 @@ async function fromStatus(
 ): Promise<Pick<Stage, 'status' | 'detail'> & { key: string | null }> {
   const [cached, now] = await Promise.all([look(ref, engine), resolveFrom(from, undefined, engine)])
   if (cached.error) return { status: 'unknown', detail: cached.error, key: null }
+  // Unbuilt, only a digest-pinned `from` has a key the plan can say without asking a registry.
+  const pinned = /@(sha256:[0-9a-f]{64})$/.exec(from)?.[1]
   const key = cached.info
-    ? fromImageKey(ref, cached.info.labels[LABEL.fromDigest] ?? cached.info.id)
-    : 'digest' in now
-      ? fromImageKey(ref, now.digest)
+    ? cached.info.labels[LABEL.key] === ''
+      ? localKey(ref, cached.info.id)
+      : fromImageKey(ref, cached.info.labels[LABEL.fromDigest] ?? cached.info.id)
+    : pinned
+      ? fromImageKey(ref, pinned)
       : null
   return { ...fromStanding(from, cached.info, now), key }
 }
@@ -289,8 +294,12 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     const { tag } = dockerfileTag(sandbox.dockerfile, harness)
     const built = await exists(tag)
     // Its key, from the built image, or else the tag when no base of it can move before the build.
-    const key =
-      built.info?.labels[LABEL.key] ?? (dockerfileBases(sandbox.dockerfile).length ? null : tag)
+    const moving = dockerfileBases(sandbox.dockerfile)
+    const key = built.info
+      ? built.info.labels[LABEL.key] || localKey(tag, built.info.id)
+      : moving.bases.length || moving.opaque
+        ? null
+        : tag
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,

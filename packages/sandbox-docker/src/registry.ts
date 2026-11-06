@@ -41,8 +41,22 @@ const firstLine = (stderr: string) =>
     ?.replace(/^Error(?: response from daemon)?: /, '') ?? ''
 
 /**
+ * The platform the engine builds and pulls for, as its server says it (a remote `DOCKER_HOST`, or
+ * x64 Node under Rosetta, can differ from this process's), or {@link PLATFORM} when it doesn't say.
+ */
+export async function enginePlatform(engine: Engine = 'docker'): Promise<string> {
+  const args =
+    engine === 'podman'
+      ? ['info', '--format', '{{.Host.OS}}/{{.Host.Arch}}']
+      : ['version', '--format', '{{.Server.Os}}/{{.Server.Arch}}']
+  const r = await docker(args, { engine }).catch(() => null)
+  const said = r?.exitCode === 0 ? r.stdout.toString('utf8').trim() : ''
+  return /^[a-z0-9]+\/[a-z0-9]+$/.test(said) ? said : PLATFORM
+}
+
+/**
  * Pulls `layer` from `registry` and tags it as its local ref, once it's checked: its
- * {@link LABEL.key} must be the layer's key and its platform {@link PLATFORM}. `pulled: false` with
+ * {@link LABEL.key} must be the layer's key and its platform the engine's ({@link enginePlatform}). `pulled: false` with
  * the reason when the registry doesn't have it, can't be reached or has another image under the
  * ref: the caller builds it instead. The registry is otherwise trusted: anyone who can push to it
  * chooses what a matching tag holds.
@@ -53,7 +67,8 @@ export async function pullLayer(
   options: Options = {},
 ): Promise<{ pulled: true; remote: string } | { pulled: false; remote: string; reason: string }> {
   const { engine, signal } = options
-  const remote = registryRef(registry, layer)
+  const platform = await enginePlatform(engine)
+  const remote = registryRef(registry, layer, platform)
   const pull = await docker(['pull', '--quiet', remote], { engine, signal }).catch(
     (error: Error) => ({ exitCode: 1, stderr: error.message }),
   )
@@ -72,11 +87,11 @@ export async function pullLayer(
           : `it has no ${LABEL.key} label`,
       }
     }
-    if (info?.platform !== PLATFORM) {
+    if (info?.platform !== platform) {
       return {
         pulled: false,
         remote,
-        reason: `it's for ${info?.platform ?? 'an unknown platform'}, not ${PLATFORM}`,
+        reason: `it's for ${info?.platform ?? 'an unknown platform'}, not ${platform}`,
       }
     }
     const tag = await docker(['tag', remote, layer.ref], { engine, signal })
@@ -89,7 +104,10 @@ export async function pullLayer(
   }
 }
 
-/** Pushes `layer` to `registry` under {@link registryRef}, which it returns. */
+/**
+ * Pushes `layer` to `registry` under {@link registryRef} for the platform the image says it's for
+ * (or the engine's), and returns that ref.
+ */
 export async function pushLayer(
   registry: string,
   layer: Layer,
@@ -97,7 +115,8 @@ export async function pushLayer(
 ): Promise<string> {
   const { engine, signal } = options
   const { bin } = engineSpec(engine)
-  const remote = registryRef(registry, layer)
+  const own = (await imageInfo(layer.ref, engine).catch(() => null))?.platform
+  const remote = registryRef(registry, layer, own ?? (await enginePlatform(engine)))
   const tag = await docker(['tag', layer.ref, remote], { engine, signal })
   if (tag.exitCode !== 0) {
     throw new Error(`${bin} tag ${layer.ref} ${remote} failed: ${firstLine(tag.stderr)}`)
