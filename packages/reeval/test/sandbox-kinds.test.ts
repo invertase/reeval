@@ -129,7 +129,7 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: ['cursor'],
+      harnesses: 'all',
     })
   })
 
@@ -166,7 +166,6 @@ describe('sandbox kinds', () => {
 
 describe('which sandbox a real harness runs in', () => {
   const cursor = { kind: 'cursor', model: 'composer-2.5' } as const
-  const claude = { kind: 'claude-code', model: 'claude-haiku-5-5' } as const
 
   test('one with a harness session that brokers, on a platform its bootstrap installs', () => {
     assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, docker()), undefined)
@@ -183,17 +182,13 @@ describe('which sandbox a real harness runs in', () => {
     )
   })
 
-  test('Boat runs the harnesses verified on it, and refuses the rest naming the bake', () => {
-    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, boat()), undefined)
-    assert.equal(unverifiedHarness(cursor, boat()), undefined)
-    assert.equal(unverifiedHarness(claude, docker()), undefined)
+  test('Boat runs every harness, each of whose bootstraps installs for Linux', () => {
+    for (const kind of Object.keys(AGENTS) as (keyof typeof AGENTS)[]) {
+      const harness = { kind, model: 'm' } as HarnessDescriptor
+      assert.equal(agentSandboxProblem(harness, AGENTS[kind], boat()), undefined, kind)
+      assert.equal(unverifiedHarness(harness, boat()), undefined, kind)
+    }
     assert.equal(unverifiedHarness({ kind: 'fake' }, boat()), undefined)
-    const refused = unverifiedHarness(claude, boat())
-    assert.equal(
-      refused,
-      "The Claude Code harness doesn't run in the boat sandbox yet: it runs Cursor so far. Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
-    )
-    assert.equal(agentSandboxProblem(claude, AGENTS['claude-code'], boat()), refused)
   })
 
   test('Tart runs every harness, each of whose bootstraps installs for macOS', () => {
