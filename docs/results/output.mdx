@@ -24,7 +24,7 @@ Each line is an icon, the evaluation's name and `N of M runs passed`: `✓` pass
 
 `Done in` gives the run's time, then the tally, which omits zeros, as in `2 failed · 1 passed · 1 infra error`. A failure outside any evaluation prints first, as `error:`, and counts as a `run error`. `Browse it:` names the studio and the run's `summary.md` file. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
 
-On a terminal outside CI, unless `--ui` names a mode, the list draws during the run and stays up after: ↑ ↓ move, → opens an evaluation and, on an open one (`→ more`), shows what `-v` adds, enter toggles it, or opens an attempt's timeline, logs and errors, ← steps back, escape folds it, and `q` quits, leaving the list in your scrollback.
+On a terminal outside CI, unless `--ui` names a mode, the list draws while the run goes and stays up once it ends: ↑ and ↓ move, → opens an evaluation and, on an open one (`→ more`), shows what `-v` adds, enter opens or closes it (attempts too), ← steps back, escape folds it, and `q` quits, leaving the list in your scrollback.
 
 An open evaluation with cases shows its case table live. → shows five, failed and running first, and `7 cases hidden, → to show`; → again shows all.
 

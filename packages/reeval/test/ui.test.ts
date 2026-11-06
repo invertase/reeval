@@ -1398,6 +1398,81 @@ test("the interactive list opens an attempt's pane on what its events said: time
   }
 })
 
+test("nothing the interactive list draws shows a secret: a check's command, a log line, an eval's name", async () => {
+  const token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
+  const written: string[] = []
+  const stdout = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    columns: 100,
+    rows: 40,
+    write: (chunk: string, cb?: () => void) => {
+      written.push(String(chunk))
+      cb?.()
+      return true
+    },
+  })
+  const stdin = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    data: null as string | null,
+    setEncoding: () => {},
+    setRawMode: () => {},
+    resume: () => {},
+    pause: () => {},
+    ref: () => {},
+    unref: () => {},
+    read() {
+      const { data } = this
+      this.data = null
+      return data
+    },
+    type(data: string) {
+      this.data = data
+      this.emit('readable')
+      this.emit('data', data)
+    },
+  })
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: stdout as never,
+    stdin: stdin as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+  })
+  const name = `pushes with ${token}`
+  const events: ReevalEvent[] = [
+    interleaved[0] as ReevalEvent,
+    {
+      type: 'collected',
+      at: T0,
+      file: 'evals/hello.eval.ts',
+      evals: [{ id: GREET, key: keyOf(GREET), group: [], name, skipped: false }],
+    },
+    { type: 'eval-start', at: s(0), id: GREET, key: keyOf(GREET), attempt: attempt(name, []) },
+    progress(GREET, s(1), { kind: 'check-start', command: `echo ${token} && sleep 40` }),
+    { type: 'log', at: s(2), key: keyOf(GREET), stream: 'stdout', text: `token=${token}\n` },
+  ]
+  try {
+    for (const e of events) renderer.onEvent(e)
+    await sleep(100)
+    for (const key of ['\r', '\u001B[B', '\r']) {
+      stdin.type(key)
+      await sleep(50)
+    }
+    const all = written.join('')
+    assert.match(all, /Timeline/, 'the pane is open')
+    assert.match(all, /\$ echo \[REDACTED\] && sleep 40/)
+    assert.match(all, /token=\[REDACTED\]/)
+    assert.match(all, /pushes with \[REDACTED\]/)
+    assert.ok(!all.includes(token.slice(4, 20)), 'no part of the token is drawn')
+  } finally {
+    renderer.close()
+    await sleep(50)
+  }
+})
+
 describe('reeval attach', () => {
   /** What a renderer draws from `events`, as `reeval run` feeds them. */
   const direct = (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {

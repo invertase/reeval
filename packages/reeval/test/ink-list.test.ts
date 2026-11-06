@@ -3,8 +3,16 @@ import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { render } from 'ink-testing-library'
 import { createElement as h } from 'react'
-import { AttemptLog, LOG_LINES_MAX, paneLines, TIMELINE_MAX } from '../src/ui/attempt-pane.ts'
-import { colors } from '../src/ui/colors.ts'
+import {
+  AttemptLog,
+  fit,
+  KEPT_MAX,
+  LOG_LINES_MAX,
+  paneLines,
+  sanitize,
+  TIMELINE_MAX,
+} from '../src/ui/attempt-pane.ts'
+import { colors, stripAnsi } from '../src/ui/colors.ts'
 import { endText, startText } from '../src/ui/header.ts'
 import { CONFIRM_MS, doneLine, frameLines, ListApp, openDetail, wrap } from '../src/ui/ink-list.ts'
 import { LiveList, SPINNER } from '../src/ui/list.ts'
@@ -1119,4 +1127,72 @@ test("an attempt's pane keeps its last LOG_LINES_MAX log lines and TIMELINE_MAX 
   assert.ok(lines.includes('    3 earlier lines not kept'), 'so do the logs')
   assert.ok(!lines.includes('    line 2') && lines.includes('    line 3'))
   assert.equal(lines.filter((l) => /turn \d+ started/.test(l)).length, TIMELINE_MAX)
+})
+
+test("an attempt's pane masks what it keeps before it breaks a line, so no break splits a secret", () => {
+  const token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
+  const log = new AttemptLog()
+  log.log('k', 'stdout', `${'x'.repeat(30)}${token}\n`)
+  log.progress('k', { at: T0, kind: 'check-start', command: `curl -H ${token}` })
+  const lines = paneLines(c, 'a', { depth: 0, text: 'fake #1' }, log.get('k'), 40).join('\n')
+  assert.ok(!lines.includes('A1b2C3d4'), lines)
+  assert.match(lines, /\[REDACTED\]/)
+})
+
+test('fit breaks by display width, between graphemes, and carries a color onto the next line', () => {
+  const red = colors(true)
+  assert.deepEqual(fit('日本語のテキスト', 6), ['日本語', 'のテキ', 'スト'])
+  assert.deepEqual(fit('👍🏽👍🏽👍🏽', 4), ['👍🏽👍🏽', '👍🏽'])
+  const lines = fit(`ok ${red.red('abcdef')} done`, 6)
+  assert.deepEqual(
+    lines.map((l) => stripAnsi(l)),
+    ['ok abc', 'def do', 'ne'],
+  )
+  assert.equal(lines[0], 'ok \x1b[31mabc\x1b[0m', 'a broken line closes its color')
+  assert.ok(lines[1]?.startsWith('\x1b[31mdef\x1b[39m'), 'and the next one opens it again')
+})
+
+test('a log line keeps its colors and loses every other control: cursor moves, titles, bells, \\r', () => {
+  const esc = '\x1b'
+  assert.equal(
+    sanitize(
+      `${esc}[31mred${esc}[0m${esc}[2K${esc}[1A${esc}]0;title\x07 a\rb\x07\tc${esc}P1$r${esc}\\${esc}7`,
+    ),
+    `${esc}[31mred${esc}[0m ab    c`,
+  )
+})
+
+test('past KEPT_MAX in all, the attempts that ended first lose their timeline and logs', () => {
+  const log = new AttemptLog()
+  const end = (key: string) =>
+    log.end({
+      id: key,
+      key,
+      file: 'f',
+      group: [],
+      name: key,
+      state: 'passed',
+      durationMs: 1,
+      errors: [],
+      formattedErrors: [],
+    })
+  const lines = Array.from({ length: LOG_LINES_MAX }, (_, i) => `l${i}`).join('\n')
+  const attempts = Math.ceil(KEPT_MAX / LOG_LINES_MAX) + 1
+  for (let i = 0; i < attempts; i++) {
+    log.log(`a${i}`, 'stdout', lines)
+    end(`a${i}`)
+  }
+  log.log('running', 'stdout', 'one more')
+  assert.equal(log.get('a0')?.logs.length, 0)
+  assert.equal(log.get('a0')?.logsDropped, LOG_LINES_MAX)
+  assert.equal(
+    log.get(`a${attempts - 1}`)?.logs.length,
+    LOG_LINES_MAX,
+    'the last to end keeps its own',
+  )
+  assert.equal(log.get('running')?.logs.length, 1, 'a running attempt keeps its own')
+  const kept = Array.from({ length: attempts }, (_, i) => log.get(`a${i}`)?.logs.length ?? 0)
+  assert.ok(kept.reduce((a, b) => a + b, 0) + 1 <= KEPT_MAX)
+  const pane = paneLines(c, 'a', { depth: 0, text: 'fake #1' }, log.get('a0'), 80)
+  assert.ok(pane.includes(`    ${LOG_LINES_MAX} earlier lines not kept`))
 })

@@ -2,6 +2,7 @@ import { parseDuration } from '../config.ts'
 import type { ResolvedEnvironment } from '../environment/resolve.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import type { PlannedAttempt } from '../options.ts'
+import { redactFields } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { sandboxKind } from '../sandbox/kinds.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
@@ -150,7 +151,7 @@ export function createAttempt(
     get ended() {
       return ended
     },
-    report: (update) => progress({ at: Date.now(), ...update }),
+    report: (update) => progress({ at: Date.now(), ...redactFields(update, ['kind']) }),
     async timed(phase, fn) {
       const start = performance.now()
       try {
