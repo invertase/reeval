@@ -42,11 +42,10 @@ import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
-import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
-import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
+import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
 import { buildBoatVmImage, dockerMachines, type FakeBoat, fakeBoat } from './support/boat.ts'
 import { seedModelsDev } from './support/cost.ts'
 import {
@@ -1131,6 +1130,18 @@ export const features: Feature[] = [
     record: ({ run, runDir }) => {
       assert.deepEqual(landed(run)?.env.brokered, ['API_KEY'])
       assert.equal(filesContaining(runDir, TOKEN), '')
+      boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/boat-installs-harness',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected '1' to be '2'/,
+    record: ({ run }) => {
+      const turns = run.evals.flatMap((e) => e.attempts).flatMap((a) => a.turns)
+      assert.equal(turns.length, 2, 'both agents started, inside their 2s')
       boatCleanedUp(run)
     },
   },
@@ -4897,6 +4908,47 @@ describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'do
 // Real attempts run one at a time, each within its own timeout.
 describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
+test("boat(): a harness install that fails is the attempt's infra error, and its VM is deleted", {
+  skip: skipTier('docker'),
+  timeout: 180_000,
+}, async () => {
+  buildBoatVmImage()
+  const p = await project('boat-install-fails', {
+    'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { boat } from 'reeval/sandbox/boat'
+export default defineConfig({
+  harnesses: fakeHarness({ bootstrap: 'echo no mirror >&2; exit 7', script: [[{ exec: 'true' }]] }),
+  sandbox: boat(),
+  egress: 'allow-all',
+})
+`,
+    'evals/a.eval.ts': `
+import { evaluate } from 'reeval'
+evaluate('installs', async (c) => {
+  await c.send('hi')
+})
+`,
+  })
+  const r = await runCli(p.dir, ['run'], {
+    env: { BOAT_BASE_URL: boatApi.url, BOAT_API_KEY: boatApi.key },
+    timeoutMs: 150_000,
+  })
+  assert.equal(r.code, 3, r.stdout + r.stderr)
+  const { run, evals } = readRun(p.dir)
+  assert.equal(evals[0]?.error?.kind, 'infra', JSON.stringify(evals[0]?.error))
+  assert.match(
+    String(evals[0]?.error?.message),
+    /^Installing the fake agent's bootstrap in Boat sandbox bx_\w+ failed: The fake agent's bootstrap exited 7: no mirror$/,
+  )
+  assert.ok(
+    boatApi.requests.some((q) => /^DELETE \/sandboxes\/bx_\w+$/.test(q.call)),
+    'the VM was deleted',
+  )
+  boatCleanedUp(run)
+})
+
 test('every feature fixture is in the table, with one check and a canary', () => {
   const root = join(testDir, 'features')
   const dirs = readdirSync(root, { withFileTypes: true })
@@ -4911,9 +4963,9 @@ test('every feature fixture is in the table, with one check and a canary', () =>
   const names = features.map(rowName)
   assert.deepEqual(names, [...new Set(names)], 'every row has its own name')
   assert.deepEqual(
-    BAKED_HARNESSES.filter((h) => takesHarness(capabilitiesOf({ kind: 'tart', image: 'i' }), h)),
+    [...BAKED_HARNESSES],
     TART_HARNESSES,
-    "tart()'s harnesses are the tart-brokered-agent rows",
+    'every harness has a tart-brokered-agent row',
   )
   for (const dir of dirs) {
     const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))

@@ -14,6 +14,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { redactSecrets } from '../redact.ts'
 import { type Colors, stripAnsi } from './colors.ts'
 import { detailSegments, nameWidth, paintIcon, type Segment, SPINNER } from './list.ts'
 import { type DetailLine, type StatusRow, shownDetail } from './status.ts'
@@ -370,6 +371,26 @@ const sizeOf = (stdout: NodeJS.WritableStream) => {
   return { rows: rows || 24, columns: columns || 80 }
 }
 
+/**
+ * `stdout` with every write masked: Ink writes to the terminal itself, past the renderer's masked
+ * output, and this is the one place all of the list's text goes through.
+ */
+function masking(stdout: NodeJS.WriteStream): NodeJS.WriteStream {
+  return new Proxy(stdout, {
+    get(target, prop) {
+      if (prop === 'write') {
+        return (chunk: unknown, ...rest: unknown[]) =>
+          (target.write as (...a: unknown[]) => boolean)(
+            typeof chunk === 'string' ? redactSecrets(chunk) : chunk,
+            ...rest,
+          )
+      }
+      const value = Reflect.get(target, prop, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+}
+
 export type MountOptions = ListAppProps & {
   stdout: NodeJS.WriteStream
   stdin: NodeJS.ReadStream
@@ -389,7 +410,7 @@ export function mountList(o: MountOptions): {
   // Only an interactive terminal mounts the list, so Ink draws it live even where it detects CI.
   const app = render(h(ListApp, props), {
     interactive: true,
-    stdout: o.stdout,
+    stdout: masking(o.stdout),
     stdin: o.stdin,
     exitOnCtrlC: false,
     patchConsole: true,

@@ -1854,8 +1854,17 @@ async function executeRun(
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancelable: (cancel) => {
-        let first: { signal: NodeJS.Signals; at: number; passedOn?: boolean } | undefined
-        const onSignal = (signal: NodeJS.Signals) => {
+        let first:
+          | { signal: NodeJS.Signals; at: number; passedOn?: boolean; attach?: boolean }
+          | undefined
+        const onSignal = (signal: NodeJS.Signals, attach: boolean) => {
+          // A Ctrl-C this soon after attach's cancel is the same cancel: two senders' signals
+          // reach the event loop in either order, so it takes the cancel's place as the first press.
+          if (first?.attach && !attach && Date.now() - first.at < SAME_PRESS_MS) {
+            stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
+            first = { signal, at: Date.now() }
+            return
+          }
           // pnpm passes the terminal's Ctrl-C on as a SIGTERM a moment after the SIGINT the CLI
           // already got: one press, not a second. The same signal again is a second press, however
           // soon: no launcher passes a SIGINT on as a SIGINT. Sent within a millisecond, the two
@@ -1888,7 +1897,7 @@ async function executeRun(
             process.exit(stopCode)
           }
           interrupted = true
-          first = { signal, at: Date.now() }
+          first = { signal, at: Date.now(), ...(attach ? { attach } : {}) }
           if (finishing) return
           questions?.cancel()
           live?.phase('cancelling')
@@ -1900,13 +1909,13 @@ async function executeRun(
           })
           cancel()
         }
-        process.on('SIGINT', onSignal)
-        process.on('SIGTERM', onSignal)
+        process.on('SIGINT', () => onSignal('SIGINT', false))
+        process.on('SIGTERM', () => onSignal('SIGTERM', false))
         // `reeval attach`'s cancel: a first Ctrl-C only, never the second that quits without a
         // record, however many viewers send it.
         if (process.platform !== 'win32') {
           process.on(CANCEL_SIGNAL, () => {
-            if (!interrupted && !finishing) onSignal('SIGINT')
+            if (!interrupted && !finishing) onSignal('SIGINT', true)
           })
         }
       },

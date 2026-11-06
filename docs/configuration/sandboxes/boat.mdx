@@ -26,7 +26,6 @@ export default defineConfig({
 - **An OpenSSH client.** reeval runs every command in the VM through `ssh` on the host, with a key `ssh-keygen` makes for each attempt.
 - **reeval from npm, on Node.** The standalone `reeval` binary isn't verified with the Boat SDK yet.
 - **`egress: 'allow-all'`.** The VM keeps its own network, so reeval can't enforce a restricted policy there, and refuses `proxy`, the default, at plan time. The egress gateway still brokers the harness's key.
-- **The Cursor harness.** Other harnesses install their CLI as the attempt starts, which isn't verified on Boat yet. reeval refuses them at plan time until Boat snapshots bake each CLI in ahead of the run; run them in `docker()`.
 
 ## `boat()`
 

@@ -15,6 +15,7 @@ import type { BoatSandboxDescriptor } from '../types.ts'
 import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
 import { PrepareError } from './provider.ts'
+import { harnessBake, installHarness } from './tart-bake.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
 const BOAT_SDK = '@boatdev/sdk'
@@ -189,9 +190,16 @@ const LIMITS_TIMEOUT_MS = 15_000
 /** How long a run's cleanup may wait on one account, so an unreachable API can't stall a resume. */
 const CLEANUP_TIMEOUT_MS = 15_000
 /** Boat's states a sandbox never leaves for `ready`; 'cancelled' answers 404 after it's reported. */
-const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
+export const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
 const TTL_MARGIN_S = 600
+/** How long installing the harness's CLI in a new sandbox may take. */
+const INSTALL_TIMEOUT_MS = 10 * 60_000
+/**
+ * How long reeval keeps deleting a sandbox that never got ready: Boat can drop a delete sent while
+ * it provisions and bring the VM up idle minutes later.
+ */
+const UNREADY_DELETE_MS = 10 * 60_000
 
 async function untilReady(
   api: BoatClient,
@@ -225,6 +233,45 @@ async function deleteSandbox(api: BoatClient, id: string, signal?: AbortSignal):
     await api.deleteSandbox({ sandboxId: id, xAsciiConfirmDelete: id }, { signal })
   } catch (error) {
     if (status(error) !== 404) throw error
+  }
+}
+
+/**
+ * Deletes a sandbox that never got ready, sending the delete again every `redeleteMs` until Boat
+ * answers 404 or reports one of {@link DEAD_STATES}, for at most `deadlineMs`. Once `signal` is
+ * aborted it sends the delete once and stops: a canceled run's `cleanupRun` and the sandbox's TTL
+ * take it from there, so the cancel doesn't wait on Boat. Whether it went.
+ */
+export async function deleteUntilGone(
+  api: BoatClient,
+  id: string,
+  o: { deadlineMs?: number; pollMs?: number; redeleteMs?: number; signal?: AbortSignal } = {},
+): Promise<boolean> {
+  const until = Date.now() + (o.deadlineMs ?? UNREADY_DELETE_MS)
+  const pollMs = o.pollMs ?? 5_000
+  const redeleteMs = o.redeleteMs ?? 30_000
+  let deletedAt = Number.NEGATIVE_INFINITY
+  for (;;) {
+    if (Date.now() - deletedAt >= redeleteMs) {
+      await deleteSandbox(api, id).catch(() => {})
+      deletedAt = Date.now()
+    }
+    if (o.signal?.aborted) return false
+    const state = await api.get({ sandboxId: id }).then(
+      ({ sandbox }) => sandbox.state,
+      (error: unknown) => (status(error) === 404 ? null : 'unknown'),
+    )
+    if (state === null || DEAD_STATES.includes(state)) return true
+    if (Date.now() >= until || o.signal?.aborted) return false
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        o.signal?.removeEventListener('abort', done)
+        resolve()
+      }
+      const timer = setTimeout(done, pollMs)
+      o.signal?.addEventListener('abort', done, { once: true })
+    })
   }
 }
 
@@ -275,11 +322,13 @@ export async function createBoatSandbox(
   const started = performance.now()
   const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
   let id: string | undefined
+  let ready = false
   // The session's destroy and a failed start both clean up; the VM is deleted once.
   let cleaned: Promise<void> | undefined
   const cleanUp = () =>
     (cleaned ??= (async () => {
-      if (id) await deleteSandbox(api, id).catch(() => {})
+      if (id && ready) await deleteSandbox(api, id).catch(() => {})
+      else if (id) await deleteUntilGone(api, id, { signal: options.signal }).catch(() => {})
       await rm(dir, { recursive: true, force: true })
     })())
   try {
@@ -301,6 +350,7 @@ export async function createBoatSandbox(
       })
     id = made.sandbox.id
     await untilReady(api, id, options.signal)
+    ready = true
     const ssh = await api
       .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
       .catch(async (error: unknown) => {
@@ -356,6 +406,35 @@ export async function createBoatSandbox(
       await network.destroy()
       throw new InfraError(
         `Can't keep ${brokered.join(', ')} out of the Boat sandbox: credential brokering could not start (${network.egress.reason})`,
+      )
+    }
+    // A VM has nothing baked in, so pnpm and the CLI download here, before the harness's start
+    // is timed: there, a slow download would spend its readiness window and be tried again. The
+    // eval's timer is paused while a sandbox starts, so the install has a deadline of its own.
+    const bake = options.harness && harnessBake(options.harness)
+    if (bake) {
+      const installing = performance.now()
+      const deadline = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
+      const signal = AbortSignal.any([options.signal, deadline])
+      const install = installHarness(network, bake, { signal })
+      install.catch(() => {})
+      const stopped = new Promise<never>((_, reject) => {
+        if (signal.aborted) reject(signal.reason)
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+      stopped.catch(() => {})
+      const version = await Promise.race([install, stopped]).catch(async (error: unknown) => {
+        await Promise.resolve(network.destroy()).catch(() => {})
+        if (options.signal.aborted) throw error
+        throw new InfraError(
+          deadline.aborted
+            ? `Installing ${bake.name} in Boat sandbox ${id} didn't finish within ${INSTALL_TIMEOUT_MS / 60_000} minutes`
+            : `Installing ${bake.name} in Boat sandbox ${id} failed: ${(error as Error).message}`,
+        )
+      })
+      debug?.log(
+        'container',
+        `installed ${bake.name} ${version} in ${Math.round(performance.now() - installing)}ms`,
       )
     }
     return await sessionSandbox(network, glue, { oomKills: async () => null })

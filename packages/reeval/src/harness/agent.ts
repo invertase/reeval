@@ -24,7 +24,6 @@ import {
   agentMcp,
   authHint,
   type HarnessUsage,
-  unverifiedHarness,
   writePluginFiles,
 } from './agents.ts'
 import { providerStop } from './provider-stop.ts'
@@ -198,14 +197,8 @@ async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVerte
  * Why `agent` can't run in `sandbox`: its kind has no harness session, can't keep the agent's
  * credential out of it, or runs a platform the agent's bootstrap has no build for.
  */
-export function agentSandboxProblem(
-  harness: AgentHarnessDescriptor,
-  agent: Agent,
-  sandbox: SandboxDescriptor,
-): string | undefined {
-  const unverified = unverifiedHarness(harness, sandbox)
-  if (unverified) return unverified
-  const fits = runsAgent(harness.kind, agent.platforms)
+export function agentSandboxProblem(agent: Agent, sandbox: SandboxDescriptor): string | undefined {
+  const fits = runsAgent(agent.platforms)
   const can = capabilitiesOf(sandbox)
   if (fits(can)) return undefined
   // Only a sandbox with a harness session runs the bootstrap, so only its platform matters.
@@ -227,7 +220,7 @@ export function createAgentHarness(
   vertex?: VertexSettings,
 ): Harness {
   const catalog = agentFor(descriptor, vertex)
-  const problem = agentSandboxProblem(descriptor, catalog, sandbox)
+  const problem = agentSandboxProblem(catalog, sandbox)
   if (problem) throw new InfraError(problem)
   return {
     async start(sandbox, signal, { skills, mcp, plugins }) {

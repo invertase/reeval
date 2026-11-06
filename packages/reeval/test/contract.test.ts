@@ -2,7 +2,8 @@
 // Docker, from one reeval project (test/contract/) run once per harness. The rows are in
 // support/harnesses.ts, the behaviors below; each behavior is its eval's outcome, its canary's
 // failure, and a host-side check of the record. The fake row runs the same suite key-free, so the
-// suite's own checks are proven on every PR's Docker job. See test/contract/README.md.
+// suite's own checks are proven on every PR's Docker job. REEVAL_CONTRACT_SANDBOX=boat runs the
+// rows in boat() instead, less the deny-all checks. See test/contract/README.md.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -21,6 +22,7 @@ import {
   PLUGIN_RULES_WORD,
 } from './contract/evals/constants.ts'
 import { type CliRun, readRun, runCli } from './helpers.ts'
+import { boatSandboxesLeft } from './support/boat.ts'
 import { containersLeft } from './support/containers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import {
@@ -30,6 +32,7 @@ import {
   harnesses,
   harnessOf,
   keyOf,
+  ON_BOAT,
   reserveAttempts,
   rowEnv,
   scanTargets,
@@ -72,13 +75,19 @@ const PLUGIN_FILE =
 
 const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => name.test(e.name))
 
+/** The sandbox's segment of every attempt id. */
+const SANDBOX_ID = ON_BOAT ? 'boat' : 'docker'
+/** Why a row in boat() skips a deny-all check. */
+const NO_POLICY = 'boat() enforces no egress policy, so its rows run allow-all'
+
 /**
  * The tags a row's run leaves out: the MCP evals on a harness with no MCP client, the plugin
  * evals on a row with no plugin field, and the hook, subagent and rules ones on one whose
- * plugin parts lack them.
+ * plugin parts lack them; in boat(), the egress evals.
  */
 function tagsLeftOut(row: HarnessRow): string[] {
   const out = row.mcp === false ? ['mcp'] : []
+  if (ON_BOAT) out.push('egress')
   if (!row.effort) out.push('effort')
   if (!row.reasoningModel) out.push('reasoning')
   if (!row.plugin) return [...out, 'plugin']
@@ -91,6 +100,7 @@ function tagsLeftOut(row: HarnessRow): string[] {
 /** The evals (eval and canary) each tag a row can leave out has. */
 const TAGGED = {
   mcp: 2,
+  egress: 2,
   effort: 1,
   reasoning: 1,
   plugin: 10,
@@ -126,7 +136,7 @@ function attempt(ran: Ran, row: HarnessRow, name: string, env: string): AttemptR
   const e = evalNamed(ran.run, name)
   assert.deepEqual(
     e.attempts.map((a) => a.id),
-    [`${cellOf(row)}/${env}/docker#1`],
+    [`${cellOf(row)}/${env}/${SANDBOX_ID}#1`],
   )
   return e.attempts[0] as AttemptRecord
 }
@@ -396,6 +406,7 @@ export const behaviors: Behavior[] = [
   {
     name: 'deny-all plus auto hosts works, a blocked host refused and recorded',
     canary: true,
+    skips: () => (ON_BOAT ? NO_POLICY : undefined),
     check(ran, row) {
       const a = checkAndCanary(ran, row, 'egress', 'closed', /expected '403 000' to match/)
       const egress = a.egress
@@ -457,7 +468,7 @@ export const behaviors: Behavior[] = [
       const e = evalNamed(ran.run, 'effort')
       const a = e.attempts[0]
       assert.ok(a, 'the effort eval has no attempt')
-      assert.equal(a.id, `${cellOf(row)}[effort=${effort.value}]/notes/docker#1`)
+      assert.equal(a.id, `${cellOf(row)}[effort=${effort.value}]/notes/${SANDBOX_ID}#1`)
       assert.equal(a.outcome, 'pass', `effort: ${detail(a)}`)
       // A CLI's own side calls (a session title) may set no reasoning, or turn it off and be
       // refused (Goose's on OpenRouter); every answered call that sets any sets the effort.
@@ -554,7 +565,8 @@ export const behaviors: Behavior[] = [
     canary: false,
     async check(ran, row) {
       const catalog = await catalogOf(row)
-      const failures = Object.keys(SIGNALS).flatMap((name) =>
+      const names = Object.keys(SIGNALS).filter((name) => !(ON_BOAT && name === 'egress'))
+      const failures = names.flatMap((name) =>
         misfiled(catalog, name, transcriptOf(ran, attempt(ran, row, name, envOf[name] ?? ''))),
       )
       assert.deepEqual(failures, [], failures.join('\n'))
@@ -728,6 +740,7 @@ export const behaviors: Behavior[] = [
         )
         assert.deepEqual(elsewhere, [], `${name}: another plugin's files in the transcript`)
       }
+      if (ON_BOAT) return
       const egress = a.egress
       assert.equal(egress?.policy, 'deny-all')
       assert.deepEqual(egress?.blocked, [], 'hosts contacted under deny-all')
@@ -745,7 +758,11 @@ export const behaviors: Behavior[] = [
     canary: false,
     async check(ran) {
       assert.equal(ran.run.status, 'complete')
-      assert.equal(await containersLeft(ran.run.runId), '', 'containers left behind')
+      if (ON_BOAT) {
+        assert.deepEqual(await boatSandboxesLeft(ran.run.runId), [], 'Boat sandboxes left behind')
+      } else {
+        assert.equal(await containersLeft(ran.run.runId), '', 'containers left behind')
+      }
     },
   },
 ]
@@ -812,7 +829,8 @@ for (const row of harnesses) {
         ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
         // One set of captures per CLI: its row on another provider sends the same stream.
-        if (process.env.REEVAL_UPDATE_CAPTURES === '1' && !row.harness) capture(ran, row)
+        if (process.env.REEVAL_UPDATE_CAPTURES === '1' && !row.harness && !ON_BOAT)
+          capture(ran, row)
       },
       { timeout: 26 * 60_000 },
     )

@@ -1327,6 +1327,121 @@ test('the interactive list takes a burst of events in one update, as attach repl
   renderer.close()
 })
 
+test('a list closed mid-burst, as attach does when a resume follows, leaves the rows it had', async () => {
+  let store: ListStore | undefined
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: {} as never,
+    stdin: {} as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    load: async () => ({
+      mountList: (o) => {
+        store = o.store
+        return { waitUntilExit: () => new Promise(() => {}), unmount: () => {} }
+      },
+    }),
+  })
+  for (const e of interleaved.slice(0, 3)) renderer.onEvent(e)
+  renderer.close()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(store?.get().files.some((f) => f.rows.length > 0))
+})
+
+test("nothing the interactive list draws shows a secret: an eval's name, an attempt's error", async () => {
+  const token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
+  const written: string[] = []
+  const stdout = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    columns: 100,
+    rows: 40,
+    write: (chunk: string, cb?: () => void) => {
+      written.push(String(chunk))
+      cb?.()
+      return true
+    },
+  })
+  const stdin = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    data: null as string | null,
+    setEncoding: () => {},
+    setRawMode: () => {},
+    resume: () => {},
+    pause: () => {},
+    ref: () => {},
+    unref: () => {},
+    read() {
+      const { data } = this
+      this.data = null
+      return data
+    },
+    type(data: string) {
+      this.data = data
+      this.emit('readable')
+      this.emit('data', data)
+    },
+  })
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: stdout as never,
+    stdin: stdin as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+  })
+  const name = `pushes with ${token}`
+  const failed: EvalResult = {
+    ...defaultResult,
+    id: GREET,
+    key: keyOf(GREET),
+    name,
+    group: [],
+    attempt: attempt(name, []),
+    errors: [`push refused for ${token}`],
+    formattedErrors: [],
+    meta: { outcome: 'infra_error', errorKind: 'timeout', judgements: [], recordPath: '' },
+  }
+  const second = { ...greetResult, id: DEFAULT, key: keyOf(DEFAULT), group: [] }
+  try {
+    for (const e of [
+      interleaved[0] as ReevalEvent,
+      {
+        type: 'collected',
+        at: T0,
+        file: 'evals/hello.eval.ts',
+        evals: [
+          { id: GREET, key: keyOf(GREET), group: [], name, skipped: false },
+          { id: GREET, key: `${GREET} # ${CELL}#2`, group: [], name, skipped: false },
+          { id: DEFAULT, key: keyOf(DEFAULT), group: [], name: 'still going', skipped: false },
+        ],
+      },
+      { type: 'eval-start', at: s(0), id: GREET, key: keyOf(GREET), attempt: failed.attempt },
+      { type: 'eval-start', at: s(0), id: DEFAULT, key: keyOf(DEFAULT), attempt: second.attempt },
+      { type: 'eval-end', at: s(5), result: failed },
+    ] as ReevalEvent[]) {
+      renderer.onEvent(e)
+    }
+    const drawn = async (pattern: RegExp) => {
+      for (let i = 0; i < 100 && !pattern.test(written.join('')); i++) await sleep(20)
+    }
+    await drawn(/still going/)
+    stdin.type('\r')
+    await drawn(/push refused/)
+    const all = written.join('')
+    assert.match(all, /pushes with \[REDACTED\]/)
+    assert.match(all, /push refused for \[REDACTED\]/, 'the open row shows the error')
+    assert.ok(!all.includes(token.slice(4, 20)), 'no part of the token is drawn')
+  } finally {
+    renderer.close()
+    await sleep(50)
+  }
+})
+
 describe('reeval attach', () => {
   /** What a renderer draws from `events`, as `reeval run` feeds them. */
   const direct = (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {

@@ -56,7 +56,7 @@
   "cursor with an empty id": "UsageError: cursor({ id }) must be a non-empty string (got \"\")",
   "codex with a typo far from any option": "UsageError: Unknown codex() option \"color\".",
   "fakeHarness good": null,
-  "claudeCode on boat()": "UsageError: evaluate(\"e\") on claude-code:claude-haiku-5-5: The Claude Code harness doesn't run in the boat sandbox yet: it runs Cursor so far. Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
+  "claudeCode on boat()": null,
   "cursor on boat()": null,
   "boat() with egress phases": "UsageError: evaluate(\"e\") runs under egress 'allow-all' for setup and 'deny-all' for the agent, but the boat sandbox can't change its egress policy during an attempt. Give both phases one policy, or run it in docker().",
   "boat() under egress 'proxy'": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the only way out, but the boat sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in docker().",
