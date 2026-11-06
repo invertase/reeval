@@ -6,7 +6,15 @@ import { symlinkSync } from 'node:fs'
 import { type AddressInfo, createServer, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { checkBoat, removeRunSandboxes, runPrefix } from '../src/sandbox/boat.ts'
+import { type DockerSession, PNPM_VERSION } from '@reeval/sandbox-docker'
+import {
+  type BoatClient,
+  checkBoat,
+  deleteUntilGone,
+  removeRunSandboxes,
+  runPrefix,
+} from '../src/sandbox/boat.ts'
+import { type HarnessBake, installHarness } from '../src/sandbox/tart-bake.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { project, readRun, runCli, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
@@ -109,6 +117,93 @@ describe("a run's cleanup", () => {
       for (const socket of held) socket.destroy()
       silent.close()
     }
+  })
+})
+
+describe("installing a harness's CLI in a new VM", () => {
+  const bake = (pnpm: boolean): HarnessBake => ({
+    label: 'x-1',
+    kind: 'x',
+    name: 'the x CLI',
+    pnpm,
+    recipe: async () => '',
+    install: async (session) => {
+      await session.run({ command: 'install-x' })
+      return '1.0'
+    },
+  })
+  const recording = (exitCode = 0) => {
+    const commands: string[] = []
+    const session = {
+      async run(o: { command: string }) {
+        commands.push(o.command)
+        return { exitCode: o.command === 'install-x' ? 0 : exitCode, stdout: '', stderr: 'E404' }
+      },
+    } as unknown as DockerSession
+    return { session, commands }
+  }
+
+  test("puts reeval's pinned pnpm in npm's global prefix first, as the session's user", async () => {
+    const { session, commands } = recording()
+    assert.equal(await installHarness(session, bake(true)), '1.0')
+    assert.deepEqual(commands, [
+      `npm install --global --no-fund --no-audit pnpm@${PNPM_VERSION} && pnpm --version`,
+      'install-x',
+    ])
+  })
+
+  test('skips pnpm for a bake that asks for none, and stops at a failed pnpm', async () => {
+    const none = recording()
+    await installHarness(none.session, bake(false))
+    assert.deepEqual(none.commands, ['install-x'])
+    const failed = recording(1)
+    await assert.rejects(installHarness(failed.session, bake(true)), {
+      message: `npm install pnpm@${PNPM_VERSION} exited 1: E404`,
+    })
+    assert.equal(failed.commands.length, 1)
+  })
+})
+
+describe('deleting a sandbox that never got ready', () => {
+  /** A sandbox Boat keeps provisioning through the first `drops` deletes, then removes. */
+  function stuck(drops: number, after: 'gone' | 'archiving' = 'gone') {
+    const calls: string[] = []
+    let deletes = 0
+    const api = {
+      async deleteSandbox() {
+        calls.push('delete')
+        deletes++
+        return { ok: true }
+      },
+      async get() {
+        calls.push('get')
+        if (deletes <= drops) return { sandbox: { id: 'bx_1', name: 'n', state: 'provisioning' } }
+        if (after === 'archiving') return { sandbox: { id: 'bx_1', name: 'n', state: 'archiving' } }
+        throw Object.assign(new Error('gone'), { response: new Response('{}', { status: 404 }) })
+      },
+    } as unknown as BoatClient
+    return { api, calls }
+  }
+  const quick = { pollMs: 5, redeleteMs: 30 }
+
+  test('sends the delete again until Boat answers 404', async () => {
+    const { api, calls } = stuck(2)
+    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
+    assert.equal(calls.filter((c) => c === 'delete').length, 3)
+    assert.equal(calls.at(-1), 'get')
+  })
+
+  test('stops once Boat reports it archiving', async () => {
+    const { api, calls } = stuck(0, 'archiving')
+    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
+    assert.deepEqual(calls, ['delete', 'get'])
+  })
+
+  test('gives up after its deadline', async () => {
+    const { api } = stuck(Number.POSITIVE_INFINITY)
+    const started = Date.now()
+    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 100 }), false)
+    assert.ok(Date.now() - started < 5_000)
   })
 })
 

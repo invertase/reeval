@@ -10,7 +10,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { type AddressInfo, connect } from 'node:net'
 import { NODE_IMAGE } from '../../../sandbox-docker/src/build-image.ts'
-import { boatClient, runPrefix } from '../../src/sandbox/boat.ts'
+import { boatClient, DEAD_STATES, runPrefix } from '../../src/sandbox/boat.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 
 /** Where one fake sandbox's SSH server is, and how to let a key in. */
@@ -326,23 +326,10 @@ export const dockerMachines: Machines = async (name) => {
 }
 
 /**
- * Boat's states of a sandbox that runs or will: one still provisioning when reeval deleted it
- * can come up idle minutes later.
- */
-const LIVE_STATES = [
-  'init',
-  'provisioning',
-  'provisioned',
-  'cloning',
-  'starting',
-  'ready',
-  'idle',
-  'running',
-]
-
-/**
  * The run's sandboxes still live on the real Boat account in BOAT_API_KEY (or the one
- * BOAT_BASE_URL points at), by name, waiting up to `deadlineMs` for deletes to land.
+ * BOAT_BASE_URL points at), by name: every one not in a state it never leaves, since one still
+ * provisioning when reeval deleted it can come up idle minutes later. Waits up to `deadlineMs`
+ * for deletes to land.
  */
 export async function boatSandboxesLeft(runId: string, deadlineMs = 30_000): Promise<string[]> {
   const sandbox = boat()
@@ -353,7 +340,7 @@ export async function boatSandboxesLeft(runId: string, deadlineMs = 30_000): Pro
   do {
     const { sandboxes } = await api.sandboxes({ namePrefix: prefix, limit: 100 })
     left = sandboxes
-      .filter((s) => s.name.startsWith(prefix) && LIVE_STATES.includes(s.state))
+      .filter((s) => s.name.startsWith(prefix) && !DEAD_STATES.includes(s.state))
       .map((s) => `${s.name} (${s.state})`)
     if (!left.length) return []
     await new Promise((r) => setTimeout(r, 1000))

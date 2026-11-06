@@ -14,7 +14,6 @@ import { GROK_CLI_VERSION } from '@reeval/harness-grok-build'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { BAKED_HARNESSES, PNPM_VERSION } from '@reeval/sandbox-docker'
-import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
 import { bakeTartImage, type HarnessBake, harnessBake } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
 import { fakeDigest, installFakeTart } from './support/fake-tart.ts'
@@ -25,9 +24,7 @@ const skip = asked
   ? false
   : 'the macOS bootstraps download each CLI: set REEVAL_TEST_DARWIN_BOOTSTRAPS=1 on an Apple Silicon Mac'
 const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
-const harnesses = BAKED_HARNESSES.filter((h) =>
-  takesHarness(capabilitiesOf({ kind: 'tart', image: IMAGE }), h),
-)
+const harnesses = BAKED_HARNESSES
 const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** The `--version` each bake records: the pinned CLI, not whatever executable came first. */
 const AGENT_VERSION: Record<string, RegExp> = {

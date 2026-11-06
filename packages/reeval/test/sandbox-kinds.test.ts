@@ -7,7 +7,7 @@ import { setupAllowance } from '../src/attempt/index.ts'
 import { resolveConfig } from '../src/config.ts'
 import { SANDBOX_EGRESS } from '../src/egress.ts'
 import { agentSandboxProblem } from '../src/harness/agent.ts'
-import { AGENTS, unverifiedHarness } from '../src/harness/agents.ts'
+import { AGENTS } from '../src/harness/agents.ts'
 import { fakeHarness } from '../src/harness.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { planEval } from '../src/plan-eval.ts'
@@ -79,7 +79,6 @@ describe('sandbox kinds', () => {
       images: true,
       preflight: true,
       pluginBuilds: true,
-      harnesses: 'all',
     })
     assert.deepEqual(capabilitiesOf(fakeSandbox()), {
       platform: process.platform,
@@ -92,7 +91,6 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: false,
       pluginBuilds: false,
-      harnesses: 'all',
     })
   })
 
@@ -108,7 +106,6 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: 'all',
     })
     assert.equal(
       sandboxKind(tart({ image: IMAGE })).id(tart({ image: IMAGE })),
@@ -129,7 +126,6 @@ describe('sandbox kinds', () => {
       images: false,
       preflight: true,
       pluginBuilds: false,
-      harnesses: 'all',
     })
   })
 
@@ -165,51 +161,40 @@ describe('sandbox kinds', () => {
 })
 
 describe('which sandbox a real harness runs in', () => {
-  const cursor = { kind: 'cursor', model: 'composer-2.5' } as const
-
   test('one with a harness session that brokers, on a platform its bootstrap installs', () => {
-    assert.equal(agentSandboxProblem(cursor, AGENTS.cursor, docker()), undefined)
-    assert.equal(
-      agentSandboxProblem({ kind: 'codex', model: 'gpt-5' }, AGENTS.codex, podman()),
-      undefined,
-    )
+    assert.equal(agentSandboxProblem(AGENTS.cursor, docker()), undefined)
+    assert.equal(agentSandboxProblem(AGENTS.codex, podman()), undefined)
   })
 
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
-      agentSandboxProblem(cursor, AGENTS.cursor, fakeSandbox()),
+      agentSandboxProblem(AGENTS.cursor, fakeSandbox()),
       "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
     )
   })
 
   test('Boat runs every harness, each of whose bootstraps installs for Linux', () => {
     for (const kind of Object.keys(AGENTS) as (keyof typeof AGENTS)[]) {
-      const harness = { kind, model: 'm' } as HarnessDescriptor
-      assert.equal(agentSandboxProblem(harness, AGENTS[kind], boat()), undefined, kind)
-      assert.equal(unverifiedHarness(harness, boat()), undefined, kind)
+      assert.equal(agentSandboxProblem(AGENTS[kind], boat()), undefined, kind)
     }
-    assert.equal(unverifiedHarness({ kind: 'fake' }, boat()), undefined)
   })
 
   test('Tart runs every harness, each of whose bootstraps installs for macOS', () => {
     const mac = tart({ image: IMAGE })
     for (const kind of Object.keys(AGENTS) as (keyof typeof AGENTS)[]) {
-      const harness = { kind, model: 'm' } as HarnessDescriptor
-      assert.equal(agentSandboxProblem(harness, AGENTS[kind], mac), undefined, kind)
-      assert.equal(unverifiedHarness(harness, mac), undefined, kind)
+      assert.equal(agentSandboxProblem(AGENTS[kind], mac), undefined, kind)
     }
-    assert.equal(unverifiedHarness({ kind: 'fake' }, mac), undefined)
   })
 
   test("the fake sandbox's platform is the host's, which it never names", () => {
     const aixOnly = { ...AGENTS.cursor, platforms: ['aix'] as const }
-    assert.doesNotMatch(agentSandboxProblem(cursor, aixOnly, fakeSandbox()) ?? '', /runs /)
+    assert.doesNotMatch(agentSandboxProblem(aixOnly, fakeSandbox()) ?? '', /runs /)
   })
 
   test('a platform no sandbox runs leaves only the fake harness', () => {
     const windowsOnly = { ...AGENTS.cursor, platforms: ['win32'] as const }
     assert.equal(
-      agentSandboxProblem(cursor, windowsOnly, docker()),
+      agentSandboxProblem(windowsOnly, docker()),
       "The Cursor harness can't run in the docker sandbox, which runs linux, not win32: use fakeHarness() with fakeSandbox()",
     )
   })

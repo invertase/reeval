@@ -89,6 +89,33 @@ export function harnessBake(harness: HarnessDescriptor): HarnessBake | null {
 }
 
 /**
+ * Installs what `bake` puts in a Tart image or a `boat()` VM, as the session's user: reeval's
+ * pinned pnpm when it asks for it (into `pnpmPrefix`, or npm's global prefix), then the CLI.
+ * Returns the CLI's version.
+ */
+export async function installHarness(
+  session: DockerSession,
+  bake: HarnessBake,
+  o: { pnpmPrefix?: string; signal?: AbortSignal; log?: (line: string) => void } = {},
+): Promise<string> {
+  if (bake.pnpm) {
+    o.log?.(`Installing pnpm ${PNPM_VERSION}`)
+    const prefix = o.pnpmPrefix ? ` --prefix ${q(o.pnpmPrefix)}` : ''
+    const r = await session.run({
+      command: `npm install --global --no-fund --no-audit${prefix} pnpm@${PNPM_VERSION} && pnpm --version`,
+      ...(o.signal && { abortSignal: o.signal }),
+    })
+    if (r.exitCode !== 0) {
+      throw new Error(
+        `npm install pnpm@${PNPM_VERSION} exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
+      )
+    }
+  }
+  o.log?.(`Installing ${bake.name}`)
+  return bake.install(session)
+}
+
+/**
  * Which preflight target `sandbox` and `harness` are: one per image, user (the home a bake
  * installs into), harness bake and the hosts it bakes on.
  */
@@ -210,15 +237,11 @@ export async function bakeTartImage(
       }
     }
     await run(`umask 022 && mkdir -p ${q(stateDir)} && chmod 700 ${q(stateDir)}`, 'mkdir')
-    if (bake.pnpm) {
-      o.log(`Installing pnpm ${PNPM_VERSION}`)
-      await run(
-        `npm install --global --no-fund --no-audit --prefix ${q(posix.join(home, PNPM_DIR))} pnpm@${PNPM_VERSION} && pnpm --version`,
-        `npm install pnpm@${PNPM_VERSION}`,
-      )
-    }
-    o.log(`Installing ${bake.name}`)
-    const agentVersion = await bake.install(session)
+    const agentVersion = await installHarness(session, bake, {
+      pnpmPrefix: posix.join(home, PNPM_DIR),
+      signal: o.signal,
+      log: o.log,
+    })
     o.log(`${bake.name} ${agentVersion}`)
     await run(`rm -f ${q(stateDir)}/exec-*.pid; sync`, 'sync')
     await halt(SHUTDOWN_S)

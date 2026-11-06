@@ -957,7 +957,8 @@ const BOAT_ENV = ['REEVAL_CONTRACT_SANDBOX', 'BOAT_API_KEY', 'BOAT_BASE_URL']
  * Why a row doesn't run here, or false. Real rows run only with `REEVAL_TEST_REAL=1` (they spend
  * money), and skip without it, saying so; asked for, a row without its key runs and fails in
  * `reserveAttempts`, naming the variable. `REEVAL_CONTRACT_HARNESSES=cursor,…` picks rows. A missing
- * image fails instead under `REEVAL_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
+ * image fails instead under `REEVAL_TEST_REQUIRE_DOCKER=1`, as the Docker tier does. In boat(), only
+ * rows with a key run.
  */
 export function skipRow(row: HarnessRow): string | false {
   const only = process.env.REEVAL_CONTRACT_HARNESSES?.split(',')
@@ -967,7 +968,10 @@ export function skipRow(row: HarnessRow): string | false {
     if (process.env.REEVAL_TEST_REAL !== '1') return 'set REEVAL_TEST_REAL=1 to run real agents'
     if (!keyOf(row)) return false
   }
-  if (ON_BOAT || process.env.REEVAL_TEST_REQUIRE_DOCKER === '1') return false
+  if (ON_BOAT) {
+    return row.key ? false : 'the key-free row stays off real Boat, whose starts it would spend'
+  }
+  if (process.env.REEVAL_TEST_REQUIRE_DOCKER === '1') return false
   if (!imageBuilt(imageFor(row.image)))
     return `needs Docker and ${imageFor(row.image)} (reeval image build)`
   return false

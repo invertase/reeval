@@ -44,7 +44,6 @@ import {
   type VertexSettings,
 } from '../gateway/vertex.ts'
 import { modelLimits } from '../prices.ts'
-import { capabilitiesOf, sandboxKind, suggestedSandbox, takesHarness } from '../sandbox/kinds.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
 import type {
@@ -53,7 +52,6 @@ import type {
   HarnessDescriptor,
   McpServer,
   PluginPart,
-  SandboxDescriptor,
   Secret,
   SecretTemplate,
   WebEventType,
@@ -1629,23 +1627,6 @@ function plannedMcpServer(s: McpServer): ResolvedMcpServer {
   return s.transport === 'stdio'
     ? { transport: 'stdio', command: s.command, args: s.args, env: literal(s.env) }
     : { transport: s.transport, url: s.url, headers: literal(s.headers) }
-}
-
-/**
- * Why a sandbox kind that runs only some real harnesses so far doesn't run `harness`, so the plan
- * refuses it before any attempt starts; undefined when it does.
- */
-export function unverifiedHarness(
-  harness: HarnessDescriptor,
-  sandbox: SandboxDescriptor,
-): string | undefined {
-  const capabilities = capabilitiesOf(sandbox)
-  if (!isAgentKind(harness.kind) || takesHarness(capabilities, harness.kind)) return
-  const kind = sandboxKind(sandbox)
-  const verified = capabilities.harnesses === 'all' ? [] : capabilities.harnesses
-  const names = verified.flatMap((k) => (isAgentKind(k) ? [AGENTS[k].name] : []))
-  const elsewhere = suggestedSandbox((c) => c.harnessSession && takesHarness(c, harness.kind))
-  return `The ${AGENTS[harness.kind].name} harness doesn't run in the ${kind.provider(sandbox)} sandbox yet: it runs ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0] || 'no real harness'} so far. ${kind.unverifiedHarnesses ?? `Run it in ${elsewhere}.`}`
 }
 
 /**

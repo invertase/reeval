@@ -28,7 +28,7 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
 import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
-import { refusedMcp, refusedPlugins, unverifiedHarness } from './harness/agents.ts'
+import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { withDefaultEffort } from './harness/default-effort.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
@@ -325,8 +325,6 @@ function planTests(
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
     const on = `${where} on ${harnessId(planned.harness)}`
-    const unverified = unverifiedHarness(planned.harness, planned.sandbox)
-    if (unverified) throw new UsageError(`${on}: ${unverified}`)
     const mcp = refusedMcp(planned.harness, planned.environment.layers)
     if (mcp) throw new UsageError(`${on}: ${mcp}`)
     const plugins = planPlugins(planned, ctx.config.root)
