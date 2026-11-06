@@ -179,7 +179,7 @@ const inputLines = (plan: PlanDocument) =>
       .map((i) => [
         `input ${i.kind}`,
         i.path,
-        `${i.via ? `via ${i.via} ` : ''}[${i.evals.map((e) => e.split(' › ').pop()).join(', ')}]`,
+        `${i.symlinkTo ? `-> ${i.symlinkTo} ` : ''}${i.via ? `via ${i.via} ` : ''}[${i.evals.map((e) => e.split(' › ').pop()).join(', ')}]`,
       ]),
   )
 

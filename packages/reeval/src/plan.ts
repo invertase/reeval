@@ -787,45 +787,57 @@ export type PlanDocument = {
   images: PlanImage[]
   /**
    * The host files the run reads, sorted by path: project-relative, or absolute outside the
-   * project. `evals` are the evals that read one, empty for the project's own (the config, its
-   * `.env` files, lockfiles); `via` the symlink a skill or plugin reached it through.
+   * project, once per kind it has. `evals` are the evals that read one, empty for the project's
+   * own (the config, its `.env` files, lockfiles); `via` the symlink a skill or plugin reached it
+   * through; `symlinkTo` what a symlink in a skill or plugin resolves to.
    */
   inputs: PlanInput[]
 }
 
 /** One entry in the plan's `inputs`. */
-export type PlanInput = { path: string; kind: LocalInputKind; evals: string[]; via?: string }
+export type PlanInput = {
+  path: string
+  kind: LocalInputKind
+  evals: string[]
+  via?: string
+  symlinkTo?: string
+}
 
 /**
- * The plan's `inputs`: the project's, then each planned attempt's, one entry per path, under the
- * first kind it came with other than `read` (a file the load read that the environment names).
+ * The plan's `inputs`: the project's, then each planned attempt's, one entry per path and kind,
+ * so a path with two roles (a loaded `.env` that `file()` also places) is listed under both. A
+ * `read` is listed only for a path that has no other kind: it's the load reading a file the
+ * environment names.
  */
 export function planInputs(
   root: string,
   project: readonly LocalInput[],
   planned: readonly PlannedItem[],
 ): PlanInput[] {
-  const byPath = new Map<string, PlanInput>()
+  const byPath = new Map<string, PlanInput[]>()
   const add = (input: LocalInput, id?: string) => {
     const path = inputPath(root, input.path)
-    let entry = byPath.get(path)
-    if (!entry) {
-      entry = {
-        path,
-        kind: input.kind,
-        evals: [],
-        ...(input.via ? { via: inputPath(root, input.via) } : {}),
-      }
-      byPath.set(path, entry)
-    } else if (entry.kind === 'read' && input.kind !== 'read') {
+    const entries = byPath.get(path) ?? []
+    byPath.set(path, entries)
+    let entry = entries.find((e) => e.kind === input.kind)
+    if (!entry && input.kind === 'read') entry = entries[0]
+    if (!entry && entries[0]?.kind === 'read' && entries.length === 1) {
+      entry = entries[0]
       entry.kind = input.kind
-      if (input.via) entry.via = inputPath(root, input.via)
     }
+    if (!entry) {
+      entry = { path, kind: input.kind, evals: [] }
+      entries.push(entry)
+    }
+    if (input.via && !entry.via) entry.via = inputPath(root, input.via)
+    if (input.symlinkTo && !entry.symlinkTo) entry.symlinkTo = inputPath(root, input.symlinkTo)
     if (id !== undefined && !entry.evals.includes(id)) entry.evals.push(id)
   }
   for (const input of project) add(input)
   for (const { id, attempt } of planned) for (const input of attempt.inputs ?? []) add(input, id)
-  return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  const order = (a: PlanInput, b: PlanInput) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0
+  return [...byPath.values()].flat().sort(order)
 }
 
 export function planDocument(

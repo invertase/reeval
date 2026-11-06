@@ -3658,6 +3658,8 @@ export type LocalInput = {
   kind: LocalInputKind
   /** The symlink, inside a skill or plugin, it was reached through, when it's outside that folder. */
   via?: string
+  /** Set when `path` is a symlink in a skill or plugin: the absolute path it resolves to. */
+  symlinkTo?: string
 }
 
 /**

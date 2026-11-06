@@ -23,11 +23,12 @@ const layers = (spec: EnvironmentLayer['spec']): EnvironmentLayer[] => [{ name: 
 const SKILL = '---\nname: guide\ndescription: Use when guiding.\n---\nGuide.\n'
 const MANIFEST = '{ "name": "tool" }\n'
 
-/** Each input as `kind path`, project-relative, `via` after it. */
+/** Each input as `kind path`, project-relative, a symlink's target and `via` after it. */
 const shown = (root: string, inputs: readonly LocalInput[]) =>
-  inputs.map(
-    (i) => `${i.kind} ${inputPath(root, i.path)}${i.via ? ` via ${inputPath(root, i.via)}` : ''}`,
-  )
+  inputs.map((i) => {
+    const to = i.symlinkTo ? ` -> ${inputPath(root, i.symlinkTo)}` : ''
+    return `${i.kind} ${inputPath(root, i.path)}${to}${i.via ? ` via ${inputPath(root, i.via)}` : ''}`
+  })
 
 describe('environmentInputs', () => {
   test('a local npm package: a tarball as itself, a directory as its files less node_modules and .git', () => {
@@ -167,10 +168,33 @@ describe('environmentInputs', () => {
       root,
     )
     assert.deepEqual(shown(root, found.inputs), [
+      'skill guide/SKILL.md -> shared/SKILL.md',
       'skill shared/SKILL.md via guide/SKILL.md',
       'skill guide/notes.md',
       'plugin tool/.claude-plugin/.keep',
+      'plugin tool/.claude-plugin/plugin.json -> shared/plugin.json',
       'plugin shared/plugin.json via tool/.claude-plugin/plugin.json',
+    ])
+    assert.deepEqual(found.warnings, [])
+  })
+
+  test('a symlink inside the folder is listed itself, with its target, so a copy can keep the link', () => {
+    const root = tree({ 'guide/SKILL.md': SKILL, 'guide/ref.md': '' })
+    symlinkSync('ref.md', join(root, 'guide/alias.md'))
+    const found = environmentInputs(
+      layers({
+        skills: [
+          { kind: 'skill', placement: 'harness', source: 'local', path: join(root, 'guide') },
+        ],
+      }),
+      undefined,
+      root,
+    )
+    assert.deepEqual(shown(root, found.inputs), [
+      'skill guide/SKILL.md',
+      'skill guide/alias.md -> guide/ref.md',
+      'skill guide/ref.md',
+      'skill guide/ref.md',
     ])
     assert.deepEqual(found.warnings, [])
   })

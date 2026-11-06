@@ -11,7 +11,12 @@ readFileSync(new URL('../data/a.txt', import.meta.url))
 const everything = defineEnvironment('everything', ({ directory, file, git, plugin, skill }) => ({
   sandbox: docker({ dockerfile: '../docker/Dockerfile' }),
   workspace: git('../repo'),
-  files: { 'a.txt': file('../data/a.txt'), ...directory('../project', { into: 'app' }) },
+  files: {
+    'a.txt': file('../data/a.txt'),
+    // The .env file reeval loads, placed too: listed under both kinds.
+    '.env': file('../.env'),
+    ...directory('../project', { into: 'app' }),
+  },
   rules: file('../RULES.md'),
   skills: [skill.local('../skills/guide')],
   plugins: [plugin.local('../plugins/tool', { only: ['skills'] })],

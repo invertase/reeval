@@ -1429,6 +1429,10 @@
           "description": "Absolute; a directory for a `workspace`, a `marketplace` or a local git `skill` or `plugin` repository (a file for any other `skill` or `plugin`, and for an `npm` tarball).",
           "type": "string"
         },
+        "symlinkTo": {
+          "description": "Set when `path` is a symlink in a skill or plugin: the absolute path it resolves to.",
+          "type": "string"
+        },
         "via": {
           "description": "The symlink, inside a skill or plugin, it was reached through, when it's outside that folder.",
           "type": "string"

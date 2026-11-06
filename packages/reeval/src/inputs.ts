@@ -30,7 +30,8 @@ const inside = (dir: string, path: string) => path === dir || path.startsWith(di
 
 /**
  * A skill's or plugin's files, by absolute path, less what `skip` leaves out and `.git`. A symlink
- * is followed and its target listed, through the link when it leads outside `dir`. reeval places
+ * is listed itself, with its target, and followed: its target is listed too, through the link
+ * when it leads outside `dir`. reeval places
  * regular files only, so such a link warns, unless it's a file in `readThrough`, which placement
  * reads by path (a skill's `SKILL.md`, a plugin's manifest). A link to `dir` or one of its
  * parents isn't followed.
@@ -84,6 +85,7 @@ function walkFolder(
             `${what}: ${shown}, outside its folder; reeval places only regular files, so the attempt doesn't get it`,
           )
         }
+        out.inputs.push({ path: through ?? full, kind, symlinkTo: target })
         const link = through ?? (outside ? full : undefined)
         if (targetIsDir) walk(target, path, link)
         else out.inputs.push({ path: target, kind, ...(link ? { via: link } : {}) })
