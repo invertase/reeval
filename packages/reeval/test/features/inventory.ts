@@ -830,6 +830,7 @@ export const inventory: InventoryFeature[] = [
       'secrets/redaction-coverage',
       'secrets/short-declared-secrets',
       'secrets/expect-message-masked',
+      'secrets/matcher-output-masked',
     ],
     unit: [
       'reeval/test/unit.test.ts',
@@ -837,6 +838,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/debug.test.ts',
       'reeval/test/engine-expect.test.ts',
       'reeval/test/engine-run.test.ts',
+      'reeval/test/match.test.ts',
+      'reeval/test/capture-page.test.ts',
     ],
   },
   {

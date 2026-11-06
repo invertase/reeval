@@ -12,6 +12,7 @@ import { loadEvalFile } from '../src/engine/loader.ts'
 import type { WireResult } from '../src/engine/protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from '../src/engine/run.ts'
 import type { Settled, TestHandle, TestOptions } from '../src/engine/runtime.ts'
+import { registerExecEnv } from '../src/redact.ts'
 import { useSchedulerChannel } from '../src/scheduler/client.ts'
 import type { EvalMeta } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -113,6 +114,29 @@ describe('runTests', () => {
       0,
       'a record before the result rides with it',
     )
+  })
+
+  test("an attempt's record goes to the main process masked, its own c.exec secrets included", async () => {
+    const passphrase = ['correct', 'horse', 'battery', 'staple', 'meta'].join('-')
+    const labeled = (label: string) =>
+      ({ outcome: 'fail', failedChecks: [{ label, message: 'm' }] }) as unknown as EvalMeta
+    const collected = await tests([
+      'labeled',
+      {},
+      async (h) => {
+        registerExecEnv({ EXEC_PASSWORD: passphrase })
+        h.setMeta(labeled(`build with ${passphrase}`))
+      },
+    ])
+    const { results, reporter } = recorder()
+    await runTests(collected, new Set([0]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: new AbortController().signal,
+      reporter,
+      onReady: () => {},
+    })
+    assert.deepEqual(results.get(0)?.meta, labeled('build with [REDACTED]'))
   })
 
   test('a timeout fails at the timeout; the body cleans up with its lease and its record follows', async () => {

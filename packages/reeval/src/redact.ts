@@ -487,15 +487,27 @@ export function redactJson(
 export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): T =>
   JSON.parse(redactJson(value, undefined, env))
 
-/** Objects copied field by field: plain ones, class instances and errors, not built-ins with internal slots. */
-const COPIED = new Set(['[object Object]', '[object Error]'])
+/** Error prototypes a copy can be made on: a native error holds no private (`#`) fields. */
+const NATIVE_ERRORS = new Set<object>(
+  [
+    Error,
+    TypeError,
+    RangeError,
+    SyntaxError,
+    ReferenceError,
+    EvalError,
+    URIError,
+    AggregateError,
+  ].map((E) => E.prototype),
+)
 
 /**
  * `value` with every string in it masked as `redactSecrets` masks text, keeping its shape: arrays,
- * Maps, Sets, and objects and errors with their prototype and property flags. What a failed
+ * Maps, Sets, plain objects and native errors, with their property flags. What a failed
  * assertion's message and diff are made from, since both shorten or split a value, which leaves a
  * secret in them that masking the text afterwards no longer recognizes. A value with no secret in
- * it is returned as it is; other built-ins (dates, buffers, promises) are too.
+ * it is returned as it is. So is anything else (a class instance, an error subclass, a date): a
+ * copy would lose its private fields or internal slots, and the formatted text is masked after.
  */
 export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
   const secrets = envSecrets(env)
@@ -506,19 +518,21 @@ export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env)
     if (seen.has(v)) return seen.get(v)
     seen.set(v, v)
     let out: unknown = v
-    if (Array.isArray(v)) {
-      const items = v.map(walk)
-      if (items.some((item, i) => item !== v[i])) out = items
-    } else if (v instanceof Map) {
-      const entries = [...v]
+    const proto: unknown = Object.getPrototypeOf(v)
+    if (proto === Array.prototype) {
+      const list = v as unknown[]
+      const items = list.map(walk)
+      if (items.some((item, i) => item !== list[i])) out = items
+    } else if (proto === Map.prototype) {
+      const entries = [...(v as Map<unknown, unknown>)]
       const masked = entries.map(([k, x]) => [walk(k), walk(x)] as const)
       if (masked.some(([k, x], i) => k !== entries[i]?.[0] || x !== entries[i]?.[1]))
         out = new Map(masked)
-    } else if (v instanceof Set) {
-      const items = [...v]
+    } else if (proto === Set.prototype) {
+      const items = [...(v as Set<unknown>)]
       const masked = items.map(walk)
       if (masked.some((item, i) => item !== items[i])) out = new Set(masked)
-    } else if (COPIED.has(Object.prototype.toString.call(v))) {
+    } else if (proto === Object.prototype || proto === null || NATIVE_ERRORS.has(proto as object)) {
       const error = v instanceof Error
       const descriptors = Object.getOwnPropertyDescriptors(v) as Record<
         PropertyKey,
@@ -537,9 +551,10 @@ export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env)
         }
       }
       if (changed) {
-        const proto = Object.getPrototypeOf(v)
         out = Object.defineProperties(
-          error ? Object.setPrototypeOf(new Error(), proto) : Object.create(proto),
+          error
+            ? Object.setPrototypeOf(new Error(), proto as object)
+            : Object.create(proto as object | null),
           descriptors,
         )
       }

@@ -23,6 +23,7 @@ import {
   unbrokeredSecrets,
 } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
@@ -1902,29 +1903,23 @@ describe('masking before shortening', () => {
 describe('redacting the strings in a value', () => {
   const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
 
-  test('masks every string, keeping arrays, Maps, Sets, prototypes, symbol keys and errors', () => {
-    class Box {
-      held: string
-      constructor(held: string) {
-        this.held = held
-      }
-    }
+  test('masks every string, keeping arrays, Maps, Sets, plain objects, symbol keys and errors', () => {
     const key = Symbol('key')
     const value = {
       list: [`a ${token}`, 1, null],
       map: new Map<unknown, unknown>([[token, { deep: token }]]),
       set: new Set([token]),
-      box: new Box(token),
+      bare: Object.assign(Object.create(null) as { held: string }, { held: token }),
       [key]: token,
     }
     const out = redactStrings(value, {})
     assert.deepEqual(out.list, ['a [REDACTED]', 1, null])
     assert.deepEqual([...out.map], [['[REDACTED]', { deep: '[REDACTED]' }]])
     assert.deepEqual([...out.set], ['[REDACTED]'])
-    assert.ok(out.box instanceof Box)
-    assert.equal(out.box.held, '[REDACTED]')
+    assert.equal(Object.getPrototypeOf(out.bare), null)
+    assert.equal(out.bare.held, '[REDACTED]')
     assert.equal(out[key], '[REDACTED]')
-    assert.equal(value.box.held, token, 'the value itself is left as it was')
+    assert.equal(value.bare.held, token, 'the value itself is left as it was')
     const error = Object.assign(new TypeError(`no ${token}`), { code: token })
     const masked = redactStrings(error, {})
     assert.ok(masked instanceof TypeError)
@@ -1943,11 +1938,49 @@ describe('redacting the strings in a value', () => {
     assert.equal(redactStrings(getter, {}), getter)
     const date = new Date(0)
     assert.equal(redactStrings(date, {}), date)
+    // A copy would lose a class's private fields, and its own inspect would throw on them.
+    class Box {
+      #held: string
+      constructor(held: string) {
+        this.#held = held
+      }
+      get shown() {
+        return this.#held
+      }
+    }
+    const box = new Box(token)
+    assert.equal(redactStrings(box, {}), box)
+    assert.equal(redactStrings({ box }, {}).box.shown, token)
+    class Failure extends Error {
+      #why = token
+      why = this.#why
+    }
+    const failure = new Failure(token)
+    assert.equal(redactStrings(failure, {}), failure)
     const cycle: Record<string, unknown> = { token }
     cycle.self = cycle
     const out = redactStrings(cycle, {})
     assert.equal(out.token, '[REDACTED]')
     assert.equal(out.self, cycle)
+  })
+})
+
+test("a fake agent's failed bootstrap quotes its output's end masked before it's cut", async () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const harness = createFakeHarness({ kind: 'fake', bootstrap: 'exit 7' })
+  const sandbox = {
+    exec: async () => ({ exitCode: 7, stdout: '', stderr: `${token} ${'w'.repeat(480)}` }),
+  }
+  const start = harness.start(sandbox as never, new AbortController().signal, {
+    skills: [],
+    workspaceSkills: [],
+    plugins: [],
+    mcp: {},
+  })
+  await assert.rejects(start, (error: Error) => {
+    assert.match(error.message, /exited 7: \[REDACTED\] w/)
+    assert.ok(!error.message.includes(token.slice(-12)))
+    return true
   })
 })
 

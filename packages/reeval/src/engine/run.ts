@@ -177,7 +177,8 @@ async function runTest(
         file,
         signal: AbortSignal.any([signal, timeout.signal]),
         setMeta: (next) => {
-          meta = next
+          // Masked here, where the attempt's own secrets are known: labels are the eval's words.
+          meta = redactValue(next)
           if (reported) reporter.meta(index, next)
         },
         progress: (progress) => reporter.progress(index, progress),

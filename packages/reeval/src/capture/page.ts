@@ -1,3 +1,4 @@
+import { redactSecrets } from '../redact.ts'
 import { clip } from '../text.ts'
 import type { CaptureConsoleMessage, CaptureFailedRequest, CapturePage } from '../types.ts'
 import type { CdpClient } from './browser.ts'
@@ -65,8 +66,9 @@ export function watchPage(cdp: Pick<CdpClient, 'on'>): {
     else dropped++
     return count < PAGE_ENTRIES
   }
-  // Clipped as kept, with room for the origin `facts` strips, so a huge line isn't held whole.
-  const held = (text: string) => clip(text, TEXT_MAX * 2)
+  // Masked and clipped as kept, with room for the origin `facts` strips, so a huge line isn't held
+  // whole and the cut can't go through a secret.
+  const held = (text: string) => clip(redactSecrets(text), TEXT_MAX * 2)
   // Each level is capped apart, so a page's many logs can't push out its errors.
   const keepConsole = (line: CaptureConsoleMessage) =>
     keep(consoleLines, line, consoleLines.filter((l) => l.level === line.level).length)
