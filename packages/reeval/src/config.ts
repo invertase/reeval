@@ -41,6 +41,7 @@ import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, mergeSnapshot, profileJudge } from './options.ts'
 import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
+import { sandboxKind } from './sandbox/kinds.ts'
 import { docker } from './sandbox.ts'
 import { resolveHistory } from './store/resolve.ts'
 import type {
@@ -960,7 +961,7 @@ export function neededCredentials(
     if (!needed.some((n) => n.line === line)) needed.push({ names, line })
   }
   for (const s of options.sandboxes ?? []) {
-    if (s.kind === 'boat') add([s.apiKey.from], `${s.apiKey.from} (for boat())`)
+    for (const { names, line } of sandboxKind(s).credentials?.(s) ?? []) add(names, line)
   }
   // A harness that takes any one of several keys (Claude Code's API key or subscription token)
   // names them all.

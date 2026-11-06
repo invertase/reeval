@@ -7,29 +7,7 @@ import { sandboxKind } from '../sandbox/kinds.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { preparedWorkspace } from '../workspace.ts'
 import { traceEnvironment } from './debug.ts'
-import type { Attempt, AttemptSpec } from './state.ts'
-
-/**
- * How many VMs the hosts preflight kept for `spec`'s sandbox run at once, or null when it runs
- * on no hosts or preflight left nothing to read. The plan's cap counts every host it names at its
- * `vms`; a host skipped, or with memory for fewer, runs fewer.
- */
-export async function preparedVmCap(spec: AttemptSpec, root: string, runId: string) {
-  const { sandbox, harness } = spec
-  if (sandbox.kind !== 'tart' || !sandbox.hosts) return null
-  const { preparedFor } = await import('../sandbox/preflight.ts')
-  const { createProviders, preparedHosts } = await import('../sandbox/providers.ts')
-  const provider = createProviders().tart
-  if (!provider) return null
-  try {
-    const prepared = preparedFor(root, runId, provider, sandbox, harness)
-    const hosts = prepared ? preparedHosts(prepared) : null
-    return hosts ? hosts.reduce((sum, h) => sum + h.vms, 0) : null
-  } catch {
-    // A sandbox that failed to prepare fails in the attempt, which reads it again.
-    return null
-  }
-}
+import type { Attempt } from './state.ts'
 
 /**
  * Resolves the attempt's environment (files, skills, secrets and their placeholders)

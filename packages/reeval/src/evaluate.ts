@@ -1,5 +1,4 @@
 import { dirname } from 'node:path'
-import { preparedVmCap } from './attempt/environment.ts'
 import { runAttempt } from './attempt/index.ts'
 import { bestOfCell } from './best-of.ts'
 import { caseEvalName, caseKeys } from './cases.ts'
@@ -33,9 +32,10 @@ import { bodyHash, caseJson } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { environmentInputs } from './inputs.ts'
 import { isObjectLike } from './object.ts'
-import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
+import { checkOptions, matchesTags, refuseIllegalCompare, sandboxProvider } from './options.ts'
 import { type PlannedEval, planEval } from './plan-eval.ts'
 import { maskedVariables, redactSecrets } from './redact.ts'
+import { sandboxKind } from './sandbox/kinds.ts'
 import type {
   CaseFn,
   CaseOptions,
@@ -383,14 +383,15 @@ function prepare(
         const warnings = [...new Set([...attempt.plan.warnings, ...found.warnings])]
         test.attempt = { ...attempt, plan: { ...attempt.plan, warnings }, inputs: found.inputs }
       }
-      if (spec && test.gate && spec.sandbox.kind === 'tart' && spec.sandbox.hosts) {
+      const readCap = spec && sandboxKind(spec.sandbox).attemptCap?.(spec.sandbox)
+      if (spec && test.gate && readCap) {
         const gate = { ...test.gate, limits: { ...test.gate.limits } }
         const before = test.ready
         test.gate = gate
         test.ready = async () => {
           const { config, runId } = getRunContext()
-          const cap = await preparedVmCap(spec, config.root, runId)
-          const key = 'sandbox:tart'
+          const cap = await readCap({ harness: spec.harness, root: config.root, runId })
+          const key = `sandbox:${sandboxProvider(spec.sandbox)}`
           if (cap && gate.limits[key]) gate.limits[key] = Math.min(gate.limits[key], cap)
           return before ? before() : true
         }

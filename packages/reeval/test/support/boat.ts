@@ -248,6 +248,8 @@ const docker = (args: string[], input?: string) =>
     child.on('close', (code) =>
       code === 0 ? resolve(out.trim()) : reject(new Error(`docker ${args[0]}: ${err.trim()}`)),
     )
+    // The child may exit before reading its stdin.
+    child.stdin.on('error', () => {})
     child.stdin.end(input ?? '')
   })
 

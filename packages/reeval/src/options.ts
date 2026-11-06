@@ -44,15 +44,14 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import { idPart } from './sandbox/id-part.ts'
 import {
   capabilitiesOf,
-  idPart,
   isSandboxKind,
   maxConcurrentProblem,
   sandboxHelpers,
   sandboxKind,
 } from './sandbox/kinds.ts'
-import { tartTagWarning } from './sandbox/tart-ref.ts'
 import { COMPARE_RUNS } from './stats.ts'
 import type {
   CaptureOptions,
@@ -1213,8 +1212,7 @@ export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
         }
       }
     }
-    const tag = a.sandbox.kind === 'tart' ? tartTagWarning(a.sandbox.image) : null
-    if (tag) out.add(tag)
+    for (const warning of sandboxKind(a.sandbox).planWarnings?.(a.sandbox) ?? []) out.add(warning)
   }
   return [...out]
 }

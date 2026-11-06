@@ -1,21 +1,23 @@
 // Every sandbox kind reeval has, one entry each: what it can do, how its sandboxes are named,
 // prepared, created and cleaned up. Code outside a kind's own modules asks this table, not the
-// kind's name, so a new kind is one more entry.
+// kind's name, so a new kind is one more entry. A kind whose attempts each run on a machine of
+// their own is a MachineProvider (machines.ts), whose entry kindOf() derives.
 import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
-import { tartVmLimit } from '../contract/tart.ts'
+import type { Check, DoctorDeps } from '../doctor.ts'
 import type {
-  BoatSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
+  HarnessDescriptor,
   InstallStep,
   SandboxDescriptor,
-  TartSandboxDescriptor,
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
+import { idPart } from './id-part.ts'
 import type { SandboxOptions } from './index.ts'
-import type { TartTarget } from './tart-cli.ts'
+import { kindOf } from './machine.ts'
+import { BOAT_MACHINE, TART_MACHINE } from './machines.ts'
 import type { Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
@@ -57,7 +59,35 @@ export type HostPath = 'file' | 'dir'
 /** What the attempt's sandbox did to widen its own privileges, for the plan's warnings. */
 export type SandboxPrivileges = { root: boolean; capabilities: readonly string[] }
 
-export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = {
+/** What `reeval doctor` gives a kind's checks. */
+export type DoctorContext = { deps: DoctorDeps; root: string; online: boolean; envFile: string }
+
+/** The questions code outside a kind's modules asks of it, each one a kind answers only when it must. */
+export type SandboxHooks<D extends SandboxDescriptor> = {
+  /**
+   * Whether removing the run's leftovers has to be given `sandbox`, because cleanup without it
+   * can't find its machines: the key that tells those apart (an account, a set of hosts), and
+   * whether the run's start can, before the plan has named every eval's sandbox.
+   */
+  cleanupScope?(sandbox: D): { key: string; atStart: boolean } | null
+  /** The credentials `sandbox` needs of its own, as `neededCredentials` lists them. */
+  credentials?(sandbox: D): Array<{ names: string[]; line: string }>
+  /** `reeval doctor`'s checks of the kind's sandboxes the config or the plan uses. */
+  doctor?(sandboxes: readonly D[], ctx: DoctorContext): Promise<Check[]>
+  /** The plan's warnings about `sandbox`. */
+  planWarnings?(sandbox: D): string[]
+  /**
+   * When preflight learns how many of `sandbox`'s attempts can run at once (the hosts it kept),
+   * reads that cap for the gate.
+   */
+  attemptCap?(
+    sandbox: D,
+  ):
+    | ((o: { harness: HarnessDescriptor; root: string; runId: string }) => Promise<number | null>)
+    | null
+}
+
+export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = SandboxHooks<D> & {
   /** The helpers that make it, as messages name them: `docker`, then `podman`. */
   helpers: readonly string[]
   capabilities: SandboxCapabilities
@@ -84,10 +114,6 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = {
    */
   cleanupRun?(runId: string, sandboxes?: readonly D[]): Promise<void>
 }
-
-/** The last path segment of `text`, with what an id can't hold replaced. */
-export const idPart = (text: string) =>
-  (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
 
 /** `+` and a hash of the install steps, or nothing without any. */
 function installId(install: readonly InstallStep[] | undefined): string {
@@ -170,101 +196,16 @@ const FAKE: SandboxKind<FakeSandboxDescriptor> = {
   create: (sandbox, options) => createFakeSandbox(sandbox, options.env),
 }
 
-/**
- * A Tart VM keeps Tart's network, so nothing it sends around the gateway's proxy is refused or
- * recorded; what goes through the proxy is. Its one policy holds for the whole attempt.
- */
-export const TART_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
-
-const TART: SandboxKind<TartSandboxDescriptor> = {
-  helpers: ['tart'],
-  capabilities: {
-    platform: 'darwin',
-    egress: TART_EGRESS,
-    brokers: true,
-    harnessSession: true,
-    isolated: true,
-    processTable: false,
-    listeners: 'lsof',
-    images: false,
-    preflight: true,
-    pluginBuilds: false,
-  },
-  provider: () => 'tart',
-  id: (s) => `tart:${idPart(s.image)}`,
-  hostPaths: { 'ssh.key': 'file' },
-  buildsAtStart: () => true,
-  hostLimit: tartVmLimit,
-  privileges: () => ({ root: false, capabilities: [] }),
-  async create(sandbox, options) {
-    const { createTartSandbox } = await import('./tart.ts')
-    return createTartSandbox(sandbox, options)
-  },
-  async cleanupRun(runId, sandboxes) {
-    const { removeRunVms } = await import('./tart.ts')
-    const { LOCAL_TART } = await import('./tart-cli.ts')
-    const { hostTarget } = await import('./tart-hosts.ts')
-    const { parseTartHost } = await import('../contract/tart.ts')
-    const away = new Map<string, TartTarget>()
-    for (const host of (sandboxes ?? []).flatMap((s) => s.hosts ?? [])) {
-      const parsed = parseTartHost(host)
-      if (typeof parsed !== 'string') away.set(parsed.label, hostTarget(parsed))
-    }
-    const here = !sandboxes || sandboxes.some((s) => !s.hosts)
-    await removeRunVms(runId, [...(here ? [LOCAL_TART] : []), ...away.values()])
-  },
-}
-
-/**
- * Enforces nothing yet: the VM keeps its own network, so only `allow-all` plans on it, for the
- * whole attempt. The gateway still brokers credentials and records what goes through it.
- */
-const BOAT_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
-
-const BOAT: SandboxKind<BoatSandboxDescriptor> = {
-  helpers: ['boat'],
-  capabilities: {
-    platform: 'linux',
-    egress: BOAT_EGRESS,
-    brokers: true,
-    harnessSession: true,
-    isolated: true,
-    processTable: true,
-    listeners: 'proc',
-    images: false,
-    preflight: true,
-    pluginBuilds: false,
-  },
-  provider: () => 'boat',
-  id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
-  hostPaths: {},
-  buildsAtStart: () => true,
-  privileges: () => ({ root: false, capabilities: [] }),
-  async create(sandbox, options) {
-    const { createBoatSandbox } = await import('./boat.ts')
-    return createBoatSandbox(sandbox, options)
-  },
-  async capacity(sandbox) {
-    const { boatCapacity } = await import('./boat.ts')
-    const free = await boatCapacity(sandbox)
-    if (free === null) return null
-    const machines = Math.max(1, free)
-    return { cpus: machines, memoryBytes: machines * 1e9 }
-  },
-  async cleanupRun(runId, sandboxes) {
-    // Without the run's descriptors there's no key or prefix to look under; each sandbox's TTL
-    // is the backstop.
-    if (!sandboxes?.length) return
-    const { removeRunSandboxes } = await import('./boat.ts')
-    await removeRunSandboxes(runId, sandboxes)
-  },
-}
-
 type Kinds = {
   [K in SandboxDescriptor['kind']]: SandboxKind<Extract<SandboxDescriptor, { kind: K }>>
 }
 
-export const SANDBOX_KINDS: Kinds = { docker: DOCKER, fake: FAKE, tart: TART, boat: BOAT }
+export const SANDBOX_KINDS: Kinds = {
+  docker: DOCKER,
+  fake: FAKE,
+  tart: kindOf(TART_MACHINE),
+  boat: kindOf(BOAT_MACHINE),
+}
 
 export type SandboxKindName = keyof Kinds
 
