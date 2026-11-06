@@ -1,12 +1,11 @@
 // A sandbox kind that runs each attempt on a machine of its own (a VM) reached over a transport,
 // started through the shared sequence (start.ts). A provider like that writes a MachineProvider;
-// kindOf() derives the rest of its kinds entry, and createProviders() its prepare provider.
+// kindOf() derives the rest of its kinds entry; createProviders() names its prepare provider.
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
 import type { BoatSandboxDescriptor, TartSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { HostPath, SandboxHooks, SandboxKind } from './kinds.ts'
-import type { SandboxProvider } from './provider.ts'
 import type { Sandbox } from './types.ts'
 
 /** The descriptors of the kinds a {@link MachineProvider} makes. */
@@ -38,8 +37,6 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
   capacity?(sandbox: D): Promise<{ machines: number } | null>
   /** Removes the run's machines: for `sandboxes`, or wherever it can look without them. */
   cleanupRun(runId: string, sandboxes?: readonly D[]): Promise<void>
-  /** The run's prepare provider: preflight's check, key and prepare. */
-  prepare(options: { pull: boolean; force: boolean }): SandboxProvider<D>
 }
 
 /**

@@ -23,7 +23,7 @@ import type {
   VmImage,
 } from '../types.ts'
 import { harnessBake } from './harness-install.ts'
-import { MACHINE_PROVIDERS } from './machines.ts'
+import type { MACHINE_PROVIDERS } from './machines.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
 import {
   type PrepareContext,
@@ -620,10 +620,14 @@ export const createProviders = (
   docker: dockerProvider(options),
   podman: dockerProvider({ ...options, engine: 'podman' }),
   fake: fakeProvider(),
-  ...Object.fromEntries(
-    MACHINE_PROVIDERS.map((m) => [
-      m.kind,
-      m.prepare({ pull: !!options.pull, force: !!options.force }),
-    ]),
-  ),
+  ...machineProviders({ pull: !!options.pull, force: !!options.force }),
+})
+
+/** Each machine provider's prepare provider, by its kind. */
+const machineProviders = (options: {
+  pull: boolean
+  force: boolean
+}): Record<(typeof MACHINE_PROVIDERS)[number]['kind'], SandboxProvider> => ({
+  tart: tartProvider(options),
+  boat: boatProvider(),
 })

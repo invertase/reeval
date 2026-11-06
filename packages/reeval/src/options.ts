@@ -44,9 +44,9 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import { idPart } from './sandbox/id-part.ts'
 import {
   capabilitiesOf,
-  idPart,
   isSandboxKind,
   maxConcurrentProblem,
   sandboxHelpers,

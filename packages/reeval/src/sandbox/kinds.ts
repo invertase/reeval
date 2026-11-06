@@ -14,6 +14,7 @@ import type {
   SandboxDescriptor,
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
+import { idPart } from './id-part.ts'
 import type { SandboxOptions } from './index.ts'
 import { kindOf } from './machine.ts'
 import { BOAT_MACHINE, TART_MACHINE } from './machines.ts'
@@ -113,10 +114,6 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = Sandb
    */
   cleanupRun?(runId: string, sandboxes?: readonly D[]): Promise<void>
 }
-
-/** The last path segment of `text`, with what an id can't hold replaced. */
-export const idPart = (text: string) =>
-  (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
 
 /** `+` and a hash of the install steps, or nothing without any. */
 function installId(install: readonly InstallStep[] | undefined): string {

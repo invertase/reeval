@@ -1,11 +1,11 @@
 // The machine providers reeval has: Tart's macOS VMs and Boat's Linux VMs. Each loads its own
-// modules only when asked, so the kinds table stays cheap to import.
+// modules only when asked, so the kinds table stays cheap to import. kinds.ts builds its entries
+// from these as it loads, so nothing this module imports may import kinds.ts in turn.
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import { tartVmLimit } from '../contract/tart.ts'
 import type { BoatSandboxDescriptor, TartSandboxDescriptor } from '../types.ts'
-import { idPart } from './kinds.ts'
+import { idPart } from './id-part.ts'
 import type { MachineProvider } from './machine.ts'
-import { boatProvider, tartProvider } from './providers.ts'
 import type { TartTarget } from './tart-cli.ts'
 import { tartTagWarning } from './tart-ref.ts'
 
@@ -40,7 +40,6 @@ export const TART_MACHINE: MachineProvider<TartSandboxDescriptor> = {
     const here = !sandboxes || sandboxes.some((s) => !s.hosts)
     await removeRunVms(runId, [...(here ? [LOCAL_TART] : []), ...away.values()])
   },
-  prepare: (o) => tartProvider(o),
   // This machine is cleaned up without a descriptor; other Macs only once the plan names them.
   cleanupScope: (s) => (s.hosts ? { key: JSON.stringify(s.hosts), atStart: false } : null),
   planWarnings(s) {
@@ -95,7 +94,6 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
     const { removeRunSandboxes } = await import('./boat.ts')
     await removeRunSandboxes(runId, sandboxes)
   },
-  prepare: () => boatProvider(),
   // A run's VMs are found only under a descriptor's account and prefix.
   cleanupScope: (s) => ({ key: JSON.stringify(s), atStart: true }),
   credentials: (s) => [{ names: [s.apiKey.from], line: `${s.apiKey.from} (for boat())` }],
@@ -105,5 +103,5 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   },
 }
 
-/** Every machine provider, which `createProviders` makes the run's prepare providers from. */
+/** Every machine provider. */
 export const MACHINE_PROVIDERS = [TART_MACHINE, BOAT_MACHINE] as const

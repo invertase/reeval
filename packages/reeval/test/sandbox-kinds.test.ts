@@ -1,6 +1,7 @@
 // The sandbox kind registry: every kind answers for itself, and what planning and the attempt ask
 // of a sandbox (egress, brokering, a harness session, the platform) comes from its capabilities.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { describe, test } from 'node:test'
@@ -365,6 +366,26 @@ describe('machine providers', () => {
     const providers = createProviders()
     for (const machine of MACHINE_PROVIDERS) {
       assert.equal(providers[machine.kind]?.kind, machine.kind)
+    }
+  })
+
+  test('each module of the kinds table loads first in a fresh process', () => {
+    // kinds.ts builds the machine entries as it loads, so an import cycle back into it throws
+    // only when another module of the cycle is the entry point.
+    for (const file of ['machines.ts', 'machine.ts', 'kinds.ts', 'providers.ts']) {
+      const url = new URL(`../src/sandbox/${file}`, import.meta.url).href
+      const r = spawnSync(
+        process.execPath,
+        [
+          '--experimental-strip-types',
+          '--no-warnings',
+          '--input-type=module',
+          '-e',
+          `await import(${JSON.stringify(url)})`,
+        ],
+        { encoding: 'utf8' },
+      )
+      assert.equal(r.status, 0, `${file}: ${r.stderr}`)
     }
   })
 
