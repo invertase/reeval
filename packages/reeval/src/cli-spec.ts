@@ -34,6 +34,8 @@ export const FLAGS = {
   profile: { type: 'string' },
   'dry-run': { type: 'boolean' },
   force: { type: 'boolean' },
+  registry: { type: 'string' },
+  push: { type: 'boolean' },
   concurrency: { type: 'string' },
   ui: { type: 'string' },
   'log-order': { type: 'string' },
@@ -107,6 +109,7 @@ const RUN_FLAGS: FlagName[] = [
   'force',
   'runs',
   'concurrency',
+  'registry',
   'tag',
   'trait',
   'record',
@@ -169,6 +172,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
+    --registry <prefix>         Pull each sandbox image that isn't built here from this registry
+                                (host[:port]/path, as reeval image build --push left it) before
+                                building it; one it doesn't have, or whose key label or platform
+                                doesn't match, is built as usual. Anyone who can push there chooses
+                                what a matching image holds
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --trait <key=value>         Only cells whose environment's trait is value, or lists it (with
                                 compare, the control's); repeat to combine (AND)
@@ -408,7 +416,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: '',
     sub: {
       build: {
-        flags: ['profile', 'dry-run', 'force'],
+        flags: ['profile', 'dry-run', 'force', 'registry', 'push'],
         positionals: Number.POSITIVE_INFINITY,
         help: `
   reeval image build [filter...]
@@ -425,6 +433,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 harness, sandbox and tags pick the images (also REEVAL_PROFILE)
     --force                     Rebuild every image, pulling each base again (and each tart() tag),
                                 and bake each tart() harness image anew
+    --registry <prefix>         Pull each image that isn't built here from this registry
+                                (host[:port]/path) before building it. Its tags hash the inputs
+                                and the platform, not this machine's image ids; a pulled image is
+                                used only when its ai.reeval.key label and platform match, so the
+                                registry is trusted with the rest. --force builds instead
+    --push                      With --registry, push every image reeval built or pulled for the
+                                evals there (docker or podman push; log in first). Each image
+                                holds its base in full, your own docker({ image }), from or
+                                Dockerfile base included, so push only where those may go
     --dry-run                   List the images, how each is made and how each stands, building
                                 and pulling nothing (a from tag or tart() image is looked up in its
                                 registry, not pulled), and whether the tart() pulls fit the disk`,

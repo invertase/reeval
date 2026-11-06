@@ -7,8 +7,8 @@ evals/inputs.eval.ts › Answer from the guide skill. (42)  fake/everything/dock
 evals/inputs.eval.ts › no environment                     fake/-/docker                  control  gated  ×1
 excluded: —
 image docker:docker · cursor · 1 evals
-  dockerfile docker/Dockerfile  reeval-dockerfile:docker-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                       reeval-dockerfile:docker-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
+  dockerfile docker/Dockerfile  reeval-dockerfile:docker-a57ffbc7ba5e9f1d  (docker build (layer cache), tagged by content hash)
+  harness                       reeval-dockerfile:docker-a57ffbc7ba5e9f1d  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)
 input env-file        .env                                     []

@@ -944,6 +944,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.registry',
+    area: 'Sandbox',
+    name: 'Image tags keyed on content, the same on every machine; `--registry` pulls a missing layer instead of building it and `reeval image build --push` pushes the layers reeval built',
+    plan: ['images/install-from-dockerfile'],
+    unit: ['reeval/test/image-keys.test.ts', 'reeval/test/docker.test.ts'],
+  },
+  {
     id: 'docker.confinement',
     area: 'Sandbox',
     name: 'Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })`',

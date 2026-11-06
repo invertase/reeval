@@ -173,9 +173,12 @@ export async function podmanRootless(): Promise<boolean> {
   return r?.exitCode === 0 && r.stdout.toString('utf8').trim() === 'true'
 }
 
+/** What a run's image builds may do beyond building: pull from a registry, and push to it. */
+export type RegistryOptions = { registry?: string | null; push?: boolean }
+
 /** Docker or Podman: one image per key, each sub-image built once per provider (so once per run). */
 export function dockerProvider(
-  options: { refresh?: Refresh; engine?: Engine } = {},
+  options: { refresh?: Refresh; engine?: Engine } & RegistryOptions = {},
 ): SandboxProvider<DockerSandboxDescriptor> {
   const engine = options.engine ?? 'docker'
   let builds: import('./prepare.ts').Builds | undefined
@@ -205,6 +208,8 @@ export function dockerProvider(
         log: ctx.log,
         refresh: options.refresh ?? 'none',
         engine,
+        registry: options.registry ?? null,
+        push: !!options.push,
       })
       return await prepareImage(
         sandbox,
@@ -604,10 +609,11 @@ export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
 /**
  * A fresh set of providers, one per run: each keeps the run's builds. `pull` lets Tart pull the
  * images it doesn't have, which only `reeval image build` does; with `force` too, it pulls each
- * tag again and bakes each harness image anew.
+ * tag again and bakes each harness image anew. `registry` is where Docker and Podman pull a
+ * missing image from before building it, and push every image to with `push`.
  */
 export const createProviders = (
-  options: { refresh?: Refresh; pull?: boolean; force?: boolean } = {},
+  options: { refresh?: Refresh; pull?: boolean; force?: boolean } & RegistryOptions = {},
 ): Record<string, SandboxProvider> => ({
   docker: dockerProvider(options),
   podman: dockerProvider({ ...options, engine: 'podman' }),

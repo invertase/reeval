@@ -6,8 +6,8 @@ evals/tree.eval.ts › a compare                fake/built/docker:docker  contro
                                               fake/own/docker:images    variant own  gated    ×4
 excluded: —
 image docker:images · cursor · 2 evals
-  dockerfile evals/images/Dockerfile  reeval-dockerfile:images-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
+  dockerfile evals/images/Dockerfile  reeval-dockerfile:images-c1d1337bb48668a1  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:images-c1d1337bb48668a1  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
 image docker:docker · cursor · 2 evals
-  dockerfile docker/Dockerfile  reeval-dockerfile:docker-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                       reeval-dockerfile:docker-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)
+  dockerfile docker/Dockerfile  reeval-dockerfile:docker-4f8fc4320879a1bd  (docker build (layer cache), tagged by content hash)
+  harness                       reeval-dockerfile:docker-4f8fc4320879a1bd  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.9)

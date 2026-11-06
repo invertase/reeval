@@ -231,6 +231,8 @@ export type ImageInfo = {
   id: string
   /** Registry digests (`repo@sha256:…`), empty for images that were only built locally (see {@link isRegistryDigest}). */
   repoDigests: string[]
+  /** `os/architecture`, as `PLATFORM` names one; null when the engine doesn't say. */
+  platform: string | null
 }
 
 /** `repository:tag` of every local image in `repository`; none when the CLI fails. */
@@ -262,7 +264,7 @@ export async function imageInfo(image: string, engine?: Engine): Promise<ImageIn
       'inspect',
       '--format',
       // `.Config.Labels` is a template error, not null, on images without labels.
-      `{"config":{{json .Config}},"id":{{json ${imageId}}},"repoDigests":{{json .RepoDigests}}}`,
+      `{"config":{{json .Config}},"id":{{json ${imageId}}},"repoDigests":{{json .RepoDigests}},"os":{{json .Os}},"arch":{{json .Architecture}}}`,
       image,
     ],
     { engine },
@@ -276,5 +278,6 @@ export async function imageInfo(image: string, engine?: Engine): Promise<ImageIn
   }
   const info = JSON.parse(r.stdout.toString('utf8'))
   const repoDigests = ((info.repoDigests ?? []) as string[]).filter(isRegistryDigest)
-  return { labels: info.config?.Labels ?? {}, id: normalizeImageId(info.id), repoDigests }
+  const platform = info.os && info.arch ? `${info.os}/${info.arch}` : null
+  return { labels: info.config?.Labels ?? {}, id: normalizeImageId(info.id), repoDigests, platform }
 }

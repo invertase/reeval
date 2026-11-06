@@ -4,7 +4,7 @@ evals/plugins.eval.ts › same plugins again  fake/built/docker+687abd2a  contro
 excluded: —
 image docker+687abd2a · cursor + install + 3 plugin builds · 2 evals
   base                                                        reeval-sandbox:cursor-0.1.9                       (reeval's image: built when missing or when its base changed)
-  install 1 command                                           reeval-install:<base id + commands>               (build unless cached)
-  build plugin.local('plugins/built')                         reeval-plugin:<image id>-344bad2041a5fe22         (build unless cached: npm ci && npm run build)
-  build plugin.git('github:acme/agent-plugins')               reeval-plugin:<image id>-<commit + tree + build>  (build unless cached: pnpm install --frozen-lockfile (from .))
-  build plugin.marketplace('lint@github:acme/agent-plugins')  reeval-plugin:<image id>-<commit + tree + build>  (build unless cached: npm ci (from .))
+  install 1 command                                           reeval-install:70c6fc51f0cf79cd                   (build unless cached)
+  build plugin.local('plugins/built')                         reeval-plugin:748c0d48cde9-344bad2041a5fe22       (build unless cached: npm ci && npm run build)
+  build plugin.git('github:acme/agent-plugins')               reeval-plugin:<base key>-<commit + tree + build>  (build unless cached: pnpm install --frozen-lockfile (from .))
+  build plugin.marketplace('lint@github:acme/agent-plugins')  reeval-plugin:<base key>-<commit + tree + build>  (build unless cached: npm ci (from .))
