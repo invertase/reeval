@@ -63,6 +63,8 @@ export type {
   HarnessEdit,
   HarnessOption,
   HistoryConfig,
+  HistoryConfigData,
+  HistoryStoreDescriptor,
   HostFile,
   JSONValue,
   JudgeArtifactRef,

@@ -1500,14 +1500,14 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
   test('a reeval.yaml mistake, or a reeval.yaml beside reeval.config.ts, exits 2', async () => {
     const p = await project('yaml-mistake', {
       'reeval.yaml':
-        'harnesses: { kind: fake }\nsandbox: { kind: fake }\nhistory: { dirr: runs }\n',
+        'harnesses: { kind: fake }\nsandbox: { kind: fake }\nhistory: { artifact: all }\n',
       'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
     })
     const typo = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(typo.code, 2, typo.stdout + typo.stderr)
     assert.match(
       typo.stderr,
-      /^reeval: Unknown option "dirr" in history in reeval\.yaml\. Did you mean "dir"\?\n$/,
+      /^reeval: Unknown option "artifact" in history in reeval\.yaml\. Did you mean "artifacts"\?\n$/,
     )
     writeFileSync(join(p.dir, 'reeval.config.ts'), 'export default {}\n')
     const both = await runCli(p.dir, ['run', '--dry-run'])
@@ -1516,6 +1516,40 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
       both.stderr,
       /^reeval: reeval\.config\.ts and reeval\.yaml are both in \.: reeval reads one config per directory\. Keep one, or pass --config\.\n$/,
     )
+  })
+
+  test('--profile picks the history store a history command reads, as REEVAL_PROFILE does', async () => {
+    const p = await project('profile-history', {
+      'reeval.yaml': [
+        'harnesses: { kind: fake }',
+        'sandbox: { kind: fake }',
+        'profiles:',
+        '  ci:',
+        '    history: { store: { kind: s3, bucket: runs } }',
+        '',
+      ].join('\n'),
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+    })
+    const local = await runCli(p.dir, ['history'])
+    assert.equal(local.code, 0, local.stdout + local.stderr)
+    const notYet =
+      /^reeval: history\.store in reeval\.yaml keeps runs in s3:\/\/runs, and reeval can't read or write a s3\(\) store yet\. Use local\(\) for now\.\n$/
+    for (const [args, env] of [
+      [['history', '--profile', 'ci'], {}],
+      [['query', 'eval_trend'], { REEVAL_PROFILE: 'ci' }],
+      [['run', '--profile', 'ci', '--dry-run'], {}],
+    ] as const) {
+      const r = await runCli(p.dir, [...args], { env })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, notYet, args.join(' '))
+    }
+    const unknown = await runCli(p.dir, ['show', '--profile', 'nope'])
+    assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
+    assert.match(unknown.stderr, /Unknown profile "nope"\. Profiles in reeval\.yaml: ci\./)
+    writeFileSync(join(p.dir, '.env'), 'REEVAL_PROFILE=ci\n')
+    const fromEnv = await runCli(p.dir, ['history'])
+    assert.equal(fromEnv.code, 2, fromEnv.stdout + fromEnv.stderr)
+    assert.match(fromEnv.stderr, notYet, 'REEVAL_PROFILE in .env')
   })
 
   test('config errors name the config file that was read, as typed from the current directory', async () => {

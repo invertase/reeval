@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
+import { local } from 'reeval/store/local'
 import { profiles } from '../profiles.ts'
 
 const fakeAgent = (path: string) =>
@@ -22,7 +23,7 @@ export default defineConfig({
   // Every run is copied into ./history to commit; only failing attempts keep their transcripts,
   // diffs and logs, which is history.artifacts' default.
   record: 'always',
-  history: { dir: 'history', artifacts: 'failures' },
+  history: { store: local({ dir: 'history' }), artifacts: 'failures' },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.
   profiles: { ...profiles },

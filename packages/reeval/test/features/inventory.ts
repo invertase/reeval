@@ -1745,6 +1745,16 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts'],
   },
   {
+    id: 'history.store',
+    area: 'Records and studio',
+    name: "`history.store`: `local()` or `s3()` from `reeval/store/*` (anything else refused), a profile's `history` over the config's, `--profile` on the commands that read runs, and every credential refused in the config",
+    unit: [
+      'reeval/test/unit.test.ts',
+      'reeval/test/options.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'history.logs',
     area: 'Records and studio',
     name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',

@@ -51,13 +51,16 @@ export function parseCli(argv: string[]): ParsedCli {
       const subcommand = configure(command.command(subName), `reeval ${name} ${subName}`, sub.flags)
       subcommand.argument('[args...]').action(() => {
         // commander hands the parent its own flags wherever they are, as it does `--config`.
-        const [stray] = Object.keys(valuesOf(command, spec.flags))
+        // A flag both take (`studio build --profile`) is the subcommand's.
+        const own = valuesOf(command, spec.flags)
+        const stray = Object.keys(own).find((flag) => !sub.flags.includes(flag as FlagName))
         if (stray) {
           throw new UsageError(
             `--${stray} isn't an option of reeval ${name} ${subName}. Run reeval --help.`,
           )
         }
-        parsed = done(program, subcommand, [name, subName], sub.flags, sub.positionals)
+        const result = done(program, subcommand, [name, subName], sub.flags, sub.positionals)
+        parsed = { ...result, values: { ...own, ...result.values } }
       })
     }
   }

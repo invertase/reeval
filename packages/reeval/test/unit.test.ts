@@ -36,8 +36,10 @@ import {
   requireConfig,
   resolveConcurrency,
   resolveConfig,
+  resolveConfigData,
   selectProfile,
   UsageError,
+  withProfileHistory,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
 import {
@@ -1346,9 +1348,55 @@ test('the history folder sits in the directory the evals live in', () => {
   assert.equal(evalRoot(['test/evals/a/*.eval.ts', 'test/evals/b/**/*.eval.ts']), 'test/evals')
   assert.equal(evalRoot(['**/*.eval.ts']), '')
   assert.equal(resolveConfig({}, '/p').history.dir, resolve('/p/evals/.history'))
-  assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, resolve('/p/runs'))
+  const runs = resolveConfig({ history: { store: { kind: 'local', dir: 'runs' } } }, '/p')
+  assert.equal(runs.history.dir, resolve('/p/runs'))
+  assert.equal(runs.history.store.name, 'local')
   assert.equal(resolveConfig({}, '/p').record, 'ci')
   assert.throws(() => resolveConfig({ history: { artifacts: 'some' as 'all' } }, '/p'), /artifacts/)
+})
+
+test("a profile's history.store replaces the config's and keeps its artifacts", () => {
+  const config = resolveConfig(
+    {
+      history: { artifacts: 'all' },
+      profiles: {
+        ci: {
+          history: {
+            store: {
+              kind: 's3',
+              prefix: '/ci/',
+              endpoint: 'https://acct.r2.cloudflarestorage.com/',
+              env: { bucket: 'R2_BUCKET', accessKeyId: 'R2_ACCESS_KEY_ID' },
+            },
+          },
+        },
+        pr: { limit: { runs: 1 } },
+      },
+    },
+    '/p',
+  )
+  assert.equal(config.history.store.kind, 'local')
+  const ci = selectProfile(config, 'ci', {})
+  assert.ok(ci?.history)
+  assert.equal(ci.history.artifacts, 'all')
+  assert.equal(ci.history.store.name, 's3://$R2_BUCKET/ci')
+  assert.deepEqual(ci.history.store.kind === 's3' && ci.history.store.descriptor, {
+    kind: 's3',
+    prefix: 'ci',
+    endpoint: 'https://acct.r2.cloudflarestorage.com',
+    env: { bucket: 'R2_BUCKET', accessKeyId: 'R2_ACCESS_KEY_ID' },
+  })
+  assert.match(ci.history.dir, /^\/p\/\.reeval\/store\/[0-9a-f]{12}\/history$/)
+  assert.equal(withProfileHistory(config, ci).history, ci.history)
+  const pr = selectProfile(config, 'pr', {})
+  assert.equal(pr?.history, undefined)
+  assert.equal(withProfileHistory(config, pr), config)
+  const yaml = resolveConfigData(
+    { profiles: { ci: { history: { store: { kind: 's3', bucket: 'runs' } } } } },
+    '/p',
+    'reeval.yaml',
+  )
+  assert.equal(selectProfile(yaml, 'ci', {})?.history?.store.name, 's3://runs')
 })
 
 test('an npm install in the sandbox collapses to one line for the judge', () => {
