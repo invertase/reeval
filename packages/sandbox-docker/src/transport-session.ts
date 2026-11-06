@@ -51,6 +51,9 @@ export type TransportSessionOptions = {
   destroy(): Promise<void>
 }
 
+/** How long killing an aborted command may take. */
+const KILL_TIMEOUT_MS = 30_000
+
 const text = (r: RunResult<Buffer>) => ({
   exitCode: r.exitCode,
   stdout: r.stdout.toString('utf8'),
@@ -68,17 +71,31 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
     path ? posix.resolve(o.defaultWorkingDirectory, path) : o.defaultWorkingDirectory
   const runHost = (c: HostCommand, signal?: AbortSignal) =>
     shell.run(c.argv, { input: c.input, signal })
+  // The kill has a signal of its own: the one that aborted the command would stop it before it ran.
   const kill = (exec: number) =>
-    runHost(shell.kill(exec)).then(
+    runHost(shell.kill(exec), AbortSignal.timeout(KILL_TIMEOUT_MS)).then(
       () => {},
       () => {},
     )
+  // Killed on the abort, not once the host program has exited: an SSH connection's master holds
+  // the command's output open until the command in the machine ends. Killed again after it has
+  // exited, for a command that started in the machine after the first kill looked.
   const execute = async (exec: number, c: HostCommand, signal?: AbortSignal) => {
+    let killed: Promise<void> | undefined
+    const onAbort = () => {
+      killed = kill(exec)
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     try {
       return text(await runHost(c, signal))
     } catch (error) {
-      if (signal?.aborted) await kill(exec)
+      if (signal?.aborted) {
+        await killed
+        await kill(exec)
+      }
       throw error
+    } finally {
+      signal?.removeEventListener('abort', onAbort)
     }
   }
 

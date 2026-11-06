@@ -167,7 +167,7 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
       const secret = { name: 'API_KEY', placeholder: 'p', value: 'v', hosts: ['a.test'], in: [] }
       await assert.rejects(
         createTartSandbox(vm(), options({ substitutions: [{ ...secret, phase: 'agent' }] })),
-        /^InfraError: Can't keep API_KEY out of the sandbox: credential brokering could not start .*passwordless sudo/,
+        /^InfraError: Can't keep API_KEY out of the tart\(\) sandbox: credential brokering could not start .*passwordless sudo/,
       )
       assert.deepEqual(vms(), [], 'and the clone is deleted')
     })
@@ -302,7 +302,7 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
           vm(),
           options({ brokering: { credential: 'CURSOR_API_KEY', endpoints: [] } }),
         ),
-        /^InfraError: Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start/,
+        /^InfraError: Can't keep CURSOR_API_KEY out of the tart\(\) sandbox: credential brokering could not start/,
       )
     })
     assert.deepEqual(vms(), [])

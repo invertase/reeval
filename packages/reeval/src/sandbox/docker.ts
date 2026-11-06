@@ -26,6 +26,7 @@ import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
+import { brokeringRefusal, logGateway } from './start.ts'
 import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
 
 /**
@@ -281,10 +282,13 @@ export async function createDockerSandbox(
   const { brokered, debug } = glue
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
+  const nodeHint = `The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
   const needsNode = (reason: string) =>
     brokered.length > 0
-      ? `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
-      : `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
+      ? brokeringRefusal(`${spec.fn}()`, brokered, reason, nodeHint)
+      : new InfraError(
+          `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). ${nodeHint}`,
+        )
   const network = await createDockerSession({
     image,
     engine,
@@ -308,11 +312,11 @@ export async function createDockerSandbox(
     },
   }).catch((error: unknown) => {
     if (!(error instanceof EgressUnavailableError)) throw error
-    throw new InfraError(
-      error.network
-        ? `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: ${error.reason}.`
-        : needsNode(error.reason),
-    )
+    throw error.network
+      ? new InfraError(
+          `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: ${error.reason}.`,
+        )
+      : needsNode(error.reason)
   })
   debug?.log(
     'container',
@@ -322,16 +326,10 @@ export async function createDockerSandbox(
     'container',
     `network policy ${egressLabel(options.egress) || 'proxy'}${isDirect(setupEgress(options.egress).policy) ? ` · keeps its ${spec.name} network, so traffic that ignores the proxy goes out directly, unrecorded` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
   )
-  debug?.log(
-    'container',
-    network.egress?.active
-      ? `egress gateway started · brokers ${brokered.join(', ') || 'nothing'}`
-      : `egress gateway not running: ${network.egress?.reason ?? 'not asked for'}`,
-  )
-  // Brokered values never enter the container: with no gateway to swap them in, the attempt can't start.
+  logGateway(debug, network.egress, brokered)
   if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
-    throw new InfraError(needsNode(network.egress.reason))
+    throw needsNode(network.egress.reason)
   }
   return sessionSandbox(network, glue, {
     ...(root !== undefined && { root }),

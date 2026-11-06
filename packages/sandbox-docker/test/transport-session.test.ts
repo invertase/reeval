@@ -90,6 +90,30 @@ describe('transportSession', () => {
     await s.run({ command: 'true' })
     await assert.rejects(s.run({ command: 'sleep 9', abortSignal: abort.signal }), /aborted/)
     assert.deepEqual(calls.at(-1)?.argv, ['kill', '2'])
+    assert.equal(calls.at(-1)?.signal?.aborted, false, 'the kill runs on a signal of its own')
+  })
+
+  test('the kill goes out on the abort, while the host program still holds on, and again once it exits', async () => {
+    const abort = new AbortController()
+    let release = () => {}
+    const { calls, run } = recorder(async (argv) => {
+      if (argv[0] === 'kill') {
+        release()
+        return ok()
+      }
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      throw new Error('aborted')
+    })
+    const running = session(namedShell(run)).run({ command: 'sleep 9', abortSignal: abort.signal })
+    await new Promise((r) => setImmediate(r))
+    abort.abort()
+    await assert.rejects(running, /aborted/)
+    assert.deepEqual(
+      calls.map((c) => c.argv[0]),
+      ['user', 'kill', 'kill'],
+    )
   })
 
   test('a read is null when the file is missing or the host program fails', async () => {

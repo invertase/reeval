@@ -1,14 +1,14 @@
-import { type Gateway, startGateway } from './egress/gateway.ts'
-import { isRestricted } from './egress/policy.ts'
-import { controlOptions, type SshTarget, sshArgv, sshTransport } from './egress/transport.ts'
+import type { Gateway } from './egress/gateway.ts'
+import {
+  controlOptions,
+  type ExecTransport,
+  type SshTarget,
+  sshArgv,
+  sshTransport,
+} from './egress/transport.ts'
 import { SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_STATE, SANDBOX_USER } from './image.ts'
 import { shellQuote as q, run as runHost } from './process.ts'
-import {
-  type DockerSession,
-  type EgressOptions,
-  type EgressStatus,
-  EgressUnavailableError,
-} from './session.ts'
+import type { DockerSession } from './session.ts'
 import { EXEC_UMASK, linuxShell, SYSTEM_PATH } from './shells.ts'
 import { traceDocker } from './trace.ts'
 import { type SessionShell, transportSession } from './transport-session.ts'
@@ -29,21 +29,35 @@ export type SshSessionOptions = {
   /** How long the VM may take to accept SSH after it reports ready. */
   connectTimeoutMs?: number
   abortSignal?: AbortSignal
-  egress?: Omit<EgressOptions, 'direct'> | boolean
-  /** Runs once the session's processes and connection are gone: deleting the VM. */
-  onDestroy?: () => Promise<void>
+}
+
+/** A Linux VM reeval set up over SSH, before its session: what the egress gateway starts on. */
+export type SshMachine = {
+  /** Runs the gateway's forwarder as root, over the session's connection. */
+  root: ExecTransport
+  /**
+   * The VM as a harness session, on `gateway` when it started (or with why it didn't). Its
+   * `destroy` is the caller's: close the gateway, then {@link SshMachine.close}, then the VM.
+   */
+  session(o: {
+    gateway: Gateway | undefined
+    noGateway: string | undefined
+    destroy: () => Promise<void>
+  }): DockerSession
+  /** Closes the shared SSH connection. */
+  close(): Promise<void>
 }
 
 /** ssh's own exit status: it couldn't connect, or the connection dropped. */
 const SSH_FAILED = 255
 
 /**
- * A harness sandbox session on a Linux VM reached over SSH: the login user has passwordless `sudo`,
- * and the agent, setup steps and checks run as {@link SANDBOX_USER}, a user made here with no
- * `sudo` and none of the login user's groups or variables. Ports are reached through the egress
- * gateway's tunnel, so the session always asks for the gateway.
+ * Sets up a Linux VM reached over SSH for a harness session: the login user has passwordless
+ * `sudo`, and the agent, setup steps and checks run as {@link SANDBOX_USER}, a user made here with
+ * no `sudo` and none of the login user's groups or variables. Ports are reached through the
+ * egress gateway's tunnel. When setting up fails, the connection is closed.
  */
-export async function createSshSession(options: SshSessionOptions): Promise<DockerSession> {
+export async function connectSsh(options: SshSessionOptions): Promise<SshMachine> {
   const { target, abortSignal: signal } = options
   const userPath = [`${SANDBOX_HOME}/.local/bin`, ...(options.path ?? []), SYSTEM_PATH].join(':')
   const baseEnv = {
@@ -78,18 +92,8 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     const [bin = 'ssh', ...args] = sshArgv(target, '')
     await runHost(bin, ['-O', 'exit', ...args.slice(0, -1)]).catch(() => {})
   }
-  let gateway: Gateway | undefined
-  let destroyed: Promise<void> | undefined
-  const destroy = () => {
-    destroyed ??= (async () => {
-      gateway?.close()
-      await closeConnection()
-      await options.onDestroy?.()
-    })()
-    return destroyed
-  }
   const fail = async (error: unknown): Promise<never> => {
-    await destroy().catch(() => {})
+    await closeConnection()
     throw signal?.aborted ? signal.reason : error
   }
 
@@ -113,29 +117,6 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     if (signal?.aborted) return fail(signal.reason)
   }
 
-  const egressOptions = options.egress === true ? {} : options.egress || undefined
-  let egress: EgressStatus | undefined
-  if (egressOptions) {
-    const { policy = { mode: 'allow-all' }, ...rest } = egressOptions
-    try {
-      gateway = await startGateway(sshTransport(target), { ...rest, policy }, signal)
-      egress = { active: true }
-    } catch (error) {
-      // The VM keeps its own network, so only a restricted policy needs the gateway to be its way out.
-      if (signal?.aborted || isRestricted(policy)) {
-        await destroy().catch(() => {})
-        if (signal?.aborted) throw signal.reason
-        throw new EgressUnavailableError((error as Error).message)
-      }
-      egress = { active: false, reason: (error as Error).message }
-    }
-  }
-  const envFor = (env?: Record<string, string>) => ({
-    ...userEnv,
-    ...(gateway ? gateway.env : {}),
-    ...env,
-  })
-
   const shell = linuxShell({
     run: hostRun,
     remote: (command) => sshArgv(target, command),
@@ -143,19 +124,24 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     user: baseEnv,
     signal,
   })
-  return transportSession({
-    id: target.hostKeyAlias,
-    description: options.description,
-    defaultWorkingDirectory: SANDBOX_ROOT,
-    shell,
-    env: envFor,
-    gateway,
-    egress,
-    async portWithoutGateway(port) {
-      throw new Error(
-        `Port ${port} of ${options.description} isn't reachable: the egress gateway ${gateway?.stopped ? `stopped: ${gateway.stopped}` : "isn't running"}`,
-      )
-    },
-    destroy,
-  })
+  return {
+    root: sshTransport(target),
+    close: closeConnection,
+    session: ({ gateway, noGateway, destroy }) =>
+      transportSession({
+        id: target.hostKeyAlias,
+        description: options.description,
+        defaultWorkingDirectory: SANDBOX_ROOT,
+        shell,
+        env: (env) => ({ ...userEnv, ...gateway?.env, ...env }),
+        gateway,
+        egress: gateway ? { active: true } : { active: false, reason: noGateway ?? '' },
+        async portWithoutGateway(port) {
+          throw new Error(
+            `Port ${port} of ${options.description} isn't reachable: the egress gateway ${gateway?.stopped ? `stopped: ${gateway.stopped}` : "isn't running"}`,
+          )
+        },
+        destroy,
+      }),
+  }
 }

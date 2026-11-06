@@ -160,7 +160,7 @@ export {
   type SessionOptions,
 } from './session.ts'
 export { darwinShell } from './shells.ts'
-export { createSshSession, type SshSessionOptions } from './ssh-session.ts'
+export { connectSsh, type SshMachine, type SshSessionOptions } from './ssh-session.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'
 export {
   type HostCommand,

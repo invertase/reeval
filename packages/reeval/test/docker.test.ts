@@ -1220,7 +1220,7 @@ evaluate('hi', async (c) => { await c.send('hi') })
       assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
       assert.match(
         refusedRun.evals[0]?.error?.message ?? '',
-        /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and reeval adds it\.$/,
+        /^Can't keep CURSOR_API_KEY out of the docker\(\) sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and reeval adds it\.$/,
       )
       assert.equal(liveContainers(refusedRun.run.runId), '')
 
@@ -1260,7 +1260,7 @@ evaluate('hi', { environments: keys }, async (c) => { await c.exec('true') })
       assert.equal(evals[0]?.error?.kind, 'infra')
       assert.match(
         evals[0]?.error?.message ?? '',
-        /^Can't keep GEMINI_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited/,
+        /^Can't keep GEMINI_API_KEY out of the docker\(\) sandbox: credential brokering could not start \(the forwarder exited/,
       )
       assert.equal(liveContainers(run.runId), '')
       const grep = (needle: string) =>
@@ -1957,7 +1957,7 @@ evaluate('hi', async (c) => {
       assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
       assert.match(
         refusedRun.evals[0]?.error?.message ?? '',
-        /^Can't keep ANTHROPIC_API_KEY out of the sandbox: credential brokering could not start/,
+        /^Can't keep ANTHROPIC_API_KEY out of the docker\(\) sandbox: credential brokering could not start/,
       )
       assert.equal(liveContainers(refusedRun.run.runId), '')
     },

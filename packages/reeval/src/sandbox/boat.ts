@@ -7,15 +7,15 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createSshSession, EgressUnavailableError, SANDBOX_USER } from '@reeval/sandbox-docker'
+import { connectSsh, SANDBOX_USER } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
+import { attemptDebug } from '../debug/attempt.ts'
 import { egressLabel } from '../egress.ts'
 import { registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
-import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
 import { PrepareError } from './provider.ts'
-import { harnessBake, installHarness } from './tart-bake.ts'
+import { startSandbox } from './start.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
 const BOAT_SDK = '@boatdev/sdk'
@@ -193,8 +193,6 @@ const CLEANUP_TIMEOUT_MS = 15_000
 export const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
 const TTL_MARGIN_S = 600
-/** How long installing the harness's CLI in a new sandbox may take. */
-const INSTALL_TIMEOUT_MS = 10 * 60_000
 /**
  * How long reeval keeps deleting a sandbox that never got ready: Boat can drop a delete sent while
  * it provisions and bring the VM up idle minutes later.
@@ -315,133 +313,92 @@ export async function createBoatSandbox(
   const api = await boatClient(descriptor).catch((error: unknown) => {
     throw error instanceof PrepareError ? new InfraError(error.message) : error
   })
-  const glue = gatewayGlue(options)
-  const { brokered, debug } = glue
+  const debug = attemptDebug()
   const type = descriptor.type ?? 'small'
   const name = `${runPrefix(descriptor, options.runId)}${randomBytes(3).toString('hex')}`
-  const started = performance.now()
-  const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
-  let id: string | undefined
-  let ready = false
-  // The session's destroy and a failed start both clean up; the VM is deleted once.
-  let cleaned: Promise<void> | undefined
-  const cleanUp = () =>
-    (cleaned ??= (async () => {
-      if (id && ready) await deleteSandbox(api, id).catch(() => {})
-      else if (id) await deleteUntilGone(api, id, { signal: options.signal }).catch(() => {})
-      await rm(dir, { recursive: true, force: true })
-    })())
-  try {
-    const key = await newKey(dir)
-    const made = await api
-      .create({
-        idempotencyKey: name,
-        createSandboxRequest: {
-          type,
-          name,
-          ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
-          noEnv: true,
-          snapshots: false,
-          monitoring: false,
-        },
-      })
-      .catch(async (error: unknown) => {
-        throw new InfraError(`Boat didn't create a sandbox: ${await boatError(error)}`)
-      })
-    id = made.sandbox.id
-    await untilReady(api, id, options.signal)
-    ready = true
-    const ssh = await api
-      .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
-      .catch(async (error: unknown) => {
-        throw new InfraError(
-          `Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`,
-        )
-      })
-    const endpoint = /^(.+):(\d+)$/.exec(ssh.sshEndpoint ?? '')
-    if (!endpoint || !ssh.hostKey) {
-      throw new InfraError(`Boat gave sandbox ${id} no SSH endpoint and host key to connect with`)
-    }
-    const knownHostsFile = join(dir, 'known_hosts')
-    await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
-    debug?.log(
-      'container',
-      `created ${id} (${name}, ${type}) in ${Math.round(performance.now() - started)}ms`,
-    )
-    const network = await createSshSession({
-      target: {
-        host: endpoint[1] as string,
-        port: Number(endpoint[2]),
-        user: ssh.sshUser ?? 'user',
-        identityFile: key.file,
-        knownHostsFile,
-        hostKeyAlias: id,
-        controlPath: join(dir, 'cm'),
-      },
-      description: `boat sandbox ${id} (${type})`,
-      env: options.env,
-      path: [`${AGENT_NODE}/bin`],
-      prepare: NODE_FOR_AGENT,
-      abortSignal: options.signal,
-      egress: glue.egress,
-      onDestroy: cleanUp,
-    }).catch((error: unknown) => {
-      throw error instanceof EgressUnavailableError
-        ? new InfraError(
-            `Can't keep ${brokered.join(', ') || 'brokered values'} out of the Boat sandbox: the egress gateway could not start (${error.reason})`,
+  return startSandbox(options, {
+    helper: 'boat()',
+    install: true,
+    networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
+    async boot() {
+      const started = performance.now()
+      const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
+      let id: string | undefined
+      let ready = false
+      const remove = async () => {
+        if (id && ready) await deleteSandbox(api, id).catch(() => {})
+        else if (id) await deleteUntilGone(api, id, { signal: options.signal }).catch(() => {})
+        await rm(dir, { recursive: true, force: true })
+      }
+      try {
+        const key = await newKey(dir)
+        const made = await api
+          .create({
+            idempotencyKey: name,
+            createSandboxRequest: {
+              type,
+              name,
+              ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
+              noEnv: true,
+              snapshots: false,
+              monitoring: false,
+            },
+          })
+          .catch(async (error: unknown) => {
+            throw new InfraError(`Boat didn't create a sandbox: ${await boatError(error)}`)
+          })
+        id = made.sandbox.id
+        await untilReady(api, id, options.signal)
+        ready = true
+        const ssh = await api
+          .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
+          .catch(async (error: unknown) => {
+            throw new InfraError(
+              `Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`,
+            )
+          })
+        const endpoint = /^(.+):(\d+)$/.exec(ssh.sshEndpoint ?? '')
+        if (!endpoint || !ssh.hostKey) {
+          throw new InfraError(
+            `Boat gave sandbox ${id} no SSH endpoint and host key to connect with`,
           )
-        : error
-    })
-    debug?.log(
-      'container',
-      `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
-    )
-    debug?.log(
-      'container',
-      network.egress?.active
-        ? `egress gateway started · brokers ${brokered.join(', ') || 'nothing'}`
-        : `egress gateway not running: ${network.egress?.reason ?? 'not asked for'}`,
-    )
-    if (network.egress?.active === false && brokered.length > 0) {
-      await network.destroy()
-      throw new InfraError(
-        `Can't keep ${brokered.join(', ')} out of the Boat sandbox: credential brokering could not start (${network.egress.reason})`,
-      )
-    }
-    // A VM has nothing baked in, so pnpm and the CLI download here, before the harness's start
-    // is timed: there, a slow download would spend its readiness window and be tried again. The
-    // eval's timer is paused while a sandbox starts, so the install has a deadline of its own.
-    const bake = options.harness && harnessBake(options.harness)
-    if (bake) {
-      const installing = performance.now()
-      const deadline = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
-      const signal = AbortSignal.any([options.signal, deadline])
-      const install = installHarness(network, bake, { signal })
-      install.catch(() => {})
-      const stopped = new Promise<never>((_, reject) => {
-        if (signal.aborted) reject(signal.reason)
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-      })
-      stopped.catch(() => {})
-      const version = await Promise.race([install, stopped]).catch(async (error: unknown) => {
-        await Promise.resolve(network.destroy()).catch(() => {})
-        if (options.signal.aborted) throw error
-        throw new InfraError(
-          deadline.aborted
-            ? `Installing ${bake.name} in Boat sandbox ${id} didn't finish within ${INSTALL_TIMEOUT_MS / 60_000} minutes`
-            : `Installing ${bake.name} in Boat sandbox ${id} failed: ${(error as Error).message}`,
+        }
+        const knownHostsFile = join(dir, 'known_hosts')
+        await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
+        debug?.log(
+          'container',
+          `created ${id} (${name}, ${type}) in ${Math.round(performance.now() - started)}ms`,
         )
-      })
-      debug?.log(
-        'container',
-        `installed ${bake.name} ${version} in ${Math.round(performance.now() - installing)}ms`,
-      )
-    }
-    return await sessionSandbox(network, glue, { oomKills: async () => null })
-  } catch (error) {
-    await cleanUp()
-    throw error
-  }
+        const machine = await connectSsh({
+          target: {
+            host: endpoint[1] as string,
+            port: Number(endpoint[2]),
+            user: ssh.sshUser ?? 'user',
+            identityFile: key.file,
+            knownHostsFile,
+            hostKeyAlias: id,
+            controlPath: join(dir, 'cm'),
+          },
+          description: `boat sandbox ${id} (${type})`,
+          env: options.env,
+          path: [`${AGENT_NODE}/bin`],
+          prepare: NODE_FOR_AGENT,
+          abortSignal: options.signal,
+        })
+        return {
+          root: machine.root,
+          session: machine.session,
+          async destroy() {
+            await machine.close()
+            await remove()
+          },
+        }
+      } catch (error) {
+        await remove()
+        throw error
+      }
+    },
+  })
 }
 
 /** Every sandbox on `sandbox`'s account whose name starts with `prefix`, across pages. */
