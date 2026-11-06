@@ -4914,7 +4914,7 @@ evaluate('installs', async (c) => {
   assert.equal(evals[0]?.error?.kind, 'infra', JSON.stringify(evals[0]?.error))
   assert.match(
     String(evals[0]?.error?.message),
-    /^Installing the fake agent's bootstrap in Boat sandbox bx_\w+ failed: The fake agent's bootstrap exited 7: no mirror$/,
+    /^Installing the fake agent's bootstrap in boat\(\) sandbox bx_\w+ failed: The fake agent's bootstrap exited 7: no mirror$/,
   )
   assert.ok(
     boatApi.requests.some((q) => /^DELETE \/sandboxes\/bx_\w+$/.test(q.call)),

@@ -9,7 +9,6 @@ import {
   darwinShell,
   type ExecTransport,
   type Gateway,
-  startGateway,
   transportSession,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
@@ -17,8 +16,8 @@ import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
 import type { TartSandboxDescriptor } from '../types.ts'
-import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
+import { type BootedMachine, startSandbox } from './start.ts'
 import {
   LOCAL_TART,
   runArgv,
@@ -394,11 +393,30 @@ export async function createTartSandbox(
       `tart() runs under egress 'allow-all' only, and this attempt asked for ${JSON.stringify(options.egress.policy)}`,
     )
   }
-  const debug = attemptDebug()
   const vm = `${vmPrefix(options.runId)}${randomBytes(3).toString('hex')}`
-  let gateway: Gateway | undefined
+  try {
+    return await startSandbox(options, {
+      helper: 'tart()',
+      hint: 'The egress gateway needs Node in the image (brew install node) and passwordless sudo for its user.',
+      // The image preflight baked the harness into, when it did.
+      install: false,
+      boot: () => bootTart(descriptor, options, vm),
+    })
+  } catch (error) {
+    if (signal.aborted) throw signal.reason
+    throw error instanceof InfraError ? error : new InfraError((error as Error).message)
+  }
+}
+
+/** Boots `vm` on a host and makes its workspace and state directory. */
+async function bootTart(
+  descriptor: TartSandboxDescriptor,
+  options: SandboxOptions,
+  vm: string,
+): Promise<BootedMachine> {
+  const { signal } = options
+  const debug = attemptDebug()
   let removed: Promise<void> | undefined
-  // The image preflight baked the harness into, when it did.
   const { guest, home, halt, on } = await bootOnHost(
     descriptor,
     options.image ?? descriptor.image,
@@ -407,19 +425,12 @@ export async function createTartSandbox(
   )
   const destroy = () => {
     removed ??= (async () => {
-      await gateway?.close()
       await halt()
       await tartCli(['delete', vm], { on }).catch(() => {})
       debug?.log('container', `deleted ${vm}${on.remote ? ` on ${on.label}` : ''}`)
     })()
     return removed
   }
-  const fail = async (error: unknown): Promise<never> => {
-    await destroy()
-    if (signal.aborted) throw signal.reason
-    throw error instanceof InfraError ? error : new InfraError((error as Error).message)
-  }
-
   const workdir = posix.join(home, WORKSPACE_DIR)
   const stateDir = posix.join(home, '.reeval-state')
   const made = await runIn(guest, [
@@ -427,76 +438,57 @@ export async function createTartSandbox(
     '-c',
     `umask 022 && mkdir -p ${q(workdir)} ${q(stateDir)} && chmod 700 ${q(stateDir)}`,
   ]).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
-  if (made.exitCode !== 0) return fail(new Error(`Couldn't set up ${vm}: ${made.stderr.trim()}`))
-
-  const glue = gatewayGlue(options)
-  const { brokered } = glue
-  let noGateway: string | undefined
-  let caBundle: string | undefined
-  try {
-    gateway = await startGateway(rootTransport(guest), glue.egress, signal)
-    debug?.log('container', `egress gateway started · brokers ${brokered.join(', ') || 'nothing'}`)
-  } catch (error) {
-    if (signal.aborted) return fail(signal.reason)
-    noGateway = (error as Error).message
-    // Under allow-all the VM keeps its own network, so the gateway only records and brokers.
-    if (brokered.length) {
-      return fail(
-        new InfraError(
-          `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${noGateway}). The egress gateway needs Node in the image (brew install node) and passwordless sudo for its user.`,
-        ),
-      )
-    }
-    debug?.log('container', `egress gateway not running: ${noGateway}`)
+  if (made.exitCode !== 0) {
+    await destroy()
+    throw new Error(`Couldn't set up ${vm}: ${made.stderr.trim()}`)
   }
-  if (gateway) {
-    const trustStarted = Date.now()
-    const trusted = await runIn(guest, ['sudo', '-n', ...TRUST_CA], {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(TRUST_TIMEOUT_MS)]),
-    }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
-    debug?.log(
-      'container',
-      trusted.exitCode === 0
-        ? 'the gateway CA is trusted in the System keychain'
-        : `the gateway CA isn't in the System keychain after ${((Date.now() - trustStarted) / 1000).toFixed(1)}s (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
-    )
-    if (signal.aborted) return fail(signal.reason)
-    if (trusted.exitCode !== 0 && options.keychainTrust) {
-      return fail(
-        new InfraError(
-          `This harness's CLI trusts only the macOS keychain, and sudo security add-trusted-cert couldn't add the egress gateway's CA to ${vm}'s System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}). In the image, allow it without a prompt: sudo security authorizationdb write com.apple.trust-settings.admin allow`,
-        ),
-      )
-    }
-    const bundle = posix.join(stateDir, 'ca-bundle.pem')
-    const bundled = await runIn(guest, ['/bin/sh', '-c', CA_BUNDLE_SCRIPT, 'sh', bundle], {
-      signal,
-    }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
-    if (signal.aborted) return fail(signal.reason)
-    if (bundled.exitCode === 0) caBundle = bundle
-    else
+  let caBundle: string | undefined
+  return {
+    root: rootTransport(guest),
+    stateDir,
+    destroy,
+    async onGateway() {
+      const trustStarted = Date.now()
+      const trusted = await runIn(guest, ['sudo', '-n', ...TRUST_CA], {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(TRUST_TIMEOUT_MS)]),
+      }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
       debug?.log(
         'container',
-        `no CA bundle for the gateway: ${bundled.stderr.trim() || `exit ${bundled.exitCode}`}`,
+        trusted.exitCode === 0
+          ? 'the gateway CA is trusted in the System keychain'
+          : `the gateway CA isn't in the System keychain after ${((Date.now() - trustStarted) / 1000).toFixed(1)}s (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}): clients that read only the keychain don't trust the proxy`,
       )
-  }
-
-  try {
-    const network = tartSession({
-      vm,
-      guest,
-      home,
-      stateDir,
-      env: options.env,
-      gateway,
-      noGateway,
-      caBundle,
-      destroy,
-      on,
-    })
-    return await sessionSandbox(network, glue, { stateDir, oomKills: async () => null })
-  } catch (error) {
-    return fail(error)
+      if (signal.aborted) throw signal.reason
+      if (trusted.exitCode !== 0 && options.keychainTrust) {
+        throw new InfraError(
+          `This harness's CLI trusts only the macOS keychain, and sudo security add-trusted-cert couldn't add the egress gateway's CA to ${vm}'s System keychain (${trusted.stderr.trim().slice(-300) || `exit ${trusted.exitCode}`}). In the image, allow it without a prompt: sudo security authorizationdb write com.apple.trust-settings.admin allow`,
+        )
+      }
+      const bundle = posix.join(stateDir, 'ca-bundle.pem')
+      const bundled = await runIn(guest, ['/bin/sh', '-c', CA_BUNDLE_SCRIPT, 'sh', bundle], {
+        signal,
+      }).catch((error: Error) => ({ exitCode: 1, stderr: error.message }))
+      if (signal.aborted) throw signal.reason
+      if (bundled.exitCode === 0) caBundle = bundle
+      else
+        debug?.log(
+          'container',
+          `no CA bundle for the gateway: ${bundled.stderr.trim() || `exit ${bundled.exitCode}`}`,
+        )
+    },
+    session: ({ gateway, noGateway, destroy: close }) =>
+      tartSession({
+        vm,
+        guest,
+        home,
+        stateDir,
+        env: options.env,
+        gateway,
+        noGateway,
+        caBundle,
+        destroy: close,
+        on,
+      }),
   }
 }
 

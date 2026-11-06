@@ -124,7 +124,7 @@ evaluate('hi', async (c) => {
       assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
       assert.match(
         refusedRun.evals[0]?.error?.message ?? '',
-        /^Can't keep GEMINI_API_KEY out of the sandbox: credential brokering could not start/,
+        /^Can't keep GEMINI_API_KEY out of the docker\(\) sandbox: credential brokering could not start/,
       )
       assert.equal(liveContainers(refusedRun.run.runId), '')
     },
