@@ -15,6 +15,7 @@ import type { BoatSandboxDescriptor } from '../types.ts'
 import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
 import { PrepareError } from './provider.ts'
+import { harnessBake } from './tart-bake.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
 const BOAT_SDK = '@boatdev/sdk'
@@ -356,6 +357,24 @@ export async function createBoatSandbox(
       await network.destroy()
       throw new InfraError(
         `Can't keep ${brokered.join(', ')} out of the Boat sandbox: credential brokering could not start (${network.egress.reason})`,
+      )
+    }
+    // A VM has nothing baked in, so the CLI downloads here, on the sandbox's own allowance: in
+    // the harness's start, a slow download would spend its readiness window and be tried again.
+    const bake = options.harness && harnessBake(options.harness)
+    if (bake) {
+      const installing = performance.now()
+      const version = await bake.install(network).catch(async (error: unknown) => {
+        await network.destroy()
+        throw options.signal.aborted
+          ? error
+          : new InfraError(
+              `Installing ${bake.name} in Boat sandbox ${id} failed: ${(error as Error).message}`,
+            )
+      })
+      debug?.log(
+        'container',
+        `installed ${bake.name} ${version} in ${Math.round(performance.now() - installing)}ms`,
       )
     }
     return await sessionSandbox(network, glue, { oomKills: async () => null })

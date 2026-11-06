@@ -15,7 +15,7 @@ import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { BAKED_HARNESSES, PNPM_VERSION } from '@reeval/sandbox-docker'
 import { capabilitiesOf, takesHarness } from '../src/sandbox/kinds.ts'
-import { bakeTartImage, type TartBake, tartBake } from '../src/sandbox/tart-bake.ts'
+import { bakeTartImage, type HarnessBake, harnessBake } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
 import { fakeDigest, installFakeTart } from './support/fake-tart.ts'
 
@@ -53,7 +53,7 @@ describe('harness bootstraps on macOS', { skip }, () => {
 
   for (const kind of harnesses) {
     test(`${kind} bakes with its macOS build`, { timeout: 600_000 }, async () => {
-      const bake = tartBake({ kind } as Parameters<typeof tartBake>[0]) as TartBake
+      const bake = harnessBake({ kind } as Parameters<typeof harnessBake>[0]) as HarnessBake
       const lines: string[] = []
       const baked = await bakeTartImage({ kind: 'tart', image: IMAGE }, bake, {
         source: fakeDigest(IMAGE),

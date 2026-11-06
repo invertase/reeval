@@ -50,7 +50,7 @@ import {
   dockerKey,
   vmImage,
 } from './providers.ts'
-import { bakedTartImage, type TartBake, tartBake, tartBakeKey } from './tart-bake.ts'
+import { bakedTartImage, type HarnessBake, harnessBake, tartBakeKey } from './tart-bake.ts'
 import type { MissingImage } from './tart-images.ts'
 
 /**
@@ -495,7 +495,7 @@ export type TartTarget = {
   id: string
   sandbox: TartSandboxDescriptor
   harness: HarnessDescriptor
-  bake: TartBake | null
+  bake: HarnessBake | null
   evals: number
   /** The evals that use it. */
   ids: readonly string[]
@@ -506,7 +506,7 @@ export function tartTargets(uses: ImageUse[]): TartTarget[] {
   const targets = new Map<string, Omit<TartTarget, 'ids'> & { seen: Set<string> }>()
   for (const { id, sandbox, harness } of uses) {
     if (sandbox.kind !== 'tart') continue
-    const bake = tartBake(harness)
+    const bake = harnessBake(harness)
     const key = tartBakeKey(sandbox, harness)
     const user = sandbox.ssh?.user ? ` as ${sandbox.ssh.user}` : ''
     const target = targets.get(key) ?? {
@@ -565,7 +565,7 @@ export async function tartPlanLines(targets: TartTarget[]): Promise<string[]> {
       if (parseTartRef(image).oci) missing.push({ image, size })
     }
     for (const b of targets.filter((o) => o.sandbox.image === image && o.bake)) {
-      const bake = b.bake as TartBake
+      const bake = b.bake as HarnessBake
       if (have instanceof Error) continue
       if (!tartListed(have, image)) {
         lines.push(`    + ${b.id}  (to bake ${bake.name} onto it once it's pulled)`)

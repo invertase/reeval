@@ -244,10 +244,8 @@ const BOAT: SandboxKind<BoatSandboxDescriptor> = {
     images: false,
     preflight: true,
     pluginBuilds: false,
-    harnesses: ['cursor'],
+    harnesses: 'all',
   },
-  unverifiedHarnesses:
-    "Boat installs a harness's CLI as the attempt starts, through the egress gateway, and the others haven't been verified to start in time that way. They'll run on boat() once its snapshots bake their CLIs in ahead of the run; until then, run this one in docker().",
   provider: () => 'boat',
   id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
   hostPaths: {},

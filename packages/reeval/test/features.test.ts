@@ -1135,6 +1135,18 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'sandbox/boat-installs-harness',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected '1' to be '2'/,
+    record: ({ run }) => {
+      const turns = run.evals.flatMap((e) => e.attempts).flatMap((a) => a.turns)
+      assert.equal(turns.length, 2, 'both agents started, inside their 2s')
+      boatCleanedUp(run)
+    },
+  },
+  {
     dir: 'sandbox/boat-serve',
     tiers: ['docker'],
     env: 'vm',

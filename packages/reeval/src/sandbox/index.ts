@@ -1,6 +1,6 @@
 import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
-import type { PlannedEgress, SandboxDescriptor } from '../types.ts'
+import type { HarnessDescriptor, PlannedEgress, SandboxDescriptor } from '../types.ts'
 import { sandboxKind } from './kinds.ts'
 import type { PreparedHost } from './tart-hosts.ts'
 import { InfraError, type Sandbox } from './types.ts'
@@ -15,6 +15,8 @@ export type SandboxOptions = {
   image?: string
   /** The hosts of `tart({ hosts })` preflight kept, each with the image it prepared there. */
   hosts?: readonly PreparedHost[]
+  /** The attempt's harness, whose CLI `boat()` installs before the session's start is timed. */
+  harness?: HarnessDescriptor
   /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
   brokering?: Brokering
   /** The harness's CLI trusts only the keychain's CAs on macOS (its catalog's `keychainTrust`). */

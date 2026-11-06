@@ -35,8 +35,11 @@ const LEFTOVER_RUNNING_MS = 60 * 60_000
 /** A bake's VM: the image it makes, `-bake-`, and when it started (base-36 ms) and a nonce. */
 const BAKE_VM = /^reeval-sandbox-.+-bake-([0-9a-z]{8,})-[0-9a-f]{4}$/
 
-/** What a harness bakes into a Tart image: its name in the image's, and how to install it. */
-export type TartBake = {
+/**
+ * What a harness bakes into a Tart image, or installs in a `boat()` VM as it starts: its name in
+ * the image's, and how to install it.
+ */
+export type HarnessBake = {
   /** The harness and its adapter version (with the patch hash, as Docker's tags have it). */
   label: string
   /** The harness kind, which every bake of it starts its label with. */
@@ -51,8 +54,8 @@ export type TartBake = {
   install: (session: DockerSession) => Promise<string>
 }
 
-/** The bake `harness` needs in `tart()`; null for a fake agent with nothing to install. */
-export function tartBake(harness: HarnessDescriptor): TartBake | null {
+/** The bake `harness` needs in `tart()` or `boat()`; null for a fake agent with nothing to install. */
+export function harnessBake(harness: HarnessDescriptor): HarnessBake | null {
   if (harness.kind === 'fake') {
     const command = harness.bootstrap
     if (!command) return null
@@ -93,7 +96,7 @@ export const tartBakeKey = (sandbox: TartSandboxDescriptor, harness: HarnessDesc
   JSON.stringify({
     image: sandbox.image,
     user: sandbox.ssh?.user ?? null,
-    bake: tartBake(harness)?.label ?? null,
+    bake: harnessBake(harness)?.label ?? null,
     ...(sandbox.hosts && { hosts: sandbox.hosts }),
   })
 
@@ -114,7 +117,7 @@ const slug = (image: string) =>
  */
 export async function bakedTartImage(
   sandbox: TartSandboxDescriptor,
-  bake: TartBake,
+  bake: HarnessBake,
   source: string | null,
 ): Promise<string> {
   const inputs = [
@@ -165,7 +168,7 @@ export async function sweepBakeVms(
  */
 export async function bakeTartImage(
   sandbox: TartSandboxDescriptor,
-  bake: TartBake,
+  bake: HarnessBake,
   o: {
     source: string | null
     force?: boolean

@@ -31,8 +31,8 @@ import {
   bakedTartImage,
   bakeTartImage,
   deleteBakedImages,
-  type TartBake,
-  tartBake,
+  type HarnessBake,
+  harnessBake,
   tartBakeKey,
 } from '../src/sandbox/tart-bake.ts'
 import { tartCli } from '../src/sandbox/tart-cli.ts'
@@ -425,7 +425,7 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
 
 describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script' }, () => {
   const bootstrap = 'echo "$HOME" > installed-in'
-  const bake = tartBake({ kind: 'fake', bootstrap }) as TartBake
+  const bake = harnessBake({ kind: 'fake', bootstrap }) as HarnessBake
   const harness: HarnessDescriptor = { kind: 'fake', bootstrap }
   const ctx = (lines: string[] = [], o: { force?: boolean; signal?: AbortSignal } = {}) => ({
     source: fakeDigest(IMAGE),
@@ -494,7 +494,10 @@ describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script'
   })
 
   test('a bootstrap that fails leaves no VM behind, and names its exit', async () => {
-    const broken = tartBake({ kind: 'fake', bootstrap: 'echo no network >&2; exit 7' }) as TartBake
+    const broken = harnessBake({
+      kind: 'fake',
+      bootstrap: 'echo no network >&2; exit 7',
+    }) as HarnessBake
     await assert.rejects(
       bakeTartImage(vm(), broken, ctx()),
       /^Error: The fake agent's bootstrap exited 7: no network$/,
@@ -503,7 +506,7 @@ describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script'
   })
 
   test('a bake canceled mid-bootstrap leaves no VM behind', async () => {
-    const slow = tartBake({ kind: 'fake', bootstrap: 'touch started; sleep 30' }) as TartBake
+    const slow = harnessBake({ kind: 'fake', bootstrap: 'touch started; sleep 30' }) as HarnessBake
     const abort = new AbortController()
     const baking = bakeTartImage(vm(), slow, ctx([], { signal: abort.signal }))
     while (!vms().some((n) => existsSync(join(vmDir(n), 'home', 'started')))) {
@@ -526,7 +529,7 @@ describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script'
 
   test('another run naming the image first wins the race, and this bake is dropped', async () => {
     const image = await bakedTartImage(vm(), bake, fakeDigest(IMAGE))
-    const racing: TartBake = {
+    const racing: HarnessBake = {
       ...bake,
       install: async (session) => {
         await tartCli(['clone', IMAGE, image])
@@ -616,12 +619,12 @@ describe('baked Tart images', { skip: !posix && 'the fake tart is a bash script'
       tartBakeKey(vm({ ssh: { key: '/k', user: 'me' } }), harness),
       tartBakeKey(vm(), harness),
     )
-    assert.equal(tartBake({ kind: 'fake' }), null)
-    const cursor = tartBake({ kind: 'cursor' } as HarnessDescriptor)
+    assert.equal(harnessBake({ kind: 'fake' }), null)
+    const cursor = harnessBake({ kind: 'cursor' } as HarnessDescriptor)
     assert.deepEqual([cursor?.label, cursor?.pnpm], [`cursor-${adapterVersion('cursor')}`, true])
     assert.match((await cursor?.recipe()) ?? '', /^[0-9a-f]{16}$/)
     assert.match(
-      tartBake({ kind: 'claude-code' } as HarnessDescriptor)?.label ?? '',
+      harnessBake({ kind: 'claude-code' } as HarnessDescriptor)?.label ?? '',
       /^claude-code-[\d.]+-patch\.[0-9a-f]{8}$/,
     )
     assert.match(await name({ image: 'sequoia-dev' }, bake, 'local:-'), /^[\w.-]+$/)

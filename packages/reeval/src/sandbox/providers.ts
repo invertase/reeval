@@ -30,7 +30,7 @@ import {
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
-import { tartBake, tartBakeKey } from './tart-bake.ts'
+import { harnessBake, tartBakeKey } from './tart-bake.ts'
 import { LOCAL_TART, type TartTarget } from './tart-cli.ts'
 import type { HostProbe, PreparedHost } from './tart-hosts.ts'
 
@@ -556,7 +556,7 @@ export const tartProvider = (
     pulls.set(pullKey, pulled)
     await pulled
     const digest = await tartDigestOn(sandbox.image, on)
-    const bake = tartBake(harness)
+    const bake = harnessBake(harness)
     if (!bake) return { digest }
     const { bakeTartImage } = await import('./tart-bake.ts')
     const source = await tartSourceOn(sandbox.image, on)

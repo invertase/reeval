@@ -3,12 +3,15 @@
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
 // call needs the key as a bearer token. Where its sandboxes run is up to `machines`: a container
 // laid out like a Boat VM (`dockerMachines`), or an address nothing listens on
-// (`unreachableMachines`), for the lifecycle without Docker.
+// (`unreachableMachines`), for the lifecycle without Docker. `boatSandboxesLeft` asks the real
+// one, for the contract's rows in boat().
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { type AddressInfo, connect } from 'node:net'
 import { NODE_IMAGE } from '../../../sandbox-docker/src/build-image.ts'
+import { boatClient, runPrefix } from '../../src/sandbox/boat.ts'
+import { boat } from '../../src/sandbox-boat.ts'
 
 /** Where one fake sandbox's SSH server is, and how to let a key in. */
 export type FakeMachine = {
@@ -320,4 +323,28 @@ export const dockerMachines: Machines = async (name) => {
     await remove()
     throw error
   }
+}
+
+/** Boat's states of a sandbox that still runs, which the account's limits count. */
+const LIVE_STATES = ['provisioned', 'cloning', 'starting', 'ready', 'idle', 'running']
+
+/**
+ * The run's sandboxes still live on the real Boat account in BOAT_API_KEY (or the one
+ * BOAT_BASE_URL points at), by name, waiting up to `deadlineMs` for deletes to land.
+ */
+export async function boatSandboxesLeft(runId: string, deadlineMs = 30_000): Promise<string[]> {
+  const sandbox = boat()
+  const api = await boatClient(sandbox)
+  const prefix = runPrefix(sandbox, runId)
+  const until = Date.now() + deadlineMs
+  let left: string[] = []
+  do {
+    const { sandboxes } = await api.sandboxes({ namePrefix: prefix, limit: 100 })
+    left = sandboxes
+      .filter((s) => s.name.startsWith(prefix) && LIVE_STATES.includes(s.state))
+      .map((s) => `${s.name} (${s.state})`)
+    if (!left.length) return []
+    await new Promise((r) => setTimeout(r, 1000))
+  } while (Date.now() < until)
+  return left
 }
