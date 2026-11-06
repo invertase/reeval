@@ -166,7 +166,7 @@ describe("installing a harness's CLI in a new VM", () => {
 
 describe('deleting a sandbox that never got ready', () => {
   /** A sandbox Boat keeps provisioning through the first `drops` deletes, then removes. */
-  function stuck(drops: number, after: 'gone' | 'archiving' = 'gone') {
+  function stuck(drops: number, after: 'gone' | string = 'gone') {
     const calls: string[] = []
     let deletes = 0
     const api = {
@@ -178,7 +178,7 @@ describe('deleting a sandbox that never got ready', () => {
       async get() {
         calls.push('get')
         if (deletes <= drops) return { sandbox: { id: 'bx_1', name: 'n', state: 'provisioning' } }
-        if (after === 'archiving') return { sandbox: { id: 'bx_1', name: 'n', state: 'archiving' } }
+        if (after !== 'gone') return { sandbox: { id: 'bx_1', name: 'n', state: after } }
         throw Object.assign(new Error('gone'), { response: new Response('{}', { status: 404 }) })
       },
     } as unknown as BoatClient
@@ -193,9 +193,32 @@ describe('deleting a sandbox that never got ready', () => {
     assert.equal(calls.at(-1), 'get')
   })
 
-  test('stops once Boat reports it archiving', async () => {
-    const { api, calls } = stuck(0, 'archiving')
-    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
+  for (const state of ['archiving', 'archived', 'error', 'cancelled']) {
+    test(`stops once Boat reports it ${state}`, async () => {
+      const { api, calls } = stuck(0, state)
+      assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
+      assert.deepEqual(calls, ['delete', 'get'])
+    })
+  }
+
+  test('sends one delete and stops when the attempt was canceled', async () => {
+    const { api, calls } = stuck(Number.POSITIVE_INFINITY)
+    const canceled = new AbortController()
+    canceled.abort()
+    const signal = canceled.signal
+    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, signal }), false)
+    assert.deepEqual(calls, ['delete'])
+  })
+
+  test('stops polling as soon as the attempt is canceled', async () => {
+    const { api, calls } = stuck(Number.POSITIVE_INFINITY)
+    const canceled = new AbortController()
+    const started = Date.now()
+    setTimeout(() => canceled.abort(), 50)
+    const signal = canceled.signal
+    const options = { pollMs: 60_000, redeleteMs: 60_000, signal }
+    assert.equal(await deleteUntilGone(api, 'bx_1', options), false)
+    assert.ok(Date.now() - started < 5_000, 'it did not wait out the poll')
     assert.deepEqual(calls, ['delete', 'get'])
   })
 

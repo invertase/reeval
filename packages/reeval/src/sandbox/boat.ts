@@ -238,12 +238,14 @@ async function deleteSandbox(api: BoatClient, id: string, signal?: AbortSignal):
 
 /**
  * Deletes a sandbox that never got ready, sending the delete again every `redeleteMs` until Boat
- * answers 404 or reports it archiving or archived, for at most `deadlineMs`. Whether it went.
+ * answers 404 or reports one of {@link DEAD_STATES}, for at most `deadlineMs`. Once `signal` is
+ * aborted it sends the delete once and stops: a canceled run's `cleanupRun` and the sandbox's TTL
+ * take it from there, so the cancel doesn't wait on Boat. Whether it went.
  */
 export async function deleteUntilGone(
   api: BoatClient,
   id: string,
-  o: { deadlineMs?: number; pollMs?: number; redeleteMs?: number } = {},
+  o: { deadlineMs?: number; pollMs?: number; redeleteMs?: number; signal?: AbortSignal } = {},
 ): Promise<boolean> {
   const until = Date.now() + (o.deadlineMs ?? UNREADY_DELETE_MS)
   const pollMs = o.pollMs ?? 5_000
@@ -254,13 +256,22 @@ export async function deleteUntilGone(
       await deleteSandbox(api, id).catch(() => {})
       deletedAt = Date.now()
     }
+    if (o.signal?.aborted) return false
     const state = await api.get({ sandboxId: id }).then(
       ({ sandbox }) => sandbox.state,
       (error: unknown) => (status(error) === 404 ? null : 'unknown'),
     )
-    if (state === null || state === 'archiving' || state === 'archived') return true
-    if (Date.now() >= until) return false
-    await new Promise((resolve) => setTimeout(resolve, pollMs))
+    if (state === null || DEAD_STATES.includes(state)) return true
+    if (Date.now() >= until || o.signal?.aborted) return false
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        o.signal?.removeEventListener('abort', done)
+        resolve()
+      }
+      const timer = setTimeout(done, pollMs)
+      o.signal?.addEventListener('abort', done, { once: true })
+    })
   }
 }
 
@@ -317,7 +328,7 @@ export async function createBoatSandbox(
   const cleanUp = () =>
     (cleaned ??= (async () => {
       if (id && ready) await deleteSandbox(api, id).catch(() => {})
-      else if (id) await deleteUntilGone(api, id).catch(() => {})
+      else if (id) await deleteUntilGone(api, id, { signal: options.signal }).catch(() => {})
       await rm(dir, { recursive: true, force: true })
     })())
   try {
