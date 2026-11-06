@@ -69,6 +69,8 @@ export const FLAGS = {
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
   'retry-errors': { type: 'string', optional: true },
+  events: { type: 'string', optional: true },
+  'events-url': { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -112,6 +114,8 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'resume',
   'retry-errors',
+  'events',
+  'events-url',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -184,7 +188,20 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 unique prefix
     --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
                                 the same run; passes and fails stay. Without a ref, the newest
-                                finished run. Exit 2 when the plan or eval source changed since`,
+                                finished run. Exit 2 when the plan or eval source changed since
+    --events [file]             Also write the run's output events as NDJSON for reeval attach
+                                (default .reeval/events/<run>.ndjson); a resume appends to it
+    --events-url <url>          Also POST them to url, in batches of NDJSON lines`,
+  },
+  attach: {
+    flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
+    positionals: 1,
+    help: `
+  reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
+                                does, from its start; exit with the run's exit code (default: the
+                                run in progress; a URL is read with GET as NDJSON)
+    --ui --log-order --log-prefix --output-logs
+                                As for reeval run`,
   },
   clean: {
     flags: ['keep', 'images', 'staging'],

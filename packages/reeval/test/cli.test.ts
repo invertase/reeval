@@ -154,6 +154,15 @@ describe('cli', () => {
       positionals: ['mcp'],
       values: { http: true, port: '4990', token: 't' },
     })
+    assert.deepEqual(parseCli(['run', '--events']).values, { events: '' })
+    assert.deepEqual(parseCli(['run', '--events', 'e.ndjson', '--events-url', 'http://x/e']), {
+      positionals: ['run'],
+      values: { events: 'e.ndjson', 'events-url': 'http://x/e' },
+    })
+    assert.deepEqual(parseCli(['attach', 'run-1', '--ui', 'agent']), {
+      positionals: ['attach', 'run-1'],
+      values: { ui: 'agent' },
+    })
   })
 
   test('commands the dispatcher reports stay positionals', () => {

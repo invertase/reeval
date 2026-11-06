@@ -112,6 +112,9 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
                               the same run; passes and fails stay. Without a ref, the newest
                               finished run. Exit 2 when the plan or eval source changed since
+  --events [file]             Also write the run's output events as NDJSON for reeval attach
+                              (default .reeval/events/<run>.ndjson); a resume appends to it
+  --events-url <url>          Also POST them to url, in batches of NDJSON lines
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -166,6 +169,20 @@ reeval run --retry-errors 20261022T172927Z
 Each retried attempt keeps the errors it ended with before in its record's [`retries`](/reference/run-record), as `{ error, at }`. A run already recorded into the history folder is recorded again with the new outcomes, also when a `--resume` finishes an interrupted retry. A retry runs only the infra errors: an attempt the run skipped, such as one a best-of cell didn't need, stays skipped.
 
 The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. It does so after a kill too, when the retry wrote no record, and keeps the attempts that finished before the kill. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
+
+## `reeval attach`
+
+[//]: # (generated:cli-help:attach)
+
+```text
+reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
+                              does, from its start; exit with the run's exit code (default: the
+                              run in progress; a URL is read with GET as NDJSON)
+  --ui --log-order --log-prefix --output-logs
+                              As for reeval run
+```
+
+[//]: # (/generated:cli-help:attach)
 
 ## `reeval clean`
 

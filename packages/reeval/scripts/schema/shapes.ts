@@ -71,6 +71,13 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'run-events',
+    file: 'src/view/events.ts',
+    type: 'RunEventLine',
+    where:
+      "One line of a run's event stream, from reeval run --events (.reeval/events/<run>.ndjson by default), read by reeval attach",
+  },
+  {
     name: 'cli-invocation',
     file: 'src/report/types.ts',
     type: 'CliInvocation',

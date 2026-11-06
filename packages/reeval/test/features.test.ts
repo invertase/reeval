@@ -4235,6 +4235,30 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'output/events',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    args: ['--events', 'out/events.ndjson'],
+    async record({ run, project, stdout }) {
+      const file = join(project, 'out', 'events.ndjson')
+      const lines = readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l) as { type: string; [k: string]: unknown })
+      assert.deepEqual(
+        [lines[0]?.type, lines[0]?.schemaVersion, lines[0]?.runId],
+        ['header', 1, run.runId],
+      )
+      assert.deepEqual(lines.at(-1)?.type === 'exit' && lines.at(-1)?.code, 1)
+      assert.ok(lines.some((l) => l.type === 'log' && l.text === 'streamed from lands\n'))
+      assert.equal(lines.filter((l) => l.type === 'eval-end').length, 2)
+      const attached = await runCli(project, ['attach', 'out/events.ndjson'])
+      assert.equal(attached.code, 1, "attach exits with the run's code")
+      assert.equal(attached.stdout, stdout, 'attach prints what the run printed')
+    },
+  },
+  {
     dir: 'output/study',
     tiers: ['fake'],
     env: 'marked',

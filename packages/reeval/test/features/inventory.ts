@@ -2350,6 +2350,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/concurrency.test.ts'],
   },
   {
+    id: 'run.events',
+    area: 'CLI and runner',
+    name: '`reeval run --events [file]` and `--events-url <url>`, followed by `reeval attach [run|file|url]`',
+    fixtures: ['output/events'],
+    unit: ['reeval/test/events.test.ts', 'reeval/test/ui.test.ts'],
+  },
+  {
     id: 'run.resume',
     area: 'CLI and runner',
     name: '`reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id',
