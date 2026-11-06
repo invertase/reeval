@@ -1619,7 +1619,11 @@ describe('AI_GATEWAY_BASE_URL', () => {
       problem('http://gw.example'),
       `AI_GATEWAY_BASE_URL (http://gw.example) isn't https://, and reeval sends the key only over HTTPS. ${fix}`,
     )
-    for (const value of ['https://gw.example/?k=1', 'https://gw.example/#a', 'https://u@gw.example']) {
+    for (const value of [
+      'https://gw.example/?k=1',
+      'https://gw.example/#a',
+      'https://u@gw.example',
+    ]) {
       assert.match(problem(value) ?? '', /has a query, a fragment or a user/, value)
     }
   })
@@ -1634,7 +1638,10 @@ describe('AI_GATEWAY_BASE_URL', () => {
     assert.deepEqual(claude.authEnv, { AI_GATEWAY_BASE_URL: BASE }, "the adapter's base URL")
     const codex = at({ kind: 'codex', model: 'gpt-5.4-mini' } as HarnessDescriptor)
     assert.deepEqual(paths(codex), [['gw.example', { exact: '/proxy/v1/responses' }]])
-    assert.equal(codex.servedModel?.({ host: 'gw.example', responseModel: 'openai/x' } as never), 'openai/x')
+    assert.equal(
+      codex.servedModel?.({ host: 'gw.example', responseModel: 'openai/x' } as never),
+      'openai/x',
+    )
     assert.equal(
       codex.servedModel?.({ host: 'ai-gateway.vercel.sh', responseModel: 'openai/x' } as never),
       undefined,
@@ -1654,7 +1661,10 @@ describe('AI_GATEWAY_BASE_URL', () => {
     ])
     const call = { host: 'gw.example', method: 'POST', status: 200 }
     const asked = { headers: { 'ai-language-model-id': 'google/m' } }
-    assert.equal(fx.askedModel?.({ ...call, path: '/proxy/v4/ai/language-model', ...asked }), 'google/m')
+    assert.equal(
+      fx.askedModel?.({ ...call, path: '/proxy/v4/ai/language-model', ...asked }),
+      'google/m',
+    )
     assert.equal(fx.askedModel?.({ ...call, path: '/v4/ai/language-model', ...asked }), undefined)
   })
 
@@ -1709,10 +1719,15 @@ describe('AI_GATEWAY_BASE_URL', () => {
     )
     assert.throws(
       () =>
-        judgeRoute('anthropic/claude-x', {
-          AI_GATEWAY_API_KEY: 'g',
-          AI_GATEWAY_BASE_URL: 'http://gw.example',
-        }, 'judge model', 'vercel'),
+        judgeRoute(
+          'anthropic/claude-x',
+          {
+            AI_GATEWAY_API_KEY: 'g',
+            AI_GATEWAY_BASE_URL: 'http://gw.example',
+          },
+          'judge model',
+          'vercel',
+        ),
       /^Error: judge model "anthropic\/claude-x": AI_GATEWAY_BASE_URL \(http:\/\/gw.example\) isn't https:\/\//,
     )
   })

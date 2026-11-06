@@ -158,8 +158,7 @@ export const fxVercelCall = (api: GatewayApi = VERCEL_API) =>
     method: ['POST'],
   }) as const satisfies EndpointMatch
 
-const escaped = (path: string) =>
-  path.replace(/\/+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const escaped = (path: string) => path.replace(/\/+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
  * The model an fx call asked the gateway for, in `ai-language-model-id`: what reeval records when
