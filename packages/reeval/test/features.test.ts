@@ -1220,6 +1220,37 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/expect-instance-masked',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected TokenError: \[REDACTED\] to be null/,
+    async record({ project, run, stdout, tier }) {
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.match(
+        JSON.stringify(canary?.assertions),
+        /expected Holder\{ held: '\[REDACTED\]' \} to be null/,
+      )
+      // The stretches a failed matcher's message kept of each before it was cut to 40 characters.
+      const kept = [
+        ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('').slice(4, 30),
+        ['correct', 'horse', 'battery', 'staple', 'and', 'more'].join('-'),
+      ]
+      const env = { CURSOR_AGENT: '1', REEVAL_FIXTURE_SANDBOX: tier }
+      const agent = await runCli(project, ['run', '--events'], { env })
+      assert.equal(agent.code, 1, agent.stdout + agent.stderr)
+      assert.match(agent.stdout, /expected TokenError: \[REDACTED\] to be null/)
+      for (const part of kept) {
+        for (const fragment of [part.slice(0, 8), part.slice(-8)]) {
+          assert.ok(!stdout.includes(fragment), `the output has ${fragment}`)
+          assert.ok(!agent.stdout.includes(fragment), `the agent output has ${fragment}`)
+          assert.equal(filesContaining(join(project, '.reeval'), fragment), '', fragment)
+        }
+      }
+      // Twin: the same search finds what was left in their place, the event stream's included.
+      assert.match(filesContaining(join(project, '.reeval', 'events'), '[REDACTED]'), /\.ndjson/)
+    },
+  },
+  {
     dir: 'secrets/matcher-output-masked',
     tiers: ['fake', 'docker'],
     env: 'plain',

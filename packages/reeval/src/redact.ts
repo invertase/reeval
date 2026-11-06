@@ -487,27 +487,34 @@ export function redactJson(
 export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): T =>
   JSON.parse(redactJson(value, undefined, env))
 
-/** Error prototypes a copy can be made on: a native error holds no private (`#`) fields. */
-const NATIVE_ERRORS = new Set<object>(
-  [
-    Error,
-    TypeError,
-    RangeError,
-    SyntaxError,
-    ReferenceError,
-    EvalError,
-    URIError,
-    AggregateError,
-  ].map((E) => E.prototype),
-)
+/** What loupe, chai and pretty-format call to format a value instead of reading its fields. */
+const FORMAT_HOOKS: PropertyKey[] = [
+  'inspect',
+  'toJSON',
+  Symbol.for('chai/inspect'),
+  Symbol.for('nodejs.util.inspect.custom'),
+]
+
+/**
+ * Whether a copy of `v` on its own prototype formats as `v` does: a plain object, an error or a
+ * class instance, read field by field. A copy has none of `v`'s private (`#`) fields, so one with a
+ * format hook, which could read them, isn't copied; nor are built-ins with internal slots (dates,
+ * promises, buffers), whose tag isn't an object's or an error's.
+ */
+function copyable(v: object, proto: unknown): boolean {
+  if (proto === Object.prototype || proto === null) return true
+  const tag = Object.prototype.toString.call(v)
+  if (tag !== '[object Object]' && tag !== '[object Error]') return false
+  return !FORMAT_HOOKS.some((key) => typeof (v as Record<PropertyKey, unknown>)[key] === 'function')
+}
 
 /**
  * `value` with every string in it masked as `redactSecrets` masks text, keeping its shape: arrays,
- * Maps, Sets, plain objects and native errors, with their property flags. What a failed
- * assertion's message and diff are made from, since both shorten or split a value, which leaves a
- * secret in them that masking the text afterwards no longer recognizes. A value with no secret in
- * it is returned as it is. So is anything else (a class instance, an error subclass, a date): a
- * copy would lose its private fields or internal slots, and the formatted text is masked after.
+ * Maps, Sets, and plain objects, errors and class instances on their own prototype, with their
+ * property flags. What a failed assertion's message and diff are made from, since both shorten or
+ * split a value, which leaves a secret in them that masking the text afterwards no longer
+ * recognizes. A value with no secret in it is returned as it is; so is one `copyable` refuses,
+ * left to the masking of the formatted text.
  */
 export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
   const secrets = envSecrets(env)
@@ -532,7 +539,7 @@ export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env)
       const items = [...(v as Set<unknown>)]
       const masked = items.map(walk)
       if (masked.some((item, i) => item !== items[i])) out = new Set(masked)
-    } else if (proto === Object.prototype || proto === null || NATIVE_ERRORS.has(proto as object)) {
+    } else if (copyable(v, proto)) {
       const error = v instanceof Error
       const descriptors = Object.getOwnPropertyDescriptors(v) as Record<
         PropertyKey,

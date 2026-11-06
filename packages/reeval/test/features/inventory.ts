@@ -830,6 +830,7 @@ export const inventory: InventoryFeature[] = [
       'secrets/redaction-coverage',
       'secrets/short-declared-secrets',
       'secrets/expect-message-masked',
+      'secrets/expect-instance-masked',
       'secrets/matcher-output-masked',
     ],
     unit: [

@@ -9,7 +9,7 @@ import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { docker, type Substitution } from '@reeval/sandbox-docker'
 import { assertionRecords } from '../src/attempt/assertions.ts'
-import { recordFailure, stagedRecordJson, turnErrors } from '../src/attempt/record.ts'
+import { recordFailure, stagedRecordJson, turnErrors, writeRecord } from '../src/attempt/record.ts'
 import { type Attempt, type AttemptSpec, createAttempt } from '../src/attempt/state.ts'
 import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
 import '../src/debug/docker.ts'
@@ -1927,6 +1927,27 @@ describe('redacting the strings in a value', () => {
     assert.match(String(masked.stack), /^TypeError: no \[REDACTED\]\n/)
   })
 
+  test('copies error subclasses and class instances on their own prototype', () => {
+    class TokenError extends Error {
+      override name = 'TokenError'
+    }
+    class Holder {
+      held: string
+      constructor(held: string) {
+        this.held = held
+      }
+    }
+    const { error, holder } = redactStrings(
+      { error: new TokenError(`bad ${token}`), holder: new Holder(token) },
+      {},
+    )
+    assert.ok(error instanceof TokenError)
+    assert.deepEqual([error.name, error.message], ['TokenError', 'bad [REDACTED]'])
+    assert.match(String(error.stack), /^TokenError: bad \[REDACTED\]\n/)
+    assert.ok(holder instanceof Holder)
+    assert.equal(holder.held, '[REDACTED]')
+  })
+
   test('twin: what has no secret, getters, cycles and other built-ins are returned as they are', () => {
     const plain = { list: ['a', 1], map: new Map([['k', 'v']]), set: new Set(['s']) }
     assert.equal(redactStrings(plain, {}), plain)
@@ -1938,22 +1959,25 @@ describe('redacting the strings in a value', () => {
     assert.equal(redactStrings(getter, {}), getter)
     const date = new Date(0)
     assert.equal(redactStrings(date, {}), date)
-    // A copy would lose a class's private fields, and its own inspect would throw on them.
+    // A copy has no private fields, which a format hook could read, so neither is copied.
     class Box {
       #held: string
+      shown: string
       constructor(held: string) {
         this.#held = held
+        this.shown = held
       }
-      get shown() {
+      toJSON() {
         return this.#held
       }
     }
     const box = new Box(token)
     assert.equal(redactStrings(box, {}), box)
-    assert.equal(redactStrings({ box }, {}).box.shown, token)
     class Failure extends Error {
-      #why = token
-      why = this.#why
+      why = token;
+      [Symbol.for('nodejs.util.inspect.custom')]() {
+        return this.why
+      }
     }
     const failure = new Failure(token)
     assert.equal(redactStrings(failure, {}), failure)
@@ -1963,6 +1987,26 @@ describe('redacting the strings in a value', () => {
     assert.equal(out.token, '[REDACTED]')
     assert.equal(out.self, cycle)
   })
+})
+
+test("an attempt's judge question is masked before its meta clips it to 200 characters", async () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const record = {
+    outcome: 'fail',
+    error: null,
+    turns: [],
+    judgements: [{ question: `${'x'.repeat(180)}${token}` }],
+  }
+  const empty = new Map()
+  const attempt = {
+    record,
+    spec: { cell: { key: 'c' }, n: 1 },
+    artifactBlobs: empty,
+    stepBlobs: empty,
+    capturePages: empty,
+  }
+  const meta = await writeRecord(attempt as never, tempDir('judge-question'), 'e')
+  assert.equal(meta.judgements[0]?.question, `${'x'.repeat(180)}[REDACTED]`)
 })
 
 test("a fake agent's failed bootstrap quotes its output's end masked before it's cut", async () => {
