@@ -36,6 +36,8 @@ export type TransportSessionOptions = {
   id: string
   /** How messages name the machine: `tart VM reeval-…`. */
   description: string
+  /** How a failed write names the machine: the VM's name, or {@link description} when unset. */
+  name?: string
   /** Where a relative path or working directory is. */
   defaultWorkingDirectory: string
   shell: SessionShell
@@ -103,7 +105,7 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
       { input: w.content, signal: w.abortSignal },
     )
     if (r.exitCode !== 0) {
-      throw new Error(`Couldn't write ${target} in ${description}: ${r.stderr.trim()}`)
+      throw new Error(`Couldn't write ${target} in ${o.name ?? description}: ${r.stderr.trim()}`)
     }
   }
   const paths = pathOperations(

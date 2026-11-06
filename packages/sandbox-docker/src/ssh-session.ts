@@ -9,6 +9,7 @@ import {
   type EgressStatus,
   EgressUnavailableError,
 } from './session.ts'
+import { EXEC_UMASK, linuxShell, SYSTEM_PATH } from './shells.ts'
 import { traceDocker } from './trace.ts'
 import { type SessionShell, transportSession } from './transport-session.ts'
 
@@ -33,23 +34,8 @@ export type SshSessionOptions = {
   onDestroy?: () => Promise<void>
 }
 
-const SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
-const EXEC_MARKER = 'REEVAL_EXEC_ID'
-const EXEC_UMASK = 'umask 022'
 /** ssh's own exit status: it couldn't connect, or the connection dropped. */
 const SSH_FAILED = 255
-
-/** `NAME=value\0` for each variable, as the remote reader takes them on stdin. */
-const envStream = (env: Record<string, string>) =>
-  Object.entries(env)
-    .map(([k, v]) => `${k}=${v}\0`)
-    .join('')
-
-/**
- * Runs `$2` with bash in `$1` as the sandbox user, after exporting the variables stdin carries.
- * The command itself gets no stdin, as a `docker exec` without `--interactive` would.
- */
-const READER = `${EXEC_UMASK}; while IFS= read -r -d "" kv; do export "$kv"; done; cd -- "$1" || exit 1; exec bash -c "$2" </dev/null`
 
 /**
  * A harness sandbox session on a Linux VM reached over SSH: the login user has passwordless `sudo`,
@@ -86,15 +72,7 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
       throw error
     }
   }
-  const ssh = (remote: string, input: string | Uint8Array = '', abort = signal) =>
-    hostRun(sshArgv(target, remote), { input, signal: abort })
-  const asUser = (cwd: string, command: string) =>
-    `sudo -n -H -u ${SANDBOX_USER} -- env -i ${Object.entries(baseEnv)
-      .map(([k, v]) => q(`${k}=${v}`))
-      .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`
-  const asRoot = (command: string, marker?: string) =>
-    `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${marker ? ` ${EXEC_MARKER}=${marker}` : ''} /bin/sh -c ${q(`cd ${SANDBOX_STATE} || exit 1; ${EXEC_UMASK}; ${command}`)}`
-
+  const ssh = (remote: string) => hostRun(sshArgv(target, remote), { input: '', signal })
   const closeConnection = async () => {
     if (!controlOptions(target.controlPath, 0).length) return
     const [bin = 'ssh', ...args] = sshArgv(target, '')
@@ -158,26 +136,13 @@ export async function createSshSession(options: SshSessionOptions): Promise<Dock
     ...env,
   })
 
-  /** Killing the host's ssh leaves the command running in the VM, so kill what has its marker. */
-  const killExec = (marker: string) =>
-    asRoot(
-      `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${marker}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
-    )
-  const marker = (exec: number) => `${target.hostKeyAlias}-${exec}`
-  const shell: SessionShell = {
+  const shell = linuxShell({
     run: hostRun,
-    user: ({ command, cwd, env, exec }) => ({
-      argv: sshArgv(target, asUser(cwd, command)),
-      input: envStream({ ...env, [EXEC_MARKER]: marker(exec) }),
-    }),
-    privileged: ({ command, exec }) => ({
-      argv: sshArgv(target, asRoot(command, marker(exec))),
-      input: '',
-    }),
-    kill: (exec) => ({ argv: sshArgv(target, killExec(marker(exec))), input: '' }),
-    direct: (argv) => sshArgv(target, `sudo -n -u ${SANDBOX_USER} -- ${argv.map(q).join(' ')}`),
-  }
-
+    remote: (command) => sshArgv(target, command),
+    id: target.hostKeyAlias,
+    user: baseEnv,
+    signal,
+  })
   return transportSession({
     id: target.hostKeyAlias,
     description: options.description,

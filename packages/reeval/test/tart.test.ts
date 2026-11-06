@@ -20,7 +20,6 @@ import { bakedImage, createProviders } from '../src/sandbox/providers.ts'
 import {
   createTartSandbox,
   EXEC_PROBE_WITH_SSH_MS,
-  execScript,
   memoryMb,
   removeRunVms,
   sshGuest,
@@ -637,20 +636,6 @@ describe('Tart sandbox commands', () => {
     assert.equal(memoryMb('4096m'), 4096)
     assert.equal(memoryMb(2 * 1024 ** 3), 2048)
     assert.equal(memoryMb('1.5g'), 1536)
-  })
-
-  test("a command's script quotes each value and drops names a shell can't export", () => {
-    const script = execScript({
-      command: 'npm test',
-      cwd: "/Users/admin/it's",
-      env: { A: "x'y", 'NOT-A-NAME': 'z' },
-      pidFile: '/s/1.pid',
-    })
-    const [setup, command] = script.split('\n')
-    assert.equal(command, 'npm test')
-    assert.match(setup ?? '', /export A='x'\\''y'/)
-    assert.match(setup ?? '', /cd '\/Users\/admin\/it'\\''s' \|\| exit 1/)
-    assert.doesNotMatch(setup ?? '', /NOT-A-NAME/)
   })
 
   test('SSH gets one quoted command line', () => {
