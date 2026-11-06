@@ -2,11 +2,14 @@
 // hint, the models reeval calls itself, what a harness on each authenticates with and is brokered
 // on, the upstream OpenRouter names, and Vercel's credential's expiry.
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { afterEach, describe, test } from 'node:test'
 import { fxVertexBaseUrl } from '@reeval/harness-fx'
 import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
+import { generateText } from 'ai'
 import { checkGateways } from '../src/config.ts'
 import { ROUTING_GATEWAY_NAMES } from '../src/contract/gateway.ts'
 import { anthropicPath, apiHost, openaiPath } from '../src/gateway/api.ts'
@@ -22,10 +25,15 @@ import { onRoutingGateway, ROUTING_GATEWAYS } from '../src/gateway/routes.ts'
 import { brokerToken, cachedTokenSource, RETRY_MS } from '../src/gateway/token.ts'
 import {
   jwtExpiry,
+  VERCEL_API,
   VERCEL_GATEWAY,
+  vercelApi,
+  vercelBaseUrl,
+  vercelBaseUrlProblem,
   vercelCredential,
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
+import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
   vertexDecisionModel,
@@ -1512,13 +1520,13 @@ describe('routing gateways as data', () => {
     for (const [name, gateway] of Object.entries(ROUTING_GATEWAYS)) {
       for (const [kind, route] of Object.entries(gateway.routes)) {
         for (const endpoint of route(process.env).endpoints ?? []) {
-          assert.equal(endpoint.host, apiHost(gateway.api), `${kind} on ${name}`)
+          assert.equal(endpoint.host, apiHost(gateway.api(process.env)), `${kind} on ${name}`)
         }
       }
     }
     assert.equal(
       OPENROUTER_GATEWAY.routes['claude-code']?.(process.env).authEnv?.ANTHROPIC_BASE_URL,
-      OPENROUTER_GATEWAY.api.anthropic,
+      OPENROUTER_GATEWAY.api(process.env).anthropic,
     )
   })
 
@@ -1538,7 +1546,8 @@ describe('routing gateways as data', () => {
     } as const
     const pis = { vercel: pi.PI_AI_GATEWAY, openrouter: pi.PI_OPENROUTER } as const
     for (const name of ROUTING_GATEWAY_NAMES) {
-      const { api, routes } = ROUTING_GATEWAYS[name]
+      const { routes } = ROUTING_GATEWAYS[name]
+      const api = ROUTING_GATEWAYS[name].api(process.env)
       for (const [kind, provider] of Object.entries(providers[name])) {
         const route = routes[kind as keyof typeof routes]?.(process.env)
         assert.equal(provider.credentialEnv, route?.authAs, `${kind} on ${name}`)
@@ -1558,9 +1567,9 @@ describe('routing gateways as data', () => {
         `pi on ${name}`,
       )
     }
-    assert.equal(fx.FX_PROVIDERS.gateway.url, VERCEL_GATEWAY.api.origin)
+    assert.equal(fx.FX_PROVIDERS.gateway.url, VERCEL_GATEWAY.api(process.env).origin)
     const { url, path } = fx.FX_PROVIDERS.openrouter
-    assert.equal(`${url}${path}`, OPENROUTER_GATEWAY.api.openai)
+    assert.equal(`${url}${path}`, OPENROUTER_GATEWAY.api(process.env).openai)
   })
 
   test('openaiPath and anthropicPath put an endpoint under the API base', () => {
@@ -1572,5 +1581,165 @@ describe('routing gateways as data', () => {
     assert.equal(apiHost(api), 'gw.example')
     assert.equal(openaiPath(api, '/chat/completions'), '/api/v1/chat/completions')
     assert.equal(anthropicPath(api, '/v1/messages'), '/v1/messages')
+  })
+})
+
+describe('AI_GATEWAY_BASE_URL', () => {
+  const saved = { ...process.env }
+  afterEach(() => {
+    process.env = { ...saved }
+  })
+  const BASE = 'https://gw.example/proxy'
+  const at = (h: HarnessDescriptor) => {
+    process.env.AI_GATEWAY_BASE_URL = `${BASE}/`
+    return agentFor({ ...h, gateway: 'vercel' } as AgentHarnessDescriptor)
+  }
+  const paths = (agent: { endpoints: readonly { host: string; path: unknown }[] }) =>
+    agent.endpoints.map((e) => [e.host, e.path])
+
+  test("vercel()'s API moves to it, path and all; unset, it's Vercel's own", () => {
+    assert.deepEqual(vercelApi({}), VERCEL_API)
+    assert.deepEqual(vercelApi({ AI_GATEWAY_BASE_URL: `${BASE}//` }), {
+      origin: BASE,
+      openai: `${BASE}/v1`,
+      anthropic: BASE,
+    })
+    assert.equal(vercelBaseUrl({}), undefined)
+    assert.equal(vercelBaseUrl({ AI_GATEWAY_BASE_URL: `${BASE}/` }), BASE)
+  })
+
+  test('only an https:// URL with nothing the agents would lose is a gateway', () => {
+    const fix =
+      'Set AI_GATEWAY_BASE_URL to an https:// URL such as https://gateway.example.com, or unset it to call Vercel AI Gateway.'
+    const problem = (value: string) => vercelBaseUrlProblem({ AI_GATEWAY_BASE_URL: value })
+    assert.equal(problem(BASE), undefined)
+    assert.equal(vercelBaseUrlProblem({}), undefined)
+    assert.equal(problem('gw.example'), `AI_GATEWAY_BASE_URL ("gw.example") isn't a URL. ${fix}`)
+    assert.equal(
+      problem('http://gw.example'),
+      `AI_GATEWAY_BASE_URL (http://gw.example) isn't https://, and reeval sends the key only over HTTPS. ${fix}`,
+    )
+    for (const value of ['https://gw.example/?k=1', 'https://gw.example/#a', 'https://u@gw.example']) {
+      assert.match(problem(value) ?? '', /has a query, a fragment or a user/, value)
+    }
+  })
+
+  test('each route brokers the key on its host only, under its path', () => {
+    const claude = at({ kind: 'claude-code', model: 'claude-sonnet-5-5' } as HarnessDescriptor)
+    assert.deepEqual(claude.hosts, ['gw.example'])
+    assert.deepEqual(paths(claude), [
+      ['gw.example', { exact: '/proxy/v1/messages' }],
+      ['gw.example', { exact: '/proxy/v1/messages/count_tokens' }],
+    ])
+    assert.deepEqual(claude.authEnv, { AI_GATEWAY_BASE_URL: BASE }, "the adapter's base URL")
+    const codex = at({ kind: 'codex', model: 'gpt-5.4-mini' } as HarnessDescriptor)
+    assert.deepEqual(paths(codex), [['gw.example', { exact: '/proxy/v1/responses' }]])
+    assert.equal(codex.servedModel?.({ host: 'gw.example', responseModel: 'openai/x' } as never), 'openai/x')
+    assert.equal(
+      codex.servedModel?.({ host: 'ai-gateway.vercel.sh', responseModel: 'openai/x' } as never),
+      undefined,
+    )
+    const pi = at({ kind: 'pi', model: 'google/gemini-3-flash' } as HarnessDescriptor)
+    assert.deepEqual(paths(pi), [
+      ['gw.example', { exact: '/proxy/v1/chat/completions' }],
+      ['gw.example', { exact: '/proxy/v1/messages' }],
+    ])
+    const grok = at({ kind: 'grok-build', model: 'grok-4.6' } as HarnessDescriptor)
+    assert.deepEqual(paths(grok), [['gw.example', { exact: '/proxy/v1/chat/completions' }]])
+    assert.equal(grok.expectedBlocked, undefined, "only Vercel's own root redirects to its site")
+    const fx = at({ kind: 'fx', model: 'google/gemini-3-flash' } as HarnessDescriptor)
+    assert.deepEqual(paths(fx), [
+      ['gw.example', { regex: '^/proxy/coding-agent/v1/' }],
+      ['gw.example', { regex: '^/proxy/v\\d+/ai/language-model$' }],
+    ])
+    const call = { host: 'gw.example', method: 'POST', status: 200 }
+    const asked = { headers: { 'ai-language-model-id': 'google/m' } }
+    assert.equal(fx.askedModel?.({ ...call, path: '/proxy/v4/ai/language-model', ...asked }), 'google/m')
+    assert.equal(fx.askedModel?.({ ...call, path: '/v4/ai/language-model', ...asked }), undefined)
+  })
+
+  test("each adapter's provider follows it", async () => {
+    process.env.AI_GATEWAY_BASE_URL = BASE
+    const [pi, fx] = await Promise.all([import('@reeval/harness-pi'), import('@reeval/harness-fx')])
+    const api = vercelApi()
+    const route = VERCEL_GATEWAY.routes.pi?.(process.env)
+    assert.deepEqual(
+      pi.piGatewayEndpoints({ ...pi.PI_AI_GATEWAY, openai: api.openai, anthropic: api.anthropic }),
+      route?.endpoints,
+    )
+    assert.equal(
+      fx.fxEnv('google/m', { provider: 'gateway', gatewayUrl: `${BASE}/` }).FX_RELAY_UPSTREAM,
+      BASE,
+    )
+    assert.equal(
+      fx.fxEnv('openai/m', { provider: 'openai', gatewayUrl: BASE }).FX_RELAY_UPSTREAM,
+      fx.FX_PROVIDERS.openai.url,
+      'only the gateway provider moves',
+    )
+  })
+
+  test("Goose and OpenCode can't follow it, so they fall to the next gateway", () => {
+    process.env.AI_GATEWAY_BASE_URL = BASE
+    const goose = { kind: 'goose', model: 'google/gemini-3-flash' } as HarnessDescriptor
+    assert.deepEqual(resolve(list('vercel', 'direct'), goose), {
+      name: 'direct',
+      skipped: [
+        {
+          gateway: 'vercel',
+          why: `Goose's vercel_ai_gateway provider has ai-gateway.vercel.sh built in, so reeval can't send its calls to AI_GATEWAY_BASE_URL (${BASE})`,
+        },
+      ],
+    })
+    const opencode = { kind: 'opencode', model: 'google/gemini-3-flash' } as HarnessDescriptor
+    assert.equal(resolve(list('vercel', 'direct'), opencode).name, 'direct')
+    assert.deepEqual(resolve(list('vercel', 'direct'), codex), { name: 'vercel', skipped: [] })
+    delete process.env.AI_GATEWAY_BASE_URL
+    assert.deepEqual(resolve(list('vercel', 'direct'), goose), { name: 'vercel', skipped: [] })
+  })
+
+  test("the judge's route refuses a URL that isn't a gateway's", () => {
+    assert.deepEqual(
+      judgeRoute(
+        'anthropic/claude-x',
+        { AI_GATEWAY_API_KEY: 'g', AI_GATEWAY_BASE_URL: BASE },
+        'judge model',
+        'vercel',
+      ),
+      { kind: 'gateway' },
+    )
+    assert.throws(
+      () =>
+        judgeRoute('anthropic/claude-x', {
+          AI_GATEWAY_API_KEY: 'g',
+          AI_GATEWAY_BASE_URL: 'http://gw.example',
+        }, 'judge model', 'vercel'),
+      /^Error: judge model "anthropic\/claude-x": AI_GATEWAY_BASE_URL \(http:\/\/gw.example\) isn't https:\/\//,
+    )
+  })
+
+  test("reeval's own calls go to it with the key, at the AI SDK's path under it", async () => {
+    assert.equal(vercelLanguageModel('openai/m', {}), 'openai/m')
+    assert.equal(vercelDecisionModel('openai/m', {}), 'openai/m')
+    const seen: { url?: string; auth?: string }[] = []
+    const server = createServer((req, res) => {
+      seen.push({ url: req.url, auth: req.headers.authorization })
+      req.resume()
+      req.on('end', () => res.writeHead(500).end('{}'))
+    })
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+    try {
+      const { port } = server.address() as AddressInfo
+      process.env.AI_GATEWAY_API_KEY = 'run-token'
+      const env = { AI_GATEWAY_BASE_URL: `http://127.0.0.1:${port}/proxy` }
+      await generateText({
+        model: vercelLanguageModel('openai/m', env),
+        prompt: 'hi',
+        maxRetries: 0,
+      }).catch(() => undefined)
+      assert.deepEqual(seen, [{ url: '/proxy/v4/ai/language-model', auth: 'Bearer run-token' }])
+      assert.equal(typeof vercelDecisionModel('openai/m', env), 'object')
+    } finally {
+      server.close()
+    }
   })
 })

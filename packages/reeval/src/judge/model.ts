@@ -1,6 +1,7 @@
 import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
 import { openRouterBilling, openRouterDecisionModel } from '../gateway/openrouter-models.ts'
+import { vercelDecisionModel } from '../gateway/vercel-models.ts'
 import { type VertexSettings, vertexDecisionModel, vertexSettings } from '../gateway/vertex.ts'
 import type { GatewayName, JudgeModel, JudgeOptions, TokenUsage } from '../types.ts'
 import { tokenUsage } from '../usage.ts'
@@ -26,7 +27,7 @@ async function resolveModel(
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
   const route = judgeRoute(model, process.env, 'judge model', gateway)
-  if (route.kind === 'gateway') return model
+  if (route.kind === 'gateway') return vercelDecisionModel(model)
   if (route.kind === 'openrouter') return openRouterDecisionModel(model, fallbacks)
   if (route.kind === 'vertex') return vertexDecisionModel(model, vertex ?? vertexSettings())
   const id = model.slice(route.provider.length + 1)

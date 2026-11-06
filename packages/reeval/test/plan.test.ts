@@ -223,6 +223,12 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  {
+    dir: 'gateway',
+    name: 'vercel-base-url',
+    args: ['--config', 'reeval.vercel.config.ts'],
+    env: { AI_GATEWAY_BASE_URL: 'https://gw.example/proxy' },
+  },
   { dir: 'gateway-strict', name: 'strict', args: [] },
   { dir: 'gateway-strict', name: 'strict-yaml', args: ['--config', 'reeval.strict.yaml'] },
   { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
@@ -646,6 +652,27 @@ evaluate('unknown', async () => {})
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+  })
+
+  test("an AI_GATEWAY_BASE_URL the key can't go to exits 2 at plan time", async () => {
+    const p = await project('gateway-base-url', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { vercel } from 'reeval/gateway'
+import { codex } from 'reeval/harness'
+export default defineConfig({ harnesses: codex({ model: 'gpt-5.4-mini' }), gateway: [vercel()] })
+`,
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('routed', async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'], {
+      env: { AI_GATEWAY_BASE_URL: 'http://gw.example', DOCKER_HOST: NO_DOCKER.DOCKER_HOST },
+    })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /AI_GATEWAY_BASE_URL \(http:\/\/gw\.example\) isn't https:\/\/, and reeval sends the key only over HTTPS\. Set AI_GATEWAY_BASE_URL to an https:\/\/ URL/,
+    )
   })
 
   test('a judge model no listed gateway serves exits 2 at plan time, naming the one that would', async () => {
