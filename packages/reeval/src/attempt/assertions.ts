@@ -88,7 +88,13 @@ export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
     Object.assign(new Error(), error),
     Object.getPrototypeOf(error),
   )
-  caught.name = error.name
+  // chai's AssertionError has `name` as a getter alone, so assigning it throws.
+  Object.defineProperty(caught, 'name', {
+    value: error.name,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  })
   caught.message = `${error.message} ${CAUGHT_HINT}`
   caught.stack = error.stack?.replace(error.message, caught.message)
   return caught

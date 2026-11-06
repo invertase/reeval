@@ -126,6 +126,33 @@ describe('standalone expect', () => {
     fails(() => createExpect().require(1).toBe(2), /expected 1 to be 2/)
   })
 
+  test("a caught expect.require fails the attempt as chai's AssertionError, with its diff", () => {
+    const t = task()
+    const own = createExpect(t)
+    try {
+      own.require({ a: 1, b: 'x' }, 'gate').toEqual({ a: 1, b: 'y' })
+    } catch {}
+    const error = checkFailure(rawAssertions(t)) as Error & { actual: unknown; expected: unknown }
+    assert.ok(error instanceof Error)
+    assert.equal(error.name, 'AssertionError')
+    assert.match(error.message, /^gate: expected \{ a: 1, b: 'x' \} to deeply equal .*\(the eval/)
+    assert.match(error.stack ?? '', /^AssertionError: gate: expected/)
+    assert.deepEqual(
+      [error.actual, error.expected],
+      [
+        { a: 1, b: 'x' },
+        { a: 1, b: 'y' },
+      ],
+    )
+    // Twin: the recorded check keeps chai's error as it was thrown.
+    const [raw] = rawAssertions(t)
+    assert.ok(raw?.error instanceof Error)
+    assert.equal(
+      raw.error.message,
+      "gate: expected { a: 1, b: 'x' } to deeply equal { a: 1, b: 'y' }",
+    )
+  })
+
   test("an expect inside a poll's function throws, so the poll tries again", async () => {
     const t = task()
     const own = createExpect(t)
