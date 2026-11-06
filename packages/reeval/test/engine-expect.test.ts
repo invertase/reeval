@@ -309,6 +309,16 @@ describe('standalone expect', () => {
         return true
       },
     )
+    // A message with a replacement pattern in it lands in the stack as written.
+    const dollars = createExpect().poll(() => '$& $` $$', { interval: 10, timeout: 30 })
+    await assert.rejects(
+      () => dollars.toBe('yes') as unknown as Promise<void>,
+      (error: Error) => {
+        assert.match(error.message, /^expected '\$& \$` \$\$' to be 'yes'/)
+        assert.ok(error.stack?.includes(error.message), error.stack)
+        return true
+      },
+    )
     // A thrown non-Error is passed through as is.
     await assert.rejects(
       () =>
