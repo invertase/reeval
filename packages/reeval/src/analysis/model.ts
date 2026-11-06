@@ -13,6 +13,7 @@ import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks, openRouterLanguageModel } from '../gateway/openrouter-models.ts'
+import { vercelLanguageModel } from '../gateway/vercel-models.ts'
 import {
   type VertexSettings,
   vertexLanguageModel,
@@ -198,7 +199,7 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
  * on openrouter, or Vertex AI's on vertex.
  */
 export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
-  if (model.route === 'gateway') return model.name
+  if (model.route === 'gateway') return vercelLanguageModel(model.name)
   if (model.route === 'openrouter') return openRouterLanguageModel(model.name, !!model.fallbacks)
   if (model.route === 'vertex') {
     return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())

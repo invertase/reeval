@@ -160,7 +160,7 @@ function fx(): GatewayRoute {
 /** OpenRouter: the harnesses reeval runs there, and why it doesn't run the rest. */
 export const OPENROUTER_GATEWAY: RoutingGateway = {
   name: 'OpenRouter',
-  api: OPENROUTER_API,
+  api: () => OPENROUTER_API,
   routes: {
     'claude-code': claudeCode,
     codex,

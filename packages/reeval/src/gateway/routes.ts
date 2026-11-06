@@ -18,10 +18,13 @@ export type GatewayRoute = ModelSpecific &
 export type RoutingGateway = {
   /** For messages: `Vercel AI Gateway`. */
   name: string
-  api: GatewayApi
+  /** Where its APIs are, from the host environment. */
+  api: (env: NodeJS.ProcessEnv) => GatewayApi
   routes: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => GatewayRoute>>
   /** Why it can't serve an agent it has no route for, for the plan's messages. */
   refusals: Partial<Record<AgentKind, string>>
+  /** Why it can't serve an agent it has a route for in this host environment, or undefined. */
+  refusedAt?: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => string | undefined>>
   /**
    * The harnesses whose `effort` reaches the model there by a path no real run has checked, each
    * with the models (as the eval names them) that holds for: the plan refuses `effort` with them
