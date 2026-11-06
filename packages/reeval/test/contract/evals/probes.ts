@@ -45,7 +45,12 @@ export const planted = scanned.extendEnvironment('planted', {
   env: { CONTRACT_PLANTED: PLANTED },
   files: { '~/.contract-planted': `${PLANTED}\n` },
 })
-export const closed = defineEnvironment('closed', { egress: 'deny-all' })
+/**
+ * `boat()` enforces no policy, so on it (`REEVAL_CONTRACT_SANDBOX=boat`) the environments below
+ * are `allow-all` and contract.test.ts leaves out what checks deny-all.
+ */
+const policy = process.env.REEVAL_CONTRACT_SANDBOX === 'boat' ? 'allow-all' : 'deny-all'
+export const closed = defineEnvironment('closed', { egress: policy })
 /**
  * The probe plugin alone, under deny-all: whatever else the agent loads or contacts is a leak. Its
  * `only` is the parts the row's harness loads (`REEVAL_CONTRACT_PLUGIN_PARTS`); unset, it keeps
@@ -54,7 +59,7 @@ export const closed = defineEnvironment('closed', { egress: 'deny-all' })
 export const plugged = defineEnvironment('plugged', ({ plugin }) => {
   const parts = process.env.REEVAL_CONTRACT_PLUGIN_PARTS
   return {
-    egress: 'deny-all',
+    egress: policy,
     plugins: [
       plugin.local('../plugins/probe', parts ? { only: parts.split(',') as PluginPart[] } : {}),
     ],

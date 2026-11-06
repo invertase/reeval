@@ -161,8 +161,8 @@ defineEnvironment('vm', { sandbox: boat({ type: 'large' }), egress: 'allow-all' 
 ```
 
 `boat()` needs `npm i @boatdev/sdk`, `BOAT_API_KEY` (or `createBoat({ apiKey, prefix })` for
-another account) and an OpenSSH client, and plans only under `egress: 'allow-all'` and on the
-Cursor harness so far; reeval refuses the others at plan time. It takes no image options: put the
+another account) and an OpenSSH client, and plans only under `egress: 'allow-all'`; reeval
+refuses the other policies at plan time. It takes no image options: put the
 toolchain's installs in the environment's `setup`.
 
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds

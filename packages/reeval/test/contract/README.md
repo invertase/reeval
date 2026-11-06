@@ -219,6 +219,12 @@ picks rows. Each real row is 15 attempts (14 without an `effort`, one more with 
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
 
+`REEVAL_CONTRACT_SANDBOX=boat` runs the rows in `boat()` instead of Docker, with `BOAT_API_KEY`
+and no sandbox images. Boat enforces no egress policy, so there the `deny-all` environments are
+`allow-all`, the `egress` evals are left out (2 fewer attempts a row), the deny-all check and the
+hermetic check's egress half skip, no captures are written, and clean teardown asks Boat for
+the run's live VMs. Each attempt is one Boat start: mind the account's starts an hour and a day.
+
 ## Flake policy
 
 Real agents are nondeterministic. The suite never retries (`runs: 1`, the default gate, no
