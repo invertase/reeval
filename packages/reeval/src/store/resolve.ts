@@ -224,11 +224,14 @@ function localHistory(
   }
 }
 
-/** Refuses a history kept anywhere but a local folder, which only `local()` can do so far. */
-export function storeReady(config: { history: ResolvedHistory; file: string }): void {
+/**
+ * Refuses a history kept anywhere but a local folder: the studio reads only `local()`, so it
+ * would show a remote store's copy as if it were the whole store.
+ */
+export function localStudio(config: { history: ResolvedHistory; file: string }): void {
   const { store } = config.history
   if (store.kind === 'local') return
   throw new UsageError(
-    `history.store in ${config.file} keeps runs in ${store.name}, and reeval can't read or write a s3() store yet. Use local() for now.`,
+    `reeval studio reads a local() history only, and history.store in ${config.file} keeps runs in ${store.name}. Run it with a profile whose history is local(), or none.`,
   )
 }

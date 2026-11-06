@@ -11,6 +11,7 @@ import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { packageReadme } from '../../../scripts/package-readme.mjs'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
+import { fakeS3 } from './support/fake-s3.ts'
 
 const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
   spawnTool(cmd, args, { cwd, env: baseEnv, encoding: 'utf8', timeout })
@@ -127,6 +128,7 @@ for (const installer of installers) {
       )
       assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
     })
+    await storeInApp(app, pkg, binCli(app))
   })
 }
 
@@ -192,6 +194,52 @@ async function boatInApp(app: string, pkg: string, cli: Cli, addSdk: () => void)
     await reachesBoat(cli, api, app)
   } finally {
     await api.close()
+  }
+}
+
+const STORE_CONFIG = (
+  pkg: string,
+  url: string,
+  bucket: string,
+) => `import { defineConfig } from '${pkg}'
+import { fakeHarness } from '${pkg}/harness'
+import { fakeJudge } from '${pkg}/judge'
+import { fakeSandbox } from '${pkg}/sandbox'
+import { local } from '${pkg}/store/local'
+import { s3 } from '${pkg}/store/s3'
+export default defineConfig({
+  harnesses: fakeHarness(),
+  sandbox: fakeSandbox(),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  history: { store: local({ dir: 'runs' }) },
+  profiles: {
+    ci: { history: { store: s3({ bucket: '${bucket}', endpoint: '${url}', prefix: 'packed' }) } },
+  },
+})
+`
+
+/**
+ * s3() in a packed install: the S3 client is one of reeval's own dependencies, so a run with
+ * `--profile ci --record` uploads with whatever the installer laid out.
+ */
+async function storeInApp(app: string, pkg: string, cli: Cli) {
+  const s3 = await fakeS3()
+  try {
+    await writeFile(join(app, 'reeval.store.config.ts'), STORE_CONFIG(pkg, s3.url, s3.bucket))
+    const env = {
+      AWS_ACCESS_KEY_ID: s3.accessKey,
+      AWS_SECRET_ACCESS_KEY: s3.secretKey,
+      CI: 'false',
+    }
+    const config = ['--config', 'reeval.store.config.ts']
+    const run = await cli(['run', ...config, '--profile', 'ci', '--record'], env)
+    assert.equal(run.status, 0, run.out)
+    assert.match(run.out, /^recorded \S+ in s3:\/\/reeval-runs\/packed /m)
+    assert.ok(
+      [...s3.objects.keys()].some((k) => /^packed\/runs\/\d{4}-\d{2}\/[^/]+\.json$/.test(k)),
+    )
+  } finally {
+    await s3.close()
   }
 }
 
@@ -283,6 +331,7 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs reeval"
     const sdk = berry(app, ['add', `${BOAT_SDK}@${boatPeer(manifest)}`])
     assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
   })
+  await storeInApp(app, pkg, cli)
 })
 
 test('the packed package installs into a clean project and runs reeval', {
@@ -437,6 +486,7 @@ test('the packed package installs into a clean project and runs reeval', {
     await api.close()
   }
   await boatInApp(app, pkg, binCli(app), () => sdk(app))
+  await storeInApp(app, pkg, binCli(app))
 
   // Nothing that ships imports an @reeval/* package, and every chunk loads with the installed
   // package's dependencies alone. cli.js runs `reeval` or `reeval __worker` by importing the CLI's chunk

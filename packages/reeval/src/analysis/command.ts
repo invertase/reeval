@@ -286,6 +286,11 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   if (flags.context && flags.save) {
     throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')
   }
+  if (flags.save && config.history.store.kind !== 'local') {
+    throw new UsageError(
+      `reeval analyze --save writes into a local() history, and history.store in ${config.file} keeps runs in ${config.history.store.name}. Drop --save: the analysis is still kept in .reeval/analysis.`,
+    )
+  }
   const entries = await allRuns(config)
   let evalFilter = flags.eval ?? null
   let head: HistoryEntry

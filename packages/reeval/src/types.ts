@@ -2316,6 +2316,41 @@ export type S3StoreDescriptor = {
 /** A history store as data, which `reeval.yaml` can name too. */
 export type HistoryStoreDescriptor = LocalStoreDescriptor | S3StoreDescriptor
 
+/** One version of a stored run: its id, and a value that changes whenever any of its files does. */
+export type StoredRunVersion = { runId: string; version: string }
+
+/** A run as a store holds it: the record, and every file beside it by its path under the run. */
+export type StoredRun = {
+  runId: string
+  /** The record's bytes, `<runId>.json` in a history folder. */
+  record: Uint8Array
+  /** Its artifacts, summary, remarks and saved analyses, by posix path under the run. */
+  files: Map<string, Uint8Array>
+}
+
+/**
+ * A remote store, as `s3()` keeps runs: reeval hands it runs it has already masked and scanned for
+ * secrets, and keeps a copy in `.reeval/store/` that every history command reads.
+ */
+export type HistoryStore = {
+  /** Names the store in messages, e.g. `s3://my-runs/ci`. */
+  readonly name: string
+  /** Every run in the store. */
+  listRuns(): Promise<StoredRunVersion[]>
+  /** One run, with its version; null when the store doesn't have it. */
+  readRun(runId: string): Promise<(StoredRun & { version: string }) | null>
+  /**
+   * Stores a run. Without `replaces` it only creates: `{ ok: false }` when the run is there,
+   * having written none of its files, so the stored run's stay as they are. With it, it replaces the run only while its version is still `replaces`, else `{ ok: false }`.
+   */
+  writeRun(
+    run: StoredRun,
+    options: { replaces?: string },
+  ): Promise<{ ok: true; version: string } | { ok: false }>
+  /** Adds or replaces one file beside a stored run: a saved analysis or the run's remarks. */
+  addFile(runId: string, path: string, bytes: Uint8Array): Promise<void>
+}
+
 export type HistoryConfig = {
   /**
    * Where recorded runs are kept: `local()` (the default, a folder committed with the evals) or
