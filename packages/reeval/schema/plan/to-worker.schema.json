@@ -2624,6 +2624,10 @@
           "description": "The folder every history command reads: the history folder for `local()`, else the store's copy in `.reeval/store/<id>/history`.",
           "type": "string"
         },
+        "scope": {
+          "description": "Which recorded runs the history commands list: a remote store holds every branch's, so it lists those whose commit HEAD reaches unless `--all-branches` asks for all. `local()` has none.",
+          "enum": ["all", "reachable"]
+        },
         "store": {
           "anyOf": [
             {

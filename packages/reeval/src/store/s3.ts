@@ -10,7 +10,7 @@ import { S3Client, S3Errors } from '@bradenmacdonald/s3-lite-client'
 import { UsageError } from '../errors.ts'
 import { RUN_ID } from '../ids.ts'
 import type { HistoryStore, S3StoreDescriptor, StoredRun, StoredRunVersion } from '../types.ts'
-import { checkEndpoint, S3_ENV_DEFAULTS, s3Name } from './resolve.ts'
+import { checkEndpoint, S3_ENV_DEFAULTS, s3Name, unsafePath } from './resolve.ts'
 
 const MARKER = 'reeval-store.json'
 const MARKER_BYTES = `${JSON.stringify({ kind: 'reeval-store', schemaVersion: 1 })}\n`
@@ -165,8 +165,16 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
       if (!record) return null
       const files = new Map<string, Uint8Array>()
       for (const file of await list(`${key}/`)) {
+        const path = file.slice(key.length + 1)
+        // `fetch` would normalize the key's dot segments away, and the signature with them.
+        if (unsafePath(path)) {
+          process.stderr.write(
+            `warning: skipped ${file} in ${s3Name(descriptor)}: a key with an empty, . or .. part can't be read back\n`,
+          )
+          continue
+        }
         const found = await get(file)
-        if (found) files.set(file.slice(key.length + 1), found.bytes)
+        if (found) files.set(path, found.bytes)
       }
       return { runId, record: record.bytes, files, version: record.version }
     },

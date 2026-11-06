@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
 import { encodeRecord } from '../src/history/files.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { resolveHistory } from '../src/store/resolve.ts'
 import { s3Settings, s3Store } from '../src/store/s3.ts'
-import { fakeConfig, project, runCli } from './helpers.ts'
+import { fakeConfig, project, runCli, tempDir } from './helpers.ts'
 import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
 
 const RUN = '20261105T120000Z_abcdef0_elliot_k3f9'
@@ -251,7 +261,7 @@ describe('recording to s3()', () => {
     assert.equal(remoteRecords().length, before + 1)
     assert.deepEqual(readdirSync(join(storeDir(), 'pending')), [])
     const idle = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
-    assert.match(idle.stdout, /nothing to upload to s3:\/\/reeval-runs\/ci/)
+    assert.match(idle.stdout, /nothing to upload, pulled 0 run\(s\) from s3:\/\/reeval-runs\/ci/)
   })
 
   test('a refused key, 403 or R2 401, names the variables and is not retried', async () => {
@@ -279,7 +289,7 @@ describe('recording to s3()', () => {
     writeFileSync(orphan, '')
     const sync = await runCli(dir, ['sync', '--profile', 'ci'], { env: env() })
     assert.equal(sync.code, 0, sync.stdout + sync.stderr)
-    assert.match(sync.stdout, /nothing to upload to s3:\/\/reeval-runs\/ci/)
+    assert.match(sync.stdout, /nothing to upload/)
     assert.equal(existsSync(orphan), false)
 
     const marker = s3.objects.get('ci/reeval-store.json') as { bytes: Buffer; etag: string }
@@ -347,5 +357,174 @@ describe('recording to s3()', () => {
       local.stdout,
       /history\.store is local\(\): runs are recorded in evals\/\.history, nothing to sync/,
     )
+  })
+})
+
+test("the copy is keyed on where the store's variables point now", () => {
+  const dir = (env: Record<string, string>) => {
+    const saved = { ...process.env }
+    Object.assign(process.env, env)
+    try {
+      const store = { kind: 's3', env: { bucket: 'RUNS_BUCKET', endpoint: 'RUNS_ENDPOINT' } }
+      return resolveHistory({ store }, 'history', 'reeval.yaml', '/p', 'evals/.history').dir
+    } finally {
+      process.env = saved
+    }
+  }
+  const one = dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://s3.example.com' })
+  assert.equal(dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://s3.example.com/' }), one)
+  assert.notEqual(dir({ RUNS_BUCKET: 'two', RUNS_ENDPOINT: 'https://s3.example.com' }), one)
+  assert.notEqual(dir({ RUNS_BUCKET: 'one', RUNS_ENDPOINT: 'https://r2.example.com' }), one)
+})
+
+describe('reading from s3()', () => {
+  let s3: FakeS3
+  let a: string
+  let b: string
+  const ids: Record<string, string> = {}
+  const env = () => ({ ...keyEnv(s3), CI: 'false', GITHUB_ACTIONS: 'false' })
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'r',
+        GIT_AUTHOR_EMAIL: 'r@example.com',
+        GIT_COMMITTER_NAME: 'r',
+        GIT_COMMITTER_EMAIL: 'r@example.com',
+      },
+    }).trim()
+  const recordOn = async (cwd: string, name: string) => {
+    writeFileSync(join(cwd, `${name}.txt`), name)
+    git(cwd, 'add', '-A')
+    git(cwd, 'commit', '-qm', name)
+    const r = await runCli(cwd, ['run', '--profile', 'ci', '--record'], { env: env() })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    ids[name] = /^recorded (\S+) in /m.exec(r.stdout)?.[1] as string
+  }
+  const listed = async (cwd: string, ...flags: string[]) => {
+    const r = await runCli(cwd, ['history', '--profile', 'ci', '--json', ...flags], { env: env() })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const view = JSON.parse(r.stdout) as { runs: Array<{ runId: string }>; orphaned: string[] }
+    return { ids: view.runs.map((run) => run.runId), orphaned: view.orphaned, stderr: r.stderr }
+  }
+  const storeDir = (cwd: string) => {
+    const [id] = readdirSync(join(cwd, '.reeval/store'))
+    return join(cwd, '.reeval/store', id as string)
+  }
+  const age = (cwd: string) => {
+    const file = join(storeDir(cwd), 'pulled.json')
+    const state = JSON.parse(readFileSync(file, 'utf8'))
+    writeFileSync(file, JSON.stringify({ ...state, at: '2026-01-01T00:00:00.000Z' }))
+  }
+
+  before(async () => {
+    s3 = await fakeS3()
+    const p = await project('store-read', {
+      '.gitignore': 'node_modules\n.reeval\nsandboxes\n',
+      'reeval.config.ts': fakeConfig({
+        extra: `record: 'manual',
+  profiles: {
+    ci: { history: { store: { kind: 's3', bucket: '${s3.bucket}', endpoint: '${s3.url}' } } },
+  },`,
+      }),
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+    })
+    a = p.dir
+    git(a, 'init', '-q', '-b', 'main')
+    await recordOn(a, 'main')
+    git(a, 'checkout', '-qb', 'feature')
+    await recordOn(a, 'feature')
+    git(a, 'checkout', '-q', 'main')
+    b = tempDir('store-read-clone')
+    rmSync(b, { recursive: true, force: true })
+    git(a, 'clone', '-q', a, b)
+    symlinkSync(join(a, 'node_modules'), join(b, 'node_modules'), 'dir')
+    git(a, 'checkout', '-q', 'feature')
+    await recordOn(a, 'later')
+    git(a, 'checkout', '-q', 'main')
+  })
+  after(() => s3.close())
+
+  test("another clone pulls the store's runs and lists those HEAD reaches", async () => {
+    const shown = await listed(b)
+    assert.deepEqual(shown.ids, [ids.main])
+    assert.deepEqual(shown.orphaned, [], 'a remote store lists no runs as rebased away')
+    const all = await listed(b, '--all-branches', '--offline')
+    assert.deepEqual(all.ids, [ids.main, ids.feature, ids.later])
+    const one = await runCli(b, ['show', '--profile', 'ci', '--json', ids.feature as string], {
+      env: env(),
+    })
+    assert.equal(one.code, 0, one.stdout + one.stderr)
+    assert.equal(JSON.parse(one.stdout).runId, ids.feature, 'a run id finds any branch')
+    const own = await runCli(a, ['sync', '--profile', 'ci'], { env: env() })
+    assert.match(own.stdout, /nothing to upload, pulled 0 run\(s\)/, 'its own uploads are known')
+  })
+
+  test('checkout fetches a commit the clone lacks', async () => {
+    const target = join(b, '.reeval/checkouts/later')
+    const r = await runCli(b, ['checkout', '--profile', 'ci', ids.later as string, target], {
+      env: env(),
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(readFileSync(join(target, 'later.txt'), 'utf8'), 'later')
+  })
+
+  test('an unreachable store shows the copy, and with no copy exits 3', async () => {
+    age(b)
+    s3.failNext(100)
+    const cached = await listed(b)
+    s3.failNext(0)
+    assert.deepEqual(cached.ids, [ids.main])
+    assert.match(
+      cached.stderr,
+      /s3:\/\/reeval-runs is unreachable \(.*\); showing the runs pulled at 20\d\d-/,
+    )
+    const fresh = tempDir('store-read-empty')
+    rmSync(fresh, { recursive: true, force: true })
+    git(a, 'clone', '-q', a, fresh)
+    symlinkSync(join(a, 'node_modules'), join(fresh, 'node_modules'), 'dir')
+    s3.failNext(100)
+    const none = await runCli(fresh, ['history', '--profile', 'ci'], { env: env() })
+    s3.failNext(0)
+    assert.equal(none.code, 3, none.stdout + none.stderr)
+    assert.match(none.stderr, /couldn't read s3:\/\/reeval-runs: /)
+    const offline = await runCli(fresh, ['history', '--profile', 'ci', '--offline'], { env: env() })
+    assert.equal(offline.code, 0, offline.stdout + offline.stderr)
+    assert.match(offline.stdout, /No recorded runs yet/)
+  })
+
+  test('a pull skips a run whose files fail their hashes, and keys outside the run', async () => {
+    const runId = ids.main as string
+    const base = `runs/${runId.slice(0, 4)}-${runId.slice(4, 6)}/${runId}`
+    const record = s3.objects.get(`${base}.json`) as { bytes: Buffer; etag: string }
+    const run = JSON.parse(String(record.bytes)) as RunRecord
+    const wrong = { path: 'summary.md', sha256: '0'.repeat(64), bytes: 1 }
+    const bad = encodeRecord({ ...run, git: { ...run.git, worktreePatch: wrong } } as RunRecord)
+    s3.objects.set(`${base}.json`, { bytes: bad, etag: 'tampered' })
+    s3.objects.set(`${base}/a/../evil.txt`, { bytes: Buffer.from('evil'), etag: 'evil' })
+    const skipped = await runCli(b, ['sync', '--profile', 'ci'], { env: env() })
+    assert.equal(skipped.code, 0, skipped.stdout + skipped.stderr)
+    assert.match(skipped.stdout, /pulled 0 run\(s\)/)
+    assert.match(
+      skipped.stderr,
+      new RegExp(
+        `warning: skipped ${runId} from s3://reeval-runs: summary\\.md doesn't match the hash in its record, so the next pull reads it again`,
+      ),
+    )
+    assert.match(
+      skipped.stderr,
+      /warning: skipped \S+\/a\/\.\.\/evil\.txt in s3:\/\/reeval-runs: a key with an empty, \. or \.\. part can't be read back/,
+    )
+    const copy = readFileSync(join(storeDir(b), 'history', `${runId}.json`))
+    assert.ok(copy.equals(record.bytes), 'the copy keeps what it had')
+    s3.objects.set(`${base}.json`, { ...record, etag: 'next' })
+    const pulled = await runCli(b, ['sync', '--profile', 'ci'], { env: env() })
+    s3.objects.delete(`${base}/a/../evil.txt`)
+    assert.equal(pulled.code, 0, pulled.stdout + pulled.stderr)
+    assert.match(pulled.stdout, /pulled 1 run\(s\)/)
+    assert.doesNotMatch(pulled.stderr, /doesn't match/)
+    assert.equal(existsSync(join(storeDir(b), 'history', 'evil.txt')), false)
   })
 })

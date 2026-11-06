@@ -61,6 +61,8 @@ export const FLAGS = {
   harness: { type: 'string' },
   bare: { type: 'boolean' },
   online: { type: 'boolean' },
+  offline: { type: 'boolean' },
+  'all-branches': { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
@@ -202,39 +204,47 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   history: {
-    flags: ['limit', 'all', 'json', 'profile'],
+    flags: ['limit', 'all', 'json', 'profile', 'offline', 'all-branches'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval history [filter]       Pass/fail per recorded eval over recent runs
                                 --limit <n> --all (include unrecorded runs) --json
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   show: {
-    flags: ['json', 'md', 'trace', 'out', 'profile'],
+    flags: ['json', 'md', 'trace', 'out', 'profile', 'offline', 'all-branches'],
     positionals: 1,
     help: `
   reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
     --trace                     Write its timeline as Chrome Trace Event JSON for ui.perfetto.dev:
                                 attempts in lanes, with setup, turns, tool calls, checks and judge
     --out <file>                With --trace, where to write it (default .reeval/traces/<run>.json)
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   compare: {
-    flags: ['md', 'json', 'fail-on-regression', 'verbose', 'profile'],
+    flags: ['md', 'json', 'fail-on-regression', 'verbose', 'profile', 'offline', 'all-branches'],
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
     -v, --verbose               Also each cell's lift and effort and each variant's comparison with
                                 its baseline, base → head, and the stack changes
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   checkout: {
-    flags: ['profile'],
+    flags: ['profile', 'offline', 'all-branches'],
     positionals: 2,
     help: `
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   sync: {
@@ -242,11 +252,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 0,
     help: `
   reeval sync                   Upload the runs recorded to history.store that didn't upload
-                                (kept in .reeval/store/<id>/pending); exit 3 if any still fails
+                                (kept in .reeval/store/<id>/pending), then download the runs
+                                recorded elsewhere; exit 3 if the store fails
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   query: {
-    flags: ['json', 'schema', 'rebuild', 'run', 'profile'],
+    flags: ['json', 'schema', 'rebuild', 'run', 'profile', 'offline'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
@@ -257,10 +268,23 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
+    --offline                   A remote history.store: read its copy without pulling first
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache', 'profile'],
+    flags: [
+      'vs',
+      'eval',
+      'json',
+      'md',
+      'save',
+      'context',
+      'dry-run',
+      'no-cache',
+      'profile',
+      'offline',
+      'all-branches',
+    ],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -272,10 +296,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   mcp: {
-    flags: ['http', 'port', 'host', 'token', 'profile'],
+    flags: ['http', 'port', 'host', 'token', 'profile', 'offline', 'all-branches'],
     positionals: 0,
     help: `
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
@@ -285,6 +311,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
                                 --port <n> (default 4986), --host <addr>
     --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   studio: {

@@ -2,13 +2,14 @@
 // in a history folder, is marked in `pending/`, and is uploaded from there. A run that didn't
 // upload stays marked until `reeval sync` uploads it.
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { UsageError } from '../errors.ts'
 import { recordFile, replaceable, runDir } from '../history/files.ts'
-import type { HistoryStore, ResolvedHistory, S3StoreDescriptor } from '../types.ts'
-import { S3_ENV_DEFAULTS } from './resolve.ts'
+import { randomSuffix, sha256 } from '../ids.ts'
+import type { HistoryStore, ResolvedHistory, S3StoreDescriptor, StoredRun } from '../types.ts'
+import { S3_ENV_DEFAULTS, unsafePath } from './resolve.ts'
 import { s3Settings, s3Store } from './s3.ts'
 
 /** A run the store didn't take: the store or the network failed, or it holds another version. */
@@ -113,23 +114,26 @@ const keyHint = (descriptor: S3StoreDescriptor) => {
 }
 
 export type Uploaded = 'uploaded' | 'replaced' | 'already'
+type Upload = { how: Uploaded; version: string }
 
 /**
  * Uploads the copy's run `runId` to the store. A run the store already holds is fine when it's
  * the same bytes, and replaced when the copy's continues it (a resume, `--retry-errors`), as a
  * history folder's is; any other version is a StoreError, and so is a store that keeps failing.
  */
-export async function uploadRun(history: RemoteHistory, runId: string): Promise<Uploaded> {
+export async function uploadRun(history: RemoteHistory, runId: string): Promise<Upload> {
   const store = storeOf(history)
   const record = await readFile(recordFile(history.dir, runId))
   const run = { runId, record, files: new Map(await filesUnder(runDir(history.dir, runId))) }
   try {
     return await tries(async () => {
       const created = await store.writeRun(run, {})
-      if (created.ok) return 'uploaded'
+      if (created.ok) return { how: 'uploaded' as const, version: created.version }
       const there = await store.readRun(runId)
       if (!there) throw new StoreError(`${runId} went missing from ${store.name} meanwhile`)
-      if (Buffer.from(there.record).equals(record)) return 'already'
+      if (Buffer.from(there.record).equals(record)) {
+        return { how: 'already' as const, version: there.version }
+      }
       if (!replaceable(Buffer.from(there.record), `${store.name} ${runId}`, record)) {
         throw new StoreError(
           `${runId} is already in ${store.name} with different content. Recorded runs are never rewritten.`,
@@ -137,7 +141,7 @@ export async function uploadRun(history: RemoteHistory, runId: string): Promise<
       }
       const replaced = await store.writeRun(run, { replaces: there.version })
       if (!replaced.ok) throw new StoreError(`${runId} was written to ${store.name} meanwhile`)
-      return 'replaced'
+      return { how: 'replaced' as const, version: replaced.version }
     })
   } catch (error) {
     if (error instanceof UsageError || error instanceof StoreError) throw error
@@ -163,9 +167,12 @@ export async function unmarkPending(history: RemoteHistory, runId: string): Prom
 
 /** Uploads `runId` and unmarks it; a failure leaves it marked, for `reeval sync`. */
 export async function uploadPending(history: RemoteHistory, runId: string): Promise<Uploaded> {
-  const result = await uploadRun(history, runId)
+  const { how, version } = await uploadRun(history, runId)
+  await savePulled(history, (state) => {
+    state.versions[runId] = version
+  })
   await unmarkPending(history, runId)
-  return result
+  return how
 }
 
 /** The line a run that didn't upload ends with, and in GitHub Actions its annotation. */
@@ -178,4 +185,128 @@ export function notUploaded(error: Error, pending: string): string {
     )
   }
   return message
+}
+
+/** What the copy holds: when it was last pulled, and each run's version. */
+type Pulled = { at: string | null; versions: Record<string, string> }
+
+const pulledFile = (history: RemoteHistory) => join(dirname(history.dir), 'pulled.json')
+
+async function readPulled(history: RemoteHistory): Promise<Pulled | null> {
+  const text = await readFile(pulledFile(history), 'utf8').catch(() => null)
+  if (!text) return null
+  try {
+    return JSON.parse(text) as Pulled
+  } catch {
+    return null
+  }
+}
+
+async function savePulled(history: RemoteHistory, change: (state: Pulled) => void) {
+  const state = (await readPulled(history)) ?? { at: null, versions: {} }
+  change(state)
+  await mkdir(dirname(history.dir), { recursive: true })
+  const tmp = `${pulledFile(history)}.${randomSuffix(6)}`
+  await writeFile(tmp, `${JSON.stringify(state)}\n`)
+  await rename(tmp, pulledFile(history))
+}
+
+/** Puts a run the store holds into the copy, its files first and its record last. */
+async function writeCopy(history: RemoteHistory, run: StoredRun) {
+  await mkdir(history.dir, { recursive: true })
+  const staging = join(history.dir, `.tmp-${randomSuffix(8)}`)
+  try {
+    for (const [path, bytes] of run.files) {
+      if (unsafePath(path)) {
+        warn(
+          `skipped ${path} in ${storeOf(history).name}'s ${run.runId}: it isn't a path under the run`,
+        )
+        continue
+      }
+      const file = join(staging, ...path.split('/'))
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, bytes)
+    }
+    await rm(runDir(history.dir, run.runId), { recursive: true, force: true })
+    if (existsSync(staging)) await rename(staging, runDir(history.dir, run.runId))
+    const tmp = join(history.dir, `.tmp-${randomSuffix(8)}.json`)
+    await writeFile(tmp, run.record)
+    await rename(tmp, recordFile(history.dir, run.runId))
+  } finally {
+    await rm(staging, { recursive: true, force: true })
+  }
+}
+
+const warn = (message: string) => process.stderr.write(`warning: ${message}\n`)
+
+/**
+ * The run's files that don't match the hash its record names for them. The record names its
+ * files as `{ path, sha256 }` wherever they're attached; `debug`'s are under `.reeval/debug`.
+ */
+function mismatched(run: StoredRun): string[] {
+  const named = new Map<string, string>()
+  const walk = (value: unknown, top: boolean) => {
+    if (Array.isArray(value)) for (const v of value) walk(v, false)
+    else if (value && typeof value === 'object') {
+      const o = value as Record<string, unknown>
+      if (typeof o.path === 'string' && typeof o.sha256 === 'string') named.set(o.path, o.sha256)
+      for (const [key, v] of Object.entries(o)) if (!(top && key === 'debug')) walk(v, false)
+    }
+  }
+  walk(JSON.parse(Buffer.from(run.record).toString()), true)
+  return [...run.files]
+    .filter(([path, bytes]) => named.has(path) && sha256(bytes) !== named.get(path))
+    .map(([path]) => path)
+}
+
+export type Pull = { pulled: number; cachedAt: string | null; unreachable?: string }
+
+/**
+ * Brings the copy up to date with the store, at most once a minute unless `force`: every run
+ * whose version it hasn't seen, except one still waiting to upload from here. A store it can't
+ * reach leaves the copy as it was, with `unreachable` saying why; with no copy yet, that's a
+ * StoreError. A run whose files don't match the hashes its record names (read while it was being
+ * replaced) is left for the next pull, with a warning.
+ */
+export async function pullStore(
+  history: RemoteHistory,
+  options: { force?: boolean; maxAgeMs?: number } = {},
+): Promise<Pull> {
+  const store = storeOf(history)
+  const state = await readPulled(history)
+  const fresh = state?.at && Date.now() - Date.parse(state.at) < (options.maxAgeMs ?? 60_000)
+  if (fresh && !options.force) return { pulled: 0, cachedAt: state?.at ?? null }
+  const seen = state?.versions ?? {}
+  const waiting = new Set(await pendingRuns(history))
+  let pulled = 0
+  try {
+    const runs = await tries(() => store.listRuns())
+    for (const { runId, version } of runs) {
+      if (waiting.has(runId)) continue
+      if (seen[runId] === version && existsSync(recordFile(history.dir, runId))) continue
+      const run = await tries(() => store.readRun(runId))
+      if (!run) continue
+      const changed = mismatched(run)
+      if (changed.length) {
+        warn(
+          `skipped ${runId} from ${store.name}: ${changed.join(', ')} ${changed.length === 1 ? "doesn't" : "don't"} match the hash in its record, so the next pull reads it again`,
+        )
+        continue
+      }
+      await writeCopy(history, run)
+      await savePulled(history, (s) => {
+        s.versions[runId] = run.version
+      })
+      pulled++
+    }
+  } catch (error) {
+    if (error instanceof UsageError || error instanceof StoreError) throw error
+    if (!state?.at) throw new StoreError(`couldn't read ${store.name}: ${reason(error, history)}`)
+    return { pulled, cachedAt: state.at, unreachable: reason(error, history) }
+  }
+  const at = new Date().toISOString()
+  await savePulled(history, (s) => {
+    s.at = at
+  })
+  return { pulled, cachedAt: at }
 }
