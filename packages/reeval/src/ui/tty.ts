@@ -418,8 +418,7 @@ export class InteractiveRenderer implements Renderer {
 
   close(): void {
     this.#stopPolling()
-    if (this.#pending) clearImmediate(this.#pending)
-    this.#pending = undefined
+    if (this.#pending) this.#flush()
     this.#spinner.settle()
     this.#plain.close()
     this.#fallback?.close()

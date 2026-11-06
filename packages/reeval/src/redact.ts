@@ -367,6 +367,15 @@ function redactWith(text: string, secrets: Secrets, forms = secrets.forms): stri
   return out + text.slice(at)
 }
 
+/** `o` with each of its string fields masked, but those named in `keep`. */
+export function redactFields<T extends object>(o: T, keep: ReadonlyArray<string> = []): T {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(o)) {
+    out[k] = typeof v === 'string' && !keep.includes(k) ? redactSecrets(v) : v
+  }
+  return out as T
+}
+
 /** A JSON string literal: `[start, end)` with its quotes, and whether it's an object's key. */
 type Literal = { start: number; end: number; key: boolean }
 
