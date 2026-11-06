@@ -1419,6 +1419,65 @@ evaluate('caught check alone', async (c) => {
     )
   })
 
+  test("a caught expect.require of a chai matcher fails the attempt with chai's message and diff everywhere", async () => {
+    const p = await project('caught-chai-require', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/shape.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('caught', async () => {
+  try {
+    expect.require({ a: 1, b: 'seen' }, 'shape').toEqual({ a: 1, b: 'wanted' })
+  } catch {}
+})
+evaluate('uncaught', async () => {
+  expect.require({ a: 1, b: 'seen' }, 'shape').toEqual({ a: 1, b: 'wanted' })
+})
+`,
+    })
+    const message = "shape: expected { a: 1, b: 'seen' } to deeply equal { a: 1, b: 'wanted' }"
+    const hint =
+      ' (the eval caught this failed check, which still fails the attempt; to wait or retry, use expect.poll)'
+    const diff =
+      '- Expected\n+ Received\n\n  {\n    "a": 1,\n-   "b": "wanted",\n+   "b": "seen",\n  }'
+    const verbose = await runCli(p.dir, ['run', '-v', '--events', '--concurrency', '1'])
+    assert.equal(verbose.code, 1, verbose.stdout + verbose.stderr)
+    const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
+    assert.equal(agent.code, 1, agent.stdout + agent.stderr)
+    for (const output of [verbose.stdout, verbose.stderr, agent.stdout, agent.stderr]) {
+      assert.doesNotMatch(output, /TypeError|only a getter/)
+    }
+    assert.ok(verbose.stdout.includes(`[caught#1 fake]`), verbose.stdout)
+    assert.ok(
+      verbose.stdout.includes(`outcome fail · assertion: ${message}${hint}`),
+      verbose.stdout,
+    )
+    assert.ok(agent.stdout.includes(message.replace('shape: ', '')), agent.stdout)
+    const { run, read } = readRun(p.dir, { back: 1 })
+    const byName = Object.fromEntries(run.evals.map((e) => [e.name, e.attempts[0]]))
+    assert.deepEqual(byName.caught?.error, { kind: 'assertion', message: `${message}${hint}` })
+    // Twin: the same check uncaught fails as chai's error, without the hint.
+    assert.deepEqual(byName.uncaught?.error, { kind: 'assertion', message })
+    assert.ok(read('summary.md').includes(`${message}${hint}`), read('summary.md'))
+    const events = readFileSync(join(p.dir, '.reeval', 'events', `${run.runId}.ndjson`), 'utf8')
+    const failed = events
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .flatMap((e) => (e.result?.formattedErrors ? [e.result] : []))
+    assert.equal(failed.length, 2, events)
+    for (const result of failed) {
+      assert.equal(result.errorName, 'AssertionError')
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: the formatted error is colored
+      assert.ok(result.formattedErrors[0].replace(/\u001b\[\d+m/g, '').includes(diff))
+    }
+    const debug = join(p.dir, '.reeval', 'debug', run.runId)
+    const logs = readdirSync(debug, { recursive: true, encoding: 'utf8' }).filter((f) =>
+      f.endsWith('debug.log'),
+    )
+    const caughtLog = logs.find((f) => /-caught-/.test(f))
+    assert.ok(caughtLog, logs.join(', '))
+    assert.ok(readFileSync(join(debug, caughtLog), 'utf8').includes(`${message}${hint}`))
+  })
+
   test('each call shows only its own inputs, diff narrowed by its patterns; build output is dropped', async () => {
     const p = await project('judge-scope', {
       'reeval.config.ts': fakeConfig({

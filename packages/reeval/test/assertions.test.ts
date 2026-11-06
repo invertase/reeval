@@ -85,3 +85,32 @@ test('the first call that did not pass fails the attempt: a soft one as what it 
   assert.ok(unanswered instanceof Error)
   assert.equal(unanswered.message, 'no turn')
 })
+
+test("a caught failure keeps its class and fields when its name or message can't be assigned", () => {
+  class Fixed extends Error {
+    override get name() {
+      return 'Fixed'
+    }
+    override get message() {
+      return "expected '$&' to be '$`$$'"
+    }
+  }
+  const cause = new Error('underneath')
+  const fixed = Object.assign(new Fixed(undefined, { cause }), { code: 'E_FIXED' })
+  const caught = checkFailure([raw({ status: 'fail', error: fixed })]) as Fixed & { code: string }
+  assert.ok(caught instanceof Fixed)
+  assert.equal(caught.name, 'Fixed')
+  assert.equal(caught.message, `expected '$&' to be '$\`$$' ${CAUGHT_HINT}`)
+  assert.match(caught.stack ?? '', /^Fixed: expected '\$&' to be '\$`\$\$' \(the eval caught/)
+  assert.equal(caught.cause, cause, 'a non-enumerable cause is kept')
+  assert.equal(caught.code, 'E_FIXED')
+  // Twin: the failure itself is left as it was.
+  assert.equal(fixed.message, "expected '$&' to be '$`$$'")
+  const timeout = new DOMException('The operation timed out', 'TimeoutError')
+  const platform = checkFailure([raw({ status: 'error', error: timeout })])
+  assert.ok(platform instanceof Error)
+  assert.equal(platform.name, 'TimeoutError')
+  assert.equal(platform.message, `The operation timed out ${CAUGHT_HINT}`)
+  assert.match(platform.stack ?? '', /^TimeoutError: The operation timed out \(the eval caught/)
+  assert.equal(platform.cause, timeout)
+})

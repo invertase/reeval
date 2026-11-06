@@ -84,12 +84,31 @@ export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
   if (!failed) return undefined
   const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
   if (failed.soft) return error
-  const caught = Object.setPrototypeOf(
-    Object.assign(new Error(), error),
+  const message = `${error.message} ${CAUGHT_HINT}`
+  const stack = error.stack?.replace(error.message, () => message)
+  // A DOMException's getters read slots a copy doesn't have, so it rides along as the cause.
+  if (error instanceof DOMException) {
+    return Object.defineProperties(new Error(message, { cause: error }), {
+      name: own(error.name),
+      stack: own(stack),
+    })
+  }
+  // Data properties of their own: chai's AssertionError has `name` as a getter alone, and a
+  // subclass may have `message` so, where assigning either would throw.
+  return Object.setPrototypeOf(
+    Object.defineProperties(new Error(), {
+      ...Object.getOwnPropertyDescriptors(error),
+      name: own(error.name),
+      message: own(message),
+      stack: own(stack),
+    }),
     Object.getPrototypeOf(error),
   )
-  caught.name = error.name
-  caught.message = `${error.message} ${CAUGHT_HINT}`
-  caught.stack = error.stack?.replace(error.message, caught.message)
-  return caught
 }
+
+const own = (value: unknown): PropertyDescriptor => ({
+  value,
+  writable: true,
+  configurable: true,
+  enumerable: false,
+})

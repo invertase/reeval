@@ -617,7 +617,7 @@ function createPoll(
                 }
                 if (Date.now() + interval >= deadline) {
                   if (error instanceof Error && location.stack)
-                    error.stack = location.stack.replace(location.message, error.message)
+                    error.stack = location.stack.replace(location.message, () => error.message)
                   if (entry) settle(entry, error, startedAt)
                   outer?.push(...tried)
                   if (!entry?.soft || outer || !isCheckOutcome(error)) throw error
