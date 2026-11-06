@@ -278,6 +278,80 @@ describe('reeval bundle', () => {
     )
   })
 
+  test('refuses a chain of listed links that leaves the extract directory', async () => {
+    const tmp = extractRoot()
+    const keep: TarEntry = {
+      type: 'file',
+      path: 'a/b/c/d/e/f/keep',
+      mode: 0o644,
+      mtime: 0,
+      data: Buffer.from('keep\n'),
+    }
+    const link = (path: string, target: string): TarEntry => ({
+      type: 'symlink',
+      path,
+      mode: 0o777,
+      mtime: 0,
+      target,
+    })
+    const up = link('a/b/c/d/e/f/x', '../../../../..')
+    /** The bundle with `extra` links, each listed in the manifest and, unless `unplanned`, the plan. */
+    const chained = (extra: TarEntry[], unplanned: string[] = []) =>
+      rewrite(
+        [...entries, keep, up, ...extra],
+        join(tempDir('bundle-bad'), 'chain.tar.gz'),
+        (m) => {
+          const all = [up, ...extra] as Array<TarEntry & { type: 'symlink' }>
+          const plan = m.plan as { inputs: Array<Record<string, unknown>> }
+          return {
+            ...m,
+            files: [
+              ...m.files,
+              { path: keep.path, kind: 'skill', sha256: sha256(Buffer.from('keep\n')), size: 5 },
+            ],
+            links: all.map((l) => ({ path: l.path, target: l.target })),
+            plan: {
+              ...m.plan,
+              inputs: [
+                ...plan.inputs,
+                ...all
+                  .filter((l) => !unplanned.includes(l.path))
+                  .map((l) => ({ path: l.path, kind: 'skill', evals: [], symlinkTo: l.target })),
+              ],
+            },
+          }
+        },
+      )
+    const host = '../../../../../../tmp/adv/host.env'
+    const cases: Array<[string, RegExp]> = [
+      [
+        chained([link('.env', `a/b/c/d/e/f/x/${host}`)]),
+        /a link where the run loads a \.env file: \.env/,
+      ],
+      [
+        chained([link('notes.md', `a/b/c/d/e/f/x/${host}`)]),
+        /a link through another link: notes\.md → a\/b\/c\/d\/e\/f\/x\//,
+      ],
+      [
+        chained([link('a/b/c/d/e/f/other', 'keep')], ['a/b/c/d/e/f/other']),
+        /a link its plan doesn't list: a\/b\/c\/d\/e\/f\/other/,
+      ],
+      [chained([link('a/b/c/d/e/f/gone', 'missing')]), /a link to nothing: a\/b\/c\/d\/e\/f\/gone/],
+    ]
+    for (const [bad, said] of cases) {
+      const r = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', bad], {
+        env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+      })
+      assert.equal(r.code, 2, r.stderr + r.stdout)
+      assert.match(r.stderr, said)
+      assert.doesNotMatch(r.stdout, /Run:/)
+    }
+    assert.deepEqual(
+      readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
+      [],
+    )
+  })
+
   test('reeval clean --bundles removes the copies whose run has ended', async () => {
     const tmp = tempDir('bundle-tmp')
     const ended = join(tmp, 'reeval-bundle-999999999-abc')

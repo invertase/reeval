@@ -639,9 +639,27 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
       `reeval: ${file} was bundled by reeval ${manifest.reeval}; this is ${PACKAGE_VERSION}, whose plan may differ`,
     )
   }
+  const inBundle = (path: string) =>
+    path.startsWith(`${ROOT}/`)
+      ? safeTarPath(path.slice(ROOT.length + 1))
+      : safeTarPath(manifest.project ? `${manifest.project}/${path}` : path)
+  const planInputs = (manifest.plan as PlanDoc).inputs ?? []
+  const atPath = (kind: (i: PlanInput) => boolean) =>
+    new Set(planInputs.filter(kind).flatMap((i) => inBundle(i.path) ?? []))
+  const planLinks = atPath((i) => i.symlinkTo !== undefined)
+  const envPaths = atPath((i) => i.kind === 'env-file')
   const listed = new Map(manifest.files.map((f) => [f.path, f]))
   const links = new Map((manifest.links ?? []).map((l) => [l.path, l.target]))
   const problems: string[] = []
+  for (const [path, target] of links) {
+    if (envPaths.has(path) || isEnvFile(basename(path))) {
+      problems.push(`a link where the run loads a .env file: ${path}`)
+    } else if (!planLinks.has(path)) {
+      problems.push(`a link its plan doesn't list: ${path}`)
+    } else if (throughLink(path, target, links)) {
+      problems.push(`a link through another link: ${path} → ${target}`)
+    }
+  }
   const files: Array<TarEntry & { type: 'file' }> = []
   const linked: Array<TarEntry & { type: 'symlink' }> = []
   for (const e of entries) {
@@ -671,11 +689,7 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   for (const [path] of links) {
     if (!linked.some((e) => e.path === path)) problems.push(`missing: ${path}`)
   }
-  const inBundle = (path: string) =>
-    path.startsWith(`${ROOT}/`)
-      ? safeTarPath(path.slice(ROOT.length + 1))
-      : safeTarPath(manifest.project ? `${manifest.project}/${path}` : path)
-  for (const input of (manifest.plan as PlanDoc).inputs ?? []) {
+  for (const input of planInputs) {
     if (input.kind === 'env-file' || isAbsolute(input.path)) continue
     const path = inBundle(input.path)
     if (!path) problems.push(`outside the bundle: ${input.path}`)
@@ -699,9 +713,16 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   try {
     // Links go last, so no file is written through one.
     const skipped = await extractTar([...files, ...linked], dir)
-    if (skipped.length) {
+    const escapes: string[] = []
+    for (const l of linked) {
+      const real = await realpath(join(dir, ...l.path.split('/'))).catch(() => null)
+      if (!real) escapes.push(`  a link to nothing: ${l.path} → ${l.target}`)
+      else if (!within(dir, real))
+        escapes.push(`  a link out of the bundle: ${l.path} → ${l.target}`)
+    }
+    if (skipped.length || escapes.length) {
       throw new UsageError(
-        `${file} doesn't match its manifest, so nothing ran:\n${skipped.map((p) => `  not extracted: ${p}`).join('\n')}`,
+        `${file} doesn't match its manifest, so nothing ran:\n${[...skipped.map((p) => `  not extracted: ${p}`), ...escapes].join('\n')}`,
       )
     }
     const project = join(dir, ...manifest.project.split('/').filter(Boolean))
@@ -731,6 +752,22 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   } finally {
     process.off('SIGINT', interrupted)
   }
+}
+
+/**
+ * Whether `target`, read from the link at `path` one segment at a time, passes through another
+ * of `links`: the lexical check can't see where that one leads, so a chain could leave the bundle.
+ */
+function throughLink(path: string, target: string, links: Map<string, string>): boolean {
+  const at = path.split('/').slice(0, -1)
+  for (const part of target.split('/')) {
+    if (part === '..') at.pop()
+    else if (part && part !== '.') {
+      at.push(part)
+      if (links.has(at.join('/'))) return true
+    }
+  }
+  return false
 }
 
 /** What differs between the manifest's plan and `plan`, the same run's dry run from the bundle. */
