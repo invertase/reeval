@@ -8,6 +8,8 @@
 #                        OpenCode, Goose, pi, Codex, fx and Grok Build
 #   real agents (Cursor) test/real-agents' smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
+# Each job ends by recording its runs to the CI history on R2 (scripts/record-real-runs.sh, the
+# R2_* secrets and variables), as well as uploading them as an artifact.
 # The weekly run is the pinned contract and the smoke, and skips (the gate says why) when main
 # hasn't moved since the last successful weekly run, unless the last weekly run whose pinned
 # contract passed is four weeks old. The latest leg runs on demand, or when drift.yml's nightly
@@ -111,6 +113,8 @@ jobs:
           HAS_XAI: ${{ secrets.XAI_API_KEY != '' }}
           HAS_GATEWAY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
           HAS_OPENROUTER: ${{ secrets.OPENROUTER_API_KEY != '' }}
+          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && vars.R2_ENDPOINT != '' }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
           HARNESSES: ${{ inputs.harnesses }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the real-agents smoke fail"
@@ -118,6 +122,8 @@ jobs:
           [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
           [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex and fx rows fail"
           [ "$HAS_XAI" = true ] || echo "::error::No XAI_API_KEY repository secret: the Grok Build rows fail"
+          [ "$HAS_R2" = true ] && [ -n "$R2_BUCKET" ] || echo "::error::No R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY secret, or R2_ENDPOINT or R2_BUCKET variable: recording the runs to the CI history fails"
+          [ -z "$R2_BUCKET" ] || [ "$R2_BUCKET" = reeval-ci-history ] || echo "::warning::The R2_BUCKET variable is $R2_BUCKET, not reeval-ci-history, the CI history's bucket: the real-agent runs are recorded there"
           case "$HARNESSES" in
             *gateway*) [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail" ;;
           esac
@@ -188,8 +194,24 @@ jobs:
       - name: compare questions (real model)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval
-        env: { REEVAL_TEST_REAL: '1' }
-        run: node --test --test-timeout=1800000 --experimental-strip-types --no-warnings test/questions-real.test.ts
+        env:
+          REEVAL_TEST_REAL: '1'
+          REEVAL_TEST_KEEP: '1'
+          TMPDIR: ${{ runner.temp }}/reeval-tests
+        run: |
+          mkdir -p "$TMPDIR"
+          node --test --test-timeout=1800000 --experimental-strip-types --no-warnings test/questions-real.test.ts
+      # Every run this job left, recorded into the CI history on R2 (test/real-agents' `ci`
+      # profile: every artifact and the debug data, kept indefinitely), alongside the artifact
+      # below. Only this step has the R2 keys, so no eval code sees them.
+      - if: ${{ !cancelled() }}
+        name: record the runs to the CI history
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+        run: bash scripts/record-real-runs.sh packages/reeval/test/real-agents "$RUNNER_TEMP/reeval-tests"
       - if: always()
         run: |
           [ -f "$REEVAL_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$REEVAL_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
