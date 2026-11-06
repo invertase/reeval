@@ -12,6 +12,7 @@ import {
 } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
@@ -370,6 +371,26 @@ export async function writeRun(
   }
 }
 
+/** What most likely makes a run's new record differ from the recorded one, for the refusal. */
+function likelyChange(existing: Buffer, bytes: Buffer, runId: string): string {
+  const parse = (b: Buffer) => {
+    try {
+      return JSON.parse(b.toString()) as RunRecord
+    } catch {
+      return null
+    }
+  }
+  const [was, now] = [parse(existing), parse(bytes)]
+  if (was && now && !isDeepStrictEqual(was.debug, now.debug)) {
+    const { debug: _was, ...before } = was
+    const { debug: _now, ...after } = now
+    if (isDeepStrictEqual(before, after)) {
+      return `its debug data differs: .reeval/debug/${runId} was pruned or changed since it was recorded, or history.debug is another level`
+    }
+  }
+  return 'another --artifacts level?'
+}
+
 async function writeClaimed(
   dir: string,
   runId: string,
@@ -383,7 +404,7 @@ async function writeClaimed(
   if (existing?.equals(bytes)) return { recordPath, artifactDir, created: false }
   if (existing && !replaceable(existing, recordPath, bytes)) {
     throw new HistoryError(
-      `${runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
+      `${runId} is already recorded with different content (${likelyChange(existing, bytes, runId)}). Recorded runs are never rewritten.`,
     )
   }
   const staging = artifactDir ? join(dir, `.tmp-${tmpName()}`) : null

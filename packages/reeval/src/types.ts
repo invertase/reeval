@@ -2366,6 +2366,8 @@ export type HistoryStore = {
    * --debug` reads a run's debug data back with it.
    */
   readFile(runId: string, path: string): Promise<Uint8Array | null>
+  /** Checks the store answers and is reeval's, without listing it: `reeval sync --push-only`. */
+  check(): Promise<void>
 }
 
 export type HistoryConfig = {
