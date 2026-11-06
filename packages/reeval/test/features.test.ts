@@ -4239,7 +4239,7 @@ export const features: Feature[] = [
     tiers: ['fake'],
     env: '-',
     canary: /second try: expected 1 to be 2/,
-    args: ['--events', 'out/events.ndjson'],
+    args: ['--events-file', 'out/events.ndjson'],
     async record({ run, project, stdout }) {
       const file = join(project, 'out', 'events.ndjson')
       const lines = readFileSync(file, 'utf8')

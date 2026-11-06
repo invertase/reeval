@@ -2,7 +2,7 @@
 // follows it (mid-run, across a resume, from a URL) and ends with the run's exit code.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { createServer, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
@@ -81,6 +81,85 @@ describe('the stream', () => {
     await stream.end(0)
     assert.ok(!readFileSync(file, 'utf8').includes(key))
     assert.match(readFileSync(file, 'utf8'), /\[REDACTED\]/)
+  })
+
+  test('masks a secret the environment holds in its strings, as a record is masked', async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    const secret = '271828182845'
+    process.env.REEVAL_EVENTS_TEST_TOKEN = secret
+    try {
+      const stream = openEventStream({ file, header: header(), warn: assert.fail })
+      stream.write({ type: 'log', at: Number(secret), stream: 'stdout', text: `t=${secret}\n` })
+      await stream.end(0)
+    } finally {
+      delete process.env.REEVAL_EVENTS_TEST_TOKEN
+    }
+    const log = readLines(file)[1] as Extract<RunEventLine, { type: 'log' }>
+    assert.ok(!log.text.includes(secret))
+    // Masking stays inside strings: the line is still JSON of the same shape.
+    assert.equal(log.at, Number(secret))
+  })
+
+  test("a failed prepare keeps the failure's message, not its full log", async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    const stream = openEventStream({ file, header: header(), warn: assert.fail })
+    const target = { kind: 'docker', key: 'k', label: 'docker', setBy: ['config'], runWide: true }
+    const failure = {
+      class: 'infra' as const,
+      stage: 'install',
+      ref: null,
+      cause: null,
+      log: 'every line docker printed',
+      message: 'install failed',
+    }
+    stream.write({
+      type: 'prepare',
+      at: 1,
+      state: 'failed',
+      outcome: { ok: false, ms: 5, target, failure },
+    } as never)
+    await stream.end(0)
+    const line = readLines(file)[1] as Extract<RunEventLine, { type: 'prepare' }>
+    assert.ok(line.state !== 'start' && !line.outcome.ok)
+    assert.deepEqual(line.outcome.failure, { ...failure, log: null })
+  })
+
+  test("won't write over a file that isn't an event stream", async () => {
+    const dir = tempDir('events')
+    const file = join(dir, 'x.eval.ts')
+    writeFileSync(file, 'evaluate()\n')
+    const warnings: string[] = []
+    const stream = openEventStream({ file, header: header(), warn: (w) => warnings.push(w) })
+    stream.write(notice('a'))
+    await stream.end(0)
+    assert.equal(readFileSync(file, 'utf8'), 'evaluate()\n')
+    assert.match(warnings.join('\n'), /x\.eval\.ts isn't a reeval event stream/)
+    const appended = openEventStream({
+      file,
+      append: true,
+      header: header(),
+      warn: (w) => warnings.push(w),
+    })
+    await appended.end(0)
+    assert.equal(readFileSync(file, 'utf8'), 'evaluate()\n')
+  })
+
+  test("a posting failure's warning names the URL without its credentials or secrets", async () => {
+    const warnings: string[] = []
+    const key = `sk-ant-${'b'.repeat(40)}`
+    const stream = openEventStream({
+      url: 'https://user:hunter2@relay.test/events',
+      header: header(),
+      warn: (w) => warnings.push(w),
+      fetch: async () => {
+        throw new Error(`refused with ${key}`)
+      },
+    })
+    await stream.end(0)
+    assert.equal(warnings.length, 1)
+    assert.match(warnings[0] ?? '', /to https:\/\/relay\.test\/events: refused with/)
+    assert.ok(!warnings[0]?.includes('hunter2'))
+    assert.ok(!warnings[0]?.includes(key))
   })
 
   test("a prepare event keeps what the terminal shows, not preflight's handles", async () => {
@@ -194,6 +273,26 @@ describe('attach', () => {
         ),
     )
     assert.match(out.text, /last words/)
+  })
+
+  test('a file cut short while it follows is an error, not a hang', async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    const stream = openEventStream({ file, header: header(), warn: assert.fail })
+    stream.write(notice('before'))
+    const done = attach({
+      source: file,
+      out: capture(),
+      output: () => output,
+      follow: { pollMs: 10, alive: () => true },
+    })
+    await sleep(50)
+    truncateSync(file, 0)
+    await assert.rejects(
+      done,
+      (error: Error) =>
+        error instanceof EventStreamError && /a\.ndjson was cut short/.test(error.message),
+    )
+    await stream.end(0)
   })
 
   test('a stream from a newer reeval is refused, naming the upgrade', async () => {
@@ -343,7 +442,7 @@ describe('reeval run --events and reeval attach', () => {
       'evals/waits.eval.ts': gated,
     })
     const file = join(p.dir, 'out', 'events.ndjson')
-    const stopped = await runCli(p.dir, ['run', '--events', 'out/events.ndjson'], {
+    const stopped = await runCli(p.dir, ['run', '--events-file', 'out/events.ndjson'], {
       onOutput: (stdout, pid) => {
         if (!stdout.includes('Running')) return false
         process.kill(pid, 'SIGINT')
@@ -379,8 +478,39 @@ describe('reeval run --events and reeval attach', () => {
     const url = await runCli(p.dir, ['run', '--events-url', 'ftp://x'])
     assert.equal(url.code, 2)
     assert.match(url.stderr, /--events-url takes an http or https URL \(got ftp:\/\/x\)/)
+    const userinfo = await runCli(p.dir, ['run', '--events-url', 'https://u:hunter2@relay.test/e'])
+    assert.equal(userinfo.code, 2)
+    assert.match(
+      userinfo.stderr,
+      /--events-url can't carry a user name or password \(got https:\/\/relay\.test\/e\)/,
+    )
+    assert.ok(!userinfo.stderr.includes('hunter2'))
+    const evalFile = join(p.dir, 'evals', 'waits.eval.ts')
+    const overwrite = await runCli(p.dir, ['run', '--events-file', 'evals/waits.eval.ts'])
+    assert.equal(overwrite.code, 2)
+    assert.match(overwrite.stderr, /waits\.eval\.ts isn't a reeval event stream/)
+    assert.equal(readFileSync(evalFile, 'utf8'), gated)
+    mkdirSync(join(p.dir, 'out'))
+    writeFileSync(join(p.dir, 'out', 'newer.ndjson'), '{"type":"header","schemaVersion":2}\n')
+    const newer = await runCli(p.dir, ['attach', 'out/newer.ndjson'])
+    assert.equal(newer.code, 2)
+    assert.match(newer.stderr, /Upgrade reeval to read it/)
     // A run without --events has no stream to attach to.
     writeFileSync(join(p.dir, 'go'), '')
+    // --events takes no value: the eval file after it is a filter, never the stream's file.
+    const filtered = await runCli(p.dir, ['run', '--events', 'evals/waits.eval.ts'])
+    assert.equal(filtered.code, 0, filtered.stderr)
+    assert.equal(readFileSync(evalFile, 'utf8'), gated)
+    const filteredId = /Run: +(\S+)/.exec(filtered.stdout)?.[1] ?? ''
+    assert.ok(existsSync(join(p.dir, '.reeval', 'events', `${filteredId}.ndjson`)))
+    // reeval clean deletes finished runs' streams.
+    const cleaned = await runCli(p.dir, ['clean'])
+    assert.equal(cleaned.code, 0, cleaned.stderr)
+    assert.match(
+      cleaned.stdout,
+      /Removed the event streams of 1 finished run from \.reeval\/events/,
+    )
+    assert.ok(!existsSync(join(p.dir, '.reeval', 'events', `${filteredId}.ndjson`)))
     const plain = await runCli(p.dir, ['run'])
     assert.equal(plain.code, 0, plain.stderr)
     const id = /Run: +(\S+)/.exec(plain.stdout)?.[1] ?? ''

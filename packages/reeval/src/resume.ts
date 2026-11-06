@@ -42,6 +42,24 @@ const stagingOf = (root: string, runId: string) => join(root, '.reeval', 'stagin
 export const eventsFile = (root: string, runId: string) =>
   join(root, '.reeval', 'events', `${runId}.ndjson`)
 
+/**
+ * `reeval clean`: deletes `.reeval/events`' streams of runs with no staging left, but the newest
+ * `keep`. Returns the run ids whose streams it deleted.
+ */
+export async function pruneEvents(root: string, keep: number): Promise<string[]> {
+  const dir = join(root, '.reeval', 'events')
+  const staged = new Set(await readdir(join(root, '.reeval', 'staging')).catch(() => []))
+  const finished = (await readdir(dir).catch(() => [] as string[]))
+    .filter((f) => f.endsWith('.ndjson') && RUN_ID.test(f.slice(0, -7)))
+    .map((f) => f.slice(0, -7))
+    .filter((id) => !staged.has(id))
+    .sort()
+    .reverse()
+    .slice(keep)
+  await Promise.all(finished.map((id) => rm(eventsFile(root, id), { force: true })))
+  return finished
+}
+
 export function writeCurrent(root: string, runId: string): void {
   const file = currentPath(root)
   mkdirSync(join(root, '.reeval'), { recursive: true })

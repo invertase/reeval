@@ -2352,7 +2352,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'run.events',
     area: 'CLI and runner',
-    name: '`reeval run --events [file]` and `--events-url <url>`, followed by `reeval attach [run|file|url]`',
+    name: '`reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]`; `reeval clean` prunes the streams',
     fixtures: ['output/events'],
     unit: ['reeval/test/events.test.ts', 'reeval/test/ui.test.ts'],
   },

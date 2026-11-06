@@ -1,11 +1,11 @@
 // A run's event stream: `reeval run --events` writes the events its renderer draws as NDJSON, to a
 // file or POSTed to a URL, and `reeval attach` follows it and draws them again. The line shape is
 // `RunEventLine` (src/view/events.ts).
-import { closeSync, mkdirSync, openSync, readSync, writeSync } from 'node:fs'
+import { closeSync, fstatSync, mkdirSync, openSync, readSync, writeSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { redactSecrets } from './redact.ts'
+import { redactJson, redactSecrets, stripCredentials } from './redact.ts'
 import { processAlive } from './resume.ts'
 import type { PrepareTargetView, ReevalEvent, Renderer } from './ui/events.ts'
 import {
@@ -34,7 +34,10 @@ const targetView = (t: PrepareTargetView): PrepareTargetView => ({
   runWide: t.runWide,
 })
 
-/** The event as the stream carries it: a prepare event without its prepared handles. */
+/**
+ * The event as the stream carries it: a prepare event without its prepared handles or a failure's
+ * full log, which the renderers don't draw.
+ */
 function wire(e: ReevalEvent): ReevalEvent {
   if (e.type !== 'prepare') return e
   if (e.state === 'start') return { ...e, targets: e.targets.map(targetView) }
@@ -43,13 +46,38 @@ function wire(e: ReevalEvent): ReevalEvent {
     ...e,
     outcome: outcome.ok
       ? { target: targetView(outcome.target), ok: true, ms: outcome.ms }
-      : { target: targetView(outcome.target), ok: false, failure: outcome.failure, ms: outcome.ms },
+      : {
+          target: targetView(outcome.target),
+          ok: false,
+          failure: { ...outcome.failure, log: null },
+          ms: outcome.ms,
+        },
   }
 }
 
 // Progress lines echo check commands and the agent's tool calls, which can hold a secret.
-const line = (value: RunEventLine) =>
-  `${JSON.stringify(value, (_key, v) => (typeof v === 'string' ? redactSecrets(v) : v))}\n`
+const line = (value: RunEventLine) => `${redactJson(value)}\n`
+
+/**
+ * Why `file` can't take a run's event stream, or null when it can: it's missing, empty, or starts
+ * with a stream's header line. Anything else is someone's file, which the run would overwrite.
+ */
+export function notEventStream(file: string): string | null {
+  let fd: number
+  try {
+    fd = openSync(file, 'r')
+  } catch {
+    return null
+  }
+  try {
+    const buffer = Buffer.alloc(256)
+    const n = readSync(fd, buffer, 0, buffer.length, 0)
+    if (n === 0 || buffer.subarray(0, n).toString().startsWith('{"type":"header"')) return null
+    return `${file} isn't a reeval event stream, so reeval run won't overwrite it`
+  } finally {
+    closeSync(fd)
+  }
+}
 
 export type EventStream = {
   write(event: ReevalEvent): void
@@ -72,7 +100,9 @@ export function openEventStream(options: {
   fetch?: typeof fetch
 }): EventStream {
   let fd: number | null = null
-  if (options.file) {
+  const refused = options.file ? notEventStream(options.file) : null
+  if (refused) options.warn(`not writing the event stream: ${refused}`)
+  if (options.file && !refused) {
     try {
       mkdirSync(dirname(options.file), { recursive: true })
       fd = openSync(options.file, options.append ? 'a' : 'w')
@@ -100,7 +130,11 @@ export function openEventStream(options: {
       .catch((error: Error) => {
         url = undefined
         queue.length = 0
-        options.warn(`stopped posting the event stream to ${to}: ${error.message}`)
+        options.warn(
+          redactSecrets(
+            `stopped posting the event stream to ${stripCredentials(to)}: ${error.message}`,
+          ),
+        )
       })
       .finally(() => {
         sending = null
@@ -201,6 +235,11 @@ async function* followFile(file: string, options: FollowOptions): AsyncGenerator
   let header: RunEventsHeader | undefined
   const decoder = new TextDecoder()
   const read = () => {
+    if (fstatSync(fd).size < position) {
+      throw new EventStreamError(
+        `${file} was cut short while reeval attach read it: another run may have started writing it`,
+      )
+    }
     const out: RunEventLine[] = []
     for (;;) {
       const n = readSync(fd, buffer, 0, buffer.length, position)

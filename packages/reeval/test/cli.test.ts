@@ -154,10 +154,14 @@ describe('cli', () => {
       positionals: ['mcp'],
       values: { http: true, port: '4990', token: 't' },
     })
-    assert.deepEqual(parseCli(['run', '--events']).values, { events: '' })
-    assert.deepEqual(parseCli(['run', '--events', 'e.ndjson', '--events-url', 'http://x/e']), {
+    // --events takes no value, so a filter after it stays a filter, never a file it writes over.
+    assert.deepEqual(parseCli(['run', '--events', 'evals/x.eval.ts']), {
+      positionals: ['run', 'evals/x.eval.ts'],
+      values: { events: true },
+    })
+    assert.deepEqual(parseCli(['run', '--events-file', 'e.ndjson', '--events-url', 'http://x/e']), {
       positionals: ['run'],
-      values: { events: 'e.ndjson', 'events-url': 'http://x/e' },
+      values: { 'events-file': 'e.ndjson', 'events-url': 'http://x/e' },
     })
     assert.deepEqual(parseCli(['attach', 'run-1', '--ui', 'agent']), {
       positionals: ['attach', 'run-1'],

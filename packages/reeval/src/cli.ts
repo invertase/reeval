@@ -29,7 +29,13 @@ import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
-import { type EventStream, isEventsUrl, openEventStream, teeRenderer } from './events.ts'
+import {
+  type EventStream,
+  isEventsUrl,
+  notEventStream,
+  openEventStream,
+  teeRenderer,
+} from './events.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
@@ -41,7 +47,7 @@ import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './liv
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import { redactSecrets, registerSecret } from './redact.ts'
+import { redactSecrets, registerSecret, stripCredentials } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
@@ -58,6 +64,7 @@ import {
   noteRetries,
   prepareResume,
   previousAttempt,
+  pruneEvents,
   type ResumeTarget,
   removeStoppedStaging,
   resolveAttach,
@@ -102,7 +109,13 @@ const HISTORY_COMMANDS = {
 /** The commands that pull a remote store's new runs into its copy before reading it. */
 const PULLS = { history: 1, show: 1, compare: 1, checkout: 1, query: 1, analyze: 1, mcp: 1 }
 
-const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
+const EXPECTED_ERRORS = [
+  'CommandError',
+  'RefError',
+  'HistoryError',
+  'StudioBuildError',
+  'NewerSchemaError',
+]
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
 const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError']
 
@@ -344,6 +357,12 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
         : 'No stopped runs in .reeval/staging to remove',
     )
   }
+  const streams = await pruneEvents(config.root, keep)
+  if (streams.length) {
+    console.log(
+      `Removed the event streams of ${streams.length} finished run${streams.length === 1 ? '' : 's'} from .reeval/events`,
+    )
+  }
   if (flags.images) {
     const { dockerAvailable, pruneImages } = await import('@reeval/sandbox-docker')
     const { requireDocker } = await import('./sandbox/providers.ts')
@@ -568,8 +587,19 @@ async function runCommand(
 ): Promise<number> {
   const retry = flags['retry-errors']
   const url = flags['events-url']
-  if (url !== undefined && !isEventsUrl(url)) {
-    throw new UsageError(`--events-url takes an http or https URL (got ${url})`)
+  const parsed = url === undefined ? null : URL.parse(url)
+  if (url !== undefined && !(parsed && isEventsUrl(url))) {
+    throw new UsageError(`--events-url takes an http or https URL (got ${stripCredentials(url)})`)
+  }
+  if (url !== undefined && (parsed?.username || parsed?.password)) {
+    throw new UsageError(
+      `--events-url can't carry a user name or password (got ${stripCredentials(url)}): put a token in the path or query instead`,
+    )
+  }
+  const eventsFileFlag = flags['events-file']
+  if (eventsFileFlag !== undefined) {
+    const refused = notEventStream(resolve(eventsFileFlag))
+    if (refused) throw new UsageError(`--events-file: ${refused}`)
   }
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
@@ -631,13 +661,13 @@ async function runCommand(
   })
   const root = setup.config.root
   const eventsTo =
-    flags.events !== undefined
-      ? flags.events
-        ? resolve(flags.events)
-        : eventsFile(root, ctx.runId)
-      : resumed?.saved?.events
-        ? resolve(root, resumed.saved.events)
-        : undefined
+    eventsFileFlag !== undefined
+      ? resolve(eventsFileFlag)
+      : flags.events
+        ? eventsFile(root, ctx.runId)
+        : resumed?.saved?.events
+          ? resolve(root, resumed.saved.events)
+          : undefined
   const savedEvents = eventsTo ? relativeFile(root, eventsTo) : undefined
   if (startedWith && savedEvents) startedWith.events = savedEvents
   const eventsUrl = flags['events-url']
