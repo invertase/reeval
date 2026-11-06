@@ -696,8 +696,11 @@ describe('reeval run --events and reeval attach', () => {
   test("attach's cancel signal is a first Ctrl-C only: never the second that quits without a record", {
     skip: noSignals,
   }, async () => {
+    // A Ctrl-C sent with attach's cancel can reach the run's event loop before or after it, so
+    // both orders hold whichever way the run sees them.
     for (const signals of [
       ['SIGINT', 'SIGUSR2', 'SIGUSR2'],
+      ['SIGUSR2', 'SIGINT', 'SIGUSR2'],
       ['SIGUSR2', 'SIGUSR2'],
     ] as const) {
       const p = await project('events-cancel', {
@@ -715,6 +718,34 @@ describe('reeval run --events and reeval attach', () => {
       assert.doesNotMatch(stopped.stderr, /discards the run/, `${signals}`)
       assert.equal(readRun(p.dir).run.status, 'interrupted', `${signals}`)
     }
+  })
+
+  test("a Ctrl-C a while after attach's cancel is the second press, which quits without a record", {
+    skip: noSignals,
+  }, async () => {
+    // `slow` ignores the cancel, so the Ctrl-C lands while the run is still canceling.
+    const p = await project('events-cancel-later', {
+      'reeval.config.ts': config,
+      'evals/slow.eval.ts': `import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate } from 'reeval'
+evaluate('slow', async (c) => {
+  await c.send('write hello.txt')
+  console.log('parked')
+  await sleep(8_000)
+})
+`,
+    })
+    const stopped = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/parked/.test(stdout)) return false
+        process.kill(pid, 'SIGUSR2')
+        setTimeout(() => process.kill(pid, 'SIGINT'), 1_500)
+        return true
+      },
+    })
+    assert.equal(stopped.code, 130, stopped.stdout + stopped.stderr)
+    assert.match(stopped.stdout, /Ctrl-C again quits at once, without a record/)
+    assert.match(stopped.stderr, /quit without writing run \S+'s record/)
   })
 
   const pty =
