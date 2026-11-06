@@ -74,7 +74,13 @@ import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
-import type { CursorEfforts, ResolvedConfig, RunContext, SandboxDescriptor } from './types.ts'
+import type {
+  CursorEfforts,
+  LocalInput,
+  ResolvedConfig,
+  RunContext,
+  SandboxDescriptor,
+} from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -827,9 +833,17 @@ async function prepareRun(
     stdinTTY: !!process.stdin.isTTY && !flags.json && !flags['dry-run'],
   })
   const path = requireConfig(configPath)
-  loadEnvFiles(path)
+  const listing = !!(flags['dry-run'] && flags.json)
+  const tracked = listing ? (await import('./inputs-load.ts')).trackLoad(dirname(path)) : undefined
+  let configInputs: LocalInput[] = []
+  let loaded: Awaited<ReturnType<typeof loadConfig>>
   const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
-  const loaded = await loadConfig(path, 'run', named)
+  try {
+    loadEnvFiles(path)
+    loaded = await loadConfig(path, 'run', named)
+  } finally {
+    if (tracked) configInputs = tracked.stop(path, 'config')
+  }
   if (profileOf && flags.profile && !loaded.profiles[flags.profile]) {
     throw new UsageError(
       `run ${profileOf} was started with profile ${flags.profile}, which ${loaded.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
@@ -876,6 +890,8 @@ async function prepareRun(
     record: profile?.record ?? config.record,
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
+    /** What loading the config read, for `--dry-run --json`'s `inputs`. */
+    configInputs,
     force: !!flags.force,
     verbosity: verbosityOf(flags),
     configFile: configLabel(path),
@@ -1140,11 +1156,19 @@ async function executeRun(
       verbosity,
       configFile,
       completed: [] as string[],
+      ...(setup.dryRun && setup.json ? { inputs: true } : {}),
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable, runHeader } =
-    await import('./plan.ts')
+  const {
+    buildPlan,
+    checkAttemptBudget,
+    planDocument,
+    planInputs,
+    planLine,
+    planTable,
+    runHeader,
+  } = await import('./plan.ts')
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -1327,7 +1351,13 @@ async function executeRun(
           stages: await imageStages(t, config.root),
         })),
       )
-      const doc = planDocument(plan, skipped, excluded, images)
+      const { lockfiles } = await import('./history/state.ts')
+      const locks = (await lockfiles(config.root)).map(({ path }) => ({
+        path: join(config.root, path),
+        kind: 'lockfile' as const,
+      }))
+      const inputs = planInputs(config.root, [...setup.configInputs, ...locks], skipped)
+      const doc = planDocument(plan, skipped, excluded, images, inputs)
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }

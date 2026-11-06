@@ -402,6 +402,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/plan.test.ts'],
   },
   {
+    id: 'plan.inputs',
+    area: 'Config and selection',
+    name: "`--dry-run --json`'s `inputs`: the host files the run reads, by kind and eval: what each file's and the config's load read and imported, the lockfiles, and what the environments and sandboxes name, local skill and plugin folders walked with placement's exclusions, symlinks out of them followed and warned about, and a Dockerfile's build context",
+    plan: ['inputs/inputs'],
+    unit: ['reeval/test/engine-worker.test.ts', 'reeval/test/inputs.test.ts'],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",

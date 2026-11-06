@@ -9,12 +9,16 @@ type Transform = NonNullable<JitiOptions['transform']>
 
 let babel: Transform | undefined
 
+/** Every file jiti has transformed in this process: the TypeScript and ESM modules it loaded. */
+export const transformedFiles = new Set<string>()
+
 /**
  * jiti's own Babel transform. jiti requires it lazily from beside its code, which a compiled reeval
  * doesn't have, so reeval requires the same file: from the jiti package on disk, or, compiled, from
  * the copy embedded in it (`vendor/jiti/babel.cjs`), copied out to disk.
  */
 export const jitiTransform: Transform = (options) => {
+  if (options.filename) transformedFiles.add(options.filename)
   if (!babel) {
     const file = COMPILED
       ? join(ownDir('vendor/jiti'), 'babel.cjs')
