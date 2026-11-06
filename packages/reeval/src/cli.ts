@@ -372,7 +372,8 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `reeval clean`: removes local debug data and snapshots, all of them or all but the newest
- * `--keep` runs', and with `--staging` every stopped run's staging.
+ * `--keep` runs', with `--staging` every stopped run's staging, and with `--bundles` every copy
+ * `run --bundle` extracted whose process has ended.
  */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
@@ -404,6 +405,15 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   if (streams.length) {
     console.log(
       `Removed the event streams of ${streams.length} finished run${streams.length === 1 ? '' : 's'} from .reeval/events`,
+    )
+  }
+  if (flags.bundles) {
+    const { removeExtractedBundles } = await import('./bundle/index.ts')
+    const removed = await removeExtractedBundles()
+    console.log(
+      removed.length
+        ? `Removed ${removed.length} extracted bundle${removed.length === 1 ? '' : 's'}: ${removed.join(', ')}`
+        : 'No extracted bundles to remove',
     )
   }
   if (flags.images) {

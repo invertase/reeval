@@ -4,22 +4,24 @@
 // same list.
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { lstat, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseEnv } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { run as runProcess } from '@reeval/sandbox-docker/process'
+import { z } from 'zod'
 import type { Flags } from '../cli-spec.ts'
 import { requireConfig } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { git, repoTop } from '../git.ts'
 import { gitInfo } from '../history/provenance.ts'
+import { findingLines, scanText } from '../history/secret-scan.ts'
 import { PreflightInfraError } from '../preflight.ts'
 import { savedFilters } from '../resume.ts'
 import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
-import { extractTar, readTar, type TarEntry, writeTar } from '../tarball.ts'
+import { extractTar, readTar, safeTarPath, type TarEntry, writeTar } from '../tarball.ts'
 import { withoutBom } from '../text.ts'
 import { NewerSchemaError, readableBundleManifest } from '../view/record.ts'
 import type { BundleArgs, BundleEnvFile, BundleFile, BundleManifest } from './types.ts'
@@ -29,10 +31,30 @@ const MANIFEST = 'manifest.json'
 /** The placeholder for the bundle root's absolute path in the plan a manifest keeps. */
 const ROOT = '<root>'
 
-/** Never in a bundle, wherever an input directory holds them. */
+/** Never in a bundle: a path through one is the install's, git's or reeval's own. */
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.reeval'])
+const throughSkipped = (rel: string) => rel.split('/').some((p) => SKIP_DIRS.has(p))
 
-const isEnvFile = (name: string) => name === '.env' || name.startsWith('.env.')
+/** Files a bundle never carries, only names with their variables: dotenv files and `.envrc`. */
+const isEnvFile = (name: string) => name === '.env' || name.startsWith('.env.') || name === '.envrc'
+
+/** Input kinds whose local path is a git repository reeval clones, history and all. */
+const REPOSITORY_KINDS = new Set(['workspace', 'skill', 'plugin', 'marketplace'])
+
+/**
+ * Package manager settings that hold a registry credential, by file name: a value that isn't a
+ * `${VAR}` (or bun's `$VAR`) reference. The match's first group is the setting.
+ */
+const REGISTRY_CREDENTIALS: Record<string, RegExp> = {
+  '.npmrc': /^[ \t]*(?:\S*:)?(_auth|_authToken|_password)[ \t]*=[ \t]*(?!["']?\$\{)\S/m,
+  '.yarnrc':
+    /^[ \t]*["']?(?:\S*:)?(_auth|_authToken|_password)["']?[ \t]*[ =][ \t]*(?!["']?\$\{)\S/m,
+  '.yarnrc.yml': /^[ \t]*(npmAuthToken|npmAuthIdent|npmPassword)[ \t]*:[ \t]*(?!["']?\$\{)[^\s#]/m,
+  'bunfig.toml': /(?:^|[{,])[ \t]*(token|password)[ \t]*=[ \t]*["'](?!\$)/m,
+}
+
+/** The shortest variable value a bundled file is checked for: shorter ones match by chance. */
+const MIN_SECRET = 8
 
 /** The package manager configuration an install from the lockfile reads, beside it. */
 const INSTALL_FILES = [
@@ -47,10 +69,6 @@ const INSTALL_FILES = [
   '.nvmrc',
   '.node-version',
 ]
-
-/** A line of an `.npmrc` that holds a registry credential. */
-const NPMRC_CREDENTIAL = /(?:_auth|_authToken|_password|token)\s*=/i
-
 /** Each lockfile and the install that reproduces it exactly. */
 const INSTALLS: Array<{ lockfile: string; command: (dir: string) => [string, ...string[]] }> = [
   { lockfile: 'pnpm-lock.yaml', command: () => ['pnpm', 'install', '--frozen-lockfile'] },
@@ -138,24 +156,102 @@ function rooted<T>(value: T, root: string): T {
   return JSON.parse(json) as T
 }
 
-/** The `.env` file's variable names. */
-async function envNames(path: string): Promise<string[]> {
-  const text = withoutBom(await readFile(path, 'utf8'))
-  return Object.keys(parseEnv(text)).sort()
+type Collected = {
+  /** Each file the bundle carries, by its path under the root (links not resolved), and its kind. */
+  kinds: Map<string, string>
+  envFiles: Map<string, BundleEnvFile>
+  /** Each loaded `.env` variable's value, by the variable: a bundled file mustn't hold one. */
+  values: Map<string, string>
+  /** Links whose target is outside the bundle root, relative to it. */
+  outside: string[]
+  /** `.env` files the run copies into the sandbox, which a bundle can't carry. */
+  carried: string[]
 }
 
-/** Every regular file under `dir`, skipping {@link SKIP_DIRS} and handing `.env` files to `env`. */
-async function walk(dir: string, env: (path: string) => Promise<void>): Promise<string[]> {
+/**
+ * The files under `root` that `inputs` name: a directory's walked, each link resolved and kept
+ * only when its target is under `root`, never through {@link SKIP_DIRS}, and `.env` files listed
+ * by their variables instead.
+ */
+export async function collect(inputs: Array<{ abs: string; kind: string }>, root: string) {
+  const c: Collected = {
+    kinds: new Map(),
+    envFiles: new Map(),
+    values: new Map(),
+    outside: [],
+    carried: [],
+  }
+  const rel = (path: string) => posix(relative(root, path))
+  const listEnv = async (path: string) => {
+    const at = rel(path)
+    if (c.envFiles.has(at)) return
+    const parsed = parseEnv(withoutBom(await readFile(path, 'utf8')))
+    c.envFiles.set(at, { path: at, variables: Object.keys(parsed).sort() })
+    for (const [name, value] of Object.entries(parsed)) if (value) c.values.set(name, value)
+  }
+  /** `path` and what it resolves to, or null when it's dangling or resolves outside `root`. */
+  const resolved = async (path: string) => {
+    const target = await realpath(path).catch(() => null)
+    if (target && !within(root, target)) c.outside.push(rel(path))
+    return target && within(root, target) ? target : null
+  }
+  const walk = async (dir: string, kind: string, ancestors: string[]) => {
+    for (const name of (await readdir(dir)).sort()) {
+      const full = join(dir, name)
+      const info = await lstat(full).catch(() => null)
+      if (!info || SKIP_DIRS.has(name)) continue
+      const target = info.isSymbolicLink() ? await resolved(full) : full
+      if (!target) continue
+      const real = info.isSymbolicLink() ? await stat(target) : info
+      if (real.isDirectory()) {
+        // A link back to a directory being walked would walk it forever.
+        if (!ancestors.includes(target)) await walk(full, kind, [...ancestors, target])
+      } else if (real.isFile()) {
+        if (isEnvFile(name)) await listEnv(full)
+        else if (!c.kinds.has(full)) c.kinds.set(full, kind)
+      }
+    }
+  }
+  for (const input of inputs) {
+    if (throughSkipped(rel(input.abs))) continue
+    if (input.kind === 'env-file') {
+      await listEnv(input.abs)
+      continue
+    }
+    if (!(await lstat(input.abs).catch(() => null))) continue
+    const target = await resolved(input.abs)
+    if (!target) continue
+    const info = await stat(target)
+    if (info.isDirectory()) await walk(input.abs, input.kind, [target])
+    else if (!info.isFile() || c.kinds.has(input.abs)) continue
+    else if (isEnvFile(basename(input.abs)) || isEnvFile(basename(target))) {
+      c.carried.push(rel(input.abs))
+    } else c.kinds.set(input.abs, input.kind)
+  }
+  return c
+}
+
+/**
+ * Why each file in `files` can't be bundled: a secret-looking value (the history's secret scan),
+ * a package manager setting with a registry credential in it, or the value of a variable in
+ * `values` (a loaded `.env`'s, and the host's for each of the run's secrets).
+ */
+function leaks(
+  files: Array<{ path: string; data: Buffer }>,
+  values: Array<{ name: string; value: string }>,
+): string[] {
   const out: string[] = []
-  for (const name of (await readdir(dir)).sort()) {
-    const full = join(dir, name)
-    const info = await stat(full).catch(() => null)
-    if (!info) continue
-    if (info.isDirectory()) {
-      if (!SKIP_DIRS.has(name)) out.push(...(await walk(full, env)))
-    } else if (info.isFile()) {
-      if (isEnvFile(name)) await env(full)
-      else out.push(full)
+  for (const { path, data } of files) {
+    const text = data.subarray(0, 8000).includes(0) ? null : data.toString('utf8')
+    if (text !== null) {
+      out.push(...findingLines(path, scanText(path, text)))
+      const setting = REGISTRY_CREDENTIALS[basename(path)]?.exec(text)?.[1]
+      if (setting) {
+        out.push(`${path}: ${setting} holds a registry credential; read it from a variable instead`)
+      }
+    }
+    for (const { name, value } of values) {
+      if (data.includes(value)) out.push(`${path}: holds the value of ${name}`)
     }
   }
   return out
@@ -204,46 +300,50 @@ export async function bundleCommand(
     ...i,
     abs: isAbsolute(i.path) ? i.path : join(project, ...i.path.split('/')),
   }))
-  const workspaces = inputs.filter((i) => i.kind === 'workspace')
-  if (workspaces.length) {
+  const repositories: string[] = []
+  for (const i of inputs) {
+    if (REPOSITORY_KINDS.has(i.kind) && (await stat(i.abs).catch(() => null))?.isDirectory()) {
+      repositories.push(`${i.path} (${i.kind})`)
+    }
+  }
+  if (repositories.length) {
     throw new UsageError(
-      `A bundle can't carry a local git() workspace, whose history reeval fetches: ${workspaces.map((w) => w.path).join(', ')}. Point git() at a remote repository to bundle the run.`,
+      `A bundle can't carry a local git repository, whose history reeval clones: ${repositories.join(', ')}. Point it at a remote repository to bundle the run.`,
     )
   }
   const root = await bundleRoot(
     project,
-    inputs.map((i) => i.abs),
+    inputs.filter((i) => i.kind !== 'env-file').map((i) => i.abs),
   )
-  const envFiles = new Map<string, BundleEnvFile>()
-  const addEnv = async (path: string) => {
-    const rel = posix(relative(root, path))
-    if (!envFiles.has(rel)) envFiles.set(rel, { path: rel, variables: await envNames(path) })
-  }
-  const kinds = new Map<string, string>()
-  const notes: string[] = []
-  for (const input of inputs) {
-    if (input.kind === 'env-file') {
-      await addEnv(input.abs)
-      continue
-    }
-    const info = await stat(input.abs).catch(() => null)
-    if (!info) continue
-    const files = info.isDirectory() ? await walk(input.abs, addEnv) : [input.abs]
-    for (const file of files) if (!kinds.has(file)) kinds.set(file, input.kind)
-  }
+  const installFiles: Array<{ abs: string; kind: string }> = []
   for (let dir = project; within(root, dir); dir = dirname(dir)) {
-    for (const name of INSTALL_FILES) {
-      const file = join(dir, name)
-      if (kinds.has(file) || !(await stat(file).catch(() => null))?.isFile()) continue
-      if (name === '.npmrc' && NPMRC_CREDENTIAL.test(await readFile(file, 'utf8'))) {
-        notes.push(
-          `left out ${posix(relative(root, file))}: it holds a registry credential; give the install its own`,
-        )
-        continue
-      }
-      kinds.set(file, 'install')
-    }
+    for (const name of INSTALL_FILES) installFiles.push({ abs: join(dir, name), kind: 'install' })
     if (dir === root) break
+  }
+  const { kinds, envFiles, values, outside, carried } = await collect(
+    [...inputs, ...installFiles],
+    root,
+  )
+  if (outside.length) {
+    throw new UsageError(
+      `The run reads through ${plural(outside.length, 'link')} to files outside the bundle root, which a bundle can't carry: ${outside.slice(0, 5).join(', ')}${outside.length > 5 ? ', …' : ''}. Copy what ${outside.length === 1 ? 'it links' : 'they link'} to into the project.`,
+    )
+  }
+  if (carried.length) {
+    throw new UsageError(
+      `The run copies ${carried.join(', ')} into the sandbox, and a bundle never carries a .env file. Leave ${carried.length === 1 ? 'it' : 'them'} out of the environment's files (directory()'s glob: ['!.env*']) and give the sandbox its variables with env.`,
+    )
+  }
+  const { inputs: _inputs, secrets = [], ...rest } = plan
+  const watched = new Map<string, string>()
+  for (const [name, value] of values) {
+    if (value.length >= MIN_SECRET && (secrets.includes(name) || !/^[a-z]+$/.test(value))) {
+      watched.set(name, value)
+    }
+  }
+  for (const name of secrets) {
+    const value = process.env[name]
+    if (value && value.length >= MIN_SECRET) watched.set(name, value)
   }
   const files: BundleFile[] = []
   const entries: TarEntry[] = []
@@ -254,18 +354,17 @@ export async function bundleCommand(
         `The run reads ${MANIFEST} at the bundle root, where the bundle keeps its own manifest. Move or rename it to bundle the run.`,
       )
     }
-    const [data, info] = await Promise.all([readFile(file), lstat(file)])
+    const [data, info] = await Promise.all([readFile(file), stat(file)])
     files.push({ path, kind: kinds.get(file) as string, sha256: sha256(data), size: data.length })
     entries.push({
       type: 'file',
       path,
-      mode: info.mode & 0o777,
+      mode: info.mode & 0o111 ? 0o755 : 0o644,
       mtime: Math.floor(info.mtimeMs / 1000),
       data,
     })
   }
   const git = await gitInfo(project)
-  const { inputs: _inputs, secrets = [], ...rest } = plan
   const manifest: BundleManifest = {
     schemaVersion: 1,
     reeval: PACKAGE_VERSION,
@@ -283,13 +382,21 @@ export async function bundleCommand(
     envFiles: [...envFiles.values()].sort((a, b) => (a.path < b.path ? -1 : 1)),
     secrets,
   }
-  const now = Math.floor(Date.now() / 1000)
   const manifestEntry: TarEntry = {
     type: 'file',
     path: MANIFEST,
     mode: 0o644,
-    mtime: now,
+    mtime: Math.floor(Date.now() / 1000),
     data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`),
+  }
+  const found = leaks(
+    [manifestEntry, ...entries].map((e) => ({ path: e.path, data: (e as { data: Buffer }).data })),
+    [...watched].map(([name, value]) => ({ name, value })),
+  )
+  if (found.length) {
+    throw new UsageError(
+      `The bundle would carry secrets, so nothing was written:\n${found.map((l) => `  ${l}`).join('\n')}\nMove each out of the files the run reads, or read it from a variable.`,
+    )
   }
   const target = resolve(flags.out ?? `${basename(project) || 'reeval'}.bundle.tar.gz`)
   const archive = gzipSync(writeTar([manifestEntry, ...entries]))
@@ -305,7 +412,6 @@ export async function bundleCommand(
     )
   }
   if (git?.dirty) out('  the project has uncommitted changes; the bundle carries them')
-  for (const note of notes) out(`  ${note}`)
   return 0
 }
 
@@ -347,6 +453,83 @@ function comparable(plan: Record<string, unknown>) {
   return strip({ profile, totals, evals, excluded, images, secrets }) as Record<string, unknown>
 }
 
+/** A path inside the bundle, as `safeTarPath` writes it: relative, `/`-separated, no `..`. */
+const bundlePath = z
+  .string()
+  .refine((p) => safeTarPath(p) === p && p !== MANIFEST, 'must be a path inside the bundle')
+
+const manifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  reeval: z.string(),
+  createdAt: z.string(),
+  args: z.object({
+    argv: z.array(z.string()),
+    filters: z.array(z.string()),
+    profile: z.string().optional(),
+    tags: z.array(z.string()),
+    traits: z.array(z.string()),
+    runs: z.string().optional(),
+  }),
+  project: z.union([z.literal(''), bundlePath]),
+  config: bundlePath,
+  git: z.object({ commit: z.string(), dirty: z.boolean() }).nullable(),
+  plan: z.record(z.string(), z.unknown()),
+  files: z.array(
+    z.object({
+      path: bundlePath,
+      kind: z.string(),
+      sha256: z.string().regex(/^[0-9a-f]{64}$/, 'must be a sha256 in hex'),
+      size: z.number().int().nonnegative(),
+    }),
+  ),
+  envFiles: z.array(z.object({ path: z.string(), variables: z.array(z.string()) })),
+  secrets: z.array(z.string()),
+}) satisfies z.ZodType<BundleManifest>
+
+/** `value` as a manifest, or a refusal naming the first few fields that aren't one. */
+function validManifest(value: unknown, file: string): BundleManifest {
+  const parsed = manifestSchema.safeParse(value)
+  if (parsed.success) return parsed.data
+  const lines = parsed.error.issues.slice(0, 5).map((issue) => {
+    const at = issue.path
+      .map((p, i) => (typeof p === 'number' ? `[${p}]` : `${i ? '.' : ''}${String(p)}`))
+      .join('')
+    return `  ${at || 'the manifest'}: ${issue.message}`
+  })
+  throw new UsageError(`${file}'s ${MANIFEST} isn't a bundle manifest:\n${lines.join('\n')}`)
+}
+
+/** The prefix of each directory `run --bundle` extracts into, followed by its process id. */
+const EXTRACT_PREFIX = 'reeval-bundle-'
+
+/** reeval's exit code after SIGINT. */
+const EXIT_INTERRUPTED = 130
+
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * `reeval clean --bundles`: removes every directory `run --bundle` extracted into whose process
+ * has ended, and returns their paths.
+ */
+export async function removeExtractedBundles(): Promise<string[]> {
+  const removed: string[] = []
+  for (const name of await readdir(tmpdir()).catch(() => [])) {
+    const pid = new RegExp(`^${EXTRACT_PREFIX}(\\d+)-`).exec(name)?.[1]
+    if (!pid || alive(Number(pid))) continue
+    const dir = join(tmpdir(), name)
+    await rm(dir, { recursive: true, force: true })
+    removed.push(dir)
+  }
+  return removed
+}
+
 export type OpenedBundle = {
   /** Set when the bundle's dry run refused, with its exit code; nothing else is. */
   exit?: number
@@ -376,48 +559,77 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   if (manifestEntry?.type !== 'file') {
     throw new UsageError(`${file} has no ${MANIFEST}, so it isn't a reeval bundle`)
   }
+  let read: unknown
+  try {
+    read = JSON.parse(manifestEntry.data.toString('utf8'))
+  } catch {
+    throw new UsageError(`${file}'s ${MANIFEST} isn't valid JSON`)
+  }
   let manifest: BundleManifest
   try {
-    manifest = readableBundleManifest(JSON.parse(manifestEntry.data.toString('utf8')), file)
+    manifest = validManifest(readableBundleManifest(read as BundleManifest, file), file)
   } catch (error) {
     if (error instanceof NewerSchemaError) throw new UsageError(error.message)
-    throw new UsageError(`${file}'s ${MANIFEST} isn't valid JSON`)
+    throw error
   }
   if (manifest.reeval !== PACKAGE_VERSION) {
     log(
       `reeval: ${file} was bundled by reeval ${manifest.reeval}; this is ${PACKAGE_VERSION}, whose plan may differ`,
     )
   }
-  const dir = await realpath(await mkdtemp(join(tmpdir(), 'reeval-bundle-')))
+  const listed = new Map(manifest.files.map((f) => [f.path, f]))
+  const problems: string[] = []
+  const files: Array<TarEntry & { type: 'file' }> = []
+  for (const e of entries) {
+    if (e === manifestEntry) continue
+    if (e.type !== 'file') {
+      problems.push(`not a regular file: ${e.path} (a ${e.type === 'dir' ? 'directory' : 'link'})`)
+      continue
+    }
+    const f = listed.get(e.path)
+    if (!f) problems.push(`not in the manifest: ${e.path}`)
+    else if (files.some((x) => x.path === e.path)) problems.push(`in the archive twice: ${e.path}`)
+    else {
+      if (sha256(e.data) !== f.sha256) problems.push(`differs: ${f.path}`)
+      files.push({ ...e, mode: e.mode & 0o111 ? 0o755 : 0o644 })
+    }
+  }
+  for (const f of manifest.files) {
+    if (!files.some((e) => e.path === f.path)) problems.push(`missing: ${f.path}`)
+  }
+  const inBundle = (path: string) =>
+    path.startsWith(`${ROOT}/`)
+      ? safeTarPath(path.slice(ROOT.length + 1))
+      : safeTarPath(manifest.project ? `${manifest.project}/${path}` : path)
+  for (const input of (manifest.plan as PlanDoc).inputs ?? []) {
+    if (input.kind === 'env-file' || isAbsolute(input.path)) continue
+    const path = inBundle(input.path)
+    if (!path) problems.push(`outside the bundle: ${input.path}`)
+    else if (throughSkipped(path) || isEnvFile(basename(path))) continue
+    else if (!listed.has(path) && !problems.includes(`missing: ${path}`)) {
+      problems.push(`missing: ${path}`)
+    }
+  }
+  if (problems.length) {
+    throw new UsageError(
+      `${file} doesn't match its manifest, so nothing ran:\n${problems.map((p) => `  ${p}`).join('\n')}`,
+    )
+  }
+  const dir = await realpath(await mkdtemp(join(tmpdir(), `${EXTRACT_PREFIX}${process.pid}-`)))
+  // Until the run starts, the copy is only the bundle's: an interrupt leaves nothing behind.
+  const interrupted = () => {
+    rmSync(dir, { recursive: true, force: true })
+    process.exit(EXIT_INTERRUPTED)
+  }
+  process.once('SIGINT', interrupted)
   try {
-    const files = entries.filter((e) => e.path !== MANIFEST)
-    await extractTar(files, dir)
-    const listed = new Map(manifest.files.map((f) => [f.path, f]))
-    const problems: string[] = []
-    for (const f of manifest.files) {
-      const data = await readFile(join(dir, ...f.path.split('/'))).catch(() => null)
-      if (!data) problems.push(`missing: ${f.path}`)
-      else if (sha256(data) !== f.sha256) problems.push(`differs: ${f.path}`)
-    }
-    for (const e of files) {
-      if (e.type === 'file' && !listed.has(e.path)) problems.push(`not in the manifest: ${e.path}`)
-    }
-    const project = join(dir, ...manifest.project.split('/').filter(Boolean))
-    for (const input of (manifest.plan as PlanDoc).inputs ?? []) {
-      if (input.kind === 'env-file' || isAbsolute(input.path)) continue
-      const path = input.path.startsWith(`${ROOT}/`)
-        ? join(dir, input.path.slice(ROOT.length + 1))
-        : join(project, input.path)
-      const shown = posix(relative(dir, path))
-      if (!existsSync(path) && !problems.includes(`missing: ${shown}`)) {
-        problems.push(`missing: ${shown}`)
-      }
-    }
-    if (problems.length) {
+    const skipped = await extractTar(files, dir)
+    if (skipped.length) {
       throw new UsageError(
-        `${file} doesn't match its manifest, so nothing ran:\n${problems.map((p) => `  ${p}`).join('\n')}`,
+        `${file} doesn't match its manifest, so nothing ran:\n${skipped.map((p) => `  not extracted: ${p}`).join('\n')}`,
       )
     }
+    const project = join(dir, ...manifest.project.split('/').filter(Boolean))
     const config = join(dir, ...manifest.config.split('/'))
     // reeval finds a monorepo's root lockfile at the repository's top, and an extracted copy
     // under some other checkout mustn't find that one's: the bundle root is a repository of its
@@ -441,6 +653,8 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   } catch (error) {
     await rm(dir, { recursive: true, force: true }).catch(() => {})
     throw error
+  } finally {
+    process.off('SIGINT', interrupted)
   }
 }
 

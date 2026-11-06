@@ -19,6 +19,7 @@ export const FLAGS = {
   keep: { type: 'string' },
   images: { type: 'boolean' },
   staging: { type: 'boolean' },
+  bundles: { type: 'boolean' },
   json: { type: 'boolean' },
   md: { type: 'boolean' },
   all: { type: 'boolean' },
@@ -218,14 +219,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
-                                reeval run --bundle runs elsewhere; never node_modules or .env
-                                values (it names the .env files' variables and the secrets it needs)
+                                reeval run --bundle runs elsewhere; never node_modules or a .env
+                                file (it names their variables and the secrets the run needs), and
+                                exit 2 when a file it would carry holds a secret
     --profile <name>            Plan with a profile, as reeval run does; --runs, --tag and --trait
                                 also plan as they do there
     --out <file>                Where to write it (default <project>.bundle.tar.gz here)`,
   },
   clean: {
-    flags: ['keep', 'images', 'staging'],
+    flags: ['keep', 'images', 'staging', 'bundles'],
     positionals: 0,
     help: `
   reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
@@ -235,7 +237,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
     --staging                   Also delete every stopped run's staging (.reeval/staging), so
-                                reeval run --resume can no longer finish it`,
+                                reeval run --resume can no longer finish it
+    --bundles                   Also delete the copies reeval run --bundle extracted into the
+                                temporary directory, each with its run's .reeval/, but a running one's`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan', 'profile'],
