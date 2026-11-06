@@ -976,6 +976,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['ui/serve-tart-own-port'],
     plan: ['tart/two-vms'],
     unit: [
+      'sandbox-docker/test/transport-session.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
       'reeval/test/tart.test.ts',
@@ -1023,6 +1024,7 @@ export const inventory: InventoryFeature[] = [
     ],
     plan: ['environments/boat'],
     unit: [
+      'sandbox-docker/test/transport-session.test.ts',
       'reeval/test/boat.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/doctor.test.ts',
