@@ -161,3 +161,9 @@ export {
 } from './session.ts'
 export { createSshSession, type SshSessionOptions } from './ssh-session.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'
+export {
+  type HostCommand,
+  type SessionShell,
+  type TransportSessionOptions,
+  transportSession,
+} from './transport-session.ts'
