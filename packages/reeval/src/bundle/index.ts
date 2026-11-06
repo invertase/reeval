@@ -7,7 +7,16 @@ import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { lstat, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  posix as posixPath,
+  relative,
+  resolve,
+  sep,
+} from 'node:path'
 import { parseEnv } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { run as runProcess } from '@reeval/sandbox-docker/process'
@@ -24,7 +33,7 @@ import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
 import { extractTar, readTar, safeTarPath, type TarEntry, writeTar } from '../tarball.ts'
 import { withoutBom } from '../text.ts'
 import { NewerSchemaError, readableBundleManifest } from '../view/record.ts'
-import type { BundleArgs, BundleEnvFile, BundleFile, BundleManifest } from './types.ts'
+import type { BundleArgs, BundleEnvFile, BundleFile, BundleLink, BundleManifest } from './types.ts'
 
 const MANIFEST = 'manifest.json'
 
@@ -86,7 +95,7 @@ const INSTALLS: Array<{ lockfile: string; command: (dir: string) => [string, ...
   { lockfile: 'uv.lock', command: () => ['uv', 'sync', '--frozen'] },
 ]
 
-type PlanInput = { path: string; kind: string; evals?: string[] }
+type PlanInput = { path: string; kind: string; evals?: string[]; symlinkTo?: string }
 type PlanDoc = Record<string, unknown> & {
   profile?: { name: string } | null
   inputs?: PlanInput[]
@@ -159,13 +168,15 @@ function rooted<T>(value: T, root: string): T {
 type Collected = {
   /** Each file the bundle carries, by its path under the root (links not resolved), and its kind. */
   kinds: Map<string, string>
+  /** Each skill's or plugin's symbolic link, by its path, and its target relative to its folder. */
+  links: Map<string, string>
   envFiles: Map<string, BundleEnvFile>
   /** Each loaded `.env` variable's value, by the variable: a bundled file mustn't hold one. */
   values: Map<string, string>
   /** Links whose target is outside the bundle root, relative to it. */
   outside: string[]
-  /** `.env` files the run copies into the sandbox, which a bundle can't carry. */
-  carried: string[]
+  /** `.env` files the run copies into the sandbox, which a bundle can't carry, and their kinds. */
+  carried: Array<{ path: string; kind: string }>
 }
 
 /**
@@ -173,9 +184,13 @@ type Collected = {
  * only when its target is under `root`, never through {@link SKIP_DIRS}, and `.env` files listed
  * by their variables instead.
  */
-export async function collect(inputs: Array<{ abs: string; kind: string }>, root: string) {
+export async function collect(
+  inputs: Array<{ abs: string; kind: string; symlinkTo?: string }>,
+  root: string,
+) {
   const c: Collected = {
     kinds: new Map(),
+    links: new Map(),
     envFiles: new Map(),
     values: new Map(),
     outside: [],
@@ -218,14 +233,21 @@ export async function collect(inputs: Array<{ abs: string; kind: string }>, root
       await listEnv(input.abs)
       continue
     }
-    if (!(await lstat(input.abs).catch(() => null))) continue
+    const link = await lstat(input.abs).catch(() => null)
+    if (!link) continue
     const target = await resolved(input.abs)
     if (!target) continue
+    if (input.symlinkTo !== undefined && link.isSymbolicLink()) {
+      // The plan lists the target's files too, so only the link itself is carried here.
+      const from = await realpath(dirname(input.abs))
+      c.links.set(input.abs, posix(relative(from, target)) || '.')
+      continue
+    }
     const info = await stat(target)
     if (info.isDirectory()) await walk(input.abs, input.kind, [target])
     else if (!info.isFile() || c.kinds.has(input.abs)) continue
     else if (isEnvFile(basename(input.abs)) || isEnvFile(basename(target))) {
-      c.carried.push(rel(input.abs))
+      c.carried.push({ path: rel(input.abs), kind: input.kind })
     } else c.kinds.set(input.abs, input.kind)
   }
   return c
@@ -234,27 +256,43 @@ export async function collect(inputs: Array<{ abs: string; kind: string }>, root
 /**
  * Why each file in `files` can't be bundled: a secret-looking value (the history's secret scan),
  * a package manager setting with a registry credential in it, or the value of a variable in
- * `values` (a loaded `.env`'s, and the host's for each of the run's secrets).
+ * `values` (a loaded `.env`'s, and the host's for each of the run's secrets). Each value is
+ * reported once a file, by the variables that hold it, and not again by the scan.
  */
 function leaks(
   files: Array<{ path: string; data: Buffer }>,
-  values: Array<{ name: string; value: string }>,
+  values: Map<string, string>,
 ): string[] {
+  const byValue = new Map<string, string[]>()
+  for (const [name, value] of values) byValue.set(value, [...(byValue.get(value) ?? []), name])
   const out: string[] = []
   for (const { path, data } of files) {
-    const text = data.subarray(0, 8000).includes(0) ? null : data.toString('utf8')
-    if (text !== null) {
-      out.push(...findingLines(path, scanText(path, text)))
-      const setting = REGISTRY_CREDENTIALS[basename(path)]?.exec(text)?.[1]
-      if (setting) {
-        out.push(`${path}: ${setting} holds a registry credential; read it from a variable instead`)
-      }
-    }
-    for (const { name, value } of values) {
-      if (data.includes(value)) out.push(`${path}: holds the value of ${name}`)
+    const held = [...byValue].filter(([value]) => data.includes(value))
+    for (const [, names] of held) out.push(`${path}: holds the value of ${names.join(' and ')}`)
+    if (data.subarray(0, 8000).includes(0)) continue
+    let text = data.toString('utf8')
+    for (const [value] of held) text = text.replaceAll(value, '*'.repeat(value.length))
+    out.push(...findingLines(path, scanText(path, text)))
+    const setting = REGISTRY_CREDENTIALS[basename(path)]?.exec(text)?.[1]
+    if (setting) {
+      out.push(`${path}: ${setting} holds a registry credential; read it from a variable instead`)
     }
   }
   return out
+}
+
+/** How to keep a `.env` file of `kind` out of what the run copies into the sandbox. */
+function leaveOut(kind: string): string {
+  if (kind === 'file') {
+    return "leave it out of the environment's files (directory()'s glob: ['!.env*']) and give the sandbox its variables with env"
+  }
+  if (kind === 'skill') return "leave it out of the skill with skill.local()'s exclude"
+  if (kind === 'plugin' || kind === 'plugin-build') return "move it out of the plugin's folder"
+  if (kind === 'docker-context' || kind === 'dockerfile') {
+    return "list it in the build context's .dockerignore"
+  }
+  if (kind === 'npm') return "list it in the package's .npmignore"
+  return 'move it out of what the run reads'
 }
 
 /**
@@ -302,7 +340,8 @@ export async function bundleCommand(
   }))
   const repositories: string[] = []
   for (const i of inputs) {
-    if (REPOSITORY_KINDS.has(i.kind) && (await stat(i.abs).catch(() => null))?.isDirectory()) {
+    if (i.symlinkTo !== undefined || !REPOSITORY_KINDS.has(i.kind)) continue
+    if ((await stat(i.abs).catch(() => null))?.isDirectory()) {
       repositories.push(`${i.path} (${i.kind})`)
     }
   }
@@ -320,7 +359,7 @@ export async function bundleCommand(
     for (const name of INSTALL_FILES) installFiles.push({ abs: join(dir, name), kind: 'install' })
     if (dir === root) break
   }
-  const { kinds, envFiles, values, outside, carried } = await collect(
+  const { kinds, links, envFiles, values, outside, carried } = await collect(
     [...inputs, ...installFiles],
     root,
   )
@@ -331,7 +370,7 @@ export async function bundleCommand(
   }
   if (carried.length) {
     throw new UsageError(
-      `The run copies ${carried.join(', ')} into the sandbox, and a bundle never carries a .env file. Leave ${carried.length === 1 ? 'it' : 'them'} out of the environment's files (directory()'s glob: ['!.env*']) and give the sandbox its variables with env.`,
+      `The run copies ${carried.length === 1 ? 'a .env file' : '.env files'} into the sandbox, and a bundle never carries one:\n${carried.map((c) => `  ${c.path} (${c.kind}): ${leaveOut(c.kind)}`).join('\n')}`,
     )
   }
   const { inputs: _inputs, secrets = [], ...rest } = plan
@@ -364,6 +403,16 @@ export async function bundleCommand(
       data,
     })
   }
+  const bundleLinks: BundleLink[] = [...links]
+    .map(([file, target]) => ({ path: posix(relative(root, file)), target }))
+    .sort((a, b) => (a.path < b.path ? -1 : 1))
+  const linkEntries: TarEntry[] = bundleLinks.map((l) => ({
+    type: 'symlink',
+    path: l.path,
+    mode: 0o777,
+    mtime: Math.floor(Date.now() / 1000),
+    target: l.target,
+  }))
   const git = await gitInfo(project)
   const manifest: BundleManifest = {
     schemaVersion: 1,
@@ -379,6 +428,7 @@ export async function bundleCommand(
     git: git ? { commit: git.sha, dirty: git.dirty } : null,
     plan: rooted({ ...rest, inputs: plan.inputs ?? [], secrets }, root),
     files,
+    ...(bundleLinks.length ? { links: bundleLinks } : {}),
     envFiles: [...envFiles.values()].sort((a, b) => (a.path < b.path ? -1 : 1)),
     secrets,
   }
@@ -391,7 +441,7 @@ export async function bundleCommand(
   }
   const found = leaks(
     [manifestEntry, ...entries].map((e) => ({ path: e.path, data: (e as { data: Buffer }).data })),
-    [...watched].map(([name, value]) => ({ name, value })),
+    watched,
   )
   if (found.length) {
     throw new UsageError(
@@ -399,11 +449,11 @@ export async function bundleCommand(
     )
   }
   const target = resolve(flags.out ?? `${basename(project) || 'reeval'}.bundle.tar.gz`)
-  const archive = gzipSync(writeTar([manifestEntry, ...entries]))
+  const archive = gzipSync(writeTar([manifestEntry, ...entries, ...linkEntries]))
   await writeFile(target, archive)
   const bytes = files.reduce((n, f) => n + f.size, 0)
   out(
-    `Bundled ${plural(files.length, 'file')} (${bytes} bytes) for ${plural(Number((plan.totals as { attempts?: number } | undefined)?.attempts ?? 0), 'attempt')} into ${relative(process.cwd(), target) || target}`,
+    `Bundled ${plural(files.length, 'file')}${bundleLinks.length ? ` and ${plural(bundleLinks.length, 'link')}` : ''} (${bytes} bytes) for ${plural(Number((plan.totals as { attempts?: number } | undefined)?.attempts ?? 0), 'attempt')} into ${relative(process.cwd(), target) || target}`,
   )
   if (secrets.length) out(`  needs: ${secrets.join(', ')}`)
   for (const env of manifest.envFiles) {
@@ -482,6 +532,18 @@ const manifestSchema = z.object({
       size: z.number().int().nonnegative(),
     }),
   ),
+  links: z
+    .array(
+      z
+        .object({ path: bundlePath, target: z.string() })
+        .refine(
+          (l) =>
+            !l.target.startsWith('/') &&
+            !!safeTarPath(posixPath.join(posixPath.dirname(l.path), l.target)),
+          { message: 'must link to a path inside the bundle', path: ['target'] },
+        ),
+    )
+    .optional(),
   envFiles: z.array(z.object({ path: z.string(), variables: z.array(z.string()) })),
   secrets: z.array(z.string()),
 }) satisfies z.ZodType<BundleManifest>
@@ -578,12 +640,21 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
     )
   }
   const listed = new Map(manifest.files.map((f) => [f.path, f]))
+  const links = new Map((manifest.links ?? []).map((l) => [l.path, l.target]))
   const problems: string[] = []
   const files: Array<TarEntry & { type: 'file' }> = []
+  const linked: Array<TarEntry & { type: 'symlink' }> = []
   for (const e of entries) {
     if (e === manifestEntry) continue
+    if (e.type === 'symlink' && links.has(e.path) && !linked.some((x) => x.path === e.path)) {
+      if (links.get(e.path) === e.target) linked.push(e)
+      else problems.push(`differs: ${e.path}, a link to ${e.target}`)
+      continue
+    }
     if (e.type !== 'file') {
-      problems.push(`not a regular file: ${e.path} (a ${e.type === 'dir' ? 'directory' : 'link'})`)
+      problems.push(
+        `not a regular file or a listed link: ${e.path} (a ${e.type === 'dir' ? 'directory' : 'link'})`,
+      )
       continue
     }
     const f = listed.get(e.path)
@@ -597,6 +668,9 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   for (const f of manifest.files) {
     if (!files.some((e) => e.path === f.path)) problems.push(`missing: ${f.path}`)
   }
+  for (const [path] of links) {
+    if (!linked.some((e) => e.path === path)) problems.push(`missing: ${path}`)
+  }
   const inBundle = (path: string) =>
     path.startsWith(`${ROOT}/`)
       ? safeTarPath(path.slice(ROOT.length + 1))
@@ -606,7 +680,7 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
     const path = inBundle(input.path)
     if (!path) problems.push(`outside the bundle: ${input.path}`)
     else if (throughSkipped(path) || isEnvFile(basename(path))) continue
-    else if (!listed.has(path) && !problems.includes(`missing: ${path}`)) {
+    else if (!listed.has(path) && !links.has(path) && !problems.includes(`missing: ${path}`)) {
       problems.push(`missing: ${path}`)
     }
   }
@@ -623,7 +697,8 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   }
   process.once('SIGINT', interrupted)
   try {
-    const skipped = await extractTar(files, dir)
+    // Links go last, so no file is written through one.
+    const skipped = await extractTar([...files, ...linked], dir)
     if (skipped.length) {
       throw new UsageError(
         `${file} doesn't match its manifest, so nothing ran:\n${skipped.map((p) => `  not extracted: ${p}`).join('\n')}`,

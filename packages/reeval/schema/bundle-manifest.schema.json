@@ -83,6 +83,21 @@
       },
       "required": ["kind", "path", "sha256", "size"]
     },
+    "BundleLink": {
+      "description": "A symbolic link in a skill or plugin folder, carried as a link to a file or folder in the bundle.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Relative to the bundle root, with `/`.",
+          "type": "string"
+        },
+        "target": {
+          "description": "What it links to, relative to its own folder, with `/`; always inside the bundle.",
+          "type": "string"
+        }
+      },
+      "required": ["path", "target"]
+    },
     "BundleManifest": {
       "type": "object",
       "properties": {
@@ -129,6 +144,13 @@
               "required": ["commit", "dirty"]
             }
           ]
+        },
+        "links": {
+          "description": "The symbolic links in the archive, sorted by path; absent when it has none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleLink"
+          }
         },
         "plan": {
           "description": "The `reeval run --dry-run --json` document the bundle was made from. Its shape is the reeval version's that wrote it, so it's kept as data: `reeval run --bundle` compares it with its own dry run.",

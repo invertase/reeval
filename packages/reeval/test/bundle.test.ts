@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -243,7 +244,7 @@ describe('reeval bundle', () => {
       env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
     })
     assert.equal(r.code, 2)
-    assert.match(r.stderr, /not a regular file: data\/link \(a link\)/)
+    assert.match(r.stderr, /not a regular file or a listed link: data\/link \(a link\)/)
     assert.deepEqual(
       readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
       [],
@@ -254,6 +255,10 @@ describe('reeval bundle', () => {
         /files\[0\]\.path: must be a path inside the bundle/,
       ],
       [(m: BundleManifest) => ({ ...m, project: '../..' }), /project: /],
+      [
+        (m: BundleManifest) => ({ ...m, links: [{ path: 'data/up', target: '../../etc' }] }),
+        /links\[0\]\.target: must link to a path inside the bundle/,
+      ],
       [(m: BundleManifest) => ({ ...m, config: '/etc/passwd' }), /config: must be a path inside/],
       [
         ({ secrets: _, ...m }: BundleManifest) => m as BundleManifest,
@@ -326,9 +331,9 @@ async function variant(
   return dir
 }
 
-async function bundleOf(dir: string) {
+async function bundleOf(dir: string, env: Record<string, string> = {}) {
   const out = join(tempDir('bundle-out'), 'variant.tar.gz')
-  const r = await runCli(dir, ['bundle', '--out', out])
+  const r = await runCli(dir, ['bundle', '--out', out], { env })
   return { ...r, out, written: existsSync(out) }
 }
 
@@ -341,16 +346,17 @@ describe('what reeval bundle refuses to carry', () => {
       ),
     )
     assert.equal(listed.code, 2, listed.stderr)
-    assert.match(listed.stderr, /copies notes\/\.env into the sandbox/)
+    assert.match(
+      listed.stderr,
+      /copies a \.env file into the sandbox[^\n]*\n {2}notes\/\.env \(file\)/,
+    )
     assert.ok(!listed.written)
-    // The plan lists a loaded .env that file() also copies once, as the env-file it loads: left
-    // out by name like any .env, so its value still never reaches the archive.
-    const given = await bundleOf(await variant({}, { files: "{ 'settings.env': file('./.env') }" }))
-    assert.equal(given.code, 0, given.stderr)
-    assert.ok(!gunzipSync(readFileSync(given.out)).includes(TOKEN))
-    assert.deepEqual(manifestOf(entriesOf(given.out)).envFiles, [
-      { path: '.env', variables: ['CHECK_TOKEN'] },
-    ])
+    const loaded = await bundleOf(
+      await variant({}, { files: "{ 'settings.env': file('./.env') }" }),
+    )
+    assert.equal(loaded.code, 2, loaded.stderr)
+    assert.match(loaded.stderr, /\n {2}\.env \(file\): leave it out of the environment's files/)
+    assert.ok(!loaded.written)
   })
 
   test('a file() link to a host file outside the bundle root', async () => {
@@ -382,7 +388,11 @@ describe('what reeval bundle refuses to carry', () => {
       await variant({ 'skills/guide/.envrc': `export GH_TOKEN=${GITHUB_TOKEN}\n` }),
     )
     assert.equal(envrc.code, 2, envrc.stderr)
-    assert.match(envrc.stderr, /skills\/guide\/\.envrc/)
+    assert.match(
+      envrc.stderr,
+      /skills\/guide\/\.envrc \(skill\): leave it out of the skill with skill\.local\(\)'s exclude/,
+    )
+    assert.doesNotMatch(envrc.stderr, /directory\(\)/)
     assert.ok(!envrc.stderr.includes(GITHUB_TOKEN))
     assert.ok(!envrc.written)
   })
@@ -426,6 +436,15 @@ describe('what reeval bundle refuses to carry', () => {
     assert.match(other.stderr, /notes\.md: holds the value of OTHER/)
   })
 
+  test("a host secret's value once, though the scan would find it too", async () => {
+    const dir = await variant({ 'skills/guide/notes.md': `key: ${GITHUB_TOKEN}\n` })
+    writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${GITHUB_TOKEN}\n`)
+    const r = await bundleOf(dir, { CHECK_TOKEN: GITHUB_TOKEN })
+    assert.equal(r.code, 2, r.stderr)
+    const said = r.stderr.split('\n').filter((l) => l.includes('notes.md'))
+    assert.deepEqual(said, ['  skills/guide/notes.md: holds the value of CHECK_TOKEN'])
+  })
+
   test('a local git repository a skill, plugin or marketplace clones', async () => {
     const dir = await variant(
       { 'repo/guide/SKILL.md': '---\nname: guide\ndescription: d\n---\n' },
@@ -464,5 +483,52 @@ describe('what reeval bundle refuses to carry', () => {
       'dir/alias.md',
       'dir/sub/a.md',
     ])
+  })
+})
+
+describe('symbolic links in a skill folder', () => {
+  test('are carried as links to their targets in the bundle, and run from it', async () => {
+    const dir = await variant({ 'skills/guide/notes.md': 'notes\n' })
+    symlinkSync('notes.md', join(dir, 'skills/guide/alias.md'))
+    mkdirSync(join(dir, 'skills/shared'))
+    writeFileSync(join(dir, 'skills/shared/tip.md'), 'tip\n')
+    symlinkSync('../shared', join(dir, 'skills/guide/shared'))
+    const made = await bundleOf(dir)
+    assert.equal(made.code, 0, made.stderr)
+    assert.match(made.stdout, /and 2 links/)
+    const archive = entriesOf(made.out)
+    const manifest = manifestOf(archive)
+    assert.deepEqual(manifest.links, [
+      { path: 'skills/guide/alias.md', target: 'notes.md' },
+      { path: 'skills/guide/shared', target: '../shared' },
+    ])
+    assert.deepEqual(
+      archive
+        .filter((e) => e.type === 'symlink')
+        .map((e) => [e.path, e.type === 'symlink' && e.target]),
+      [
+        ['skills/guide/alias.md', 'notes.md'],
+        ['skills/guide/shared', '../shared'],
+      ],
+    )
+    assert.ok(manifest.files.some((f) => f.path === 'skills/shared/tip.md'))
+    const r = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', made.out], {
+      env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    const extracted = /running .* in (\S+), where its \.reeval\/ stays/.exec(r.stdout)?.[1] ?? ''
+    assert.equal(readlinkSync(join(extracted, 'skills/guide/alias.md')), 'notes.md')
+    assert.equal(readlinkSync(join(extracted, 'skills/guide/shared')), '../shared')
+  })
+
+  test('still refuse a link whose target is outside the bundle root', async () => {
+    const host = tempDir('bundle-host')
+    writeFileSync(join(host, 'secret.md'), 'host\n')
+    const dir = await variant({})
+    symlinkSync(join(host, 'secret.md'), join(dir, 'skills/guide/secret.md'))
+    const r = await bundleOf(dir)
+    assert.equal(r.code, 2, r.stderr)
+    assert.match(r.stderr, /secret\.md/)
+    assert.ok(!r.written)
   })
 })

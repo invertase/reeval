@@ -27,6 +27,14 @@ export type BundleFile = {
   size: number
 }
 
+/** A symbolic link in a skill or plugin folder, carried as a link to a file or folder in the bundle. */
+export type BundleLink = {
+  /** Relative to the bundle root, with `/`. */
+  path: string
+  /** What it links to, relative to its own folder, with `/`; always inside the bundle. */
+  target: string
+}
+
 /** A `.env` file the run loads, which the bundle leaves out. */
 export type BundleEnvFile = {
   /** Relative to the bundle root, with `/`. */
@@ -59,6 +67,8 @@ export type BundleManifest = {
   plan: Record<string, unknown>
   /** Every file in the archive but `manifest.json`, sorted by path. */
   files: BundleFile[]
+  /** The symbolic links in the archive, sorted by path; absent when it has none. */
+  links?: BundleLink[]
   /** The `.env` files the run loads, left out of the archive. */
   envFiles: BundleEnvFile[]
   /** The host variables the run reads secrets from, as the dry run's `secrets`; never values. */
