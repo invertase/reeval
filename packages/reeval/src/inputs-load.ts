@@ -6,6 +6,7 @@ import fs, { statSync } from 'node:fs'
 import { createRequire, syncBuiltinESMExports } from 'node:module'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ownReads } from './inputs.ts'
 import { transformedFiles } from './jiti.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { LocalInput } from './types.ts'
@@ -37,7 +38,8 @@ const jitiCached = (path: string) =>
  * Starts recording the host files read until `stop`, which restores `fs` and returns them,
  * classified: a module jiti transformed, read from its cache or Node's require cache holds is a
  * `module`, a tsconfig a `tsconfig`, a `.env` file an `env-file`, and anything else a `read`.
- * `main`, the file the load is for, comes first as `mainKind`. A plain CommonJS module jiti loads
+ * `main`, the file the load is for, comes first as `mainKind`. What reeval reads for itself
+ * (`asOwnReads`) isn't recorded. A plain CommonJS module jiti loads
  * without its module cache (the config's) isn't transformed, so it counts as a `read`.
  */
 export function trackLoad(root: string) {
@@ -45,6 +47,7 @@ export function trackLoad(root: string) {
   const cached = new Set<string>()
   let last: string | undefined
   const record = (arg: unknown) => {
+    if (ownReads.depth > 0) return
     const path = pathOf(arg)
     if (!path || !isAbsolute(path)) return
     if (jitiCached(path)) {
@@ -96,4 +99,17 @@ export function trackLoad(root: string) {
       return out
     },
   }
+}
+
+/**
+ * Each attempt's inputs with its file's load first: less a `read` some attempt's own inputs name,
+ * which is reeval planning that attempt (a plugin's manifest, a skill's `SKILL.md`), not the file.
+ */
+export function loadedInputs(
+  loaded: readonly LocalInput[],
+  named: ReadonlyArray<readonly LocalInput[] | undefined>,
+): (own: readonly LocalInput[] | undefined) => LocalInput[] {
+  const covered = new Set(named.flatMap((inputs) => (inputs ?? []).map((i) => i.path)))
+  const shared = loaded.filter((i) => i.kind !== 'read' || !covered.has(i.path))
+  return (own) => [...shared, ...(own ?? [])]
 }

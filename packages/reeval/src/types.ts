@@ -3543,8 +3543,8 @@ export type AttemptMeta = {
   /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
   pluginBuilds?: PluginSource[]
   /**
-   * The host files it reads, by absolute path: its environment's and sandbox's, then what its
-   * file's load read. Set only when the run context asks for `inputs`.
+   * The host files it reads, by absolute path: what its file's load read, then what its
+   * environment and sandbox name. Set only when the run context asks for `inputs`.
    */
   inputs?: LocalInput[]
   plan: EvalPlan
@@ -3650,7 +3650,10 @@ export type LocalInputKind =
 
 /** One host file or directory a run reads. */
 export type LocalInput = {
-  /** Absolute; a directory for a `workspace`, `npm` or `marketplace` source. */
+  /**
+   * Absolute; a directory for a `workspace`, a `marketplace` or a local git `skill` or `plugin`
+   * repository (a file for any other `skill` or `plugin`, and for an `npm` tarball).
+   */
   path: string
   kind: LocalInputKind
   /** The symlink, inside a skill or plugin, it was reached through, when it's outside that folder. */

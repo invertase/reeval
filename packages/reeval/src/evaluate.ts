@@ -376,16 +376,12 @@ function prepare(
         hooks = of(n)
       }
       const test: TestOptions = { ...options, ...hooks }
-      if (spec) {
+      if (spec && getRunContext().inputs) {
         const { root } = getRunContext().config
         const found = environmentInputs(spec.environment.layers, spec.sandbox, root)
         const { attempt } = options
         const warnings = [...new Set([...attempt.plan.warnings, ...found.warnings])]
-        test.attempt = {
-          ...attempt,
-          plan: { ...attempt.plan, warnings },
-          ...(getRunContext().inputs ? { inputs: found.inputs } : {}),
-        }
+        test.attempt = { ...attempt, plan: { ...attempt.plan, warnings }, inputs: found.inputs }
       }
       if (spec && test.gate && spec.sandbox.kind === 'tart' && spec.sandbox.hosts) {
         const gate = { ...test.gate, limits: { ...test.gate.limits } }

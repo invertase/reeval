@@ -406,7 +406,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Config and selection',
     name: "`--dry-run --json`'s `inputs`: the host files the run reads, by kind and eval: what each file's and the config's load read and imported, the lockfiles, and what the environments and sandboxes name, local skill and plugin folders walked with placement's exclusions, symlinks out of them followed and warned about, and a Dockerfile's build context",
     plan: ['inputs/inputs'],
-    unit: ['reeval/test/engine-worker.test.ts'],
+    unit: ['reeval/test/engine-worker.test.ts', 'reeval/test/inputs.test.ts'],
   },
   {
     id: 'plan.cost',

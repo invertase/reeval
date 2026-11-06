@@ -1,8 +1,8 @@
 no profile · 2 evals · 2 cells · 2 attempts
 warning: workspace git(../repo) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
-warning: skill skills/guide: skills/guide/more is a symlink to shared/more, outside its folder; it's listed in inputs, but reeval places only regular files, so the attempt doesn't get it
+warning: skill skills/guide: skills/guide/more is a symlink to shared/more, outside its folder; reeval places only regular files, so the attempt doesn't get it
 warning: skill skills/guide: skills/guide/references/broken.md is a broken symlink, and reeval doesn't place it
-warning: skill skills/guide: skills/guide/references/notes.md is a symlink to shared/notes.md, outside its folder; it's listed in inputs, but reeval places only regular files, so the attempt doesn't get it
+warning: skill skills/guide: skills/guide/references/notes.md is a symlink to shared/notes.md, outside its folder; reeval places only regular files, so the attempt doesn't get it
 evals/inputs.eval.ts › Answer from the guide skill. (42)  fake/everything/docker:docker  control  gated  ×1  workspace ../repo · files a.txt, app/package.json, app/src/index.ts · plugins tool (skills)
 evals/inputs.eval.ts › no environment                     fake/-/docker                  control  gated  ×1
 excluded: —
@@ -16,20 +16,20 @@ input rules           RULES.md                                 [Answer from the 
 input module          config/harnesses.ts                      []
 input file            data/a.txt                               [Answer from the guide skill. (42)]
 input read            data/answers.json                        [Answer from the guide skill. (42), no environment]
-input docker-context  docker/.dockerignore                     [Answer from the guide skill. (42), no environment]
+input docker-context  docker/.dockerignore                     [Answer from the guide skill. (42)]
 input dockerfile      docker/Dockerfile                        [Answer from the guide skill. (42)]
 input docker-context  docker/setup.sh                          [Answer from the guide skill. (42)]
 input eval            evals/inputs.eval.ts                     [Answer from the guide skill. (42), no environment]
 input module          lib/task.ts                              [Answer from the guide skill. (42), no environment]
 input lockfile        package-lock.json                        []
-input plugin          plugins/tool/.claude-plugin/plugin.json  [Answer from the guide skill. (42), no environment]
-input plugin          plugins/tool/skills/fmt/SKILL.md         [Answer from the guide skill. (42), no environment]
+input plugin          plugins/tool/.claude-plugin/plugin.json  [Answer from the guide skill. (42)]
+input plugin          plugins/tool/skills/fmt/SKILL.md         [Answer from the guide skill. (42)]
 input file            project/package.json                     [Answer from the guide skill. (42)]
 input file            project/src/index.ts                     [Answer from the guide skill. (42)]
 input config          reeval.config.ts                         []
 input workspace       repo                                     [Answer from the guide skill. (42)]
 input skill           shared/more/extra.md                     via skills/guide/more/extra.md [Answer from the guide skill. (42)]
 input skill           shared/notes.md                          via skills/guide/references/notes.md [Answer from the guide skill. (42)]
-input skill           skills/guide/SKILL.md                    [Answer from the guide skill. (42), no environment]
+input skill           skills/guide/SKILL.md                    [Answer from the guide skill. (42)]
 input skill           skills/guide/references/ref.md           [Answer from the guide skill. (42)]
 input skill           skills/guide/scripts/run.sh              [Answer from the guide skill. (42)]

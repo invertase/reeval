@@ -2,9 +2,15 @@
 // the project elsewhere would need. Paths are already absolute (the helpers resolve them where
 // they're written); a folder is walked as reeval walks it to place it, so the list is its files.
 import { type Dirent, existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { contextFiles } from '@reeval/sandbox-docker'
-import { PLUGIN_PARTS, pluginKeeps, skillName } from './environment/plugins.ts'
+import {
+  localPlugin,
+  PLUGIN_MANIFEST,
+  PluginProblem,
+  pluginKeeps,
+  skillName,
+} from './environment/plugins.ts'
 import { excludeMatcher } from './environment/resolve.ts'
 import { DEFAULT_SKILL_EXCLUDE, isHostFile, isLocalPath } from './environment.ts'
 import { relativeFile } from './ids.ts'
@@ -12,19 +18,37 @@ import type {
   EnvironmentLayer,
   LocalInput,
   LocalInputKind,
-  PluginPart,
+  PluginSource,
   SandboxDescriptor,
 } from './types.ts'
 
 type Found = { inputs: LocalInput[]; warnings: string[] }
 
+/**
+ * Above 0 while reeval reads the project's files for its own sake (placement's walks, the plan's
+ * reads of a plugin or skill), which a load's tracking (`./inputs-load.ts`) leaves out.
+ */
+export const ownReads = { depth: 0 }
+
+/** `fn`'s file reads are reeval's own, not the load's. */
+export function asOwnReads<T>(fn: () => T): T {
+  ownReads.depth++
+  try {
+    return fn()
+  } finally {
+    ownReads.depth--
+  }
+}
+
 const isDir = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
 const inside = (dir: string, path: string) => path === dir || path.startsWith(dir + sep)
 
 /**
- * A skill's or plugin's files, by absolute path, less what `skip` leaves out and `.git`. reeval
- * places regular files only, so a symlink is followed here and its target listed, through the
- * link, with a warning when it leads outside `dir`.
+ * A skill's or plugin's files, by absolute path, less what `skip` leaves out and `.git`. A symlink
+ * is followed and its target listed, through the link when it leads outside `dir`. reeval places
+ * regular files only, so such a link warns, unless it's a file in `readThrough`, which placement
+ * reads by path (a skill's `SKILL.md`, a plugin's manifest). A link to `dir` or one of its
+ * parents isn't followed.
  */
 function walkFolder(
   dir: string,
@@ -33,6 +57,7 @@ function walkFolder(
   root: string,
   skip: (path: string, isDir: boolean) => boolean,
   out: Found,
+  readThrough: readonly string[] = [],
 ) {
   const real = realpathSync(dir)
   const seen = new Set<string>()
@@ -63,10 +88,15 @@ function walkFolder(
         }
         const targetIsDir = isDir(target)
         if (skip(path, targetIsDir)) continue
+        const shown = `${relativeFile(root, full)} is a symlink to ${relativeFile(root, target) || '.'}`
+        if (targetIsDir && inside(target, real)) {
+          out.warnings.push(`${what}: ${shown}, which holds its folder, so it isn't followed`)
+          continue
+        }
         const outside = !inside(real, target)
-        if (outside) {
+        if (outside && !(via === undefined && !targetIsDir && readThrough.includes(path))) {
           out.warnings.push(
-            `${what}: ${relativeFile(root, full)} is a symlink to ${relativeFile(root, target)}, outside its folder; it's listed in inputs, but reeval places only regular files, so the attempt doesn't get it`,
+            `${what}: ${shown}, outside its folder; reeval places only regular files, so the attempt doesn't get it`,
           )
         }
         const link = through ?? (outside ? full : undefined)
@@ -94,9 +124,14 @@ function skillDirs(dir: string, only: readonly string[] | undefined): string[] {
     .sort()
 }
 
-/** A plugin-relative path `only` leaves out, the manifest kept. */
-function pluginSkip(only: readonly PluginPart[] | undefined) {
-  const keeps = pluginKeeps(only ?? PLUGIN_PARTS)
+/**
+ * A plugin-relative file placement leaves out: a part the plugin's `kept` (as `readPlugin` reads
+ * it) doesn't have. A plugin the plan can't read leaves nothing out.
+ */
+function pluginSkip(p: PluginSource, root: string) {
+  const read = localPlugin(p, root)
+  if (!read || read instanceof PluginProblem) return () => false
+  const keeps = pluginKeeps(read.kept)
   return (path: string, dir: boolean) => !dir && !keeps(path)
 }
 
@@ -128,8 +163,19 @@ export function environmentInputs(
   root: string,
 ): Found {
   const key = JSON.stringify([layers.map((l) => l.spec), sandbox, root])
-  const known = cache.get(key)
-  if (known) return known
+  let found = cache.get(key)
+  if (!found) {
+    found = asOwnReads(() => readInputs(layers, sandbox, root))
+    cache.set(key, found)
+  }
+  return found
+}
+
+function readInputs(
+  layers: readonly EnvironmentLayer[],
+  sandbox: SandboxDescriptor | undefined,
+  root: string,
+): Found {
   const out: Found = { inputs: [], warnings: [] }
   const file = (path: string, kind: LocalInputKind) => {
     if (existsSync(path)) out.inputs.push({ path, kind })
@@ -144,7 +190,9 @@ export function environmentInputs(
       if (s.source === 'local') {
         const skip = excludeMatcher(s.exclude ?? DEFAULT_SKILL_EXCLUDE)
         for (const dir of skillDirs(s.path, s.only)) {
-          walkFolder(dir, 'skill', `skill ${relativeFile(root, dir)}`, root, skip, out)
+          walkFolder(dir, 'skill', `skill ${relativeFile(root, dir)}`, root, skip, out, [
+            'SKILL.md',
+          ])
         }
       } else if (s.source === 'git' && isLocalPath(s.repo)) file(s.repo, 'skill')
       else if (s.source === 'npm') npmInputs(s.spec, root, out)
@@ -153,7 +201,7 @@ export function environmentInputs(
       if (p.source === 'local') {
         if (!isDir(p.path)) continue
         const what = `plugin ${relativeFile(root, p.path)}`
-        walkFolder(p.path, 'plugin', what, root, pluginSkip(p.only), out)
+        walkFolder(p.path, 'plugin', what, root, pluginSkip(p, root), out, [PLUGIN_MANIFEST])
         if (p.build !== undefined) {
           for (const path of contextFiles(p.path, null)) {
             if (path !== '.git' && !path.startsWith('.git/')) {
@@ -181,12 +229,12 @@ export function environmentInputs(
     }
   }
   out.warnings = [...new Set(out.warnings)]
-  cache.set(key, out)
   return out
 }
 
 /** A path as the plan prints it: project-relative, or absolute outside the project. */
 export function inputPath(root: string, path: string): string {
   const rel = relative(root, path)
-  return rel.startsWith('..') || rel === '' ? path.split(sep).join('/') : relativeFile(root, path)
+  const outside = rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)
+  return outside ? path.split(sep).join('/') : relativeFile(root, path)
 }

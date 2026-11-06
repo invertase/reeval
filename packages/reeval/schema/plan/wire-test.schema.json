@@ -93,7 +93,7 @@
           "$ref": "#/$defs/HarnessDescriptor"
         },
         "inputs": {
-          "description": "The host files it reads, by absolute path: its environment's and sandbox's, then what its file's load read. Set only when the run context asks for `inputs`.",
+          "description": "The host files it reads, by absolute path: what its file's load read, then what its environment and sandbox name. Set only when the run context asks for `inputs`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalInput"
@@ -1426,7 +1426,7 @@
           "$ref": "#/$defs/LocalInputKind"
         },
         "path": {
-          "description": "Absolute; a directory for a `workspace`, `npm` or `marketplace` source.",
+          "description": "Absolute; a directory for a `workspace`, a `marketplace` or a local git `skill` or `plugin` repository (a file for any other `skill` or `plugin`, and for an `npm` tarball).",
           "type": "string"
         },
         "via": {
