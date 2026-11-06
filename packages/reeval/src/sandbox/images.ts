@@ -3,6 +3,7 @@
 import {
   type BakedHarness,
   contextHash,
+  dockerfileBases,
   dockerfileTag,
   type Engine,
   engineSpec,
@@ -287,6 +288,9 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     const base = onReeval ? await reevalBase() : null
     const { tag } = dockerfileTag(sandbox.dockerfile, harness)
     const built = await exists(tag)
+    // Its key, from the built image, or else the tag when no base of it can move before the build.
+    const key =
+      built.info?.labels[LABEL.key] ?? (dockerfileBases(sandbox.dockerfile).length ? null : tag)
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
@@ -295,7 +299,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       detail: built.detail,
     })
     if (onReeval) {
-      parent = tag
+      parent = key
       if (built.status === 'unknown') unanswered = built.detail
       stages.push({
         what: 'harness',
@@ -310,7 +314,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     } else {
       const ref = harnessImageFor(harness, tag)
       const baked = await exists(ref)
-      parent = ref
+      parent = key ? fromImageKey(ref, key) : null
       if (baked.status === 'unknown') unanswered = baked.detail
       stages.push({
         what: 'harness',

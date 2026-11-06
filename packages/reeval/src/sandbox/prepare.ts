@@ -7,6 +7,8 @@ import {
   buildInstallLayer,
   buildPluginLayer,
   contextHash,
+  dockerfileBases,
+  dockerfileKey,
   dockerfileTag,
   type Engine,
   engineSpec,
@@ -226,7 +228,9 @@ async function harnessBase(
       }
       const output = buildLogger(root, ref)
       const pull = b.refresh === 'force'
-      await b.retry(() => buildImage(b.log, { harness, from, signal, output, pull, engine }))
+      await b.retry(() =>
+        buildImage(b.log, { harness, from, signal, output, pull, engine, ...(key ? { key } : {}) }),
+      )
       return built(ref, engine)
     })
     return { ref, info, key: key ?? fromImageKey(ref, info.labels[LABEL.fromDigest] ?? info.id) }
@@ -266,7 +270,19 @@ async function harnessBase(
     const info = await b.once(tag, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(tag, engine)
       if (cached) return cached
-      const fetched = await pulled({ ref: tag, key: tag }, b, signal)
+      // What its moving bases name now: a base only this machine has keeps it off the registry.
+      const bases = await Promise.all(
+        dockerfileBases(path).map(async (ref) => ({
+          ref,
+          now: await resolveFrom(ref, signal, engine),
+        })),
+      )
+      const shared = bases.every(({ now }) => 'digest' in now && !now.local)
+      const key = dockerfileKey(
+        tag,
+        bases.map(({ ref, now }) => ({ ref, digest: 'digest' in now ? now.digest : 'unresolved' })),
+      )
+      const fetched = shared ? await pulled({ ref: tag, key }, b, signal) : null
       if (fetched) return fetched
       b.log(`Building ${dockerfile.path} as ${tag}`)
       const output = buildLogger(root, tag)
@@ -279,17 +295,19 @@ async function harnessBase(
           force: true,
           pull: b.refresh === 'force',
           engine,
+          key,
         }),
       )
       return built(tag, engine)
     })
+    const key = info.labels[LABEL.key] ?? tag
     // Built on this harness's image, so its CLI is already there. Any other base, including
     // another harness's image, gets this harness baked on.
-    layers.push({ ref: tag, key: tag })
+    layers.push({ ref: tag, key })
     if (info.labels[LABEL.harness] === harnessLabel(harness)) {
-      return { ref: tag, key: tag, info, dockerfile, layers }
+      return { ref: tag, key, info, dockerfile, layers }
     }
-    const baked = await bake(tag, harnessImageFor(harness, tag))
+    const baked = await bake(tag, fromImageKey(harnessImageFor(harness, tag), key))
     return { ...baked, dockerfile, layers: [...layers, baked] }
   }
   const base = { ref: imageFor(harness), key: reevalImageKey(harness) }
@@ -352,14 +370,16 @@ export async function prepareImage(
     const ref = installLayerTag(parent, steps)
     const on = parent
     const info = await b.once(ref, async () => {
-      const cached = await imageInfo(ref, b.engine)
+      // Its tag is its parent's key, which a forced rebuild of the parent keeps.
+      const force = b.refresh === 'force'
+      const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
       const fetched = await pulled({ ref, key: ref }, b, signal)
       if (fetched) return fetched
       b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
       const output = buildLogger(root, ref)
       // The user's own commands: a failure is theirs, never retried.
-      await buildInstallLayer(on, steps, { signal, output, engine: b.engine })
+      await buildInstallLayer(on, steps, { signal, output, engine: b.engine, force })
       return built(ref, b.engine)
     })
     parent = { ref, key: ref, id: info.id }
@@ -372,14 +392,15 @@ export async function prepareImage(
     const on = parent
     const name = `the build of ${pluginCall(source, root)}`
     const info = await b.once(ref, async () => {
-      const cached = await imageInfo(ref, b.engine)
+      const force = b.refresh === 'force'
+      const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
       const fetched = await pulled({ ref, key: ref }, b, signal)
       if (fetched) return fetched
       b.log(`Building ${name} onto ${on.ref} as ${ref}`)
       const output = buildLogger(root, ref)
       // The user's own commands: a failure is theirs, never retried.
-      await buildPluginLayer(on, spec, { name, signal, output, engine: b.engine })
+      await buildPluginLayer(on, spec, { name, signal, output, engine: b.engine, force })
       return built(ref, b.engine)
     })
     builtPlugins.push({

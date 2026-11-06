@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
-import type { Layer } from './build-image.ts'
-import { docker } from './docker-cli.ts'
+import { type Layer, PLATFORM } from './build-image.ts'
+import { docker, imageInfo } from './docker-cli.ts'
 import { type Engine, engineSpec } from './engine.ts'
+import { LABEL } from './image.ts'
 
 type Options = { engine?: Engine | undefined; signal?: AbortSignal | undefined }
 
@@ -17,9 +18,10 @@ export function registryProblem(registry: string): string | null {
 /**
  * Where a layer goes in `registry`: its repository under the prefix, with its tag, plus its content
  * key's hash where the tag alone doesn't pin what's in it (reeval's own image and a `from` image),
- * so one machine's push is another's pull only when they'd have built the same thing.
+ * and the platform, so one machine's push is another's pull only when they'd have built the same
+ * thing for the same architecture.
  */
-export function registryRef(registry: string, layer: Layer): string {
+export function registryRef(registry: string, layer: Layer, platform = PLATFORM): string {
   const at = layer.ref.lastIndexOf(':')
   const repository = layer.ref.slice(0, at)
   const tag = layer.ref.slice(at + 1)
@@ -27,7 +29,7 @@ export function registryRef(registry: string, layer: Layer): string {
     layer.key === layer.ref
       ? tag
       : `${tag}-${createHash('sha256').update(layer.key).digest('hex').slice(0, 12)}`
-  return `${registry.replace(/\/+$/, '')}/${repository}:${pinned}`
+  return `${registry.replace(/\/+$/, '')}/${repository}:${pinned}-${platform.replaceAll('/', '-')}`
 }
 
 const firstLine = (stderr: string) =>
@@ -39,8 +41,11 @@ const firstLine = (stderr: string) =>
     ?.replace(/^Error(?: response from daemon)?: /, '') ?? ''
 
 /**
- * Pulls `layer` from `registry` and tags it as its local ref. `pulled: false` with the engine's
- * reason when the registry doesn't have it or can't be reached: the caller builds it instead.
+ * Pulls `layer` from `registry` and tags it as its local ref, once it's checked: its
+ * {@link LABEL.key} must be the layer's key and its platform {@link PLATFORM}. `pulled: false` with
+ * the reason when the registry doesn't have it, can't be reached or has another image under the
+ * ref: the caller builds it instead. The registry is otherwise trusted: anyone who can push to it
+ * chooses what a matching tag holds.
  */
 export async function pullLayer(
   registry: string,
@@ -55,12 +60,33 @@ export async function pullLayer(
   if (pull.exitCode !== 0) {
     return { pulled: false, remote, reason: firstLine(pull.stderr) || `exit ${pull.exitCode}` }
   }
-  const tag = await docker(['tag', remote, layer.ref], { engine, signal })
-  await docker(['image', 'rm', remote], { engine }).catch(() => {})
-  if (tag.exitCode !== 0) {
-    return { pulled: false, remote, reason: firstLine(tag.stderr) || `exit ${tag.exitCode}` }
+  try {
+    const info = await imageInfo(remote, engine).catch(() => null)
+    const key = info?.labels[LABEL.key]
+    if (key !== layer.key) {
+      return {
+        pulled: false,
+        remote,
+        reason: key
+          ? `its ${LABEL.key} label is ${key}, not ${layer.key}`
+          : `it has no ${LABEL.key} label`,
+      }
+    }
+    if (info?.platform !== PLATFORM) {
+      return {
+        pulled: false,
+        remote,
+        reason: `it's for ${info?.platform ?? 'an unknown platform'}, not ${PLATFORM}`,
+      }
+    }
+    const tag = await docker(['tag', remote, layer.ref], { engine, signal })
+    if (tag.exitCode !== 0) {
+      return { pulled: false, remote, reason: firstLine(tag.stderr) || `exit ${tag.exitCode}` }
+    }
+    return { pulled: true, remote }
+  } finally {
+    await docker(['image', 'rm', remote], { engine }).catch(() => {})
   }
-  return { pulled: true, remote }
 }
 
 /** Pushes `layer` to `registry` under {@link registryRef}, which it returns. */

@@ -16,6 +16,8 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  dockerfileBases,
+  dockerfileKey,
   dockerfileTag,
   harnessImageFor,
   installLayerTag,
@@ -1313,6 +1315,33 @@ describe('image recipes', () => {
     assert.equal(ignored('src/index.ts'), false)
   })
 
+  test("a Dockerfile's moving bases: FROM and COPY --from tags, not build args, stages, scratch or digests", () => {
+    const file = join(tmp(), 'Dockerfile')
+    const pinned = `debian@sha256:${'a'.repeat(64)}`
+    writeFileSync(
+      file,
+      [
+        'ARG REEVAL_BASE',
+        'FROM --platform=linux/amd64 node:22 AS build',
+        `FROM ${pinned} AS pinned`,
+        'from scratch',
+        'FROM build AS again',
+        'FROM ${REEVAL_BASE}',
+        'COPY --from=python:3.12 /usr/local/bin/python3 /opt/',
+        'COPY --from=build /a /b',
+        'COPY --from=0 /a /b',
+        'FROM node:22',
+      ].join('\n'),
+    )
+    assert.deepEqual(dockerfileBases(file), ['node:22', 'python:3.12'])
+    const tag = 'reeval-dockerfile:x-0123456789abcdef'
+    assert.equal(dockerfileKey(tag, []), tag, 'nothing that moves: the tag is the key')
+    assert.notEqual(
+      dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:1' }]),
+      dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:2' }]),
+    )
+  })
+
   test('the Dockerfile tag hashes the Dockerfile and its build context, less .dockerignore', () => {
     const dir = tmp()
     const file = join(dir, 'Dockerfile')
@@ -1399,7 +1428,7 @@ describe('image recipes', () => {
     }
   })
 
-  test('the base image and the toolchain layer take Node from the same image, on Node 24 or later', () => {
+  test('the base image and the toolchain layer take Node from the same pinned image, on Node 24 or later', () => {
     const dockerfile = readFileSync(
       fileURLToPath(new URL('../docker/Dockerfile', import.meta.url)),
       'utf8',
@@ -1407,6 +1436,8 @@ describe('image recipes', () => {
     assert.equal(/^FROM (\S+)$/m.exec(dockerfile)?.[1], NODE_IMAGE)
     // Node 22's undici 6 warns that EnvHttpProxyAgent is experimental in every proxied process.
     assert.ok(Number(/^node:(\d+)-/.exec(NODE_IMAGE)?.[1]) >= 24, NODE_IMAGE)
+    // Pinned, so reeval's image keys name its content.
+    assert.match(NODE_IMAGE, /@sha256:[0-9a-f]{64}$/)
   })
 
   test("a CLI's version output becomes a label value that can't add instructions", () => {

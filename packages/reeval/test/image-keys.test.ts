@@ -12,6 +12,8 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
+  PLATFORM,
+  reevalImageKey,
   registryProblem,
   registryRef,
 } from '@reeval/sandbox-docker'
@@ -32,7 +34,7 @@ fs.mkdirSync(registry, { recursive: true })
 const file = (dir, ref) => path.join(dir, encodeURIComponent(ref) + '.json')
 const read = (dir, ref) => (fs.existsSync(file(dir, ref)) ? JSON.parse(fs.readFileSync(file(dir, ref), 'utf8')) : null)
 const write = (dir, ref, image) => fs.writeFileSync(file(dir, ref), JSON.stringify(image))
-const fresh = (labels) => ({ labels, id: 'sha256:' + createHash('sha256').update(machine + randomUUID()).digest('hex') })
+const fresh = (labels) => ({ labels, platform: process.env.FAKE_PLATFORM, id: 'sha256:' + createHash('sha256').update(machine + randomUUID()).digest('hex') })
 const fail = (message) => { process.stderr.write(message + '\\n'); process.exit(1) }
 const flag = (name) => args.filter((a, i) => args[i - 1] === name)
 if (args[0] === 'image' && args[1] === 'inspect') {
@@ -40,7 +42,7 @@ if (args[0] === 'image' && args[1] === 'inspect') {
   const image = read(local, ref)
   if (!image) fail('Error: No such image: ' + ref)
   process.stdout.write(args[3].includes('config')
-    ? JSON.stringify({ config: { Labels: image.labels }, id: image.id, repoDigests: null })
+    ? JSON.stringify({ config: { Labels: image.labels }, id: image.id, repoDigests: null, os: image.platform.split('/')[0], arch: image.platform.split('/')[1] })
     : '2026-11-06T00:00:00Z\\n')
 } else if (args[0] === 'image' && args[1] === 'rm') {
   fs.rmSync(file(local, args[2]), { force: true })
@@ -66,7 +68,10 @@ if (args[0] === 'image' && args[1] === 'inspect') {
   if (!image) fail('Error response from daemon: manifest unknown')
   write(local, args.at(-1), image)
 } else if (args[0] === 'buildx') {
-  fail('ERROR: no registry in this test')
+  const digests = path.join(process.env.FAKE_STATE, machine + '-upstream.json')
+  const digest = fs.existsSync(digests) ? JSON.parse(fs.readFileSync(digests, 'utf8'))[args.at(-1)] : null
+  if (!digest) fail('ERROR: no registry in this test')
+  process.stdout.write(JSON.stringify(digest) + '\\n')
 }
 `
 
@@ -81,24 +86,28 @@ function world() {
   const state = join(dir, 'state')
   const project = join(dir, 'project')
   mkdirSync(project)
-  const env = { PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: state }
+  const env = { PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: state, FAKE_PLATFORM: PLATFORM }
   /** One machine: its own images, whose ids are its own, and the shared registry. */
   const machine = (name: string) => {
     const local = join(state, name)
     mkdirSync(local, { recursive: true })
-    const seed = (ref: string, labels: Record<string, string>) =>
+    const seed = (ref: string, labels: Record<string, string>, dir = local) =>
       writeFileSync(
-        join(local, `${encodeURIComponent(ref)}.json`),
-        JSON.stringify({ labels, id: `sha256:${name}-${ref}`.padEnd(71, '0') }),
+        join(dir, `${encodeURIComponent(ref)}.json`),
+        JSON.stringify({ labels, platform: PLATFORM, id: `sha256:${name}-${ref}`.padEnd(71, '0') }),
       )
     return {
       seed,
+      /** What the upstream registry says each tag names now, as this machine looks it up. */
+      upstream: (digests: Record<string, string>) =>
+        writeFileSync(join(state, `${name}-upstream.json`), JSON.stringify(digests)),
       /** Seeds reeval's own image for the harness, as `reeval image build` left it here. */
       seedReeval: () =>
         seed(reevalImage, {
           [LABEL.context]: contextHash(),
           [LABEL.agentVersion]: '1.0.0',
           [LABEL.harness]: harnessLabel(harness),
+          [LABEL.key]: reevalImageKey(harness),
         }),
       builds: () => {
         const log = join(state, `${name}-builds.log`)
@@ -107,7 +116,12 @@ function world() {
       has: (ref: string) => existsSync(join(local, `${encodeURIComponent(ref)}.json`)),
       prepare: async (
         sandbox: Omit<DockerSandboxDescriptor, 'kind'>,
-        options: { registry?: string; push?: boolean } = {},
+        options: {
+          registry?: string
+          push?: boolean
+          refresh?: 'force'
+          log?: (line: string) => void
+        } = {},
       ) => {
         const saved = { ...process.env }
         Object.assign(process.env, env, { FAKE_MACHINE: name })
@@ -125,7 +139,16 @@ function world() {
       },
     }
   }
-  return { project, machine }
+  /** Puts an image straight into the shared registry, as someone else's push would. */
+  const publish = (remote: string, labels: Record<string, string>, platform = PLATFORM) => {
+    const dir = join(state, 'registry')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, `${encodeURIComponent(remote)}.json`),
+      JSON.stringify({ labels, platform, id: `sha256:${'f'.repeat(64)}` }),
+    )
+  }
+  return { project, machine, publish }
 }
 
 describe('sandbox image tags are content keys', () => {
@@ -219,17 +242,120 @@ describe('sandbox image tags are content keys', () => {
       key: 'reeval-install:0123456789abcdef',
     }
     assert.equal(
-      registryRef(registry, install),
-      'localhost:5000/reeval/reeval-install:0123456789abcdef',
+      registryRef(registry, install, 'linux/amd64'),
+      'localhost:5000/reeval/reeval-install:0123456789abcdef-linux-amd64',
     )
     const one = registryRef(registry, { ref: reevalImage, key: `${reevalImage}+aaaa` })
     const two = registryRef(registry, { ref: reevalImage, key: `${reevalImage}+bbbb` })
-    assert.match(one, new RegExp(`^localhost:5000/reeval/${reevalImage}-[0-9a-f]{12}$`))
+    assert.match(
+      one,
+      new RegExp(
+        `^localhost:5000/reeval/${reevalImage}-[0-9a-f]{12}-${PLATFORM.replace('/', '-')}$`,
+      ),
+    )
     assert.notEqual(one, two, 'a new reeval base is a new registry tag')
     assert.equal(registryProblem('ghcr.io/acme/reeval'), null)
     assert.equal(registryProblem('localhost:5000'), null)
     assert.match(registryProblem('https://ghcr.io/acme') ?? '', /without a scheme/)
     assert.match(registryProblem('ghcr.io/acme/reeval:latest') ?? '', /without a scheme, tag/)
+  })
+  test('every registry ref names the platform, so another architecture never pulls it', () => {
+    const registry = 'localhost:5000/reeval'
+    const platformTag = PLATFORM.replace('/', '-')
+    for (const layer of [
+      { ref: reevalImage, key: reevalImageKey(harness) },
+      { ref: 'reeval-install:0123456789abcdef', key: 'reeval-install:0123456789abcdef' },
+    ]) {
+      const here = registryRef(registry, layer)
+      assert.ok(here.endsWith(`-${platformTag}`), here)
+      // Canary: the same layer for another architecture is another ref.
+      assert.notEqual(registryRef(registry, layer, 'linux/riscv64'), here)
+    }
+  })
+
+  test("a pulled image whose key label or platform doesn't match is built instead", async () => {
+    const { machine, publish } = world()
+    const registry = 'registry.test:5000/reeval'
+    const install = ['echo checked']
+    const a = machine('a')
+    a.seedReeval()
+    const ref = (await a.prepare({ install })).ref
+    const remote = registryRef(registry, { ref, key: ref })
+
+    const cases = [
+      [
+        { [LABEL.key]: 'reeval-install:0000000000000000' },
+        PLATFORM,
+        /label is reeval-install:0+, not/,
+      ],
+      [{}, PLATFORM, /has no ai\.reeval\.key label/],
+      [{ [LABEL.key]: ref }, 'linux/riscv64', /it's for linux\/riscv64, not/],
+    ] as const
+    for (const [i, [labels, platform, reason]] of cases.entries()) {
+      publish(remote, labels, platform)
+      const b = machine(`b${i}`)
+      b.seedReeval()
+      const lines: string[] = []
+      const got = await b.prepare({ install }, { registry, log: (line) => lines.push(line) })
+      assert.equal(got.ref, ref)
+      assert.deepEqual(b.builds(), [ref], 'built, not pulled')
+      assert.match(lines.join('\n'), reason)
+    }
+    // Canary: the image as reeval labels it is pulled.
+    publish(remote, { [LABEL.key]: ref })
+    const c = machine('c')
+    c.seedReeval()
+    await c.prepare({ install }, { registry })
+    assert.deepEqual(c.builds(), [])
+  })
+
+  test('--force builds the install layer again, though its tag is the same', async () => {
+    const { machine } = world()
+    const a = machine('a')
+    a.seed('acme/tools:1', {
+      [LABEL.agentVersion]: '1.0.0',
+      [LABEL.harness]: harnessLabel(harness),
+    })
+    const sandbox = { image: 'acme/tools:1', install: ['echo forced'] }
+    const first = await a.prepare(sandbox)
+    // Canary: without --force it's reused.
+    await a.prepare(sandbox)
+    assert.deepEqual(a.builds(), [first.ref])
+    const forced = await a.prepare(sandbox, { refresh: 'force' })
+    assert.equal(forced.ref, first.ref)
+    assert.notEqual(forced.id, first.id, 'a new image under the same tag')
+    assert.ok(a.builds().filter((ref) => ref === first.ref).length === 2, a.builds().join('\n'))
+  })
+
+  test("a Dockerfile's key holds the digest its moving base names: a base that moved is another image", async () => {
+    const { project, machine } = world()
+    const dockerfile = join(project, 'node', 'Dockerfile')
+    mkdirSync(join(project, 'node'))
+    writeFileSync(
+      dockerfile,
+      'FROM node:22 AS node\nARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nCOPY --from=node /usr/local/bin/node /opt/node\n',
+    )
+    const registry = 'registry.test:5000/reeval'
+    const install = ['echo on node']
+    const one = { 'node:22': `sha256:${'1'.repeat(64)}` }
+    const a = machine('a')
+    a.seedReeval()
+    a.upstream(one)
+    const onA = await a.prepare({ dockerfile, install }, { registry, push: true })
+    const b = machine('b')
+    b.seedReeval()
+    b.upstream(one)
+    const onB = await b.prepare({ dockerfile, install }, { registry })
+    assert.equal(onB.ref, onA.ref)
+    assert.deepEqual(b.builds(), [], 'the same base digest is the same image, pulled')
+    // Canary: node:22 moved, so the Dockerfile and the layer on it are built, under a new key.
+    const c = machine('c')
+    c.seedReeval()
+    c.upstream({ 'node:22': `sha256:${'2'.repeat(64)}` })
+    const onC = await c.prepare({ dockerfile, install }, { registry })
+    assert.equal(onC.base, onA.base, 'the same files are the same local tag')
+    assert.notEqual(onC.ref, onA.ref, 'the install layer hashes the new key')
+    assert.ok(c.builds().includes(onC.base), c.builds().join('\n'))
   })
 })
 

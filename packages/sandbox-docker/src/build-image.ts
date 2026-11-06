@@ -33,14 +33,23 @@ import { createDockerSession, type DockerSession } from './session.ts'
 export const PNPM_VERSION = '10.33.3'
 /** Pinned so evals' installs don't move with the Node image's bundled npm. */
 const NPM_VERSION = '11.20.0'
-/**
- * The official Node image the sandbox's Node comes from: the base Dockerfile's `FROM` (a test holds
- * them equal) and the toolchain layer's copy onto a `from` image. Node 24+ bundles undici 7, whose
- * `EnvHttpProxyAgent` (behind `NODE_USE_ENV_PROXY`) prints no experimental warning.
- */
-export const NODE_IMAGE = 'node:26-bookworm-slim'
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
+
+/** Docker's names for Node's architectures, as image indexes list platforms. */
+const OCI_ARCH: Record<string, string> = {
+  x64: 'amd64',
+  arm64: 'arm64',
+  arm: 'arm',
+  ppc64: 'ppc64le',
+}
+
+/**
+ * The platform the engine builds and pulls for, as `docker image inspect` says it (`.Os/.Architecture`):
+ * Linux on this machine's architecture, which Docker Desktop's and Podman's VMs share. Every
+ * registry ref carries it, so an image built for one architecture is never another's.
+ */
+export const PLATFORM = `linux/${OCI_ARCH[process.arch] ?? process.arch}`
 
 const slugify = (text: string, max: number) =>
   text
@@ -52,6 +61,16 @@ const slugify = (text: string, max: number) =>
 
 /** The build context of reeval's base image, shipped in the package. */
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
+
+/**
+ * The official Node image the sandbox's Node comes from, pinned by its index digest: the base
+ * Dockerfile's `FROM`, which the toolchain layer also copies onto a `from` image. The pin is what
+ * makes reeval's image, and every key built on it, the same content on any machine. Node 24+
+ * bundles undici 7, whose `EnvHttpProxyAgent` (behind `NODE_USE_ENV_PROXY`) prints no experimental
+ * warning.
+ */
+export const NODE_IMAGE =
+  /^FROM (\S+)$/m.exec(readFileSync(join(DOCKER_CONTEXT, 'Dockerfile'), 'utf8'))?.[1] ?? 'node'
 
 /**
  * How reeval bakes a harness into an image, beyond the build context and the adapter: bump it when
@@ -267,6 +286,13 @@ function buildError(
 
 /** Every image reeval builds carries this label, so `reeval clean --images` can find what it left. */
 const BUILT_BY = ['--label', `${LABEL.managed}=image`]
+const keyLabel = (key: string) => ['--label', `${LABEL.key}=${key}`]
+
+/** Removes the image `tag` pointed at before a rebuild, once the tag points elsewhere. */
+async function replaced(tag: string, previous: string | undefined, engine?: Engine) {
+  if (!previous) return
+  if ((await imageInfo(tag, engine))?.id !== previous) await removeQuietly(previous, engine)
+}
 
 /**
  * Removes the images reeval built that nothing tags any more (a rebuild's old image) and the
@@ -299,14 +325,6 @@ export async function pruneImages(engine?: Engine): Promise<number> {
     }
   }
   return removed
-}
-
-/** Docker's names for Node's architectures, as image indexes list platforms. */
-const OCI_ARCH: Record<string, string> = {
-  x64: 'amd64',
-  arm64: 'arm64',
-  arm: 'arm',
-  ppc64: 'ppc64le',
 }
 
 /**
@@ -405,17 +423,23 @@ export function contextHash(): string {
  */
 export type Layer = { ref: string; key: string }
 
-/** reeval's image for a harness: its tag (the adapter) and its base's build context. */
+/**
+ * reeval's image for a harness: its tag (the adapter) and its base's build context, whose `FROM` is
+ * pinned by digest.
+ */
 export const reevalImageKey = (harness: BakedHarness) => `${imageFor(harness)}+${contextHash()}`
 
 /**
  * A harness baked onto `from`: its tag and what `from` named when it was built, a registry digest
- * (or, for a base only this machine has, its image id).
+ * (or, for a base only this machine has, its image id, or a Dockerfile image's own key).
  */
 export const fromImageKey = (ref: string, digest: string) => `${ref}@${digest}`
 
-/** An image reeval uses as is: its registry digest, or for one only built here, its id. */
-export const imageKey = (info: ImageInfo) => info.repoDigests[0] ?? info.id
+/**
+ * An image reeval uses as is: its image id, which is content-addressed, so the same on every machine
+ * that pulled it (and this machine's alone for one built here), whichever registries it's in.
+ */
+export const imageKey = (info: ImageInfo) => info.id
 
 /**
  * Bakes a harness's bootstrap (which installs its agent's CLI) into an image, so the image tag
@@ -434,6 +458,8 @@ export async function buildImage(
     /** Pull the base again even when it's cached: `reeval image build --force`. */
     pull?: boolean
     engine?: Engine
+    /** The {@link LABEL.key} it carries, when the caller pins `from` with a key of its own. */
+    key?: string
   },
 ): Promise<{ image: string; agentVersion: string }> {
   const { harness, from, signal, engine } = options
@@ -447,6 +473,8 @@ export async function buildImage(
   const bootstrap = BOOTSTRAPS[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
+  const key =
+    options.key ?? (from ? (digest ? fromImageKey(target, digest) : null) : reevalImageKey(harness))
   const previous = [
     (await imageInfo(target, engine))?.id,
     from ? null : (await imageInfo(base, engine))?.id,
@@ -516,7 +544,7 @@ export async function buildImage(
       [
         'commit',
         '--change',
-        `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}`,
+        `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}${key ? ` ${LABEL.key}="${key}"` : ''}`,
         '--change',
         `WORKDIR ${SANDBOX_ROOT}`,
         // Not the bootstrap's user: Dockerfiles `FROM ${REEVAL_BASE}` build as root.
@@ -646,19 +674,19 @@ export function installScript(steps: InstallStep[]): string {
 /** Where a build's full output goes, and the path its failure names. */
 export type BuildOutput = { write: (text: string) => void; path: string }
 
-/** Builds the install layer if it's missing. `output` gets the build's output, for a log file. */
+/**
+ * Builds the install layer if it's missing, or again with `force` (`reeval image build --force`,
+ * whose rebuilt parent keeps its key). `output` gets the build's output, for a log file.
+ */
 export async function buildInstallLayer(
   parent: Layer,
   steps: InstallStep[],
-  options: { signal?: AbortSignal; output?: BuildOutput; engine?: Engine } = {},
+  options: { signal?: AbortSignal; output?: BuildOutput; engine?: Engine; force?: boolean } = {},
 ): Promise<string> {
   const { signal, engine } = options
   const tag = installLayerTag(parent, steps)
-  const exists = await docker(['image', 'inspect', '--format', '{{.Created}}', tag], {
-    signal,
-    engine,
-  })
-  if (exists.exitCode === 0) return tag
+  const previous = (await imageInfo(tag, engine))?.id
+  if (previous && !options.force) return tag
   const script = installScript(steps)
   // Base64, so no command's quoting or newlines can break the Dockerfile.
   const encoded = Buffer.from(script).toString('base64')
@@ -674,11 +702,10 @@ export async function buildInstallLayer(
     `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
-  const build = await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-'], {
-    input: dockerfile,
-    signal,
-    engine,
-  })
+  const build = await docker(
+    ['build', '--progress', 'plain', ...BUILT_BY, ...keyLabel(tag), '--tag', tag, '-'],
+    { input: dockerfile, signal, engine },
+  )
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
   if (build.exitCode !== 0) {
@@ -698,6 +725,7 @@ export async function buildInstallLayer(
       (line) => !line.startsWith('reeval: install '),
     )
   }
+  await replaced(tag, previous, engine)
   return tag
 }
 
@@ -768,15 +796,19 @@ export const pluginBuildScript = (b: Pick<PluginBuildSpec, 'cwd' | 'steps'>, src
 export async function buildPluginLayer(
   parent: Layer,
   b: PluginBuildSpec,
-  options: { name: string; signal?: AbortSignal; output?: BuildOutput; engine?: Engine },
+  options: {
+    name: string
+    signal?: AbortSignal
+    output?: BuildOutput
+    engine?: Engine
+    /** Build it again even when it's there: `reeval image build --force`. */
+    force?: boolean
+  },
 ): Promise<string> {
   const { signal, engine } = options
   const tag = pluginLayerTag(parent, b)
-  const exists = await docker(['image', 'inspect', '--format', '{{.Created}}', tag], {
-    signal,
-    engine,
-  })
-  if (exists.exitCode === 0) return tag
+  const previous = (await imageInfo(tag, engine))?.id
+  if (previous && !options.force) return tag
   const src = '/tmp/reeval-plugin-src'
   const script = pluginBuildScript(b, src)
   const encoded = Buffer.from(script).toString('base64')
@@ -796,7 +828,18 @@ export async function buildPluginLayer(
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
   const build = await docker(
-    ['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-f', '-', b.context],
+    [
+      'build',
+      '--progress',
+      'plain',
+      ...BUILT_BY,
+      ...keyLabel(tag),
+      '--tag',
+      tag,
+      '-f',
+      '-',
+      b.context,
+    ],
     { input: dockerfile, signal, engine },
   )
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
@@ -822,6 +865,7 @@ export async function buildPluginLayer(
       (line) => !line.startsWith('reeval: build '),
     )
   }
+  await replaced(tag, previous, engine)
   return tag
 }
 
@@ -836,7 +880,8 @@ export const usesReevalBase = (dockerfile: string) =>
  * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
  * of its build context (its directory, less `.dockerignore`) and, for a Dockerfile `FROM
  * ${REEVAL_BASE}`, the {@link reevalImageKey} of the harness's image it names, so an edit to any of
- * them, or a new reeval base, builds anew, and the same files give the same tag on any machine.
+ * them, or a new reeval base, builds anew, and the same files give the same tag on any machine. What
+ * its other bases' tags name is in its key ({@link dockerfileKey}), not its tag.
  */
 export function dockerfileTag(
   dockerfile: string,
@@ -861,6 +906,40 @@ export function dockerfileTag(
 }
 
 /**
+ * The images a Dockerfile's `FROM` and `COPY --from` lines name by a tag that can move: not
+ * `${REEVAL_BASE}` or any other build arg, an earlier stage, `scratch` or a digest-pinned image.
+ */
+export function dockerfileBases(dockerfile: string): string[] {
+  const stages = new Set<string>()
+  const bases: string[] = []
+  const add = (image: string) => {
+    const name = image.toLowerCase()
+    if (image.includes('$') || stages.has(name) || name === 'scratch' || /^\d+$/.test(name)) return
+    if (/@sha256:[0-9a-f]{64}$/.test(image) || bases.includes(image)) return
+    bases.push(image)
+  }
+  for (const line of readFileSync(dockerfile, 'utf8').split('\n')) {
+    const from = /^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?/i.exec(line)
+    if (from?.[1]) {
+      add(from[1])
+      if (from[2]) stages.add(from[2].toLowerCase())
+    }
+    const copy = /^\s*COPY\s.*--from=(\S+)/i.exec(line)
+    if (copy?.[1]) add(copy[1])
+  }
+  return bases
+}
+
+/**
+ * A Dockerfile image's content key: its tag, plus the digest each of its {@link dockerfileBases}
+ * named when it was built, so a base that moved upstream is another image.
+ */
+export const dockerfileKey = (
+  tag: string,
+  bases: ReadonlyArray<{ ref: string; digest: string }>,
+) => (bases.length ? `${tag}+${bases.map((b) => `${b.ref}@${b.digest}`).join(',')}` : tag)
+
+/**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
  * its directory, with `REEVAL_BASE` set to the harness's sandbox image.
  * Rebuilds even when the tag exists with `force`, as `reeval image build` does, and then removes the
@@ -877,6 +956,8 @@ export async function buildDockerfile(
     /** Pull its `FROM` again: `reeval image build --force`. */
     pull?: boolean
     engine?: Engine
+    /** Its {@link dockerfileKey}, for its {@link LABEL.key}; its tag when it has no moving base. */
+    key?: string
   },
 ): Promise<string> {
   const { harness, signal, engine } = options
@@ -889,6 +970,7 @@ export async function buildDockerfile(
       '--progress',
       'plain',
       ...BUILT_BY,
+      ...keyLabel(options.key ?? tag),
       ...(options.pull ? ['--pull'] : []),
       '--file',
       dockerfile,

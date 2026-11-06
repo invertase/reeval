@@ -11,6 +11,7 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
+  PLATFORM,
 } from '@reeval/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { assertKeyRejected, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -757,13 +758,15 @@ evaluate('pulled', { environments: box }, async (c) => {
         )?.[1] as string
         assert.ok(layer, pushed.stdout)
         const prefix = registry.prefix.replaceAll('.', '\\.')
-        assert.match(pushed.stdout, new RegExp(`^Pushed ${layer} as ${prefix}/${layer}$`, 'm'))
+        const platform = PLATFORM.replace('/', '-')
         assert.match(
           pushed.stdout,
-          new RegExp(
-            `^Pushed ${DEFAULT_IMAGE.replaceAll('.', '\\.')} as ${prefix}/${DEFAULT_IMAGE.replaceAll('.', '\\.')}-[0-9a-f]{12}$`,
-            'm',
-          ),
+          new RegExp(`^Pushed ${layer} as ${prefix}/${layer}-${platform}$`, 'm'),
+        )
+        const reeval = DEFAULT_IMAGE.replaceAll('.', '\\.')
+        assert.match(
+          pushed.stdout,
+          new RegExp(`^Pushed ${reeval} as ${prefix}/${reeval}-[0-9a-f]{12}-${platform}$`, 'm'),
         )
 
         // Another machine: the same evals, without the install layer.
