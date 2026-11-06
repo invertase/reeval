@@ -143,7 +143,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
     'broker ANTHROPIC_API_KEY stays on the host · the gateway swaps it in on POST api.anthropic.com/v1/messages',
   ])
   for (const kind of Object.keys(AGENTS) as AgentKind[]) {
-    const model = kind === 'opencode' ? 'google/m' : 'm'
+    const model = ['opencode', 'goose', 'pi'].includes(kind) ? 'google/m' : 'm'
     assert.doesNotMatch(brokerLine(kind, model).join('\n'), /\[object /, kind)
   }
 })
@@ -710,9 +710,10 @@ test('an auth failure names the credential; other errors get no hint', () => {
     ],
   ]
   for (const [kind, message] of refused) {
-    const { credential } = AGENTS[kind]
+    const agent = agentFor({ kind, model: 'google/m' } as never)
+    const { credential } = agent
     assert.equal(
-      authHint(AGENTS[kind], message),
+      authHint(agent, message),
       `The API rejected ${credential}: set a valid key in the environment or .env.local`,
       message,
     )

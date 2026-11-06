@@ -364,7 +364,9 @@ const FORMATS: Record<string, Format> = {
       'delta',
       'toolCall',
     ],
-    values: ['stopReason', 'role', 'api', 'provider'],
+    // `api` is the wire format; `provider` is only the model's provider id, which the adapter
+    // doesn't read and which differs for each of pi's providers.
+    values: ['stopReason', 'role', 'api'],
     lists: [],
     defined: PI_DEFINED,
     optional: PI_OPTIONAL,

@@ -1051,12 +1051,14 @@ class FakeHarnessDescriptor(TypedDict):
     # does a real harness's, so an attempt there finds it done.
     bootstrap: NotRequired[str]
     # In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`,
-    # Cursor's when unset) on that agent's endpoints, as its adapter does: the key stays on the
-    # host, and `exec` steps get a placeholder in its variable, which the egress gateway swaps
-    # in on those endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on
-    # any other request. For an agent whose bridge is a server in the sandbox (Claude Code,
-    # OpenCode, Goose, fx, Grok Build), it also serves on the session's first exposed port and
-    # reaches it from the host, as that adapter's start does.
+    # Cursor's when unset) on that agent's endpoints, as its adapter does; OpenCode, Goose and
+    # pi take their model's provider's key, so with their layouts it's `FAKE_AGENT_API_KEY`, on
+    # no endpoint. The key stays on the host, and `exec` steps get a placeholder in its
+    # variable, which the egress gateway swaps in on those endpoints when sent as
+    # `Authorization: Bearer <placeholder>`, and refuses on any other request. For an agent
+    # whose bridge is a server in the sandbox (Claude Code, OpenCode, Goose, fx, Grok Build), it
+    # also serves on the session's first exposed port and reaches it from the host, as that
+    # adapter's start does.
     brokers: NotRequired[Literal[True]]
     # US dollars the fake agent says every turn cost, as a harness that reports its cost does; 0
     # reports none.
@@ -1237,8 +1239,9 @@ class GitWorkspace(TypedDict):
     url: str
 
 
-# Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
-# on a Gemini API key, and reports no usage (its ACP server counts one call).
+# Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs a model on its
+# provider's key, and reads each turn's usage from Goose's `usage_ledger` (its ACP server counts
+# one call).
 class GooseHarnessDescriptor(TypedDict):
     # Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.
     effort: NotRequired[str]
@@ -1252,7 +1255,8 @@ class GooseHarnessDescriptor(TypedDict):
     kind: Literal["goose"]
     # The most Goose attempts at once, across the run, e.g. for the key's rate limits.
     maxConcurrent: NotRequired[float]
-    # A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.
+    # `<provider>/<model>`: Goose's `google`, `anthropic`, `openai` or `xai` provider on its own
+    # key, or the gateway's id on `vercel()` and `openrouter()`, e.g. `google/gemini-3.8-flash`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
@@ -1532,9 +1536,9 @@ class PhasedEgress(TypedDict):
     setup: NotRequired[EgressPolicy]
 
 
-# pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
-# Google models on a Gemini API key and reports each model call's tokens. It takes stdio and
-# HTTP MCP servers, not SSE ones.
+# pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs a
+# model on its provider's key and reports each model call's tokens. It takes stdio and HTTP MCP
+# servers, not SSE ones.
 class PiHarnessDescriptor(TypedDict):
     # Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that
     # flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.
@@ -1548,7 +1552,9 @@ class PiHarnessDescriptor(TypedDict):
     kind: Literal["pi"]
     # The most pi attempts at once, across the run, e.g. for the key's rate limits.
     maxConcurrent: NotRequired[float]
-    # A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`.
+    # `<provider>/<model>`: one of pi's providers whose key it sends in a header on a fixed
+    # host, or the gateway's id on `vercel()` and `openrouter()`, e.g.
+    # `google/gemini-3.8-flash`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.

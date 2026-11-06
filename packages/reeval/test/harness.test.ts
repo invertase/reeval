@@ -36,7 +36,7 @@ import {
 } from '@reeval/harness-cursor-sdk'
 import { FX_HOME_SKILLS_DIR, FX_WORKSPACE_SKILLS_DIR } from '@reeval/harness-fx'
 import {
-  GOOSE_ENDPOINTS,
+  GOOSE_GEMINI_ENDPOINTS,
   GOOSE_HOME_SKILLS_DIR,
   GOOSE_WORKSPACE_SKILLS_DIR,
 } from '@reeval/harness-goose'
@@ -52,7 +52,7 @@ import {
   openCodeEndpoints,
   openCodeTurnUsage,
 } from '@reeval/harness-opencode'
-import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
+import { PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR, piProvider } from '@reeval/harness-pi'
 import {
   applyTransformations,
   BAKED_HARNESSES,
@@ -80,6 +80,7 @@ import {
   claudeMcpServers,
   cursorHookMatcher,
   cursorMcpServers,
+  fakeBrokering,
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
@@ -151,7 +152,7 @@ describe('where each harness reads what the environment gives it', () => {
         'flat agents=.opencode/agents commands=.opencode/commands',
       ],
       goose: [
-        goose({ model: 'm' }),
+        goose({ model: 'google/m' }),
         'AGENTS.md',
         GOOSE_WORKSPACE_SKILLS_DIR,
         home('goose', GOOSE_HOME_SKILLS_DIR),
@@ -172,7 +173,7 @@ describe('where each harness reads what the environment gives it', () => {
         'namespaced',
       ],
       pi: [
-        pi({ model: 'm' }),
+        pi({ model: 'google/m' }),
         'AGENTS.md',
         PI_WORKSPACE_SKILLS_DIR,
         PI_HOME_SKILLS_DIR,
@@ -214,9 +215,65 @@ describe('where each harness reads what the environment gives it', () => {
       brokeringFor(opencode({ model: 'google/m' }))?.endpoints,
       openCodeEndpoints('google/m'),
     )
-    assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
+    assert.deepEqual(brokeringFor(goose({ model: 'google/m' }))?.endpoints, GOOSE_GEMINI_ENDPOINTS)
     assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
-    assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
+    for (const provider of ['google', 'anthropic', 'openai', 'xai', 'opencode']) {
+      const table = piProvider(provider)
+      assert.ok(!('refused' in table), provider)
+      assert.deepEqual(
+        brokeringFor(pi({ model: `${provider}/m` }))?.endpoints,
+        table.endpoints.map(({ host, method, path }) => ({ host, method, path })),
+        provider,
+      )
+    }
+  })
+
+  test("Goose's and pi's model calls are their provider's POST requests, on every provider", () => {
+    const calls = (
+      h: Parameters<typeof brokeringFor>[0],
+      method: string,
+      host: string,
+      path: string,
+    ) => onEndpoint(brokeringFor(h)?.modelCalls ?? [], { method, host, path, headers: {} })
+    const gemini = '/v1beta/models/gemini-3.8-flash:streamGenerateContent'
+    for (const h of [goose({ model: 'google/m' }), pi({ model: 'google/m' })]) {
+      assert.ok(calls(h, 'POST', 'generativelanguage.googleapis.com', gemini), h.kind)
+    }
+    assert.ok(
+      !calls(
+        goose({ model: 'google/m' }),
+        'GET',
+        'generativelanguage.googleapis.com',
+        '/v1beta/models',
+      ),
+    )
+    assert.ok(calls(goose({ model: 'anthropic/m' }), 'POST', 'api.anthropic.com', '/v1/messages'))
+    assert.ok(!calls(goose({ model: 'anthropic/m' }), 'GET', 'api.anthropic.com', '/v1/models'))
+    assert.ok(calls(goose({ model: 'openai/m' }), 'POST', 'api.openai.com', '/v1/chat/completions'))
+    assert.ok(calls(goose({ model: 'xai/m' }), 'POST', 'api.x.ai', '/v1/chat/completions'))
+    for (const provider of ['anthropic', 'openai', 'xai', 'mistral']) {
+      const table = piProvider(provider)
+      assert.ok(!('refused' in table), provider)
+      const b = brokeringFor(pi({ model: `${provider}/m` }))
+      for (const e of table.endpoints.filter((e) => e.method.includes('POST'))) {
+        assert.ok(
+          b?.modelCalls?.some(
+            (c) => c.host === e.host && JSON.stringify(c.path) === JSON.stringify(e.path),
+          ),
+          provider,
+        )
+      }
+      assert.ok((b?.modelCalls?.length ?? 0) > 0, provider)
+    }
+  })
+
+  test('OpenCode, Goose and pi have no key of their own: only their model names one', () => {
+    for (const kind of ['opencode', 'goose', 'pi'] as const) {
+      assert.equal(AGENTS[kind].credential, undefined, kind)
+      assert.equal(AGENTS[kind].endpoints, undefined, kind)
+    }
+    assert.deepEqual(fakeBrokering('pi'), { credential: 'FAKE_AGENT_API_KEY', endpoints: [] })
+    assert.equal(fakeBrokering('codex').credential, 'OPENAI_API_KEY')
   })
 })
 
@@ -339,8 +396,8 @@ describe('the Claude Code harness', () => {
       cursor({ model: 'composer-2.5' }),
       antigravity({ model: 'm' }),
       opencode({ model: 'google/m' }),
-      goose({ model: 'm' }),
-      pi({ model: 'm' }),
+      goose({ model: 'google/m' }),
+      pi({ model: 'google/m' }),
       codex({ model: 'm' }),
       grokBuild({ model: 'm' }),
       fx({ model: 'm' }),
@@ -730,21 +787,25 @@ describe('the OpenCode harness', () => {
 })
 
 describe('the Goose harness', () => {
-  test('is plain data with its own cell id, and needs a Gemini model id', () => {
-    const h = goose({ model: 'gemini-3.8-flash' })
-    assert.deepEqual(h, { kind: 'goose', model: 'gemini-3.8-flash' })
+  test('is plain data with its own cell id, and needs a model id', () => {
+    const h = goose({ model: 'google/gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'goose', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'goose:gemini-3.8-flash')
-    for (const model of [undefined, '', 'google/gemini-3.8-flash']) {
+    assert.equal(
+      harnessId(goose({ model: 'anthropic/claude-haiku-4-5' })),
+      'goose:claude-haiku-4-5',
+    )
+    for (const model of [undefined, '', 'gemini-3.8-flash', 'a/b/c']) {
       assert.throws(
         () => goose({ model } as never),
-        /goose\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. goose\(\{ model: 'gemini-3\.8-flash' \}\)/,
+        /goose\(\) needs a model, <provider>\/<model>, e\.g\. goose\(\{ model: 'google\/gemini-3\.8-flash' \}\)/,
         String(model),
       )
     }
   })
 
   test('is accepted by the config and needs GOOGLE_GENERATIVE_AI_API_KEY', () => {
-    const config = resolveConfig({ harnesses: [goose({ model: 'm' })] }, '/p')
+    const config = resolveConfig({ harnesses: [goose({ model: 'google/m' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GOOGLE_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
     ])
@@ -914,21 +975,37 @@ describe('mcp.sse', () => {
 })
 
 describe('the pi harness', () => {
-  test('is plain data with its own cell id, and needs a Gemini model id', () => {
-    const h = pi({ model: 'gemini-3.8-flash' })
-    assert.deepEqual(h, { kind: 'pi', model: 'gemini-3.8-flash' })
+  test('is plain data with its own cell id, and needs a model id', () => {
+    const h = pi({ model: 'google/gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'pi', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'pi:gemini-3.8-flash')
     assert.throws(
-      () => pi({ model: 'google/gemini-3.8-flash' }),
-      /pi\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. pi\(\{ model: 'gemini-3\.8-flash' \}\)/,
+      () => pi({ model: 'gemini-3.8-flash' }),
+      /pi\(\) needs a model, <provider>\/<model>, e\.g\. pi\(\{ model: 'google\/gemini-3\.8-flash' \}\)/,
+    )
+    assert.deepEqual(
+      pi({ model: 'huggingface/moonshotai/Kimi-K2.6' }).model,
+      'huggingface/moonshotai/Kimi-K2.6',
     )
   })
 
-  test('needs GOOGLE_GENERATIVE_AI_API_KEY, not GEMINI_API_KEY', () => {
-    const config = resolveConfig({ harnesses: [pi({ model: 'm' })] }, '/p')
+  test("needs GOOGLE_GENERATIVE_AI_API_KEY, not GEMINI_API_KEY, or the model's provider's key", () => {
+    const config = resolveConfig({ harnesses: [pi({ model: 'google/m' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
     ])
+    for (const [model, key] of [
+      ['anthropic/claude-haiku-4-5', 'ANTHROPIC_API_KEY'],
+      ['openai/gpt-5.4-mini', 'OPENAI_API_KEY'],
+      ['xai/grok-4.6', 'XAI_API_KEY'],
+    ]) {
+      for (const h of [pi({ model }), goose({ model })]) {
+        const c = resolveConfig({ harnesses: [h] }, '/p')
+        assert.deepEqual(missingCredentials(c, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [key])
+      }
+    }
+    const c = resolveConfig({ harnesses: [pi({ model: 'deepseek/deepseek-v4' })] }, '/p')
+    assert.deepEqual(missingCredentials(c, {}), ['DEEPSEEK_API_KEY'])
   })
 
   test("MCP servers go in pi's mcp.json shape; it has no SSE transport and refuses odd names", () => {
@@ -1132,7 +1209,7 @@ describe('harness effort', () => {
     )
     assert.equal(harnessId(cursor({ model: 'composer-2.5' })), 'cursor:composer-2.5')
     assert.equal(
-      harnessId(pi({ model: 'gemini-3.8-flash', effort: 'xhigh' })),
+      harnessId(pi({ model: 'google/gemini-3.8-flash', effort: 'xhigh' })),
       'pi:gemini-3.8-flash[effort=xhigh]',
     )
     assert.equal(
@@ -1140,7 +1217,7 @@ describe('harness effort', () => {
       'codex:gpt-5.6-luna[effort=ultra]',
     )
     assert.equal(
-      harnessId(goose({ model: 'gemini-3.8-flash', effort: 'off' })),
+      harnessId(goose({ model: 'google/gemini-3.8-flash', effort: 'off' })),
       'goose:gemini-3.8-flash[effort=off]',
     )
     assert.equal(
@@ -1472,6 +1549,7 @@ describe('credential brokering per agent', () => {
     {
       name: 'Goose: the Gemini key, as GOOGLE_API_KEY, to the Gemini API',
       kind: 'goose',
+      model: 'google/m',
       env: {
         ...everything,
         GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
@@ -1507,6 +1585,7 @@ describe('credential brokering per agent', () => {
     {
       name: 'pi: the Gemini key, as GEMINI_API_KEY, to the Gemini API',
       kind: 'pi',
+      model: 'google/m',
       env: {
         ...everything,
         GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
@@ -1718,8 +1797,14 @@ describe('credential brokering per agent', () => {
         { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
         'GOOGLE_GENERATIVE_AI_API_KEY',
       ],
-      [goose({ model: 'm' }), { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, 'GOOGLE_API_KEY'],
-      [pi({ model: 'm' }), { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, 'GEMINI_API_KEY'],
+      [
+        goose({ model: 'google/m' }),
+        { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
+        'GOOGLE_API_KEY',
+      ],
+      [pi({ model: 'google/m' }), { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, 'GEMINI_API_KEY'],
+      [goose({ model: 'anthropic/m' }), { ANTHROPIC_API_KEY: 'sk-ant-real' }, 'ANTHROPIC_API_KEY'],
+      [pi({ model: 'openai/m' }), { OPENAI_API_KEY: 'sk-real' }, 'OPENAI_API_KEY'],
       [codex({ model: 'm' }), { OPENAI_API_KEY: 'sk-real' }, 'OPENAI_API_KEY'],
       [fx({ model: 'gpt-4.1-mini' }), { OPENAI_API_KEY: 'sk-real' }, 'OPENAI_API_KEY'],
       [grokBuild({ model: 'm' }), { XAI_API_KEY: 'xai-real' }, 'XAI_API_KEY'],
@@ -2348,8 +2433,8 @@ describe('tools that wait on a person are off', () => {
       claudeCode({ model: 'claude-sonnet-5' }),
       antigravity({ model: 'gemini-3.8-flash' }),
       opencode({ model: 'google/gemini-3.8-flash' }),
-      goose({ model: 'gemini-3.8-flash' }),
-      pi({ model: 'gemini-3.8-flash' }),
+      goose({ model: 'google/gemini-3.8-flash' }),
+      pi({ model: 'google/gemini-3.8-flash' }),
       codex({ model: 'gpt-5.5' }),
       fx({ model: 'gpt-4.1' }),
       grokBuild({ model: 'grok-build' }),
@@ -2359,7 +2444,7 @@ describe('tools that wait on a person are off', () => {
       new Set(Object.keys(AGENTS)),
       'every agent is checked',
     )
-    const keys = Object.fromEntries(Object.values(AGENTS).map((a) => [a.credential, 'k']))
+    const keys = Object.fromEntries(descriptors.map((d) => [agentFor(d).credential, 'k']))
     await withHostEnv(keys, async () => {
       for (const descriptor of descriptors) {
         const agent = agentFor(descriptor)
@@ -2788,13 +2873,20 @@ describe("each harness's image serves its attempts' bootstrap", () => {
       { ...opencode({ model: 'anthropic/claude-haiku-4-5' }), gateway: 'openrouter' },
       { ...opencode({ model: 'google/gemini-3.8-flash' }), gateway: 'vertex' },
     ],
+    // Each provider's key is another variable.
     goose: [
-      goose({ model: 'gemini-3.8-flash' }),
-      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'vercel' },
-      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'openrouter' },
-      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'vertex' },
+      goose({ model: 'google/gemini-3.8-flash' }),
+      goose({ model: 'anthropic/claude-haiku-4-5' }),
+      goose({ model: 'openai/gpt-5.4-mini' }),
+      { ...goose({ model: 'google/gemini-3.8-flash' }), gateway: 'vercel' },
+      { ...goose({ model: 'google/gemini-3.8-flash' }), gateway: 'openrouter' },
+      { ...goose({ model: 'google/gemini-3.8-flash' }), gateway: 'vertex' },
     ],
-    pi: [pi({ model: 'gemini-3.8-flash' })],
+    pi: [
+      pi({ model: 'google/gemini-3.8-flash' }),
+      pi({ model: 'anthropic/claude-haiku-4-5' }),
+      pi({ model: 'openai/gpt-5.4-mini' }),
+    ],
     codex: [codex({ model: 'gpt-5.5' })],
     fx: [fx({ model: 'openai/gpt-5.5' })],
     'grok-build': [grokBuild({ model: 'grok-4.6' })],

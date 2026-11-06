@@ -7,7 +7,7 @@ import {
 } from '@reeval/harness-opencode/providers'
 import { claudeCodeModelName, claudeCodeTakesEffort } from '../contract/harness.ts'
 import { UsageError } from '../errors.ts'
-import { AGENTS, isAgentKind } from '../harness/agents.ts'
+import { AGENTS, directProviderRefusal, isAgentKind } from '../harness/agents.ts'
 import { harnessEffort } from '../harness/effort.ts'
 import { harnessId } from '../options.ts'
 import type {
@@ -41,6 +41,7 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       if (h.kind === 'fx' && h.model.includes('/')) {
         return `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway or OpenRouter`
       }
+      if (h.kind === 'pi' || h.kind === 'goose') return directProviderRefusal(h.kind, h.model)
       if (h.kind === 'opencode') {
         const resolved = resolveOpenCodeProvider(h.model, process.env)
         if ('error' in resolved) return resolved.error

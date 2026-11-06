@@ -33,8 +33,15 @@ export type HarnessRow = {
     | 'opencode-anthropic'
     | 'opencode-openai'
     | 'goose'
+    | 'goose-anthropic'
+    | 'goose-openai'
+    | 'goose-xai'
     | 'pi'
+    | 'pi-anthropic'
+    | 'pi-openai'
+    | 'pi-xai'
     | 'pi-gateway'
+    | 'pi-anthropic-gateway'
     | 'codex'
     | 'grok-build'
     | 'fx'
@@ -50,12 +57,14 @@ export type HarnessRow = {
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
+    | 'goose-anthropic-gateway'
     | 'grok-build-gateway'
     | 'claude-code-openrouter'
     | 'codex-openrouter'
     | 'opencode-openrouter'
     | 'goose-openrouter'
     | 'pi-openrouter'
+    | 'pi-openai-openrouter'
     | 'grok-build-openrouter'
     | 'fx-openrouter'
   /**
@@ -295,7 +304,7 @@ export const harnesses: HarnessRow[] = [
   },
   {
     id: 'goose',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: {
       name: 'GOOGLE_GENERATIVE_AI_API_KEY',
       from: ['GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_API_KEY'],
@@ -320,7 +329,7 @@ export const harnesses: HarnessRow[] = [
   },
   {
     id: 'pi',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: {
       name: 'GOOGLE_GENERATIVE_AI_API_KEY',
       from: ['GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_API_KEY'],
@@ -339,13 +348,97 @@ export const harnesses: HarnessRow[] = [
     effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=LOW$/ },
   },
   {
+    // Goose and pi on another provider's key: Anthropic's, in x-api-key, and OpenAI's, a Bearer
+    // key. Their plugins and effort are the Gemini rows'.
+    id: 'goose-anthropic',
+    harness: 'goose',
+    model: 'anthropic/claude-haiku-4-5',
+    key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.anthropic.com'],
+    apiHost: 'api.anthropic.com',
+    tokens: true,
+    servedModel: /^claude-haiku-4-5/,
+    wireModel: /^claude-haiku-4-5/,
+  },
+  {
+    id: 'goose-openai',
+    harness: 'goose',
+    model: 'openai/gpt-5.4-mini',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.openai.com'],
+    apiHost: 'api.openai.com',
+    tokens: true,
+    servedModel: /^gpt-5\.4-mini/,
+    wireModel: /^gpt-5\.4-mini/,
+  },
+  {
+    // Goose and pi on xAI's key, a Bearer key: Goose on Chat Completions, pi on the Responses API.
+    id: 'goose-xai',
+    harness: 'goose',
+    model: 'xai/grok-4.6',
+    key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.x.ai'],
+    apiHost: 'api.x.ai',
+    tokens: true,
+    servedModel: /^grok-4\.6/,
+    wireModel: /^grok-4\.6/,
+  },
+  {
+    id: 'pi-xai',
+    harness: 'pi',
+    model: 'xai/grok-4.6',
+    key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.x.ai'],
+    apiHost: 'api.x.ai',
+    tokens: true,
+    servedModel: /^grok-4\.6/,
+    wireModel: /^grok-4\.6/,
+  },
+  {
+    id: 'pi-anthropic',
+    harness: 'pi',
+    model: 'anthropic/claude-haiku-4-5',
+    key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.anthropic.com'],
+    apiHost: 'api.anthropic.com',
+    tokens: true,
+    servedModel: /^claude-haiku-4-5/,
+    wireModel: /^claude-haiku-4-5/,
+  },
+  {
+    id: 'pi-openai',
+    harness: 'pi',
+    model: 'openai/gpt-5.4-mini',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.openai.com'],
+    apiHost: 'api.openai.com',
+    tokens: true,
+    servedModel: /^gpt-5\.4-mini/,
+    wireModel: /^gpt-5\.4-mini/,
+  },
+  {
     // pi on Vercel AI Gateway through `gateway: [vercel()]`: a pi provider of reeval's on Vercel's
-    // Chat Completions API (a Bearer key), the model as google/<id>, and each thinking level as
+    // Chat Completions API (a Bearer key), the gateway's id, and each thinking level as
     // Gemini's own thinkingConfig under Vercel's providerOptions, never Vercel's shared effort.
     id: 'pi-gateway',
     harness: 'pi',
     gateway: 'vercel',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'pi',
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
@@ -359,6 +452,22 @@ export const harnesses: HarnessRow[] = [
       asked:
         /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low$/,
     },
+  },
+  {
+    // pi on Vercel AI Gateway with an Anthropic model: reeval's provider on Vercel's Anthropic
+    // Messages API, the key a Bearer token and in x-api-key, the limits from pi's catalog for Vercel.
+    id: 'pi-anthropic-gateway',
+    harness: 'pi',
+    gateway: 'vercel',
+    model: 'anthropic/claude-haiku-4.5',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /^anthropic\/claude-haiku-4\.5$/,
+    wireModel: /^anthropic\/claude-haiku-4\.5$/,
   },
   {
     id: 'codex',
@@ -522,7 +631,7 @@ export const harnesses: HarnessRow[] = [
     id: 'goose-vertex',
     harness: 'goose',
     gateway: 'vertex',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'goose',
@@ -538,7 +647,7 @@ export const harnesses: HarnessRow[] = [
     id: 'pi-vertex',
     harness: 'pi',
     gateway: 'vertex',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'pi',
@@ -607,11 +716,11 @@ export const harnesses: HarnessRow[] = [
   },
   {
     // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
-    // key), the Gemini id as google/<id>, and the served model from Vercel's response.
+    // key), the gateway's id, and the served model from Vercel's response.
     id: 'goose-gateway',
     harness: 'goose',
     gateway: 'vercel',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'goose',
     skillContext:
@@ -621,6 +730,22 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    // Goose on Vercel AI Gateway with an Anthropic model, on the same OpenAI-compatible provider.
+    id: 'goose-anthropic-gateway',
+    harness: 'goose',
+    gateway: 'vercel',
+    model: 'anthropic/claude-haiku-4.5',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /claude-haiku-4\.5/,
+    wireModel: /claude-haiku-4\.5/,
   },
   {
     id: 'grok-build',
@@ -712,7 +837,7 @@ export const harnesses: HarnessRow[] = [
     id: 'goose-openrouter',
     harness: 'goose',
     gateway: 'openrouter',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'goose',
     skillContext:
@@ -726,12 +851,13 @@ export const harnesses: HarnessRow[] = [
     effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
-    // pi on OpenRouter: pi's own openrouter provider (Chat Completions, a Bearer key), the model
-    // as google/<id> from pi's catalog for OpenRouter, each thinking level as reasoning.effort.
+    // pi on OpenRouter with a Gemini model: pi's own openrouter provider (Chat Completions, a
+    // Bearer key), the model as google/<id> from pi's catalog for OpenRouter, each thinking level
+    // as reasoning.effort.
     id: 'pi-openrouter',
     harness: 'pi',
     gateway: 'openrouter',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'pi',
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
@@ -742,6 +868,23 @@ export const harnesses: HarnessRow[] = [
     wireModel: /^google\/gemini-3\.8-flash$/,
     upstream: true,
     effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
+  },
+  {
+    // pi on OpenRouter with an OpenAI model: reeval's provider on OpenRouter's Chat Completions
+    // API, a Bearer key, the limits from pi's catalog for OpenRouter.
+    id: 'pi-openai-openrouter',
+    harness: 'pi',
+    gateway: 'openrouter',
+    model: 'openai/gpt-5.4-mini',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /^openai\/gpt-5\.4-mini/,
+    wireModel: /^openai\/gpt-5\.4-mini/,
+    upstream: true,
   },
   {
     // Grok Build on OpenRouter: the model as a [model."x-ai/<id>"] table on OpenRouter's Chat

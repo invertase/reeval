@@ -27,8 +27,6 @@ export const GOOSE_CLI_SHA256 = {
   aarch64: '26bcb7d3f55aac485a91d81cbdecd8d90e5af1acadeca6e580b4d58b64a888e4',
   'darwin-aarch64': '52f3f8d62e3d144c5de70c5c471de39d8b92c24d41d5b3436eb8bab11ba4bc24',
 } as const
-/** The credential the adapter uses by default: a Gemini API key, for Goose's `google` provider. */
-export const GOOSE_CREDENTIAL_ENV = 'GOOGLE_API_KEY'
 export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 /** The header Goose's `google` provider sends the key in. */
 export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
@@ -44,13 +42,42 @@ export type GooseProvider = {
   readonly scheme?: string
 }
 
-/** Google's Gemini API with a Gemini API key: the default. */
+/** Goose's `google` provider: Google's Gemini API, with a Gemini API key. */
 export const GEMINI_PROVIDER: GooseProvider = {
   name: 'Gemini API',
   id: 'google',
-  credentialEnv: GOOSE_CREDENTIAL_ENV,
+  credentialEnv: 'GOOGLE_API_KEY',
   baseUrl: GEMINI_API_URL,
   header: GEMINI_API_KEY_HEADER,
+}
+
+/** Goose's `anthropic` provider: Anthropic's API, with the key in `x-api-key`. */
+export const ANTHROPIC_PROVIDER: GooseProvider = {
+  name: 'Anthropic API',
+  id: 'anthropic',
+  credentialEnv: 'ANTHROPIC_API_KEY',
+  baseUrl: 'https://api.anthropic.com',
+  header: 'x-api-key',
+}
+
+/** Goose's `openai` provider: OpenAI's API, with the key as a Bearer token. */
+export const OPENAI_PROVIDER: GooseProvider = {
+  name: 'OpenAI API',
+  id: 'openai',
+  credentialEnv: 'OPENAI_API_KEY',
+  baseUrl: 'https://api.openai.com',
+  header: 'Authorization',
+  scheme: 'Bearer',
+}
+
+/** Goose's `xai` provider: xAI's API, an OpenAI-compatible one, with the key as a Bearer token. */
+export const XAI_PROVIDER: GooseProvider = {
+  name: 'xAI API',
+  id: 'xai',
+  credentialEnv: 'XAI_API_KEY',
+  baseUrl: 'https://api.x.ai',
+  header: 'Authorization',
+  scheme: 'Bearer',
 }
 
 /**
@@ -98,12 +125,12 @@ export const GOOSE_QUIET_ENV = {
 } as const
 
 /**
- * The endpoints Goose sends the key on: the model request, `POST
+ * The endpoints Goose's `google` provider sends the key on: the model request, `POST
  * /v1beta/models/<model>:streamGenerateContent`, and the model list, `GET /v1beta/models`, which
  * it fetches at the start of every turn. A gateway that enforces them refuses the key anywhere
  * else.
  */
-export const GOOSE_ENDPOINTS = [
+export const GOOSE_GEMINI_ENDPOINTS = [
   {
     host: new URL(GEMINI_API_URL).hostname,
     path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
@@ -128,11 +155,11 @@ rm goose.tar.gz`
 
 export type GooseHarnessSettings = {
   /**
-   * The provider's key under its `credentialEnv` (`{ GOOGLE_API_KEY }` by default), the only key
-   * used. The host environment is never read.
+   * The provider's key under its `credentialEnv`, the only key used. The host environment is
+   * never read.
    */
   readonly auth: HarnessV1AuthenticationEnvironment
-  /** The provider Goose calls; Google's Gemini API ({@link GEMINI_PROVIDER}) by default. */
+  /** The provider Goose calls; unused on `vertex`. */
   readonly provider?: GooseProvider
   /**
    * The model a session starts on (`GOOSE_MODEL`), in the provider's ids: Goose refuses
@@ -177,7 +204,7 @@ export function gooseEnv(
   const { vertex } = settings
   return {
     ...GOOSE_QUIET_ENV,
-    GOOSE_PROVIDER: vertex ? GOOSE_VERTEX_PROVIDER_ID : (settings.provider ?? GEMINI_PROVIDER).id,
+    GOOSE_PROVIDER: vertex ? GOOSE_VERTEX_PROVIDER_ID : (settings.provider?.id ?? ''),
     GOOSE_MODEL: settings.model,
     // Set, if empty, at every effort: the bootstrap is keyed on these names, so the image's
     // bootstrap serves every effort. Goose reads an empty value as no effort.
@@ -197,26 +224,26 @@ export function gooseEnv(
 }
 
 /**
- * Goose (`goose acp`) as an AI SDK harness, on its `google` provider with a Gemini API key (a
- * model is a Gemini id such as `gemini-3.8-flash`) or another {@link GooseProvider}. Thin config
- * over `@ai-sdk/harness-acp`.
+ * Goose (`goose acp`) as an AI SDK harness, on a {@link GooseProvider} with its key, or on Vertex
+ * AI. Thin config over `@ai-sdk/harness-acp`.
  *
  * Goose's ACP `PromptResponse.usage` is its last model call's, not the turn's, so the translator
  * drops it (see {@link GooseStreamTranslator}); each turn's usage is read instead from Goose's
  * `usage_ledger` in the sandbox, one row per model call (see {@link GooseLedger}).
  */
 export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuiltinTools> {
-  const provider = settings.provider ?? GEMINI_PROVIDER
-  const credential = provider.credentialEnv
+  const { provider } = settings
+  if (!provider && !settings.vertex) throw new Error('Goose needs a provider, or vertex')
+  const credential = provider?.credentialEnv ?? ''
   if (
     !isHarnessAuthenticationEnvironment(settings.auth) ||
-    (!settings.vertex && !settings.auth[credential])
+    (provider && !settings.vertex && !settings.auth[credential])
   ) {
     throw new Error(
-      `Goose auth must be an environment object with ${credential} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)`,
+      `Goose auth must be an environment object${provider ? ` with ${credential} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)` : ''}`,
     )
   }
-  const value = (key: string) => (provider.scheme ? `${provider.scheme} ${key}` : key)
+  const value = (key: string) => (provider?.scheme ? `${provider.scheme} ${key}` : key)
   const mcpServers = Object.keys(settings.mcpServers ?? {})
   const acp = createACP({
     version: 'v1',
@@ -235,13 +262,16 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     // bootstrap serves each provider.
     credentialEnv: [
       GEMINI_PROVIDER.credentialEnv,
+      ANTHROPIC_PROVIDER.credentialEnv,
+      OPENAI_PROVIDER.credentialEnv,
+      XAI_PROVIDER.credentialEnv,
       AI_GATEWAY_PROVIDER.credentialEnv,
       OPENROUTER_PROVIDER.credentialEnv,
     ],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]
-      if (settings.vertex || !key || !placeholder) return []
+      if (settings.vertex || !provider || !key || !placeholder) return []
       return [
         createCredentialRequestTransformation({
           matchUrl: provider.baseUrl,

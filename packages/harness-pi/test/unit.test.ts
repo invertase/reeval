@@ -12,15 +12,24 @@ import {
   createPi,
   escapePiConfigValue,
   PI_AI_GATEWAY,
-  PI_CREDENTIAL_ENV,
   PI_MCP_FILE,
   PI_OPENROUTER,
+  type PiGateway,
   type PiHarnessSettings,
   type PiMcpServer,
+  type PiModelInfo,
 } from '../src/pi-harness.ts'
+import { PROBED_VERSION } from '../src/pi-provider-table.ts'
+import { type PiProvider, piProvider } from '../src/pi-providers.ts'
 import { VERSION } from '../src/version.ts'
 
+const provider = (id: string) => piProvider(id) as PiProvider
+const GOOGLE = provider('google')
+
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const PI_LOCKED_AI = /'@earendil-works\/pi-ai@([\d.]+)':/.exec(
+  readFileSync(new URL('../assets/pnpm-lock.yaml', import.meta.url), 'utf8'),
+)?.[1]
 
 test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
@@ -50,6 +59,7 @@ test('each turn runs pi in print mode on one session id, the prompt from its fil
     model: 'gemini-3.8-flash',
     sessionId: 'abc',
     sessionDir: '/h/.pi/agent/sessions',
+    provider: 'google',
   })
   assert.equal(
     command,
@@ -66,6 +76,7 @@ test("with MCP servers, the turn loads pi's built-in mcp extension and no other"
     sessionId: 'abc',
     sessionDir: '/s',
     mcp: true,
+    provider: 'google',
   })
   assert.match(command, / --approve --no-extensions -e builtin:mcp --provider 'google' /)
 })
@@ -79,6 +90,7 @@ test('effort is --thinking', () => {
     sessionId: 'abc',
     sessionDir: '/s',
     thinking: 'high',
+    provider: 'google',
   })
   assert.match(command, / --model 'gemini-3\.8-flash' --thinking 'high' --session-id /)
 })
@@ -151,6 +163,7 @@ function recordingSandbox(stdout: string[] = []) {
   const writes: Array<{ path: string; content: string }> = []
   const spawned: string[] = []
   const envs: Array<Record<string, string>> = []
+  const transformations: unknown[] = []
   const stream = (lines: string[] = []) =>
     new ReadableStream<Uint8Array>({
       start: (c) => {
@@ -159,7 +172,9 @@ function recordingSandbox(stdout: string[] = []) {
       },
     })
   const sandbox = {
-    addRequestTransformations: async () => {},
+    addRequestTransformations: async (t: unknown[]) => {
+      transformations.push(...t)
+    },
     run: async () => ({ exitCode: 0, stdout: '/root\n', stderr: '' }),
     readTextFile: async () => null,
     writeTextFile: async (o: { path: string; content: string }) => {
@@ -176,16 +191,16 @@ function recordingSandbox(stdout: string[] = []) {
       }
     },
   }
-  return { sandbox, writes, spawned, envs }
+  return { sandbox, writes, spawned, envs, transformations }
 }
 
 async function oneTurn(
   mcpServers?: Record<string, PiMcpServer>,
   stdout?: string[],
-  settings: Partial<PiHarnessSettings> = { auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } },
+  settings: Partial<PiHarnessSettings> = { auth: { GEMINI_API_KEY: 'AIza-k' }, provider: GOOGLE },
   model?: string,
 ) {
-  const { sandbox, writes, spawned, envs } = recordingSandbox(stdout)
+  const { sandbox, writes, spawned, envs, transformations } = recordingSandbox(stdout)
   const parts: HarnessV1StreamPart[] = []
   const harness = createPi({
     auth: {},
@@ -206,7 +221,7 @@ async function oneTurn(
     emit: (part: HarnessV1StreamPart) => parts.push(part),
   } as never)
   await control.done
-  return { writes, spawned, envs, parts }
+  return { writes, spawned, envs, parts, transformations }
 }
 
 test('a session with MCP servers writes mcp.json under the home and loads the mcp extension', async () => {
@@ -250,12 +265,61 @@ test('a session without MCP servers writes no mcp.json and loads no extension', 
   assert.doesNotMatch(spawned[0] ?? '', /-e builtin:mcp/)
 })
 
-test('auth is an environment with the Gemini key, or it throws', () => {
+test("auth is an environment with the provider's key, or it throws", () => {
   assert.throws(
-    () => createPi({ auth: {} }),
-    /pi auth must be an environment object with GEMINI_API_KEY/,
+    () => createPi({ auth: {}, provider: GOOGLE }),
+    /pi auth must be an environment object with GEMINI_API_KEY \(pi's google provider's key\)/,
   )
-  assert.equal(createPi({ auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } }).harnessId, 'pi')
+  assert.throws(() => createPi({ auth: { GEMINI_API_KEY: 'k' } }), /pi needs a provider/)
+  assert.equal(createPi({ auth: { GEMINI_API_KEY: 'AIza-k' }, provider: GOOGLE }).harnessId, 'pi')
+})
+
+test("on a provider's own API, pi runs that provider on a placeholder of its own key, brokered to its hosts", async () => {
+  for (const [id, key, brokered] of [
+    ['anthropic', 'sk-ant-k', [['api.anthropic.com', { 'x-api-key': 'sk-ant-k' }]]],
+    ['openai', 'sk-k', [['api.openai.com', { authorization: 'Bearer sk-k' }]]],
+    ['xai', 'xai-k', [['api.x.ai', { authorization: 'Bearer xai-k' }]]],
+    [
+      'opencode',
+      'oc-k',
+      [
+        ['opencode.ai', { 'x-api-key': 'oc-k' }],
+        ['opencode.ai', { 'x-goog-api-key': 'oc-k' }],
+        ['opencode.ai', { authorization: 'Bearer oc-k' }],
+      ],
+    ],
+  ] as const) {
+    const p = provider(id)
+    const { spawned, envs, transformations } = await oneTurn(
+      undefined,
+      undefined,
+      { auth: { [p.credentialEnv]: key }, provider: p },
+      'm',
+    )
+    assert.match(spawned[0] ?? '', new RegExp(` --provider '${id}' --model 'm' `))
+    const placeholder = envs[0]?.[p.credentialEnv] ?? ''
+    assert.match(placeholder, /^aisdkhc_/)
+    assert.deepEqual(Object.keys(envs[0] ?? {}).sort(), [p.credentialEnv, 'PI_OFFLINE'].sort())
+    const seen = transformations as Array<{
+      match: { host: string }
+      transform: { headers: unknown }
+    }>
+    assert.deepEqual(
+      seen.map((t) => [t.match.host, t.transform.headers]),
+      brokered,
+    )
+  }
+})
+
+test("pi's providers come from its probed catalog: a refused one says why, an unknown one that pi reads no key for it", () => {
+  assert.equal(PROBED_VERSION, PI_LOCKED_AI)
+  assert.equal(provider('google').credentialEnv, 'GEMINI_API_KEY')
+  assert.deepEqual(piProvider('azure'), {
+    refused:
+      "pi's azure provider can't run here: its host is your account's or resource's, which pi takes from more variables",
+  })
+  assert.match(String((piProvider('google-vertex') as { refused: string }).refused), /vertex\(\)/)
+  assert.deepEqual(piProvider('nope'), { refused: 'pi has no provider "nope" that reads a key' })
 })
 
 test('on Vertex AI, pi runs its google-vertex provider on a credentials file, with no key', async () => {
@@ -270,7 +334,7 @@ test('on Vertex AI, pi runs its google-vertex provider on a credentials file, wi
   })
 })
 
-test('on OpenRouter, pi runs its own openrouter provider on a placeholder key, with no models.json', async () => {
+test("on OpenRouter, a Gemini model runs on pi's own openrouter provider on a placeholder key, with no models.json", async () => {
   const { writes, spawned, envs } = await oneTurn(
     undefined,
     undefined,
@@ -281,8 +345,9 @@ test('on OpenRouter, pi runs its own openrouter provider on a placeholder key, w
     spawned[0] ?? '',
     /^cd '\/w' && exec .* --provider 'openrouter' --model 'google\/gemini-3\.8-flash' --thinking 'low' /,
   )
+  assert.doesNotMatch(spawned[0] ?? '', /gateway-models\.mjs/)
   assert.equal(
-    writes.some((w) => w.path.endsWith('gateway-models.mjs') || w.path.endsWith('models.json')),
+    writes.some((w) => w.path.endsWith('models.json')),
     false,
   )
   assert.equal(envs[0]?.PI_OFFLINE, '1')
@@ -290,9 +355,37 @@ test('on OpenRouter, pi runs its own openrouter provider on a placeholder key, w
   assert.ok(envs[0]?.OPENROUTER_API_KEY)
 })
 
+test("on a gateway, another provider's model runs on reeval's provider, its key brokered as a Bearer token and in x-api-key", async () => {
+  const { writes, spawned, transformations } = await oneTurn(
+    undefined,
+    undefined,
+    {
+      auth: { OPENROUTER_API_KEY: 'sk-or-k' },
+      gateway: PI_OPENROUTER,
+      modelInfo: { reasoning: false, input: ['text'], contextWindow: 1000, maxTokens: 100 },
+    },
+    'anthropic/claude-haiku-4.5',
+  )
+  assert.ok(writes.some((w) => w.path.endsWith('gateway-models.mjs')))
+  assert.match(spawned[0] ?? '', /'node' '[^']*gateway-models\.mjs' .*"contextWindow":1000/)
+  assert.match(
+    spawned[0] ?? '',
+    / --provider 'reeval-openrouter' --model 'anthropic\/claude-haiku-4\.5' /,
+  )
+  const brokered = transformations as Array<{ match: { host: string }; transform: unknown }>
+  assert.deepEqual(
+    brokered.map((t) => [t.match.host, t.transform]),
+    [
+      ['openrouter.ai', { headers: { authorization: 'Bearer sk-or-k' } }],
+      ['openrouter.ai', { headers: { 'x-api-key': 'sk-or-k' } }],
+    ],
+  )
+})
+
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createPi({
-    auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
+    auth: { GEMINI_API_KEY: 'AIza-k' },
+    provider: GOOGLE,
     requireCredentialBrokering: true,
   })
   await assert.rejects(
@@ -319,15 +412,18 @@ test('on a gateway, a turn writes models.json first and runs on its provider', (
 })
 
 /** A bootstrap directory laid out as pnpm installs pi: pi-ai beside pi-coding-agent. */
-function fakeBootstrap(models: Record<string, unknown>) {
+function fakeBootstrap(catalogs: Record<string, Record<string, unknown>>) {
   const root = mkdtempSync(join(tmpdir(), 'pi-gateway-'))
   const store = join(root, 'node_modules/.pnpm/pi/node_modules/@earendil-works')
   mkdirSync(join(store, 'pi-coding-agent'), { recursive: true })
   mkdirSync(join(store, 'pi-ai/dist/providers/data'), { recursive: true })
-  writeFileSync(
-    join(store, 'pi-ai/dist/providers/data/google.json'),
-    JSON.stringify({ 'google-generative-ai': models }),
-  )
+  for (const [file, models] of Object.entries(catalogs)) {
+    const chat = Object.fromEntries(Object.entries(models).map(([id, m]) => [`chat:${id}`, m]))
+    writeFileSync(
+      join(store, `pi-ai/dist/providers/data/${file}.json`),
+      JSON.stringify({ 'some-api': chat }),
+    )
+  }
   mkdirSync(join(root, 'bootstrap/node_modules/@earendil-works'), { recursive: true })
   const link = join(root, 'bootstrap/node_modules/@earendil-works/pi-coding-agent')
   // A junction on Windows, where a plain symlink needs Developer Mode or admin.
@@ -335,29 +431,35 @@ function fakeBootstrap(models: Record<string, unknown>) {
   return { root, bootstrap: join(root, 'bootstrap') }
 }
 
-async function gatewayModels(bootstrap: string, out: string, model: string) {
+async function gatewayModels(
+  bootstrap: string,
+  out: string,
+  model: string,
+  gateway: PiGateway = PI_AI_GATEWAY,
+  info: PiModelInfo | null = null,
+) {
   const script = join(bootstrap, 'gateway-models.mjs')
   writeFileSync(script, await piGatewayModelsScript())
   return spawnSync(
     process.execPath,
-    [script, bootstrap, out, JSON.stringify(PI_AI_GATEWAY), model],
-    {
-      encoding: 'utf8',
-    },
+    [script, bootstrap, out, JSON.stringify(gateway), model, JSON.stringify(info)],
+    { encoding: 'utf8' },
   )
 }
 
 test("models.json: pi's catalog entry, each thinking level as Gemini's own under providerOptions", async () => {
   const { root, bootstrap } = fakeBootstrap({
-    'gemini-3.8-flash': {
-      id: 'gemini-3.8-flash',
-      name: 'Gemini 3.8 Flash',
-      reasoning: true,
-      thinkingLevelMap: { off: null, minimal: null, low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
-      input: ['text'],
-      cost: { input: 1, output: 2 },
-      contextWindow: 1000,
-      maxTokens: 100,
+    google: {
+      'gemini-3.8-flash': {
+        id: 'gemini-3.8-flash',
+        name: 'Gemini 3.8 Flash',
+        reasoning: true,
+        thinkingLevelMap: { off: null, minimal: null, low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
+        input: ['text'],
+        cost: { input: 1, output: 2 },
+        contextWindow: 1000,
+        maxTokens: 100,
+      },
     },
   })
   const out = join(root, 'agent/models.json')
@@ -378,15 +480,75 @@ test("models.json: pi's catalog entry, each thinking level as Gemini's own under
   })
 })
 
-test('twin: a model missing from the catalog, or on a thinking budget, is refused', async () => {
+test('twin: a Gemini model missing from the catalog, or on a thinking budget, is refused', async () => {
   const { root, bootstrap } = fakeBootstrap({
-    'gemini-2.5-pro': { id: 'gemini-2.5-pro', reasoning: true },
+    google: { 'gemini-2.5-pro': { id: 'gemini-2.5-pro', reasoning: true } },
   })
   const out = join(root, 'agent/models.json')
   const missing = await gatewayModels(bootstrap, out, 'google/gemini-9')
   assert.equal(missing.status, 1)
-  assert.match(missing.stderr, /pi's catalog has no Gemini model gemini-9/)
-  const budget = await gatewayModels(bootstrap, out, 'gemini-2.5-pro')
+  assert.match(missing.stderr, /pi's google catalog has no model gemini-9/)
+  const budget = await gatewayModels(bootstrap, out, 'google/gemini-2.5-pro')
   assert.equal(budget.status, 1)
   assert.match(budget.stderr, /gemini-2\.5-pro takes a thinking budget, not a thinking level/)
+})
+
+const limits = (contextWindow: number) => ({
+  reasoning: true,
+  input: ['text'],
+  cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
+  contextWindow,
+  maxTokens: 100,
+})
+
+test("models.json: an Anthropic model on the gateway's Messages API, any other on Chat Completions, from the gateway's catalog, then the provider's", async () => {
+  const { root, bootstrap } = fakeBootstrap({
+    openrouter: {
+      'anthropic/claude-haiku-4.5': { id: 'anthropic/claude-haiku-4.5', ...limits(1) },
+    },
+    openai: { 'gpt-5.4-mini': { id: 'gpt-5.4-mini', ...limits(2) } },
+    anthropic: { 'claude-sonnet-5-5': { id: 'claude-sonnet-5-5', ...limits(3) } },
+  })
+  const out = join(root, 'agent/models.json')
+  for (const [model, api, baseUrl, contextWindow] of [
+    ['anthropic/claude-haiku-4.5', 'anthropic-messages', 'https://openrouter.ai/api', 1],
+    ['openai/gpt-5.4-mini', 'openai-completions', 'https://openrouter.ai/api/v1', 2],
+    ['anthropic/claude-sonnet-5.5', 'anthropic-messages', 'https://openrouter.ai/api', 3],
+  ] as const) {
+    const r = await gatewayModels(bootstrap, out, model, PI_OPENROUTER)
+    assert.equal(r.status, 0, r.stderr)
+    const provider = JSON.parse(readFileSync(out, 'utf8')).providers['reeval-openrouter']
+    assert.deepEqual([provider.api, provider.baseUrl, provider.authHeader], [api, baseUrl, true])
+    assert.equal(provider.apiKey, '$OPENROUTER_API_KEY')
+    assert.equal(provider.compat.supportsReasoningEffort, undefined, model)
+    const [entry] = provider.models
+    assert.deepEqual([entry.id, entry.contextWindow, entry.reasoning], [model, contextWindow, true])
+  }
+})
+
+test('twin: a model no catalog lists takes the limits it is given, and without them is refused', async () => {
+  const { root, bootstrap } = fakeBootstrap({})
+  const out = join(root, 'agent/models.json')
+  const info = {
+    reasoning: false,
+    input: ['text', 'image'],
+    contextWindow: 7,
+    maxTokens: 5,
+  } as const
+  const given = await gatewayModels(bootstrap, out, 'mistral/devstral-2', PI_AI_GATEWAY, info)
+  assert.equal(given.status, 0, given.stderr)
+  const provider = JSON.parse(readFileSync(out, 'utf8')).providers['reeval-ai-gateway']
+  assert.equal(provider.baseUrl, 'https://ai-gateway.vercel.sh/v1')
+  assert.deepEqual(provider.models, [
+    {
+      id: 'mistral/devstral-2',
+      reasoning: false,
+      input: ['text', 'image'],
+      contextWindow: 7,
+      maxTokens: 5,
+    },
+  ])
+  const none = await gatewayModels(bootstrap, out, 'mistral/devstral-2')
+  assert.equal(none.status, 1)
+  assert.match(none.stderr, /neither pi's catalog nor models\.dev describes mistral\/devstral-2/)
 })

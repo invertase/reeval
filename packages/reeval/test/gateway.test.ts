@@ -302,8 +302,8 @@ describe('Vercel AI Gateway routes', () => {
     assert.equal(agent.askedModel?.({ ...call, host: 'api.openai.com', ...asked }), undefined)
   })
 
-  test('Goose takes Gemini ids as Google models on Vercel, and reads the served model', () => {
-    const goose = onVercel({ kind: 'goose', model: 'gemini-3-flash' } as HarnessDescriptor)
+  test("Goose takes Vercel's ids on Vercel, and reads the served model", () => {
+    const goose = onVercel({ kind: 'goose', model: 'google/gemini-3-flash' } as HarnessDescriptor)
     assert.equal(goose.credential, 'AI_GATEWAY_API_KEY')
     assert.deepEqual(
       goose.endpoints.map((e) => [e.method, e.path]),
@@ -319,7 +319,7 @@ describe('Vercel AI Gateway routes', () => {
     )
     assert.deepEqual(goose.expectedBlocked?.hosts, ['models.dev'], "Goose's catalog refresh")
     assert.deepEqual(goose.hosts, ['ai-gateway.vercel.sh'])
-    assert.equal(goose.modelId?.('gemini-3-flash'), 'google/gemini-3-flash')
+    assert.equal(goose.modelId?.('google/gemini-3-flash'), 'google/gemini-3-flash')
     assert.equal(goose.modelId?.('anthropic/claude-haiku-4.5'), 'anthropic/claude-haiku-4.5')
     assert.equal(
       goose.servedModel?.({
@@ -334,7 +334,7 @@ describe('Vercel AI Gateway routes', () => {
 
   test('Goose on Vercel gets its key and provider; pi off it stays on Gemini', async () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
-    const descriptor = { kind: 'goose', model: 'gemini-3-flash', gateway: 'vercel' } as never
+    const descriptor = { kind: 'goose', model: 'google/gemini-3-flash', gateway: 'vercel' } as never
     const agent = agentFor(descriptor)
     const adapter = (await agent.adapter({
       auth: agentAuth(agent),
@@ -344,7 +344,7 @@ describe('Vercel AI Gateway routes', () => {
     })) as { harnessId: string }
     assert.equal(adapter.harnessId, 'goose')
     process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-test'
-    const direct = agentFor({ kind: 'pi', model: 'gemini-3-flash' } as never)
+    const direct = agentFor({ kind: 'pi', model: 'google/gemini-3-flash' } as never)
     assert.equal(direct.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
     assert.ok(direct.endpoints.every((e) => e.host === 'generativelanguage.googleapis.com'))
   })
@@ -444,7 +444,7 @@ describe('Vercel AI Gateway routes', () => {
 
   test('effort with a harness whose effort path on Vercel is unchecked is refused there', () => {
     for (const [kind, model] of [
-      ['goose', 'gemini-3-flash'],
+      ['goose', 'google/gemini-3-flash'],
       ['opencode', 'anthropic/claude-sonnet-5-5'],
     ] as const) {
       const h = { kind, model, effort: 'high' } as HarnessDescriptor
@@ -459,7 +459,7 @@ describe('Vercel AI Gateway routes', () => {
       claude,
       codex,
       { kind: 'opencode', model: 'google/gemini-3.8-flash' },
-      { kind: 'pi', model: 'gemini-3.8-flash' },
+      { kind: 'pi', model: 'google/gemini-3.8-flash' },
       { kind: 'grok-build', model: 'grok-4.6' },
     ]) {
       const high = { ...h, effort: 'high' } as HarnessDescriptor
@@ -470,7 +470,11 @@ describe('Vercel AI Gateway routes', () => {
   test("a brokered 401 gets the refused-key hint, whatever the CLI's message", () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
     for (const [kind, model, message] of [
-      ['goose', 'gemini-3.8-flash', 'ACP prompt update stream failed: Authentication required'],
+      [
+        'goose',
+        'google/gemini-3.8-flash',
+        'ACP prompt update stream failed: Authentication required',
+      ],
       ['grok-build', 'grok-4.6', 'ACP prompt update stream failed: Internal error'],
     ] as const) {
       const agent = onVercel({ kind, model } as HarnessDescriptor)
@@ -661,17 +665,21 @@ describe('Vercel AI Gateway routes', () => {
     )
   })
 
-  test('pi on Vercel: its own provider on Chat Completions, the model as google/<id>', () => {
+  test("pi on Vercel: its own provider on Chat Completions or Anthropic Messages, the model as the gateway's id", () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
-    const agent = onVercel({ kind: 'pi', model: 'gemini-3.8-flash' } as never)
+    const agent = onVercel({ kind: 'pi', model: 'google/gemini-3.8-flash' } as never)
     assert.equal(agent.credential, 'AI_GATEWAY_API_KEY')
     assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh'])
     assert.deepEqual(
       agent.endpoints.map((e) => [e.host, e.path, e.method]),
-      [['ai-gateway.vercel.sh', { exact: '/v1/chat/completions' }, ['POST']]],
+      [
+        ['ai-gateway.vercel.sh', { exact: '/v1/chat/completions' }, ['POST']],
+        ['ai-gateway.vercel.sh', { exact: '/v1/messages' }, ['POST']],
+      ],
     )
     assert.deepEqual(agent.modelResponses, agent.endpoints)
-    assert.equal(agent.modelId?.('gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    assert.equal(agent.modelId?.('google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    assert.equal(agent.modelId?.('anthropic/claude-haiku-4.5'), 'anthropic/claude-haiku-4.5')
   })
 
   test("OpenCode on Vercel: a Gemini model's effort is its thinking level under providerOptions", () => {
@@ -838,14 +846,14 @@ describe('OpenRouter routes', () => {
     for (const [h, path, id] of [
       [codex, '/api/v1/responses', 'openai/gpt-5.4-mini'],
       [
-        { kind: 'goose', model: 'gemini-3-flash' },
+        { kind: 'goose', model: 'google/gemini-3-flash' },
         '/api/v1/chat/completions',
         'google/gemini-3-flash',
       ],
       [{ kind: 'fx', model: 'gpt-5.5' }, '/api/v1/chat/completions', 'openai/gpt-5.5'],
       [{ kind: 'grok-build', model: 'grok-4.6' }, '/api/v1/chat/completions', 'x-ai/grok-4.6'],
       [
-        { kind: 'pi', model: 'gemini-3.8-flash' },
+        { kind: 'pi', model: 'google/gemini-3.8-flash' },
         '/api/v1/chat/completions',
         'google/gemini-3.8-flash',
       ],
@@ -920,7 +928,7 @@ describe('OpenRouter routes', () => {
   test("effort on OpenRouter: Claude Code's is refused, and the others' on a model no run checked", () => {
     for (const h of [
       { ...claude, effort: 'high' },
-      { kind: 'goose', model: 'llama-4', effort: 'high' },
+      { kind: 'goose', model: 'meta-llama/llama-4', effort: 'high' },
       { kind: 'opencode', model: 'anthropic/claude-haiku-4-5', effort: 'high' },
     ] as HarnessDescriptor[]) {
       assert.throws(
@@ -930,10 +938,10 @@ describe('OpenRouter routes', () => {
     }
     for (const h of [
       codex,
-      { kind: 'goose', model: 'gemini-3.8-flash' },
+      { kind: 'goose', model: 'google/gemini-3.8-flash' },
       { kind: 'opencode', model: 'google/gemini-3.8-flash' },
       { kind: 'grok-build', model: 'grok-4.6' },
-      { kind: 'pi', model: 'gemini-3.8-flash' },
+      { kind: 'pi', model: 'google/gemini-3.8-flash' },
     ]) {
       const high = { ...h, effort: 'high' } as HarnessDescriptor
       assert.equal(resolve(list('openrouter'), high).name, 'openrouter', high.kind)
@@ -1112,7 +1120,7 @@ describe('Vertex AI routes', () => {
       assert.equal((adapter as { harnessId: string }).harnessId, kind)
     }
     assert.equal(
-      onGlobal({ kind: 'pi', model: 'm' } as never).modelId?.('google/gemini-3.8-flash'),
+      onGlobal({ kind: 'pi', model: 'google/m' } as never).modelId?.('google/gemini-3.8-flash'),
       'gemini-3.8-flash',
     )
     const opencode = onGlobal({ kind: 'opencode', model: 'm' } as never)
@@ -1520,16 +1528,15 @@ describe('routing gateways as data', () => {
       vercel: {
         codex: codex.AI_GATEWAY_PROVIDER,
         goose: goose.AI_GATEWAY_PROVIDER,
-        pi: pi.PI_AI_GATEWAY,
         'grok-build': grok.AI_GATEWAY_PROVIDER,
       },
       openrouter: {
         codex: codex.OPENROUTER_PROVIDER,
         goose: goose.OPENROUTER_PROVIDER,
-        pi: pi.PI_OPENROUTER,
         'grok-build': grok.OPENROUTER_PROVIDER,
       },
     } as const
+    const pis = { vercel: pi.PI_AI_GATEWAY, openrouter: pi.PI_OPENROUTER } as const
     for (const name of ROUTING_GATEWAY_NAMES) {
       const { api, routes } = ROUTING_GATEWAYS[name]
       for (const [kind, provider] of Object.entries(providers[name])) {
@@ -1542,6 +1549,14 @@ describe('routing gateways as data', () => {
           `${kind} on ${name}`,
         )
       }
+      const { credentialEnv, openai, anthropic } = pis[name]
+      assert.equal(credentialEnv, routes.pi?.(process.env).authAs, `pi on ${name}`)
+      assert.deepEqual([openai, anthropic], [api.openai, api.anthropic], `pi on ${name}`)
+      assert.deepEqual(
+        pi.piGatewayEndpoints(pis[name]),
+        routes.pi?.(process.env).endpoints,
+        `pi on ${name}`,
+      )
     }
     assert.equal(fx.FX_PROVIDERS.gateway.url, VERCEL_GATEWAY.api.origin)
     const { url, path } = fx.FX_PROVIDERS.openrouter

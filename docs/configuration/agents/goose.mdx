@@ -1,17 +1,17 @@
 ---
 title: "Goose harness"
-description: "The Goose harness runs Goose in the sandbox on a Gemini API key and records its events."
+description: "The Goose harness runs Goose in the sandbox on its model's provider's API key and records its events."
 ---
 
 `goose()` runs Goose (`goose acp`) in the sandbox. For more information about the sandbox, see [Choose a sandbox](/configuration/sandboxes).
 
-## `GOOGLE_GENERATIVE_AI_API_KEY`
+## `GOOGLE_GENERATIVE_AI_API_KEY` or the model provider's key
 
-`goose()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+`goose()` reads the model's provider's key, `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…`, `ANTHROPIC_API_KEY` for `anthropic/…`, `OPENAI_API_KEY` for `openai/…` or `XAI_API_KEY` for `xai/…`, from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
-Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
+Goose reads the Google key as `GOOGLE_API_KEY`, and the others under their own names. The gateway brokers the Google key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`, Anthropic's in `x-api-key` at `api.anthropic.com`, and OpenAI's and xAI's as a Bearer token at `api.openai.com` and `api.x.ai`. A restricted egress policy allows that provider's host.
 
-When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 
@@ -31,7 +31,7 @@ import { goose } from '{{ pkg }}/harness'
 
 export default defineConfig({
   harnesses: goose({
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     effort: 'high',
   }),
 })

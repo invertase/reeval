@@ -90,23 +90,64 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 /** A refusal of models.dev's answer, as opposed to not reaching it. */
 class BadAnswer extends Error {}
 
-/** The priced models of the providers reeval calls; a malformed entry is skipped. */
-function tableOf(catalog: unknown): Record<string, Price> {
+/**
+ * What a harness needs to know of a model its own catalog doesn't list: whether it thinks, what
+ * it reads, and its context window and output tokens.
+ */
+export type ModelLimits = {
+  name?: string
+  reasoning: boolean
+  input: ('text' | 'image')[]
+  contextWindow: number
+  maxTokens: number
+}
+
+const tokens = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0
+
+/** Null without a context window and an output limit. */
+function limitsOf(model: Record<string, unknown>): ModelLimits | null {
+  const limit = isObject(model.limit) ? model.limit : {}
+  if (!tokens(limit.context) || !tokens(limit.output)) return null
+  const modalities = isObject(model.modalities) ? model.modalities : {}
+  const input = Array.isArray(modalities.input) ? modalities.input : []
+  return {
+    ...(typeof model.name === 'string' ? { name: model.name } : {}),
+    reasoning: model.reasoning === true,
+    input: input.includes('image') ? ['text', 'image'] : ['text'],
+    contextWindow: limit.context,
+    maxTokens: limit.output,
+  }
+}
+
+/**
+ * The priced models of the providers reeval calls, and their limits; a malformed entry is
+ * skipped.
+ */
+function tableOf(catalog: unknown): Required<Omit<Cached, 'fetchedAt'>> {
   const table = new Map<string, Price>()
+  const limits = new Map<string, ModelLimits>()
   for (const provider of [...PROVIDERS, ...GATEWAYS]) {
     const entry = isObject(catalog) && Object.hasOwn(catalog, provider) ? catalog[provider] : null
     const models = isObject(entry) && isObject(entry.models) ? entry.models : {}
     for (const [id, model] of Object.entries(models)) {
-      const price = isObject(model) ? priceOf(model.cost as Cost) : null
+      if (!isObject(model)) continue
+      const price = priceOf(model.cost as Cost)
+      const limit = limitsOf(model)
       const key = id.toLowerCase()
       if (price && !table.has(key)) table.set(key, price)
+      if (limit && !limits.has(key)) limits.set(key, limit)
     }
   }
   if (!table.size) throw new BadAnswer('answered without prices')
-  return Object.fromEntries(table)
+  return { table: Object.fromEntries(table), limits: Object.fromEntries(limits) }
 }
 
-type Cached = { fetchedAt: string; table: Record<string, Price> }
+type Cached = {
+  fetchedAt: string
+  table: Record<string, Price>
+  /** Absent from a copy an older reeval wrote, which a fetch then replaces. */
+  limits?: Record<string, ModelLimits>
+}
 const cacheFile = () => join(cacheDir(), 'models-dev-prices.json')
 const failedFile = () => join(cacheDir(), 'models-dev-failed.json')
 
@@ -119,7 +160,11 @@ async function readCached(): Promise<Cached | null> {
     }
     if (!cached.table || typeof cached.table !== 'object') return null
     if (!Object.values(cached.table).every(isPrice)) return null
-    return { fetchedAt: cached.fetchedAt, table: cached.table }
+    return {
+      fetchedAt: cached.fetchedAt,
+      table: cached.table,
+      ...(isObject(cached.limits) ? { limits: cached.limits } : {}),
+    }
   } catch {
     return null
   }
@@ -191,16 +236,24 @@ async function read(res: IncomingMessage): Promise<unknown> {
 
 const UNREACHABLE = 'unreachable'
 
-/** models.dev's prices, an older copy, or why there are none. */
+/** models.dev's prices and limits, an older copy, or why there are none. */
 async function modelsDev(
   now: number,
   url: string,
   timeoutMs: number,
-): Promise<{ table: Record<string, Price>; modelsDev: ModelsDev } | { why: string }> {
+  needLimits = false,
+): Promise<
+  | { table: Record<string, Price>; limits: Record<string, ModelLimits>; modelsDev: ModelsDev }
+  | { why: string }
+> {
   const cached = await readCached()
   const age = cached ? now - Date.parse(cached.fetchedAt) : Number.NaN
-  if (cached && age >= 0 && age < FRESH_MS) {
-    return { table: cached.table, modelsDev: { fetchedAt: cached.fetchedAt, stale: false } }
+  if (cached && (cached.limits || !needLimits) && age >= 0 && age < FRESH_MS) {
+    return {
+      table: cached.table,
+      limits: cached.limits ?? {},
+      modelsDev: { fetchedAt: cached.fetchedAt, stale: false },
+    }
   }
   const failed = await readFailed()
   let retryIn = failed === null ? 0 : failed.at + RETRY_MS - now
@@ -208,10 +261,10 @@ async function modelsDev(
   if (retryIn <= 0 || retryIn > RETRY_MS) {
     try {
       const fetchedAt = new Date(now).toISOString()
-      const table = tableOf(await getJson(url, timeoutMs))
-      await writeCacheFile(cacheFile(), { fetchedAt, table })
+      const { table, limits } = tableOf(await getJson(url, timeoutMs))
+      await writeCacheFile(cacheFile(), { fetchedAt, table, limits })
       await rm(failedFile(), { force: true }).catch(() => {})
-      return { table, modelsDev: { fetchedAt, stale: false } }
+      return { table, limits, modelsDev: { fetchedAt, stale: false } }
     } catch (error) {
       why = error instanceof BadAnswer ? error.message : UNREACHABLE
       await writeCacheFile(failedFile(), { at: new Date(now).toISOString(), why })
@@ -219,7 +272,11 @@ async function modelsDev(
     }
   }
   if (cached) {
-    return { table: cached.table, modelsDev: { fetchedAt: cached.fetchedAt, stale: true, why } }
+    return {
+      table: cached.table,
+      limits: cached.limits ?? {},
+      modelsDev: { fetchedAt: cached.fetchedAt, stale: true, why },
+    }
   }
   return { why: `models.dev ${why}, next try in ${Math.ceil(retryIn / 60_000)}m` }
 }
@@ -277,7 +334,31 @@ export async function loadPrices(
     }
   }
   const fetched = await modelsDev(now, source.url, source.timeoutMs)
-  if ('table' in fetched) return { ...fetched, overlay, file }
+  if ('table' in fetched) {
+    const { table, modelsDev: when } = fetched
+    return { table, overlay, file, modelsDev: when }
+  }
   if (!overlay) return { table: null, why: fetched.why }
   return { table: {}, overlay, file, modelsDev: fetched }
+}
+
+/**
+ * models.dev's limits for a gateway's model (`anthropic/claude-haiku-4.5`), under the gateway's id
+ * or its provider's own (`claude-haiku-4-5`); undefined when models.dev can't be reached or has
+ * neither.
+ */
+export async function modelLimits(
+  model: string,
+  now = Date.now(),
+  source = { url: MODELS_DEV, timeoutMs: FETCH_TIMEOUT_MS },
+): Promise<ModelLimits | undefined> {
+  const fetched = await modelsDev(now, source.url, source.timeoutMs, true)
+  if (!('limits' in fetched)) return undefined
+  const key = model.toLowerCase()
+  const bare = key.slice(key.indexOf('/') + 1)
+  return (
+    fetched.limits[key] ??
+    fetched.limits[bare] ??
+    fetched.limits[bare.replace(/(\d)\.(\d)/g, '$1-$2')]
+  )
 }

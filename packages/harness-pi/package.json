@@ -2,13 +2,17 @@
   "name": "@reeval/harness-pi",
   "version": "0.2.9",
   "private": true,
-  "description": "An AI SDK harness adapter for pi on a Gemini API key or Vercel AI Gateway, running pi --mode json in the sandbox",
+  "description": "An AI SDK harness adapter for pi on its providers' API keys or a gateway, running pi --mode json in the sandbox",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./providers": {
+      "types": "./dist/pi-providers.d.ts",
+      "default": "./dist/pi-providers.js"
     },
     "./package.json": "./package.json"
   },

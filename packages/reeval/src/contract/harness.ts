@@ -35,6 +35,10 @@ import {
 
 /** A model id with no provider prefix. */
 const BARE_MODEL = /^[\w.-]+$/
+/** A model id naming its provider once: `anthropic/claude-haiku-4-5`. */
+const PROVIDER_MODEL = /^[\w.-]+\/[\w.-]+$/
+/** A pi model id, `<provider>/<model>`: the model's own id may have slashes (`huggingface/moonshotai/Kimi-K2.6`). */
+const PI_MODEL = /^[\w.-]+\/\S+$/
 
 export const cursorHarnessSchema = z.strictObject({
   kind: z.literal('cursor'),
@@ -84,7 +88,7 @@ export const opencodeHarnessSchema = z.strictObject({
 export const gooseHarnessSchema = z.strictObject({
   kind: z.literal('goose'),
   gateway: gatewayNameSchema.optional(),
-  model: z.string().regex(BARE_MODEL),
+  model: z.string().regex(PROVIDER_MODEL),
   effort: nonEmpty().optional(),
   id: nonEmpty().optional(),
   maxConcurrent: z.number().optional(),
@@ -104,7 +108,7 @@ export const fxHarnessSchema = z.strictObject({
 export const piHarnessSchema = z.strictObject({
   kind: z.literal('pi'),
   gateway: gatewayNameSchema.optional(),
-  model: z.string().regex(BARE_MODEL),
+  model: z.string().regex(PI_MODEL),
   effort: nonEmpty().optional(),
   id: nonEmpty().optional(),
   maxConcurrent: z.number().optional(),
@@ -267,9 +271,9 @@ const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> 
   opencode: (v) =>
     `opencode(): needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${got(v)})`,
   goose: (v) =>
-    `goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got ${got(v)})`,
+    `goose() needs a model, <provider>/<model>, e.g. goose({ model: 'google/gemini-3.8-flash' }) (got ${got(v)})`,
   pi: (v) =>
-    `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got ${got(v)})`,
+    `pi() needs a model, <provider>/<model>, e.g. pi({ model: 'google/gemini-3.8-flash' }) (got ${got(v)})`,
   codex: (v) =>
     `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${got(v)})`,
   fx: (v) =>

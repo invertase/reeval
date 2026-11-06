@@ -146,9 +146,6 @@ function fx(env: NodeJS.ProcessEnv): GatewayRoute {
   }
 }
 
-/** A Gemini id as Vercel names it (`google/gemini-3-flash`), unless the id names a provider. */
-const googleId = (model: string) => (model.includes('/') ? model : `google/${model}`)
-
 /**
  * Goose on its `vercel_ai_gateway` provider, an OpenAI-compatible one: Chat Completions, the
  * Responses API for OpenAI's reasoning models, and the model list it fetches each turn.
@@ -165,17 +162,21 @@ function goose(env: NodeJS.ProcessEnv): GatewayRoute {
     modelResponses: calls,
     servedModel: servedOnVercel,
     hosts: [VERCEL_HOST],
-    modelId: googleId,
+    modelId: (model) => model,
   }
 }
 
 /**
- * pi on a provider of its own on Vercel's Chat Completions API, a Bearer key: a Gemini model from
- * pi's catalog, each thinking level sent as Gemini's own `thinkingConfig` under Vercel's
- * `providerOptions` (Vercel's `reasoning_effort` maps every Gemini 3 level but `low` to `high`).
+ * pi on a provider of its own on Vercel, a Bearer key: an Anthropic model on the Anthropic
+ * Messages API, any other on Chat Completions. A Gemini model's thinking level goes as Gemini's
+ * own `thinkingConfig` under Vercel's `providerOptions` (Vercel's `reasoning_effort` maps every
+ * Gemini 3 level but `low` to `high`).
  */
 function pi(env: NodeJS.ProcessEnv): GatewayRoute {
-  const endpoints = [onVercel(openai('/chat/completions'), 'POST')]
+  const endpoints = [
+    onVercel(openai('/chat/completions'), 'POST'),
+    onVercel(anthropicPath(VERCEL_API, '/v1/messages'), 'POST'),
+  ]
   return {
     credential: vercelCredential(env),
     authAs: VERCEL_KEY,
@@ -183,7 +184,7 @@ function pi(env: NodeJS.ProcessEnv): GatewayRoute {
     modelResponses: endpoints,
     servedModel: servedOnVercel,
     hosts: [VERCEL_HOST],
-    modelId: googleId,
+    modelId: (model) => model,
   }
 }
 
@@ -249,5 +250,5 @@ export const VERCEL_GATEWAY: RoutingGateway = {
   // Claude Code's effort goes as on Anthropic's API, Codex's response names the effort it ran at,
   // pi and OpenCode send a Gemini model's thinking level under providerOptions, and Grok Build
   // sends reasoning_effort (an xAI model's own). Goose's vercel_ai_gateway provider sends none.
-  unprovenEffort: { goose: everyModel, opencode: notGemini },
+  unprovenEffort: { goose: everyModel, opencode: notGemini, pi: notGemini },
 }

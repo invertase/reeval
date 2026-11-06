@@ -42,7 +42,7 @@ function mcpSupport(agent) {
 /** The web events reeval records for an agent: its adapter's tools that the transcript maps to them. */
 async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
-    auth: { [agent.credential]: 'probe' },
+    auth: { [agent.authAs ?? agent.credential]: 'probe' },
     descriptor: { kind, model },
     model,
     plugins: [],
@@ -82,7 +82,7 @@ export async function harnessFacts() {
         `${kind}: the contract row's key is ${row.key?.name}, the catalog's ${credential}`,
       )
     }
-    if (!!row.wireModel !== !!agent.servedModel) {
+    if (!!row.wireModel !== !!agentFor({ kind, model: row.model }).servedModel) {
       problems.push(
         `${kind}: the contract row's wireModel and the catalog's servedModel disagree on whether its requests name the model`,
       )
@@ -103,7 +103,16 @@ export async function harnessFacts() {
     if (!sandbox)
       problems.push(`${kind}: no sandbox kind runs it on ${agent.platforms.join(' or ')}`)
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
-    const h = { kind, agent, row, page, mcp, web, sandbox }
+    const h = {
+      kind,
+      agent,
+      resolved: agentFor({ kind, model: row.model }),
+      row,
+      page,
+      mcp,
+      web,
+      sandbox,
+    }
     facts.push(h)
   }
   for (const row of harnesses) {
@@ -156,7 +165,7 @@ export function renderMatrix(facts, { href }) {
     h.agent.forModel
       ? "The model's provider's"
       : [h.agent.credential, ...(h.agent.fallbackCredentials ?? [])].map(code).join(' or '),
-    yes(h.agent.endpoints.length > 0),
+    yes(h.resolved.endpoints.length > 0),
     code(h.agent.rulesFile),
     yes(!!h.agent.workspaceSkillDir),
     yes(!!h.agent.harnessSkillDir),

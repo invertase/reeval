@@ -71,7 +71,7 @@ describe('the shared default effort', () => {
       effort: 'medium',
     })
     assert.equal(harnessId(h), 'codex:gpt-5.6-sol')
-    assert.equal(withDefaultEffort(pi({ model: 'gemini-3.8-flash' })).effort, 'medium')
+    assert.equal(withDefaultEffort(pi({ model: 'google/gemini-3.8-flash' })).effort, 'medium')
     assert.equal(withDefaultEffort(grokBuild({ model: 'grok-4.6' })).effort, 'medium')
     assert.equal(withDefaultEffort(claudeCode({ model: 'claude-sonnet-5-5' })).effort, 'medium')
     assert.equal(withDefaultEffort(antigravity({ model: 'gemini-3.8-flash' })).effort, 'medium')
@@ -200,7 +200,7 @@ describe('the shared default effort', () => {
         "effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY is not set)",
       ],
     )
-    const same = [codex({ model: 'a' }), pi({ model: 'gemini-3.8-flash' })].map((h) =>
+    const same = [codex({ model: 'a' }), pi({ model: 'google/gemini-3.8-flash' })].map((h) =>
       withDefaultEffort(h),
     )
     assert.deepEqual(effortNotes(same, undefined, ''), [])

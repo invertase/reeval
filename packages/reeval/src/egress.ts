@@ -95,7 +95,8 @@ export const isRestricted = (policy: EgressPolicy) => policy !== 'allow-all' && 
 export const isDirect = (policy: EgressPolicy) => policy === 'allow-all'
 
 /**
- * The hosts the harness needs: a real agent's own API (its model's provider's, for OpenCode), or
+ * The hosts the harness needs: a real agent's own API (its model's provider's, for OpenCode, Goose
+ * and pi), or
  * a fake agent's with `layout` (it behaves like that agent). A plain fake agent talks to nothing.
  */
 function harnessHosts(harness: HarnessDescriptor, vertex?: VertexSettings): readonly string[] {

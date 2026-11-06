@@ -105,10 +105,10 @@ Each factory in this table runs an agent and requires `model`. All but `fx()` ta
 | `claudeCode()` | A model id or alias the `claude` CLI accepts. | `low`, `medium`, `high`, `xhigh`, or `max`, for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as Extra. reeval refuses any other value, and any value on a model Claude Code sends none to, such as `claude-haiku-4-5`. On Vertex AI, Claude Code sends an effort only to the models its own catalog lists, so reeval refuses one there on a model it doesn't list, such as `claude-haiku-5-5`, and runs that model with none. reeval refuses the `sonnet` and `opusplan` aliases on Vertex AI: Claude Code resolves them there to Sonnet 4.5 (`opusplan` outside plan mode), which Anthropic retires on 2026-11-30, so name the model, such as `claude-sonnet-5-5`. |
 | `antigravity()` | A slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug, and reeval refuses `effort` beside one. | Passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies it. |
 | `codex()` | An OpenAI model id with no provider prefix, passed as `--model`. | Written as `model_reasoning_effort` in `~/.codex/config.toml`: `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
-| `goose()` | A model id with no provider prefix, run on Goose's `google` provider, using letters, digits, `_`, `.`, and `-`. | Passed as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high`, or `max`. |
+| `goose()` | `<provider>/<model>`, using letters, digits, `_`, `.`, and `-`. The provider is Goose's `google`, `anthropic`, `openai`, or `xai` on its own key, or any the gateway serves on `vercel()` or `openrouter()`. | Passed as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high`, or `max`. |
 | `grokBuild()` | An xAI model id with no provider prefix, using letters, digits, and `._-`. | For a model that takes one, such as `low`, `medium`, or `high`. Set as `default_reasoning_effort` in Grok Build's `config.toml` file. |
 | `opencode()` | `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it can't broker. | A value the provider takes, added to each request body in the API's own field: `output_config.effort` on `anthropic/`, `reasoning.effort` on `openai/` and `openrouter/`, and Gemini's `thinkingLevel` on `google/` and `google-vertex/`. reeval refuses a value the model's API answers with a 400, such as any value on `anthropic/claude-haiku-4-5`, `openai/gpt-4.1` or `google/gemini-2.5-flash` and any but `high` on `openai/gpt-5-pro`, and any value on a provider with no field it knows. On `openrouter()`, which maps the effort onto each model itself, nothing is refused. |
-| `pi()` | A Gemini model id with no provider prefix, which pi runs on its `google` provider. | Passed as pi's `--thinking` flag: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `pi()` | `<provider>/<model>`. The part before the first `/` is one of pi's providers that sends its key in a header on a fixed host, on that key, or any provider the gateway serves on `vercel()` or `openrouter()`. | Passed as pi's `--thinking` flag: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
 | `fx()` | A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. | Not accepted. |
 
 <Property name="params" type="Record<string, string>" optional>
@@ -147,11 +147,11 @@ Every factory takes these options beside `model`.
 | Antigravity | ❌ | ❌ |
 | OpenCode | ⚠️ | ⚠️ |
 | Goose | ⚠️ | ⚠️ |
-| pi | ❌ | ❌ |
+| pi | ⚠️ | ⚠️ |
 | fx | ✅ | ❌ |
 | Grok Build | ⚠️ | ⚠️ |
 
-Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key, and fx on `vercel()` or OpenAI's API.
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs fx on `vercel()` or OpenAI's API.
 
 ### Harness behavior
 
@@ -167,8 +167,8 @@ Each value of `harnesses` reads the environment's `rules`, `skills`, and `mcp` s
 | [Claude Code](/configuration/agents/claude-code) | `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [Antigravity](/configuration/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [OpenCode](/configuration/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
-| [Goose](/configuration/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
-| [pi](/configuration/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
+| [Goose](/configuration/agents/goose) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
+| [pi](/configuration/agents/pi) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` or `tart()` |
 | [Codex](/configuration/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [fx](/configuration/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` or `tart()` |
 | [Grok Build](/configuration/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` or `tart()` |
@@ -236,8 +236,8 @@ For more information about the token fields, see [`TokenUsage`](/reference/run-r
 - **Antigravity:** each turn's `model` is the model the CLI reports at the start of the turn, or else the last brokered request's model. `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`, which can include a model the CLI calls for a title or a checkpoint.
 - **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or `medium` when unset.
 - **OpenCode:** the stream names only the model OpenCode was configured with, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
-- **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. `servedModels` lists every such id.
-- **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL, without an effort suffix.
+- **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn (on Anthropic, OpenAI or xAI, the model its last response named), or null when that turn made none. `servedModels` lists every such id.
+- **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL on Google's Gemini API and from the response body on every other provider, with `[effort=<value>]` when OpenAI's Responses API names an effort.
 - **fx:** fx names only its configured model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
 - **Grok Build:** the stream names only the configured model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
 

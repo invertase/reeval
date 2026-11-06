@@ -34,18 +34,14 @@ import {
   PI_CLI_PATH,
   piGatewayModelsScript,
 } from './pi-bootstrap.ts'
+import type { PiProvider } from './pi-providers.ts'
 import { PiStreamTranslator } from './pi-stream.ts'
 import { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'
 
 export const PI_HARNESS_ID = 'pi'
-/** The only credential the adapter uses: a Gemini API key, for pi's `google` provider. */
-export const PI_CREDENTIAL_ENV = 'GEMINI_API_KEY'
-export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
-/** The header pi's `google` provider sends the key in. */
-export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
-/** pi's agent directory under the home: its sessions, settings, global skills and rules. */
 /** pi's provider for Vertex AI, which authenticates from Application Default Credentials. */
 export const PI_VERTEX_PROVIDER = 'google-vertex'
+/** pi's agent directory under the home: its sessions, settings, global skills and rules. */
 export const PI_AGENT_DIR = '.pi/agent'
 /** Where harness-placed skills go, under the sandbox home. */
 export const PI_HOME_SKILLS_DIR = `${PI_AGENT_DIR}/skills`
@@ -56,75 +52,119 @@ export const PI_WORKSPACE_SKILLS_DIR = '.pi/skills'
 /** pi's global MCP config, which its built-in `mcp` extension reads. */
 export const PI_MCP_FILE = `${PI_AGENT_DIR}/mcp.json`
 
-/**
- * The model-request endpoint pi sends the key on, `POST /v1beta/models/<model>:
- * streamGenerateContent`. A gateway that enforces it refuses the key
- * anywhere else.
- */
-export const PI_ENDPOINTS = [
-  {
-    host: new URL(GEMINI_API_URL).hostname,
-    path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
-    method: ['POST'],
-  },
-] as const
-
 /** pi's model list, which a {@link PiGateway}'s provider goes in. */
 export const PI_MODELS_FILE = `${PI_AGENT_DIR}/models.json`
 
 /**
- * An AI gateway pi reaches a model through, as a pi provider on the gateway's OpenAI-compatible
- * Chat Completions API, with the key sent as a Bearer token.
+ * An AI gateway pi reaches a model through, whose ids name their provider
+ * (`anthropic/claude-haiku-4.5`). Each turn writes the model to `models.json` in a provider of
+ * reeval's, `id`: an Anthropic model on the gateway's Anthropic Messages API, any other on its
+ * Chat Completions API, with the key sent as a Bearer token (and in `x-api-key`, on Messages).
  */
 export type PiGateway = {
   /** For messages: `Vercel AI Gateway`. */
   readonly name: string
-  /** The pi provider id, `--provider`. */
+  /** reeval's pi provider id, `--provider`. */
   readonly id: string
   readonly credentialEnv: string
   /** The Chat Completions base URL, ending `/v1`. */
-  readonly baseUrl: string
+  readonly openai: string
+  /** The Anthropic Messages base URL, which pi adds `/v1/messages` to. */
+  readonly anthropic: string
+  /** pi's own provider for the gateway, whose catalog has the model's limits when it lists it. */
+  readonly catalog: string
   /**
-   * The `providerOptions` keys a Gemini model's native `thinkingConfig` goes under, in a provider
-   * of reeval's that each turn writes to `models.json`. Unset, `id` is a provider pi has built in,
-   * which runs the model from pi's own catalog for it.
+   * How a model runs, by the provider its id names (`google` in `google/gemini-3.8-flash`). A
+   * provider with no route runs on the Chat Completions API, described by pi's catalog for the
+   * gateway or the provider, else `PiModelInfo`.
    */
-  readonly upstreams?: readonly string[]
+  readonly routes: Readonly<Record<string, PiGatewayRoute>>
 }
 
+/** How a {@link PiGateway} runs one provider's models. */
+export type PiGatewayRoute =
+  /** On pi's own provider for the gateway (`--provider <catalog>`), not one of reeval's. */
+  | { readonly builtin: true }
+  | {
+      readonly builtin?: false
+      /** The gateway's API it goes on; default `openai-completions`. */
+      readonly api?: 'anthropic-messages' | 'openai-completions'
+      /**
+       * Each thinking level goes as the model's native `thinkingConfig`, under these
+       * `providerOptions` keys: the model must be in pi's `thinkingCatalog` and take a level.
+       */
+      readonly thinkingConfig?: { readonly catalog: string; readonly upstreams: readonly string[] }
+    }
+
 /**
- * Vercel AI Gateway, whose model ids name their provider (`google/gemini-3.8-flash`). It takes
- * Gemini's own `thinkingConfig` under the provider that serves the call, Google's or Vertex's.
+ * Vercel AI Gateway. It takes Gemini's own `thinkingConfig` under the provider that serves the
+ * call, Google's or Vertex's: its `reasoning_effort` maps every Gemini 3 level but `low` to `high`.
  */
 export const PI_AI_GATEWAY: PiGateway = {
   name: 'Vercel AI Gateway',
   id: 'reeval-ai-gateway',
   credentialEnv: 'AI_GATEWAY_API_KEY',
-  baseUrl: 'https://ai-gateway.vercel.sh/v1',
-  upstreams: ['google', 'vertex'],
+  openai: 'https://ai-gateway.vercel.sh/v1',
+  anthropic: 'https://ai-gateway.vercel.sh',
+  catalog: 'vercel-ai-gateway',
+  routes: {
+    anthropic: { api: 'anthropic-messages' },
+    google: { thinkingConfig: { catalog: 'google', upstreams: ['google', 'vertex'] } },
+  },
 }
 
 /**
- * OpenRouter, on pi's own `openrouter` provider: its catalog's ids name their provider
- * (`google/gemini-3.8-flash`), and a Gemini 3 model's thinking level goes as OpenRouter's
- * `reasoning.effort`, which OpenRouter sends Gemini as the same level.
+ * OpenRouter. A Gemini model runs on pi's own `openrouter` provider, whose `reasoning.effort`
+ * OpenRouter sends Gemini as the same thinking level.
  */
 export const PI_OPENROUTER: PiGateway = {
   name: 'OpenRouter',
-  id: 'openrouter',
+  id: 'reeval-openrouter',
   credentialEnv: 'OPENROUTER_API_KEY',
-  baseUrl: 'https://openrouter.ai/api/v1',
+  openai: 'https://openrouter.ai/api/v1',
+  anthropic: 'https://openrouter.ai/api',
+  catalog: 'openrouter',
+  routes: { anthropic: { api: 'anthropic-messages' }, google: { builtin: true } },
 }
 
-/** The model call pi makes on a {@link PiGateway}: Chat Completions, which it streams. */
+/** The model calls pi makes on a {@link PiGateway}, which it streams. */
 export const piGatewayEndpoints = (gateway: PiGateway) =>
   [
     {
-      host: new URL(gateway.baseUrl).hostname,
-      path: { exact: `${new URL(gateway.baseUrl).pathname}/chat/completions` },
+      host: new URL(gateway.openai).hostname,
+      path: { exact: `${new URL(gateway.openai).pathname}/chat/completions` },
+      method: ['POST'],
+    },
+    {
+      host: new URL(gateway.anthropic).hostname,
+      path: { exact: `${new URL(gateway.anthropic).pathname.replace(/\/$/, '')}/v1/messages` },
       method: ['POST'],
     },
   ] as const
+
+/**
+ * What pi needs to know of a model its catalog doesn't list, from another source (models.dev):
+ * it defaults to a 128,000-token context window and 16,384 output tokens, and no thinking.
+ */
+export type PiModelInfo = {
+  readonly name?: string
+  readonly reasoning: boolean
+  readonly input: readonly ('text' | 'image')[]
+  readonly contextWindow: number
+  readonly maxTokens: number
+}
+
+const routeOf = (gateway: PiGateway, model: string): PiGatewayRoute | undefined =>
+  gateway.routes[model.slice(0, Math.max(0, model.indexOf('/')))]
+
+/**
+ * Whether pi's own catalogs describe `model` on `gateway`, so it needs no `PiModelInfo`: a route
+ * that runs it on pi's provider, or takes its thinking levels from pi's catalog.
+ */
+export const piGatewayDescribes = (gateway: PiGateway, model: string): boolean => {
+  const route = routeOf(gateway, model)
+  return !!route && (route.builtin === true || 'thinkingConfig' in route)
+}
 
 /** An `mcp.json` server: stdio (`command`) or streamable HTTP (`url`); pi has no SSE transport. */
 export type PiMcpServer =
@@ -133,16 +173,24 @@ export type PiMcpServer =
 
 export type PiHarnessSettings = {
   /**
-   * `{ GEMINI_API_KEY }`, or the gateway's key under its `credentialEnv`: the only key used. The
-   * host environment is never read.
+   * The provider's or the gateway's key under its `credentialEnv`: the only key used. The host
+   * environment is never read.
    */
   readonly auth: HarnessV1AuthenticationEnvironment
   /**
-   * Run the model on this gateway rather than Gemini's API: a model is the gateway's id
-   * (`google/gemini-3.8-flash`), of a Gemini model in pi's catalog that takes a thinking level, or,
-   * on a provider pi has built in, of a model in pi's catalog for it.
+   * The provider pi calls with its own key (`piProvider('anthropic')`), Vertex AI's when
+   * `vertex` is set; unused on a `gateway`.
+   */
+  readonly provider?: PiProvider
+  /**
+   * Run the model on this gateway rather than a provider's API: a model is the gateway's id
+   * (`anthropic/claude-haiku-4.5`). A Gemini one must be in pi's catalog, and take a thinking
+   * level where its native `thinkingConfig` is sent; any other is in pi's catalog for the gateway
+   * or its provider, or described by `modelInfo`.
    */
   readonly gateway?: PiGateway
+  /** The gateway model's limits, for a model pi's catalogs don't list. */
+  readonly modelInfo?: PiModelInfo
   /** MCP servers by name, written to pi's `mcp.json` with their tools declared to the model. */
   readonly mcpServers?: Record<string, PiMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
@@ -255,8 +303,8 @@ export function buildPiCommand(options: {
   sessionDir: string
   mcp?: boolean
   thinking?: string
-  /** The pi provider, `google` by default. */
-  provider?: string
+  /** The pi provider, `--provider`. */
+  provider: string
   /** A command that must succeed before pi starts, such as writing its models.json. */
   before?: string
 }): string {
@@ -265,7 +313,7 @@ export function buildPiCommand(options: {
     ...(options.before ? [`${options.before} &&`] : []),
     `exec ${shellQuote(options.cli)} --mode json -p --offline --approve --no-extensions`,
     ...(options.mcp ? ['-e builtin:mcp'] : []),
-    `--provider ${shellQuote(options.provider ?? 'google')}`,
+    `--provider ${shellQuote(options.provider)}`,
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
     ...(options.thinking ? [`--thinking ${shellQuote(options.thinking)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
@@ -280,47 +328,89 @@ export function buildPiCommand(options: {
  * all in the sandbox, MCP servers included.
  */
 export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools> {
-  const credential = settings.gateway?.credentialEnv ?? PI_CREDENTIAL_ENV
+  if (settings.vertex) {
+    return harness(settings, { id: PI_VERTEX_PROVIDER, credentialEnv: '', endpoints: [] })
+  }
+  const provider = keyedProvider(settings)
+  const { credentialEnv, id } = provider
   const key = isHarnessAuthenticationEnvironment(settings.auth)
-    ? settings.auth[credential]
+    ? settings.auth[credentialEnv]
     : undefined
-  if (!key && !settings.vertex) {
+  if (!key) {
     throw new Error(
-      `pi auth must be an environment object with ${credential} (${settings.gateway ? `a ${settings.gateway.name} key` : 'a Gemini API key'})`,
+      `pi auth must be an environment object with ${credentialEnv} (pi's ${id} provider's key)`,
     )
   }
+  return harness(settings, provider, key)
+}
+
+function harness(
+  settings: PiHarnessSettings,
+  provider: PiProvider,
+  key?: string,
+): HarnessV1<PiBuiltinTools> {
   return {
     specificationVersion: 'harness-v1',
     harnessId: PI_HARNESS_ID,
     builtinTools: PI_BUILTIN_TOOLS,
     lifecycleStateSchema: lifecycleData,
     getBootstrap: getPiBootstrap,
-    doStart: (options) => startSession(settings, key, options),
+    doStart: (options) => startSession(settings, provider, key, options),
   }
 }
 
+/** What pi calls with the key: the gateway's provider of reeval's, else `provider`. */
+function keyedProvider({ gateway, provider }: PiHarnessSettings): PiProvider {
+  if (gateway) {
+    const [chat, messages] = piGatewayEndpoints(gateway)
+    const bearer = { name: 'authorization', scheme: 'Bearer' }
+    return {
+      id: gateway.id,
+      credentialEnv: gateway.credentialEnv,
+      endpoints: [
+        { ...chat, api: 'openai-completions', headers: [bearer] },
+        { ...messages, api: 'anthropic-messages', headers: [bearer, { name: 'x-api-key' }] },
+      ],
+    }
+  }
+  if (!provider) throw new Error('pi needs a provider, a gateway or vertex')
+  return provider
+}
+
+/** Each host and header pi sends the key in, once. */
+const keyHeaders = (provider: PiProvider) => [
+  ...new Map(
+    provider.endpoints.flatMap(({ host, headers }) =>
+      headers.map((h) => [`${host} ${h.name} ${h.scheme}`, { host, ...h }] as const),
+    ),
+  ).values(),
+]
+
 async function startSession(
   settings: PiHarnessSettings,
+  provider: PiProvider,
   key: string | undefined,
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
   const { sandboxSession: sandbox, sessionWorkDir, abortSignal } = options
   const { gateway, vertex } = settings
-  const credential = gateway?.credentialEnv ?? PI_CREDENTIAL_ENV
-  const header = gateway ? 'Authorization' : GEMINI_API_KEY_HEADER
-  const sent = (value: string) => (gateway ? `Bearer ${value}` : value)
+  const { credentialEnv: credential } = provider
   let sandboxKey = key
   if (!key || vertex) {
     sandboxKey = undefined
   } else if (canBroker(sandbox)) {
-    sandboxKey = generateSandboxCredentialPlaceholder()
-    await sandbox.addRequestTransformations([
-      createCredentialRequestTransformation({
-        matchUrl: gateway ? new URL(gateway.baseUrl).origin : GEMINI_API_URL,
-        matchHeaders: { [header]: sent(sandboxKey) },
-        transformHeaders: { ...options.headers, [header]: sent(key) },
+    const placeholder = generateSandboxCredentialPlaceholder()
+    sandboxKey = placeholder
+    await sandbox.addRequestTransformations(
+      keyHeaders(provider).map(({ host, name, scheme }) => {
+        const sent = (value: string) => (scheme ? `${scheme} ${value}` : value)
+        return createCredentialRequestTransformation({
+          matchUrl: `https://${host}`,
+          matchHeaders: { [name]: sent(placeholder) },
+          transformHeaders: { ...options.headers, [name]: sent(key) },
+        })
       }),
-    ])
+    )
   } else if (settings.requireCredentialBrokering) {
     throw new Error(
       `The sandbox can't broker ${credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
@@ -346,19 +436,20 @@ async function startSession(
     : { [credential]: sandboxKey ?? '', PI_OFFLINE: '1' }
   const bootstrapDir = posix.join(stateDir, PI_BOOTSTRAP_DIR)
   const modelsScript = posix.join(dataDir, 'gateway-models.mjs')
-  if (gateway?.upstreams) {
+  if (gateway) {
     await sandbox.writeTextFile({
       path: modelsScript,
       content: await piGatewayModelsScript(),
       abortSignal,
     })
   }
+  const builtin = (model: string) => !!gateway && routeOf(gateway, model)?.builtin === true
   const writeModels = (model: string) =>
-    gateway?.upstreams
+    gateway && !builtin(model)
       ? [
           'node',
           ...[modelsScript, bootstrapDir, posix.join(home, PI_MODELS_FILE)],
-          ...[JSON.stringify(gateway), model],
+          ...[JSON.stringify(gateway), model, JSON.stringify(settings.modelInfo ?? null)],
         ]
           .map(shellQuote)
           .join(' ')
@@ -427,8 +518,8 @@ async function startSession(
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
         ...(settings.effort ? { thinking: settings.effort } : {}),
-        ...(vertex ? { provider: PI_VERTEX_PROVIDER } : {}),
-        ...(gateway ? { provider: gateway.id } : {}),
+        provider:
+          turn.model && builtin(turn.model) ? (gateway?.catalog ?? provider.id) : provider.id,
         ...(before ? { before } : {}),
       })
       const translator = new PiStreamTranslator({

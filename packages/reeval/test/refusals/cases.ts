@@ -515,7 +515,7 @@ export const CASES: Record<string, Case[]> = {
       planned(
         {},
         {
-          harnesses: pi({ model: 'gemini-3.8-flash' }),
+          harnesses: pi({ model: 'google/gemini-3.8-flash' }),
           sandbox: tart({ image: SEQUOIA }),
           egress: 'allow-all',
         },
@@ -559,7 +559,7 @@ export const CASES: Record<string, Case[]> = {
       planned(
         {},
         {
-          harnesses: goose({ model: 'gemini-3.8-flash' }),
+          harnesses: goose({ model: 'google/gemini-3.8-flash' }),
           sandbox: tart({ image: SEQUOIA }),
           egress: 'allow-all',
         },
@@ -673,10 +673,15 @@ export const CASES: Record<string, Case[]> = {
       any(opencode, { model: 'openrouter/anthropic/claude-haiku-4.5' }),
     ],
     ['opencode good', any(opencode, { model: 'google/gemini-3.8-flash' })],
-    ['goose with a provider', any(goose, { model: 'google/gemini-3.8-flash' })],
+    ['goose with a nested id', any(goose, { model: 'openrouter/google/gemini-3.8-flash' })],
+    ['goose without a provider', any(goose, { model: 'gemini-3.8-flash' })],
     ['goose without a model', any(goose, {})],
-    ['pi with a provider', any(pi, { model: 'google/gemini-3.8-flash' })],
-    ['pi effort empty', any(pi, { model: 'gemini-3.8-flash', effort: '' })],
+    [
+      'pi with slashes in the model',
+      any(pi, { model: 'huggingface/Qwen/Qwen3-Coder-480B-A35B-Instruct' }),
+    ],
+    ['pi without a provider', any(pi, { model: 'gemini-3.8-flash' })],
+    ['pi effort empty', any(pi, { model: 'google/gemini-3.8-flash', effort: '' })],
     ['codex with a provider', any(codex, { model: 'openai/gpt-5.6-luna' })],
     ['codex without a model', any(codex, {})],
     ['grokBuild with a provider', any(grokBuild, { model: 'xai/grok-4.6' })],
@@ -837,7 +842,7 @@ export const CASES: Record<string, Case[]> = {
       'data: claude-code with a bad effort',
       harnesses({ kind: 'claude-code', model: 'm', effort: 'huge' }),
     ],
-    ['data: goose with a provider', harnesses({ kind: 'goose', model: 'google/g' })],
+    ['data: goose with a nested id', harnesses({ kind: 'goose', model: 'a/b/c' })],
     ['data: grok-build with a provider', harnesses({ kind: 'grok-build', model: 'xai/g' })],
     ['data: fx without a model', harnesses({ kind: 'fx' })],
     ['data: fake with a bad layout', harnesses({ kind: 'fake', layout: 'vim' })],
@@ -2317,10 +2322,13 @@ environments:
     ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
     ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
     ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
-    ['route: pi on vercel, direct off', route([VERCEL, OFF], pi({ model: 'gemini-3.8-flash' }))],
+    [
+      'route: pi on vercel, direct off',
+      route([VERCEL, OFF], pi({ model: 'google/gemini-3.8-flash' })),
+    ],
     [
       'route: pi on vercel before direct',
-      route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
+      route([VERCEL, DIRECT], pi({ model: 'google/gemini-3.8-flash' })),
     ],
     [
       'route: opencode with effort on vercel, direct off',
@@ -2328,7 +2336,7 @@ environments:
     ],
     [
       'route: goose with effort on vercel, direct off',
-      route([VERCEL, OFF], goose({ model: 'm', effort: 'high' })),
+      route([VERCEL, OFF], goose({ model: 'google/m', effort: 'high' })),
     ],
     [
       'route: opencode with effort on a gemini model on vercel',
@@ -2336,7 +2344,7 @@ environments:
     ],
     [
       'route: pi with effort on vercel',
-      route([VERCEL], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+      route([VERCEL], pi({ model: 'google/gemini-3.8-flash', effort: 'low' })),
     ],
     [
       'route: grok build with effort on vercel',
@@ -2358,6 +2366,19 @@ environments:
       "route: opencode on a provider whose key variable can't be set",
       route([DIRECT], opencode({ model: '302ai/m' })),
     ],
+    [
+      'route: goose on a provider reeval has not probed, on direct alone',
+      route([DIRECT], goose({ model: 'mistral/devstral-2' })),
+    ],
+    [
+      'route: goose on a provider reeval has not probed, on vercel',
+      route([VERCEL], goose({ model: 'mistral/devstral-2' })),
+    ],
+    [
+      'route: pi on a provider its table refuses, on direct alone',
+      route([DIRECT], pi({ model: 'amazon-bedrock/anthropic.claude-haiku-4-5' })),
+    ],
+    ['route: pi on an unknown provider, on direct alone', route([DIRECT], pi({ model: 'nope/m' }))],
     [
       'ts: openrouter with fallbacks',
       config({ gateway: [{ kind: 'openrouter', fallbacks: true }] }),
@@ -2451,7 +2472,7 @@ environments:
     ],
     [
       'route: pi with effort on a gemini model on openrouter',
-      route([OPENROUTER], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+      route([OPENROUTER], pi({ model: 'google/gemini-3.8-flash', effort: 'low' })),
     ],
     ['route: claude code on openrouter', route([OPENROUTER], claudeCode({ model: 'm' }))],
     ['route: opencode on openrouter', route([OPENROUTER], opencode({ model: 'anthropic/m' }))],
@@ -2465,11 +2486,11 @@ environments:
     ],
     [
       'route: goose with effort on a gemini model on openrouter',
-      route([OPENROUTER, DIRECT], goose({ model: 'gemini-3.8-flash', effort: 'high' })),
+      route([OPENROUTER, DIRECT], goose({ model: 'google/gemini-3.8-flash', effort: 'high' })),
     ],
     [
       'route: goose with effort on another model falls through to direct',
-      route([OPENROUTER, DIRECT], goose({ model: 'llama-4', effort: 'high' })),
+      route([OPENROUTER, DIRECT], goose({ model: 'xai/grok-4.6', effort: 'high' })),
     ],
     [
       'route: opencode with effort on another model on openrouter, direct off',
@@ -2537,7 +2558,7 @@ environments:
     ['route: claude code on vertex, direct off', route([VERTEX, OFF], claudeCode({ model: 'm' }))],
     [
       'route: goose on vertex, direct off',
-      route([VERTEX, OFF], goose({ model: 'gemini-3.8-flash' })),
+      route([VERTEX, OFF], goose({ model: 'google/gemini-3.8-flash' })),
     ],
     ['route: grok build on vertex, direct off', route([VERTEX, OFF], grokBuild({ model: 'm' }))],
     ['vertex: no project', vertexEntry({}, {})],

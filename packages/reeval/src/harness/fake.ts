@@ -6,7 +6,14 @@ import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
-import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
+import {
+  AGENTS,
+  agentMcp,
+  fakeBrokering,
+  keyRejected,
+  layoutOf,
+  writePluginFiles,
+} from './agents.ts'
 import { fakeBootstrapScript } from './fake-bootstrap.ts'
 import { providerStop } from './provider-stop.ts'
 import type { Harness, HarnessResult } from './types.ts'
@@ -239,7 +246,7 @@ async function brokerKey(
   descriptor: FakeHarnessDescriptor,
   sandbox: Sandbox,
 ): Promise<Record<string, string>> {
-  const { credential, endpoints } = AGENTS[descriptor.layout ?? 'cursor']
+  const { credential, endpoints } = fakeBrokering(descriptor.layout)
   const key = process.env[credential]
   if (!key) {
     throw new InfraError(
