@@ -1758,19 +1758,23 @@ export const inventory: InventoryFeature[] = [
     id: 'history.store.s3',
     area: 'Records and studio',
     name: "`s3()`: a recorded run uploads to an S3-compatible bucket, the record last and create-only (a resume's or `--retry-errors`' replaces it at the version it read), one retried failure, exit 3 and `reeval sync` when the store keeps failing, keys refused before a run that would record, and `reeval studio` refusing a remote store",
-    unit: ['reeval/test/store.test.ts', 'reeval/test/pack.test.ts'],
+    unit: [
+      'reeval/test/store.test.ts',
+      'reeval/test/pack.test.ts',
+      'reeval/test/store-minio.test.ts',
+    ],
   },
   {
     id: 'history.store.read',
     area: 'Records and studio',
     name: "Reading a remote store: the history commands pull new runs into its copy (at most once a minute, `--offline` skips it, `reeval sync` always), list the runs HEAD reaches unless `--all-branches`, find any branch's run by id, show the copy when the store is unreachable (exit 3 with none), empty a copy of another bucket, and `reeval checkout` fetches a commit the clone lacks",
-    unit: ['reeval/test/store.test.ts'],
+    unit: ['reeval/test/store.test.ts', 'reeval/test/store-minio.test.ts'],
   },
   {
     id: 'history.debug',
     area: 'Records and studio',
     name: "`history.debug`: each attempt's `requests.ndjson` (`'requests'`) or all its debug data (`'all'`) uploads with the run to a remote store under a `debug/` prefix of its own, rescanned for secrets (a finding leaves the file out and names it in `record.debug.dropped`), staged so `reeval sync` still uploads it after `.reeval/debug` is pruned; refused on `local()`. `reeval sync --debug <run>` downloads one run's back into `.reeval/debug/<run>`, hash-checked; a pull never does",
-    unit: ['reeval/test/store.test.ts'],
+    unit: ['reeval/test/store.test.ts', 'reeval/test/store-minio.test.ts'],
   },
   {
     id: 'history.logs',
