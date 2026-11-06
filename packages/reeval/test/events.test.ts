@@ -717,6 +717,62 @@ describe('reeval run --events and reeval attach', () => {
     }
   })
 
+  /** One eval that ignores the cancel, so a signal can land while the run is still canceling. */
+  const slow = `import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate } from 'reeval'
+evaluate('slow', async (c) => {
+  await c.send('write hello.txt')
+  console.log('parked')
+  await sleep(8_000)
+})
+`
+
+  test("a Ctrl-C the run sees just after attach's cancel is the same press: the run is recorded", {
+    skip: noSignals,
+  }, async () => {
+    // Linux delivers a pending SIGINT before a SIGUSR2, so the Ctrl-C waits for the cancel's
+    // notice to reach the run after it.
+    const p = await project('events-cancel-then-ctrl-c', {
+      'reeval.config.ts': config,
+      'evals/slow.eval.ts': slow,
+    })
+    let canceled = false
+    const stopped = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!canceled && /parked/.test(stdout)) {
+          canceled = true
+          process.kill(pid, 'SIGUSR2')
+        }
+        if (!stdout.includes('Canceling:')) return false
+        process.kill(pid, 'SIGINT')
+        return true
+      },
+    })
+    assert.equal(stopped.code, 130, stopped.stdout + stopped.stderr)
+    assert.doesNotMatch(stopped.stderr, /discards the run/)
+    assert.equal(readRun(p.dir).run.status, 'interrupted')
+  })
+
+  test("a Ctrl-C a while after attach's cancel is the second press, which quits without a record", {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('events-cancel-later', {
+      'reeval.config.ts': config,
+      'evals/slow.eval.ts': slow,
+    })
+    const stopped = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/parked/.test(stdout)) return false
+        process.kill(pid, 'SIGUSR2')
+        setTimeout(() => process.kill(pid, 'SIGINT'), 2_500)
+        return true
+      },
+    })
+    assert.equal(stopped.code, 130, stopped.stdout + stopped.stderr)
+    assert.match(stopped.stdout, /Ctrl-C again quits at once, without a record/)
+    assert.match(stopped.stderr, /quit without writing run \S+'s record/)
+  })
+
   const pty =
     process.platform === 'linux' && spawnSync('script', ['--version']).status === 0
       ? false
