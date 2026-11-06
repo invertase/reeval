@@ -159,8 +159,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
-                                with --json, as one JSON document (every cell, what's excluded and
-                                the host files the run reads, in inputs)
+                                with --json, as one JSON document (every cell, what's excluded, the
+                                host files the run reads, in inputs, and the variables its secrets
+                                come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts

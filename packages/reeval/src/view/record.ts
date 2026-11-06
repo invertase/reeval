@@ -206,5 +206,7 @@ export const readableCapturePage = (
 ): CapturePageFile => fillDefaults('capture-page', upgrade('capture-page', page, what))
 
 /** A bundle's `manifest.json` as `reeval run --bundle` sees it; one from a newer reeval throws. */
-export const readableBundleManifest = (manifest: BundleManifest, what = 'This bundle'): BundleManifest =>
-  fillDefaults('bundle-manifest', upgrade('bundle-manifest', manifest, what))
+export const readableBundleManifest = (
+  manifest: BundleManifest,
+  what = 'This bundle',
+): BundleManifest => fillDefaults('bundle-manifest', upgrade('bundle-manifest', manifest, what))

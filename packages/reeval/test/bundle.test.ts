@@ -51,7 +51,9 @@ function rewrite(
   const rest = entries.filter((e) => e.path !== 'manifest.json')
   writeFileSync(
     out,
-    gzipSync(writeTar([{ type: 'file', path: 'manifest.json', mode: 0o644, mtime: 0, data }, ...rest])),
+    gzipSync(
+      writeTar([{ type: 'file', path: 'manifest.json', mode: 0o644, mtime: 0, data }, ...rest]),
+    ),
   )
   return out
 }
@@ -105,16 +107,13 @@ describe('reeval bundle', () => {
       assert.ok(entry?.type === 'file', f.path)
       assert.equal(f.sha256, sha256(entry.data), f.path)
     }
-    assert.deepEqual(
-      Object.fromEntries(manifest.files.map((f) => [f.path, f.kind])),
-      {
-        'data/answer.txt': 'read',
-        'evals/answer.eval.ts': 'eval',
-        'lib/task.ts': 'module',
-        'reeval.config.ts': 'config',
-        'skills/guide/SKILL.md': 'skill',
-      },
-    )
+    assert.deepEqual(Object.fromEntries(manifest.files.map((f) => [f.path, f.kind])), {
+      'data/answer.txt': 'read',
+      'evals/answer.eval.ts': 'eval',
+      'lib/task.ts': 'module',
+      'reeval.config.ts': 'config',
+      'skills/guide/SKILL.md': 'skill',
+    })
     assert.deepEqual(manifest.envFiles, [{ path: '.env', variables: ['CHECK_TOKEN'] }])
     assert.deepEqual(manifest.secrets, ['CHECK_TOKEN'])
     assert.ok(!JSON.stringify(manifest.plan).includes(dir), 'the plan names no host path')
@@ -148,7 +147,10 @@ describe('reeval bundle', () => {
       env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
     })
     assert.equal(r.code, 2)
-    assert.match(r.stderr, /doesn't match its manifest, so nothing ran:\n {2}differs: data\/answer\.txt/)
+    assert.match(
+      r.stderr,
+      /doesn't match its manifest, so nothing ran:\n {2}differs: data\/answer\.txt/,
+    )
     assert.doesNotMatch(r.stdout, /Run:/)
     assert.deepEqual(
       readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
@@ -223,7 +225,14 @@ describe('reeval bundle', () => {
   })
 
   test('takes its filters and profile from the bundle', async () => {
-    const r = await runCli(tempDir('bundle-fresh'), ['run', 'answer', '--tag', 'x', '--bundle', file])
+    const r = await runCli(tempDir('bundle-fresh'), [
+      'run',
+      'answer',
+      '--tag',
+      'x',
+      '--bundle',
+      file,
+    ])
     assert.equal(r.code, 2)
     assert.match(r.stderr, /leave out filters, --tag/)
   })

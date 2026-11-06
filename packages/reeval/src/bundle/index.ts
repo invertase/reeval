@@ -17,8 +17,8 @@ import { UsageError } from '../errors.ts'
 import { git, repoTop } from '../git.ts'
 import { gitInfo } from '../history/provenance.ts'
 import { PreflightInfraError } from '../preflight.ts'
-import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
 import { savedFilters } from '../resume.ts'
+import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
 import { extractTar, readTar, type TarEntry, writeTar } from '../tarball.ts'
 import { withoutBom } from '../text.ts'
 import { NewerSchemaError, readableBundleManifest } from '../view/record.ts'
@@ -129,11 +129,11 @@ async function dryRun(
 
 /** `value` with the absolute path `root` written as {@link ROOT} in every string. */
 function rooted<T>(value: T, root: string): T {
-  const escape = (s: string) => JSON.stringify(s).slice(1, -1)
+  const inJson = (s: string) => JSON.stringify(s).slice(1, -1)
   const json = JSON.stringify(value)
-    .split(escape(root + sep))
+    .split(inJson(root + sep))
     .join(`${ROOT}/`)
-    .split(`"${escape(root)}"`)
+    .split(`"${inJson(root)}"`)
     .join(`"${ROOT}"`)
   return JSON.parse(json) as T
 }
@@ -316,7 +316,7 @@ function differences(a: unknown, b: unknown, at = '', found: string[] = [], limi
   const isObj = (v: unknown): v is Record<string, unknown> =>
     typeof v === 'object' && v !== null && !Array.isArray(v)
   if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) {
-    a.forEach((v, i) => differences(v, b[i], `${at}[${i}]`, found, limit))
+    for (const [i, v] of a.entries()) differences(v, b[i], `${at}[${i}]`, found, limit)
   } else if (isObj(a) && isObj(b)) {
     for (const key of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
       differences(a[key], b[key], at ? `${at}.${key}` : key, found, limit)
@@ -362,10 +362,7 @@ export type OpenedBundle = {
  * against its manifest, installs from its lockfiles and dry-runs it there, and refuses (exit 2,
  * naming each file) when a file is missing or differs or the plan isn't the manifest's.
  */
-export async function openBundle(
-  file: string,
-  log: (line: string) => void,
-): Promise<OpenedBundle> {
+export async function openBundle(file: string, log: (line: string) => void): Promise<OpenedBundle> {
   let entries: TarEntry[]
   try {
     entries = readTar(gunzipSync(await readFile(file)))
@@ -484,7 +481,12 @@ async function install(
     if (f.kind !== 'lockfile') continue
     const how = INSTALLS.find((i) => i.lockfile === basename(f.path))
     if (!how) continue
-    const at = join(dir, ...dirname(f.path).split('/').filter((p) => p !== '.'))
+    const at = join(
+      dir,
+      ...dirname(f.path)
+        .split('/')
+        .filter((p) => p !== '.'),
+    )
     const [cmd, ...args] = how.command(at)
     log(`reeval: installing from ${f.path}: ${cmd} ${args.join(' ')}`)
     const result = await runProcess(cmd, args, { cwd: at }).catch((error: Error) => {

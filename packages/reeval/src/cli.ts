@@ -286,7 +286,9 @@ async function run(argv: string[]): Promise<number> {
  * project it extracts to. Other run flags (`--json`, `--record`, `--concurrency`, …) apply as given.
  */
 async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
-  const planning = (['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors'] as const)
+  const planning = (
+    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors'] as const
+  )
     .filter((f) => flags[f] !== undefined)
     .map((f) => `--${f}`)
   if (filters.length || planning.length) {
