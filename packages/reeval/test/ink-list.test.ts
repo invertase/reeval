@@ -3,11 +3,12 @@ import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { render } from 'ink-testing-library'
 import { createElement as h } from 'react'
+import { AttemptLog, LOG_LINES_MAX, paneLines, TIMELINE_MAX } from '../src/ui/attempt-pane.ts'
 import { colors } from '../src/ui/colors.ts'
 import { endText, startText } from '../src/ui/header.ts'
 import { CONFIRM_MS, doneLine, frameLines, ListApp, openDetail, wrap } from '../src/ui/ink-list.ts'
 import { LiveList, SPINNER } from '../src/ui/list.ts'
-import type { StatusFile, StatusRow } from '../src/ui/status.ts'
+import type { DetailLine, StatusFile, StatusRow } from '../src/ui/status.ts'
 import { ListStore, rowsOf, StepSpinner } from '../src/ui/tty.ts'
 
 const c = colors(false)
@@ -905,4 +906,217 @@ test('a line takes the rows a terminal places it on', () => {
   assert.equal(rowsOf(`\x1b[31m${'x'.repeat(20)}\x1b[39m`, 20), 1, 'a full row waits to wrap')
   assert.equal(rowsOf('\x1b]8;;https://example.com/a/b\x07link\x1b]8;;\x07', 4), 1, 'a hyperlink')
   assert.equal(rowsOf('', 20), 1)
+})
+
+/** A list whose one open eval has two attempts, the first with `logs` lines of log. */
+const paneStore = (logs = 2, own = true) => {
+  const log = new AttemptLog()
+  log.start('a#1', T0)
+  log.progress('a#1', { at: T0 + 1000, kind: 'sandbox' })
+  log.progress('a#1', { at: T0 + 4000, kind: 'sandbox-ready', ms: 3000 })
+  log.progress('a#1', { at: T0 + 4000, kind: 'turn-start', turn: 1 })
+  for (let i = 1; i <= logs; i++) log.log('a#1', 'stdout', `log line ${i}\n`)
+  log.end({
+    id: 'a',
+    key: 'a#1',
+    file: 'evals/a.eval.ts',
+    group: [],
+    name: 'a',
+    state: 'failed',
+    durationMs: 9000,
+    errors: ['expected 1 to be 2'],
+    formattedErrors: ['AssertionError: expected 1 to be 2\n ❯ evals/a.eval.ts:3:1'],
+  })
+  const attempts: DetailLine[] = [
+    { depth: 0, mark: 'fail', text: 'fake #1 failed', note: 'expected 1 to be 2', attempt: 'a#1' },
+    { depth: 0, mark: 'pass', text: 'fake #2 passed', attempt: 'a#2' },
+  ]
+  const store = new ListStore()
+  store.set({
+    files: [
+      {
+        path: 'evals/a.eval.ts',
+        rows: [
+          row('a', {
+            icon: 'fail',
+            summary: '1 of 2 runs passed',
+            detail: own ? attempts : [{ depth: 0, text: 'Failed on fake once.', tone: 'dim' }],
+          }),
+          row('b'),
+        ],
+      },
+    ],
+    counts: { done: 1, total: 2 },
+    attempts: { of: (id) => (id === 'a' ? attempts : []), get: log.get },
+  })
+  return store
+}
+
+const T0 = 1_790_000_000_000
+const ENTER = '\r'
+const ESC = '\u001B'
+
+test("enter on an open eval's attempt opens its pane, and esc or ← goes back to the list", async () => {
+  const app = mount(paneStore())
+  try {
+    await settle()
+    app.stdin.write(ENTER)
+    await settle()
+    app.stdin.write(KEY.down)
+    await settle()
+    assert.match(app.frame(), /^ {4}❯ ✗ fake #1 failed · expected 1 to be 2$/m, '↓ steps into it')
+    assert.match(app.frame(), /^ {2}✗ a/m, "the eval's own row loses the pointer")
+    app.stdin.write(ENTER)
+    await settle()
+    const pane = app.frame()
+    assert.match(pane, /^a\n {2}✗ fake #1 failed · expected 1 to be 2\n\nTimeline$/m)
+    for (const line of [
+      /^ {4}\+0:00 {2}started$/m,
+      /^ {4}\+0:01 {2}sandbox starting$/m,
+      /^ {4}\+0:04 {2}sandbox ready 3s$/m,
+      /^ {4}\+0:04 {2}turn 1 started$/m,
+      /^ {4}\+0:09 {2}failed 9s$/m,
+      /^Logs\n {4}log line 1\n {4}log line 2$/m,
+      /^Errors\n {4}AssertionError: expected 1 to be 2\n {4} ❯ evals\/a\.eval\.ts:3:1$/m,
+      /^Transcript\n {4}The transcript isn't available in this view\.$/m,
+      /^↑↓ scroll · ← back · q cancel$/m,
+    ]) {
+      assert.match(pane, line)
+    }
+    assert.doesNotMatch(pane, /evals\/a\.eval\.ts$/m, 'the pane takes the list’s place')
+    app.stdin.write(ESC)
+    await sleep(80)
+    assert.match(app.frame(), /^ {4}❯ ✗ fake #1 failed/m, 'esc goes back to the attempt')
+    app.stdin.write(KEY.down)
+    await settle()
+    app.stdin.write(KEY.right)
+    await settle()
+    assert.match(app.frame(), /^ {2}✓ fake #2 passed$/m, '→ opens one too')
+    assert.match(app.frame(), /^ {4}Not started\.$/m)
+    assert.match(app.frame(), /^ {4}No logs\.$/m)
+    assert.match(app.frame(), /^ {4}None so far\.$/m)
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.match(app.frame(), /^ {4}❯ ✓ fake #2 passed$/m, '← goes back')
+    app.stdin.write(KEY.down)
+    await settle()
+    assert.match(app.frame(), /^❯ ✓ b/m, '↓ past the last attempt is the next eval')
+    app.stdin.write(KEY.up)
+    await settle()
+    assert.match(app.frame(), /^ {4}❯ ✓ fake #2 passed$/m, '↑ comes back up into the attempts')
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.match(app.frame(), /^❯ ✗ a/m, '← on an attempt selects its eval')
+    app.stdin.write(KEY.left)
+    await settle()
+    assert.doesNotMatch(app.frame(), /fake #1/, 'and ← again folds it')
+  } finally {
+    app.unmount()
+  }
+})
+
+test('a long pane scrolls by line, by page and to either end, and says where it is', async () => {
+  const app = mount(paneStore(60))
+  try {
+    await settle()
+    for (const key of [ENTER, KEY.down, ENTER]) {
+      app.stdin.write(key)
+      await settle()
+    }
+    assert.match(app.frame(), /^a$/m)
+    assert.match(app.frame(), /· lines 1–20 of 78$/m, 'a 24-row terminal shows 20 of its lines')
+    app.stdin.write(KEY.down)
+    await settle()
+    assert.doesNotMatch(app.frame(), /^a$/m)
+    assert.match(app.frame(), /· lines 2–21 of 78$/m)
+    app.stdin.write('\u001B[6~')
+    await settle()
+    assert.match(app.frame(), /· lines 22–41 of 78$/m, 'page down')
+    app.stdin.write('\u001B[5~')
+    await settle()
+    assert.match(app.frame(), /· lines 2–21 of 78$/m, 'page up')
+    app.stdin.write('\u001B[F')
+    await settle()
+    assert.match(app.frame(), /· lines 59–78 of 78$/m, 'end')
+    assert.match(app.frame(), /The transcript isn't available in this view\./)
+    app.stdin.write(KEY.down)
+    app.stdin.write(KEY.down)
+    await settle()
+    assert.match(app.frame(), /· lines 59–78 of 78$/m, 'it stops at the end')
+    app.stdin.write(KEY.up)
+    await settle()
+    assert.match(app.frame(), /· lines 58–77 of 78$/m, 'and ↑ moves at once from there')
+    app.stdin.write('\u001B[H')
+    await settle()
+    assert.match(app.frame(), /· lines 1–20 of 78$/m, 'home')
+  } finally {
+    app.unmount()
+  }
+})
+
+test('an eval whose detail names no attempt lists them under Attempts, and they open', async () => {
+  const app = mount(paneStore(2, false))
+  try {
+    await settle()
+    app.stdin.write(ENTER)
+    await settle()
+    assert.match(
+      app.frame(),
+      /^ {6}Failed on fake once\.\n {6}Attempts\n {6}✗ fake #1 failed · expected 1 to be 2\n {6}✓ fake #2 passed$/m,
+    )
+    app.stdin.write(KEY.down)
+    await settle()
+    app.stdin.write(ENTER)
+    await settle()
+    assert.match(app.frame(), /^ {4}log line 2$/m)
+  } finally {
+    app.unmount()
+  }
+})
+
+test("in the pane, q still asks to cancel the run, and once it's done q quits", async () => {
+  let canceled = 0
+  const store = paneStore()
+  const app = mount(store, () => {
+    canceled++
+  })
+  try {
+    await settle()
+    for (const key of [ENTER, KEY.down, ENTER]) {
+      app.stdin.write(key)
+      await settle()
+    }
+    app.stdin.write('q')
+    await settle()
+    assert.match(app.frame(), /Press q again to cancel the run\.$/m)
+    assert.match(app.frame(), /^Timeline$/m, 'the pane stays open')
+    app.stdin.write('q')
+    await settle()
+    assert.equal(canceled, 1)
+    store.set({ finished: FINISHED })
+    await settle()
+    assert.match(app.frame(), /^↑↓ scroll · ← back · q quit · lines 1–\d+ of 20$/m)
+    app.stdin.write('q')
+    await settle()
+    assert.equal(app.frame().trim(), '', 'q takes the frame down')
+  } finally {
+    app.unmount()
+  }
+})
+
+test("an attempt's pane keeps its last LOG_LINES_MAX log lines and TIMELINE_MAX entries, and says so", () => {
+  const log = new AttemptLog()
+  log.log(
+    'k',
+    'stdout',
+    Array.from({ length: LOG_LINES_MAX + 3 }, (_, i) => `line ${i}`).join('\n'),
+  )
+  for (let turn = 1; turn <= TIMELINE_MAX + 1; turn++) {
+    log.progress('k', { at: T0, kind: 'turn-start', turn })
+  }
+  const lines = paneLines(c, 'a', { depth: 0, text: 'fake #1' }, log.get('k'), 80)
+  assert.ok(lines.includes('    1 earlier entry not kept'), 'the timeline says what it dropped')
+  assert.ok(lines.includes('    3 earlier lines not kept'), 'so do the logs')
+  assert.ok(!lines.includes('    line 2') && lines.includes('    line 3'))
+  assert.equal(lines.filter((l) => /turn \d+ started/.test(l)).length, TIMELINE_MAX)
 })

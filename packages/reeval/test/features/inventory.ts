@@ -2283,6 +2283,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/ink-list.test.ts'],
   },
   {
+    id: 'output.attempt-pane',
+    area: 'CLI and runner',
+    name: "In the interactive list of `reeval run` and `reeval attach`, an open eval's attempts: enter or → on one opens its pane, its progress timeline, log lines and errors from the run's events (no transcript), which scrolls and esc or ← closes",
+    unit: ['reeval/test/ink-list.test.ts', 'reeval/test/ui.test.ts'],
+  },
+  {
     id: 'output.flags',
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',

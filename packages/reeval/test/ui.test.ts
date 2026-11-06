@@ -5,6 +5,8 @@ import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { render as inkRender } from 'ink-testing-library'
+import { createElement as h } from 'react'
 import { attach } from '../src/attach.ts'
 import { EventStreamError, openEventStream } from '../src/events.ts'
 import type { RunRecord } from '../src/history/types.ts'
@@ -15,6 +17,7 @@ import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import { failureReason, phaseOf, progressLine } from '../src/ui/format.ts'
 import { createRenderer } from '../src/ui/index.ts'
+import { ListApp } from '../src/ui/ink-list.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
@@ -1325,6 +1328,74 @@ test('the interactive list takes a burst of events in one update, as attach repl
     JSON.stringify(detail?.map((l) => l.text)),
   )
   renderer.close()
+})
+
+test("the interactive list opens an attempt's pane on what its events said: timeline, logs, errors", async () => {
+  let store: ListStore | undefined
+  const renderer = new InteractiveRenderer({
+    out: { isTTY: true, write: () => true },
+    stdout: {} as never,
+    stdin: {} as never,
+    colors: colors(false),
+    output: options({ statusLine: true, interactive: true, outputLogs: 'none' }),
+    harness: 'cursor',
+    now: () => T0,
+    timers: false,
+    load: async () => ({
+      mountList: (o) => {
+        store = o.store
+        return { waitUntilExit: () => new Promise(() => {}), unmount: () => {} }
+      },
+    }),
+  })
+  for (const e of interleaved.filter((e) => e.type !== 'run-end')) renderer.onEvent(e)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(store)
+  const lines = store.get().attempts?.of(DEFAULT) ?? []
+  assert.deepEqual(
+    lines.map((l) => l.attempt),
+    [keyOf(DEFAULT)],
+    'its attempt line carries the key',
+  )
+  const app = inkRender(h(ListApp, { store, colors: colors(false), cancel: () => {} }))
+  const frame = () => app.lastFrame() ?? ''
+  try {
+    await sleep(30)
+    for (const key of ['\u001B[B', '\r', '\u001B[B', '\r']) {
+      app.stdin.write(key)
+      await sleep(30)
+    }
+    const top = frame()
+    assert.match(top, /^greet module › adds a default name in a follow-up turn$/m)
+    assert.match(top, /^ {2}✗ cursor #1 failed · expected 1 to be 2/m)
+    for (const line of [
+      /^ {4}\+0:00 {2}started$/m,
+      /^ {4}\+0:01 {2}sandbox starting$/m,
+      /^ {4}\+0:05 {2}sandbox ready 4s$/m,
+      /^ {4}\+3:19 {2}turn 1 done 3m 14s · 3 tool calls, 1 file changed$/m,
+      /^ {4}\+5:30 {2}\$ node -e "…"… {2}exit 1 900ms$/m,
+      /^ {4}\+6:03 {2}failed 6m 03s$/m,
+      /^ {4}seeding greet\.js$/m,
+    ]) {
+      assert.match(top, line)
+    }
+    assert.match(top, /↑↓ scroll · ← back · q cancel · lines 1–\d+ of \d+$/m)
+    app.stdin.write('\u001B[F')
+    await sleep(30)
+    const pane = frame()
+    for (const line of [
+      /^ {4}AssertionError: expected 1 to be 2 \/\/ Object\.is equality$/m,
+      /^ {4} ❯ evals\/hello\.eval\.ts:31:20$/m,
+      /^ {4}The transcript isn't available in this view\.$/m,
+    ]) {
+      assert.match(pane, line)
+    }
+    assert.ok(!pane.includes('\x1b['), 'no color on a colorless terminal, errors included')
+    assert.doesNotMatch(pane, /greet module › creates/, 'only this attempt')
+  } finally {
+    app.unmount()
+    renderer.close()
+  }
 })
 
 describe('reeval attach', () => {

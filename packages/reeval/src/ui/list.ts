@@ -453,26 +453,34 @@ export class LiveList {
     return { id: e.id, name: e.name, icon, summary, detail, remarks: 0, compare: false }
   }
 
+  /** Each of an eval's attempts as a detail line, in the order they were collected. */
+  attempts(id: string): DetailLine[] {
+    return (this.#evals.get(id)?.attempts ?? []).map((a) => this.#attemptLine(a))
+  }
+
   /** An attempt as a detail line. A failed check is a fail, its message dim; only an error (a timeout, infra) is red. */
   #attemptLine(a: LiveAttempt): DetailLine {
     const who = `${a.axes || this.#harness}${a.case ? ` · ${a.case}` : ''} #${a.n}`
-    if (a.state === 'running') return { depth: 0, mark: 'spin', text: `${who} ${a.phase}` }
-    if (a.state === 'queued')
-      return { depth: 0, mark: 'queued', text: `${who} queued`, tone: 'dim' }
-    if (a.state === 'pass') return { depth: 0, mark: 'pass', text: `${who} passed` }
+    const line = (l: Omit<DetailLine, 'depth' | 'attempt'>): DetailLine => ({
+      depth: 0,
+      ...l,
+      attempt: a.key,
+    })
+    if (a.state === 'running') return line({ mark: 'spin', text: `${who} ${a.phase}` })
+    if (a.state === 'queued') return line({ mark: 'queued', text: `${who} queued`, tone: 'dim' })
+    if (a.state === 'pass') return line({ mark: 'pass', text: `${who} passed` })
     if (a.state === 'skipped' || a.state === 'canceled') {
-      return { depth: 0, mark: 'skipped', text: `${who} ${a.state}`, tone: 'dim' }
+      return line({ mark: 'skipped', text: `${who} ${a.state}`, tone: 'dim' })
     }
     if (a.state === 'fail') {
-      return {
-        depth: 0,
+      return line({
         mark: a.gated ? 'fail' : 'miss',
         text: `${who} failed`,
         ...(a.error ? { note: a.error } : {}),
-      }
+      })
     }
     const error = a.error ? `: ${a.error}` : ''
-    return { depth: 0, mark: 'error', text: `${who} errored${error}`, tone: 'red' }
+    return line({ mark: 'error', text: `${who} errored${error}`, tone: 'red' })
   }
 }
 

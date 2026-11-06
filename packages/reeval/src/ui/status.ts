@@ -96,6 +96,8 @@ export type DetailLine = {
    * detail leaves out. The interactive list shows its own number of case rows and no count.
    */
   cases?: 'head' | 'row' | 'more'
+  /** The attempt's key, on a line for one attempt: the interactive list opens its pane on it. */
+  attempt?: string
 }
 
 /** The lines a detail shows, compact or `full`. */

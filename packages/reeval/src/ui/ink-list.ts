@@ -1,19 +1,23 @@
 // The interactive status list, drawn with Ink: ↑↓ move, → or enter expands one eval (an eval
 // with cases shows `CASES_OPEN` of them, failed and running first, → again all of them), ← steps
-// back and esc folds it. While the run goes, Ctrl-C cancels it and so does q pressed twice; once
+// back and esc folds it. ↓ steps into an open eval's attempts, and → or enter on one opens its
+// pane (its timeline, logs and errors, from the run's events), which ↑↓, page up and down, home
+// and end scroll, and esc or ← closes. While the run goes, Ctrl-C cancels it and so does q pressed twice; once
 // it has ended, q quits, taking the frame down so `tty.ts` can print the whole list into the
 // scrollback. Following another process's run (`reeval attach`), q and Ctrl-C leave the list at
 // once and the run goes on; x pressed twice cancels the run, while the store says it can be
 // reached. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
 // else loads React.
-import { Box, render, Static, Text, useApp, useInput, useStdout } from 'ink'
+import { Box, type Key, render, Static, Text, useApp, useInput, useStdout } from 'ink'
 import {
   createElement as h,
   type ReactElement,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react'
+import { paneLines } from './attempt-pane.ts'
 import { type Colors, stripAnsi } from './colors.ts'
 import { detailSegments, nameWidth, paintIcon, type Segment, SPINNER } from './list.ts'
 import { type DetailLine, type StatusRow, shownDetail } from './status.ts'
@@ -23,7 +27,7 @@ const FRAME_MS = 80
 /** How long a first q (x, following another process's run) waits for the second that cancels it. */
 export const CONFIRM_MS = 3000
 
-type Line = { text: string; row: number }
+type Line = { text: string; row: number; attempt?: string }
 
 /** Case rows an open eval shows before → shows them all. */
 export const CASES_OPEN = 5
@@ -67,6 +71,22 @@ const hasMore = (lines: DetailLine[]) => {
   const full = openDetail(lines, true)
   return open.length !== full.length || open.some((l, i) => l !== full[i])
 }
+
+/**
+ * The open eval's lines as the list shows them, with its attempts' lines after them under
+ * `Attempts` when they have none of their own (a finished eval's, an eval with cases).
+ */
+export function openLines(state: ListState, row: StatusRow, full: boolean): DetailLine[] {
+  const shown = openDetail(row.detail, full)
+  if (shown.some((l) => l.attempt)) return shown
+  const attempts = state.attempts?.of(row.id) ?? []
+  if (!attempts.length) return shown
+  return [...shown, { depth: 0, text: 'Attempts', tone: 'dim' }, ...attempts]
+}
+
+/** The keys of the attempts the open eval's lines show, in their order. */
+const attemptKeys = (lines: DetailLine[]): string[] =>
+  lines.flatMap((l) => (l.attempt ? [l.attempt] : []))
 
 /** Where `text` breaks into lines of at most `width` characters, at spaces where it can. */
 function wrapRanges(text: string, width: number): Array<[number, number]> {
@@ -116,6 +136,8 @@ export function frameLines(
   columns = 80,
   /** The open eval's full detail: file excerpts, snapshots, remarks' whole sentences. */
   full = false,
+  /** The selected attempt's key, on one of the open eval's attempt lines. */
+  attempt: string | null = null,
 ): Line[] {
   const out: Line[] = []
   let i = 0
@@ -124,7 +146,7 @@ export function frameLines(
     out.push({ text: c.bold(file.path), row: -1 })
     const width = nameWidth(file.rows)
     for (const row of file.rows) {
-      const here = i === selected
+      const here = i === selected && !(attempt && expanded === row.id)
       const spins = row.icon === 'running' || row.icon === 'failing'
       const glyph = spins ? SPINNER[frame % SPINNER.length] : undefined
       const name =
@@ -137,16 +159,22 @@ export function frameLines(
       })
       if (expanded === row.id) {
         const spinner = SPINNER[frame % SPINNER.length]
-        for (const line of openDetail(row.detail, full)) {
+        for (const line of openLines(state, row, full)) {
           const indent = 6 + line.depth * 2
+          const on = !!line.attempt && line.attempt === attempt && i === selected
           const parts = wrapSegments(
             detailSegments(c, line, spinner),
             Math.max(20, columns - indent),
           )
           // A wrapped line's continuation starts under its text, past the mark.
           const under = ' '.repeat(indent + (line.mark ? 2 : 0))
+          const lead = on ? `${' '.repeat(indent - 2)}${c.blue('❯')} ` : ' '.repeat(indent)
           for (const [k, part] of parts.entries()) {
-            out.push({ text: k === 0 ? `${' '.repeat(indent)}${part}` : `${under}${part}`, row: i })
+            out.push({
+              text: k === 0 ? `${lead}${part}` : `${under}${part}`,
+              row: i,
+              ...(line.attempt ? { attempt: line.attempt } : {}),
+            })
           }
         }
       }
@@ -163,13 +191,93 @@ const tall = (lines: string[], columns: number) =>
 /** The rows in list order. */
 const rowsOf = (state: ListState): StatusRow[] => state.files.flatMap((f) => f.rows)
 
-/** The lines that fit `height`, scrolled so the selected row is on screen. */
-function windowOf(lines: Line[], selected: number, height: number): Line[] {
+/** The lines that fit `height`, scrolled so the selected row (or its selected attempt) is on screen. */
+function windowOf(
+  lines: Line[],
+  selected: number,
+  height: number,
+  attempt: string | null = null,
+): Line[] {
   if (lines.length <= height) return lines
-  const first = lines.findIndex((l) => l.row === selected)
-  const last = lines.findLastIndex((l) => l.row === selected)
+  const on = (l: Line) => l.row === selected && l.attempt === attempt
+  const at = attempt && lines.some(on) ? on : (l: Line) => l.row === selected
+  const first = lines.findIndex(at)
+  const last = lines.findLastIndex(at)
   const start = Math.max(0, Math.min(first, last - height + 1, lines.length - height))
   return lines.slice(start, start + height)
+}
+
+/** Where the list's cursor is, which eval is open, and which attempt's pane. */
+type Nav = {
+  selected: number
+  expanded: string | null
+  full: boolean
+  /** The selected attempt in the open eval; null when the eval's own row is. */
+  attempt: string | null
+  /** The attempt whose pane is open, by its eval's row and its key. */
+  pane: { row: string; key: string } | null
+  /** The pane's first line on screen. */
+  scroll: number
+}
+
+const NAV: Nav = { selected: 0, expanded: null, full: false, attempt: null, pane: null, scroll: 0 }
+
+/**
+ * The cursor after one key. It reads the cursor it's given, not a frame's, so keys that arrive
+ * together before a frame is drawn all count.
+ */
+function navigate(
+  n: Nav,
+  input: string,
+  key: Key,
+  state: ListState,
+  view: { max: number; page: number },
+): Nav {
+  if (n.pane) {
+    const top = Math.min(n.scroll, view.max)
+    const to = (s: number) => ({ ...n, scroll: Math.max(0, Math.min(view.max, s)) })
+    if (key.escape || key.leftArrow) return { ...n, pane: null }
+    if (key.upArrow) return to(top - 1)
+    if (key.downArrow) return to(top + 1)
+    if (key.pageUp) return to(top - view.page)
+    if (key.pageDown || input === ' ') return to(top + view.page)
+    if (key.home) return to(0)
+    if (key.end) return to(view.max)
+    return n
+  }
+  const rows = rowsOf(state)
+  const here = rows[n.selected]
+  const id = here?.id ?? null
+  const keys = here && n.expanded === id ? attemptKeys(openLines(state, here, n.full)) : []
+  const sub = n.attempt ? keys.indexOf(n.attempt) : -1
+  const fold = (open: string | null): Nav => ({ ...n, expanded: open, full: false, attempt: null })
+  // ↓ steps through an open eval's attempts before the next eval, and ↑ back up into them.
+  if (key.upArrow) {
+    if (sub > 0) return { ...n, attempt: keys[sub - 1] ?? null }
+    if (sub === 0) return { ...n, attempt: null }
+    if (n.selected === 0) return n
+    const above = rows[n.selected - 1]
+    const last =
+      above && above.id === n.expanded ? attemptKeys(openLines(state, above, n.full)).at(-1) : null
+    return { ...n, selected: n.selected - 1, attempt: last ?? null }
+  }
+  if (key.downArrow) {
+    if (sub + 1 < keys.length) return { ...n, attempt: keys[sub + 1] ?? null }
+    if (n.selected >= rows.length - 1) return n
+    return { ...n, selected: n.selected + 1, attempt: null }
+  }
+  if ((key.rightArrow || key.return) && sub >= 0 && here) {
+    return { ...n, pane: { row: here.id, key: keys[sub] ?? '' }, scroll: 0 }
+  }
+  // → opens an eval, and on an open one shows its full detail; ← steps back the same way.
+  if (key.rightArrow) return n.expanded === id ? { ...n, full: true, attempt: null } : fold(id)
+  if (key.return) return fold(n.expanded === id ? null : id)
+  if (key.leftArrow || key.escape) {
+    if (sub >= 0 && !key.escape) return { ...n, attempt: null }
+    if (n.full && !key.escape) return { ...n, full: false }
+    return fold(null)
+  }
+  return n
 }
 
 export type ListAppProps = {
@@ -192,9 +300,10 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
   const state = useSyncExternalStore(store.subscribe, store.get)
   const { exit } = useApp()
   const { stdout } = useStdout()
-  const [selected, setSelected] = useState(0)
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [full, setFull] = useState(false)
+  const [nav, setNav] = useState<Nav>(NAV)
+  const { selected, expanded, full, attempt, pane, scroll } = nav
+  /** The pane's furthest scroll and page height, as the last frame drew them. */
+  const paneView = useRef({ max: 0, page: 1 })
   const [frame, setFrame] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [quitting, setQuitting] = useState(false)
@@ -240,9 +349,13 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
     const failed = all.findIndex((r) => r.icon === 'fail')
     const first = failed >= 0 ? failed : all.findIndex((r) => r.remarks > 0)
     if (first < 0) return
-    setSelected(first)
-    setExpanded(all[first]?.id ?? null)
-    setFull(false)
+    setNav((n) => ({
+      ...n,
+      selected: first,
+      expanded: all[first]?.id ?? null,
+      full: false,
+      attempt: null,
+    }))
   }, [finished, store])
 
   const cancelable = !!detach && !!cancel && state.cancelable === true && !canceled
@@ -275,26 +388,7 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
         return
       }
     }
-    const id = rows[selected]?.id ?? null
-    // → opens an eval, and on an open one shows its full detail; ← steps back the same way.
-    if (key.upArrow) setSelected((s) => Math.max(0, s - 1))
-    else if (key.downArrow) setSelected((s) => Math.min(rows.length - 1, s + 1))
-    else if (key.rightArrow) {
-      if (expanded === id) setFull(true)
-      else {
-        setExpanded(id)
-        setFull(false)
-      }
-    } else if (key.return) {
-      setExpanded(expanded === id ? null : id)
-      setFull(false)
-    } else if (key.leftArrow || key.escape) {
-      if (full && !key.escape) setFull(false)
-      else {
-        setExpanded(null)
-        setFull(false)
-      }
-    }
+    setNav((n) => navigate(n, input, key, store.get(), paneView.current))
   })
 
   const logs = h(Static<string>, {
@@ -308,17 +402,37 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
   const { rows: rowsTall, columns } = size
   const here = rows[selected]
   const open = here && here.id === expanded ? here : undefined
-  const more = open && !full && hasMore(open.detail)
+  const more = open && !full && !attempt && hasMore(open.detail)
   const step = more ? '→ more' : '→ open'
+  const move = pane ? '↑↓ scroll · ← back' : `↑↓ move · ${step}`
   const keys = finished
-    ? `↑↓ move · ${step} · ← close · q quit`
+    ? `${move}${pane ? '' : ' · ← close'} · q quit`
     : detach
-      ? `↑↓ move · ${step} · q detach${cancelable ? ' · x cancel the run' : ''}`
-      : `↑↓ move · ${step} · q cancel`
+      ? `${move} · q detach${cancelable ? ' · x cancel the run' : ''}`
+      : `${move} · q cancel`
+  const paneRow = pane ? rows.find((r) => r.id === pane.row) : undefined
+  const paneLine = pane
+    ? (state.attempts?.of(pane.row).find((l) => l.attempt === pane.key) ?? {
+        depth: 0,
+        text: pane.key,
+      })
+    : undefined
+  const paneText =
+    pane && paneLine
+      ? paneLines(
+          c,
+          paneRow?.name ?? pane.row,
+          paneLine,
+          state.attempts?.get(pane.key),
+          columns,
+          SPINNER[frame % SPINNER.length],
+        )
+      : []
   const confirm = detach ? 'Press x again to cancel the run.' : 'Press q again to cancel the run.'
   // The phase spins while reeval waits on the run, and settles once it ends.
   const glyph = finished ? c.teal('◆') : c.teal(SPINNER[frame % SPINNER.length] ?? '◆')
   const head = state.phase ? [`  ${glyph}  ${state.phase}`, ' '] : []
+  const asking = !finished && !refused && confirming && (cancelable || !detach)
   const footer = [
     ' ',
     ...(finished
@@ -331,23 +445,46 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
       : [doneLine(c, state.counts)]),
     refused && !finished
       ? c.yellow("The run can't be canceled from here now.")
-      : confirming && !finished && (cancelable || !detach)
+      : asking
         ? c.yellow(confirm)
         : c.dim(keys),
   ]
   // One line spare, so Ink never draws a frame as tall as the terminal (it clears the screen then).
-  const height = Math.max(3, rowsTall - tall(head, columns) - tall(footer, columns) - 1)
-  const lines = windowOf(
-    frameLines(state, c, selected, expanded, frame, columns, full),
-    selected,
-    height,
-  )
+  const fits = (f: string[]) => Math.max(3, rowsTall - tall(head, columns) - tall(f, columns) - 1)
+  let height = fits(footer)
+  let body: string[]
+  if (pane) {
+    // The pane's place in its text goes after the keys, which can wrap the footer a line taller.
+    const last = footer.length - 1
+    const keysLine = footer[last] ?? ''
+    const spot = (page: number) => {
+      const max = Math.max(0, paneText.length - page)
+      const top = Math.min(scroll, max)
+      const end = Math.min(paneText.length, top + page)
+      const where = max ? c.dim(` · lines ${top + 1}–${end} of ${paneText.length}`) : ''
+      return { max, top, where }
+    }
+    const shows = !(refused && !finished) && !asking
+    footer[last] = `${keysLine}${shows ? spot(height).where : ''}`
+    height = fits(footer)
+    const { max, top, where } = spot(height)
+    footer[last] = `${keysLine}${shows ? where : ''}`
+    paneView.current = { max, page: height }
+    body = paneText.slice(top, top + height)
+  } else {
+    body = windowOf(
+      frameLines(state, c, selected, expanded, frame, columns, full, attempt),
+      selected,
+      height,
+      attempt,
+    ).map((l) => l.text)
+  }
   return h(
     Box,
     { flexDirection: 'column' },
     logs,
     ...head.map((line, i) => h(Text, { key: `h${i}` }, line)),
-    ...lines.map((l, i) => h(Text, { key: `l${i}`, wrap: 'truncate-end' }, l.text || ' ')),
+    ...body.map((l, i) => h(Text, { key: `l${i}`, wrap: 'truncate-end' }, l || ' ')),
     ...footer.map((line, i) => h(Text, { key: `f${i}` }, line)),
   )
 }

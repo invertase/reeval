@@ -7,12 +7,20 @@
 import stringWidth from 'string-width'
 import { redactSecrets } from '../redact.ts'
 import { suiteResult } from '../view/suite.ts'
+import { AttemptLog, type AttemptRecord } from './attempt-pane.ts'
 import type { Colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
 import { endText, startText } from './header.ts'
 import { LiveList, listLines, SPINNER } from './list.ts'
 import { PlainRenderer, type RendererOptions } from './plain.ts'
-import { onHost, pointerLine, type StatusFile, type StatusList, statusList } from './status.ts'
+import {
+  type DetailLine,
+  onHost,
+  pointerLine,
+  type StatusFile,
+  type StatusList,
+  statusList,
+} from './status.ts'
 
 export type ListState = {
   files: StatusFile[]
@@ -35,6 +43,11 @@ export type ListState = {
   quit?: true
   /** Following another process's run: whether x can cancel it now. */
   cancelable?: boolean
+  /** Each eval's attempts as lines, and what the stream said of each, for the pane one opens. */
+  attempts?: {
+    of: (evalId: string) => DetailLine[]
+    get: (key: string) => AttemptRecord | undefined
+  }
 }
 
 /** The list's state, which the Ink app reads with `useSyncExternalStore`. */
@@ -210,6 +223,7 @@ export class InteractiveRenderer implements Renderer {
   readonly #c: Colors
   readonly #store = new ListStore()
   readonly #list: LiveList
+  readonly #log = new AttemptLog()
   /** The header and run-level lines, as every terminal prints them. */
   readonly #plain: PlainRenderer
   #app: Promise<Mounted | undefined> | undefined
@@ -228,6 +242,7 @@ export class InteractiveRenderer implements Renderer {
     this.#o = options
     this.#c = options.colors
     this.#list = new LiveList(options.harness)
+    this.#store.set({ attempts: { of: (id) => this.#list.attempts(id), get: this.#log.get } })
     this.#spinner = new StepSpinner(
       (text) => options.out.write(text),
       options.colors,
@@ -357,6 +372,7 @@ export class InteractiveRenderer implements Renderer {
         return
       case 'eval-start':
         this.#list.start(e)
+        this.#log.start(e.key, e.at)
         this.#update()
         return
       case 'eval-progress':
@@ -364,11 +380,20 @@ export class InteractiveRenderer implements Renderer {
           this.#plain.onEvent(e)
         }
         this.#list.progress(e.key, e.progress)
+        this.#log.progress(e.key, e.progress)
         this.#update()
         return
       case 'eval-end':
         this.#list.end(e.result)
+        this.#log.end(e.result)
         this.#update()
+        return
+      case 'log':
+        if (e.key) {
+          this.#log.log(e.key, e.stream, e.text)
+          this.#update()
+        }
+        this.#plain.onEvent(e)
         return
       case 'debug':
         return
