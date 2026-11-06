@@ -2,7 +2,7 @@
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
 
-import { loadedInputs, trackLoad } from '../inputs-load.ts'
+import { trackLoad } from '../inputs-load.ts'
 import { loadEvalModule } from '../language-runner/load.ts'
 import { evalMatchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
@@ -83,12 +83,6 @@ export function startWorker(channel: Channel): Worker {
       } finally {
         if (tracked) loaded = tracked.stop(file, 'eval')
       }
-      const withLoaded = tracked
-        ? loadedInputs(
-            loaded,
-            tests.map((t) => t.options.attempt?.inputs),
-          )
-        : undefined
       channel.send({
         t: 'collected',
         tests: tests.map(({ index, name, groups, mode, options: { attempt } }) => ({
@@ -97,7 +91,11 @@ export function startWorker(channel: Channel): Worker {
           groups,
           mode,
           ...(attempt
-            ? { attempt: withLoaded ? { ...attempt, inputs: withLoaded(attempt.inputs) } : attempt }
+            ? {
+                attempt: tracked
+                  ? { ...attempt, inputs: [...loaded, ...(attempt.inputs ?? [])] }
+                  : attempt,
+              }
             : {}),
         })),
         harnesses: [...harnesses],

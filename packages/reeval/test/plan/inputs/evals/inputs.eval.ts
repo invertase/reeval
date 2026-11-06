@@ -5,6 +5,8 @@ import { TASK } from '../lib/task.ts'
 
 // Read while the file loads, as a hidden test or an answer key would be.
 const answers = JSON.parse(readFileSync(new URL('../data/answers.json', import.meta.url), 'utf8'))
+// The file's own read of a file one environment also places: every eval in it keeps it.
+readFileSync(new URL('../data/a.txt', import.meta.url))
 
 const everything = defineEnvironment('everything', ({ directory, file, git, plugin, skill }) => ({
   sandbox: docker({ dockerfile: '../docker/Dockerfile' }),

@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import fs, { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
-import { asOwnReads, environmentInputs, inputPath } from '../src/inputs.ts'
-import { loadedInputs, trackLoad } from '../src/inputs-load.ts'
+import { environmentInputs, inputPath } from '../src/inputs.ts'
+import { trackLoad } from '../src/inputs-load.ts'
+import { asOwnReads } from '../src/own-reads.ts'
 import type { EnvironmentLayer, LocalInput } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 
@@ -227,19 +228,5 @@ describe('trackLoad', () => {
     assert.equal(readFileSync, before[0], 'the ESM view of fs is synced back too')
     fs.readFileSync(join(root, 'own.json'))
     assert.equal(tracked.stop(main, 'eval').length, 4, 'a read after stop is not recorded')
-  })
-})
-
-describe('loadedInputs', () => {
-  test("puts the load's inputs first, less a read that an attempt's own inputs name", () => {
-    const loaded: LocalInput[] = [
-      { path: '/p/w.eval.ts', kind: 'eval' },
-      { path: '/p/skills/guide/SKILL.md', kind: 'read' },
-      { path: '/p/data.json', kind: 'read' },
-    ]
-    const skill: LocalInput = { path: '/p/skills/guide/SKILL.md', kind: 'skill' }
-    const merge = loadedInputs(loaded, [[skill], [], undefined])
-    assert.deepEqual(merge([skill]), [loaded[0], loaded[2], skill])
-    assert.deepEqual(merge(undefined), [loaded[0], loaded[2]])
   })
 })

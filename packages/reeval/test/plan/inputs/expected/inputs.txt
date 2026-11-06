@@ -14,7 +14,7 @@ image docker · cursor · 1 evals
 input env-file        .env                                     []
 input rules           RULES.md                                 [Answer from the guide skill. (42)]
 input module          config/harnesses.ts                      []
-input file            data/a.txt                               [Answer from the guide skill. (42)]
+input file            data/a.txt                               [Answer from the guide skill. (42), no environment]
 input read            data/answers.json                        [Answer from the guide skill. (42), no environment]
 input docker-context  docker/.dockerignore                     [Answer from the guide skill. (42)]
 input dockerfile      docker/Dockerfile                        [Answer from the guide skill. (42)]

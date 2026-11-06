@@ -45,7 +45,7 @@
 | `limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare | — | ✓ 3 | — | — | — | — |
 | `limit.harnesses` leaving none of `compare.harnesses`: the compare is off and each control gates like an eval without compare | — | ✓ 2 | — | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 1 | ✓ 1 | — | — | — | — |
-| `--dry-run --json`'s `inputs`: the host files the run reads, by kind and eval: what each file's and the config's load read and imported, the lockfiles, and what the environments and sandboxes name, local skill and plugin folders walked with placement's exclusions, symlinks out of them followed and warned about, and a Dockerfile's build context | ✓ 1 | ✓ 1 | — | — | — | — |
+| `--dry-run --json`'s `inputs`: the host files the run reads, by kind and eval: what each file's and the config's load read and imported, the lockfiles, and what the environments and sandboxes name, local skill and plugin folders walked with placement's exclusions, symlinks out of them followed and warned about, and a Dockerfile's build context | ✓ 2 | ✓ 1 | — | — | — | — |
 | `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 1 | ✓ 5 | — | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 3 | ✓ 1 | — | — | — | — |

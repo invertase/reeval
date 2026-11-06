@@ -14,6 +14,7 @@ import {
 import { excludeMatcher } from './environment/resolve.ts'
 import { DEFAULT_SKILL_EXCLUDE, isHostFile, isLocalPath } from './environment.ts'
 import { relativeFile } from './ids.ts'
+import { asOwnReads } from './own-reads.ts'
 import type {
   EnvironmentLayer,
   LocalInput,
@@ -23,22 +24,6 @@ import type {
 } from './types.ts'
 
 type Found = { inputs: LocalInput[]; warnings: string[] }
-
-/**
- * Above 0 while reeval reads the project's files for its own sake (placement's walks, the plan's
- * reads of a plugin or skill), which a load's tracking (`./inputs-load.ts`) leaves out.
- */
-export const ownReads = { depth: 0 }
-
-/** `fn`'s file reads are reeval's own, not the load's. */
-export function asOwnReads<T>(fn: () => T): T {
-  ownReads.depth++
-  try {
-    return fn()
-  } finally {
-    ownReads.depth--
-  }
-}
 
 const isDir = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
 const inside = (dir: string, path: string) => path === dir || path.startsWith(dir + sep)

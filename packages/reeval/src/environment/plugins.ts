@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml'
 import { credentialsIn } from '../contract/plain.ts'
 import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
+import { asOwnReads } from '../own-reads.ts'
 import { stripCredentials } from '../redact.ts'
 import { capabilitiesOf, suggestedSandbox } from '../sandbox/kinds.ts'
 import { withoutBom } from '../text.ts'
@@ -25,7 +26,8 @@ import type {
   SkillSource,
 } from '../types.ts'
 
-const readText = (path: string) => withoutBom(readFileSync(path, 'utf8'))
+/** The plan's reads of a plugin or skill, which are reeval's, not the eval file's load's. */
+const readText = (path: string) => asOwnReads(() => withoutBom(readFileSync(path, 'utf8')))
 
 export const PLUGIN_PARTS: readonly PluginPart[] = [
   'skills',

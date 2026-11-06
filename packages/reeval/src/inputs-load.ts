@@ -6,8 +6,8 @@ import fs, { statSync } from 'node:fs'
 import { createRequire, syncBuiltinESMExports } from 'node:module'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ownReads } from './inputs.ts'
 import { transformedFiles } from './jiti.ts'
+import { ownReads } from './own-reads.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { LocalInput } from './types.ts'
 
@@ -99,17 +99,4 @@ export function trackLoad(root: string) {
       return out
     },
   }
-}
-
-/**
- * Each attempt's inputs with its file's load first: less a `read` some attempt's own inputs name,
- * which is reeval planning that attempt (a plugin's manifest, a skill's `SKILL.md`), not the file.
- */
-export function loadedInputs(
-  loaded: readonly LocalInput[],
-  named: ReadonlyArray<readonly LocalInput[] | undefined>,
-): (own: readonly LocalInput[] | undefined) => LocalInput[] {
-  const covered = new Set(named.flatMap((inputs) => (inputs ?? []).map((i) => i.path)))
-  const shared = loaded.filter((i) => i.kind !== 'read' || !covered.has(i.path))
-  return (own) => [...shared, ...(own ?? [])]
 }
