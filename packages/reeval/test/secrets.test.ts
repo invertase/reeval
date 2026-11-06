@@ -10,7 +10,7 @@ import { describe, test } from 'node:test'
 import { docker, type Substitution } from '@reeval/sandbox-docker'
 import { assertionRecords } from '../src/attempt/assertions.ts'
 import { recordFailure, stagedRecordJson, turnErrors } from '../src/attempt/record.ts'
-import type { Attempt } from '../src/attempt/state.ts'
+import { type Attempt, type AttemptSpec, createAttempt } from '../src/attempt/state.ts'
 import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
 import '../src/debug/docker.ts'
 import type { RawAssertion } from '../src/engine/runtime.ts'
@@ -1895,5 +1895,26 @@ describe('masking before shortening', () => {
       assert.match(capped, /password=\[RED/)
       assert.doesNotMatch(capped, /password=corr|staple\.z/)
     }),
+  )
+})
+
+test("an attempt's progress leaves it masked, but its kind: a check's command, a warning", () => {
+  const token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
+  const sent: unknown[] = []
+  const a = createAttempt(
+    {} as AttemptSpec,
+    new AbortController().signal,
+    (p) => sent.push(p),
+    () => Promise.reject(new Error('not started')),
+    tempDir(),
+  )
+  a.report({ kind: 'check-start', command: `echo ${token} && sleep 40` })
+  a.report({ kind: 'warning', text: `token ${token} in the logs` })
+  assert.deepEqual(
+    sent.map((p) => ({ ...(p as object), at: 0 })),
+    [
+      { at: 0, kind: 'check-start', command: 'echo [REDACTED] && sleep 40' },
+      { at: 0, kind: 'warning', text: 'token [REDACTED] in the logs' },
+    ],
   )
 })
