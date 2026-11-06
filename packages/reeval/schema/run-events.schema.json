@@ -343,6 +343,13 @@
         "harness": {
           "$ref": "#/$defs/HarnessDescriptor"
         },
+        "inputs": {
+          "description": "The host files it reads, by absolute path: what its file's load read, then what its environment and sandbox name. Set only when the run context asks for `inputs`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalInput"
+          }
+        },
         "judge": {
           "description": "Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the gateway its calls go through, so the run checks the judge's key before any attempt starts. Unset for a fake judge, a model object, or none.",
           "type": "object",
@@ -4211,6 +4218,50 @@
         }
       },
       "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
+    },
+    "LocalInput": {
+      "description": "One host file or directory a run reads.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/LocalInputKind"
+        },
+        "path": {
+          "description": "Absolute; a directory for a `workspace`, a `marketplace` or a local git `skill` or `plugin` repository (a file for any other `skill` or `plugin`, and for an `npm` tarball).",
+          "type": "string"
+        },
+        "symlinkTo": {
+          "description": "Set when `path` is a symlink in a skill or plugin: the absolute path it resolves to.",
+          "type": "string"
+        },
+        "via": {
+          "description": "The symlink, inside a skill or plugin, it was reached through, when it's outside that folder.",
+          "type": "string"
+        }
+      },
+      "required": ["kind", "path"]
+    },
+    "LocalInputKind": {
+      "description": "What a host file is to the run: `eval` the eval file, `module` a file its load imported, `read` one it read, `tsconfig` a tsconfig.json it loaded under, `config` and `env-file` the config and its `.env` files, `lockfile` a lockfile reeval records, and the rest what the environment or sandbox names: `file` (`file()` and `directory()`), `rules`, `workspace` (a local `git()`), `skill`, `plugin`, `npm` (a local package spec), `marketplace` (a local one), `dockerfile`, `docker-context` and `plugin-build` (a local plugin's build context).",
+      "enum": [
+        "config",
+        "docker-context",
+        "dockerfile",
+        "env-file",
+        "eval",
+        "file",
+        "lockfile",
+        "marketplace",
+        "module",
+        "npm",
+        "plugin",
+        "plugin-build",
+        "read",
+        "rules",
+        "skill",
+        "tsconfig",
+        "workspace"
+      ]
     },
     "McpStartup": {
       "description": "One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that starts one process per turn starts its servers on every turn; a CLI that keeps a session starts them on the first turn only. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.",
