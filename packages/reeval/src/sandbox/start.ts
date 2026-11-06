@@ -6,6 +6,7 @@ import {
   startGateway,
 } from '@reeval/sandbox-docker'
 import type { AttemptDebug } from '../debug/attempt.ts'
+import { egressLabel, isRestricted, setupEgress } from '../egress.ts'
 import { gatewayGlue, sessionSandbox } from './docker.ts'
 import type { SandboxOptions } from './index.ts'
 import { harnessBake, installHarness } from './tart-bake.ts'
@@ -102,6 +103,16 @@ export async function startSandbox(
     } catch (error) {
       if (signal.aborted) throw signal.reason
       noGateway = (error as Error).message
+    }
+    // Planning refuses a restricted policy on a machine that keeps its own network; were one to
+    // get here, nothing would hold the machine to it without the gateway.
+    if (
+      !gateway &&
+      [options.egress, setupEgress(options.egress)].some((e) => isRestricted(e.policy))
+    ) {
+      throw new InfraError(
+        `Can't enforce egress ${egressLabel(options.egress)}: the egress gateway could not start in the ${start.helper} sandbox (${noGateway})`,
+      )
     }
     if (start.networkNote) debug?.log('container', start.networkNote)
     logGateway(

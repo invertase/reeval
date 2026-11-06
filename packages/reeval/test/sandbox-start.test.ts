@@ -68,6 +68,24 @@ describe('startSandbox', () => {
     assert.equal(seen.destroyed, 1)
   })
 
+  test("refuses a restricted policy the gateway isn't there to hold the machine to", async () => {
+    const { booted, seen } = machine()
+    await assert.rejects(
+      startSandbox(options({ egress: { policy: 'deny-all', auto: [] } }), {
+        helper: 'boat()',
+        install: false,
+        boot: async () => booted,
+      }),
+      {
+        name: 'InfraError',
+        message:
+          "Can't enforce egress deny-all: the egress gateway could not start in the boat() sandbox (couldn't install the gateway CA: sudo: a password is required)",
+      },
+    )
+    assert.equal(seen.sessions, 0)
+    assert.equal(seen.destroyed, 1)
+  })
+
   test("without brokered values, the session says why the gateway isn't running, and its destroy removes the machine once", async () => {
     const { booted, seen } = machine()
     const box = await startSandbox(options(), {
