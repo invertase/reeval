@@ -55,6 +55,11 @@ export type LiveProgress = {
   attempts: LiveAttempt[]
   /** How the run was started, for a `--resume` after a quit that wrote no record. */
   invocation?: RunInvocation
+  /**
+   * The file `reeval run --events` writes the run's event stream to, from the project root in
+   * posix form (`../…` outside it), for `reeval attach`; unset without one.
+   */
+  events?: string
 }
 
 /** A live run as the studio lists it: `stopped` when its process is gone or went quiet. */
@@ -117,7 +122,7 @@ const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str)
 /** A saved invocation, or undefined when it isn't one; its numbers are whole and at least 1. */
 export function readableInvocation(v: unknown): RunInvocation | undefined {
   if (!isObj(v)) return undefined
-  const { runs, profile, concurrency, filters, tags, traits } = v
+  const { runs, profile, concurrency, filters, tags, traits, events } = v
   const count = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) >= 1)
   if (!count(runs) || !count(concurrency) || !(profile === undefined || str(profile)))
     return undefined
@@ -130,6 +135,7 @@ export function readableInvocation(v: unknown): RunInvocation | undefined {
     filters,
     tags,
     ...(traits?.length ? { traits } : {}),
+    ...(str(events) ? { events } : {}),
   }
 }
 
@@ -158,5 +164,6 @@ export function readableLiveProgress(value: unknown): LiveProgress | null {
     counts: liveCounts(list),
     attempts: list,
     ...(invocation ? { invocation } : {}),
+    ...(str(value.events) ? { events: value.events } : {}),
   }
 }

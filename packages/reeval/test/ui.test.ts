@@ -2,19 +2,22 @@ import assert from 'node:assert/strict'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { attach } from '../src/attach.ts'
+import { openEventStream } from '../src/events.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import { failureReason, phaseOf, progressLine } from '../src/ui/format.ts'
+import { createRenderer } from '../src/ui/index.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
 import { InteractiveRenderer, type ListStore } from '../src/ui/tty.ts'
 import { readableRecord } from '../src/view/record.ts'
 import type { RunRemarks } from '../src/view/remarks.ts'
-import { pkgRoot } from './helpers.ts'
+import { pkgRoot, tempDir } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
 
 const T0 = 1_790_000_000_000
@@ -1282,4 +1285,71 @@ test('the interactive list counts against the planned total too', async () => {
   for (const e of [interleaved[0] as ReevalEvent, planned, collected]) renderer.onEvent(e)
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(store?.get().counts.total, 4)
+})
+
+describe('reeval attach', () => {
+  /** What a renderer draws from `events`, as `reeval run` feeds them. */
+  const direct = (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {
+    let text = ''
+    const renderer = createRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      output,
+      harness: 'cursor',
+      verbosity,
+    })
+    for (const e of events) renderer.onEvent(e)
+    renderer.close()
+    return text
+  }
+
+  /** What `reeval attach` draws from the stream `reeval run --events` writes of `events`. */
+  const attached = async (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {
+    const file = join(tempDir('ui-events'), 'events.ndjson')
+    const stream = openEventStream({
+      file,
+      header: { reeval: '0.1.0', runId: 'run-1', startedAt: '', harness: 'cursor', verbosity },
+      warn: (message) => assert.fail(message),
+    })
+    for (const e of events) stream.write(e)
+    await stream.end(1)
+    let text = ''
+    const code = await attach({
+      source: file,
+      out: { write: (chunk: string) => (text += chunk) },
+      output: () => output,
+    })
+    return { code, text }
+  }
+
+  const streams: Record<string, ReevalEvent[]> = {
+    interleaved,
+    'a two-line failure': withLongMessage,
+    'sandboxes prepared, then a plan': [...prepared, planEvent()],
+  }
+  // The heartbeat runs on the wall clock in both, so it's off for the comparison.
+  const outputs: Record<string, OutputOptions> = {
+    grouped: options({ heartbeatMs: 0 }),
+    stream: options({ heartbeatMs: 0, logOrder: 'stream' }),
+    'errors-only': options({ heartbeatMs: 0, outputLogs: 'errors-only' }),
+    'GitHub Actions': options({ heartbeatMs: 0, githubActions: true, logPrefix: 'none' }),
+    agent: options({ heartbeatMs: 0, mode: 'agent' }),
+  }
+  for (const [name, events] of Object.entries(streams)) {
+    for (const [mode, output] of Object.entries(outputs)) {
+      test(`draws the recorded stream as the run did: ${name}, ${mode}`, async () => {
+        const { code, text } = await attached(events, output)
+        assert.equal(code, 1, "the run's exit code")
+        assert.equal(text, direct(events, output))
+        assert.ok(text.length > 0)
+      })
+    }
+  }
+
+  test('draws -v detail lines as the run did', async () => {
+    const output = options({ heartbeatMs: 0, logOrder: 'stream' })
+    assert.equal(
+      (await attached(withLongMessage, output, 1)).text,
+      direct(withLongMessage, output, 1),
+    )
+  })
 })

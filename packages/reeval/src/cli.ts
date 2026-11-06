@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseCli } from './cli-parse.ts'
@@ -29,24 +29,32 @@ import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
+import {
+  type EventStream,
+  isEventsUrl,
+  notEventStream,
+  openEventStream,
+  teeRenderer,
+} from './events.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
-import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import { redactSecrets, registerSecret } from './redact.ts'
+import { redactSecrets, registerSecret, stripCredentials } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import {
   completedKeysFor,
   erroredAttempts,
+  eventsFile,
   holdRetry,
   keptAttempts,
   type LeftOut,
@@ -56,8 +64,10 @@ import {
   noteRetries,
   prepareResume,
   previousAttempt,
+  pruneEvents,
   type ResumeTarget,
   removeStoppedStaging,
+  resolveAttach,
   resolveResume,
   resolveRetry,
   restoreRetry,
@@ -74,7 +84,13 @@ import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
-import type { CursorEfforts, ResolvedConfig, RunContext, SandboxDescriptor } from './types.ts'
+import type {
+  CursorEfforts,
+  LocalInput,
+  ResolvedConfig,
+  RunContext,
+  SandboxDescriptor,
+} from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -93,9 +109,15 @@ const HISTORY_COMMANDS = {
 /** The commands that pull a remote store's new runs into its copy before reading it. */
 const PULLS = { history: 1, show: 1, compare: 1, checkout: 1, query: 1, analyze: 1, mcp: 1 }
 
-const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
+const EXPECTED_ERRORS = [
+  'CommandError',
+  'RefError',
+  'HistoryError',
+  'StudioBuildError',
+  'NewerSchemaError',
+]
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
-const INFRA_ERRORS = ['PreflightInfraError', 'StoreError']
+const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
@@ -121,6 +143,9 @@ const invocation: {
   runId: null,
   unhandledErrors: [],
 }
+
+/** `reeval run --events`: the run's event stream, which ends with the command's exit code. */
+let eventStream: EventStream | undefined
 
 /** Set by the first Ctrl-C or SIGTERM of `reeval run`. */
 let interrupted = false
@@ -245,6 +270,7 @@ async function run(argv: string[]): Promise<number> {
     }
   }
   if (command === 'clean') return cleanCommand(values, configPath)
+  if (command === 'attach') return attachCommand(values, filters[0], configPath)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run reeval --help.`)
   return runCommand(values, configPath, filters)
 }
@@ -329,6 +355,12 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
       removed.length
         ? `Removed the staging of ${removed.length} stopped run${removed.length === 1 ? '' : 's'}: ${removed.join(', ')}`
         : 'No stopped runs in .reeval/staging to remove',
+    )
+  }
+  const streams = await pruneEvents(config.root, keep)
+  if (streams.length) {
+    console.log(
+      `Removed the event streams of ${streams.length} finished run${streams.length === 1 ? '' : 's'} from .reeval/events`,
     )
   }
   if (flags.images) {
@@ -515,6 +547,40 @@ async function imageBuildCommand(
 /** The first 12 hex digits of an image id or digest. */
 const short12 = (id: string) => id.replace(/^sha256:/, '').slice(0, 12)
 
+/**
+ * `reeval attach`: a stream URL or file as given, else the run a ref names (by default the one in
+ * progress) and the stream file it writes. Exits with the run's exit code.
+ */
+async function attachCommand(
+  flags: Flags,
+  target: string | undefined,
+  configPath: string | undefined,
+): Promise<number> {
+  let source: string
+  if (target && (isEventsUrl(target) || existsSync(target))) source = target
+  else source = (await resolveAttach(dirname(requireConfig(configPath)), target)).file
+  const { attach } = await import('./attach.ts')
+  return attach({
+    source,
+    out: process.stdout,
+    columns: process.stdout.columns,
+    colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
+    output: (verbosity) =>
+      resolveOutput({
+        flags: {
+          ui: flags.ui,
+          logOrder: flags['log-order'],
+          logPrefix: flags['log-prefix'],
+          outputLogs: flags['output-logs'],
+          verbose: verbosity > 0,
+        },
+        env: process.env,
+        isTTY: !!process.stdout.isTTY,
+        agent: detectAgent().name,
+      }),
+  })
+}
+
 /** `reeval run`: check, plan, run the engine, then write the run and pick the exit code. */
 async function runCommand(
   flags: Flags,
@@ -522,6 +588,21 @@ async function runCommand(
   given: string[],
 ): Promise<number> {
   const retry = flags['retry-errors']
+  const url = flags['events-url']
+  const parsed = url === undefined ? null : URL.parse(url)
+  if (url !== undefined && !(parsed && isEventsUrl(url))) {
+    throw new UsageError(`--events-url takes an http or https URL (got ${stripCredentials(url)})`)
+  }
+  if (url !== undefined && (parsed?.username || parsed?.password)) {
+    throw new UsageError(
+      `--events-url can't carry a user name or password (got ${stripCredentials(url)}): put a token in the path or query instead`,
+    )
+  }
+  const eventsFileFlag = flags['events-file']
+  if (eventsFileFlag !== undefined) {
+    const refused = notEventStream(resolve(eventsFileFlag))
+    if (refused) throw new UsageError(`--events-file: ${refused}`)
+  }
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
   }
@@ -570,21 +651,50 @@ async function runCommand(
   // The JSON plan is the only output of `--dry-run --json`; a run's JSON is the only stdout of
   // `--json`, so its progress goes to stderr.
   const terminal = setup.json && !setup.dryRun ? process.stderr : process.stdout
-  const renderer = createRenderer({
+  const harness = setup.config.harness[0]?.kind ?? 'agent'
+  const drawn = createRenderer({
     out: setup.json && setup.dryRun ? { write: () => true } : terminal,
     columns: terminal.columns,
     colorDepth: terminal.isTTY ? terminal.getColorDepth() : undefined,
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
-    harness: setup.config.harness[0]?.kind ?? 'agent',
+    harness,
     tty: { stdout: process.stdout, stdin: process.stdin },
   })
+  const root = setup.config.root
+  const eventsTo =
+    eventsFileFlag !== undefined
+      ? resolve(eventsFileFlag)
+      : flags.events
+        ? eventsFile(root, ctx.runId)
+        : resumed?.saved?.events
+          ? resolve(root, resumed.saved.events)
+          : undefined
+  const savedEvents = eventsTo ? relativeFile(root, eventsTo) : undefined
+  if (startedWith && savedEvents) startedWith.events = savedEvents
+  const eventsUrl = flags['events-url']
+  if (eventsTo || eventsUrl) {
+    eventStream = openEventStream({
+      ...(eventsTo ? { file: eventsTo, append: continued } : {}),
+      ...(eventsUrl ? { url: eventsUrl } : {}),
+      header: {
+        reeval: version,
+        runId: ctx.runId,
+        startedAt: new Date().toISOString(),
+        harness,
+        verbosity: ctx.verbosity ?? 0,
+      },
+      warn: (message) => process.stderr.write(yellow(`reeval: ${message}\n`)),
+    })
+  }
+  const renderer = eventStream ? teeRenderer(drawn, eventStream) : drawn
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
     executed = await executeRun(ctx, setup, filters, renderer, {
       startedWith,
       notes: resumed?.notes ?? [],
       narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length || !!flags.trait?.length),
+      ...(savedEvents ? { events: savedEvents } : {}),
     })
   } catch (error) {
     renderer.close()
@@ -829,9 +939,17 @@ async function prepareRun(
     stdinTTY: !!process.stdin.isTTY && !flags.json && !flags['dry-run'],
   })
   const path = requireConfig(configPath)
-  loadEnvFiles(path)
+  const listing = !!(flags['dry-run'] && flags.json)
+  const tracked = listing ? (await import('./inputs-load.ts')).trackLoad(dirname(path)) : undefined
+  let configInputs: LocalInput[] = []
+  let loaded: Awaited<ReturnType<typeof loadConfig>>
   const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
-  const loaded = await loadConfig(path, 'run', named)
+  try {
+    loadEnvFiles(path)
+    loaded = await loadConfig(path, 'run', named)
+  } finally {
+    if (tracked) configInputs = tracked.stop(path, 'config')
+  }
   if (profileOf && flags.profile && !loaded.profiles[flags.profile]) {
     throw new UsageError(
       `run ${profileOf} was started with profile ${flags.profile}, which ${loaded.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
@@ -879,6 +997,8 @@ async function prepareRun(
     record: profile?.record ?? config.record,
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
+    /** What loading the config read, for `--dry-run --json`'s `inputs`. */
+    configInputs,
     force: !!flags.force,
     /** `--registry`: where a missing sandbox image is pulled from before it's built. */
     registry,
@@ -1142,8 +1262,11 @@ async function executeRun(
     notes: string[]
     /** A resume whose filters or `--tag` replace the run's, so its plan may leave attempts out. */
     narrowed: boolean
+    /** The event stream file, as live.json names it. */
+    events?: string
   },
 ) {
+  const { events } = started
   const { runId, stagingDir, config, runs, tags, traits, concurrency, profile, verbosity } = ctx
   const { configFile } = ctx
   const run = JSON.parse(
@@ -1159,11 +1282,19 @@ async function executeRun(
       verbosity,
       configFile,
       completed: [] as string[],
+      ...(setup.dryRun && setup.json ? { inputs: true } : {}),
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable, runHeader } =
-    await import('./plan.ts')
+  const {
+    buildPlan,
+    checkAttemptBudget,
+    planDocument,
+    planInputs,
+    planLine,
+    planTable,
+    runHeader,
+  } = await import('./plan.ts')
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -1346,7 +1477,13 @@ async function executeRun(
           stages: await imageStages(t, config.root),
         })),
       )
-      const doc = planDocument(plan, skipped, excluded, images)
+      const { lockfiles } = await import('./history/state.ts')
+      const locks = (await lockfiles(config.root)).map(({ path }) => ({
+        path: join(config.root, path),
+        kind: 'lockfile' as const,
+      }))
+      const inputs = planInputs(config.root, [...setup.configInputs, ...locks], skipped)
+      const doc = planDocument(plan, skipped, excluded, images, inputs)
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }
@@ -1609,6 +1746,7 @@ async function executeRun(
           kept,
           leftOut,
           ...(started.startedWith ? { invocation: started.startedWith } : {}),
+          ...(events ? { events } : {}),
         })
         renderer.onEvent({
           type: 'run-start',
@@ -1735,6 +1873,8 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
  * error or an infra error), prints one line suggesting `reeval report`. Not for agents or JSON.
  */
 function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation['error']>['kind']) {
+  // Its file is written before this returns; a POST still sending keeps the process up a moment.
+  void eventStream?.end(code)
   const flags = invocation.flags
   let root = process.cwd()
   try {

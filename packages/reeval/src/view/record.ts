@@ -24,6 +24,7 @@ export type ShapeName =
   | 'live-progress'
   | 'cli-invocation'
   | 'capture-page'
+  | 'run-events'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -54,6 +55,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'live-progress': [],
   'cli-invocation': [],
   'capture-page': [],
+  'run-events': [],
 }
 
 /**
@@ -69,6 +71,7 @@ export const SCHEMA_VERSIONS = {
   'analysis-note': 1,
   remarks: 1,
   'capture-page': 1,
+  'run-events': 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */

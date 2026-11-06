@@ -2,10 +2,11 @@
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
 
+import { trackLoad } from '../inputs-load.ts'
 import { loadEvalModule } from '../language-runner/load.ts'
 import { evalMatchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
-import type { RunContext } from '../types.ts'
+import type { LocalInput, RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
 import { extendExpect } from './expect.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
@@ -74,15 +75,28 @@ export function startWorker(channel: Channel): Worker {
     extendExpect(evalMatchers)
     routeConsole(reporter)
     try {
-      const tests = await collect(file, () => loadEvalModule(file, run.config.root))
+      const tracked = run.inputs ? trackLoad(run.config.root) : undefined
+      let loaded: LocalInput[] = []
+      let tests: Awaited<ReturnType<typeof collect>>
+      try {
+        tests = await collect(file, () => loadEvalModule(file, run.config.root))
+      } finally {
+        if (tracked) loaded = tracked.stop(file, 'eval')
+      }
       channel.send({
         t: 'collected',
-        tests: tests.map(({ index, name, groups, mode, options }) => ({
+        tests: tests.map(({ index, name, groups, mode, options: { attempt } }) => ({
           index,
           name,
           groups,
           mode,
-          ...(options.attempt ? { attempt: options.attempt } : {}),
+          ...(attempt
+            ? {
+                attempt: tracked
+                  ? { ...attempt, inputs: [...loaded, ...(attempt.inputs ?? [])] }
+                  : attempt,
+              }
+            : {}),
         })),
         harnesses: [...harnesses],
         traits: [...traits],

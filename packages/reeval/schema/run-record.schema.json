@@ -3138,6 +3138,10 @@
           "description": "`--concurrency` or `REEVAL_CONCURRENCY`; unset when the config or the machine sized it.",
           "type": "number"
         },
+        "events": {
+          "description": "The file `--events` wrote the run's event stream to, from the project root in posix form (`../…` outside it), so a resume appends to it; unset without `--events`.",
+          "type": "string"
+        },
         "filters": {
           "description": "The filter arguments.",
           "type": "array",

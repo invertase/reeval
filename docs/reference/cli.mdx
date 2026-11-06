@@ -78,7 +78,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                               default: defaultProfile.ci in CI, else defaultProfile.local)
   --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
-                              with --json, as one JSON document (every cell, and what's excluded)
+                              with --json, as one JSON document (every cell, what's excluded and
+                              the host files the run reads, in inputs)
   --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                               document on stdout when it ends; progress goes to stderr
   --force                     Run even when the plan is over budget.attempts
@@ -114,6 +115,10 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into
                               the same run; passes and fails stay. Without a ref, the newest
                               finished run. Exit 2 when the plan or eval source changed since
+  --events                    Also write the run's output events as NDJSON for reeval attach, to
+                              .reeval/events/<run>.ndjson; a resume appends to it
+  --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
+  --events-url <url>          Also POST them to url, in batches of NDJSON lines
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -169,17 +174,32 @@ Each retried attempt keeps the errors it ended with before in its record's [`ret
 
 The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `durationMs` is the run's plus the retry's own. In the retry line, an attempt a Ctrl-C stopped or aborted counts under `didn't finish`, and the run is then `interrupted`. `reeval run --resume` finishes it as the retry would: with the same refusals, the run's record kept, and no filters, `--tag` or `--trait`. It does so after a kill too, when the retry wrote no record, and keeps the attempts that finished before the kill. The record's [`retriedAt`](/reference/run-record) lists when each retry started.
 
+## `reeval attach`
+
+[//]: # (generated:cli-help:attach)
+
+```text
+reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
+                              does, from its start; exit with the run's exit code (default: the
+                              run in progress; a URL is read with GET as NDJSON)
+  --ui --log-order --log-prefix --output-logs
+                              As for reeval run
+```
+
+[//]: # (/generated:cli-help:attach)
+
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers, and with Tart installed, deletes every Tart image reeval baked a harness into that isn't running. `--staging` deletes every stopped run's staging, after putting back any record a killed resume or retry moved into it, so `reeval run --resume` can no longer finish those runs.
+The `reeval clean` command deletes local debug data, the attempts' snapshots and the event streams in `.reeval/events/` of runs with no staging left, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers, and with Tart installed, deletes every Tart image reeval baked a harness into that isn't running. `--staging` deletes every stopped run's staging, after putting back any record a killed resume or retry moved into it, so `reeval run --resume` can no longer finish those runs.
 
-The command prints `Removed debug data and snapshots for <n> runs (<size>) from <directory> and .reeval/runs`, or `No debug data or snapshots to remove in <directory> or .reeval/runs`. With `--staging`, it then prints `Removed the staging of <n> stopped runs: <ids>`, or `No stopped runs in .reeval/staging to remove`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
+The command prints `Removed debug data and snapshots for <n> runs (<size>) from <directory> and .reeval/runs`, or `No debug data or snapshots to remove in <directory> or .reeval/runs`. With `--staging`, it then prints `Removed the staging of <n> stopped runs: <ids>`, or `No stopped runs in .reeval/staging to remove`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`. When it deleted event streams, it ends with `Removed the event streams of <n> finished runs from .reeval/events`.
 
 [//]: # (generated:cli-help:clean)
 
 ```text
-reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
-                              --keep <n> keeps the newest n runs'
+reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
+                              and finished runs' event streams (.reeval/events); --keep <n> keeps
+                              the newest n runs'
   --images                    Also remove the Docker images reeval built that nothing tags any more,
                               and the intermediate -base tags of from builds; with Tart, delete
                               every Tart image reeval baked a harness into that isn't running
