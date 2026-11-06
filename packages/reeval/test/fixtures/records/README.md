@@ -2,10 +2,10 @@
 
 Real runs, recorded by reeval at different points, that every reader is tested against. Each entry is
 a project whose `evals/.history` holds the runs, and `events/` any of their event streams; its
-`reeval.config.ts` says when and how they were recorded. Their histories are never re-recorded, since they're what an older reeval really wrote;
-they're edited only when reeval renames one of its own identifiers that readers match on (the
-record's `kind`, `stack.reeval`), and old files stop loading. The `reeval.config.ts` follows the
-config API like any other project.
+`reeval.config.ts` says when and how they were recorded. Their histories are never re-recorded,
+since they're what an older reeval really wrote; they're edited only when reeval renames one of its
+own identifiers that readers match on (the record's `kind`, `stack.reeval`), and old files stop
+loading. The `reeval.config.ts` follows the config API like any other project.
 
 | Entry | What it holds |
 |---|---|

@@ -22,7 +22,7 @@ import { EventStreamError, openEventStream } from '../src/events.ts'
 import { stripAnsi } from '../src/ui/colors.ts'
 import type { ReevalEvent } from '../src/ui/events.ts'
 import type { OutputOptions } from '../src/ui/mode.ts'
-import type { RunEventLine } from '../src/view/events.ts'
+import type { RunEventLine, RunEventsHeader } from '../src/view/events.ts'
 import { NewerSchemaError } from '../src/view/record.ts'
 import { baseEnv, noSignals, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
@@ -75,6 +75,7 @@ describe('the stream', () => {
         pid: 0,
         host: hostname(),
         ...header(),
+        heartbeatMs: 5000,
       },
     )
     assert.equal(second?.type, 'notice')
@@ -407,11 +408,30 @@ describe('heartbeats', () => {
         .map((l) => `${JSON.stringify(l)}\n`)
         .join(''),
     )
+  /** The same, from a run whose header says it writes heartbeats. */
+  const beating = (file: string, ...lines: object[]) =>
+    appendFileSync(
+      file,
+      [
+        {
+          type: 'header',
+          schemaVersion: 1,
+          ...header(),
+          pid: 1,
+          host: 'build-7',
+          heartbeatMs: 5000,
+        },
+        ...lines,
+      ]
+        .map((l) => `${JSON.stringify(l)}\n`)
+        .join(''),
+    )
   const heartbeat = { type: 'heartbeat', at: 1 }
 
-  test('a quiet stream gets a heartbeat line, a busy one none, and none comes after the exit line', async () => {
+  test('the header names the interval; a quiet stream gets heartbeat lines, a busy one none, and none comes after the exit line', async () => {
     const file = join(tempDir('events'), 'a.ndjson')
     const stream = openEventStream({ file, header: header(), warn: assert.fail, heartbeatMs: 20 })
+    assert.equal((readLines(file)[0] as RunEventsHeader).heartbeatMs, 20)
     await until(() => beats(file) >= 2)
     await stream.end(0)
     const lines = readLines(file)
@@ -429,6 +449,7 @@ describe('heartbeats', () => {
     for (let i = 0; i < 40; i++, await sleep(10)) chatty.write(notice(`line ${i}`))
     await chatty.end(0)
     assert.equal(beats(busy), 0)
+    assert.equal((readLines(busy)[0] as RunEventsHeader).heartbeatMs, 300, 'so a stall still shows')
 
     const none = join(tempDir('events'), 'c.ndjson')
     const off = openEventStream({ file: none, header: header(), warn: assert.fail, heartbeatMs: 0 })
@@ -438,6 +459,7 @@ describe('heartbeats', () => {
       readLines(none).map((l) => l.type),
       ['header', 'exit'],
     )
+    assert.equal('heartbeatMs' in (readLines(none)[0] as RunEventsHeader), false)
   })
 
   test('a URL sink gets the heartbeats too', async () => {
@@ -486,6 +508,27 @@ describe('heartbeats', () => {
       assert.match(out.text, /No word[\s\S]*Run run-1 is sending again\.[\s\S]*still here/)
     })
   }
+
+  test('attach says a busy run that stalled before any heartbeat may have stalled, from its header on', async () => {
+    const busy = join(tempDir('events'), 'a.ndjson')
+    beating(busy, notice('one'), notice('two'), notice('three'))
+    const resumed = join(tempDir('events'), 'b.ndjson')
+    beating(resumed, notice('first part'), { type: 'exit', at: 2, code: 130 })
+    beating(resumed)
+    for (const source of [busy, resumed]) {
+      const out = capture()
+      const done = attach({
+        source,
+        out,
+        output: () => output,
+        follow: { pollMs: 10 },
+        silence: { stallMs: 50, lostMs: 150 },
+      })
+      await until(() => out.text.includes('No word'))
+      assert.match(out.text, /No word from run run-1 for 50ms/)
+      await assert.rejects(done, /stopped following it as lost/)
+    }
+  })
 
   test('attach gives up on a run quiet for long enough, as lost', async () => {
     const file = join(tempDir('events'), 'a.ndjson')
@@ -605,6 +648,11 @@ describe('reeval run --events and reeval attach', () => {
     try {
       for (let i = 0; i < 300 && !beat(); i++) await sleep(50)
       assert.ok(beat(), 'a heartbeat within 15s')
+      const [stream] = readdirSync(events)
+      assert.equal(
+        (readLines(join(events, stream as string))[0] as RunEventsHeader).heartbeatMs,
+        5000,
+      )
       writeFileSync(join(p.dir, 'go'), '')
       assert.equal(await exited, 0)
     } finally {

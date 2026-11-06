@@ -102,7 +102,7 @@ export function openEventStream(options: {
   /** A resume or retry of the run: add to its stream rather than start the file anew. */
   append?: boolean
   url?: string
-  header: Omit<RunEventsHeader, 'type' | 'schemaVersion' | 'pid' | 'host'>
+  header: Omit<RunEventsHeader, 'type' | 'schemaVersion' | 'pid' | 'host' | 'heartbeatMs'>
   warn: (message: string) => void
   fetch?: typeof fetch
   /** `HEARTBEAT_MS` unless given; 0 writes none. */
@@ -168,15 +168,16 @@ export function openEventStream(options: {
       pump()
     }
   }
+  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
   emit({
     type: 'header',
     schemaVersion: EVENTS_SCHEMA_VERSION,
     pid: process.pid,
     host: hostname(),
     ...options.header,
+    ...(heartbeatMs > 0 ? { heartbeatMs } : {}),
   })
   let ended = false
-  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
   const beating =
     heartbeatMs > 0 && (fd !== null || url)
       ? setInterval(() => {

@@ -3,7 +3,8 @@
 // follows. It exits with the run's own exit code. On a terminal that's the interactive list, whose
 // q and Ctrl-C detach this viewer and leave the run alone; x pressed twice cancels the run, which
 // only a run on this host whose live.json vouches for its pid can be reached for. A run that writes
-// heartbeats and then goes quiet is shown as stalled, and after longer as lost, which ends attach.
+// heartbeats (its header says so) and then goes quiet is shown as stalled, and after longer as
+// lost, which ends attach.
 import { hostname } from 'node:os'
 import { EventStreamError, type FollowOptions, followEvents, LOST_MS, STALL_MS } from './events.ts'
 import { CANCEL_SIGNAL, cancelable, processAlive } from './resume.ts'
@@ -54,7 +55,7 @@ export async function attach(options: AttachOptions): Promise<number> {
   let ended: Renderer | undefined
   let header: RunEventsHeader | undefined
   let code: number | undefined
-  /** This segment's run writes heartbeats, so its silence means something. */
+  /** This segment's run writes heartbeats, so its silence means something from its header on. */
   let beating = false
   let heard = Date.now()
   let stalled = false
@@ -135,7 +136,8 @@ export async function attach(options: AttachOptions): Promise<number> {
         renderer = ended = undefined
         await last?.dismiss?.()
         code = undefined
-        beating = stalled = false
+        beating = line.heartbeatMs !== undefined
+        stalled = false
         header = line
         renderer = rendererFor(line)
         continue

@@ -6142,6 +6142,10 @@
           "description": "The config's first harness kind, which names attempts' axes on detail lines.",
           "type": "string"
         },
+        "heartbeatMs": {
+          "description": "How often a quiet stream gets a heartbeat line, so a reader can treat silence as a stall from the header on. Absent from streams that write none, such as an older reeval's.",
+          "type": "number"
+        },
         "host": {
           "type": "string"
         },

@@ -23,6 +23,11 @@ export type RunEventsHeader = {
   harness: string
   /** `-v` (1) or `-vv` (2): how debug lines' times read; 0 without either. */
   verbosity: 0 | 1 | 2
+  /**
+   * How often a quiet stream gets a heartbeat line, so a reader can treat silence as a stall from
+   * the header on. Absent from streams that write none, such as an older reeval's.
+   */
+  heartbeatMs?: number
 }
 
 /** The last line a `reeval run` writes to the stream: its exit code. */
