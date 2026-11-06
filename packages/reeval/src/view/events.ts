@@ -32,8 +32,17 @@ export type RunEventsExit = {
   code: number
 }
 
+/**
+ * Written while the stream is otherwise quiet, so a reader can tell a run that's still going from
+ * one that stalled or was lost. Streams from before it have none.
+ */
+export type RunEventsHeartbeat = {
+  type: 'heartbeat'
+  at: number
+}
+
 /** One line of a run's event stream. */
-export type RunEventLine = RunEventsHeader | ReevalEvent | RunEventsExit
+export type RunEventLine = RunEventsHeader | ReevalEvent | RunEventsHeartbeat | RunEventsExit
 
 /**
  * A stream line as `reeval attach` reads it. A header from a newer reeval throws a

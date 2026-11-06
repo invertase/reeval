@@ -2949,7 +2949,6 @@
         }
       },
       "required": [
-        "attempt",
         "durationMs",
         "errors",
         "file",
@@ -2957,7 +2956,6 @@
         "group",
         "id",
         "key",
-        "meta",
         "name",
         "state"
       ]
@@ -5792,6 +5790,9 @@
           "$ref": "#/$defs/RunEventsHeader"
         },
         {
+          "$ref": "#/$defs/RunEventsHeartbeat"
+        },
+        {
           "type": "object",
           "properties": {
             "at": {
@@ -5810,7 +5811,7 @@
               "const": "eval-start"
             }
           },
-          "required": ["at", "attempt", "id", "key", "type"]
+          "required": ["at", "id", "key", "type"]
         },
         {
           "type": "object",
@@ -6181,6 +6182,19 @@
         "type",
         "verbosity"
       ]
+    },
+    "RunEventsHeartbeat": {
+      "description": "Written while the stream is otherwise quiet, so a reader can tell a run that's still going from one that stalled or was lost. Streams from before it have none.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "number"
+        },
+        "type": {
+          "const": "heartbeat"
+        }
+      },
+      "required": ["at", "type"]
     },
     "RunHeader": {
       "description": "What the plan line says, as the facts a terminal's run header lists one per line.",

@@ -16,7 +16,7 @@ export type EvalResult = {
   group: string[]
   name: string
   /** Absent when the engine did not register an attempt for this result. */
-  attempt: AttemptMeta | undefined
+  attempt?: AttemptMeta
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
   errors: string[]
@@ -24,7 +24,7 @@ export type EvalResult = {
   errorName?: string
   /** `errors` as Vitest prints them (diff, code frame), with ANSI color codes. */
   formattedErrors: string[]
-  meta: EvalMeta | undefined
+  meta?: EvalMeta
   /** A placeholder (`evaluate.todo` or `group.todo`): no body; it's skipped and shown as todo. */
   todo?: true
   /**
@@ -149,7 +149,7 @@ export type PrepareView =
     }
 
 /** What a line about an attempt needs to name it. */
-export type AttemptRef = { id: string; key: string; attempt: AttemptMeta | undefined }
+export type AttemptRef = { id: string; key: string; attempt?: AttemptMeta }
 
 export type ReevalEvent =
   | {

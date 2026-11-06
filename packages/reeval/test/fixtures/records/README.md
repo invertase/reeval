@@ -1,8 +1,8 @@
 # The record corpus
 
 Real runs, recorded by reeval at different points, that every reader is tested against. Each entry is
-a project whose `evals/.history` holds the runs; its `reeval.config.ts` says when and how they were
-recorded. Their histories are never re-recorded, since they're what an older reeval really wrote;
+a project whose `evals/.history` holds the runs, and `events/` any of their event streams; its
+`reeval.config.ts` says when and how they were recorded. Their histories are never re-recorded, since they're what an older reeval really wrote;
 they're edited only when reeval renames one of its own identifiers that readers match on (the
 record's `kind`, `stack.reeval`), and old files stop loading. The `reeval.config.ts` follows the
 config API like any other project.
@@ -58,6 +58,7 @@ config API like any other project.
 | `before-vm-image` | The fake harness in `tart()` on the fake `tart`, from before `evals[].attempts[].vmImage` (the image an attempt's VM was cloned from, with its digest), when a run pulled the image itself |
 | `with-vm-image` | The same run with `evals[].attempts[].vmImage`, its digest also the cell's `fingerprintParts.image` |
 | `before-debug-upload` | The corpus project's fake-harness runs from before `debug` (each attempt's debug data uploaded with the run to a remote store, `history.debug`) |
+| `before-heartbeats` | The corpus project's fake-harness runs and their event stream (`events/<run>.ndjson`, as `reeval run --events` wrote it), from before the stream's `heartbeat` lines |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

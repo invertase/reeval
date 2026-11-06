@@ -8,6 +8,8 @@ export const CORPUS_DIR = fileURLToPath(new URL('../../test/fixtures/records/', 
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
 /** Where each entry's runs are, from its root: the default `history.dir`. */
 export const HISTORY_DIR = 'evals/.history'
+/** Where an entry keeps its runs' event streams, `reeval run --events`' `.reeval/events/`. */
+export const EVENTS_DIR = 'events'
 
 export type CorpusRun = {
   runId: string
@@ -52,12 +54,15 @@ export function corpus(): {
   analyses: Array<{ file: string; value: Record<string, unknown> }>
   remarks: Array<{ file: string; value: Record<string, unknown> }>
   capturePages: Array<{ file: string; value: Record<string, unknown> }>
+  /** Runs' event streams, kept in an entry's `events/`. */
+  eventStreams: string[]
 } {
   const records: Array<{ file: string; value: Record<string, unknown> }> = []
   const transcripts: string[] = []
   const analyses: Array<{ file: string; value: Record<string, unknown> }> = []
   const remarks: Array<{ file: string; value: Record<string, unknown> }> = []
   const capturePages: Array<{ file: string; value: Record<string, unknown> }> = []
+  const eventStreams: string[] = []
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, e.name)
@@ -75,6 +80,11 @@ export function corpus(): {
   for (const entry of corpusEntries()) {
     for (const run of entry.runs) records.push({ file: run.file, value: run.raw })
     walk(join(entry.dir, HISTORY_DIR))
+    const events = join(entry.dir, EVENTS_DIR)
+    if (!existsSync(events)) continue
+    for (const n of readdirSync(events).sort()) {
+      if (n.endsWith('.ndjson')) eventStreams.push(join(events, n))
+    }
   }
-  return { records, transcripts, analyses, remarks, capturePages }
+  return { records, transcripts, analyses, remarks, capturePages, eventStreams }
 }

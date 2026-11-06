@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -390,6 +391,147 @@ describe('attach', () => {
   })
 })
 
+describe('heartbeats', () => {
+  /** Until `ready()`, checked every few milliseconds, for at most 10s. */
+  const until = async (ready: () => boolean) => {
+    for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
+    }
+  }
+  const beats = (file: string) => readLines(file).filter((l) => l.type === 'heartbeat').length
+  /** A stream from a run on another host, which attach can't check for a live process. */
+  const remote = (file: string, ...lines: object[]) =>
+    appendFileSync(
+      file,
+      [{ type: 'header', schemaVersion: 1, ...header(), pid: 1, host: 'build-7' }, ...lines]
+        .map((l) => `${JSON.stringify(l)}\n`)
+        .join(''),
+    )
+  const heartbeat = { type: 'heartbeat', at: 1 }
+
+  test('a quiet stream gets a heartbeat line, a busy one none, and none comes after the exit line', async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    const stream = openEventStream({ file, header: header(), warn: assert.fail, heartbeatMs: 20 })
+    await until(() => beats(file) >= 2)
+    await stream.end(0)
+    const lines = readLines(file)
+    assert.equal(lines.at(-1)?.type, 'exit')
+    await sleep(60)
+    assert.deepEqual(readLines(file), lines)
+
+    const busy = join(tempDir('events'), 'b.ndjson')
+    const chatty = openEventStream({
+      file: busy,
+      header: header(),
+      warn: assert.fail,
+      heartbeatMs: 300,
+    })
+    for (let i = 0; i < 40; i++, await sleep(10)) chatty.write(notice(`line ${i}`))
+    await chatty.end(0)
+    assert.equal(beats(busy), 0)
+
+    const none = join(tempDir('events'), 'c.ndjson')
+    const off = openEventStream({ file: none, header: header(), warn: assert.fail, heartbeatMs: 0 })
+    await sleep(60)
+    await off.end(0)
+    assert.deepEqual(
+      readLines(none).map((l) => l.type),
+      ['header', 'exit'],
+    )
+  })
+
+  test('a URL sink gets the heartbeats too', async () => {
+    const bodies: string[] = []
+    const stream = openEventStream({
+      url: 'https://relay.test/events',
+      header: header(),
+      warn: assert.fail,
+      heartbeatMs: 20,
+      fetch: async (_url, init) => {
+        bodies.push(String(init?.body))
+        return new Response(null, { status: 204 })
+      },
+    })
+    await until(() => bodies.join('').includes('"type":"heartbeat"'))
+    await stream.end(0)
+    const lines = bodies
+      .join('')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as RunEventLine)
+    assert.equal(lines[0]?.type, 'header')
+    assert.equal(lines.at(-1)?.type, 'exit')
+  })
+
+  for (const mode of ['plain', 'agent'] as const) {
+    test(`attach says a run that stopped beating may have stalled, then that it is back (${mode})`, async () => {
+      const file = join(tempDir('events'), 'a.ndjson')
+      remote(file, notice('working'), heartbeat)
+      const out = capture()
+      const done = attach({
+        source: file,
+        out,
+        output: () => ({ ...output, mode }),
+        follow: { pollMs: 10 },
+        silence: { stallMs: 50, lostMs: 60_000 },
+      })
+      await until(() => out.text.includes('No word'))
+      assert.match(
+        out.text,
+        /⚠ {2}No word from run run-1 for 50ms: it may have stalled, or lost its connection\./,
+      )
+      appendFileSync(file, `${JSON.stringify(notice('still here'))}\n`)
+      appendFileSync(file, `${JSON.stringify({ type: 'exit', at: 2, code: 0 })}\n`)
+      assert.equal(await done, 0)
+      assert.match(out.text, /No word[\s\S]*Run run-1 is sending again\.[\s\S]*still here/)
+    })
+  }
+
+  test('attach gives up on a run quiet for long enough, as lost', async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    remote(file, heartbeat)
+    const out = capture()
+    await assert.rejects(
+      attach({
+        source: file,
+        out,
+        output: () => output,
+        follow: { pollMs: 10 },
+        silence: { stallMs: 30, lostMs: 100 },
+      }),
+      (error: Error) =>
+        error instanceof EventStreamError &&
+        /no word from run run-1 for 100ms and no exit line: reeval attach stopped following it as lost/.test(
+          error.message,
+        ),
+    )
+    assert.match(out.text, /No word from run run-1 for 30ms/)
+  })
+
+  test('a stream without heartbeats, or a resume that writes none, is never called stalled', async () => {
+    const file = join(tempDir('events'), 'a.ndjson')
+    remote(file, notice('an older reeval'))
+    const resumed = join(tempDir('events'), 'b.ndjson')
+    remote(resumed, heartbeat, { type: 'exit', at: 2, code: 130 })
+    remote(resumed, notice('resumed by an older reeval'))
+    for (const source of [file, resumed]) {
+      const out = capture()
+      await assert.rejects(
+        attach({
+          source,
+          out,
+          output: () => output,
+          follow: { pollMs: 10, signal: AbortSignal.timeout(200) },
+          silence: { stallMs: 10, lostMs: 30 },
+        }),
+        /ended before the run did/,
+      )
+      assert.match(out.text, /older reeval/)
+      assert.doesNotMatch(out.text, /No word/)
+    }
+  })
+})
+
 const config = `
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -440,6 +582,37 @@ describe('reeval run --events and reeval attach', () => {
     const again = await runCli(p.dir, ['attach', id.slice(0, 20)])
     assert.equal(again.code, 0, again.stderr)
     assert.equal(again.stdout, ran)
+  })
+
+  test('a quiet run writes heartbeats to its stream, which attach replays as the run printed', async () => {
+    const p = await project('events-heartbeat', {
+      'reeval.config.ts': config,
+      'evals/waits.eval.ts': gated,
+    })
+    const run = spawn(process.execPath, [join(pkgRoot, 'dist/cli.js'), 'run', '--events'], {
+      cwd: p.dir,
+      env: baseEnv,
+    })
+    let ran = ''
+    run.stdout.on('data', (d) => (ran += d))
+    const exited = new Promise<number | null>((resolve) => run.on('close', resolve))
+    const events = join(p.dir, '.reeval', 'events')
+    const beat = () =>
+      existsSync(events) &&
+      readdirSync(events).some((n) =>
+        readFileSync(join(events, n), 'utf8').includes('"type":"heartbeat"'),
+      )
+    try {
+      for (let i = 0; i < 300 && !beat(); i++) await sleep(50)
+      assert.ok(beat(), 'a heartbeat within 15s')
+      writeFileSync(join(p.dir, 'go'), '')
+      assert.equal(await exited, 0)
+    } finally {
+      run.kill()
+    }
+    const attached = await runCli(p.dir, ['attach', /Run: +(\S+)/.exec(ran)?.[1] ?? ''])
+    assert.equal(attached.code, 0, attached.stderr)
+    assert.equal(attached.stdout, ran)
   })
 
   test('a resume appends to the stream the run started, without --events', {
