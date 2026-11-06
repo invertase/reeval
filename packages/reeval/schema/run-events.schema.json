@@ -2949,7 +2949,6 @@
         }
       },
       "required": [
-        "attempt",
         "durationMs",
         "errors",
         "file",
@@ -2957,7 +2956,6 @@
         "group",
         "id",
         "key",
-        "meta",
         "name",
         "state"
       ]
@@ -5792,6 +5790,9 @@
           "$ref": "#/$defs/RunEventsHeader"
         },
         {
+          "$ref": "#/$defs/RunEventsHeartbeat"
+        },
+        {
           "type": "object",
           "properties": {
             "at": {
@@ -5810,7 +5811,7 @@
               "const": "eval-start"
             }
           },
-          "required": ["at", "attempt", "id", "key", "type"]
+          "required": ["at", "id", "key", "type"]
         },
         {
           "type": "object",
@@ -6141,6 +6142,10 @@
           "description": "The config's first harness kind, which names attempts' axes on detail lines.",
           "type": "string"
         },
+        "heartbeatMs": {
+          "description": "How often a quiet stream gets a heartbeat line, so a reader can treat silence as a stall from the header on. Absent from streams that write none, such as an older reeval's.",
+          "type": "number"
+        },
         "host": {
           "type": "string"
         },
@@ -6181,6 +6186,19 @@
         "type",
         "verbosity"
       ]
+    },
+    "RunEventsHeartbeat": {
+      "description": "Written while the stream is otherwise quiet, so a reader can tell a run that's still going from one that stalled or was lost. Streams from before it have none.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "number"
+        },
+        "type": {
+          "const": "heartbeat"
+        }
+      },
+      "required": ["at", "type"]
     },
     "RunHeader": {
       "description": "What the plan line says, as the facts a terminal's run header lists one per line.",

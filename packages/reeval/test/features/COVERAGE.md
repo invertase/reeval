@@ -295,7 +295,7 @@
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `reeval clean` | ✓ 2 | — | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 1 | — | — | — | — | — |
-| `reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host); `reeval clean` prunes the streams | ✓ 3 | — | ● 1 | — | — | — |
+| `reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host), with heartbeat lines that show a quiet run as stalled, then lost; `reeval clean` prunes the streams | ✓ 4 | — | ● 1 | — | — | — |
 | `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 3 | ✓ 1 | ● 1 | — | — | — |
 | `reeval run --retry-errors [<ref>]`: run a finished run's infra-errored attempts again into the same run | ✓ 1 | ✓ 1 | ● 1 | — | — | — |
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 8 | — | — | — | — | — |

@@ -1343,15 +1343,27 @@ describe('reeval attach', () => {
   }
 
   /** What `reeval attach` draws from the stream `reeval run --events` writes of `events`. */
-  const attached = async (events: ReevalEvent[], output: OutputOptions, verbosity: 0 | 1 = 0) => {
+  const attached = async (
+    events: ReevalEvent[],
+    output: OutputOptions,
+    verbosity: 0 | 1 = 0,
+    beats = false,
+  ) => {
     const file = join(tempDir('ui-events'), 'events.ndjson')
     const stream = openEventStream({
       file,
       header: { reeval: '0.1.0', runId: 'run-1', startedAt: '', harness: 'cursor', verbosity },
       warn: (message) => assert.fail(message),
+      heartbeatMs: 0,
     })
     for (const e of events) stream.write(e)
     await stream.end(1)
+    if (beats) {
+      const lines = readFileSync(file, 'utf8').trimEnd().split('\n')
+      const beat = JSON.stringify({ type: 'heartbeat', at: 1 })
+      const exit = lines.pop()
+      writeFileSync(file, `${[...lines.flatMap((l) => [l, beat]), exit].join('\n')}\n`)
+    }
     let text = ''
     const code = await attach({
       source: file,
@@ -1381,6 +1393,11 @@ describe('reeval attach', () => {
         assert.equal(code, 1, "the run's exit code")
         assert.equal(text, direct(events, output))
         assert.ok(text.length > 0)
+        assert.equal(
+          (await attached(events, output, 0, true)).text,
+          text,
+          'heartbeats draw nothing',
+        )
       })
     }
   }
@@ -1515,6 +1532,30 @@ describe('reeval attach', () => {
     await press('q')
     assert.equal(await run, 1, "the run's exit code")
     assert.equal(text, await quitList(interleaved))
+  })
+
+  test('on a terminal, a run that stopped beating shows above the list as stalled', async () => {
+    const file = join(tempDir('ui-events'), 'events.ndjson')
+    const stream = streamOf(file)
+    for (const e of interleaved.slice(0, 5)) stream.write(e)
+    await stream.end(1)
+    const lines = readFileSync(file, 'utf8').trimEnd().split('\n').slice(0, -1)
+    writeFileSync(file, `${[...lines, JSON.stringify({ type: 'heartbeat', at: 1 })].join('\n')}\n`)
+    const { tty, shows, press } = terminal()
+    let text = ''
+    const run = attach({
+      source: file,
+      out: { write: (chunk: string) => (text += chunk) },
+      output: () => listed,
+      tty,
+      follow: { pollMs: 10 },
+      silence: { stallMs: 50, lostMs: 60_000 },
+    })
+    await until(() => shows('No word from run run-1 for 50ms'))
+    assert.ok(shows('q detach'), 'the list stays up')
+    await press('q')
+    assert.equal(await run, 0)
+    assert.match(text, /Detached from run run-1/)
   })
 
   test('on a terminal, q detaches from a run in progress and x twice cancels it by its pid', async () => {

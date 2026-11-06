@@ -26,6 +26,13 @@ export class EventStreamError extends Error {
 const POST_DRAIN_MS = 10_000
 const POST_TIMEOUT_MS = 10_000
 
+/** A run writes a heartbeat line in each interval this long that it wrote nothing else in. */
+export const HEARTBEAT_MS = 5_000
+/** How long `reeval attach` hears nothing from a run that writes heartbeats before it says so. */
+export const STALL_MS = 20_000
+/** How long it hears nothing before it stops following the run as lost. */
+export const LOST_MS = 120_000
+
 const targetView = (t: PrepareTargetView): PrepareTargetView => ({
   kind: t.kind,
   key: t.key,
@@ -88,16 +95,18 @@ export type EventStream = {
 /**
  * Opens a run's stream: writes `file` (a resume adds its lines after the run's) and POSTs
  * batches of lines to `url`, in order, one request at a time. A failing target is dropped with one
- * warning; the run goes on.
+ * warning; the run goes on. Until the exit line, a quiet stream gets a heartbeat line.
  */
 export function openEventStream(options: {
   file?: string
   /** A resume or retry of the run: add to its stream rather than start the file anew. */
   append?: boolean
   url?: string
-  header: Omit<RunEventsHeader, 'type' | 'schemaVersion' | 'pid' | 'host'>
+  header: Omit<RunEventsHeader, 'type' | 'schemaVersion' | 'pid' | 'host' | 'heartbeatMs'>
   warn: (message: string) => void
   fetch?: typeof fetch
+  /** `HEARTBEAT_MS` unless given; 0 writes none. */
+  heartbeatMs?: number
 }): EventStream {
   let fd: number | null = null
   const refused = options.file ? notEventStream(options.file) : null
@@ -141,7 +150,9 @@ export function openEventStream(options: {
         pump()
       })
   }
+  let quiet = true
   const emit = (value: RunEventLine) => {
+    quiet = false
     const text = line(value)
     if (fd !== null) {
       try {
@@ -157,20 +168,31 @@ export function openEventStream(options: {
       pump()
     }
   }
+  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
   emit({
     type: 'header',
     schemaVersion: EVENTS_SCHEMA_VERSION,
     pid: process.pid,
     host: hostname(),
     ...options.header,
+    ...(heartbeatMs > 0 ? { heartbeatMs } : {}),
   })
   let ended = false
+  const beating =
+    heartbeatMs > 0 && (fd !== null || url)
+      ? setInterval(() => {
+          if (quiet) emit({ type: 'heartbeat', at: Date.now() })
+          quiet = true
+        }, heartbeatMs)
+      : undefined
+  beating?.unref()
   return {
     write: (event) => {
       if (!ended) emit(wire(event))
     },
     async end(code) {
       if (ended) return
+      clearInterval(beating)
       emit({ type: 'exit', at: Date.now(), code })
       ended = true
       if (fd !== null) closeSync(fd)

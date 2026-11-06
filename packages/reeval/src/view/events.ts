@@ -23,6 +23,11 @@ export type RunEventsHeader = {
   harness: string
   /** `-v` (1) or `-vv` (2): how debug lines' times read; 0 without either. */
   verbosity: 0 | 1 | 2
+  /**
+   * How often a quiet stream gets a heartbeat line, so a reader can treat silence as a stall from
+   * the header on. Absent from streams that write none, such as an older reeval's.
+   */
+  heartbeatMs?: number
 }
 
 /** The last line a `reeval run` writes to the stream: its exit code. */
@@ -32,8 +37,17 @@ export type RunEventsExit = {
   code: number
 }
 
+/**
+ * Written while the stream is otherwise quiet, so a reader can tell a run that's still going from
+ * one that stalled or was lost. Streams from before it have none.
+ */
+export type RunEventsHeartbeat = {
+  type: 'heartbeat'
+  at: number
+}
+
 /** One line of a run's event stream. */
-export type RunEventLine = RunEventsHeader | ReevalEvent | RunEventsExit
+export type RunEventLine = RunEventsHeader | ReevalEvent | RunEventsHeartbeat | RunEventsExit
 
 /**
  * A stream line as `reeval attach` reads it. A header from a newer reeval throws a
