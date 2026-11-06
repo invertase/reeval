@@ -446,7 +446,9 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'excluded',
       'images',
       'inputs',
+      'secrets',
     ])
+    assert.deepEqual(plan.secrets, [], 'the fake agent and judge read no secret')
     assert.match(plan.runId ?? '', /^\d{8}T\d{6}Z_/)
     assert.ok(plan.concurrency >= 1)
     assert.equal(

@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from BundleManifest in src/bundle/types.ts by `pnpm schema:update`; don't edit. manifest.json at the root of a reeval bundle archive, read by reeval run --bundle.",
+  "title": "BundleManifest",
+  "$ref": "#/$defs/BundleManifest",
+  "$defs": {
+    "BundleArgs": {
+      "description": "The `reeval run` arguments a bundle replays: what shapes its plan.",
+      "type": "object",
+      "properties": {
+        "argv": {
+          "description": "The command line `reeval bundle` was given, after `bundle`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filters": {
+          "description": "Its filters, a path one relative to the project directory.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "description": "The profile the plan ran under, which `--profile`, `REEVAL_PROFILE` or `defaultProfile` picked.",
+          "type": "string"
+        },
+        "runs": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "traits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["argv", "filters", "tags", "traits"]
+    },
+    "BundleEnvFile": {
+      "description": "A `.env` file the run loads, which the bundle leaves out.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Relative to the bundle root, with `/`.",
+          "type": "string"
+        },
+        "variables": {
+          "description": "The variables it defines, sorted; never their values.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["path", "variables"]
+    },
+    "BundleFile": {
+      "description": "One file in the bundle, by its path in the archive.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What it is to the run: a kind from the dry run's `inputs` (`eval`, `skill`, `lockfile`, …), or `install` for a file the install from the lockfile reads (`package.json`, `pnpm-workspace.yaml`, …).",
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to the bundle root, with `/`.",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        }
+      },
+      "required": ["kind", "path", "sha256", "size"]
+    },
+    "BundleLink": {
+      "description": "A symbolic link in a skill or plugin folder, carried as a link to a file or folder in the bundle.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Relative to the bundle root, with `/`.",
+          "type": "string"
+        },
+        "target": {
+          "description": "What it links to, relative to its own folder, with `/`; always inside the bundle.",
+          "type": "string"
+        }
+      },
+      "required": ["path", "target"]
+    },
+    "BundleManifest": {
+      "type": "object",
+      "properties": {
+        "args": {
+          "$ref": "#/$defs/BundleArgs"
+        },
+        "config": {
+          "description": "The config file, relative to the bundle root.",
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "envFiles": {
+          "description": "The `.env` files the run loads, left out of the archive.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleEnvFile"
+          }
+        },
+        "files": {
+          "description": "Every file in the archive but `manifest.json`, sorted by path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleFile"
+          }
+        },
+        "git": {
+          "description": "The commit the project was at, and whether it had uncommitted changes; null outside git.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "dirty": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["commit", "dirty"]
+            }
+          ]
+        },
+        "links": {
+          "description": "The symbolic links in the archive, sorted by path; absent when it has none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleLink"
+          }
+        },
+        "plan": {
+          "description": "The `reeval run --dry-run --json` document the bundle was made from. Its shape is the reeval version's that wrote it, so it's kept as data: `reeval run --bundle` compares it with its own dry run.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {}
+        },
+        "project": {
+          "description": "The project directory, relative to the bundle root (`''` when they're the same): the root is the project's, or its git repository's when the project reads files outside its own directory or its lockfile is the repository's, as in a monorepo.",
+          "type": "string"
+        },
+        "reeval": {
+          "description": "The reeval that wrote it.",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "secrets": {
+          "description": "The host variables the run reads secrets from, as the dry run's `secrets`; never values.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "args",
+        "config",
+        "createdAt",
+        "envFiles",
+        "files",
+        "git",
+        "plan",
+        "project",
+        "reeval",
+        "schemaVersion",
+        "secrets"
+      ]
+    }
+  },
+  "x-schemaVersion": 1
+}

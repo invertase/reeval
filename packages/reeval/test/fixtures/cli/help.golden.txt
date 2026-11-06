@@ -23,8 +23,9 @@ Usage:
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
-                                with --json, as one JSON document (every cell, what's excluded and
-                                the host files the run reads, in inputs)
+                                with --json, as one JSON document (every cell, what's excluded, the
+                                host files the run reads, in inputs, and the variables its secrets
+                                come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
@@ -61,11 +62,22 @@ Usage:
                                 .reeval/events/<run>.ndjson; a resume appends to it
     --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
     --events-url <url>          Also POST them to url, in batches of NDJSON lines
+    --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new
+                                temporary directory, check its files, install from its lockfile and
+                                exit 2 before any attempt when its plan or files differ; .reeval/ is
+                                in the extracted project
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
                                 does, from its start; exit with the run's exit code (default: the
                                 run in progress; a URL is read with GET as NDJSON)
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run
+  reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
+                                reeval run --bundle runs elsewhere; never node_modules or a .env
+                                file (it names their variables and the secrets the run needs), and
+                                exit 2 when a file it would carry holds a secret
+    --profile <name>            Plan with a profile, as reeval run does; --runs, --tag and --trait
+                                also plan as they do there
+    --out <file>                Where to write it (default <project>.bundle.tar.gz here)
   reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
                                 and finished runs' event streams (.reeval/events); --keep <n> keeps
                                 the newest n runs'
@@ -74,6 +86,8 @@ Usage:
                                 every Tart image reeval baked a harness into that isn't running
     --staging                   Also delete every stopped run's staging (.reeval/staging), so
                                 reeval run --resume can no longer finish it
+    --bundles                   Also delete the copies reeval run --bundle extracted into the
+                                temporary directory, each with its run's .reeval/, but a running one's
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
                                 --artifacts all|failures|none --allow-incomplete --skip-secret-scan
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)

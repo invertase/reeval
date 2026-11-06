@@ -416,6 +416,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/engine-worker.test.ts', 'reeval/test/inputs.test.ts'],
   },
   {
+    id: 'run.bundle',
+    area: 'Config and selection',
+    name: "`reeval bundle` and `reeval run --bundle`: the dry run's plan and `inputs` as one `.tar.gz` with a `manifest.json` (reeval version, arguments, git commit and dirty flag, each file's sha256, the `.env` files' variable names and the secret names, never values or `node_modules`), rooted at the git repository when the project reads outside itself; run from it, the files are checked against the manifest, the lockfile installed and the plan and inputs compared before any attempt, naming each missing or differing file",
+    unit: ['reeval/test/bundle.test.ts', 'reeval/test/cli.test.ts', 'reeval/test/schema.test.ts'],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",

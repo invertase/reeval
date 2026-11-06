@@ -792,6 +792,12 @@ export type PlanDocument = {
    * through; `symlinkTo` what a symlink in a skill or plugin resolves to.
    */
   inputs: PlanInput[]
+  /**
+   * The host variables the run reads secrets from, sorted, never their values: the harnesses',
+   * judges' and `boat()` accounts' keys (every variable that can provide one) and the variables
+   * the config's, profile's and attempts' secrets read.
+   */
+  secrets: string[]
 }
 
 /** One entry in the plan's `inputs`. */
@@ -846,6 +852,7 @@ export function planDocument(
   excluded: ExcludedEval[],
   images: PlanImage[],
   inputs: PlanInput[] = [],
+  secrets: string[] = [],
 ): PlanDocument {
   const evals = new Map<string, PlanEval & { family?: FamilyMeta }>()
   for (const { id, file, attempt } of planned) {
@@ -927,6 +934,7 @@ export function planDocument(
     excluded,
     images,
     inputs,
+    secrets,
   }
 }
 
