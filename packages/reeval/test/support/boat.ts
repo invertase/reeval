@@ -325,8 +325,20 @@ export const dockerMachines: Machines = async (name) => {
   }
 }
 
-/** Boat's states of a sandbox that still runs, which the account's limits count. */
-const LIVE_STATES = ['provisioned', 'cloning', 'starting', 'ready', 'idle', 'running']
+/**
+ * Boat's states of a sandbox that runs or will: one still provisioning when reeval deleted it
+ * can come up idle minutes later.
+ */
+const LIVE_STATES = [
+  'init',
+  'provisioning',
+  'provisioned',
+  'cloning',
+  'starting',
+  'ready',
+  'idle',
+  'running',
+]
 
 /**
  * The run's sandboxes still live on the real Boat account in BOAT_API_KEY (or the one
