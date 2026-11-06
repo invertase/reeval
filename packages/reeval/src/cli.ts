@@ -618,6 +618,7 @@ async function attachCommand(
     out: process.stdout,
     columns: process.stdout.columns,
     colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
+    tty: { stdout: process.stdout, stdin: process.stdin },
     output: (verbosity) =>
       resolveOutput({
         flags: {
@@ -630,6 +631,7 @@ async function attachCommand(
         env: process.env,
         isTTY: !!process.stdout.isTTY,
         agent: detectAgent().name,
+        stdinTTY: !!process.stdin.isTTY,
       }),
   })
 }

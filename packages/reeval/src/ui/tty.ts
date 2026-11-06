@@ -2,7 +2,8 @@
 // the evals you can browse with the arrow keys, which stays up once the run ends until you quit
 // it. Quitting leaves the whole list in the scrollback, as a pipe prints it. The list is drawn by
 // `ink-list.ts`, imported only once there's an eval to list; if that import fails, the run prints
-// as a pipe's does, so a broken install costs the list, never the result.
+// as a pipe's does, so a broken install costs the list, never the result. Events update the list
+// once per turn of the event loop, so a stream `reeval attach` replays from its start draws once.
 import stringWidth from 'string-width'
 import { redactSecrets } from '../redact.ts'
 import { suiteResult } from '../view/suite.ts'
@@ -11,7 +12,7 @@ import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
 import { endText, startText } from './header.ts'
 import { LiveList, listLines, SPINNER } from './list.ts'
 import { PlainRenderer, type RendererOptions } from './plain.ts'
-import { pointerLine, type StatusFile, type StatusList, statusList } from './status.ts'
+import { onHost, pointerLine, type StatusFile, type StatusList, statusList } from './status.ts'
 
 export type ListState = {
   files: StatusFile[]
@@ -30,6 +31,8 @@ export type ListState = {
     pointer: string
     errors: string[]
   } | null
+  /** Takes the finished list down as q does, with no key pressed. */
+  quit?: true
 }
 
 /** The list's state, which the Ink app reads with `useSyncExternalStore`. */
@@ -181,8 +184,14 @@ export class StepSpinner {
 export type InteractiveOptions = RendererOptions & {
   stdout: NodeJS.WriteStream
   stdin: NodeJS.ReadStream
-  /** What Ctrl-C, or q pressed twice, does while the run goes. */
+  /** What Ctrl-C, or q pressed twice, does while the run goes (x twice under `attached`). */
   cancel?: () => void
+  /**
+   * The run is another process's, which `reeval attach` follows: q and Ctrl-C call `detach`, and
+   * only `cancel` reaches the run. `host` is the run's when it isn't this one's, and marks the
+   * paths the run prints as being there.
+   */
+  attached?: { detach: () => void; host?: string }
   /** Loads the Ink list; tests stand in a failing one. */
   load?: () => Promise<Pick<typeof import('./ink-list.ts'), 'mountList'>>
 }
@@ -202,6 +211,8 @@ export class InteractiveRenderer implements Renderer {
   #fallback: PlainRenderer | undefined
   #ended: Ended | undefined
   #closed = false
+  #detached = false
+  #pending: NodeJS.Immediate | undefined
   readonly #spinner: StepSpinner
   /** What the plain renderer wrote since `#written` was reset, while the list isn't up. */
   #written = ''
@@ -238,14 +249,25 @@ export class InteractiveRenderer implements Renderer {
 
   #mount() {
     if (this.#app || this.#closed) return
-    const cancel = this.#o.cancel ?? (() => process.kill(process.pid, 'SIGINT'))
+    const { attached } = this.#o
+    const cancel = attached
+      ? this.#o.cancel
+      : (this.#o.cancel ?? (() => process.kill(process.pid, 'SIGINT')))
     const load = this.#o.load ?? (() => import('./ink-list.ts'))
     this.#app = load()
       .then((m) =>
         m.mountList({
           store: this.#store,
           colors: this.#c,
-          cancel,
+          ...(cancel ? { cancel } : {}),
+          ...(attached
+            ? {
+                detach: () => {
+                  this.#detached = true
+                  attached.detach()
+                },
+              }
+            : {}),
           stdout: this.#o.stdout,
           stdin: this.#o.stdin,
         }),
@@ -272,6 +294,12 @@ export class InteractiveRenderer implements Renderer {
   }
 
   #update() {
+    this.#pending ??= setImmediate(() => this.#flush())
+  }
+
+  #flush() {
+    if (this.#pending) clearImmediate(this.#pending)
+    this.#pending = undefined
     const { done, total, failed, failing } = this.#list.counts()
     this.#store.set({ files: this.#list.files(), counts: { done, total, failed, failing } })
   }
@@ -295,10 +323,15 @@ export class InteractiveRenderer implements Renderer {
         if (e.state === 'start') this.#spinner.start(this.#written, e.targets.length)
         else this.#spinner.reported()
         return
-      case 'plan':
+      case 'plan': {
         this.#list.planned(e.header.evals)
-        this.#plain.onEvent(e)
+        const { record } = e.header
+        const host = this.#o.attached?.host
+        this.#plain.onEvent(
+          record && host ? { ...e, header: { ...e.header, record: onHost(record, host) } } : e,
+        )
         return
+      }
       case 'collected':
         this.#spinner.settle()
         this.#list.collected(e.file, e.evals)
@@ -323,6 +356,7 @@ export class InteractiveRenderer implements Renderer {
       case 'debug':
         return
       case 'run-end': {
+        const host = this.#o.attached?.host
         const listOf = (verbose: boolean) =>
           statusList({
             record: e.record,
@@ -330,6 +364,7 @@ export class InteractiveRenderer implements Renderer {
             remarks: e.remarks ?? null,
             verbose,
             ...(e.notRun ? { notRun: e.notRun } : {}),
+            ...(host ? { host } : {}),
           })
         const list = listOf(false)
         const verbose = (this.#o.verbosity ?? 0) > 0
@@ -338,19 +373,16 @@ export class InteractiveRenderer implements Renderer {
           this.#plain.onEvent(e)
           return
         }
-        this.#ended = {
-          scrollback: verbose ? listOf(true) : list,
-          verbose,
-          pointer: pointerLine(e.summaryPath),
-          event: e,
-        }
+        this.#flush()
+        const pointer = pointerLine(e.summaryPath, host)
+        this.#ended = { scrollback: verbose ? listOf(true) : list, verbose, pointer, event: e }
         this.#store.set({
           files: list.files,
           ...(this.#store.get().phase ? { phase: endText(e.record.status) } : {}),
           finished: {
             done: list.done,
             notes: list.notes,
-            pointer: pointerLine(e.summaryPath),
+            pointer,
             errors: list.errors,
           },
         })
@@ -362,26 +394,39 @@ export class InteractiveRenderer implements Renderer {
   }
 
   close(): void {
+    if (this.#pending) clearImmediate(this.#pending)
+    this.#pending = undefined
     this.#spinner.settle()
     this.#plain.close()
     this.#fallback?.close()
-    // Without a run-end the run failed: take the list down so the error prints below it.
-    if (!this.#store.get().finished) {
+    // Without a run-end the run failed: take the list down so the error prints below it. A
+    // detached list takes itself down.
+    if (!this.#store.get().finished && !this.#detached) {
       this.#closed = true
       void this.#app?.then((a) => a?.unmount())
     }
   }
 
-  /** Until the user quits the list, then the whole list into the scrollback; at once when there's none. */
+  /**
+   * Until the user quits the list, then the whole list into the scrollback; at once when there's
+   * none. Detached from a run that goes on, until the list is down, with nothing printed.
+   */
   async wait(): Promise<void> {
     const app = await this.#app
-    if (!app || !this.#ended) return
+    if (!app || !(this.#ended || this.#detached)) return
     await app.waitUntilExit()
+    if (!this.#ended) return
     const { phase } = this.#store.get()
     const { scrollback, verbose, pointer } = this.#ended
     const head = phase ? [`  ${this.#c.teal('◆')}  ${phase}`, ''] : []
     const text = [...head, ...listLines(scrollback, this.#c, true, pointer, verbose)]
     this.#o.out.write(`${text.join('\n')}\n`)
+  }
+
+  /** Takes a finished list down without a key, then prints it as `wait` does. */
+  async dismiss(): Promise<void> {
+    if (this.#ended) this.#store.set({ quit: true })
+    await this.wait()
   }
 }
 

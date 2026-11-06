@@ -4,7 +4,7 @@ import { type ColorDepth, colors } from './colors.ts'
 import type { OutputStream, Renderer } from './events.ts'
 import type { OutputOptions } from './mode.ts'
 import { PlainRenderer } from './plain.ts'
-import { InteractiveRenderer } from './tty.ts'
+import { type InteractiveOptions, InteractiveRenderer } from './tty.ts'
 
 export type { Renderer } from './events.ts'
 export { type OutputOptions, resolveOutput } from './mode.ts'
@@ -23,6 +23,10 @@ export function createRenderer(options: {
   colorDepth?: number
   /** The terminal the interactive list draws on and reads keys from. */
   tty?: { stdout: NodeJS.WriteStream; stdin: NodeJS.ReadStream }
+  /** The interactive list's run is another process's: see `InteractiveOptions`. */
+  attached?: InteractiveOptions['attached']
+  /** What the interactive list's cancel keys do. */
+  cancel?: () => void
 }): Renderer {
   // Progress lines echo check commands and the agent's tool calls, which can hold a secret.
   const out: OutputStream = { write: (text) => options.out.write(redactSecrets(text)) }

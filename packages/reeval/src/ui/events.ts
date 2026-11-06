@@ -212,6 +212,8 @@ export interface Renderer {
   close(): void
   /** Resolves when the output is done with the terminal: the interactive list, once it's quit. */
   wait?(): Promise<void>
+  /** Takes the interactive list down with no key pressed, then prints it as `wait` does. */
+  dismiss?(): Promise<void>
 }
 
 /** Where output goes; `process.stdout` in the CLI, a capture in tests. */
