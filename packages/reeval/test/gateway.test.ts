@@ -58,6 +58,9 @@ import { gatewayPart } from '../src/history/assemble.ts'
 import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../src/types.ts'
 
+// Vercel's own API, whatever the shell running the tests exports.
+delete process.env.AI_GATEWAY_BASE_URL
+
 const WHERE = 'evaluate("e")'
 const cursor = { kind: 'cursor', model: 'composer-2.5' } as HarnessDescriptor
 const codex = { kind: 'codex', model: 'gpt-5.4-mini' } as HarnessDescriptor
@@ -1608,16 +1611,17 @@ describe('AI_GATEWAY_BASE_URL', () => {
     assert.equal(vercelBaseUrl({ AI_GATEWAY_BASE_URL: `${BASE}/` }), BASE)
   })
 
-  test('only an https:// URL with nothing the agents would lose is a gateway', () => {
+  test('only an https:// URL that reads as written, with nothing the agents would lose, is a gateway', () => {
     const fix =
       'Set AI_GATEWAY_BASE_URL to an https:// URL such as https://gateway.example.com, or unset it to call Vercel AI Gateway.'
     const problem = (value: string) => vercelBaseUrlProblem({ AI_GATEWAY_BASE_URL: value })
     assert.equal(problem(BASE), undefined)
+    assert.equal(problem(`${BASE}/`), undefined)
     assert.equal(vercelBaseUrlProblem({}), undefined)
     assert.equal(problem('gw.example'), `AI_GATEWAY_BASE_URL ("gw.example") isn't a URL. ${fix}`)
     assert.equal(
       problem('http://gw.example'),
-      `AI_GATEWAY_BASE_URL (http://gw.example) isn't https://, and reeval sends the key only over HTTPS. ${fix}`,
+      `AI_GATEWAY_BASE_URL ("http://gw.example") isn't https://, and reeval sends the key only over HTTPS. ${fix}`,
     )
     for (const value of [
       'https://gw.example/?k=1',
@@ -1626,6 +1630,23 @@ describe('AI_GATEWAY_BASE_URL', () => {
     ]) {
       assert.match(problem(value) ?? '', /has a query, a fragment or a user/, value)
     }
+    const rewritten = {
+      'https://gw.example/p?': 'https://gw.example/p',
+      'https://gw.example/p#': 'https://gw.example/p',
+      ' https://gw.example/p': 'https://gw.example/p',
+      'https://gw.exa\nmple/p': 'https://gw.example/p',
+      'https:gw.example/p': 'https://gw.example/p',
+    }
+    for (const [value, base] of Object.entries(rewritten)) {
+      assert.equal(
+        problem(value),
+        `AI_GATEWAY_BASE_URL (${JSON.stringify(value)}) reads as ${base}, and reeval sends the key only to a URL written as it reads. ${fix}`,
+      )
+    }
+    assert.deepEqual(
+      vercelApi({ AI_GATEWAY_BASE_URL: 'https:gw.example/p' }).origin,
+      BASE.replace('/proxy', '/p'),
+    )
   })
 
   test('each route brokers the key on its host only, under its path', () => {
@@ -1707,6 +1728,19 @@ describe('AI_GATEWAY_BASE_URL', () => {
     assert.deepEqual(resolve(list('vercel', 'direct'), goose), { name: 'vercel', skipped: [] })
   })
 
+  test("a model reeval calls itself on vercel() refuses a URL that isn't a gateway's", () => {
+    const scope = { gateways: [{ kind: 'vercel' }, { kind: 'direct' }] } as GatewayScope
+    process.env.AI_GATEWAY_BASE_URL = 'https:gw.example/p'
+    assert.throws(() => resolveModelGateway('openai/m', undefined, scope, 'capture model'), {
+      name: 'UsageError',
+      message:
+        /^capture model "openai\/m": AI_GATEWAY_BASE_URL \("https:gw.example\/p"\) reads as https:\/\/gw.example\/p,/,
+    })
+    assert.equal(resolveModelGateway('anthropic/m', 'direct', scope, 'judge model'), 'direct')
+    process.env.AI_GATEWAY_BASE_URL = BASE
+    assert.equal(resolveModelGateway('openai/m', undefined, scope, 'capture model'), 'vercel')
+  })
+
   test("the judge's route refuses a URL that isn't a gateway's", () => {
     assert.deepEqual(
       judgeRoute(
@@ -1728,7 +1762,7 @@ describe('AI_GATEWAY_BASE_URL', () => {
           'judge model',
           'vercel',
         ),
-      /^Error: judge model "anthropic\/claude-x": AI_GATEWAY_BASE_URL \(http:\/\/gw.example\) isn't https:\/\//,
+      /^Error: judge model "anthropic\/claude-x": AI_GATEWAY_BASE_URL \("http:\/\/gw.example"\) isn't https:\/\//,
     )
   })
 

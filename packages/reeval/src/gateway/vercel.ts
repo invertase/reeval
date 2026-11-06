@@ -38,18 +38,27 @@ function apiAt(base: string): GatewayApi {
   return { origin, openai: `${origin}/v1`, anthropic: origin }
 }
 
-/** Where `vercel()`'s calls go: `AI_GATEWAY_BASE_URL`'s gateway, else Vercel's own API. */
-export const vercelApi = (env: NodeJS.ProcessEnv = process.env): GatewayApi =>
-  env[VERCEL_BASE_URL] ? apiAt(env[VERCEL_BASE_URL]) : VERCEL_API
+/** `value` as the URL reeval calls: the parsed origin and path, with no trailing slash. */
+const parsedBase = (value: string) => {
+  const url = URL.parse(value)
+  return url && `${url.origin}${url.pathname}`.replace(/\/+$/, '')
+}
 
-/** `AI_GATEWAY_BASE_URL`'s value without a trailing slash, or undefined when it's unset. */
+/** Where `vercel()`'s calls go: `AI_GATEWAY_BASE_URL`'s gateway, else Vercel's own API. */
+export const vercelApi = (env: NodeJS.ProcessEnv = process.env): GatewayApi => {
+  const value = env[VERCEL_BASE_URL]
+  return value ? apiAt(parsedBase(value) ?? value) : VERCEL_API
+}
+
+/** `AI_GATEWAY_BASE_URL` as the URL reeval calls, or undefined when it's unset. */
 export const vercelBaseUrl = (env: NodeJS.ProcessEnv = process.env): string | undefined =>
   env[VERCEL_BASE_URL] ? vercelApi(env).origin : undefined
 
 /**
  * Why `AI_GATEWAY_BASE_URL` can't be a gateway's URL, or undefined when it's unset or can: the
- * egress gateway swaps the key in over HTTPS only, and a query, a fragment or a user would be
- * lost on the paths the CLIs add to it.
+ * egress gateway swaps the key in over HTTPS only, a query, a fragment or a user would be lost on
+ * the paths the agents add to it, and a value the URL parser rewrites (spaces, line breaks,
+ * `https:host`) isn't the URL every agent would read from it.
  */
 export function vercelBaseUrlProblem(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const value = env[VERCEL_BASE_URL]
@@ -58,10 +67,14 @@ export function vercelBaseUrlProblem(env: NodeJS.ProcessEnv = process.env): stri
   const fix = `Set ${VERCEL_BASE_URL} to an https:// URL such as https://gateway.example.com, or unset it to call Vercel AI Gateway.`
   if (!url) return `${VERCEL_BASE_URL} (${JSON.stringify(value)}) isn't a URL. ${fix}`
   if (url.protocol !== 'https:') {
-    return `${VERCEL_BASE_URL} (${value}) isn't https://, and reeval sends the key only over HTTPS. ${fix}`
+    return `${VERCEL_BASE_URL} (${JSON.stringify(value)}) isn't https://, and reeval sends the key only over HTTPS. ${fix}`
   }
   if (url.search || url.hash || url.username || url.password) {
-    return `${VERCEL_BASE_URL} (${value}) has a query, a fragment or a user, which the paths the agents add to it would lose. ${fix}`
+    return `${VERCEL_BASE_URL} (${JSON.stringify(value)}) has a query, a fragment or a user, which the paths the agents add to it would lose. ${fix}`
+  }
+  const base = parsedBase(value)
+  if (value.replace(/\/+$/, '') !== base) {
+    return `${VERCEL_BASE_URL} (${JSON.stringify(value)}) reads as ${base}, and reeval sends the key only to a URL written as it reads. ${fix}`
   }
   return undefined
 }

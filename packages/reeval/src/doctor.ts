@@ -36,7 +36,12 @@ import {
   resolveModelGateway,
 } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
-import { VERCEL_KEY, vercelBaseUrlProblem, vercelCredentialProblem } from './gateway/vercel.ts'
+import {
+  VERCEL_BASE_URL,
+  VERCEL_KEY,
+  vercelBaseUrlProblem,
+  vercelCredentialProblem,
+} from './gateway/vercel.ts'
 import {
   VERTEX_PROJECT_ENV,
   type VertexSettings,
@@ -910,7 +915,14 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
       })
     }
     const base = vercelBaseUrlProblem(deps.env)
-    if (base) checks.push({ id: 'gateway', status: 'fail', summary: base })
+    if (base) {
+      checks.push({
+        id: 'gateway',
+        status: 'fail',
+        summary: base,
+        fix: `set ${VERCEL_BASE_URL} to the gateway's https:// URL in ${envFile}, or unset it`,
+      })
+    }
   }
   for (const { gateways, profile } of lists) {
     const harnesses = [

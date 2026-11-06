@@ -821,6 +821,25 @@ evaluate('a', async () => {})
       expired[0]?.fix,
       'run vercel env pull, or add AI_GATEWAY_API_KEY=... to .env.local',
     )
+    const plain = checkGateways(
+      config,
+      deps({ env: { ...env, AI_GATEWAY_BASE_URL: 'http://gw.example' } }),
+      '.env.local',
+    )
+    assert.deepEqual(
+      [plain[0]?.status, plain[0]?.fix],
+      ['fail', "set AI_GATEWAY_BASE_URL to the gateway's https:// URL in .env.local, or unset it"],
+    )
+    assert.match(
+      plain[0]?.summary ?? '',
+      /^AI_GATEWAY_BASE_URL \("http:\/\/gw\.example"\) isn't https:\/\//,
+    )
+    const based = checkGateways(
+      config,
+      deps({ env: { ...env, AI_GATEWAY_BASE_URL: 'https://gw.example/proxy' } }),
+      '.env.local',
+    )
+    assert.ok(based.every((c) => c.status === 'ok'))
     const unset = await configOf(
       'gateway-unset',
       "{ harnesses: cursor({ model: 'composer-2.5' }) }",

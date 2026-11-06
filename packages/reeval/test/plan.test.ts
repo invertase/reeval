@@ -654,25 +654,41 @@ evaluate('unknown', async () => {})
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
-  test("an AI_GATEWAY_BASE_URL the key can't go to exits 2 at plan time", async () => {
-    const p = await project('gateway-base-url', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+  test("an AI_GATEWAY_BASE_URL the key can't go to exits 2 at plan time, for a harness or the judge on vercel()", async () => {
+    const configs = {
+      harness: `import { defineConfig } from 'reeval'
 import { vercel } from 'reeval/gateway'
 import { codex } from 'reeval/harness'
 export default defineConfig({ harnesses: codex({ model: 'gpt-5.4-mini' }), gateway: [vercel()] })
 `,
-      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+      judge: `import { defineConfig } from 'reeval'
+import { vercel } from 'reeval/gateway'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({
+  harnesses: fakeHarness(),
+  gateway: [vercel()],
+  judge: { model: 'anthropic/claude-haiku-4.5' },
+})
+`,
+    }
+    for (const [name, config] of Object.entries(configs)) {
+      const p = await project(`gateway-base-url-${name}`, {
+        'reeval.config.ts': config,
+        'evals/g.eval.ts': `import { evaluate } from 'reeval'
 evaluate('routed', async () => {})
 `,
-    })
-    const r = await runCli(p.dir, ['run', '--dry-run'], {
-      env: { AI_GATEWAY_BASE_URL: 'http://gw.example', DOCKER_HOST: NO_DOCKER.DOCKER_HOST },
-    })
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(
-      r.stderr,
-      /AI_GATEWAY_BASE_URL \(http:\/\/gw\.example\) isn't https:\/\/, and reeval sends the key only over HTTPS\. Set AI_GATEWAY_BASE_URL to an https:\/\/ URL/,
-    )
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'], {
+        env: { AI_GATEWAY_BASE_URL: 'http://gw.example', DOCKER_HOST: NO_DOCKER.DOCKER_HOST },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /AI_GATEWAY_BASE_URL \("http:\/\/gw\.example"\) isn't https:\/\/, and reeval sends the key only over HTTPS\. Set AI_GATEWAY_BASE_URL to an https:\/\/ URL/,
+        name,
+      )
+      assert.doesNotMatch(r.stdout, /at http:/, name)
+    }
   })
 
   test('a judge model no listed gateway serves exits 2 at plan time, naming the one that would', async () => {

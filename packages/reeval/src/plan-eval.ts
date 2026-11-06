@@ -250,7 +250,8 @@ function planTests(
           const hid = harnessId(harness)
           if (gatewaySet || harness.gateway !== undefined) {
             routes.set(hid, route)
-            const at = route.name === 'vercel' ? vercelBaseUrl() : undefined
+            const at =
+              route.name === 'vercel' && !vercelBaseUrlProblem() ? vercelBaseUrl() : undefined
             gatewayNotes.push(
               `gateway: ${hid} → ${route.name}${at ? ` at ${at}` : ''}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
             )
