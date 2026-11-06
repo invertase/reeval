@@ -4,6 +4,7 @@ import { resolveBridgePort } from '@ai-sdk/harness/utils'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
+import { redactSecrets } from '../redact.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import {
@@ -41,7 +42,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
         const r = await sandbox.exec(fakeBootstrapScript(descriptor.bootstrap), { signal })
         if (r.exitCode !== 0) {
           throw new InfraError(
-            `The fake agent's bootstrap exited ${r.exitCode}: ${(r.stderr || r.stdout).trim().slice(-500)}`,
+            `The fake agent's bootstrap exited ${r.exitCode}: ${redactSecrets(r.stderr || r.stdout)
+              .trim()
+              .slice(-500)}`,
           )
         }
       }

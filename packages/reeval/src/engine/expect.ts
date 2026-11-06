@@ -20,10 +20,12 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
+import { inspect } from '@vitest/utils/display'
 import type { Limits, RunMatch } from '../assert.ts'
 import { fromCwd } from '../ids.ts'
 import type { AtLeastOne, MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
 import { isThenable } from '../object.ts'
+import { redactStrings } from '../redact.ts'
 import type {
   AttemptContext,
   CapturePage,
@@ -188,6 +190,35 @@ export type { ExpectStatic }
 chai.use(JestExtend as ChaiPlugin)
 chai.use(JestChaiExpect as ChaiPlugin)
 chai.use(JestAsymmetricMatchers as ChaiPlugin)
+
+/** How `toHaveProperty` quotes its value in its own message, cut as it cuts it. */
+const quotedValue = (value: unknown) => inspect(value, { truncate: 40 })
+
+type ChaiAssert = (this: Chai.Assertion, ...args: unknown[]) => void
+const chaiAssert = chai.Assertion.prototype.assert as ChaiAssert
+/**
+ * A failed assertion makes its message, and the values its diff is made from, from the subject
+ * and values masked: the message cuts a long value to 40 characters and the diff splits it around
+ * what changed, so a secret in either would no longer be one the output's masking recognizes.
+ * The check itself has run on the real values.
+ */
+chai.Assertion.prototype.assert = function (this: Chai.Assertion, ...args: unknown[]) {
+  if (chai.util.test(this, args as never)) return
+  const object = chai.util.flag(this, 'object')
+  const masked = args.map((arg, i) => (i === 3 || i === 4 ? redactStrings(arg) : arg))
+  if (masked[3] !== args[3]) {
+    const [from, to] = [quotedValue(args[3]), quotedValue(masked[3])]
+    for (const i of [1, 2]) {
+      if (typeof masked[i] === 'string') masked[i] = (masked[i] as string).replaceAll(from, to)
+    }
+  }
+  chai.util.flag(this, 'object', redactStrings(object))
+  try {
+    Reflect.apply(chaiAssert, this, masked)
+  } finally {
+    chai.util.flag(this, 'object', object)
+  }
+}
 
 /** What the matchers read of the attempt, shaped like Vitest's test task. */
 export type ExpectTask = {
@@ -368,6 +399,30 @@ const carriesOn = (entry: Recorded, error: unknown) =>
   entry.soft && pollTry.getStore() === undefined && isCheckOutcome(error)
 
 /**
+ * Masks what `.resolves` and `.rejects` quote when the promise settles the other way (the
+ * rejection, or the value), which their message cuts to 40 characters. The matcher after them
+ * gets the real value.
+ */
+function maskUnexpected(assertion: object, property: 'resolves' | 'rejects') {
+  const subject = flag(assertion, 'object')
+  const mask = (settling: unknown) =>
+    isThenable(settling)
+      ? Promise.resolve(settling).then(
+          (value) => (property === 'rejects' ? redactStrings(value) : value),
+          (error: unknown) => {
+            throw property === 'resolves' ? redactStrings(error) : error
+          },
+        )
+      : settling
+  const masked =
+    property === 'rejects' && typeof subject === 'function' ? () => mask(subject()) : mask(subject)
+  if (masked !== subject && subjectOf(subject) !== undefined) {
+    Object.assign(masked as object, { [SUBJECT]: subjectOf(subject) })
+  }
+  chai.util.flag(assertion, 'object', masked)
+}
+
+/**
  * Wraps an assertion so each matcher called on it is recorded on the attempt. A failed matcher's
  * outcome is kept on its entry, which fails the attempt at its end, and the body carries on;
  * under `expect.require` it throws, ending the body.
@@ -414,6 +469,7 @@ function recording<T extends object>(target: T, list: Recorded[], file?: string)
   }
   return new Proxy(target, {
     get(t, property) {
+      if (property === 'resolves' || property === 'rejects') maskUnexpected(t, property)
       const value: unknown = Reflect.get(t, property)
       if (typeof property === 'symbol' || UNRECORDED.has(property)) return value
       if (typeof value !== 'function') return chained(value)

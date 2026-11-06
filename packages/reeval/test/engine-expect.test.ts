@@ -20,6 +20,7 @@ import {
   unawaitedError,
   withAttemptExpect,
 } from '../src/engine/expect.ts'
+import { registerExecEnv } from '../src/redact.ts'
 
 const task = (): ExpectTask => ({ type: 'test', name: 't', fullTestName: 'file > t' })
 /** The task's records, as the attempt makes them from the engine's raw entries. */
@@ -820,5 +821,79 @@ describe('unawaited assertions', () => {
     assert.match(error?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
     const empty = await unawaitedError([pendingOf(Promise.reject(undefined))])
     assert.match(empty?.message ?? '', /^failed\n\n/)
+  })
+})
+
+describe('secrets in what a failed matcher quotes', () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const caught = (fn: () => unknown) => {
+    try {
+      fn()
+    } catch (error) {
+      return error as Error & { actual?: unknown; expected?: unknown }
+    }
+    return assert.fail('the matcher passed')
+  }
+
+  test('the message and the values a diff is made from are masked before the message cuts them', () => {
+    const failed = caught(() => expect(`nope ${token}`).toBe('other'))
+    assert.equal(failed.message, "expected 'nope [REDACTED]' to be 'other' // Object.is equality")
+    assert.equal(failed.actual, 'nope [REDACTED]')
+    const deep = caught(() => expect({ out: [token] }).toEqual({ out: [`${token} x`] }))
+    assert.deepEqual(
+      [deep.actual, deep.expected],
+      [{ out: ['[REDACTED]'] }, { out: ['[REDACTED] x'] }],
+    )
+    // Twin: the check runs on the real values, so tokens that mask alike still differ.
+    expect({ out: [token] }).toEqual({ out: [token] })
+    const other = token.replace('A1', 'Z9')
+    assert.equal(
+      caught(() => expect(token).toBe(other)).message,
+      "expected '[REDACTED]' to be '[REDACTED]' // Object.is equality",
+    )
+    const subject = { token }
+    const chained = expect(subject)
+    caught(() => chained.toEqual({}))
+    chained.toBe(subject)
+  })
+
+  test("toHaveProperty's value, which it quotes in its own words, is masked", () => {
+    assert.equal(
+      caught(() => expect({ a: 1 }).toHaveProperty('a', `a value ${token}`)).message,
+      'expected { a: 1 } to have property "a" with value \'a value [REDACTED]\'',
+    )
+    // A message made by a function is left to make itself.
+    const made = caught(() => expect(1).assert(false, () => 'made', 'negated', token))
+    assert.equal(made.message, 'made')
+  })
+
+  test("a value registered as c.exec's own secret is masked too", () => {
+    const passphrase = ['correct', 'horse', 'battery', 'staple', 'expect', 'unit'].join('-')
+    registerExecEnv({ EXEC_PASSWORD: passphrase })
+    assert.equal(
+      caught(() => expect('nope').toBe(passphrase)).message,
+      "expected 'nope' to be '[REDACTED]' // Object.is equality",
+    )
+  })
+
+  test('.resolves and .rejects quote what settled the other way masked; the matcher gets the real value', async () => {
+    const t = task()
+    const own = createExpect(t)
+    await own(Promise.resolve(token)).resolves.toBe(token)
+    await own(Promise.reject(new Error(token))).rejects.toThrow(token)
+    await own(() => Promise.reject(new Error(token))).rejects.toThrow(token)
+    await assert.rejects(
+      own(Promise.reject(new Error(`no ${token}`))).resolves.toBe(1),
+      (error: Error) =>
+        error.message === 'promise rejected "Error: no [REDACTED]" instead of resolving',
+    )
+    await own(Promise.resolve(`yes ${token}`)).rejects.toThrow()
+    assert.equal(
+      records(t).at(-1)?.message,
+      'promise resolved "\'yes [REDACTED]\'" instead of rejecting',
+    )
+    // Twin: a subject that isn't a promise is refused as before.
+    assert.throws(() => own(token).resolves, /You must provide a Promise/)
+    assert.throws(() => own(() => token).rejects.toThrow(), /You must provide a Promise/)
   })
 })

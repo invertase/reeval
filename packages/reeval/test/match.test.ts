@@ -23,6 +23,7 @@ import {
   SUBJECT,
 } from '../src/engine/expect.ts'
 import { MATCHERS, matchers } from '../src/matchers.ts'
+import { registerExecEnv } from '../src/redact.ts'
 import type {
   AssertionRecord,
   AttemptContext,
@@ -816,4 +817,25 @@ describe('toBe and toEqual', () => {
     assert.equal(r.pass, false)
     assert.match(r.message(), /deeply equal/)
   })
+})
+
+test("toSucceed's and toHaveFile's tails are masked before they're cut, so no stretch of a secret is left", async () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const passphrase = ['correct', 'horse', 'battery', 'staple', 'tail', 'words'].join('-')
+  registerExecEnv({ EXEC_PASSWORD: passphrase })
+  const flags = { not: false }
+  // The secret ends 1970 characters from the end, so a 2000-character tail would cut into it.
+  for (const secret of [token, passphrase]) {
+    const output = `${secret} ${'w'.repeat(1970)}`
+    const failed = MATCHERS.toSucceed({ exitCode: 1, stdout: output, stderr: '' }, [], flags)
+    const file = await MATCHERS.toHaveFile(
+      { readFile: async () => output },
+      ['out.txt', 'x'],
+      flags,
+    )
+    for (const { message } of [failed as { message: () => string }, file]) {
+      assert.match(message(), /\[REDACTED\] w/)
+      assert.ok(!message().includes(secret.slice(-12)), secret)
+    }
+  }
 })

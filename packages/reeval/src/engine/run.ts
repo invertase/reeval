@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { format } from 'node:util'
 import { processError } from '@vitest/utils/error'
 import { TimeoutError } from '../errors.ts'
-import { redactSecrets, redactValue } from '../redact.ts'
+import { redactSecrets, redactStrings, redactValue } from '../redact.ts'
 import { acquire, type Lease } from '../scheduler/client.ts'
 import type { EvalMeta } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
@@ -38,13 +38,25 @@ export type Reporter = {
 
 /**
  * An error as it crosses to the main process: its diff computed, then plain data, masked here,
- * where the secrets an attempt registered (`c.exec`'s own `env`) are known.
+ * where the secrets an attempt registered (`c.exec`'s own `env`) are known. The values the diff
+ * is made from are masked before it is: it splits a value around what changed.
  */
 export function serializeError(error: unknown): SerializedError {
   if (error instanceof Error && typeof error.stack === 'string') {
     try {
       error.stack = originalStack(error.stack)
     } catch {}
+  }
+  const seen = new Set<object>()
+  for (
+    let e = error;
+    typeof e === 'object' && e !== null && !seen.has(e);
+    e = Reflect.get(e, 'cause')
+  ) {
+    seen.add(e)
+    for (const key of ['actual', 'expected']) {
+      if (key in e) Reflect.set(e, key, redactStrings(Reflect.get(e, key)))
+    }
   }
   return redactValue(processError(error)) as SerializedError
 }
@@ -165,7 +177,8 @@ async function runTest(
         file,
         signal: AbortSignal.any([signal, timeout.signal]),
         setMeta: (next) => {
-          meta = next
+          // Masked here, where the attempt's own secrets are known: labels are the eval's words.
+          meta = redactValue(next)
           if (reported) reporter.meta(index, next)
         },
         progress: (progress) => reporter.progress(index, progress),

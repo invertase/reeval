@@ -487,6 +487,107 @@ export function redactJson(
 export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): T =>
   JSON.parse(redactJson(value, undefined, env))
 
+/** What loupe, chai and pretty-format call to format a value instead of reading its fields. */
+const FORMAT_HOOKS: PropertyKey[] = [
+  'inspect',
+  'toJSON',
+  Symbol.for('chai/inspect'),
+  Symbol.for('nodejs.util.inspect.custom'),
+]
+
+const hasHook = (v: object, key: PropertyKey) =>
+  typeof (v as Record<PropertyKey, unknown>)[key] === 'function'
+
+/**
+ * Whether a copy of `v` on its own prototype formats as `v` does: a plain object, an error or a
+ * class instance, read field by field. A copy has none of `v`'s private (`#`) fields, so one with a
+ * format hook, which could read them, isn't copied; nor are built-ins with internal slots (dates,
+ * promises, buffers), whose tag isn't an object's or an error's. An error's `toJSON` doesn't count:
+ * loupe formats an error from its fields alone, and the copy's `toJSON` is the original's.
+ */
+function copyable(v: object, proto: unknown): boolean {
+  if (proto === Object.prototype || proto === null) return true
+  const tag = Object.prototype.toString.call(v)
+  if (tag === '[object Error]') return !FORMAT_HOOKS.some((k) => k !== 'toJSON' && hasHook(v, k))
+  return tag === '[object Object]' && !FORMAT_HOOKS.some((key) => hasHook(v, key))
+}
+
+/**
+ * `value` with every string in it masked as `redactSecrets` masks text, keeping its shape: arrays,
+ * Maps, Sets, and plain objects, errors and class instances on their own prototype, with their
+ * property flags. What a failed assertion's message and diff are made from, since both shorten or
+ * split a value, which leaves a secret in them that masking the text afterwards no longer
+ * recognizes. A value with no secret in it is returned as it is; so is one `copyable` refuses,
+ * left to the masking of the formatted text.
+ */
+export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
+  const secrets = envSecrets(env)
+  const seen = new Map<object, unknown>()
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'string') return redactWith(v, secrets)
+    if (typeof v !== 'object' || v === null) return v
+    if (seen.has(v)) return seen.get(v)
+    seen.set(v, v)
+    let out: unknown = v
+    const proto: unknown = Object.getPrototypeOf(v)
+    if (proto === Array.prototype) {
+      const list = v as unknown[]
+      const items = list.map(walk)
+      if (items.some((item, i) => item !== list[i])) out = items
+    } else if (proto === Map.prototype) {
+      const entries = [...(v as Map<unknown, unknown>)]
+      const masked = entries.map(([k, x]) => [walk(k), walk(x)] as const)
+      if (masked.some(([k, x], i) => k !== entries[i]?.[0] || x !== entries[i]?.[1]))
+        out = new Map(masked)
+    } else if (proto === Set.prototype) {
+      const items = [...(v as Set<unknown>)]
+      const masked = items.map(walk)
+      if (masked.some((item, i) => item !== items[i])) out = new Set(masked)
+    } else if (copyable(v, proto)) {
+      const error = v instanceof Error
+      const descriptors = Object.getOwnPropertyDescriptors(v) as Record<
+        PropertyKey,
+        PropertyDescriptor
+      >
+      // An error's `stack` is an accessor that reads only on the error it was made for.
+      if (error) descriptors.stack = { value: v.stack, writable: true, configurable: true }
+      let changed = false
+      for (const key of Reflect.ownKeys(descriptors)) {
+        const descriptor = descriptors[key] as PropertyDescriptor
+        if (!('value' in descriptor)) continue
+        const masked = walk(descriptor.value)
+        if (masked !== descriptor.value) {
+          descriptor.value = masked
+          changed = true
+        }
+      }
+      if (changed) {
+        // pretty-format diffs what `toJSON` returns, which the original makes from its own fields;
+        // on a prototype between, since loupe lists every own property of an error.
+        const base =
+          error && hasHook(v, 'toJSON')
+            ? Object.create(proto as object, {
+                toJSON: {
+                  value: () => redactStrings((v as unknown as { toJSON(): unknown }).toJSON(), env),
+                  configurable: true,
+                  writable: true,
+                },
+              })
+            : proto
+        out = Object.defineProperties(
+          error
+            ? Object.setPrototypeOf(new Error(), base as object)
+            : Object.create(proto as object | null),
+          descriptors,
+        )
+      }
+    }
+    seen.set(v, out)
+    return out
+  }
+  return walk(value) as T
+}
+
 /**
  * Serialized JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
  * for byte outside the strings it masks. A line that isn't JSON is masked as plain text. `also`

@@ -231,6 +231,19 @@ test('watchPage clips a huge console line as it keeps it', () => {
   assert.ok((watched.facts('', ORIGIN).console[0]?.text.length ?? 0) <= 2001)
 })
 
+test('watchPage masks a console line before it clips it, so the cut goes through no secret', () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const cdp = fakeCdp()
+  const watched = watchPage(cdp)
+  // The kept line is cut at 4000 characters, 25 into the token; stripping the origins brings that
+  // within the 2000 that `facts` keeps.
+  const value = `${ORIGIN.repeat(180)}${'x'.repeat(15)}${token}`
+  cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [{ type: 'string', value }] })
+  const text = watched.facts('', ORIGIN).console[0]?.text ?? ''
+  assert.match(text, /x\[REDACTED\]$/)
+  assert.ok(!text.includes(token.slice(0, 8)))
+})
+
 function fakeSocket() {
   const listeners = new Map<string, Array<(ev: unknown) => void>>()
   const sent: Array<{ id: number; method: string }> = []

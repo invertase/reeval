@@ -9,7 +9,7 @@ import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { docker, type Substitution } from '@reeval/sandbox-docker'
 import { assertionRecords } from '../src/attempt/assertions.ts'
-import { recordFailure, stagedRecordJson, turnErrors } from '../src/attempt/record.ts'
+import { recordFailure, stagedRecordJson, turnErrors, writeRecord } from '../src/attempt/record.ts'
 import { type Attempt, type AttemptSpec, createAttempt } from '../src/attempt/state.ts'
 import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
 import '../src/debug/docker.ts'
@@ -23,6 +23,7 @@ import {
   unbrokeredSecrets,
 } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
@@ -45,6 +46,7 @@ import {
   redactKey,
   redactSecrets,
   redactSplitSecrets,
+  redactStrings,
   redactValue,
   registerSecret,
   type SecretMatch,
@@ -1896,6 +1898,165 @@ describe('masking before shortening', () => {
       assert.doesNotMatch(capped, /password=corr|staple\.z/)
     }),
   )
+})
+
+describe('redacting the strings in a value', () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+
+  test('masks every string, keeping arrays, Maps, Sets, plain objects, symbol keys and errors', () => {
+    const key = Symbol('key')
+    const value = {
+      list: [`a ${token}`, 1, null],
+      map: new Map<unknown, unknown>([[token, { deep: token }]]),
+      set: new Set([token]),
+      bare: Object.assign(Object.create(null) as { held: string }, { held: token }),
+      [key]: token,
+    }
+    const out = redactStrings(value, {})
+    assert.deepEqual(out.list, ['a [REDACTED]', 1, null])
+    assert.deepEqual([...out.map], [['[REDACTED]', { deep: '[REDACTED]' }]])
+    assert.deepEqual([...out.set], ['[REDACTED]'])
+    assert.equal(Object.getPrototypeOf(out.bare), null)
+    assert.equal(out.bare.held, '[REDACTED]')
+    assert.equal(out[key], '[REDACTED]')
+    assert.equal(value.bare.held, token, 'the value itself is left as it was')
+    const error = Object.assign(new TypeError(`no ${token}`), { code: token })
+    const masked = redactStrings(error, {})
+    assert.ok(masked instanceof TypeError)
+    assert.deepEqual([masked.message, masked.code], ['no [REDACTED]', '[REDACTED]'])
+    assert.match(String(masked.stack), /^TypeError: no \[REDACTED\]\n/)
+  })
+
+  test('copies error subclasses and class instances on their own prototype', () => {
+    class TokenError extends Error {
+      override name = 'TokenError'
+    }
+    class Holder {
+      held: string
+      constructor(held: string) {
+        this.held = held
+      }
+    }
+    const { error, holder } = redactStrings(
+      { error: new TokenError(`bad ${token}`), holder: new Holder(token) },
+      {},
+    )
+    assert.ok(error instanceof TokenError)
+    assert.deepEqual([error.name, error.message], ['TokenError', 'bad [REDACTED]'])
+    assert.match(String(error.stack), /^TokenError: bad \[REDACTED\]\n/)
+    assert.ok(holder instanceof Holder)
+    assert.equal(holder.held, '[REDACTED]')
+  })
+
+  test("copies an error with a toJSON, AxiosError's shape, and its toJSON is the original's, masked", () => {
+    class AxiosLike extends Error {
+      override name = 'AxiosLike'
+      #code: string
+      constructor(message: string, code: string) {
+        super(message)
+        this.#code = code
+      }
+      toJSON() {
+        return { message: this.message, code: this.#code }
+      }
+    }
+    const error = new AxiosLike(`Request failed with ${token}`, token)
+    const masked = redactStrings(error, {})
+    assert.ok(masked instanceof AxiosLike)
+    assert.equal(masked.message, 'Request failed with [REDACTED]')
+    assert.deepEqual(masked.toJSON(), {
+      message: 'Request failed with [REDACTED]',
+      code: '[REDACTED]',
+    })
+    assert.ok(
+      !Object.getOwnPropertyNames(masked).includes('toJSON'),
+      "loupe lists an error's own properties",
+    )
+    assert.equal(
+      error.message,
+      `Request failed with ${token}`,
+      'the error itself is left as it was',
+    )
+  })
+
+  test('twin: what has no secret, getters, cycles and other built-ins are returned as they are', () => {
+    const plain = { list: ['a', 1], map: new Map([['k', 'v']]), set: new Set(['s']) }
+    assert.equal(redactStrings(plain, {}), plain)
+    const getter = {
+      get secret() {
+        return token
+      },
+    }
+    assert.equal(redactStrings(getter, {}), getter)
+    const date = new Date(0)
+    assert.equal(redactStrings(date, {}), date)
+    // A copy has no private fields, which a format hook could read, so neither is copied.
+    class Box {
+      #held: string
+      shown: string
+      constructor(held: string) {
+        this.#held = held
+        this.shown = held
+      }
+      toJSON() {
+        return this.#held
+      }
+    }
+    const box = new Box(token)
+    assert.equal(redactStrings(box, {}), box)
+    class Failure extends Error {
+      why = token;
+      [Symbol.for('nodejs.util.inspect.custom')]() {
+        return this.why
+      }
+    }
+    const failure = new Failure(token)
+    assert.equal(redactStrings(failure, {}), failure)
+    const cycle: Record<string, unknown> = { token }
+    cycle.self = cycle
+    const out = redactStrings(cycle, {})
+    assert.equal(out.token, '[REDACTED]')
+    assert.equal(out.self, cycle)
+  })
+})
+
+test("an attempt's judge question is masked before its meta clips it to 200 characters", async () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const record = {
+    outcome: 'fail',
+    error: null,
+    turns: [],
+    judgements: [{ question: `${'x'.repeat(180)}${token}` }],
+  }
+  const empty = new Map()
+  const attempt = {
+    record,
+    spec: { cell: { key: 'c' }, n: 1 },
+    artifactBlobs: empty,
+    stepBlobs: empty,
+    capturePages: empty,
+  }
+  const meta = await writeRecord(attempt as never, tempDir('judge-question'), 'e')
+  assert.equal(meta.judgements[0]?.question, `${'x'.repeat(180)}[REDACTED]`)
+})
+
+test("a fake agent's failed bootstrap quotes its output's end masked before it's cut", async () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+  const harness = createFakeHarness({ kind: 'fake', bootstrap: 'exit 7' })
+  const sandbox = {
+    exec: async () => ({ exitCode: 7, stdout: '', stderr: `${token} ${'w'.repeat(480)}` }),
+  }
+  const start = harness.start(sandbox as never, new AbortController().signal, {
+    skills: [],
+    workspaceSkills: [],
+    plugins: [],
+    mcp: {},
+  })
+  await assert.rejects(start, (error: Error) => {
+    assert.match(error.message, /exited 7: \[REDACTED\] w/)
+    assert.ok(!error.message.includes(token.slice(-12)))
+    return true
+  })
 })
 
 test("an attempt's progress leaves it masked, but its kind: a check's command, a warning", () => {

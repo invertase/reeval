@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { stripVTControlCharacters } from 'node:util'
 import { budgetMarker } from '../src/engine/budget.ts'
 import { type CollectedTest, collect, registerTest } from '../src/engine/collector.ts'
 import { expect } from '../src/engine/expect.ts'
@@ -11,6 +12,7 @@ import { loadEvalFile } from '../src/engine/loader.ts'
 import type { WireResult } from '../src/engine/protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from '../src/engine/run.ts'
 import type { Settled, TestHandle, TestOptions } from '../src/engine/runtime.ts'
+import { registerExecEnv } from '../src/redact.ts'
 import { useSchedulerChannel } from '../src/scheduler/client.ts'
 import type { EvalMeta } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -112,6 +114,29 @@ describe('runTests', () => {
       0,
       'a record before the result rides with it',
     )
+  })
+
+  test("an attempt's record goes to the main process masked, its own c.exec secrets included", async () => {
+    const passphrase = ['correct', 'horse', 'battery', 'staple', 'meta'].join('-')
+    const labeled = (label: string) =>
+      ({ outcome: 'fail', failedChecks: [{ label, message: 'm' }] }) as unknown as EvalMeta
+    const collected = await tests([
+      'labeled',
+      {},
+      async (h) => {
+        registerExecEnv({ EXEC_PASSWORD: passphrase })
+        h.setMeta(labeled(`build with ${passphrase}`))
+      },
+    ])
+    const { results, reporter } = recorder()
+    await runTests(collected, new Set([0]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: new AbortController().signal,
+      reporter,
+      onReady: () => {},
+    })
+    assert.deepEqual(results.get(0)?.meta, labeled('build with [REDACTED]'))
   })
 
   test('a timeout fails at the timeout; the body cleans up with its lease and its record follows', async () => {
@@ -417,5 +442,27 @@ describe('console routing and error serialization', () => {
     again.stack = `Error: kept\n    at ${file}:3:9`
     rmSync(file)
     assert.match(String(serializeError(again).stack), /x\.ts:3:9/)
+  })
+
+  test("serializeError masks a diff's values before diffing them, the cause's too", () => {
+    const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+    // Highlighting what changed cuts the token after the `ghp_` both lines share.
+    const diffed = (message: string) =>
+      Object.assign(new Error(message), {
+        actual: `top\ntoken ${token}`,
+        expected: 'top\ntoken ghp_none',
+        diffOptions: { changeColor: (s: string) => `\x1b[7m${s}\x1b[27m` },
+      })
+    const error = diffed('outer')
+    Object.assign(error, { cause: diffed('inner') })
+    const serialized = serializeError(error)
+    const plain = (text: unknown) => stripVTControlCharacters(String(text))
+    for (const diff of [serialized.diff, (serialized.cause as { diff?: string }).diff]) {
+      assert.match(plain(diff), /\+ token \[REDACTED\]/)
+      assert.ok(!plain(diff).includes('A1b2C3'), plain(diff))
+    }
+    assert.ok(!JSON.stringify(serialized).includes('A1b2C3'))
+    // Twin: an error with nothing to diff gets no actual or expected.
+    assert.equal('actual' in serializeError(new Error('none')), false)
   })
 })

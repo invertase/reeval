@@ -21,6 +21,7 @@ import {
   withinLimits,
 } from './assert.ts'
 import { isObjectLike, isThenable } from './object.ts'
+import { redactSecrets } from './redact.ts'
 import { plural } from './text.ts'
 import type { CapturePage, ExecResult, JudgeFailure, StatusRange, Verdict } from './types.ts'
 
@@ -39,9 +40,12 @@ type Run<A extends unknown[], R extends Result | Promise<Result>> = (
 
 const matcher = <A extends unknown[], R extends Result | Promise<Result>>(run: Run<A, R>) => run
 
-/** The last `lines` lines, and at most `chars` characters of them: one line can be megabytes. */
+/**
+ * The last `lines` lines, and at most `chars` characters of them: one line can be megabytes.
+ * Masked first, so a secret the cut would go through is masked whole.
+ */
 const tail = (s: string, lines = 20, chars = 2000) => {
-  const last = s.trimEnd().split('\n').slice(-lines).join('\n')
+  const last = redactSecrets(s).trimEnd().split('\n').slice(-lines).join('\n')
   return last.length <= chars
     ? last
     : `[… ${last.length - chars} earlier characters]${last.slice(-chars)}`

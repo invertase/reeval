@@ -259,7 +259,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
       verdict: j.verdict,
       score: j.score,
       threshold: j.threshold,
-      question: clip(j.question, 200),
+      question: clip(redactSecrets(j.question), 200),
     })),
     turnErrors: turnErrors(record.turns.map((t) => t.transcript)),
     ...failedChecks(record),
