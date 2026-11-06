@@ -1,0 +1,170 @@
+{
+  "kind": "reeval-analysis",
+  "schemaVersion": 1,
+  "scope": {
+    "kind": "run",
+    "head": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+    "base": null,
+    "evals": null
+  },
+  "anchor": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+  "inputs": {
+    "records": [
+      {
+        "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+        "sha256": "6650d22c384e634b62cfa3b765a9fb65667734eb32ae04ad92cd871f4409f3bc"
+      }
+    ],
+    "digestVersion": 15,
+    "digestHash": "b4621162ba437d25ae36c2933b119df5c9a91d382ed30653c724d46b6311b120"
+  },
+  "promptVersion": "analysis-v13",
+  "author": "cursor-agent",
+  "model": "fake",
+  "resolvedModel": "fake-analysis",
+  "route": "fake",
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  },
+  "latencyMs": 10,
+  "createdAt": "2026-11-05T20:04:28.495Z",
+  "validation": {
+    "citations": 4,
+    "invalid": [],
+    "dropped": 0,
+    "commands": 1,
+    "invalidCommands": [],
+    "unverifiedNumbers": 0
+  },
+  "analysis": {
+    "tldr": "The house-style skill lifts the pass rate.",
+    "whatHappened": [
+      {
+        "text": "Every eval ran once.",
+        "cites": [
+          "F1"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "results": [
+      {
+        "text": "The variant passed where the control failed.",
+        "cites": [
+          "F1"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "why": [],
+    "anomalies": [
+      {
+        "text": "The broken harness never started.",
+        "kind": "noise",
+        "cites": [
+          "F1"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "title": "Rerun the compare",
+        "target": "evals/skill.eval.ts",
+        "kind": "eval",
+        "change": "Run it three times.",
+        "expectedEffect": "A tighter interval.",
+        "verify": "reeval run skill --runs 3",
+        "impact": "medium",
+        "effort": "low",
+        "cites": [
+          "F1"
+        ]
+      }
+    ],
+    "confidence": {
+      "overall": "medium",
+      "why": "One run."
+    }
+  },
+  "attempts": {
+    "r1/cases/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-cases-eval-ts-greets-2bbb19",
+      "attempt": "fake/plain/docker#Grace#1"
+    },
+    "r1/cases/with-house-greeting#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-cases-eval-ts-greets-2bbb19",
+      "attempt": "fake/with-house-greeting/docker#Grace#1"
+    },
+    "r1/greet-1/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-greet-eval-ts-writes-greet-js-df720a",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-2/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-greet-eval-ts-fails-its-check-and-its-judge-035df6",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-3/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-greet-eval-ts-never-starts-dd13ad",
+      "attempt": "broken/fake/fake#1"
+    },
+    "r1/greet-4/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-greet-eval-ts-is-skipped-for-now-9cda2b",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-5/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-greet-eval-ts-greets-in-welsh-bd390d",
+      "attempt": "unknown#1"
+    },
+    "r1/skill/control#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#1"
+    },
+    "r1/skill/control#2": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#2"
+    },
+    "r1/skill/control#3": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#3"
+    },
+    "r1/skill/control#4": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#4"
+    },
+    "r1/skill/with-house-greeting#1": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#1"
+    },
+    "r1/skill/with-house-greeting#2": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#2"
+    },
+    "r1/skill/with-house-greeting#3": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#3"
+    },
+    "r1/skill/with-house-greeting#4": {
+      "runId": "20261105T200418Z_cbe4c55_cursor-agent_b5r0",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#4"
+    }
+  },
+  "cited": {
+    "F1": "{\"kind\":\"pass@1\",\"run\":\"r1\",\"eval\":\"cases\",\"cells\":[{\"cell\":\"plain (control)\",\"pass\":\"0/2\",\"gated\":false},{\"cell\":\"with-house-greeting\",\"pass\":\"2/2\",\"gated\":true}],\"cases\":[\"Ada\",\"Grace\"]}"
+  }
+}

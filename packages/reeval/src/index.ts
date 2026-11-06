@@ -43,6 +43,7 @@ export type {
   CompareCut,
   CompareOptions,
   ConfigHelpers,
+  DebugUpload,
   Diff,
   DirectoryOptions,
   Duration,

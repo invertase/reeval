@@ -104,6 +104,7 @@ export const historyStoreDescriptorSchema = z.discriminatedUnion('kind', [
 export const historyConfigDataSchema = z.strictObject({
   store: historyStoreDescriptorSchema.optional(),
   artifacts: z.enum(['all', 'failures', 'none']).optional(),
+  debug: z.enum(['none', 'requests', 'all']).optional(),
 })
 
 const recordMode = z.enum(['manual', 'ci', 'always'])

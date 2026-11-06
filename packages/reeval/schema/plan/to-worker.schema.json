@@ -392,6 +392,9 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "DebugUpload": {
+      "enum": ["all", "none", "requests"]
+    },
     "DirectGatewayDescriptor": {
       "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
@@ -2620,6 +2623,9 @@
         "artifacts": {
           "$ref": "#/$defs/ArtifactLevel"
         },
+        "debug": {
+          "$ref": "#/$defs/DebugUpload"
+        },
         "dir": {
           "description": "The folder every history command reads: the history folder for `local()`, else the store's copy in `.reeval/store/<id>/history`.",
           "type": "string"
@@ -2662,7 +2668,7 @@
           ]
         }
       },
-      "required": ["artifacts", "dir", "store"]
+      "required": ["artifacts", "debug", "dir", "store"]
     },
     "ResolvedProfile": {
       "description": "A profile as the run uses it, with why it was chosen.",

@@ -90,9 +90,11 @@ Usage:
     --offline --all-branches    A remote history.store: read its copy without pulling first; list
                                 every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
-  reeval sync                   Upload the runs recorded to history.store that didn't upload
+  reeval sync [--debug run...]  Upload the runs recorded to history.store that didn't upload
                                 (kept in .reeval/store/<id>/pending), then download the runs
                                 recorded elsewhere; exit 3 if the store fails
+    --debug                     Then download each run's debug data (default latest), which a
+                                pull leaves in the store, into .reeval/debug/<run>
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,

@@ -12,9 +12,11 @@ import {
 } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
+import { debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
 import type { QuestionInput } from '../types.ts'
+import { DEBUG_LOG, REQUESTS_FILE, TRACE_FILE } from '../view/debug.ts'
 import { runHeader } from '../view/header.ts'
 import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
 import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
@@ -34,6 +36,7 @@ import type {
   AttemptRecord,
   FileRef,
   HistoryEntry,
+  RunDebug,
   RunRecord,
 } from './types.ts'
 
@@ -477,6 +480,8 @@ export type RecordOptions = {
    * a remote store's copy isn't (default true).
    */
   committed?: boolean
+  /** Upload the attempts' debug data too, staged in `staging` (a remote store's `history.debug`). */
+  debug?: { level: RunDebug['level']; staging: string }
 }
 
 export type RecordResult = WrittenRun & {
@@ -486,6 +491,55 @@ export type RecordResult = WrittenRun & {
   droppedPatch: string[]
   /** Files `git check-ignore` still matches after the history `.gitignore` was written. */
   ignored: IgnoredRecorded[]
+  /** The debug data the record names, staged to upload with it. */
+  debug?: RunDebug
+}
+
+/** Every file under `dir`, by posix path, with its bytes. */
+export async function filesUnder(dir: string, at = ''): Promise<Array<[string, Uint8Array]>> {
+  const entries = await readdir(join(dir, at), { withFileTypes: true }).catch(() => [])
+  const out: Array<[string, Uint8Array]> = []
+  for (const entry of entries) {
+    const path = at ? `${at}/${entry.name}` : entry.name
+    if (entry.isDirectory()) out.push(...(await filesUnder(dir, path)))
+    else if (entry.isFile()) out.push([path, await readFile(join(dir, path))])
+  }
+  return out
+}
+
+const DEBUG_FILES: Record<RunDebug['level'], string[]> = {
+  requests: [REQUESTS_FILE],
+  all: [REQUESTS_FILE, DEBUG_LOG, TRACE_FILE],
+}
+
+/**
+ * The run's debug data `level` names, from `.reeval/debug/<run>`, written to `staging` for the
+ * upload; a file the secret scan finds something in is left out and named in `dropped`.
+ */
+async function stageDebug(
+  root: string,
+  runId: string,
+  options: NonNullable<RecordOptions['debug']>,
+): Promise<RunDebug | undefined> {
+  const wanted = DEBUG_FILES[options.level]
+  const debug: RunDebug = { level: options.level, files: [] }
+  const dropped: NonNullable<RunDebug['dropped']> = []
+  await rm(options.staging, { recursive: true, force: true })
+  for (const [path, bytes] of await filesUnder(join(debugRoot(root), runId))) {
+    if (!wanted.includes(path.slice(path.lastIndexOf('/') + 1))) continue
+    // Always scanned, even with --skip-secret-scan: a finding drops the file, never the run.
+    const findings = scanText(path, Buffer.from(bytes).toString())
+    if (findings.length > 0) {
+      dropped.push({ path, note: `${SECRET_NOTE} (${findingSummary(findings)})` })
+      continue
+    }
+    const file = join(options.staging, ...path.split('/'))
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, bytes)
+    debug.files.push({ path, sha256: sha256(bytes), bytes: bytes.length })
+  }
+  if (dropped.length) debug.dropped = dropped
+  return debug.files.length || dropped.length ? debug : undefined
 }
 
 /** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
@@ -588,6 +642,8 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     } catch {}
   }
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
+  const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
+  if (debug) record.debug = debug
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [
@@ -614,7 +670,16 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   }
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
-  if (!committed) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }
+  if (!committed) {
+    return {
+      ...written,
+      files: files.size,
+      bytes,
+      droppedPatch,
+      ignored: [],
+      ...(debug ? { debug } : {}),
+    }
+  }
   const folderFiles = [
     historyGitignorePath(options.historyDir),
     historyGitattributesPath(options.historyDir),

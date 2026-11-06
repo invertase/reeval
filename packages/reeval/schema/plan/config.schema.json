@@ -1470,6 +1470,11 @@
           "type": "string",
           "enum": ["all", "failures", "none"]
         },
+        "debug": {
+          "description": "Each attempt's debug data uploaded with the run to a remote store: none (the default), its gateway requests (`requests.ndjson`, which holds prompts and responses), or all of it (`debug.log` and `trace.ndjson` too). Rescanned for secrets first; `local()` takes `'none'` only.",
+          "type": "string",
+          "enum": ["none", "requests", "all"]
+        },
         "store": {
           "description": "Where recorded runs are kept: `{ kind: local }` (the default) or `{ kind: s3, … }`.",
           "oneOf": [

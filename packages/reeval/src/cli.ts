@@ -233,7 +233,7 @@ async function run(argv: string[]): Promise<number> {
       case 'checkout':
         return commands.checkoutCommand(ctx, filters)
       case 'sync':
-        return commands.syncCommand(ctx)
+        return commands.syncCommand(ctx, filters)
       case 'query': {
         const { queryCommand } = await import('./query.ts')
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)

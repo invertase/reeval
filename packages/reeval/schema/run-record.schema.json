@@ -3098,6 +3098,38 @@
       },
       "required": ["cause", "kills"]
     },
+    "RunDebug": {
+      "type": "object",
+      "properties": {
+        "dropped": {
+          "description": "Files left out because the secret scan found something in them, with what it found.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["note", "path"]
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileRef"
+          }
+        },
+        "level": {
+          "description": "`requests`: each attempt's `requests.ndjson`; `all`: its `debug.log` and `trace.ndjson` too.",
+          "enum": ["all", "requests"]
+        }
+      },
+      "required": ["files", "level"]
+    },
     "RunInvocation": {
       "description": "The `reeval run` settings that shaped a run's plan, as it was first started. A resume keeps them, so it finishes the attempts the run planned.",
       "type": "object",
@@ -3318,6 +3350,10 @@
         },
         "cost": {
           "$ref": "#/$defs/Cost"
+        },
+        "debug": {
+          "description": "The attempts' debug data uploaded with the run to its store (`history.debug`), each file by its path in `.reeval/debug/<run>/` (`<eval>/<cell>/<n>/requests.ndjson`); absent when none was.",
+          "$ref": "#/$defs/RunDebug"
         },
         "dependencies": {
           "type": "object",

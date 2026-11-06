@@ -3,6 +3,8 @@
 //   <prefix>/reeval-store.json                       { kind: 'reeval-store', schemaVersion: 1 }
 //   <prefix>/runs/<YYYY-MM>/<runId>.json             the record, written last
 //   <prefix>/runs/<YYYY-MM>/<runId>/<path>           every file beside it
+//   <prefix>/debug/<YYYY-MM>/<runId>/<path>          its debug data (`history.debug`), apart so a
+//                                                    pull never lists or downloads it
 //
 // Every key is under its run id, so concurrent writers never touch one object. The record is
 // created with `If-None-Match: *` and replaced with `If-Match: <etag>`, so a run lands whole once.
@@ -93,6 +95,14 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
   const runKey = (runId: string) => {
     if (!RUN_ID.test(runId)) throw new UsageError(`${runId} isn't a run id`)
     return `${base}runs/${month(runId)}/${runId}`
+  }
+  /** A file beside the run, or under `debug/` its debug data, which is kept apart from `runs/`. */
+  const fileKey = (runId: string, path: string) => {
+    const key = runKey(runId)
+    const debug = /^debug\/(.+)$/.exec(path)?.[1]
+    return debug
+      ? `${base}debug/${key.slice(base.length + 'runs/'.length)}/${debug}`
+      : `${key}/${path}`
   }
   const put = async (key: string, bytes: Uint8Array | string, condition?: [string, string]) => {
     const headers = new Headers({ 'Content-Type': contentType(key) })
@@ -204,7 +214,10 @@ export function s3Store(descriptor: S3StoreDescriptor, env: Env = process.env): 
       return { ok: true, version }
     },
     async addFile(runId, path, bytes) {
-      await put(`${runKey(runId)}/${path}`, bytes)
+      await put(fileKey(runId, path), bytes)
+    },
+    async readFile(runId, path) {
+      return (await get(fileKey(runId, path)))?.bytes ?? null
     },
   }
 }
