@@ -1174,7 +1174,7 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'keys',
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
-    canary: /expected 'Bearer reeval_secret_[0-9A-Za-z]+…' to be 'Bearer \[REDACTED\]…'/,
+    canary: /expected 'Bearer reeval_secret_[0-9A-Za-z]+…' to be 'Bearer \[REDACTED\]'/,
     record: ({ runDir }) => {
       assert.equal(filesContaining(runDir, TOKEN), '')
     },
