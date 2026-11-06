@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.21.0](https://github.com/invertase/reeval/compare/v0.20.0...v0.21.0) (2026-11-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **harness:** run pi and goose on any provider they key ([#829](https://github.com/invertase/reeval/issues/829))
+* **history:** configure history.store, per profile ([#843](https://github.com/invertase/reeval/issues/843))
+* **history:** default history.artifacts to failures and mark recorded runs generated ([#801](https://github.com/invertase/reeval/issues/801))
+
+### Features
+
+* **egress:** separate setup and agent egress policies ([#799](https://github.com/invertase/reeval/issues/799)) ([4d920b8](https://github.com/invertase/reeval/commit/4d920b829e523b46b3e8cd599ffb89b08c86d0f8))
+* **exec:** add c.exec(cmd, { env }) for per-command variables ([#825](https://github.com/invertase/reeval/issues/825)) ([60b58ad](https://github.com/invertase/reeval/commit/60b58ada6a80fd9d7f13c9ca19b528c52a9c8839))
+* **harness:** recover antigravity reasoning from agy's stored conversation ([#833](https://github.com/invertase/reeval/issues/833)) ([dab80e9](https://github.com/invertase/reeval/commit/dab80e9aed1fec34f3dfed0aad8d26002b8279a4))
+* **harness:** run pi and goose on any provider they key ([#829](https://github.com/invertase/reeval/issues/829)) ([b04eff6](https://github.com/invertase/reeval/commit/b04eff6f76913f18acb202c30933b33c66166b21))
+* **history:** configure history.store, per profile ([#843](https://github.com/invertase/reeval/issues/843)) ([4060a19](https://github.com/invertase/reeval/commit/4060a19665cf2bcacb543916d9f93df194b4b339))
+* **history:** default history.artifacts to failures and mark recorded runs generated ([#801](https://github.com/invertase/reeval/issues/801)) ([2b1711f](https://github.com/invertase/reeval/commit/2b1711f40964641efba5508577f1d51d7b44a3aa))
+* **history:** read history from a store ([#846](https://github.com/invertase/reeval/issues/846)) ([bc86a47](https://github.com/invertase/reeval/commit/bc86a474130e02d8a3955a3bce2f0aab43ed6fea))
+* **history:** record runs to an S3-compatible store ([#845](https://github.com/invertase/reeval/issues/845)) ([9c56200](https://github.com/invertase/reeval/commit/9c562005efe47073db608ef4cfb3d2e3834b1e35))
+* **history:** store and show cost per turn, attempt, cell and run ([#835](https://github.com/invertase/reeval/issues/835)) ([026da8f](https://github.com/invertase/reeval/commit/026da8f920bf258c821c76346ab7ed21c2870b68))
+* **history:** time each turn's model calls, tools and waiting ([#831](https://github.com/invertase/reeval/issues/831)) ([9c84594](https://github.com/invertase/reeval/commit/9c84594ea5ded4cdda03b6c4f3338a6647ec114d))
+* **history:** upload debug data on request ([#848](https://github.com/invertase/reeval/issues/848)) ([f948a64](https://github.com/invertase/reeval/commit/f948a64a6a5d7c887bed6f6a5931439ad732d897))
+* **matchers:** match the program a shell command ran with toHaveRun({ program, args }) ([#823](https://github.com/invertase/reeval/issues/823)) ([5bc864f](https://github.com/invertase/reeval/commit/5bc864f089df9f83ee769de616a130c31f0d3472))
+* **sandbox:** bake harness images for tart and run pi and codex there ([#795](https://github.com/invertase/reeval/issues/795)) ([452dce6](https://github.com/invertase/reeval/commit/452dce6fa183fb9d49e07925a770f98d5cb2792d))
+* **sandbox:** run antigravity, goose, fx and grok build in tart ([#813](https://github.com/invertase/reeval/issues/813)) ([fae373b](https://github.com/invertase/reeval/commit/fae373b992ed386193b8e1f963e886b4b780bd1d))
+* **sandbox:** run claude code and opencode in tart ([#798](https://github.com/invertase/reeval/issues/798)) ([e92c609](https://github.com/invertase/reeval/commit/e92c609171c1d458f48a7215687101ad8dea4cac))
+* **sandbox:** run tart() vms on remote macs over ssh ([#809](https://github.com/invertase/reeval/issues/809)) ([6977d45](https://github.com/invertase/reeval/commit/6977d45de33c43f37f2fd13d1e2b26a5ad60e95c))
+* **secrets:** warn about plain env strings that look like credentials ([#800](https://github.com/invertase/reeval/issues/800)) ([317b282](https://github.com/invertase/reeval/commit/317b282ba186b1e6add482c670fda59574b6ee15))
+
+
+### Bug Fixes
+
+* **assert:** recognize every harness's skill use in toHaveCalledSkill and skill_reads ([#824](https://github.com/invertase/reeval/issues/824)) ([c88dd24](https://github.com/invertase/reeval/commit/c88dd2484db897b044737afb11408fc00e0c9cf9))
+* batch environment files, and correct dry-run egress, progress, init and doctor output ([#811](https://github.com/invertase/reeval/issues/811)) ([ea54f2c](https://github.com/invertase/reeval/commit/ea54f2cdab80b7ef0de9ae2992840aa4acc7d214))
+* **cli:** keep resumable staging in the sweep and never sweep on --dry-run ([#822](https://github.com/invertase/reeval/issues/822)) ([6d764f9](https://github.com/invertase/reeval/commit/6d764f926708b9821c30505e847cc9436cfcc360))
+* **egress:** fall back to every checked address when connecting upstream ([#810](https://github.com/invertase/reeval/issues/810)) ([48fae1d](https://github.com/invertase/reeval/commit/48fae1d15404edd5ef3a3c56bcd1dea82dcb226a))
+* **harness:** keep an aborted turn's streamed events and stored usage ([#840](https://github.com/invertase/reeval/issues/840)) ([929464d](https://github.com/invertase/reeval/commit/929464d6e934d5cb14f5cafa1dd3074cdb22aaeb))
+* **harness:** record a turn the model provider stopped as an infra error ([#827](https://github.com/invertase/reeval/issues/827)) ([87ab8cd](https://github.com/invertase/reeval/commit/87ab8cdc1cea6d1c8ed5dd01a729bf0f3a087279))
+* **harness:** record fx's cache reads and reasoning tokens on Chat Completions providers ([#839](https://github.com/invertase/reeval/issues/839)) ([a8ab9a5](https://github.com/invertase/reeval/commit/a8ab9a52a17350d905ec190a80f41f4e0b0de931))
+* **harness:** record goose's tokens from its usage_ledger after each turn ([#838](https://github.com/invertase/reeval/issues/838)) ([4d3a0af](https://github.com/invertase/reeval/commit/4d3a0afa1b87fa90276b387b2d716b7a8cc075cf))
+* **harness:** record large tool output that cursor and antigravity save to files ([#842](https://github.com/invertase/reeval/issues/842)) ([c3eabad](https://github.com/invertase/reeval/commit/c3eabad4104aeef788e45215bc23f24eb9132062))
+* **harness:** record reasoning tokens and text on claude code, codex and opencode ([#841](https://github.com/invertase/reeval/issues/841)) ([bd59533](https://github.com/invertase/reeval/commit/bd59533438fb49fae0df898c34b0918271fa3277))
+* **harness:** retry cursor's catalog and transient start failures, and keep one start's abort from failing another's ([#850](https://github.com/invertase/reeval/issues/850)) ([4b65647](https://github.com/invertase/reeval/commit/4b6564773bdb95d39c32892f39b965dd49fde5a2))
+* **harness:** run claudeCode() on a claude setup-token subscription token ([#814](https://github.com/invertase/reeval/issues/814)) ([4f79903](https://github.com/invertase/reeval/commit/4f799039ca130c4bd38475e7e3aef7f35896c5c4))
+* **history:** continue evaluate.each history after the move to cases ([#794](https://github.com/invertase/reeval/issues/794)) ([c1d7fa7](https://github.com/invertase/reeval/commit/c1d7fa78ace3a74bc330f89aa64f1708d531ac83))
+* **history:** count skill use of skills reeval didn't place ([#834](https://github.com/invertase/reeval/issues/834)) ([fcd974b](https://github.com/invertase/reeval/commit/fcd974bb644b82ecffbd4a887eadb31af1cb325a))
+* **history:** keep a fresh pending marker, retry Bun's network errors, and check the CI store without pulling ([#853](https://github.com/invertase/reeval/issues/853)) ([df6bc92](https://github.com/invertase/reeval/commit/df6bc92caadba83a7fd837a7d69d91131ff733da))
+* **init:** derive the analysis key from the analysis model's provider ([#847](https://github.com/invertase/reeval/issues/847)) ([e807211](https://github.com/invertase/reeval/commit/e807211ef28e0454a02bc48d6aa89ff51d012aae))
+* **judge:** record a judge call the provider never answered as an infra error ([#821](https://github.com/invertase/reeval/issues/821)) ([ddb5fed](https://github.com/invertase/reeval/commit/ddb5fed8ab5fc433bd150220e53cd41b75fc7920))
+* **opencode:** record the turn's uncached input instead of 0 ([#837](https://github.com/invertase/reeval/issues/837)) ([0223e94](https://github.com/invertase/reeval/commit/0223e9435c42b7bd1e579eef21c7f1d50aa42356))
+* **sandbox:** close the raw test connections podman's slirp4netns keeps open ([#816](https://github.com/invertase/reeval/issues/816)) ([745bf5b](https://github.com/invertase/reeval/commit/745bf5b0a008b2ddd2c1454c3763ef4b245dbe56))
+* **sandbox:** delete a stopped run's boat vms on --resume ([#828](https://github.com/invertase/reeval/issues/828)) ([8f0d903](https://github.com/invertase/reeval/commit/8f0d90324f58a3349cce6e495ede107a408ba138))
+* **sandbox:** keep ssh control socket paths under the socket length limit ([#820](https://github.com/invertase/reeval/issues/820)) ([68dd499](https://github.com/invertase/reeval/commit/68dd499817099d6c165020c53434d3352947d6d4))
+* **ui:** print the served-by upstream lines in reeval run's status list ([#830](https://github.com/invertase/reeval/issues/830)) ([3a383ae](https://github.com/invertase/reeval/commit/3a383aeaa96c97979c23af38491b07bf5b28dc68))
+
 ## [0.20.0](https://github.com/invertase/reeval/compare/v0.19.0...v0.20.0) (2026-11-03)
 
 
