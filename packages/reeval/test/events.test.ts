@@ -1,8 +1,15 @@
 // A run's event stream: what `reeval run --events` and `--events-url` write, and how `reeval attach`
 // follows it (mid-run, across a resume, from a URL) and ends with the run's exit code.
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  truncateSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
@@ -11,11 +18,12 @@ import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { attach } from '../src/attach.ts'
 import { EventStreamError, openEventStream } from '../src/events.ts'
+import { stripAnsi } from '../src/ui/colors.ts'
 import type { ReevalEvent } from '../src/ui/events.ts'
 import type { OutputOptions } from '../src/ui/mode.ts'
 import type { RunEventLine } from '../src/view/events.ts'
 import { NewerSchemaError } from '../src/view/record.ts'
-import { baseEnv, noSignals, pkgRoot, project, runCli, tempDir } from './helpers.ts'
+import { baseEnv, noSignals, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const output: OutputOptions = {
   mode: 'plain',
@@ -462,6 +470,81 @@ describe('reeval run --events and reeval attach', () => {
     const attached = await runCli(p.dir, ['attach', 'out/events.ndjson'])
     assert.equal(attached.code, 0, attached.stderr)
     assert.equal(attached.stdout, stopped.stdout + resumed.stdout)
+  })
+
+  test("attach's cancel signal is a first Ctrl-C only: never the second that quits without a record", {
+    skip: noSignals,
+  }, async () => {
+    for (const signals of [
+      ['SIGINT', 'SIGUSR2', 'SIGUSR2'],
+      ['SIGUSR2', 'SIGUSR2'],
+    ] as const) {
+      const p = await project('events-cancel', {
+        'reeval.config.ts': config,
+        'evals/waits.eval.ts': gated,
+      })
+      const stopped = await runCli(p.dir, ['run'], {
+        onOutput: (stdout, pid) => {
+          if (!stdout.includes('Running')) return false
+          for (const signal of signals) process.kill(pid, signal)
+          return true
+        },
+      })
+      assert.equal(stopped.code, 130, `${signals}: ${stopped.stderr}`)
+      assert.doesNotMatch(stopped.stderr, /discards the run/, `${signals}`)
+      assert.equal(readRun(p.dir).run.status, 'interrupted', `${signals}`)
+    }
+  })
+
+  const pty =
+    process.platform === 'linux' && spawnSync('script', ['--version']).status === 0
+      ? false
+      : "needs util-linux's script to give reeval attach a terminal"
+  test('on a terminal, reeval attach draws the list, and x twice cancels the run, which writes its record', {
+    skip: pty || noSignals,
+  }, async () => {
+    const p = await project('events-tty', {
+      'reeval.config.ts': config,
+      'evals/waits.eval.ts': gated,
+    })
+    const running = runCli(p.dir, ['run', '--events'], {
+      onOutput: (stdout) => stdout.includes('Running'),
+    })
+    const staging = join(p.dir, '.reeval', 'staging')
+    const live = () =>
+      existsSync(staging) &&
+      readdirSync(staging).some((id) => existsSync(join(staging, id, 'live.json')))
+    for (let i = 0; i < 400 && !live(); i++) await sleep(25)
+    const { REEVAL_UI: _, ...env } = baseEnv
+    const viewer = spawn(
+      'script',
+      ['-qec', `'${process.execPath}' '${join(pkgRoot, 'dist/cli.js')}' attach`, '/dev/null'],
+      { cwd: p.dir, env: { ...env, TERM: 'xterm-256color' } },
+    )
+    let shown = ''
+    viewer.stdout.on('data', (d) => (shown += d))
+    const viewed = new Promise<number | null>((resolve) => viewer.on('close', resolve))
+    const shows = async (text: string) => {
+      for (let i = 0; i < 400 && !stripAnsi(shown).includes(text); i++) await sleep(25)
+      assert.ok(stripAnsi(shown).includes(text), `${text} in:\n${stripAnsi(shown)}`)
+    }
+    try {
+      await shows('q detach · x cancel the run')
+      viewer.stdin.write('x')
+      await shows('Press x again to cancel the run.')
+      viewer.stdin.write('x')
+      // The eval's body doesn't watch for the cancel, so the run waits for it to end.
+      await shows('Canceling')
+      writeFileSync(join(p.dir, 'go'), '')
+      const ran = await running
+      assert.equal(ran.code, 130, ran.stderr)
+      assert.equal(readRun(p.dir).run.status, 'interrupted')
+      await shows('q quit')
+      viewer.stdin.write('q')
+      assert.equal(await viewed, 130, "attach exits with the run's code")
+    } finally {
+      viewer.kill()
+    }
   })
 
   test('attach names what it can not find', async () => {

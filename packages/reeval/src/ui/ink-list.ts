@@ -3,7 +3,8 @@
 // back and esc folds it. While the run goes, Ctrl-C cancels it and so does q pressed twice; once
 // it has ended, q quits, taking the frame down so `tty.ts` can print the whole list into the
 // scrollback. Following another process's run (`reeval attach`), q and Ctrl-C leave the list at
-// once and the run goes on; x pressed twice cancels the run, when it can be reached. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
+// once and the run goes on; x pressed twice cancels the run, while the store says it can be
+// reached. Only `tty.ts` imports this module, and only on an interactive terminal, so nothing
 // else loads React.
 import { Box, render, Static, Text, useApp, useInput, useStdout } from 'ink'
 import {
@@ -176,9 +177,10 @@ export type ListAppProps = {
   colors: Colors
   /**
    * Cancels the run: Ctrl-C or q pressed twice while it goes, or x pressed twice under `detach`,
-   * where without it there's no key that cancels.
+   * where without it there's no key that cancels. There it returns false when the run could not
+   * be reached after all.
    */
-  cancel?: () => void
+  cancel?: () => boolean | undefined
   /**
    * Set when the run is another process's: q and Ctrl-C call it while the run goes and take the
    * list down, leaving the run alone.
@@ -197,6 +199,7 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
   const [confirming, setConfirming] = useState(false)
   const [quitting, setQuitting] = useState(false)
   const [canceled, setCanceled] = useState(false)
+  const [refused, setRefused] = useState(false)
   const [size, setSize] = useState(() => sizeOf(stdout))
   const rows = rowsOf(state)
   const finished = state.finished
@@ -242,7 +245,10 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
     setFull(false)
   }, [finished, store])
 
+  const cancelable = !!detach && !!cancel && state.cancelable === true && !canceled
+
   useInput((input, key) => {
+    setRefused(false)
     if (finished && (input === 'q' || (key.ctrl && input === 'c'))) {
       setQuitting(true)
       return
@@ -253,10 +259,10 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
         setQuitting(true)
         return
       }
-      if (input === 'x' && cancel && !canceled) {
+      if (input === 'x' && cancelable) {
         if (confirming) {
-          cancel()
-          setCanceled(true)
+          if (cancel?.() === false) setRefused(true)
+          else setCanceled(true)
         }
         setConfirming(!confirming)
         return
@@ -307,7 +313,7 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
   const keys = finished
     ? `↑↓ move · ${step} · ← close · q quit`
     : detach
-      ? `↑↓ move · ${step} · q detach${cancel && !canceled ? ' · x cancel the run' : ''}`
+      ? `↑↓ move · ${step} · q detach${cancelable ? ' · x cancel the run' : ''}`
       : `↑↓ move · ${step} · q cancel`
   const confirm = detach ? 'Press x again to cancel the run.' : 'Press q again to cancel the run.'
   // The phase spins while reeval waits on the run, and settles once it ends.
@@ -323,7 +329,11 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
           c.dim(finished.pointer),
         ]
       : [doneLine(c, state.counts)]),
-    confirming && !finished ? c.yellow(confirm) : c.dim(keys),
+    refused && !finished
+      ? c.yellow("The run can't be canceled from here now.")
+      : confirming && !finished && (cancelable || !detach)
+        ? c.yellow(confirm)
+        : c.dim(keys),
   ]
   // One line spare, so Ink never draws a frame as tall as the terminal (it clears the screen then).
   const height = Math.max(3, rowsTall - tall(head, columns) - tall(footer, columns) - 1)
@@ -376,7 +386,9 @@ export function mountList(o: MountOptions): {
     ...(o.cancel ? { cancel: o.cancel } : {}),
     ...(o.detach ? { detach: o.detach } : {}),
   }
+  // Only an interactive terminal mounts the list, so Ink draws it live even where it detects CI.
   const app = render(h(ListApp, props), {
+    interactive: true,
     stdout: o.stdout,
     stdin: o.stdin,
     exitOnCtrlC: false,

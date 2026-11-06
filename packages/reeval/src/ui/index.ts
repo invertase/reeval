@@ -26,7 +26,7 @@ export function createRenderer(options: {
   /** The interactive list's run is another process's: see `InteractiveOptions`. */
   attached?: InteractiveOptions['attached']
   /** What the interactive list's cancel keys do. */
-  cancel?: () => void
+  cancel?: InteractiveOptions['cancel']
 }): Renderer {
   // Progress lines echo check commands and the agent's tool calls, which can hold a secret.
   const out: OutputStream = { write: (text) => options.out.write(redactSecrets(text)) }

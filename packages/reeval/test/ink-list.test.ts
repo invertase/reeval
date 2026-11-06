@@ -206,7 +206,7 @@ test('once the run has ended, q quits at once and takes the whole frame down', a
 test("following another process's run, q and Ctrl-C detach at once and never cancel it", async () => {
   for (const key of ['q', '\u0003']) {
     const store = new ListStore()
-    store.set({ files: files(), counts: { done: 2, total: 3 } })
+    store.set({ files: files(), counts: { done: 2, total: 3 }, cancelable: true })
     let detached = 0
     let canceled = 0
     const app = render(
@@ -233,7 +233,7 @@ test("following another process's run, q and Ctrl-C detach at once and never can
 
 test("following another process's run, x asks and a second x cancels it, once", async () => {
   const store = new ListStore()
-  store.set({ files: files(), counts: { done: 2, total: 3 } })
+  store.set({ files: files(), counts: { done: 2, total: 3 }, cancelable: true })
   let canceled = 0
   let detached = 0
   const app = render(
@@ -261,15 +261,44 @@ test("following another process's run, x asks and a second x cancels it, once", 
 })
 
 test('following a run that cannot be reached, there is no cancel key', async () => {
+  for (const cancelable of [undefined, false]) {
+    const store = new ListStore()
+    store.set({ files: files(), counts: { done: 2, total: 3 }, cancelable })
+    let canceled = 0
+    const app = render(
+      h(ListApp, { store, colors: c, cancel: () => !!canceled++, detach: () => {} }),
+    )
+    try {
+      await settle()
+      assert.match(app.lastFrame() ?? '', /↑↓ move · → open · q detach$/m)
+      app.stdin.write('x')
+      await settle()
+      app.stdin.write('x')
+      await settle()
+      assert.doesNotMatch(app.lastFrame() ?? '', /Press x again/)
+      assert.equal(canceled, 0)
+    } finally {
+      app.unmount()
+    }
+  }
+})
+
+test('the cancel key goes as the run stops being reachable, and a refused cancel says so', async () => {
   const store = new ListStore()
-  store.set({ files: files(), counts: { done: 2, total: 3 } })
-  const app = render(h(ListApp, { store, colors: c, detach: () => {} }))
+  store.set({ files: files(), counts: { done: 2, total: 3 }, cancelable: true })
+  const app = render(h(ListApp, { store, colors: c, cancel: () => false, detach: () => {} }))
+  const frame = () => app.lastFrame() ?? ''
   try {
     await settle()
-    assert.match(app.lastFrame() ?? '', /↑↓ move · → open · q detach$/m)
     app.stdin.write('x')
     await settle()
-    assert.doesNotMatch(app.lastFrame() ?? '', /Press x again/)
+    app.stdin.write('x')
+    await settle()
+    assert.match(frame(), /^The run can't be canceled from here now\.$/m)
+    store.set({ cancelable: false })
+    app.stdin.write(KEY.down)
+    await settle()
+    assert.match(frame(), /q detach$/m, 'the refusal goes with the next key, and so does x')
   } finally {
     app.unmount()
   }

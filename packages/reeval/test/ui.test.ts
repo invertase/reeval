@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { attach } from '../src/attach.ts'
-import { openEventStream } from '../src/events.ts'
+import { EventStreamError, openEventStream } from '../src/events.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { writeLiveProgress } from '../src/live.ts'
 import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
@@ -1394,20 +1395,25 @@ describe('reeval attach', () => {
 
   /** A terminal on both stdin and stdout, as Ink reads keys from and draws on it. */
   const terminal = () => {
+    let drawn = ''
     const stdout = Object.assign(new EventEmitter(), {
       isTTY: true,
       columns: 100,
       rows: 40,
-      write: (_chunk: string, done?: () => void) => {
+      write: (chunk: string, done?: () => void) => {
+        drawn += chunk
         done?.()
         return true
       },
     })
     let data: string | null = null
+    const raw: boolean[] = []
     const stdin = Object.assign(new EventEmitter(), {
       isTTY: true,
       setEncoding() {},
-      setRawMode() {},
+      setRawMode(on: boolean) {
+        raw.push(on)
+      },
       resume() {},
       pause() {},
       ref() {},
@@ -1418,17 +1424,27 @@ describe('reeval attach', () => {
         return chunk
       },
     })
+    /** What the terminal shows has `text`, drawn since `from`. */
+    const shows = (text: string, from = 0) => stripAnsi(drawn.slice(from)).includes(text)
     return {
       tty: { stdout: stdout as never, stdin: stdin as never },
-      /** Once the list reads keys. */
-      listening: async () => {
-        while (!stdin.listenerCount('readable')) await sleep(10)
-      },
-      press: async (key: string) => {
+      raw,
+      reading: () => stdin.listenerCount('readable') > 0,
+      shows,
+      /** Presses `key` once the list reads keys, and waits until it has drawn `then`. */
+      press: async (key: string, then?: string) => {
+        await until(() => stdin.listenerCount('readable') > 0)
+        const from = drawn.length
         data = key
         stdin.emit('readable')
-        await sleep(50)
+        if (then) await until(() => shows(then, from))
       },
+    }
+  }
+  /** Until `ready()`, checked every few milliseconds, for at most 10s. */
+  const until = async (ready: () => boolean) => {
+    for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
     }
   }
   const listed = options({
@@ -1444,6 +1460,20 @@ describe('reeval attach', () => {
       header: { reeval: '0.1.0', runId: 'run-1', startedAt: '', harness: 'cursor', verbosity: 0 },
       warn: (message) => assert.fail(message),
     })
+  /** A project whose run-1 is this process, as its live.json says, with its stream in events/. */
+  const liveProject = (over: { phase?: 'cancelling' | 'finishing'; ago?: number } = {}) => {
+    const root = tempDir('ui-attach')
+    const live = writeLiveProgress({
+      dir: join(root, '.reeval', 'staging', 'run-1'),
+      runId: 'run-1',
+      startedAt: new Date(),
+      planned: [],
+      now: () => new Date(Date.now() - (over.ago ?? 0)),
+    })
+    live.stop()
+    if (over.phase) live.phase(over.phase)
+    return { root, file: join(root, '.reeval', 'events', 'run-1.ndjson') }
+  }
   /** What `reeval run` leaves in the scrollback once its list is quit. */
   const quitList = async (events: ReevalEvent[]) => {
     let text = ''
@@ -1469,53 +1499,177 @@ describe('reeval attach', () => {
     const stream = streamOf(file)
     for (const e of interleaved) stream.write(e)
     await stream.end(1)
-    const { tty, listening, press } = terminal()
+    const { tty, shows, press } = terminal()
     let text = ''
     let done = false
-    const signaled: number[] = []
     const run = attach({
       source: file,
       out: { write: (chunk: string) => (text += chunk) },
       output: () => listed,
       tty,
-      signalRun: (pid) => signaled.push(pid),
     }).finally(() => {
       done = true
     })
-    await listening()
-    await sleep(100)
+    await until(() => shows('q quit'))
     assert.equal(done, false, 'the list stays up once the stream has ended')
     await press('q')
     assert.equal(await run, 1, "the run's exit code")
     assert.equal(text, await quitList(interleaved))
-    assert.deepEqual(signaled, [])
   })
 
   test('on a terminal, q detaches from a run in progress and x twice cancels it by its pid', async () => {
-    const file = join(tempDir('ui-events'), 'events.ndjson')
+    const { root, file } = liveProject()
     const stream = streamOf(file)
     for (const e of interleaved.slice(0, 5)) stream.write(e)
-    const { tty, listening, press } = terminal()
+    const { tty, shows, press } = terminal()
     let text = ''
     const signaled: number[] = []
     try {
       const run = attach({
         source: file,
+        root,
         out: { write: (chunk: string) => (text += chunk) },
         output: () => listed,
         tty,
         follow: { pollMs: 10 },
         signalRun: (pid) => signaled.push(pid),
       })
-      await listening()
-      await press('x')
+      await until(() => shows('q detach · x cancel the run'))
+      await press('x', 'Press x again to cancel the run.')
       assert.deepEqual(signaled, [], 'one x only asks')
-      await press('x')
+      await press('x', 'q detach')
       assert.deepEqual(signaled, [process.pid], "the run's own process, from the header")
       await press('q')
       assert.equal(await run, 0, 'detaching exits 0')
       assert.deepEqual(signaled, [process.pid], 'q never signals the run')
       assert.ok(text.endsWith('Detached from run run-1; it goes on.\n'), text)
+    } finally {
+      await stream.end(0)
+    }
+  })
+
+  test("on a terminal, x is offered only when the run's live.json vouches for the stream's pid", async () => {
+    const cases: Record<string, (root: string) => void> = {
+      'no live.json': (root) => rmSync(join(root, '.reeval', 'staging'), { recursive: true }),
+      'another process (a reused pid)': (root) => {
+        const path = join(root, '.reeval', 'staging', 'run-1', 'live.json')
+        const live = JSON.parse(readFileSync(path, 'utf8'))
+        writeFileSync(path, JSON.stringify({ ...live, pid: process.pid + 1 }))
+      },
+      canceling: (root) => {
+        writeLiveProgress({
+          dir: join(root, '.reeval', 'staging', 'run-1'),
+          runId: 'run-1',
+          startedAt: new Date(),
+          planned: [],
+        }).phase('cancelling')
+      },
+      'a stale heartbeat': (root) => {
+        writeLiveProgress({
+          dir: join(root, '.reeval', 'staging', 'run-1'),
+          runId: 'run-1',
+          startedAt: new Date(),
+          planned: [],
+          now: () => new Date(Date.now() - 60_000),
+        }).stop()
+      },
+    }
+    for (const [name, spoil] of Object.entries(cases)) {
+      const { root, file } = liveProject()
+      spoil(root)
+      const stream = streamOf(file)
+      for (const e of interleaved.slice(0, 5)) stream.write(e)
+      const { tty, shows, press } = terminal()
+      let text = ''
+      const signaled: number[] = []
+      try {
+        const run = attach({
+          source: file,
+          root,
+          out: { write: (chunk: string) => (text += chunk) },
+          output: () => listed,
+          tty,
+          follow: { pollMs: 10 },
+          signalRun: (pid) => signaled.push(pid),
+        })
+        await until(() => shows('q detach'))
+        assert.ok(!shows('x cancel'), name)
+        await press('x')
+        await press('x')
+        await press('q')
+        assert.equal(await run, 0, name)
+        assert.deepEqual(signaled, [], name)
+        assert.ok(!shows('Press x again'), name)
+        if (name !== 'canceling') {
+          assert.ok(text.endsWith('Detached from run run-1.\n'), `${name}: ${text}`)
+        }
+      } finally {
+        await stream.end(0)
+      }
+    }
+  })
+
+  test('on a terminal, x checks again at the press: an owner Ctrl-C or a dead pid since sends nothing', async () => {
+    for (const since of ['canceled', 'died'] as const) {
+      const { root, file } = liveProject()
+      const stream = streamOf(file)
+      for (const e of interleaved.slice(0, 5)) stream.write(e)
+      const { tty, shows, press } = terminal()
+      let text = ''
+      let alive = true
+      const signaled: number[] = []
+      try {
+        const run = attach({
+          source: file,
+          root,
+          out: { write: (chunk: string) => (text += chunk) },
+          output: () => listed,
+          tty,
+          // Asleep while the pid dies, so the follow doesn't end the stream before the press.
+          follow: { pollMs: 60_000, alive: () => alive },
+          signalRun: (pid) => signaled.push(pid),
+        })
+        await until(() => shows('x cancel the run'))
+        await press('x', 'Press x again')
+        if (since === 'canceled') {
+          writeLiveProgress({
+            dir: join(root, '.reeval', 'staging', 'run-1'),
+            runId: 'run-1',
+            startedAt: new Date(),
+            planned: [],
+          }).phase('cancelling')
+        } else alive = false
+        await press('x', "The run can't be canceled from here now.")
+        assert.deepEqual(signaled, [], since)
+        await press('q')
+        assert.equal(await run, 0, since)
+        assert.ok(text.endsWith('Detached from run run-1.\n'), `${since}: ${text}`)
+      } finally {
+        await stream.end(0)
+      }
+    }
+  })
+
+  test("on a terminal, a stream cut off as its run's process dies takes the list down and fails", async () => {
+    const { root, file } = liveProject()
+    const stream = streamOf(file)
+    for (const e of interleaved.slice(0, 5)) stream.write(e)
+    const { tty, raw, reading, shows } = terminal()
+    let alive = true
+    try {
+      const run = attach({
+        source: file,
+        root,
+        out: { write: () => true },
+        output: () => listed,
+        tty,
+        follow: { pollMs: 10, alive: () => alive },
+      })
+      await until(() => shows('q detach'))
+      alive = false
+      await assert.rejects(run, EventStreamError)
+      assert.equal(raw.at(-1), false, 'the terminal is back out of raw mode')
+      assert.equal(reading(), false, 'nothing reads keys any more')
     } finally {
       await stream.end(0)
     }
@@ -1529,27 +1683,31 @@ describe('reeval attach', () => {
         [JSON.stringify({ ...JSON.parse(head), host: 'build-7' }), ...rest].join('\n'),
       )
     }
-    const going = join(tempDir('ui-events'), 'events.ndjson')
-    const stream = streamOf(going)
+    const going = liveProject()
+    const stream = streamOf(going.file)
     for (const e of interleaved.slice(0, 5)) stream.write(e)
-    remote(going)
+    remote(going.file)
     const signaled: number[] = []
+    let text = ''
     try {
-      const { tty, listening, press } = terminal()
+      const { tty, shows, press } = terminal()
       const run = attach({
-        source: going,
-        out: { write: () => true },
+        source: going.file,
+        root: going.root,
+        out: { write: (chunk: string) => (text += chunk) },
         output: () => listed,
         tty,
         follow: { pollMs: 10 },
         signalRun: (pid) => signaled.push(pid),
       })
-      await listening()
+      await until(() => shows('q detach'))
+      assert.ok(!shows('x cancel'))
       await press('x')
       await press('x')
       await press('q')
       assert.equal(await run, 0)
       assert.deepEqual(signaled, [], 'nothing reaches a run on another host')
+      assert.ok(text.endsWith('Detached from run run-1.\n'), 'whether it goes on is unknown here')
     } finally {
       await stream.end(0)
     }
@@ -1559,15 +1717,15 @@ describe('reeval attach', () => {
     for (const e of interleaved) done.write(e)
     await done.end(1)
     remote(ended)
-    const { tty, listening, press } = terminal()
-    let text = ''
+    const { tty, shows, press } = terminal()
+    text = ''
     const run = attach({
       source: ended,
       out: { write: (chunk: string) => (text += chunk) },
       output: () => listed,
       tty,
     })
-    await listening()
+    await until(() => shows('q quit'))
     await press('q')
     assert.equal(await run, 1)
     assert.match(
@@ -1585,7 +1743,7 @@ describe('reeval attach', () => {
     const resume = streamOf(file, true)
     for (const e of interleaved) resume.write(e)
     await resume.end(0)
-    const { tty, listening, press } = terminal()
+    const { tty, shows, press } = terminal()
     let text = ''
     const run = attach({
       source: file,
@@ -1593,10 +1751,9 @@ describe('reeval attach', () => {
       output: () => listed,
       tty,
     })
-    await listening()
-    await sleep(100)
     const once = await quitList(interleaved)
-    assert.equal(text, once, 'the first list is in the scrollback with no key pressed')
+    await until(() => text === once)
+    await until(() => shows('q quit'))
     await press('q')
     assert.equal(await run, 0, "the resume's exit code")
     assert.equal(text, once + once)

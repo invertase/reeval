@@ -2,10 +2,10 @@
 // from the stream's first line, so attaching mid-run replays what already happened and then
 // follows. It exits with the run's own exit code. On a terminal that's the interactive list, whose
 // q and Ctrl-C detach this viewer and leave the run alone; x pressed twice cancels the run, which
-// only a run on this host can be reached for, by its pid.
+// only a run on this host whose live.json vouches for its pid can be reached for.
 import { hostname } from 'node:os'
 import { EventStreamError, type FollowOptions, followEvents } from './events.ts'
-import { processAlive } from './resume.ts'
+import { CANCEL_SIGNAL, cancelable, processAlive } from './resume.ts'
 import type { OutputStream, Renderer } from './ui/events.ts'
 import { createRenderer, type OutputOptions } from './ui/index.ts'
 import type { RunEventsHeader } from './view/events.ts'
@@ -20,8 +20,10 @@ export type AttachOptions = {
   colorDepth?: number
   /** The terminal the interactive list draws on and reads keys from. */
   tty?: { stdout: NodeJS.WriteStream; stdin: NodeJS.ReadStream }
+  /** The run's project, whose staging has its live.json; without one, the run can't be canceled. */
+  root?: string
   follow?: FollowOptions
-  /** Asks the run's process to cancel, as Ctrl-C in its own terminal does. */
+  /** Asks the run's process to cancel, as a first Ctrl-C in its own terminal does. */
   signalRun?: (pid: number) => void
 }
 
@@ -34,15 +36,17 @@ export async function attach(options: AttachOptions): Promise<number> {
   const given = options.follow?.signal
   const signal = given ? AbortSignal.any([given, detached.signal]) : detached.signal
   const alive = options.follow?.alive ?? processAlive
-  const signalRun = options.signalRun ?? ((pid) => process.kill(pid, 'SIGINT'))
+  const signalRun = options.signalRun ?? ((pid) => process.kill(pid, CANCEL_SIGNAL))
+  const { root } = options
+  const reachable = (line: RunEventsHeader) =>
+    root !== undefined && cancelable(root, line, { alive })
   let renderer: Renderer | undefined
   /** The last segment's renderer once its exit line came, while its list may still be up. */
   let ended: Renderer | undefined
   let header: RunEventsHeader | undefined
   let code: number | undefined
-  const rendererFor = (line: RunEventsHeader) => {
-    const here = line.host === hostname()
-    return createRenderer({
+  const rendererFor = (line: RunEventsHeader) =>
+    createRenderer({
       out: options.out,
       output: options.output(line.verbosity),
       harness: line.harness,
@@ -50,16 +54,17 @@ export async function attach(options: AttachOptions): Promise<number> {
       ...(options.columns === undefined ? {} : { columns: options.columns }),
       ...(options.colorDepth === undefined ? {} : { colorDepth: options.colorDepth }),
       ...(options.tty ? { tty: options.tty } : {}),
-      attached: { detach: () => detached.abort(), ...(here ? {} : { host: line.host }) },
-      ...(here && alive(line.pid, line.host)
-        ? {
-            cancel: () => {
-              if (alive(line.pid, line.host)) signalRun(line.pid)
-            },
-          }
-        : {}),
+      attached: {
+        detach: () => detached.abort(),
+        ...(line.host === hostname() ? {} : { host: line.host }),
+        ...(root === undefined ? {} : { cancelable: () => reachable(line) }),
+      },
+      cancel: () => {
+        if (!reachable(line)) return false
+        signalRun(line.pid)
+        return true
+      },
     })
-  }
   try {
     for await (const line of followEvents(options.source, { ...options.follow, signal })) {
       if (detached.signal.aborted) break
@@ -93,7 +98,14 @@ export async function attach(options: AttachOptions): Promise<number> {
   renderer?.close()
   await (renderer ?? ended)?.wait?.()
   if (detached.signal.aborted) {
-    if (header) options.out.write(`Detached from run ${header.runId}; it goes on.\n`)
+    if (header) {
+      const goesOn = code === undefined && header.host === hostname() && reachable(header)
+      options.out.write(
+        goesOn
+          ? `Detached from run ${header.runId}; it goes on.\n`
+          : `Detached from run ${header.runId}.\n`,
+      )
+    }
     return 0
   }
   if (code === undefined) {

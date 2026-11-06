@@ -93,6 +93,42 @@ export function processAlive(pid: number, host: string): boolean {
   }
 }
 
+/**
+ * The signal `reeval attach` cancels a run with: `reeval run` takes it as a first Ctrl-C, and
+ * ignores it once the run is canceling or finishing.
+ */
+export const CANCEL_SIGNAL = 'SIGUSR2'
+
+/**
+ * Whether `reeval attach` may cancel the run `header` names: its live.json is that same
+ * process, alive on this host, still running attempts and beating. A stream's pid alone could be
+ * another process by now, or a run already canceling, which a signal would quit without a record.
+ */
+export function cancelable(
+  root: string,
+  header: { runId: string; pid: number; host: string },
+  options: { now?: number; alive?: (pid: number, host: string) => boolean } = {},
+): boolean {
+  if (process.platform === 'win32' || header.host !== hostname()) return false
+  if (!(options.alive ?? processAlive)(header.pid, header.host)) return false
+  let progress: ReturnType<typeof readableLiveProgress>
+  try {
+    progress = readableLiveProgress(
+      JSON.parse(readFileSync(join(stagingOf(root, header.runId), LIVE_FILE), 'utf8')),
+    )
+  } catch {
+    return false
+  }
+  if (progress?.phase !== 'running') return false
+  const now = options.now ?? Date.now()
+  return (
+    progress.runId === header.runId &&
+    progress.pid === header.pid &&
+    progress.host === header.host &&
+    now - Date.parse(progress.heartbeatAt) <= STALE_MS
+  )
+}
+
 function readHolder(dir: string): { pid: number; host: string } | null {
   try {
     const [pidLine, hostLine] = readFileSync(join(dir, HOLDER_FILE), 'utf8').split('\n')

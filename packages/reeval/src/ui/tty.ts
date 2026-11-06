@@ -33,6 +33,8 @@ export type ListState = {
   } | null
   /** Takes the finished list down as q does, with no key pressed. */
   quit?: true
+  /** Following another process's run: whether x can cancel it now. */
+  cancelable?: boolean
 }
 
 /** The list's state, which the Ink app reads with `useSyncExternalStore`. */
@@ -60,6 +62,7 @@ export class ListStore {
 }
 
 const FRAME_MS = 80
+const CANCELABLE_MS = 1000
 
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
@@ -184,14 +187,17 @@ export class StepSpinner {
 export type InteractiveOptions = RendererOptions & {
   stdout: NodeJS.WriteStream
   stdin: NodeJS.ReadStream
-  /** What Ctrl-C, or q pressed twice, does while the run goes (x twice under `attached`). */
-  cancel?: () => void
+  /**
+   * What Ctrl-C, or q pressed twice, does while the run goes (x twice under `attached`, where it
+   * returns false when the run could not be reached).
+   */
+  cancel?: () => boolean | undefined
   /**
    * The run is another process's, which `reeval attach` follows: q and Ctrl-C call `detach`, and
-   * only `cancel` reaches the run. `host` is the run's when it isn't this one's, and marks the
-   * paths the run prints as being there.
+   * only `cancel` reaches the run, while `cancelable` (asked every `CANCELABLE_MS`) says it can.
+   * `host` is the run's when it isn't this one's, and marks the paths the run prints as being there.
    */
-  attached?: { detach: () => void; host?: string }
+  attached?: { detach: () => void; host?: string; cancelable?: () => boolean }
   /** Loads the Ink list; tests stand in a failing one. */
   load?: () => Promise<Pick<typeof import('./ink-list.ts'), 'mountList'>>
 }
@@ -213,6 +219,7 @@ export class InteractiveRenderer implements Renderer {
   #closed = false
   #detached = false
   #pending: NodeJS.Immediate | undefined
+  #polling: NodeJS.Timeout | undefined
   readonly #spinner: StepSpinner
   /** What the plain renderer wrote since `#written` was reset, while the list isn't up. */
   #written = ''
@@ -254,6 +261,16 @@ export class InteractiveRenderer implements Renderer {
       ? this.#o.cancel
       : (this.#o.cancel ?? (() => process.kill(process.pid, 'SIGINT')))
     const load = this.#o.load ?? (() => import('./ink-list.ts'))
+    const asked = attached?.cancelable
+    if (asked) {
+      const poll = () => {
+        const cancelable = asked()
+        if (cancelable !== this.#store.get().cancelable) this.#store.set({ cancelable })
+      }
+      poll()
+      this.#polling = setInterval(poll, CANCELABLE_MS)
+      this.#polling.unref()
+    }
     this.#app = load()
       .then((m) =>
         m.mountList({
@@ -374,6 +391,7 @@ export class InteractiveRenderer implements Renderer {
           return
         }
         this.#flush()
+        this.#stopPolling()
         const pointer = pointerLine(e.summaryPath, host)
         this.#ended = { scrollback: verbose ? listOf(true) : list, verbose, pointer, event: e }
         this.#store.set({
@@ -393,7 +411,13 @@ export class InteractiveRenderer implements Renderer {
     }
   }
 
+  #stopPolling() {
+    clearInterval(this.#polling)
+    this.#polling = undefined
+  }
+
   close(): void {
+    this.#stopPolling()
     if (this.#pending) clearImmediate(this.#pending)
     this.#pending = undefined
     this.#spinner.settle()
