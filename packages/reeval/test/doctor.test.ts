@@ -840,6 +840,20 @@ evaluate('a', async () => {})
       '.env.local',
     )
     assert.ok(based.every((c) => c.status === 'ok'))
+    process.env.AI_GATEWAY_BASE_URL = 'http://gw.example'
+    try {
+      const judged = await checkJudge(config, deps({ env }), false, '.env.local')
+      assert.deepEqual(
+        [judged[0]?.status, judged[0]?.fix],
+        ['fail', "set AI_GATEWAY_BASE_URL to the gateway's https:// URL, or unset it"],
+      )
+      assert.match(
+        judged[0]?.summary ?? '',
+        /^the judge model "anthropic\/claude-haiku-4-5": AI_GATEWAY_BASE_URL/,
+      )
+    } finally {
+      delete process.env.AI_GATEWAY_BASE_URL
+    }
     const unset = await configOf(
       'gateway-unset',
       "{ harnesses: cursor({ model: 'composer-2.5' }) }",
