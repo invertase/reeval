@@ -78,7 +78,8 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
       () => {},
     )
   // Killed on the abort, not once the host program has exited: an SSH connection's master holds
-  // the command's output open until the command in the machine ends.
+  // the command's output open until the command in the machine ends. Killed again after it has
+  // exited, for a command that started in the machine after the first kill looked.
   const execute = async (exec: number, c: HostCommand, signal?: AbortSignal) => {
     let killed: Promise<void> | undefined
     const onAbort = () => {
@@ -88,7 +89,10 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
     try {
       return text(await runHost(c, signal))
     } catch (error) {
-      if (signal?.aborted) await (killed ?? kill(exec))
+      if (signal?.aborted) {
+        await killed
+        await kill(exec)
+      }
       throw error
     } finally {
       signal?.removeEventListener('abort', onAbort)

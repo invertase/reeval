@@ -93,7 +93,7 @@ describe('transportSession', () => {
     assert.equal(calls.at(-1)?.signal?.aborted, false, 'the kill runs on a signal of its own')
   })
 
-  test('the kill goes out on the abort, while the host program still holds on', async () => {
+  test('the kill goes out on the abort, while the host program still holds on, and again once it exits', async () => {
     const abort = new AbortController()
     let release = () => {}
     const { calls, run } = recorder(async (argv) => {
@@ -112,7 +112,7 @@ describe('transportSession', () => {
     await assert.rejects(running, /aborted/)
     assert.deepEqual(
       calls.map((c) => c.argv[0]),
-      ['user', 'kill'],
+      ['user', 'kill', 'kill'],
     )
   })
 
