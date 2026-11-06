@@ -1183,6 +1183,32 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/expect-message-masked',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected 'nope \[REDACTED\]' to be '\[REDACTED\]'/,
+    async record({ project, stdout, tier }) {
+      // The stretches a failed matcher's message kept of each before it was cut to 40 characters.
+      const kept = [
+        ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('').slice(4, 30),
+        ['correct', 'horse', 'battery', 'staple', 'and', 'more'].join('-'),
+      ]
+      const env = { CURSOR_AGENT: '1', REEVAL_FIXTURE_SANDBOX: tier }
+      const agent = await runCli(project, ['run', '--events'], { env })
+      assert.equal(agent.code, 1, agent.stdout + agent.stderr)
+      assert.match(agent.stdout, /expected 'nope \[REDACTED\]' to be '\[REDACTED\]'/)
+      for (const part of kept) {
+        for (const fragment of [part.slice(0, 8), part.slice(-8)]) {
+          assert.ok(!stdout.includes(fragment), `the output has ${fragment}`)
+          assert.ok(!agent.stdout.includes(fragment), `the agent output has ${fragment}`)
+          assert.equal(filesContaining(join(project, '.reeval'), fragment), '', fragment)
+        }
+      }
+      // Twin: the same search finds what was left in their place, the event stream's included.
+      assert.match(filesContaining(join(project, '.reeval', 'events'), '[REDACTED]'), /\.ndjson/)
+    },
+  },
+  {
     dir: 'secrets/checks-setup-background',
     tiers: ['docker'],
     env: 'unbrokered',

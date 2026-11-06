@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { stripVTControlCharacters } from 'node:util'
 import { budgetMarker } from '../src/engine/budget.ts'
 import { type CollectedTest, collect, registerTest } from '../src/engine/collector.ts'
 import { expect } from '../src/engine/expect.ts'
@@ -417,5 +418,27 @@ describe('console routing and error serialization', () => {
     again.stack = `Error: kept\n    at ${file}:3:9`
     rmSync(file)
     assert.match(String(serializeError(again).stack), /x\.ts:3:9/)
+  })
+
+  test("serializeError masks a diff's values before diffing them, the cause's too", () => {
+    const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+    // Highlighting what changed cuts the token after the `ghp_` both lines share.
+    const diffed = (message: string) =>
+      Object.assign(new Error(message), {
+        actual: `top\ntoken ${token}`,
+        expected: 'top\ntoken ghp_none',
+        diffOptions: { changeColor: (s: string) => `\x1b[7m${s}\x1b[27m` },
+      })
+    const error = diffed('outer')
+    Object.assign(error, { cause: diffed('inner') })
+    const serialized = serializeError(error)
+    const plain = (text: unknown) => stripVTControlCharacters(String(text))
+    for (const diff of [serialized.diff, (serialized.cause as { diff?: string }).diff]) {
+      assert.match(plain(diff), /\+ token \[REDACTED\]/)
+      assert.ok(!plain(diff).includes('A1b2C3'), plain(diff))
+    }
+    assert.ok(!JSON.stringify(serialized).includes('A1b2C3'))
+    // Twin: an error with nothing to diff gets no actual or expected.
+    assert.equal('actual' in serializeError(new Error('none')), false)
   })
 })

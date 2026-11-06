@@ -45,6 +45,7 @@ import {
   redactKey,
   redactSecrets,
   redactSplitSecrets,
+  redactStrings,
   redactValue,
   registerSecret,
   type SecretMatch,
@@ -1896,4 +1897,56 @@ describe('masking before shortening', () => {
       assert.doesNotMatch(capped, /password=corr|staple\.z/)
     }),
   )
+})
+
+describe('redacting the strings in a value', () => {
+  const token = ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('')
+
+  test('masks every string, keeping arrays, Maps, Sets, prototypes, symbol keys and errors', () => {
+    class Box {
+      held: string
+      constructor(held: string) {
+        this.held = held
+      }
+    }
+    const key = Symbol('key')
+    const value = {
+      list: [`a ${token}`, 1, null],
+      map: new Map<unknown, unknown>([[token, { deep: token }]]),
+      set: new Set([token]),
+      box: new Box(token),
+      [key]: token,
+    }
+    const out = redactStrings(value, {})
+    assert.deepEqual(out.list, ['a [REDACTED]', 1, null])
+    assert.deepEqual([...out.map], [['[REDACTED]', { deep: '[REDACTED]' }]])
+    assert.deepEqual([...out.set], ['[REDACTED]'])
+    assert.ok(out.box instanceof Box)
+    assert.equal(out.box.held, '[REDACTED]')
+    assert.equal(out[key], '[REDACTED]')
+    assert.equal(value.box.held, token, 'the value itself is left as it was')
+    const error = Object.assign(new TypeError(`no ${token}`), { code: token })
+    const masked = redactStrings(error, {})
+    assert.ok(masked instanceof TypeError)
+    assert.deepEqual([masked.message, masked.code], ['no [REDACTED]', '[REDACTED]'])
+    assert.match(String(masked.stack), /^TypeError: no \[REDACTED\]\n/)
+  })
+
+  test('twin: what has no secret, getters, cycles and other built-ins are returned as they are', () => {
+    const plain = { list: ['a', 1], map: new Map([['k', 'v']]), set: new Set(['s']) }
+    assert.equal(redactStrings(plain, {}), plain)
+    const getter = {
+      get secret() {
+        return token
+      },
+    }
+    assert.equal(redactStrings(getter, {}), getter)
+    const date = new Date(0)
+    assert.equal(redactStrings(date, {}), date)
+    const cycle: Record<string, unknown> = { token }
+    cycle.self = cycle
+    const out = redactStrings(cycle, {})
+    assert.equal(out.token, '[REDACTED]')
+    assert.equal(out.self, cycle)
+  })
 })

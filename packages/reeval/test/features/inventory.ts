@@ -826,8 +826,18 @@ export const inventory: InventoryFeature[] = [
     id: 'redaction',
     area: 'Environments',
     name: 'Secrets masked in everything reeval writes',
-    fixtures: ['secrets/redaction-coverage', 'secrets/short-declared-secrets'],
-    unit: ['reeval/test/unit.test.ts', 'reeval/test/secrets.test.ts', 'reeval/test/debug.test.ts'],
+    fixtures: [
+      'secrets/redaction-coverage',
+      'secrets/short-declared-secrets',
+      'secrets/expect-message-masked',
+    ],
+    unit: [
+      'reeval/test/unit.test.ts',
+      'reeval/test/secrets.test.ts',
+      'reeval/test/debug.test.ts',
+      'reeval/test/engine-expect.test.ts',
+      'reeval/test/engine-run.test.ts',
+    ],
   },
   {
     id: 'redaction.names',
