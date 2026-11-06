@@ -1230,6 +1230,10 @@ export const features: Feature[] = [
         JSON.stringify(canary?.assertions),
         /expected Holder\{ held: '\[REDACTED\]' \} to be null/,
       )
+      assert.match(
+        JSON.stringify(canary?.assertions),
+        /expected AxiosLike: Request failed with \[REDACTED\] to be null/,
+      )
       // The stretches a failed matcher's message kept of each before it was cut to 40 characters.
       const kept = [
         ['ghp_A1b2C3d4E5f6G7h8', 'I9j0K1l2M3n4O5p6Q7r8'].join('').slice(4, 30),

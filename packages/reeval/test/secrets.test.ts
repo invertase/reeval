@@ -1948,6 +1948,37 @@ describe('redacting the strings in a value', () => {
     assert.equal(holder.held, '[REDACTED]')
   })
 
+  test("copies an error with a toJSON, AxiosError's shape, and its toJSON is the original's, masked", () => {
+    class AxiosLike extends Error {
+      override name = 'AxiosLike'
+      #code: string
+      constructor(message: string, code: string) {
+        super(message)
+        this.#code = code
+      }
+      toJSON() {
+        return { message: this.message, code: this.#code }
+      }
+    }
+    const error = new AxiosLike(`Request failed with ${token}`, token)
+    const masked = redactStrings(error, {})
+    assert.ok(masked instanceof AxiosLike)
+    assert.equal(masked.message, 'Request failed with [REDACTED]')
+    assert.deepEqual(masked.toJSON(), {
+      message: 'Request failed with [REDACTED]',
+      code: '[REDACTED]',
+    })
+    assert.ok(
+      !Object.getOwnPropertyNames(masked).includes('toJSON'),
+      "loupe lists an error's own properties",
+    )
+    assert.equal(
+      error.message,
+      `Request failed with ${token}`,
+      'the error itself is left as it was',
+    )
+  })
+
   test('twin: what has no secret, getters, cycles and other built-ins are returned as they are', () => {
     const plain = { list: ['a', 1], map: new Map([['k', 'v']]), set: new Set(['s']) }
     assert.equal(redactStrings(plain, {}), plain)

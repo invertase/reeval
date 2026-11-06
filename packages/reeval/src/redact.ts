@@ -495,17 +495,21 @@ const FORMAT_HOOKS: PropertyKey[] = [
   Symbol.for('nodejs.util.inspect.custom'),
 ]
 
+const hasHook = (v: object, key: PropertyKey) =>
+  typeof (v as Record<PropertyKey, unknown>)[key] === 'function'
+
 /**
  * Whether a copy of `v` on its own prototype formats as `v` does: a plain object, an error or a
  * class instance, read field by field. A copy has none of `v`'s private (`#`) fields, so one with a
  * format hook, which could read them, isn't copied; nor are built-ins with internal slots (dates,
- * promises, buffers), whose tag isn't an object's or an error's.
+ * promises, buffers), whose tag isn't an object's or an error's. An error's `toJSON` doesn't count:
+ * loupe formats an error from its fields alone, and the copy's `toJSON` is the original's.
  */
 function copyable(v: object, proto: unknown): boolean {
   if (proto === Object.prototype || proto === null) return true
   const tag = Object.prototype.toString.call(v)
-  if (tag !== '[object Object]' && tag !== '[object Error]') return false
-  return !FORMAT_HOOKS.some((key) => typeof (v as Record<PropertyKey, unknown>)[key] === 'function')
+  if (tag === '[object Error]') return !FORMAT_HOOKS.some((k) => k !== 'toJSON' && hasHook(v, k))
+  return tag === '[object Object]' && !FORMAT_HOOKS.some((key) => hasHook(v, key))
 }
 
 /**
@@ -558,9 +562,21 @@ export function redactStrings<T>(value: T, env: NodeJS.ProcessEnv = process.env)
         }
       }
       if (changed) {
+        // pretty-format diffs what `toJSON` returns, which the original makes from its own fields;
+        // on a prototype between, since loupe lists every own property of an error.
+        const base =
+          error && hasHook(v, 'toJSON')
+            ? Object.create(proto as object, {
+                toJSON: {
+                  value: () => redactStrings((v as unknown as { toJSON(): unknown }).toJSON(), env),
+                  configurable: true,
+                  writable: true,
+                },
+              })
+            : proto
         out = Object.defineProperties(
           error
-            ? Object.setPrototypeOf(new Error(), proto as object)
+            ? Object.setPrototypeOf(new Error(), base as object)
             : Object.create(proto as object | null),
           descriptors,
         )

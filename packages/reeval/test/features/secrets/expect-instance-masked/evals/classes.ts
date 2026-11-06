@@ -9,3 +9,16 @@ export class Holder {
     this.held = held
   }
 }
+
+/** AxiosError's shape: an error subclass whose `toJSON` reads a private field. */
+export class AxiosLike extends Error {
+  override name = 'AxiosLike'
+  #code: string
+  constructor(message: string, code = 'ERR_BAD_REQUEST') {
+    super(message)
+    this.#code = code
+  }
+  toJSON() {
+    return { message: this.message, code: this.#code }
+  }
+}
