@@ -14,10 +14,13 @@ const OUTPUT_LINES = 20
 /** A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` (or `tcp6`) or `lsof`. */
 export type Listener = { port: number; address: string }
 
-/** One look at the sandbox's listeners and whether the served command still runs. */
+/**
+ * One look at the sandbox's listeners and whether the served command still runs. `others` are
+ * ports other users listen on, on a machine whose attempts share its network as users of their own.
+ */
 export type ServeProbe =
   | { proc: false; alive: boolean }
-  | { proc: true; alive: boolean; listeners: Listener[] }
+  | { proc: true; alive: boolean; listeners: Listener[]; others?: number[] }
 
 /**
  * How a sandbox lists its TCP listeners: Linux's `/proc/net`, `lsof` (macOS), or not at all,
@@ -26,7 +29,7 @@ export type ServeProbe =
 export type ListenerSource = 'proc' | 'lsof' | 'host'
 
 const READ_LISTENERS: Record<ListenerSource, string> = {
-  proc: 'if [ -r /proc/net/tcp ]; then cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; else echo noproc; fi',
+  proc: 'if [ -r /proc/net/tcp ]; then echo "uid $(id -u)"; cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; else echo noproc; fi',
   lsof: 'if command -v lsof >/dev/null 2>&1; then echo lsof; lsof -nP -iTCP -sTCP:LISTEN -Fn 2>/dev/null; else echo noproc; fi',
   host: 'echo noproc',
 }
@@ -75,14 +78,24 @@ export function parseProbe(stdout: string): ServeProbe {
     }
     return { proc: true, alive, listeners }
   }
+  const own = lines.find((l) => l.startsWith('uid '))?.slice(4)
+  const others = new Set<number>()
   for (const l of lines) {
-    // `sl local remote st …`; state 0A is LISTEN.
-    const m = /^\s*\d+:\s+([0-9A-F]+):([0-9A-F]{4})\s+\S+\s+0A\s/i.exec(l)
+    // `sl local remote st tx:rx tr:when retrnsmt uid …`; state 0A is LISTEN.
+    const m =
+      /^\s*\d+:\s+([0-9A-F]+):([0-9A-F]{4})\s+\S+\s+0A\s(?:\s*\S+\s+\S+\s+\S+\s+(\d+))?/i.exec(l)
     const address = m ? procAddress(m[1] as string) : ''
-    if (m && reachable(address))
-      listeners.push({ port: Number.parseInt(m[2] as string, 16), address })
+    if (!m || !reachable(address)) continue
+    const port = Number.parseInt(m[2] as string, 16)
+    if (own !== undefined && m[3] !== undefined && m[3] !== own) others.add(port)
+    else listeners.push({ port, address })
   }
-  return { proc: true, alive, listeners }
+  return {
+    proc: true,
+    alive,
+    listeners,
+    ...(others.size && { others: [...others].sort((a, b) => a - b) }),
+  }
 }
 
 /** The ports listening now that weren't before the command started, ascending. */

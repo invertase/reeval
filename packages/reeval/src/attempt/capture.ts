@@ -27,7 +27,7 @@ import { vertexSettingsIn } from '../gateway/vertex.ts'
 import { sha256 } from '../ids.ts'
 import { redactJson } from '../redact.ts'
 import { cacheDir } from '../root.ts'
-import { capabilitiesOf } from '../sandbox/kinds.ts'
+import { capabilitiesOf, sandboxKind } from '../sandbox/kinds.ts'
 import { plural } from '../text.ts'
 import type {
   BackgroundHandle,
@@ -203,8 +203,17 @@ export async function serveCommand(
   const first = await look()
   const before = new Set(first.proc ? first.listeners.map((l) => l.port) : [])
   // The fake sandbox shares the host's network; a sandbox that can't list its listeners can't tell.
+  const neighbors = new Set(first.proc ? (first.others ?? []) : [])
+  const shared = (sandboxKind(a.spec.sandbox).slotsPerMachine?.(a.spec.sandbox as never) ?? 1) > 1
+  if (shared && port !== undefined && neighbors.has(port)) {
+    throw new Error(
+      `c.serve(${JSON.stringify(command)}, ${port}): port ${port} is in use by another attempt on this machine, which runs attempts side by side (attemptsPerMachine) on one network. Drop the port to serve on PORT, or run this eval with attemptsPerMachine: 1`,
+    )
+  }
   const taken = async (p: number) =>
-    first.proc ? before.has(p) : onHost && (await hostListening(p)) !== undefined
+    first.proc
+      ? before.has(p) || neighbors.has(p)
+      : onHost && (await hostListening(p)) !== undefined
   const want = await servePort(command, port, allocatePort, taken)
   const { handle, pid, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
   const found = await awaitListening(command, {

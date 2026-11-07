@@ -177,7 +177,8 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
   const shell = linuxShell({
     run: hostRun,
     remote: (command) => sshArgv(target, command),
-    id: target.hostKeyAlias,
+    // Slots on one machine number their commands alike, so the marker kill finds names the slot.
+    id: `${target.hostKeyAlias}-${layout.user}`,
     user: baseEnv,
     signal,
     layout,
