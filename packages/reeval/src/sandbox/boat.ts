@@ -455,10 +455,10 @@ export function retryAfterMs(
   return null
 }
 
-/** What `boat()` keeps after a machine's harness installed: its sandbox user's home, by harness. */
+/** The harness install a machine keeps a home for, so its slots and resets copy it: by harness. */
 const homeLabel = (options: SandboxOptions) => {
   const bake = options.harness && harnessBake(options.harness)
-  return bake ? bake.label : 'none'
+  return bake ? bake.label : undefined
 }
 
 /**
@@ -627,7 +627,8 @@ export async function createBoatSandbox(
 ): Promise<NetworkSandbox> {
   const debug = attemptDebug()
   const shared = (descriptor.attemptsPerMachine ?? 1) > 1
-  const label = homeLabel(options)
+  // A machine of its own that's never reused installs once anyway, so it keeps no copy.
+  const label = shared || descriptor.reuse ? homeLabel(options) : undefined
   return startSandbox(options, {
     helper: 'boat()',
     install: true,
@@ -676,7 +677,8 @@ export async function createBoatSandbox(
             prepare: nodeForAgent(layout.user),
             abortSignal: options.signal,
             ...(shared && { layout }),
-            ...(lease.reused && { reset: { home: label } }),
+            ...(lease.reused && { reset: true }),
+            ...(label && { home: label }),
           })
         } catch (error) {
           await rm(dir, { recursive: true, force: true })
@@ -690,16 +692,42 @@ export async function createBoatSandbox(
         }
         debug?.log(
           'container',
-          `ssh to ${info.id} over ${routeLabel({ host: info.host, port: info.port, via: info.via })}${machine.restored ? `, its home from the last attempt's install` : ''}`,
+          `ssh to ${info.id} over ${routeLabel({ host: info.host, port: info.port, via: info.via })}`,
         )
         let healthy = true
         return {
           root: machine.root,
           ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
-          installed: machine.restored,
-          ...((descriptor.reuse ?? false) && {
+          ...(label && {
+            async installedElsewhere() {
+              const got = await machine.home().catch((error: unknown) => {
+                if (options.signal.aborted) throw error
+                return { restored: false, waitedMs: 0, copyFailed: (error as Error).message }
+              })
+              const { restored, waitedMs, copyFailed } = got
+              if (copyFailed && !restored) {
+                debug?.log(
+                  'container',
+                  `no home from the machine's install, so this slot installs its own: ${copyFailed}`,
+                )
+              } else if (copyFailed) {
+                debug?.log(
+                  'container',
+                  `the machine's first copy of the install didn't unpack: ${copyFailed}`,
+                )
+              }
+              if (restored) {
+                debug?.log(
+                  'container',
+                  `its home from the machine's install${waitedMs >= 1000 ? `, after waiting ${Math.round(waitedMs / 1000)}s for another slot to install it` : ''}`,
+                )
+              }
+              return restored
+            },
             async onInstalled() {
-              await machine.snapshotHome(label)
+              await machine.snapshotHome().catch((error: unknown) => {
+                debug?.log('container', `the machine keeps no copy of the install: ${error}`)
+              })
             },
           }),
           session: (o) => machine.session(o),
