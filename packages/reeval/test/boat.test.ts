@@ -419,7 +419,11 @@ describe("the account's capacity", () => {
       machines: 4,
       attempts: 5,
     })
-    assert.equal(await pointedAt('boat_wrong', () => boatCapacity(boat())), null)
+    // Without the limits, the pool runs one machine, so the run runs no more than it holds.
+    assert.deepEqual(
+      await pointedAt('boat_wrong', () => boatCapacity(boat({ attemptsPerMachine: 2 }))),
+      { machines: 1, attempts: 2 },
+    )
   })
 })
 
