@@ -137,16 +137,21 @@ export function openEventStream(options: {
       body,
       signal: AbortSignal.timeout(POST_TIMEOUT_MS),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      .then(async (res) => {
+        if (res.ok) return
+        const said = await serverMessage(res)
+        if (res.status === 413) {
+          throw new Error(
+            `HTTP 413: the server refused a batch as too large, likely a line over its size limit${said}`,
+          )
+        }
+        throw new Error(`HTTP ${res.status}${said}`)
       })
       .catch((error: Error) => {
         url = undefined
         queue.length = 0
         options.warn(
-          redactSecrets(
-            `stopped posting the event stream to ${stripCredentials(to)}: ${error.message}`,
-          ),
+          redactSecrets(`stopped posting the event stream to ${displayUrl(to)}: ${error.message}`),
         )
       })
       .finally(() => {
@@ -209,6 +214,17 @@ export function openEventStream(options: {
   }
 }
 
+/** The message in an error response's `{ error: { message } }` body, as ` (message)`, or ''. */
+async function serverMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { message?: unknown } }
+    const message = body?.error?.message
+    return typeof message === 'string' && message ? ` (${message.slice(0, 200)})` : ''
+  } catch {
+    return ''
+  }
+}
+
 /** A renderer that also sends every event it draws to `stream`. */
 export const teeRenderer = (renderer: Renderer, stream: EventStream): Renderer => ({
   onEvent(event) {
@@ -239,6 +255,8 @@ export type FollowOptions = {
   connect?: (url: string) => WebSocket
   /** How long a dropped socket is reconnected to before following gives up; `LOST_MS` unless given. */
   reconnectMs?: number
+  /** How often a connected socket sends `ping`; 30s unless given. */
+  pingMs?: number
   /** How long a socket stays up before its next drop starts the backoff over; 5s unless given. */
   stableMs?: number
   /** Called once each time the socket drops and following starts reconnecting. */
@@ -319,7 +337,8 @@ async function* followFile(file: string, options: FollowOptions): AsyncGenerator
 /**
  * How a run's event socket closes. The server closes with `done` once it has sent the run's last
  * line and the run is over; any code from 4000 on, or 1008, refuses this viewer for good, and every
- * other close is a dropped connection that `reeval attach` reconnects after.
+ * other close is a dropped connection that `reeval attach` reconnects after, 1001 included, which
+ * the server sends a viewer it evicts as stale.
  */
 export const SOCKET_CLOSE = {
   done: 1000,
@@ -332,6 +351,14 @@ export const SOCKET_CLOSE = {
 
 /** The waits between reconnects to a run's event socket, the last repeated. */
 const RECONNECT_MS = [250, 500, 1_000, 2_000, 5_000]
+/**
+ * A viewer sends `PING` this often, and the server answers `PONG` (Durable Object hibernation's
+ * auto-response, text frames, since Node's WebSocket can't send protocol pings). At its viewer cap
+ * the server closes, with 1001, a viewer that has pinged before but not lately.
+ */
+const PING_MS = 30_000
+const PING = 'ping'
+const PONG = 'pong'
 /** How long a connection stays up, with no frame, before the backoff starts over. */
 const STABLE_MS = 5_000
 
@@ -357,6 +384,7 @@ async function* socketEvents(
   url: string,
   connect: (url: string) => WebSocket,
   signal: AbortSignal | undefined,
+  pingMs: number,
 ): AsyncGenerator<SocketEvent> {
   const socket = connect(url)
   socket.binaryType = 'arraybuffer'
@@ -368,8 +396,13 @@ async function* socketEvents(
     wake?.()
   }
   const decoder = new TextDecoder()
+  let pinging: NodeJS.Timeout | undefined
   socket.onopen = () => {
     opened = true
+    pinging = setInterval(() => {
+      if (socket.readyState === socket.OPEN) socket.send(PING)
+    }, pingMs)
+    pinging.unref()
     push({ type: 'open' })
   }
   socket.onmessage = (e: MessageEvent) =>
@@ -380,6 +413,7 @@ async function* socketEvents(
   // A refused connection fires only `error`, with no `close` after it.
   let closed = false
   const close = (code: number, reason: string) => {
+    clearInterval(pinging)
     if (closed) return
     closed = true
     push({ type: 'close', code, reason, opened })
@@ -400,6 +434,7 @@ async function* socketEvents(
       if (next.type === 'close') return
     }
   } finally {
+    clearInterval(pinging)
     signal?.removeEventListener('abort', abort)
     if (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN) {
       socket.close(SOCKET_CLOSE.done)
@@ -437,6 +472,7 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
   const connect = options.connect ?? ((url: string) => new WebSocket(url))
   const giveUpMs = options.reconnectMs ?? LOST_MS
   const stableMs = options.stableMs ?? STABLE_MS
+  const pingMs = options.pingMs ?? PING_MS
   const shown = displayUrl(source)
   const base = socketUrl(source)
   let seq = 0
@@ -451,7 +487,7 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
     url.searchParams.set('after', String(seq))
     let closed: Extract<SocketEvent, { type: 'close' }> | undefined
     let openedAt: number | undefined
-    for await (const event of socketEvents(url.href, connect, options.signal)) {
+    for await (const event of socketEvents(url.href, connect, options.signal, pingMs)) {
       if (event.type === 'open') {
         openedAt = Date.now()
         droppedAt = undefined
@@ -461,6 +497,7 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
         closed = event
         break
       }
+      if (event.data === PONG) continue
       let frame: { seq?: unknown; line?: unknown } | null
       try {
         frame = JSON.parse(event.data)

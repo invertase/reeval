@@ -280,6 +280,26 @@ describe('the stream', () => {
     })
   })
 
+  test('a line the server refuses as too large (413) says so, with its message and no token', async () => {
+    const warnings: string[] = []
+    const stream = openEventStream({
+      url: 'https://relay.test/api/runs/r1/events?token=hunter2',
+      header: header(),
+      warn: (w) => warnings.push(w),
+      fetch: async () =>
+        Response.json(
+          {
+            error: { code: 'payload_too_large', message: 'line 2 is over 4 MiB', retryable: false },
+          },
+          { status: 413 },
+        ),
+    })
+    await stream.end(0)
+    assert.deepEqual(warnings, [
+      'stopped posting the event stream to https://relay.test/api/runs/r1/events?token=***: HTTP 413: the server refused a batch as too large, likely a line over its size limit (line 2 is over 4 MiB)',
+    ])
+  })
+
   test('a failing URL warns once and the run goes on', async () => {
     const warnings: string[] = []
     const stream = openEventStream({
@@ -654,6 +674,54 @@ describe('attach', () => {
           /\/events\?token=\*\*\* refused the token \(expired\)/.test(error.message) &&
           !error.message.includes('hunter2'),
       )
+    } finally {
+      await s.close()
+    }
+  })
+
+  test('a connected viewer sends "ping" and ignores the "pong" answers', async () => {
+    const got: string[] = []
+    const s = await scripted((ws) => {
+      ws.on('message', (data) => {
+        got.push(String(data))
+        ws.send('pong')
+        if (got.length < 2) return
+        ws.send(frame(1, headerLine))
+        ws.send('pong')
+        ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+        ws.close(1000)
+      })
+    })
+    try {
+      const code = await attach({
+        source: s.source,
+        out: capture(),
+        output: () => output,
+        follow: { pingMs: 20 },
+      })
+      assert.equal(code, 7)
+      assert.deepEqual(got.slice(0, 2), ['ping', 'ping'])
+    } finally {
+      await s.close()
+    }
+  })
+
+  test('a viewer evicted as stale (1001) reconnects after the last line it got', async () => {
+    const afters: string[] = []
+    const s = await scripted((ws, after) => {
+      afters.push(after)
+      if (afters.length === 1) {
+        ws.send(frame(1, headerLine))
+        return void ws.close(1001, 'stale viewer')
+      }
+      ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+      ws.close(1000)
+    })
+    try {
+      const out = capture()
+      assert.equal(await attach({ source: s.source, out, output: () => output }), 7)
+      assert.deepEqual(afters, ['0', '1'])
+      assert.match(out.text, /Lost the connection to run run-1; reconnecting/)
     } finally {
       await s.close()
     }
