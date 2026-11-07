@@ -113,10 +113,12 @@ const RUN_SCRIPT = [
  * Kills the command whose shell wrote `pidFile` and everything it started: macOS has no `/proc`
  * to find them by a marker, so it stops and kills the shell's process group, which keeps a
  * process its parent left behind (a double fork's), and walks the tree from the shell for one
- * that moved to a group of its own (a job-control shell's job).
+ * that moved to a group of its own (a job-control shell's job). Anything but a pid above 1 in the
+ * file kills nothing: `kill -9 -1` is every process the user can signal.
  */
 export const killTree = (pidFile: string) =>
   `f=${q(pidFile)}; [ -f "$f" ] || exit 0; p=$(cat "$f")
+case $p in ''|*[!0-9]*) rm -f "$f"; exit 0 ;; esac; [ "$p" -gt 1 ] || { rm -f "$f"; exit 0; }
 tree() { kill -STOP "$1" 2>/dev/null; for c in $(pgrep -P "$1"); do tree "$c"; done; kill -9 "$1" 2>/dev/null; }
 kill -STOP "-$p" 2>/dev/null; tree "$p"; kill -9 "-$p" 2>/dev/null; rm -f "$f"; true`
 
