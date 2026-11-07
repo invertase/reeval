@@ -397,8 +397,9 @@ CREATE VIEW failing_attempts AS
 -- Each attempt's machine (its sandbox's provider and size, and the vCPUs and memory it gave) and
 -- what the attempt used there: CPU seconds, average and peak cores, peak memory, and a VM's disk
 -- bytes; cpu_share and memory_share are average cores and peak memory over what it gave. scope
--- container counts the container's own processes, machine the whole VM. Attempts with no readings
--- (the fake sandbox) are left out.
+-- container counts the container's own processes, machine the whole VM. The fake sandbox's
+-- attempts are left out; one whose sandbox had nothing to read (cgroup v1, a macOS VM) has its
+-- machine and null usage.
 CREATE VIEW attempt_resources AS
   SELECT a.run_id, r.started_at, a.eval_key, a.cell_key, a.key AS attempt_key, c.harness,
     c.model, c.environment, c.sandbox, a.resource_scope AS scope, a.machine_size,
