@@ -455,7 +455,7 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
             await until(
               'slot a listens',
               async () => {
-                const own = parseProbe((await a.exec(probeScript())).stdout)
+                const own = parseProbe((await a.exec(probeScript())).stdout, { byUser: true })
                 return own.proc && own.listeners.some((l) => l.port === 45111)
               },
               10_000,
@@ -464,7 +464,7 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
             await until(
               "slot b sees slot a's port",
               async () => {
-                seen = parseProbe((await b.exec(probeScript())).stdout)
+                seen = parseProbe((await b.exec(probeScript())).stdout, { byUser: true })
                 return seen.proc && (seen.others ?? []).includes(45111)
               },
               10_000,
