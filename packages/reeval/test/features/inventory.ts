@@ -1030,7 +1030,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'boat.sandbox',
     area: 'Sandbox',
-    name: "`boat()` and `createBoat({ apiKey, prefix })`: a boat.dev VM per attempt over SSH, under `allow-all`, on every real harness, whose CLI it installs as the VM starts, before the harness's start is timed",
+    name: "`boat()` and `createBoat({ apiKey, prefix })`: a boat.dev VM per attempt over SSH (to the VM's own address on port 22, else Boat's public endpoint), under `allow-all`, on every real harness, whose CLI it installs as the VM starts, before the harness's start is timed",
     fixtures: [
       'sandbox/boat-session',
       'sandbox/boat-brokered',
