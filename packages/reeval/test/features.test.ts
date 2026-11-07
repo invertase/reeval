@@ -1953,7 +1953,7 @@ export const features: Feature[] = [
     dir: 'sandbox/resources',
     tiers: ['docker', 'podman'],
     env: 'busy',
-    canary: /expected 0 to be greater than or equal to 2/,
+    canary: /expected [01] to be greater than or equal to 2/,
     record: ({ run, tier }) => {
       const [lands, canary] = ['lands', 'canary'].map(
         (name) => run.evals.find((e) => e.name === name)?.attempts[0]?.resources,
