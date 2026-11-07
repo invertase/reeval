@@ -3146,6 +3146,57 @@ export type VmImage = {
   digest: string | null
 }
 
+/**
+ * What an attempt's sandbox gave it and what it used, measured in the sandbox from when it started
+ * until teardown. A value the sandbox can't measure is left out, never estimated.
+ */
+export type AttemptResources = {
+  /**
+   * `container`: the container's own cgroup, so only the attempt's processes count (Docker,
+   * Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).
+   */
+  scope: 'container' | 'machine'
+  /** What the attempt ran on. */
+  machine: {
+    /** The sandbox's provider: `docker`, `podman`, `boat` or `tart`. */
+    sandbox: string
+    /** The provider's machine size, where it has sizes: `boat({ type })`. */
+    size?: string
+    /** CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has. */
+    vcpus?: number
+    /** Memory the attempt could use, in bytes: the container's limit, else the VM's total. */
+    memoryBytes?: number
+  }
+  /** What it used; absent when the sandbox gave no readings (a macOS VM has no `/proc`). */
+  usage?: {
+    /** Milliseconds between the first reading and the last. */
+    durationMs: number
+    /** Milliseconds between readings while the attempt ran. */
+    sampleMs: number
+    /** CPU time over `durationMs`, in seconds: user and system, every CPU added up. */
+    cpuSeconds: number
+    /** `cpuSeconds` over `durationMs`: how many CPUs it kept busy on average. */
+    avgCores: number
+    /** The most CPUs it kept busy between two readings; absent with fewer than two. */
+    peakCores?: number
+    /**
+     * The highest memory reading, in bytes, page cache the kernel can reclaim left out: the
+     * cgroup's `memory.current` less its `inactive_file`, or the VM's `MemTotal` less
+     * `MemAvailable`. Sampled, so a spike between readings is missed.
+     */
+    peakMemoryBytes?: number
+    /** Bytes the VM's disks read over `durationMs`; `machine` scope only. */
+    diskReadBytes?: number
+    /** Bytes the VM's disks wrote over `durationMs`; `machine` scope only. */
+    diskWriteBytes?: number
+    /**
+     * The sandbox went before the last reading (a timeout or cancel): the values stop at the last
+     * sample.
+     */
+    partial?: true
+  }
+}
+
 /** What one judge call saw, and for a call that failed, why and what was retried first. */
 export type JudgeInput = {
   question: string
@@ -3274,6 +3325,8 @@ export type EvalRecord = {
   image?: AttemptImage | null
   /** See `AttemptRecord.vmImage`. */
   vmImage?: VmImage
+  /** See `AttemptRecord.resources`. */
+  resources?: AttemptResources
   /** Names of the variables and secrets set in the sandbox, and of the brokered secrets among them. */
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */

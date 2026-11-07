@@ -14,6 +14,7 @@ import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
+import { resourcesLine } from '../view/resources.ts'
 import { inferDurations, sumSplits, timeSplit } from '../view/timeline.ts'
 import { checkFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
@@ -121,6 +122,14 @@ export function recordFailure(
     record.error.kind = judgeOutage(a, error, raw) ? 'infra' : 'judge'
   }
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
+}
+
+/** What the sandbox gave the attempt and what it used, into the record, before the sandbox goes. */
+export async function recordResources(a: Attempt): Promise<void> {
+  const resources = await a.meter?.stop({ gone: a.signal.aborted }).catch(() => undefined)
+  if (!resources) return
+  a.record.resources = resources
+  debugLog('teardown', `resources ${resourcesLine(resources)}`)
 }
 
 /**

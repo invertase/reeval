@@ -320,6 +320,7 @@ export async function createBoatSandbox(
   const name = `${runPrefix(descriptor, options.runId)}${randomBytes(3).toString('hex')}`
   return startSandbox(options, {
     helper: 'boat()',
+    machine: { sandbox: 'boat', size: type },
     install: true,
     networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
     async boot() {

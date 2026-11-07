@@ -1107,6 +1107,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['sandbox-docker/test/confinement.test.ts'],
   },
   {
+    id: 'sandbox.resources',
+    area: 'Sandbox',
+    name: "Each attempt's `resources`: the container's or VM's vCPUs and memory, and the CPU, peak memory and a VM's disk it used, in `reeval show` and `reeval query attempt_resources`",
+    fixtures: ['sandbox/resources', 'sandbox/boat-resources'],
+    unit: ['reeval/test/resources.test.ts'],
+  },
+  {
     id: 'docker.from',
     area: 'Sandbox',
     name: '`docker({ from })` toolchain images',

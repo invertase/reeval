@@ -64,6 +64,8 @@ export type BootedMachine = {
 export type StartOptions = {
   /** How messages name the sandbox: `boat()`, `tart()`. */
   helper: string
+  /** The machine as the record names it: its provider and size. */
+  machine: { sandbox: string; size?: string }
   /** What the gateway needs on this machine, for the brokering refusal. */
   hint?: string
   /** Installs the harness's CLI before the session, when the image doesn't have it baked in. */
@@ -157,6 +159,7 @@ export async function startSandbox(
     return await sessionSandbox(network, glue, {
       ...(machine.stateDir && { stateDir: machine.stateDir }),
       oomKills: async () => null,
+      resources: { scope: 'machine', machine: start.machine },
     })
   } catch (error) {
     await destroy().catch(() => {})

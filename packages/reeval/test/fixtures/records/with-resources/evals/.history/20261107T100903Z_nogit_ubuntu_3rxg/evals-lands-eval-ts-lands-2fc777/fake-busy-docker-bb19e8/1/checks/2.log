@@ -1,0 +1,5 @@
+$ echo $(( $(sed -n 's/^usage_usec //p' /sys/fs/cgroup/cpu.stat) / 1000000 ))
+exit 0
+--- stdout
+3
+--- stderr

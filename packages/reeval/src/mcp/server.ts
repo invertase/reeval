@@ -45,6 +45,8 @@ const VIEW_ROWS: Record<string, string> = {
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:
     'failed or infra-error attempt, with its harness, model, environment skill, error, OOM kills and first failed check',
+  attempt_resources:
+    'attempt whose sandbox gave readings: its machine (provider, size, vCPUs, memory) and what it used there (CPU seconds, average and peak cores, peak memory, a VM’s disk bytes, and the shares of what it was given)',
   eval_trend:
     'eval per run (an eval with cases is one, with how many): outcome, pass@1, branch, PR and fingerprint',
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',

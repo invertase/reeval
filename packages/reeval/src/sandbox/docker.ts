@@ -24,8 +24,9 @@ import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
-import type { DockerSandboxDescriptor } from '../types.ts'
+import type { AttemptResources, DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
+import { startMeter } from './resources.ts'
 import { brokeringRefusal, logGateway } from './start.ts'
 import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
 
@@ -227,7 +228,13 @@ type UnsubstitutedEvent = Parameters<NonNullable<EgressOptions['onUnsubstituted'
 export async function sessionSandbox(
   network: DockerSession,
   glue: ReturnType<typeof gatewayGlue>,
-  options: { root?: boolean; stateDir?: string; oomKills: Sandbox['oomKills'] },
+  options: {
+    root?: boolean
+    stateDir?: string
+    oomKills: Sandbox['oomKills']
+    /** What its resources are read from: a container's cgroup, or the whole machine. */
+    resources: { scope: AttemptResources['scope']; machine: { sandbox: string; size?: string } }
+  },
 ): Promise<NetworkSandbox> {
   const workdir = posix.join(network.defaultWorkingDirectory, WORKSPACE_DIR)
   const stateDir = options.stateDir ?? SANDBOX_STATE
@@ -262,6 +269,7 @@ export async function sessionSandbox(
     getPortEndpoint: async ({ port, protocol = 'http' }) =>
       network.getPortEndpoint({ port, protocol }),
     oomKills: options.oomKills,
+    meter: () => startMeter(network, options.resources.scope, options.resources.machine),
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})
     },
@@ -333,6 +341,7 @@ export async function createDockerSandbox(
   }
   return sessionSandbox(network, glue, {
     ...(root !== undefined && { root }),
+    resources: { scope: 'container', machine: { sandbox: engine } },
     oomKills: async () => {
       const kills = await network.oomKills()
       if (kills === null) return null

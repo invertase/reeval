@@ -2,6 +2,7 @@ import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
 import type { ModelCall } from '../model-calls.ts'
 import type { ExecResult } from '../types.ts'
+import type { ResourceMeter } from './resources.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }
 
@@ -65,6 +66,11 @@ export interface Sandbox {
    * when it can't tell.
    */
   oomKills?(): Promise<{ kills: number; limit: string; swap: string | null } | null>
+  /**
+   * Starts reading what the sandbox gives the attempt and what it uses; unset where nothing
+   * can be read, such as the fake sandbox on the host.
+   */
+  meter?(): ResourceMeter
   /** Idempotent, never throws. */
   destroy(): Promise<void>
   /**

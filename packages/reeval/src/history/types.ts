@@ -3,6 +3,7 @@ import type {
   AttemptAnswer,
   AttemptError,
   AttemptImage,
+  AttemptResources,
   CaptureStep,
   Cell,
   CellGate,
@@ -204,6 +205,12 @@ export type AttemptRecord = {
    * other sandboxes, and in attempts that didn't reach their sandbox.
    */
   vmImage?: VmImage
+  /**
+   * The container or VM the attempt ran on and the CPU, memory and disk it used there, measured
+   * in the sandbox (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in
+   * attempts that didn't reach their sandbox.
+   */
+  resources?: AttemptResources
   /** Names of the variables and secrets set in the sandbox, and the brokered ones; never values. */
   env: { vars: string[]; secrets: string[]; brokered: string[] }
   /** Skills, rules, and MCP config visible to the agent in its sandbox, by content hash. */

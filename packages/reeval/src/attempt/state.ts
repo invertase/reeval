@@ -6,6 +6,7 @@ import { redactFields } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { sandboxKind } from '../sandbox/kinds.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
+import type { ResourceMeter } from '../sandbox/resources.ts'
 import type { PreparedHost } from '../sandbox/tart-hosts.ts'
 import type {
   BackgroundHandle,
@@ -61,6 +62,8 @@ export type Attempt = {
   hosts?: readonly PreparedHost[]
   /** As soon as it exists, so teardown can remove it even when the start fails later. */
   sandbox?: Sandbox
+  /** Reads what the sandbox uses, from its start until teardown. */
+  meter?: ResourceMeter
   session?: HarnessSession
   phases?: BrokerPhases
   /**

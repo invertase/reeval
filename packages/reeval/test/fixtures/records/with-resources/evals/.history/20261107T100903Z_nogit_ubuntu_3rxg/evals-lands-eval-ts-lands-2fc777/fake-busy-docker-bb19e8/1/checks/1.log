@@ -1,0 +1,5 @@
+$ node -e 'const b = Buffer.alloc(256 << 20, 1); const t = Date.now(); while (Date.now() - t < 3000); console.log(b.length)'
+exit 0
+--- stdout
+268435456
+--- stderr
