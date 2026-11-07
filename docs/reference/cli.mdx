@@ -188,7 +188,9 @@ The record keeps the run's `plan`, `git`, `dependencies` and `stack`, and its `d
 ```text
 reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
                               does, from its start; exit with the run's exit code (default: the
-                              run in progress; a URL is read with GET as NDJSON). On a terminal,
+                              run in progress). A ws(s) or http(s) URL is followed over a
+                              WebSocket, which reconnects after a drop from the last line it got
+                              and exits 3 when the run refuses another viewer. On a terminal,
                               reeval run's interactive list: q detaches (exit 0) and the run goes
                               on; x pressed twice cancels a run on this host. A run that stops
                               sending heartbeats shows as stalled after 20s and ends attach as
