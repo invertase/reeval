@@ -61,6 +61,11 @@ export type BootedMachine = {
   proxyPort?: number
   /** The harness's CLI is already in the machine, from an attempt before. */
   installed?: boolean
+  /**
+   * Once the gateway runs: waits for the harness's CLI another of the machine's attempts installs,
+   * whether it's now in this one's home, or this attempt is to install it.
+   */
+  installedElsewhere?(): Promise<boolean>
   /** Runs once the harness's CLI has installed. */
   onInstalled?(): Promise<void>
   /** Starting the sandbox failed after the boot: `destroy` follows, and the machine isn't reused. */
@@ -147,8 +152,9 @@ export async function startSandbox(
     // A machine with nothing baked in downloads pnpm and the CLI here, before the harness's start
     // is timed: there, a slow download would spend its readiness window and be tried again. The
     // eval's timer is paused while a sandbox starts, so the install has a deadline of its own.
-    const bake =
-      start.install && !machine.installed && options.harness && harnessBake(options.harness)
+    const needed =
+      start.install && !machine.installed && options.harness ? harnessBake(options.harness) : null
+    const bake = needed && !(await machine.installedElsewhere?.()) ? needed : null
     if (bake) {
       const installing = performance.now()
       const deadline = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
