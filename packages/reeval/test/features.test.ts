@@ -1210,7 +1210,7 @@ export const features: Feature[] = [
     },
     args: ['--concurrency', '1'],
     canary: /expected 'home-clean' to be 'home-dirty'/,
-    record: ({ run }) => {
+    record: ({ run, runDir }) => {
       const sandbox = createBoat({ prefix: 'pool' })()
       const prefix = runPrefix(sandbox, run.runId)
       assert.ok(
@@ -1218,6 +1218,17 @@ export const features: Feature[] = [
         'the refused start was retried, not failed',
       )
       assert.equal(boatCreates(run, sandbox), 1, 'both attempts ran on one machine')
+      // Whichever attempt ran second, the canary's or lands', found nothing the first left.
+      const saw = run.evals.map((e) => {
+        const path = e.attempts[0]?.files.transcript?.path ?? ''
+        const shell = readFileSync(join(runDir, path), 'utf8')
+          .trim()
+          .split('\n')
+          .map((l) => JSON.parse(l))
+          .find((t) => t.type === 'tool' && t.tool === 'shell')
+        return String(shell?.output).split('\n').slice(0, 3).join(' ')
+      })
+      assert.deepEqual(saw, ['home-clean tmp-clean proc-clean', 'home-clean tmp-clean proc-clean'])
       boatCleanedUp(run, sandbox)
     },
   },
