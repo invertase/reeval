@@ -3168,6 +3168,11 @@ export type AttemptResources = {
    * Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).
    */
   scope: 'container' | 'machine'
+  /**
+   * The VM ran other attempts at the same time (`boat({ attemptsPerMachine })` above 1), so its
+   * whole-VM usage isn't this attempt's: `usage` is left out.
+   */
+  shared?: true
   /** What the attempt ran on. */
   machine: {
     /** The sandbox's provider: `docker`, `podman`, `boat` or `tart`. */

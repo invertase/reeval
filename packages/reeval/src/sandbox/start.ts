@@ -74,6 +74,8 @@ export type StartOptions = {
   helper: string
   /** The machine as the record names it: its provider and size. */
   machine: { sandbox: string; size?: string }
+  /** Other attempts run on the machine at the same time, so its usage isn't recorded. */
+  shared?: boolean
   /** A macOS guest, which has no `/proc` to read usage from, only its sizes. */
   darwin?: boolean
   /** What the gateway needs on this machine, for the brokering refusal. */
@@ -175,7 +177,11 @@ export async function startSandbox(
     return await sessionSandbox(network, glue, {
       ...(machine.stateDir && { stateDir: machine.stateDir }),
       oomKills: async () => null,
-      resources: { mode: start.darwin ? 'darwin' : 'machine', machine: start.machine },
+      resources: {
+        mode: start.darwin ? 'darwin' : 'machine',
+        machine: start.machine,
+        ...(start.shared && { shared: true }),
+      },
     })
   } catch (error) {
     machine.failed?.()

@@ -361,3 +361,37 @@ export function startMeter(
     },
   }
 }
+
+/**
+ * A meter for a machine other attempts run on at the same time: no readings, whose whole-VM
+ * usage would count theirs too, only the machine's sizes from one reading at teardown.
+ */
+export function sharedMeter(
+  hosts: readonly SamplerHost[],
+  mode: SampleMode,
+  machine: { sandbox: string; size?: string },
+): ResourceMeter {
+  return {
+    async stop({ gone }) {
+      let limits: Limits | null = null
+      const host = hosts.at(-1)
+      if (!gone && host) {
+        const r = await Promise.resolve(
+          host.run({
+            command: command(mode, 'once', host.target),
+            abortSignal: AbortSignal.timeout(FINAL_TIMEOUT_MS),
+          }),
+        ).catch(() => null)
+        for (const line of r?.exitCode === 0 ? r.stdout.split('\n') : []) {
+          const parsed = parseLine(line, performance.now())
+          if (parsed && 'limits' in parsed) limits ??= parsed.limits
+        }
+      }
+      const resources = summarize('machine', machine, limits, [], {
+        sampleMs: SAMPLE_MS,
+        partial: false,
+      })
+      return { ...resources, shared: true }
+    },
+  }
+}

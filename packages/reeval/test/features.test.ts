@@ -1241,6 +1241,15 @@ export const features: Feature[] = [
     record: ({ run }) => {
       assert.equal(boatCreates(run), 1, 'both attempts ran at once on one machine')
       boatCleanedUp(run)
+      const resources = run.evals.flatMap((e) => e.attempts.map((a) => a.resources))
+      assert.ok(resources.length >= 2, JSON.stringify(resources))
+      for (const r of resources) {
+        assert.equal(r?.scope, 'machine', JSON.stringify(r))
+        assert.equal(r?.shared, true, JSON.stringify(r))
+        assert.equal(r?.machine.sandbox, 'boat')
+        assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
+        assert.equal(r?.usage, undefined, "another attempt's use would count in the VM's")
+      }
     },
   },
   {

@@ -815,6 +815,10 @@
           "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).",
           "enum": ["container", "machine"]
         },
+        "shared": {
+          "description": "The VM ran other attempts at the same time (`boat({ attemptsPerMachine })` above 1), so its whole-VM usage isn't this attempt's: `usage` is left out.",
+          "const": true
+        },
         "usage": {
           "description": "What it used; absent when the sandbox gave no readings (a macOS VM has no `/proc`).",
           "type": "object",
