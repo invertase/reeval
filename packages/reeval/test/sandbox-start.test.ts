@@ -54,6 +54,7 @@ describe('startSandbox', () => {
     await assert.rejects(
       startSandbox(options({ brokering: { credential: 'API_KEY', endpoints: [] } }), {
         helper: 'boat()',
+        machine: { sandbox: 'boat' },
         hint: 'The gateway needs Node.',
         install: false,
         boot: async () => booted,
@@ -73,6 +74,7 @@ describe('startSandbox', () => {
     await assert.rejects(
       startSandbox(options({ egress: { policy: 'deny-all', auto: [] } }), {
         helper: 'boat()',
+        machine: { sandbox: 'boat' },
         install: false,
         boot: async () => booted,
       }),
@@ -90,6 +92,7 @@ describe('startSandbox', () => {
     const { booted, seen } = machine()
     const box = await startSandbox(options(), {
       helper: 'tart()',
+      machine: { sandbox: 'tart' },
       install: false,
       boot: async () => booted,
     })
@@ -109,7 +112,12 @@ describe('startSandbox', () => {
       },
     })
     await assert.rejects(
-      startSandbox(options(), { helper: 'boat()', install: false, boot: async () => booted }),
+      startSandbox(options(), {
+        helper: 'boat()',
+        machine: { sandbox: 'boat' },
+        install: false,
+        boot: async () => booted,
+      }),
       (error) => error === failure,
     )
     assert.equal(seen.destroyed, 1)

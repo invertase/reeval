@@ -1123,6 +1123,27 @@ export const features: Feature[] = [
     record: ({ run }) => boatCleanedUp(run),
   },
   {
+    dir: 'sandbox/boat-resources',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected \d+ to be \+0/,
+    record: ({ run }) => {
+      boatCleanedUp(run)
+      const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
+      assert.equal(r?.scope, 'machine', JSON.stringify(r))
+      assert.equal(r?.machine.sandbox, 'boat')
+      assert.equal(r?.machine.size, 'small')
+      assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
+      assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
+      assert.ok((r?.usage?.cpuSeconds ?? 0) >= 2.5, JSON.stringify(r))
+      assert.ok((r?.usage?.peakCores ?? 0) >= 0.8, JSON.stringify(r))
+      assert.ok((r?.usage?.peakMemoryBytes ?? 0) > 0, JSON.stringify(r))
+      assert.equal(typeof r?.usage?.diskReadBytes, 'number')
+      assert.equal(typeof r?.usage?.diskWriteBytes, 'number')
+    },
+  },
+  {
     dir: 'sandbox/boat-brokered',
     tiers: ['docker'],
     env: 'keys',
@@ -1926,6 +1947,33 @@ export const features: Feature[] = [
       assert.equal(lands?.resource?.cause, 'oom')
       assert.ok((lands?.resource?.kills ?? 0) > 0, JSON.stringify(lands))
       assert.equal(canary?.resource, undefined)
+    },
+  },
+  {
+    dir: 'sandbox/resources',
+    tiers: ['docker', 'podman'],
+    env: 'busy',
+    canary: /expected 0 to be greater than or equal to 2/,
+    record: ({ run, tier }) => {
+      const [lands, canary] = ['lands', 'canary'].map(
+        (name) => run.evals.find((e) => e.name === name)?.attempts[0]?.resources,
+      )
+      for (const r of [lands, canary]) {
+        assert.equal(r?.scope, 'container', JSON.stringify(r))
+        assert.deepEqual(r?.machine, {
+          sandbox: tier === 'podman' ? 'podman' : 'docker',
+          vcpus: 1,
+          memoryBytes: 512 * 1024 ** 2,
+        })
+      }
+      const [used, idle] = [lands?.usage, canary?.usage]
+      assert.ok((used?.cpuSeconds ?? 0) >= 2.5, JSON.stringify(used))
+      assert.ok((used?.peakCores ?? 0) >= 0.8, JSON.stringify(used))
+      assert.ok((used?.peakMemoryBytes ?? 0) >= 256 * 1024 ** 2, JSON.stringify(used))
+      assert.equal(used?.partial, undefined)
+      assert.equal(used?.diskReadBytes, undefined)
+      assert.ok((idle?.cpuSeconds ?? 9) < 1, JSON.stringify(idle))
+      assert.ok((idle?.peakMemoryBytes ?? 0) < 128 * 1024 ** 2, JSON.stringify(idle))
     },
   },
   {

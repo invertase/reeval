@@ -570,6 +570,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     onWarning: (text) => a.report({ kind: 'warning', text }),
   })
   a.sandbox = box
+  a.meter = box.meter?.()
   if (!capabilitiesOf(spec.sandbox).isolated) {
     debugLog(
       'container',

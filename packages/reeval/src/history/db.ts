@@ -167,7 +167,9 @@ CREATE TABLE attempts (
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
   reasoning_effort TEXT, served_reasoning_effort TEXT, files_changed INTEGER, reasoning_ms INTEGER,
   case_key TEXT, model_ms INTEGER, tool_ms INTEGER, waiting_ms INTEGER, other_ms INTEGER,
-  cost_usd REAL, cost_basis TEXT,
+  cost_usd REAL, cost_basis TEXT, resource_scope TEXT, machine_size TEXT, machine_vcpus REAL,
+  machine_memory_bytes INTEGER, cpu_seconds REAL, avg_cores REAL, peak_cores REAL,
+  peak_memory_bytes INTEGER, disk_read_bytes INTEGER, disk_write_bytes INTEGER,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -392,6 +394,22 @@ CREATE VIEW failing_attempts AS
     AND s.digest = c.environment_digest
   WHERE a.outcome IN ('fail', 'infra_error');
 
+-- Each attempt's machine (its sandbox's provider and size, and the vCPUs and memory it gave) and
+-- what the attempt used there: CPU seconds, average and peak cores, peak memory, and a VM's disk
+-- bytes; cpu_share and memory_share are average cores and peak memory over what it gave. scope
+-- container counts the container's own processes, machine the whole VM. Attempts with no readings
+-- (the fake sandbox) are left out.
+CREATE VIEW attempt_resources AS
+  SELECT a.run_id, r.started_at, a.eval_key, a.cell_key, a.key AS attempt_key, c.harness,
+    c.model, c.environment, c.sandbox, a.resource_scope AS scope, a.machine_size,
+    a.machine_vcpus, a.machine_memory_bytes, a.outcome, a.duration_ms, a.cpu_seconds,
+    a.avg_cores, a.peak_cores, a.peak_memory_bytes, a.disk_read_bytes, a.disk_write_bytes,
+    a.avg_cores / a.machine_vcpus AS cpu_share,
+    CAST(a.peak_memory_bytes AS REAL) / a.machine_memory_bytes AS memory_share
+  FROM attempts a JOIN runs r USING (run_id)
+  JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
+  WHERE a.resource_scope IS NOT NULL;
+
 -- Each check of a variant cell beside its control's: whether it tells them apart.
 CREATE VIEW check_discrimination AS
   SELECT k.run_id, k.eval_key, c.harness, c.variant, c.key AS cell_key, k.label,
@@ -449,6 +467,7 @@ export const VIEW_NAMES = [
   'flaky_cells',
   'drift',
   'failing_attempts',
+  'attempt_resources',
   'eval_trend',
   'verdict_flips',
   'check_discrimination',
@@ -809,7 +828,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(39).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(49).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -849,6 +868,16 @@ function insertRun(
         a.timeSplit?.otherMs ?? null,
         a.cost?.usd ?? null,
         a.cost?.basis ?? null,
+        a.resources?.scope ?? null,
+        a.resources?.machine.size ?? null,
+        a.resources?.machine.vcpus ?? null,
+        a.resources?.machine.memoryBytes ?? null,
+        a.resources?.usage?.cpuSeconds ?? null,
+        a.resources?.usage?.avgCores ?? null,
+        a.resources?.usage?.peakCores ?? null,
+        a.resources?.usage?.peakMemoryBytes ?? null,
+        a.resources?.usage?.diskReadBytes ?? null,
+        a.resources?.usage?.diskWriteBytes ?? null,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []

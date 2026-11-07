@@ -765,6 +765,10 @@
           "description": "What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's `usage.cost`); absent when it names none.",
           "type": "number"
         },
+        "resources": {
+          "description": "The container or VM the attempt ran on and the CPU, memory and disk it used there, measured in the sandbox (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in attempts that didn't reach their sandbox.",
+          "$ref": "#/$defs/AttemptResources"
+        },
         "retries": {
           "description": "The infra errors this attempt ended with before `reeval run --retry-errors` or `--resume` ran it again, oldest first: each `{ error, at }`, `at` being when that try started (null when it never did). The attempt's own `outcome` and `error` are its last try's. Absent when it never ran again.",
           "type": "array",
@@ -1003,6 +1007,83 @@
         "turns",
         "usage"
       ]
+    },
+    "AttemptResources": {
+      "description": "What an attempt's sandbox gave it and what it used, measured in the sandbox from when it started until teardown. A value the sandbox can't measure is left out, never estimated.",
+      "type": "object",
+      "properties": {
+        "machine": {
+          "description": "What the attempt ran on.",
+          "type": "object",
+          "properties": {
+            "memoryBytes": {
+              "description": "Memory the attempt could use, in bytes: the container's limit, else the VM's total.",
+              "type": "number"
+            },
+            "sandbox": {
+              "description": "The sandbox's provider: `docker`, `podman`, `boat` or `tart`.",
+              "type": "string"
+            },
+            "size": {
+              "description": "The provider's machine size, where it has sizes: `boat({ type })`.",
+              "type": "string"
+            },
+            "vcpus": {
+              "description": "CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has.",
+              "type": "number"
+            }
+          },
+          "required": ["sandbox"]
+        },
+        "scope": {
+          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).",
+          "enum": ["container", "machine"]
+        },
+        "usage": {
+          "description": "What it used; absent when the sandbox gave no readings (a macOS VM has no `/proc`).",
+          "type": "object",
+          "properties": {
+            "avgCores": {
+              "description": "`cpuSeconds` over `durationMs`: how many CPUs it kept busy on average.",
+              "type": "number"
+            },
+            "cpuSeconds": {
+              "description": "CPU time over `durationMs`, in seconds: user and system, every CPU added up.",
+              "type": "number"
+            },
+            "diskReadBytes": {
+              "description": "Bytes the VM's disks read over `durationMs`; `machine` scope only.",
+              "type": "number"
+            },
+            "diskWriteBytes": {
+              "description": "Bytes the VM's disks wrote over `durationMs`; `machine` scope only.",
+              "type": "number"
+            },
+            "durationMs": {
+              "description": "Milliseconds between the first reading and the last.",
+              "type": "number"
+            },
+            "partial": {
+              "description": "The sandbox went before the last reading (a timeout or cancel): the values stop at the last sample.",
+              "const": true
+            },
+            "peakCores": {
+              "description": "The most CPUs it kept busy between two readings; absent with fewer than two.",
+              "type": "number"
+            },
+            "peakMemoryBytes": {
+              "description": "The highest memory reading, in bytes, page cache the kernel can reclaim left out: the cgroup's `memory.current` less its `inactive_file`, or the VM's `MemTotal` less `MemAvailable`. Sampled, so a spike between readings is missed.",
+              "type": "number"
+            },
+            "sampleMs": {
+              "description": "Milliseconds between readings while the attempt ran.",
+              "type": "number"
+            }
+          },
+          "required": ["avgCores", "cpuSeconds", "durationMs", "sampleMs"]
+        }
+      },
+      "required": ["machine", "scope"]
     },
     "AttemptRetry": {
       "description": "An infra error an attempt ended with before it ran again, and when that try started.",

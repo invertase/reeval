@@ -23,6 +23,7 @@ import {
   recordEgress,
   recordFailure,
   recordOom,
+  recordResources,
   recordTimeline,
   writeRecord,
 } from './record.ts'
@@ -144,6 +145,7 @@ async function attemptBody(
     clock?.clear()
     await a.endStarts()
     for (const bg of a.backgrounds) await bg.kill().catch(() => {})
+    await recordResources(a)
     const { sandbox } = a
     if (sandbox && !a.signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))
     if (sandbox) a.report({ kind: 'cleanup' })

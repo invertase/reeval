@@ -14,6 +14,7 @@ import {
   runtimeLabel,
 } from '../view/model.ts'
 import type { RunRemarks } from '../view/remarks.ts'
+import { runResourcesLine } from '../view/resources.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, RunRecord } from './types.ts'
@@ -80,6 +81,8 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
       : 'none (fake sandbox)',
   ])
   rows.push(['Harnesses', env.harnesses.map(harnessLabel).join(', ') || 'none'])
+  const resources = runResourcesLine(run.evals.flatMap((e) => e.attempts.map((a) => a.resources)))
+  if (resources) rows.push(['Resources', resources])
   rows.push([
     'Environments',
     run.environments

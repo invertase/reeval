@@ -58,7 +58,8 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `before-vm-image` | The fake harness in `tart()` on the fake `tart`, from before `evals[].attempts[].vmImage` (the image an attempt's VM was cloned from, with its digest), when a run pulled the image itself |
 | `with-vm-image` | The same run with `evals[].attempts[].vmImage`, its digest also the cell's `fingerprintParts.image` |
 | `before-debug-upload` | The corpus project's fake-harness runs from before `debug` (each attempt's debug data uploaded with the run to a remote store, `history.debug`) |
-| `before-heartbeats` | The corpus project's fake-harness runs and their event stream (`events/<run>.ndjson`, as `reeval run --events` wrote it), from before the stream's `heartbeat` lines |
+| `before-heartbeats` | The corpus project's fake-harness runs and their event stream (`events/<run>.ndjson`, as `reeval run --events` wrote it), from before the stream's `heartbeat` lines and `evals[].attempts[].resources` (the fake sandbox reads none) |
+| `with-resources` | The fake harness in Docker (`docker({ memory: '512m', cpus: 1 })`) and in `boat()` on the fake Boat API: `evals[].attempts[].resources`, a container's (scope `container`, an attempt that burned a CPU and held 256 MiB beside an idle one) and a VM's (scope `machine`, with its size and disk bytes) |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

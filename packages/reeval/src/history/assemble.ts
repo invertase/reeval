@@ -939,6 +939,7 @@ async function addAttempt(
     startedAt: record?.startedAt ?? null,
     imageId: record?.image?.id ?? null,
     ...(record?.vmImage ? { vmImage: record.vmImage } : {}),
+    ...(record?.resources ? { resources: record.resources } : {}),
     env: record?.env ?? { vars: [], secrets: [], brokered: [] },
     context,
     egress: record?.egress ?? null,
