@@ -116,6 +116,7 @@ export class MachinePool<M> {
   readonly #slots: Pool<Slot<M>>
   readonly #queues: PQueue[] = []
   readonly #closing = new AbortController()
+  readonly #roomWaiters = new Set<() => void>()
   #heldUntil = 0
   #held: NodeJS.Timeout | undefined
   #reaping: NodeJS.Timeout | undefined
@@ -269,10 +270,19 @@ export class MachinePool<M> {
     this.#slots.release(slot)
   }
 
-  /** tarn's `create`: a slot on a machine that's up or starting, else on a new machine. */
+  /**
+   * tarn's `create`: a slot on a machine that's up or starting, else on a new machine once the
+   * provider has room for one. tarn counts slots, and a machine being removed, or one whose other
+   * slots still run, holds its place at the provider until it's gone.
+   */
   async #claim(): Promise<Slot<M>> {
-    let machine = [...this.#machines].find((m) => !m.draining && m.unclaimed.length)
-    if (!machine) machine = this.#startMachine()
+    const open = () => [...this.#machines].find((m) => !m.draining && m.unclaimed.length)
+    let machine = open()
+    while (!machine && this.#machines.size >= Math.max(1, this.#options.limits.machines)) {
+      await this.#room()
+      machine = open()
+    }
+    machine ??= this.#startMachine()
     const slot: Slot<M> = {
       machine,
       slot: machine.unclaimed.shift() as number,
@@ -309,9 +319,33 @@ export class MachinePool<M> {
     machine.removed ??= (async () => {
       await machine.ready.catch(() => {})
       if (machine.id) await this.#provider.remove(machine.id).catch(() => {})
-      this.#machines.delete(machine)
+      this.#forget(machine)
     })()
     return machine.removed
+  }
+
+  #forget(machine: Machine<M>) {
+    this.#machines.delete(machine)
+    for (const wake of [...this.#roomWaiters]) wake()
+  }
+
+  /** Resolves once a machine has gone; rejects when the pool closes. */
+  #room(): Promise<void> {
+    const closing = this.#closing.signal
+    closing.throwIfAborted()
+    return new Promise((resolve, reject) => {
+      const wake = () => {
+        this.#roomWaiters.delete(wake)
+        closing.removeEventListener('abort', stop)
+        resolve()
+      }
+      const stop = () => {
+        this.#roomWaiters.delete(wake)
+        reject(closing.reason)
+      }
+      this.#roomWaiters.add(wake)
+      closing.addEventListener('abort', stop, { once: true })
+    })
   }
 
   #startMachine(): Machine<M> {
@@ -337,7 +371,7 @@ export class MachinePool<M> {
       (error: unknown) => {
         machine.draining = true
         machine.unclaimed = []
-        this.#machines.delete(machine)
+        this.#forget(machine)
         throw error
       },
     )
