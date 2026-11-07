@@ -9,6 +9,7 @@ import { after, before, describe, test } from 'node:test'
 import { type DockerSession, PNPM_VERSION } from '@reeval/sandbox-docker'
 import {
   type BoatClient,
+  boatCapacity,
   checkBoat,
   deleteUntilGone,
   firstReachable,
@@ -406,6 +407,19 @@ export default defineConfig({
       },
       left,
     )
+  })
+})
+
+describe("the account's capacity", () => {
+  test('is the free machines times attemptsPerMachine, capped by maxConcurrent', async () => {
+    const at = (o: Parameters<typeof boat>[0]) => pointedAt(api.key, () => boatCapacity(boat(o)))
+    assert.deepEqual(await at({}), { machines: 4, attempts: 4 })
+    assert.deepEqual(await at({ attemptsPerMachine: 3 }), { machines: 4, attempts: 12 })
+    assert.deepEqual(await at({ attemptsPerMachine: 3, maxConcurrent: 5 }), {
+      machines: 4,
+      attempts: 5,
+    })
+    assert.equal(await pointedAt('boat_wrong', () => boatCapacity(boat())), null)
   })
 })
 

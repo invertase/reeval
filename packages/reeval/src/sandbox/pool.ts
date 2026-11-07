@@ -118,6 +118,7 @@ export class MachinePool<M> {
   readonly #closing = new AbortController()
   #heldUntil = 0
   #held: NodeJS.Timeout | undefined
+  #reaping: NodeJS.Timeout | undefined
   #backoffMs: number
   #ttlSeconds = 0
   #closed: Promise<void> | undefined
@@ -193,7 +194,10 @@ export class MachinePool<M> {
     try {
       slot = await pending.promise
     } catch (error) {
-      if (signal?.aborted) throw signal.reason
+      if (signal?.aborted) {
+        this.#reapUntaken()
+        throw signal.reason
+      }
       if (this.#closed) throw this.#closing.signal.reason
       throw error
     } finally {
@@ -233,12 +237,29 @@ export class MachinePool<M> {
     this.#closed ??= (async () => {
       this.#closing.abort(new InfraError(`${this.#provider.helper}'s machine pool closed`))
       clearTimeout(this.#held)
+      clearInterval(this.#reaping)
       for (const queue of this.#queues) queue.clear()
       for (const slot of [...this.#leased]) this.#release(slot, true)
       await this.#slots.destroy().catch(() => {})
       await Promise.all([...this.#machines].map((m) => this.#remove(m)))
     })()
     return this.#closed
+  }
+
+  /**
+   * tarn reaps idle slots only once an acquire has succeeded, so a machine started for an acquire
+   * that was aborted would sit free for good: check for idle ones until none is free or starting.
+   */
+  #reapUntaken() {
+    this.#reaping ??= setInterval(
+      () => {
+        this.#slots.check()
+        if (this.#slots.numFree() + this.#slots.numPendingCreates() > 0) return
+        clearInterval(this.#reaping)
+        this.#reaping = undefined
+      },
+      Math.min(1_000, this.#options.idleMs),
+    )
   }
 
   #release(slot: Slot<M>, broken: boolean) {
