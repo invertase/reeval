@@ -21,7 +21,7 @@ import { hasNetworkSession, type Sandbox } from '../src/sandbox/types.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
 import { fakeTart, holdLoopback } from './support/fake-tart.ts'
-import { buildSshVmImage, SSH_VM_IMAGE, startSshVm } from './support/ssh-vm.ts'
+import { buildSshVmImage, SSH_VM_IMAGE, SSH_VM_LABEL, startSshVm } from './support/ssh-vm.ts'
 
 type MachineKind = (typeof MACHINE_PROVIDERS)[number]['kind']
 
@@ -37,6 +37,8 @@ type Backend = {
   asked(runId: string): boolean
   /** Makes each boot take seconds, until the returned undo. */
   slowBoot(): () => void
+  /** Runs a root shell script in the named machine, behind reeval's back, and returns its output. */
+  inMachine?(name: string, script: string): string
 }
 
 const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
@@ -112,6 +114,17 @@ const BACKENDS: Record<MachineKind, Backend> = {
     asked: (runId) => BACKENDS.boat.machines(runId).length > 0,
     // A container's sshd takes seconds to answer.
     slowBoot: () => () => {},
+    inMachine(name, script) {
+      const container = execFileSync('docker', [
+        'ps',
+        '-q',
+        '--filter',
+        `label=${SSH_VM_LABEL}=${name}`,
+      ])
+        .toString()
+        .trim()
+      return execFileSync('docker', ['exec', container, 'sh', '-c', script]).toString()
+    },
   },
 }
 
@@ -449,7 +462,7 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           await a.writeFile('secret.txt', 'slot a')
           await a.exec('echo slot a > ~/secret.txt')
           const peek = await b.exec(
-            `cat ${a.workdir}/secret.txt 2>/dev/null; cat ${(await a.exec('echo ~')).stdout.trim()}/secret.txt 2>/dev/null; true`,
+            `cat ${a.workdir}/secret.txt 2>/dev/null; cat ~/secret.txt /home/*/secret.txt 2>/dev/null; true`,
           )
           assert.equal(peek.stdout, '', "one slot reads neither the other's workspace nor its home")
           if (kind.capabilities.listeners === 'proc') {
@@ -488,7 +501,7 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
         const id = `${runId}-shared-install`
         const harness = {
           kind: 'fake',
-          bootstrap: `sleep 2; echo "$(id -un) $HOME" > installed; ln -s "$HOME/installed" link`,
+          bootstrap: `sleep 2; echo "$(id -un) $HOME" > installed; ln -s "$HOME/installed" link; printf '\\177ELF\\0%s' "$HOME/installed" > binary`,
         } as const
         const boxes = await Promise.all(
           [0, 1, 2].map(() =>
@@ -501,7 +514,7 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
             boxes.map(async (box) =>
               (
                 await box.exec(
-                  'echo "$(id -un) $HOME"; cat ~/installed; stat -c %U ~/installed; readlink ~/link; stat -c %a ~',
+                  'echo "$(id -un) $HOME"; cat ~/installed; stat -c %U ~/installed; readlink ~/link; stat -c %a ~; stat -c %U "$(tail -c +6 ~/binary)"',
                 )
               ).stdout
                 .trim()
@@ -510,15 +523,96 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           )
           const installers = new Set(saw.map(([, installed]) => installed?.split(' ')[0]))
           assert.equal(installers.size, 1, `the bootstrap ran in one slot: ${[...installers]}`)
-          for (const [self = '', installed = '', owner, link, mode] of saw) {
+          for (const [self = '', installed = '', owner, link, mode, binary] of saw) {
             const [user, home] = self.split(' ')
             assert.equal(installed.split(' ')[1], home, 'the copy names its own home')
             assert.equal(owner, user, 'the copy is its own user')
             assert.equal(link, `${home}/installed`, 'a link into the home points at its own')
             assert.equal(mode, '700', 'the home stays closed to the other slots')
+            assert.equal(binary, user, "a path in a binary file leads into the slot's own home")
           }
         } finally {
           await Promise.all(boxes.map((box) => box.destroy()))
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test("attemptsPerMachine: a slot whose copy of the machine's install won't unpack installs its own", {
+        skip: !backend.inMachine && 'no shell in the fake machine',
+      }, async () => {
+        const id = `${runId}-shared-bad-copy`
+        const harness = { kind: 'fake', bootstrap: 'echo "$(id -un)" > installed' } as const
+        const descriptor = pooled({ attemptsPerMachine: 2 })
+        const first = await kind.create(descriptor, options(id, { harness }))
+        try {
+          const [machineName = ''] = backend.machines(id)
+          backend.inMachine?.(
+            machineName,
+            'for f in /var/lib/reeval-pool/*.tar; do echo bad > "$f"; done',
+          )
+          const second = await kind.create(descriptor, options(id, { harness }))
+          try {
+            const [self, installed] = (await second.exec('id -un; cat ~/installed')).stdout
+              .trim()
+              .split('\n')
+            assert.equal(installed, self, 'the slot installed the harness itself')
+          } finally {
+            await second.destroy()
+          }
+        } finally {
+          await first.destroy()
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test('attemptsPerMachine: when the installing slot dies, a waiting slot installs at once', {
+        skip: !backend.inMachine && 'no shell in the fake machine',
+      }, async () => {
+        const id = `${runId}-shared-dead-installer`
+        // The first slot to install hangs; any other installs straight away.
+        const harness = {
+          kind: 'fake',
+          bootstrap:
+            'mkdir /tmp/reeval-first 2>/dev/null && sleep 600; echo "$(id -un)" > installed',
+        } as const
+        const descriptor = pooled({ attemptsPerMachine: 2 })
+        const stuck = new AbortController()
+        const boxes = [0, 1].map(() =>
+          kind.create(descriptor, options(id, { harness, signal: stuck.signal })),
+        )
+        const settledBoxes = Promise.allSettled(boxes)
+        try {
+          await until(
+            'a slot is installing',
+            () => {
+              const [machineName] = backend.machines(id)
+              if (!machineName) return false
+              try {
+                return !!backend.inMachine?.(machineName, 'pgrep -x -f "sleep 600" || true').trim()
+              } catch {
+                return false
+              }
+            },
+            60_000,
+          )
+          const [machineName = ''] = backend.machines(id)
+          // What holds the install's lock dies, as it would with the reeval that started it.
+          backend.inMachine?.(machineName, 'pkill -KILL -x cat; true')
+          const waiter = await Promise.race([
+            Promise.any(boxes),
+            new Promise<undefined>((r) => setTimeout(() => r(undefined), 20_000)),
+          ])
+          assert.ok(
+            waiter,
+            "the waiting slot was still waiting 20s after the installer's lock died",
+          )
+          const [self, installed] = (await waiter.exec('id -un; cat ~/installed')).stdout
+            .trim()
+            .split('\n')
+          assert.equal(installed, self, 'the waiting slot installed the harness itself')
+        } finally {
+          stuck.abort(new Error('canceled'))
+          for (const r of await settledBoxes) if (r.status === 'fulfilled') await r.value.destroy()
         }
         await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
       })

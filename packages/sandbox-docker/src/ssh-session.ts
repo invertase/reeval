@@ -1,3 +1,4 @@
+import { type ChildProcess, spawn } from 'node:child_process'
 import { posix } from 'node:path'
 import type { Gateway } from './egress/gateway.ts'
 import {
@@ -7,7 +8,7 @@ import {
   sshArgv,
   sshTransport,
 } from './egress/transport.ts'
-import { SANDBOX_USER, type SlotLayout, slotLayout } from './image.ts'
+import { SANDBOX_HOME, SANDBOX_USER, type SlotLayout, slotLayout } from './image.ts'
 import { shellQuote as q, run as runHost } from './process.ts'
 import type { DockerSession } from './session.ts'
 import { EXEC_UMASK, linuxShell, SYSTEM_PATH } from './shells.ts'
@@ -39,8 +40,8 @@ export type SshSessionOptions = {
   reset?: boolean
   /**
    * The install the sandbox user's home needs, by label: a home the machine kept under it, from
-   * any slot, is copied in; else this slot claims the install, which the machine's other slots
-   * wait for rather than run too.
+   * any slot, is copied in; else this slot takes the install's lock, which the machine's other
+   * slots wait on rather than install too.
    */
   home?: string
 }
@@ -51,12 +52,14 @@ export type SshMachine = {
   root: ExecTransport
   /**
    * Gives the sandbox user the machine's home for `home`, waiting while another slot installs it:
-   * `restored` once it's in place, false when this slot is to install it.
+   * `restored` once it's in place, false when this slot is to install it. `copyFailed` says why
+   * the machine's copy wouldn't unpack, when this slot installs because of it.
    */
-  home(): Promise<{ restored: boolean; waitedMs: number }>
+  home(): Promise<{ restored: boolean; waitedMs: number; copyFailed?: string }>
   /**
    * Keeps the sandbox user's home as it is now as the machine's copy under `home`, for its other
-   * slots and later resets, and lets the slots waiting for the install go on.
+   * slots and later resets, when this slot holds the install's lock, and lets the slots waiting
+   * for it go on.
    */
   snapshotHome(): Promise<void>
   /**
@@ -68,7 +71,7 @@ export type SshMachine = {
     noGateway: string | undefined
     destroy: () => Promise<void>
   }): DockerSession
-  /** Hands on an install claim it never finished, then closes the shared SSH connection. */
+  /** Releases an install's lock it still holds, then closes the shared SSH connection. */
   close(): Promise<void>
 }
 
@@ -76,17 +79,28 @@ export type SshMachine = {
 const SSH_FAILED = 255
 /** Held while one slot sets up, so slots sharing a machine don't install the same things at once. */
 const SETUP_LOCK = '/var/lock/reeval-setup'
-/** The machine's homes, root's: `home-<label>.tar`, with the home it was taken from in `.from`. */
+/** The machine's homes, root's: `home-<label>.tar`, and the `.lock` its installer holds. */
 const HOMES = '/var/lib/reeval-pool'
 const RESTORED = 'reeval:home-restored'
 const CLAIMED = 'reeval:install-claimed'
 const WAITING = 'reeval:install-waiting'
+const COPY_FAILED = 'reeval:home-copy-failed'
+const FRESH = 'reeval:install-fresh'
 /** How long a slot waits for another's install, past the install's own deadline of 10 minutes. */
 const INSTALL_WAIT_MS = 11 * 60_000
 
 const homeFiles = (label: string) => {
   const base = `${HOMES}/home-${label.replace(/[^A-Za-z0-9._-]/g, '_')}`
-  return { tar: `${base}.tar`, from: `${base}.from`, claim: `${base}.claim` }
+  return { tar: `${base}.tar`, lock: `${base}.lock` }
+}
+
+/**
+ * Root commands that empty a slot's home back to the skeleton. The directory itself stays: on a
+ * shared machine, slot 0's is where the other slots' commands see their own homes.
+ */
+const skeletonHome = (layout: SlotLayout) => {
+  const [u, home] = [q(layout.user), q(layout.home)]
+  return `mkdir -p ${home} && find ${home} -mindepth 1 -delete && cp -a /etc/skel/. ${home}/ && chown -R -h ${u}:${u} ${home} && chmod 700 ${home}`
 }
 
 /**
@@ -100,44 +114,36 @@ export function resetSlot(layout: SlotLayout): string {
     `for i in 1 2 3 4 5 6 7 8 9 10; do pkill -KILL -u ${u} || break; sleep 0.2; done`,
     `crontab -r -u ${u} 2>/dev/null`,
     `find /tmp /var/tmp /dev/shm -xdev -mindepth 1 -user ${u} -delete 2>/dev/null`,
-    `rm -rf ${q(layout.root)} ${q(layout.state)} ${q(layout.home)}`,
-    `cp -a /etc/skel ${q(layout.home)} && chown -R ${u}:${u} ${q(layout.home)}`,
+    `rm -rf ${q(layout.root)} ${q(layout.state)}`,
+    skeletonHome(layout),
     'fi; true',
   ].join('\n')
 }
 
 /**
- * The root command that gives a slot the machine's home for `label`: the copy, moved into the
- * slot's home with every path to the home it was taken from pointed at this one (printing
- * {@link RESTORED}); else the claim to install it ({@link CLAIMED}), taken from a slot that has
- * held it past {@link INSTALL_WAIT_MS}; else {@link WAITING} while another slot installs.
+ * The root script that gives a slot the machine's home for `label`. With a copy kept, it unpacks
+ * it into the slot's home ({@link RESTORED}): every slot sees its home at one path, so the copy
+ * needs no change. With none, the slot takes the install's lock and holds it, in the process that
+ * then reads its stdin until the installer closes it ({@link CLAIMED}); a slot that finds it held
+ * says {@link WAITING} and blocks until the kernel releases it, when its holder finishes or dies.
+ * A copy that won't unpack is deleted ({@link COPY_FAILED}) and the slot goes for the lock again,
+ * or installs on its own ({@link FRESH}).
  */
 function slotHome(layout: SlotLayout, label: string): string {
   const f = homeFiles(label)
-  const [tar, from, claim] = [q(f.tar), q(f.from), q(f.claim)]
-  const u = q(layout.user)
-  const home = q(layout.home)
-  // Slot homes differ only in their last name, and no name may follow on from the old one.
-  const rewrite = `s#$src\\([^A-Za-z0-9._-]\\|$\\)#${layout.home}\\1#g`
-  const restore = [
-    `src=$(cat ${from})`,
-    `tmp=$(mktemp -d ${q(`${posix.dirname(layout.home)}/.reeval-home-XXXXXX`)})`,
-    `tar -C "$tmp" -xpf ${tar}`,
-    `rm -rf ${home}`,
-    `mv "$tmp/$(basename "$src")" ${home}`,
-    'rmdir "$tmp"',
-    `{ [ "$src" = ${home} ] || { grep -rlI --null -F -- "$src" ${home} | xargs -0 -r sed -i "${rewrite}" && find ${home} -type l \\( -lname "$src" -o -lname "$src/*" \\) -exec sh -c 't=$(readlink "$1"); ln -sfn "$2${'$'}{t#"$3"}" "$1"' sh {} ${home} "$src" \\; ; }; }`,
-    `chown -R -h ${u}:${u} ${home}`,
-    `chmod 700 ${home}`,
-    `echo ${RESTORED}`,
-  ].join(' && ')
-  const stale = Math.ceil(INSTALL_WAIT_MS / 60_000)
+  const [tar, lock] = [q(f.tar), q(f.lock)]
+  const [u, home] = [q(layout.user), q(layout.home)]
+  const restore = `find ${home} -mindepth 1 -delete && tar -C ${home} --strip-components=1 -xpf ${tar} && chown -R -h ${u}:${u} ${home} && chmod 700 ${home}`
   return [
-    `mkdir -p ${q(HOMES)} && chmod 700 ${q(HOMES)} &&`,
-    `if [ -f ${tar} ]; then ${restore}`,
-    `elif mkdir ${claim} 2>/dev/null; then echo ${CLAIMED}`,
-    `elif [ -n "$(find ${claim} -maxdepth 0 -mmin +${stale} 2>/dev/null)" ] && rm -rf ${claim} && mkdir ${claim} 2>/dev/null; then echo ${CLAIMED}`,
-    `else echo ${WAITING}; fi`,
+    `mkdir -p ${q(HOMES)} && chmod 700 ${q(HOMES)} && exec 9>>${lock} || exit 1`,
+    'for try in 1 2; do',
+    `if [ ! -f ${tar} ] && ! flock -x -n 9; then echo ${WAITING}; flock -x -w ${INSTALL_WAIT_MS / 1000} 9 || { echo "another slot was still installing the harness after ${INSTALL_WAIT_MS / 60_000} minutes" >&2; exit 1; }; fi`,
+    `if [ ! -f ${tar} ]; then echo ${CLAIMED}; exec cat >/dev/null; fi`,
+    'flock -u 9',
+    `if ${restore}; then echo ${RESTORED}; exit 0; fi`,
+    `echo ${COPY_FAILED}; rm -f ${tar}; ${skeletonHome(layout)} || exit 1`,
+    'done',
+    `echo ${FRESH}`,
   ].join('\n')
 }
 
@@ -150,10 +156,10 @@ function slotHome(layout: SlotLayout, label: string): string {
 export async function connectSsh(options: SshSessionOptions): Promise<SshMachine> {
   const { target, abortSignal: signal } = options
   const layout = options.layout ?? slotLayout(0)
-  const userPath = [`${layout.home}/.local/bin`, ...(options.path ?? []), SYSTEM_PATH].join(':')
+  const userPath = [`${SANDBOX_HOME}/.local/bin`, ...(options.path ?? []), SYSTEM_PATH].join(':')
   const baseEnv = {
     PATH: userPath,
-    HOME: layout.home,
+    HOME: SANDBOX_HOME,
     USER: layout.user,
     LOGNAME: layout.user,
     SHELL: '/bin/bash',
@@ -161,7 +167,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
   }
   const userEnv = {
     NPM_CONFIG_UPDATE_NOTIFIER: 'false',
-    NPM_CONFIG_PREFIX: `${layout.home}/.local`,
+    NPM_CONFIG_PREFIX: `${SANDBOX_HOME}/.local`,
     ...options.env,
   }
 
@@ -189,10 +195,20 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
   }
 
   const { user } = layout
+  const addUser = (name: string) =>
+    `{ id -u ${name} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --user-group ${name}; }`
   const setup = [
     EXEC_UMASK,
     ...(options.reset ? [`{ ${resetSlot(layout)}\n}`] : []),
-    `{ id -u ${user} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --user-group ${user}; }`,
+    ...(layout.home === SANDBOX_HOME
+      ? [addUser(user)]
+      : [
+          // Its commands see its home where slot 0's is, which must be there to bind it over.
+          addUser(SANDBOX_USER),
+          `chmod 700 ${SANDBOX_HOME}`,
+          `{ id -u ${user} >/dev/null 2>&1 || useradd --no-create-home --home-dir ${SANDBOX_HOME} --shell /bin/bash --user-group ${user}; }`,
+          `{ [ -d ${layout.home} ] || { cp -a /etc/skel ${layout.home} && chown -R ${user}:${user} ${layout.home}; }; }`,
+        ]),
     `mkdir -p ${layout.root} && chown ${user}:${user} ${layout.root}`,
     // Slots sharing a machine are users of one host: neither reads the other's work.
     `chmod 700 ${layout.root} ${layout.home}`,
@@ -215,7 +231,18 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     if (signal?.aborted) return fail(signal.reason)
   }
 
-  let claimed = false
+  /** The process holding the install's lock in the machine, while this slot installs. */
+  let holder: ChildProcess | undefined
+  const release = async () => {
+    const held = holder
+    holder = undefined
+    if (!held || held.exitCode !== null) return
+    const gone = new Promise((resolve) => held.once('close', resolve))
+    held.stdin?.end()
+    const timer = setTimeout(() => held.kill('SIGKILL'), 10_000)
+    await gone
+    clearTimeout(timer)
+  }
 
   const shell = linuxShell({
     run: hostRun,
@@ -231,61 +258,75 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     // Outside the setup lock: slots copy the machine's home at once, and wait while one installs.
     async home() {
       if (!options.home) return { restored: false, waitedMs: 0 }
-      const command = `sudo -n -- /bin/sh -c ${q(`${EXEC_UMASK} && ${slotHome(layout, options.home)}`)}`
-      const until = Date.now() + INSTALL_WAIT_MS
-      let waitingSince: number | undefined
-      for (;;) {
-        signal?.throwIfAborted()
-        const asked = Date.now()
-        const r = await ssh(command)
-        const said = r.stdout.toString('utf8')
-        if (r.exitCode !== 0) {
-          const why = r.stderr.trim() || said.trim()
-          throw new Error(
-            `Couldn't give ${user} the machine's home in ${options.description}: ${why.slice(-500)}`,
+      const [bin = 'ssh', ...args] = sshArgv(
+        target,
+        `sudo -n -- /bin/sh -c ${q(`${EXEC_UMASK}\n${slotHome(layout, options.home)}`)}`,
+      )
+      const startedAt = Date.now()
+      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      let [out, err] = ['', '']
+      child.stderr.on('data', (d: Buffer) => {
+        err += d.toString('utf8')
+      })
+      const said = await new Promise<string>((resolve, reject) => {
+        let waitingSince: number | undefined
+        const stop = () => child.kill('SIGKILL')
+        signal?.addEventListener('abort', stop, { once: true })
+        child.stdout.on('data', (d: Buffer) => {
+          out += d.toString('utf8')
+          if (waitingSince === undefined && out.includes(WAITING)) waitingSince = Date.now()
+          const decided = [RESTORED, CLAIMED, FRESH].find((m) => out.includes(m))
+          if (!decided) return
+          signal?.removeEventListener('abort', stop)
+          resolve(`${decided} ${waitingSince === undefined ? 0 : Date.now() - waitingSince}`)
+        })
+        child.once('error', reject)
+        child.once('close', (code) => {
+          signal?.removeEventListener('abort', stop)
+          if (signal?.aborted) return reject(signal.reason)
+          const why = err.trim() || out.trim() || `ssh exited with ${code}`
+          reject(
+            new Error(
+              `Couldn't give ${user} the machine's home in ${options.description}: ${why.slice(-500)}`,
+            ),
           )
-        }
-        if (!said.includes(WAITING)) {
-          claimed = said.includes(CLAIMED)
-          const waitedMs = waitingSince === undefined ? 0 : asked - waitingSince
-          return { restored: said.includes(RESTORED), waitedMs }
-        }
-        waitingSince ??= asked
-        if (Date.now() > until) {
-          throw new Error(
-            `Another slot of ${options.description} was still installing the harness after ${INSTALL_WAIT_MS / 60_000} minutes`,
-          )
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        })
+      }).finally(() =>
+        traceDocker(args, startedAt, { exitCode: child.exitCode, stdout: out, stderr: err }, 'ssh'),
+      )
+      const [decided, waited] = said.split(' ')
+      if (decided === CLAIMED) holder = child
+      else child.stdin.end()
+      return {
+        restored: decided === RESTORED,
+        waitedMs: Number(waited),
+        ...(out.includes(COPY_FAILED) && {
+          copyFailed: err.trim().slice(-500) || "the machine's copy didn't unpack",
+        }),
       }
     },
     async snapshotHome() {
-      if (!options.home) return
+      if (!options.home || !holder) return
       const f = homeFiles(options.home)
-      const parent = q(posix.dirname(layout.home))
       const command = [
         EXEC_UMASK,
-        `mkdir -p ${q(HOMES)}`,
-        `chmod 700 ${q(HOMES)}`,
-        `tar -C ${parent} -cf ${q(f.tar)}.$$ ${q(posix.basename(layout.home))}`,
-        `printf %s ${q(layout.home)} > ${q(f.from)}.$$`,
-        `mv ${q(f.from)}.$$ ${q(f.from)}`,
+        `tar -C ${q(posix.dirname(layout.home))} -cf ${q(f.tar)}.$$ ${q(posix.basename(layout.home))}`,
         `mv ${q(f.tar)}.$$ ${q(f.tar)}`,
-        `rm -rf ${q(f.claim)}`,
       ].join(' && ')
-      const r = await ssh(`sudo -n -- /bin/sh -c ${q(command)}`)
-      if (r.exitCode !== 0) {
-        throw new Error(
-          `Couldn't keep ${layout.user}'s home in ${options.description}: ${r.stderr.trim().slice(-500)}`,
-        )
+      try {
+        const r = await ssh(`sudo -n -- /bin/sh -c ${q(command)}`)
+        if (r.exitCode !== 0) {
+          throw new Error(
+            `Couldn't keep ${layout.user}'s home in ${options.description}: ${r.stderr.trim().slice(-500)}`,
+          )
+        }
+      } finally {
+        await release()
       }
-      claimed = false
     },
     async close() {
-      // An install that never finished hands its claim on, so a waiting slot installs instead.
-      if (claimed && options.home) {
-        await ssh(`sudo -n -- rm -rf ${q(homeFiles(options.home).claim)}`).catch(() => {})
-      }
+      // An install that never finished lets a waiting slot install instead.
+      await release()
       await closeConnection()
     },
     session: ({ gateway, noGateway, destroy }) =>
