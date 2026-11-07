@@ -232,6 +232,36 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
     command: string
     abortSignal?: AbortSignal
   }): Promise<{ exitCode: number; stdout: string; stderr: string }>
+  /** {@link runPrivileged} with the output streamed, until it ends or is killed. */
+  spawnPrivileged(o: { command: string }): Promise<Spawned>
+  /** Containers only: a sibling that watches this one from outside it. */
+  observer?: Observer
+}
+
+/** A process whose output the caller reads, and ends. */
+export type Spawned = {
+  pid: number | undefined
+  stdout: ReadableStream<Uint8Array>
+  wait(): Promise<{ exitCode: number }>
+  kill(): Promise<void>
+}
+
+/**
+ * A sibling container that reads a container's cgroup from outside: the same image, as `nobody`,
+ * with no network, no capabilities and a read-only root, in the host's cgroup namespace, where
+ * the cgroup files are read-only. It shares no PID namespace with the container, so nothing in
+ * the container can see or signal it. The session removes it with the container.
+ */
+export type Observer = {
+  /** The container it watches: its full id, which names its cgroup. */
+  target: string
+  /** Starts a sibling running `/bin/sh -c command`. */
+  spawn(o: { command: string }): Promise<Spawned>
+  /** Runs `/bin/sh -c command` in the sibling `spawn` started last. */
+  run(o: {
+    command: string
+    abortSignal?: AbortSignal
+  }): Promise<{ exitCode: number; stdout: string; stderr: string }>
 }
 
 /** Root's PATH in a privileged exec: none of the sandbox user's own `bin` directories. */
@@ -411,9 +441,12 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   })
   let gateway: Gateway | undefined
   let removed: Promise<void> | undefined
+  const observers: string[] = []
   const remove = () => {
     gateway?.close()
-    removed ??= removeContainerDetached(id, engine)
+    removed ??= Promise.all([id, ...observers].map((c) => removeContainerDetached(c, engine))).then(
+      () => {},
+    )
     return removed
   }
   if (signal?.aborted) {
@@ -587,6 +620,101 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     }
   }
 
+  /** Runs the engine's CLI with its output streamed; `stop` ends what it started. */
+  const streamed = (args: string[], stop: () => Promise<void>): Spawned => {
+    const startedAt = Date.now()
+    const child = spawn(spec.bin, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+      env: { ...process.env, ...engineEnv(engine) },
+    })
+    child.stderr.resume()
+    const exited = new Promise<{ exitCode: number }>((resolve) => {
+      child.once('error', () => resolve({ exitCode: 127 }))
+      child.once('close', (code) => {
+        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
+        resolve({ exitCode: code ?? 1 })
+      })
+    })
+    return {
+      pid: child.pid,
+      stdout: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
+      wait: () => exited,
+      kill: async () => {
+        child.kill('SIGKILL')
+        await stop()
+      },
+    }
+  }
+
+  const spawnPrivileged: DockerSession['spawnPrivileged'] = async (o) => {
+    const marker = nextMarker()
+    return streamed(
+      [
+        'exec',
+        '--user',
+        '0:0',
+        '--workdir',
+        SANDBOX_STATE,
+        '--env',
+        `${EXEC_MARKER}=${marker}`,
+        '--env',
+        `PATH=${SYSTEM_PATH}`,
+        id,
+        '/bin/sh',
+        '-c',
+        o.command,
+      ],
+      () => killExec(marker, true),
+    )
+  }
+
+  const observer: Observer = {
+    target: id,
+    async spawn(o) {
+      if (removed) throw new Error(`${spec.name} container ${id.slice(0, 12)} is gone`)
+      const name = `reeval-observer-${nonce}-${observers.length + 1}`
+      observers.push(name)
+      const args = [
+        'run',
+        '--rm',
+        '--name',
+        name,
+        ...Object.entries(labels).flatMap(([k, v]) => ['--label', `${k}=${v}`]),
+        '--pull',
+        'never',
+        '--network',
+        'none',
+        '--cgroupns',
+        'host',
+        '--user',
+        '65534:65534',
+        '--cap-drop',
+        'ALL',
+        '--security-opt',
+        'no-new-privileges',
+        '--read-only',
+        '--pids-limit',
+        '16',
+        '--entrypoint',
+        '/bin/sh',
+        options.image,
+        '-c',
+        o.command,
+      ]
+      return streamed(args, () => removeContainerDetached(name, engine))
+    },
+    async run(o) {
+      const name = observers.at(-1)
+      if (!name) return { exitCode: 1, stdout: '', stderr: 'no observer started' }
+      const r = await docker(['exec', name, '/bin/sh', '-c', o.command], {
+        signal: o.abortSignal,
+        engine,
+      })
+      return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+    },
+  }
+
   const readBinaryFile = async (o: { path: string; abortSignal?: AbortSignal }) => {
     const r = await docker(
       ['exec', ...user, id, 'cat', '--', posix.resolve(SANDBOX_ROOT, o.path)],
@@ -673,6 +801,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     oomKills: () => oomKills(id, engine, execUser(options)),
     run,
     runPrivileged,
+    spawnPrivileged,
+    observer,
     // The overloads type a `stdin: true` spawn's writable stdin, which this one refuses.
     spawn: (async (o: Parameters<DockerSession['spawn']>[0]) => {
       if (o.stdin) throw new Error(`A ${spec.name} sandbox process has no writable stdin`)

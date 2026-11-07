@@ -3147,7 +3147,7 @@ export type VmImage = {
 }
 
 /**
- * What an attempt's sandbox gave it and what it used, measured in the sandbox from when it started
+ * What an attempt's sandbox gave it and what it used, measured from when the sandbox started
  * until teardown. A value the sandbox can't measure is left out, never estimated.
  */
 export type AttemptResources = {
@@ -3162,9 +3162,15 @@ export type AttemptResources = {
     sandbox: string
     /** The provider's machine size, where it has sizes: `boat({ type })`. */
     size?: string
-    /** CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has. */
+    /**
+     * CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has (a macOS
+     * VM's `sysctl hw.ncpu`).
+     */
     vcpus?: number
-    /** Memory the attempt could use, in bytes: the container's limit, else the VM's total. */
+    /**
+     * Memory the attempt could use, in bytes: the container's limit, else the VM's total (a
+     * macOS VM's `sysctl hw.memsize`).
+     */
     memoryBytes?: number
   }
   /** What it used; absent when the sandbox gave no readings (a macOS VM has no `/proc`). */
@@ -3180,11 +3186,29 @@ export type AttemptResources = {
     /** The most CPUs it kept busy between two readings; absent with fewer than two. */
     peakCores?: number
     /**
+     * The 95th percentile of the CPUs it kept busy between two readings, a second apart: what it
+     * needed but for its busiest twentieth of the time. Absent with fewer than two readings.
+     */
+    p95Cores?: number
+    /**
      * The highest memory reading, in bytes, page cache the kernel can reclaim left out: the
      * cgroup's `memory.current` less its `inactive_file`, or the VM's `MemTotal` less
      * `MemAvailable`. Sampled, so a spike between readings is missed.
      */
     peakMemoryBytes?: number
+    /**
+     * cgroup v2's `memory.peak`, in bytes: the highest `memory.current` the kernel saw since the
+     * container started, page cache included, so no spike is missed but it reads higher than
+     * `peakMemoryBytes`. `container` scope on Linux 5.19 or later only.
+     */
+    cgroupPeakMemoryBytes?: number
+    /**
+     * How often the container's CPU quota held it back over `durationMs`, from cgroup v2's
+     * `cpu.stat`: `periods` is `nr_periods` (quota periods it ran in), `throttledPeriods`
+     * `nr_throttled` (those it used up its quota in and waited out) and `throttledSeconds`
+     * `throttled_usec`. `container` scope only.
+     */
+    throttling?: { periods: number; throttledPeriods: number; throttledSeconds: number }
     /** Bytes the VM's disks read over `durationMs`; `machine` scope only. */
     diskReadBytes?: number
     /** Bytes the VM's disks wrote over `durationMs`; `machine` scope only. */

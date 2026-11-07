@@ -1109,9 +1109,15 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'sandbox.resources',
     area: 'Sandbox',
-    name: "Each attempt's `resources`: the container's or VM's vCPUs and memory, and the CPU, peak memory and a VM's disk it used, in `reeval show` and `reeval query attempt_resources`",
+    name: "Each attempt's `resources`: the container's or VM's vCPUs and memory (a macOS VM's from `sysctl`), and the CPU (average, p95 and peak cores), peak memory, a container's cgroup `memory.peak` and CPU throttling, and a VM's disk it used, in `reeval show` and `reeval query attempt_resources`",
     fixtures: ['sandbox/resources', 'sandbox/boat-resources'],
     unit: ['reeval/test/resources.test.ts'],
+  },
+  {
+    id: 'sandbox.resources-sampler',
+    area: 'Sandbox',
+    name: "The resources sampler is out of the agent's reach: a container's runs in a sibling container it can't see, a VM's as root",
+    fixtures: ['sandbox/resources-hidden', 'sandbox/boat-resources-root'],
   },
   {
     id: 'docker.from',

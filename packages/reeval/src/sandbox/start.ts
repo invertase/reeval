@@ -66,6 +66,8 @@ export type StartOptions = {
   helper: string
   /** The machine as the record names it: its provider and size. */
   machine: { sandbox: string; size?: string }
+  /** A macOS guest, which has no `/proc` to read usage from, only its sizes. */
+  darwin?: boolean
   /** What the gateway needs on this machine, for the brokering refusal. */
   hint?: string
   /** Installs the harness's CLI before the session, when the image doesn't have it baked in. */
@@ -159,7 +161,7 @@ export async function startSandbox(
     return await sessionSandbox(network, glue, {
       ...(machine.stateDir && { stateDir: machine.stateDir }),
       oomKills: async () => null,
-      resources: { scope: 'machine', machine: start.machine },
+      resources: { mode: start.darwin ? 'darwin' : 'machine', machine: start.machine },
     })
   } catch (error) {
     await destroy().catch(() => {})
