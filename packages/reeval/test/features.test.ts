@@ -96,7 +96,7 @@ type Feature = {
   /** Canary cell environments in plan order. Defaults to `cells`, then `[canaryEnv ?? env]`. */
   canaryCells?: string[]
   /** What the canary's failure says: proof it failed on the check, not on setup. */
-  canary: RegExp
+  canary: RegExp | ((tier: Tier) => RegExp)
   /** The canary's environment, when it needs another one; defaults to `env`. */
   canaryEnv?: string
   /** Canary cell environments that must pass. The other canary attempts must match `canary`. */
@@ -1605,7 +1605,11 @@ export const features: Feature[] = [
     env: 'closed',
     canaryEnv: 'open',
     hostEnv: egressEnv,
-    canary: /expected '200 exit=0 dns=0' to match/,
+    // A rootless Podman container resolves names only as far as the runner's own DNS answers.
+    canary: (tier) =>
+      tier === 'podman'
+        ? /expected '200 exit=0 dns=\d+' to match/
+        : /expected '200 exit=0 dns=0' to match/,
     record: ({ run }) => {
       const egress = landed(run)?.egress
       assert.equal(egress?.policy, 'deny-all')
@@ -5043,7 +5047,10 @@ function fixtureTests(tiers: Tier[]) {
             canary: {
               outcome: 'fail',
               attempts: ids(f.canaryCells ?? f.cells ?? [f.canaryEnv ?? f.env]),
-              error: { kind: 'assertion', message: f.canary },
+              error: {
+                kind: 'assertion',
+                message: typeof f.canary === 'function' ? f.canary(tier) : f.canary,
+              },
               ...(f.canaryPass ? { clean: ids(f.canaryPass) } : {}),
             },
           },
