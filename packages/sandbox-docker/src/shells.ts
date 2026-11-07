@@ -29,7 +29,10 @@ const READER = `${EXEC_UMASK}; while IFS= read -r -d "" kv; do export "$kv"; don
 export function linuxShell(o: {
   run: SessionShell['run']
   remote(command: string): string[]
-  /** Tells this machine's commands apart from another's with the same exec number. */
+  /**
+   * Tells this session's commands apart from another's with the same exec number: another
+   * machine's, or another slot's on this one, since `kill` looks through every process as root.
+   */
   id: string
   /** The sandbox user's own variables: PATH, HOME, USER and the like. */
   user: Record<string, string>

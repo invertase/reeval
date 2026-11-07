@@ -51,6 +51,25 @@ test('parseProbe keeps the reachable LISTEN rows of /proc/net/tcp and tcp6', () 
   assert.deepEqual(parseProbe('alive\nnoproc\n'), { proc: false, alive: true })
 })
 
+test("parseProbe keeps its own user's listeners, and names the ports other users listen on", () => {
+  const probe = parseProbe(
+    [
+      'alive',
+      'uid 1001',
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1002        0 100 1',
+      '   1: 0100007F:0BB9 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 101 1',
+      '   2: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 102 1',
+    ].join('\n'),
+  )
+  assert.deepEqual(probe, {
+    proc: true,
+    alive: true,
+    listeners: [{ port: 3001, address: '127.0.0.1' }],
+    others: [22, 3000],
+  })
+})
+
 test("parseProbe keeps lsof's reachable listeners, as macOS lists them", () => {
   const probe = parseProbe(
     [
