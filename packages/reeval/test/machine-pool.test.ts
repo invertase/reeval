@@ -23,6 +23,8 @@ type Fake = PoolProvider<{ host: string }> & {
   tries: number[]
   removed: string[]
   kept: string[]
+  /** What each keep-alive asked: the machine and its TTL from now. */
+  keptFor: number[]
   live: () => string[]
   /** The most machines that were up at once. */
   peak: () => number
@@ -34,7 +36,7 @@ type Fake = PoolProvider<{ host: string }> & {
  */
 function fakeProvider(
   answer: (n: number) => 'ok' | RateLimitError | Error | 'hang' = () => 'ok',
-  o: { startMs?: number; removeMs?: number } = {},
+  o: { startMs?: number; removeMs?: number; keepAlive?: (id: string) => void } = {},
 ): Fake {
   let n = 0
   const t0 = performance.now()
@@ -46,6 +48,7 @@ function fakeProvider(
     tries: [],
     removed: [],
     kept: [],
+    keptFor: [],
     live: () => [...live],
     peak: () => peak,
     async start(signal) {
@@ -70,8 +73,10 @@ function fakeProvider(
       if (o.removeMs) await new Promise((r) => setTimeout(r, o.removeMs))
       live.delete(id)
     },
-    async keepAlive(id) {
+    async keepAlive(id, ttlSeconds) {
       fake.kept.push(id)
+      fake.keptFor.push(ttlSeconds)
+      o.keepAlive?.(id)
     },
     rateLimited: (error): RateLimited | null =>
       error instanceof RateLimitError ? { retryAfterMs: error.retryAfterMs } : null,
@@ -231,9 +236,56 @@ describe('machine pool', () => {
       machinesAtOnce: 1,
       leases: 2,
       reusedLeases: 1,
+      keepAliveFailed: 0,
     })
     await p.close()
     assert.deepEqual(provider.live(), [])
+  })
+
+  test('a reused machine is kept alive for the longest TTL any attempt asked, from now', async () => {
+    const provider = fakeProvider()
+    const p = pool(provider, { limits: { machines: 1 }, reuse: true })
+    ;(await p.acquire({ ttlSeconds: 900 })).release()
+    ;(await p.acquire({ ttlSeconds: 300 })).release()
+    assert.deepEqual(provider.keptFor, [900])
+    await p.close()
+  })
+
+  test('a machine that fails its keep-alive goes, and the attempt gets a new one', async () => {
+    const provider = fakeProvider(() => 'ok', {
+      keepAlive: (id) => {
+        if (id === 'm1') throw new Error('404 sandbox not found')
+      },
+    })
+    const p = pool(provider, { limits: { machines: 1 }, reuse: true })
+    const a = await p.acquire()
+    a.release()
+    const b = await p.acquire()
+    assert.equal(b.machine, 'm2')
+    assert.ok(b.start, 'a new machine')
+    assert.deepEqual(b.lost, [{ machine: 'm1', error: '404 sandbox not found' }])
+    assert.ok(provider.removed.includes('m1'))
+    assert.equal(p.stats().keepAliveFailed, 1)
+    b.release()
+    await p.close()
+    assert.deepEqual(provider.live(), [])
+  })
+
+  test("a start waiting on the hour's cap past maxRateWaitMs fails, naming the cap", async () => {
+    const provider = fakeProvider()
+    const p = pool(provider, {
+      limits: { machines: 10, startsPerHour: 1 },
+      windowsMs: { minute: 60_000, hour: 60_000 },
+      maxRateWaitMs: 150,
+    })
+    const first = await p.acquire()
+    assert.ok(first.start && first.start.queuedMs < 100)
+    await assert.rejects(
+      p.acquire(),
+      /fake\(\) had no room to start a machine for \d+s: the account's starts are capped at 1 an hour/,
+    )
+    assert.equal(provider.tries.length, 1)
+    await p.close()
   })
 
   test('a broken slot takes its machine out; the next attempt gets a new one', async () => {
@@ -322,7 +374,7 @@ describe('machine pool', () => {
     await p.close()
   })
 
-  test('an acquire aborted while its machine starts leaves the machine idle, and idle it goes', async () => {
+  test('an acquire aborted while its machine starts, with none other waiting, removes the machine once it is up', async () => {
     const provider = fakeProvider(() => 'ok', { startMs: 50 })
     const p = pool(provider, { idleMs: 100 })
     const stop = new AbortController()
@@ -332,8 +384,32 @@ describe('machine pool', () => {
     await assert.rejects(waiting, /the attempt was canceled/)
     for (let i = 0; i < 100 && provider.removed.length === 0; i++)
       await new Promise((r) => setTimeout(r, 20))
-    assert.deepEqual(provider.removed, ['m1'], 'the machine nobody took is removed once idle')
+    assert.deepEqual(provider.removed, ['m1'], 'the machine nobody waits for is removed')
     assert.deepEqual(provider.live(), [])
+    await p.close()
+  })
+
+  test('an acquire aborted while its start waits for the window, or boots, with none other waiting, stops the start', async () => {
+    const provider = fakeProvider((n) => (n === 1 ? 'hang' : 'ok'))
+    const p = pool(provider, {
+      limits: { machines: 10, startsPerMinute: 2 },
+      windowsMs: { minute: 60_000, hour: 3_600_000 },
+    })
+    const a = await p.acquire()
+    const booting = new AbortController()
+    const boots = p.acquire({ signal: booting.signal })
+    await until(() => provider.tries.length === 2)
+    booting.abort(new Error('canceled'))
+    await assert.rejects(boots, /canceled/)
+    const queued = new AbortController()
+    const waits = p.acquire({ signal: queued.signal })
+    await new Promise((r) => setTimeout(r, 20))
+    queued.abort(new Error('canceled'))
+    await assert.rejects(waits, /canceled/)
+    await new Promise((r) => setTimeout(r, 20))
+    assert.equal(provider.tries.length, 2, 'the queued start never went out')
+    assert.deepEqual(provider.live(), [a.machine], 'the booting start was stopped')
+    a.release()
     await p.close()
   })
 })

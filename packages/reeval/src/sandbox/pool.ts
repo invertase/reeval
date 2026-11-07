@@ -32,7 +32,11 @@ export type PoolProvider<M> = {
   start(signal: AbortSignal, ttlSeconds: number): Promise<{ id: string; info: M }>
   /** Removes a machine; one already gone is removed. */
   remove(id: string): Promise<void>
-  /** Keeps a machine about to run another attempt from expiring for `ttlSeconds` more. */
+  /**
+   * Restarts the clock of a machine about to run another attempt: it now expires `ttlSeconds`
+   * from this call, not from its start. A machine that can't be kept alive is taken out of the
+   * pool, so the attempt gets another.
+   */
   keepAlive?(id: string, ttlSeconds: number): Promise<void>
   /** Whether `error`, from `start`, is the provider refusing for now rather than failing. */
   rateLimited(error: unknown): RateLimited | null
@@ -62,9 +66,16 @@ export type LeaseFacts = {
   slot: number
   /** The attempts this slot ran before this one. */
   reused: number
-  /** The machine's start, for its first lease: how long it took and the rate limits it waited out. */
-  start: { ms: number; rateLimited: number } | null
+  /**
+   * The machine's start, for its first lease: how long it took, how long of that it waited for
+   * room in the start windows, and the rate limits it waited out.
+   */
+  start: MachineStart | null
+  /** The machines dropped for this lease because keeping them alive failed, and why. */
+  lost: { machine: string; error: string }[]
 }
+
+export type MachineStart = { ms: number; queuedMs: number; rateLimited: number }
 
 export type PoolLease<M> = LeaseFacts & {
   info: M
@@ -79,6 +90,8 @@ export type PoolStats = {
   machinesAtOnce: number
   leases: number
   reusedLeases: number
+  /** Machines dropped because keeping them alive for another attempt failed. */
+  keepAliveFailed: number
 }
 
 type Machine<M> = {
@@ -89,7 +102,9 @@ type Machine<M> = {
   alive: number
   draining: boolean
   removed?: Promise<void>
-  start: { ms: number; rateLimited: number } | null
+  start: MachineStart | null
+  /** Stops its start: the pool closed, or no attempt waits for it any more. */
+  stop: AbortController
 }
 
 type Slot<M> = { machine: Machine<M>; slot: number; uses: number; dead: boolean }
@@ -117,6 +132,7 @@ export class MachinePool<M> {
   readonly #queues: PQueue[] = []
   readonly #closing = new AbortController()
   readonly #roomWaiters = new Set<() => void>()
+  readonly #stopReason: InfraError
   #heldUntil = 0
   #held: NodeJS.Timeout | undefined
   #reaping: NodeJS.Timeout | undefined
@@ -129,10 +145,12 @@ export class MachinePool<M> {
     machinesAtOnce: 0,
     leases: 0,
     reusedLeases: 0,
+    keepAliveFailed: 0,
   }
 
   constructor(provider: PoolProvider<M>, options: PoolOptions) {
     this.#provider = provider
+    this.#stopReason = new InfraError(`${provider.helper}: no attempt waits for this machine`)
     this.#options = {
       idleMs: 15_000,
       maxRateWaitMs: 15 * 60_000,
@@ -186,16 +204,58 @@ export class MachinePool<M> {
   async acquire(o: { signal?: AbortSignal; ttlSeconds?: number } = {}): Promise<PoolLease<M>> {
     const { signal } = o
     this.#ttlSeconds = Math.max(this.#ttlSeconds, o.ttlSeconds ?? 0)
+    const lost: LeaseFacts['lost'] = []
+    for (;;) {
+      const slot = await this.#take(signal)
+      const { machine } = slot
+      const first = machine.start
+      machine.start = null
+      if (!first && this.#provider.keepAlive) {
+        try {
+          await this.#provider.keepAlive(machine.id as string, this.#ttlSeconds)
+        } catch (error) {
+          this.#stats.keepAliveFailed++
+          lost.push({
+            machine: machine.id as string,
+            error: (error as Error)?.message ?? String(error),
+          })
+          this.#release(slot, true)
+          signal?.throwIfAborted()
+          continue
+        }
+      }
+      const reused = slot.uses++
+      this.#leased.add(slot)
+      this.#stats.leases++
+      if (reused) this.#stats.reusedLeases++
+      let released = false
+      return {
+        machine: machine.id as string,
+        slot: slot.slot,
+        reused,
+        start: first,
+        lost,
+        info: machine.info as M,
+        release: (broken = false) => {
+          if (released) return
+          released = true
+          this.#release(slot, broken)
+        },
+      }
+    }
+  }
+
+  async #take(signal: AbortSignal | undefined): Promise<Slot<M>> {
     if (this.#closed) throw new InfraError(`${this.#provider.helper}'s machine pool is closed`)
     signal?.throwIfAborted()
     const pending = this.#slots.acquire()
     const abort = () => pending.abort()
     signal?.addEventListener('abort', abort, { once: true })
-    let slot: Slot<M>
     try {
-      slot = await pending.promise
+      return await pending.promise
     } catch (error) {
       if (signal?.aborted) {
+        this.#stopUnwanted()
         this.#reapUntaken()
         throw signal.reason
       }
@@ -203,29 +263,6 @@ export class MachinePool<M> {
       throw error
     } finally {
       signal?.removeEventListener('abort', abort)
-    }
-    const { machine } = slot
-    const reused = slot.uses++
-    this.#leased.add(slot)
-    this.#stats.leases++
-    if (reused) this.#stats.reusedLeases++
-    const first = machine.start
-    machine.start = null
-    if (!first) {
-      await this.#provider.keepAlive?.(machine.id as string, this.#ttlSeconds).catch(() => {})
-    }
-    let released = false
-    return {
-      machine: machine.id as string,
-      slot: slot.slot,
-      reused,
-      start: first,
-      info: machine.info as M,
-      release: (broken = false) => {
-        if (released) return
-        released = true
-        this.#release(slot, broken)
-      },
     }
   }
 
@@ -263,6 +300,16 @@ export class MachinePool<M> {
     )
   }
 
+  /** With no attempt left waiting, the machines still starting would only sit idle: stop them. */
+  #stopUnwanted() {
+    if (this.#slots.numPendingAcquires() > 0) return
+    for (const machine of this.#machines) {
+      if (machine.id === undefined && !machine.draining) {
+        machine.stop.abort(this.#stopReason)
+      }
+    }
+  }
+
   #release(slot: Slot<M>, broken: boolean) {
     this.#leased.delete(slot)
     if (broken) slot.machine.draining = true
@@ -276,6 +323,18 @@ export class MachinePool<M> {
    * slots still run, holds its place at the provider until it's gone.
    */
   async #claim(): Promise<Slot<M>> {
+    for (;;) {
+      try {
+        return await this.#claimOnce()
+      } catch (error) {
+        // A start stopped for want of an attempt, with one waiting again: it gets another.
+        const stopped = error === this.#stopReason && !this.#closing.signal.aborted
+        if (!stopped || this.#slots.numPendingAcquires() === 0) throw error
+      }
+    }
+  }
+
+  async #claimOnce(): Promise<Slot<M>> {
     const open = () => [...this.#machines].find((m) => !m.draining && m.unclaimed.length)
     let machine = open()
     while (!machine && this.#machines.size >= Math.max(1, this.#options.limits.machines)) {
@@ -356,16 +415,28 @@ export class MachinePool<M> {
       alive: 0,
       draining: false,
       start: null,
+      stop: new AbortController(),
     }
     this.#machines.add(machine)
     this.#stats.machinesAtOnce = Math.max(this.#stats.machinesAtOnce, this.#machines.size)
     const started = performance.now()
     let rateLimited = 0
-    machine.ready = this.#started(() => rateLimited++).then(
+    let queuedMs = 0
+    machine.ready = this.#started(
+      AbortSignal.any([this.#closing.signal, machine.stop.signal]),
+      () => rateLimited++,
+      (ms) => {
+        queuedMs += ms
+      },
+    ).then(
       ({ id, info }) => {
         machine.id = id
         machine.info = info
-        machine.start = { ms: Math.round(performance.now() - started), rateLimited }
+        machine.start = {
+          ms: Math.round(performance.now() - started),
+          queuedMs: Math.round(queuedMs),
+          rateLimited,
+        }
         this.#backoffMs = this.#options.backoffMs
       },
       (error: unknown) => {
@@ -380,17 +451,31 @@ export class MachinePool<M> {
   }
 
   /** One start, through the rate gate, again after each rate limit until `maxRateWaitMs`. */
-  #started(onRateLimit: () => void): Promise<{ id: string; info: M }> {
-    const signal = this.#closing.signal
+  #started(
+    signal: AbortSignal,
+    onRateLimit: () => void,
+    onQueued: (ms: number) => void,
+  ): Promise<{ id: string; info: M }> {
     const provider = this.#provider
     const startedAt = performance.now()
     return pRetry(
       () =>
-        this.#gate(async () => {
-          signal.throwIfAborted()
-          this.#stats.starts++
-          return provider.start(signal, this.#ttlSeconds)
-        }),
+        this.#gate(
+          async () => {
+            signal.throwIfAborted()
+            this.#stats.starts++
+            const started = await provider.start(signal, this.#ttlSeconds)
+            // Stopped as it booted: nothing would hold the machine, so it goes now.
+            if (signal.aborted) {
+              await provider.remove(started.id).catch(() => {})
+              throw signal.reason
+            }
+            return started
+          },
+          this.#options.maxRateWaitMs - (performance.now() - startedAt),
+          signal,
+          onQueued,
+        ),
       {
         retries: Number.POSITIVE_INFINITY,
         minTimeout: 0,
@@ -435,11 +520,49 @@ export class MachinePool<M> {
     }, ms)
   }
 
-  /** Runs `fn` once every window has room, hour then minute. */
-  #gate<T>(fn: () => Promise<T>): Promise<T> {
-    return this.#queues.reduceRight<() => Promise<T>>(
-      (inner, queue) => () => queue.add(inner) as Promise<T>,
-      fn,
-    )()
+  /**
+   * Runs `fn` once every window has room, hour then minute, or fails once it has waited
+   * `withinMs`. Only the wait is bounded: a start under way is never cut short, or its machine
+   * would be left running.
+   */
+  #gate<T>(
+    fn: () => Promise<T>,
+    withinMs: number,
+    stop: AbortSignal,
+    onQueued: (ms: number) => void,
+  ): Promise<T> {
+    const queued = performance.now()
+    const waiting = new AbortController()
+    const stopped = () => waiting.abort(stop.reason)
+    stop.addEventListener('abort', stopped, { once: true })
+    const { startsPerHour, startsPerMinute } = this.#options.limits
+    const caps = [
+      startsPerHour != null && `${startsPerHour} an hour`,
+      startsPerMinute != null && `${startsPerMinute} a minute`,
+    ].filter(Boolean)
+    const timer = setTimeout(
+      () =>
+        waiting.abort(
+          new InfraError(
+            `${this.#provider.helper} had no room to start a machine for ${Math.round((performance.now() - queued) / 1000)}s${caps.length ? `: the account's starts are capped at ${caps.join(' and ')}, counting the ones it made before this run` : ''}`,
+          ),
+        ),
+      Math.max(0, withinMs),
+    )
+    const run = () => {
+      clearTimeout(timer)
+      stop.removeEventListener('abort', stopped)
+      onQueued(performance.now() - queued)
+      return fn()
+    }
+    return this.#queues
+      .reduceRight<() => Promise<T>>(
+        (inner, queue) => () => queue.add(inner, { signal: waiting.signal }) as Promise<T>,
+        run,
+      )()
+      .finally(() => {
+        clearTimeout(timer)
+        stop.removeEventListener('abort', stopped)
+      })
   }
 }

@@ -79,8 +79,8 @@ export class MachineService {
       throw new Error('The attempt stopped waiting for a machine')
     }
     this.#held.set(key, { owner, lease })
-    const { info, machine, slot, reused, start } = lease
-    return { info, machine, slot, reused, start } satisfies WireLease
+    const { info, machine, slot, reused, start, lost } = lease
+    return { info, machine, slot, reused, start, lost } satisfies WireLease
   }
 
   /** `owner`'s worker is gone: what it waited for is abandoned, what it held is broken. */

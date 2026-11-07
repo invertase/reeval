@@ -467,9 +467,7 @@ const homeLabel = (options: SandboxOptions) => {
  */
 export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) => {
   const api = await boatClient(sandbox, o.root)
-  const limits = (await api
-    .limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
-    .catch(() => null)) as BoatLimits | null
+  const limits = await readLimits(api)
   const k = sandbox.attemptsPerMachine ?? 1
   const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
   const capped = sandbox.maxConcurrent ? Math.ceil(sandbox.maxConcurrent / k) : free
@@ -486,6 +484,27 @@ export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) 
       attemptsPerMachine: k,
       reuse: sandbox.reuse ?? false,
     },
+  }
+}
+
+let limitsWarned = false
+
+/**
+ * The account's limits, or null, warning once, when Boat doesn't answer: the pool then runs one
+ * machine with no start caps of its own, holding back only when Boat refuses a start.
+ */
+async function readLimits(api: BoatClient | null): Promise<BoatLimits | null> {
+  try {
+    if (!api) throw new Error('no Boat client')
+    return (await api.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })) as BoatLimits
+  } catch (error) {
+    if (!limitsWarned) {
+      limitsWarned = true
+      console.warn(
+        `warning: boat() couldn't read the account's limits (${(error as Error)?.message ?? error}), so the run starts one machine at a time and runs its attemptsPerMachine attempts on it`,
+      )
+    }
+    return null
   }
 }
 
@@ -632,9 +651,12 @@ export async function createBoatSandbox(
         debug?.log(
           'container',
           lease.start
-            ? `created ${info.id} (${info.name}, ${info.type}) in ${lease.start.ms}ms${lease.start.rateLimited ? `, after ${lease.start.rateLimited} rate-limited starts` : ''}; slot ${lease.slot}`
+            ? `created ${info.id} (${info.name}, ${info.type}) in ${lease.start.ms}ms${lease.start.queuedMs >= 1000 ? `, ${Math.round(lease.start.queuedMs / 1000)}s of it waiting for the account's start caps` : ''}${lease.start.rateLimited ? `, after ${lease.start.rateLimited} rate-limited starts` : ''}; slot ${lease.slot}`
             : `${lease.reused ? 'reused' : 'shared'} ${info.id} (${info.name}, ${info.type}); slot ${lease.slot}${lease.reused ? `, its attempt ${lease.reused + 1}` : ''}`,
         )
+        for (const lost of lease.lost) {
+          debug?.log('container', `dropped ${lost.machine}: keeping it alive failed: ${lost.error}`)
+        }
         const layout = slotLayout(lease.slot)
         const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-ssh-'))
         let machine: SshMachine
@@ -744,15 +766,13 @@ export async function removeRunSandboxes(
  */
 export async function boatCapacity(
   sandbox: BoatSandboxDescriptor,
-): Promise<{ machines: number; attempts: number } | null> {
+): Promise<{ machines: number; attempts: number }> {
   const api = await boatClient(sandbox).catch(() => null)
-  const limits = (await api
-    ?.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
-    .catch(() => null)) as BoatLimits | null | undefined
-  if (!limits) return null
+  const limits = await readLimits(api)
+  const k = sandbox.attemptsPerMachine ?? 1
+  if (!limits) return { machines: 1, attempts: Math.min(k, sandbox.maxConcurrent ?? k) }
   const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
   const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
-  const k = sandbox.attemptsPerMachine ?? 1
   const attempts = Math.min(machines, perMinute ?? machines) * k
   return { machines, attempts: Math.max(1, Math.min(attempts, sandbox.maxConcurrent ?? attempts)) }
 }
