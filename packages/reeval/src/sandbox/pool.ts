@@ -103,7 +103,10 @@ type Machine<M> = {
   draining: boolean
   removed?: Promise<void>
   start: MachineStart | null
-  /** Stops its start: the pool closed, or no attempt waits for it any more. */
+  /**
+   * No attempt waits for it any more: a start still queued never goes out, and one under way is
+   * removed once up.
+   */
   stop: AbortController
 }
 
@@ -464,7 +467,9 @@ export class MachinePool<M> {
           async () => {
             signal.throwIfAborted()
             this.#stats.starts++
-            const started = await provider.start(signal, this.#ttlSeconds)
+            // Only the pool's close cuts a start short: a machine stopped mid-provision can come up
+            // anyway (Boat drops a delete sent then), and only a canceled run reaps by name.
+            const started = await provider.start(this.#closing.signal, this.#ttlSeconds)
             // Stopped as it booted: nothing would hold the machine, so it goes now.
             if (signal.aborted) {
               await provider.remove(started.id).catch(() => {})
