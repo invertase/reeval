@@ -64,7 +64,12 @@ export function procAddress(hex: string): string {
 const reachable = (address: string) =>
   address === '0.0.0.0' || address === '::' || address === '::1' || address.startsWith('127.')
 
-export function parseProbe(stdout: string): ServeProbe {
+/**
+ * `byUser` keeps only the listeners of the user the probe ran as, naming the others' ports in
+ * `others`: on a machine whose attempts share its network. Elsewhere a listener of another user
+ * (root's `docker-proxy` for a container's published port) may be the command's own.
+ */
+export function parseProbe(stdout: string, o: { byUser?: boolean } = {}): ServeProbe {
   const lines = stdout.split('\n')
   const alive = lines.includes('alive')
   if (lines.includes('noproc')) return { proc: false, alive }
@@ -78,7 +83,7 @@ export function parseProbe(stdout: string): ServeProbe {
     }
     return { proc: true, alive, listeners }
   }
-  const own = lines.find((l) => l.startsWith('uid '))?.slice(4)
+  const own = o.byUser ? lines.find((l) => l.startsWith('uid '))?.slice(4) : undefined
   const others = new Set<number>()
   for (const l of lines) {
     // `sl local remote st tx:rx tr:when retrnsmt uid …`; state 0A is LISTEN.
