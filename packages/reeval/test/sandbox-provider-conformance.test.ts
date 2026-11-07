@@ -140,9 +140,17 @@ const settled = (p: Promise<unknown>, ms = 20_000) =>
     new Promise<string>((r) => setTimeout(() => r('still waiting'), ms)),
   ])
 
-/** Every process's command line in the machine, as reeval's own commands see them. */
-const machineArgs = async (box: Sandbox) =>
-  (await box.execOwn('ps -A -ww -o args=')).stdout.split('\n').map((line) => line.trim())
+/**
+ * Every process's command line in the machine, as reeval's own commands see them. A `ps` that
+ * failed would read as no survivors, so it must have listed itself.
+ */
+const machineArgs = async (box: Sandbox) => {
+  const ps = await box.execOwn('ps -A -ww -o args=')
+  const args = ps.stdout.split('\n').map((line) => line.trim())
+  assert.equal(ps.exitCode, 0, `ps in the machine failed: ${ps.stderr}`)
+  assert.ok(args.includes('ps -A -ww -o args='), `ps in the machine listed nothing: ${ps.stdout}`)
+  return args
+}
 
 /** How many processes in the machine run exactly `sleep <n>`. */
 const sleeping = async (box: Sandbox, n: number) =>
@@ -294,6 +302,40 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           }
         })
       }
+
+      test("an abort leaves the machine's other commands running, the agent's and reeval's own", async () => {
+        const [n, agent, own] = [token(), token(), token()]
+        const stop = new AbortController()
+        const keep = new AbortController()
+        const running = box.exec(`sleep ${n}`, { signal: stop.signal })
+        const others = [
+          box.exec(`sleep ${agent}`, { signal: keep.signal }),
+          box.execOwn(`sleep ${own}`, { signal: keep.signal }),
+        ]
+        for (const p of [running, ...others]) p.catch(() => {})
+        try {
+          await until(
+            'the commands started',
+            async () =>
+              (await sleeping(box, n)) === 1 &&
+              (await sleeping(box, agent)) === 1 &&
+              (await sleeping(box, own)) === 1,
+          )
+          stop.abort(new Error('canceled'))
+          await until('the aborted command died', async () => (await sleeping(box, n)) === 0)
+          assert.equal(await settled(running), 'rejected', 'the aborted command returned')
+          assert.equal(
+            await sleeping(box, agent),
+            1,
+            "the abort killed another of the agent's commands",
+          )
+          assert.equal(await sleeping(box, own), 1, "the abort killed one of reeval's own commands")
+        } finally {
+          keep.abort()
+          await Promise.all(others.map((p) => settled(p)))
+          for (const k of [n, agent, own]) await reap(box, k)
+        }
+      })
 
       test("the harness session's spawn: an abort, and kill(), each stop its whole tree", async () => {
         assert.ok(hasNetworkSession(box))
