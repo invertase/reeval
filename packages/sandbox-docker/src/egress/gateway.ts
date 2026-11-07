@@ -104,12 +104,18 @@ const installCa = (
   o: { caPath: string; shared: boolean },
   signal?: AbortSignal,
 ) => {
-  const install = `umask 022 && mkdir -p "$(dirname ${o.caPath})" && cat > ${o.caPath} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${o.caPath})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`
-  return execRun(
-    transport,
-    o.shared ? ['flock', CA_LOCK, 'sh', '-c', install] : ['sh', '-c', install],
-    { input: cert, signal },
-  )
+  const inBundle = `grep -q "$(sed -n 2p ${o.caPath})" ${CA_BUNDLE}`
+  const rebuild =
+    'command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1'
+  if (!o.shared) {
+    const install = `umask 022 && mkdir -p "$(dirname ${o.caPath})" && cat > ${o.caPath} && { ${rebuild} && ${inBundle} && echo ${BUNDLED}; true; }`
+    return execRun(transport, ['sh', '-c', install], { input: cert, signal })
+  }
+  // Each gateway's file lands whole before the lock, so one rebuild takes in every gateway that
+  // started meanwhile, and those find their CA in the bundle without a rebuild of their own.
+  const bundle = `{ ${inBundle} || { ${rebuild}; }; } && ${inBundle} && echo ${BUNDLED}; true`
+  const install = `umask 022 && mkdir -p "$(dirname ${o.caPath})" && cat > ${o.caPath}.$$ && mv ${o.caPath}.$$ ${o.caPath} && flock ${CA_LOCK} sh -c '${bundle}'`
+  return execRun(transport, ['sh', '-c', install], { input: cert, signal })
 }
 
 /**
