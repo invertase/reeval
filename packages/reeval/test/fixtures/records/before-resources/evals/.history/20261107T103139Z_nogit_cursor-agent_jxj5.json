@@ -1,0 +1,466 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261107T103139Z_nogit_cursor-agent_jxj5",
+  "status": "complete",
+  "startedAt": "2026-11-07T10:31:39.060Z",
+  "endedAt": "2026-11-07T10:31:45.547Z",
+  "durationMs": 6487,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.21.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.9",
+        "id": "sha256:86cf61caff72d7131c432e2ab98cf253cf003ca7709e640ac695bc118f129eea",
+        "agentCli": "@cursor/sdk 1.0.40",
+        "base": "reeval-sandbox:cursor-0.1.9",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.16",
+      "@reeval/harness-opencode": "0.2.16",
+      "@reeval/harness-goose": "0.1.16",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.9",
+      "@ai-sdk/harness-claude-code": "1.0.176-patch.a9d56a8c",
+      "@reeval/harness-codex": "0.1.13",
+      "@reeval/harness-fx": "0.1.11",
+      "@reeval/harness-grok-build": "0.1.12",
+      "ai": "7.0.161",
+      "@ai-sdk/harness": "1.0.172",
+      "@ai-sdk/anthropic": "4.0.95",
+      "@ai-sdk/google": "4.0.110",
+      "@ai-sdk/openai": "4.0.107",
+      "@ai-sdk/typesafe-ai": "3.0.32"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "a3ce9d328e88"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "busy",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 2,
+    "cells": 2,
+    "attempts": 2,
+    "estimateMs": 60000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "a0c52aaca03092daa87cdb2a380546541f551c1267dbc92dc1681febe280ad9a"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 2,
+    "attempts": 2,
+    "pass": 1,
+    "fail": 1,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/canary.eval.ts › canary",
+      "key": "evals/canary.eval.ts › canary",
+      "slug": "evals-canary-eval-ts-canary-d06886",
+      "file": "evals/canary.eval.ts",
+      "group": [],
+      "name": "canary",
+      "tags": [],
+      "fingerprint": "6b0959c2db6b8b00c87d087d0c11e8073a2968a31b02f7878f68086738989fdb",
+      "sources": [
+        {
+          "path": "evals/canary.eval.ts",
+          "sha256": "6bceceaf259f88a886195cc57d82e040c06576c1b31e9552781f0412d5d06bb4"
+        }
+      ],
+      "source": {
+        "body": "a70250b409c3de0f6811daf84300c77d3706554dd81c29b82f420c9971b55601",
+        "options": "46bef1c5d128db828039180243c03871bd7870935d51ddc74fc5a57b8a4268bd"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/busy/docker",
+          "harness": "fake",
+          "environment": "busy",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "6f193b18ba362b2e227ad63a749d5426a81c12db4b07c3e4c7e0694d3f0dea11",
+          "fingerprintParts": {
+            "sources": "816a2578aaf1168190c0859ee0441c044151931abf8c3c3c23b1039d6991342c",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:86cf61caff72d7131c432e2ab98cf253cf003ca7709e640ac695bc118f129eea",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b532414e87cb5038da23f7aefddae37076af9ec5156e54aa28ef36b1b742f71d",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toBeGreaterThanOrEqual 2",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/canary.eval.ts › canary # fake/busy/docker#1",
+          "id": "fake/busy/docker#1",
+          "cell": "fake/busy/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-07T10:31:40.101Z",
+          "imageId": "sha256:86cf61caff72d7131c432e2ab98cf253cf003ca7709e640ac695bc118f129eea",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected 0 to be greater than or equal to 2"
+          },
+          "durationMs": 2116,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1698,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 46,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-canary-eval-ts-canary-d06886/fake-busy-docker-bb19e8/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThanOrEqual 2",
+              "labelled": false,
+              "matcher": "toBeGreaterThanOrEqual",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/canary.eval.ts:6",
+              "message": "expected 0 to be greater than or equal to 2"
+            }
+          ],
+          "checks": [
+            {
+              "command": "echo $(( $(sed -n 's/^usage_usec //p' /sys/fs/cgroup/cpu.stat) / 1000000 ))",
+              "exitCode": 0,
+              "durationMs": 47,
+              "log": {
+                "path": "evals-canary-eval-ts-canary-d06886/fake-busy-docker-bb19e8/1/checks/1.log",
+                "sha256": "515b285ece25079c560ac46fca5b3b7d132fce90f965bf70a763d8b49fd3af54",
+                "bytes": 109
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/lands.eval.ts › lands",
+      "key": "evals/lands.eval.ts › lands",
+      "slug": "evals-lands-eval-ts-lands-2fc777",
+      "file": "evals/lands.eval.ts",
+      "group": [],
+      "name": "lands",
+      "tags": [],
+      "fingerprint": "638312a458ea745be45ef7afd33689960c9114c6c708a0463d208d942d5fd75a",
+      "sources": [
+        {
+          "path": "evals/lands.eval.ts",
+          "sha256": "c01841981971221a9cac7783a512db3f940742010fd682b46abbb842d30da0ed"
+        }
+      ],
+      "source": {
+        "body": "c05f0b3c13133fff53d2420e2d5506ca81f40ec689fa2ca9208852c36872485b",
+        "options": "46bef1c5d128db828039180243c03871bd7870935d51ddc74fc5a57b8a4268bd"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/busy/docker",
+          "harness": "fake",
+          "environment": "busy",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "30a8c9386d1edd39f92b728dfe10eace030fd9671331d1d5a820c89f51e3a6cc",
+          "fingerprintParts": {
+            "sources": "23f1d85f10c639e4123363849a1c332084afd3a6ad176b879496ebb2ba1765f1",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:86cf61caff72d7131c432e2ab98cf253cf003ca7709e640ac695bc118f129eea",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "b532414e87cb5038da23f7aefddae37076af9ec5156e54aa28ef36b1b742f71d",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBeGreaterThanOrEqual 2",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/lands.eval.ts › lands # fake/busy/docker#1",
+          "id": "fake/busy/docker#1",
+          "cell": "fake/busy/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-11-07T10:31:40.101Z",
+          "imageId": "sha256:86cf61caff72d7131c432e2ab98cf253cf003ca7709e640ac695bc118f129eea",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 5436,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1773,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 3290,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-lands-eval-ts-lands-2fc777/fake-busy-docker-bb19e8/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThanOrEqual 2",
+              "labelled": false,
+              "matcher": "toBeGreaterThanOrEqual",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/lands.eval.ts:7"
+            }
+          ],
+          "checks": [
+            {
+              "command": "node -e 'const b = Buffer.alloc(256 << 20, 1); const t = Date.now(); while (Date.now() - t < 3000); console.log(b.length)'",
+              "exitCode": 0,
+              "durationMs": 3223,
+              "log": {
+                "path": "evals-lands-eval-ts-lands-2fc777/fake-busy-docker-bb19e8/1/checks/1.log",
+                "sha256": "09795faccc10ee09c63789bfe225e12f915999c8844c499b55df59a1a74d5520",
+                "bytes": 164
+              }
+            },
+            {
+              "command": "echo $(( $(sed -n 's/^usage_usec //p' /sys/fs/cgroup/cpu.stat) / 1000000 ))",
+              "exitCode": 0,
+              "durationMs": 68,
+              "log": {
+                "path": "evals-lands-eval-ts-lands-2fc777/fake-busy-docker-bb19e8/1/checks/2.log",
+                "sha256": "76f26252a369aa5e73d242b04f49772971e92a00b658e345e3ad27a184706e86",
+                "bytes": 109
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
