@@ -206,6 +206,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     ...(layout.home === SANDBOX_HOME
       ? [addUser(user)]
       : [
+          `{ command -v unshare && command -v setpriv && command -v mount; } >/dev/null || { echo "a machine shared by attempts needs unshare, setpriv and mount (util-linux)" >&2; false; }`,
           // Its commands see its home where slot 0's is, which must be there to bind it over.
           addUser(SANDBOX_USER),
           `chmod 700 ${SANDBOX_HOME}`,
