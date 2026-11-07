@@ -1,5 +1,5 @@
 // A run's event stream: what `reeval run --events` and `--events-url` write, and how `reeval attach`
-// follows it (mid-run, across a resume, from a URL) and ends with the run's exit code.
+// follows it (mid-run, across a resume, over a WebSocket) and ends with the run's exit code.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import {
@@ -11,12 +11,14 @@ import {
   truncateSync,
   writeFileSync,
 } from 'node:fs'
-import { createServer, type ServerResponse } from 'node:http'
+import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
+import type WebSocket from 'ws'
+import { WebSocketServer } from 'ws'
 import { attach } from '../src/attach.ts'
 import { EventStreamError, openEventStream } from '../src/events.ts'
 import { stripAnsi } from '../src/ui/colors.ts'
@@ -51,6 +53,87 @@ const notice = (text: string): ReevalEvent => ({ type: 'notice', at: 1, level: '
 const capture = () => {
   const out = { text: '', write: (chunk: string) => (out.text += chunk) }
   return out
+}
+
+/** Until `ready()`, checked every few milliseconds, for at most 10s. */
+const waitFor = async (ready: () => boolean) => {
+  for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
+  }
+}
+
+/**
+ * A relay shaped like the platform's run session: it takes `--events-url` POSTs, numbers each line
+ * from 1, and serves them on a WebSocket as `{"seq":n,"line":…}` frames after `?after=`. It closes
+ * with 1000 once the run is over: after its exit line, or with `resumes`, at `finish()`.
+ */
+async function relay(
+  options: { maxViewers?: number; closeAtOnce?: boolean; resumes?: boolean } = {},
+) {
+  const lines: string[] = []
+  const afters: string[] = []
+  const viewers = new Set<WebSocket>()
+  let sent = 0
+  let refusing = false
+  let over = false
+  const finish = () => {
+    over = true
+    for (const v of viewers) v.close(1000)
+  }
+  const send = (ws: WebSocket, seq: number) => {
+    ws.send(`{"seq":${seq},"line":${lines[seq - 1]}}`)
+    sent++
+  }
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', (d) => (body += d))
+    req.on('end', () => {
+      assert.equal(req.headers['content-type'], 'application/x-ndjson')
+      for (const l of body.split('\n').filter(Boolean)) {
+        lines.push(l)
+        for (const v of viewers) send(v, lines.length)
+        if (!options.resumes && l.includes('"type":"exit"')) finish()
+      }
+      res.end()
+    })
+  })
+  const sockets = new WebSocketServer({ noServer: true })
+  server.on('upgrade', (req, socket, head) => {
+    if (refusing) return socket.destroy()
+    sockets.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+      const after = new URL(req.url ?? '', 'http://relay').searchParams.get('after') ?? ''
+      afters.push(after)
+      if (options.maxViewers !== undefined && viewers.size >= options.maxViewers) {
+        return ws.close(4429, `${options.maxViewers} viewers per run`)
+      }
+      viewers.add(ws)
+      ws.on('close', () => viewers.delete(ws))
+      for (let seq = Number(after) + 1; seq <= lines.length; seq++) send(ws, seq)
+      if (options.closeAtOnce || over) ws.close(1000)
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/events`,
+    lines,
+    afters,
+    get sent() {
+      return sent
+    },
+    drop: () => {
+      for (const v of viewers) v.terminate()
+    },
+    finish,
+    refuseUpgrades: () => {
+      refusing = true
+    },
+    close: async () => {
+      for (const v of viewers) v.terminate()
+      sockets.close()
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
+    },
+  }
 }
 
 const readLines = (file: string) =>
@@ -197,6 +280,26 @@ describe('the stream', () => {
     })
   })
 
+  test('a line the server refuses as too large (413) says so, with its message and no token', async () => {
+    const warnings: string[] = []
+    const stream = openEventStream({
+      url: 'https://relay.test/api/runs/r1/events?token=hunter2',
+      header: header(),
+      warn: (w) => warnings.push(w),
+      fetch: async () =>
+        Response.json(
+          {
+            error: { code: 'payload_too_large', message: 'line 2 is over 4 MiB', retryable: false },
+          },
+          { status: 413 },
+        ),
+    })
+    await stream.end(0)
+    assert.deepEqual(warnings, [
+      'stopped posting the event stream to https://relay.test/api/runs/r1/events?token=***: HTTP 413: the server refused a batch as too large, likely a line over its size limit (line 2 is over 4 MiB)',
+    ])
+  })
+
   test('a failing URL warns once and the run goes on', async () => {
     const warnings: string[] = []
     const stream = openEventStream({
@@ -327,68 +430,317 @@ describe('attach', () => {
     )
   })
 
-  test('posts to a URL and follows it there, as a relay serves the posted lines', async () => {
-    const lines: string[] = []
-    const readers = new Set<ServerResponse>()
-    const server = createServer((req, res) => {
-      if (req.method === 'POST') {
-        let body = ''
-        req.on('data', (d) => (body += d))
-        req.on('end', () => {
-          assert.equal(req.headers['content-type'], 'application/x-ndjson')
-          lines.push(body)
-          for (const r of readers) r.write(body)
-          if (body.includes('"type":"exit"')) for (const r of readers) r.end()
-          res.end()
-        })
-        return
-      }
-      res.writeHead(200, { 'content-type': 'application/x-ndjson' })
-      res.write(lines.join(''))
-      readers.add(res)
-    })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/events`
+  test('posts to a URL and follows it over a WebSocket there, replaying then live', async () => {
+    const r = await relay()
     try {
-      const stream = openEventStream({ url, header: header(), warn: assert.fail })
+      const stream = openEventStream({ url: r.url, header: header(), warn: assert.fail })
       stream.write(notice('over http'))
-      await sleep(50)
+      await waitFor(() => r.lines.length >= 2)
       const out = capture()
-      const done = attach({ source: url, out, output: () => output })
-      await sleep(50)
+      const done = attach({ source: r.url, out, output: () => output })
+      await waitFor(() => r.afters.length === 1)
       stream.write(notice('then more'))
       await stream.end(1)
       assert.equal(await done, 1)
       assert.match(out.text, /over http[\s\S]*then more/)
+      assert.deepEqual(r.afters, ['0'])
     } finally {
-      server.close()
+      await r.close()
     }
   })
 
-  test('a URL whose response ends before the exit line is an error', async () => {
+  test('a dropped socket reconnects after the last line it got, and draws each line once', async () => {
+    const r = await relay()
+    try {
+      const stream = openEventStream({
+        url: r.url,
+        header: header(),
+        warn: assert.fail,
+        heartbeatMs: 0,
+      })
+      stream.write(notice('before the drop'))
+      await waitFor(() => r.lines.length >= 2)
+      const out = capture()
+      const done = attach({ source: r.url, out, output: () => output })
+      await waitFor(() => r.sent >= 2)
+      r.drop()
+      await waitFor(() => r.afters.length === 2)
+      stream.write(notice('after the drop'))
+      await stream.end(0)
+      assert.equal(await done, 0)
+      assert.deepEqual(r.afters, ['0', '2'])
+      assert.equal(out.text.match(/before the drop/g)?.length, 1)
+      assert.match(out.text, /Lost the connection to run run-1; reconnecting[\s\S]*after the drop/)
+    } finally {
+      await r.close()
+    }
+  })
+
+  test('a viewer past the run’s limit is refused with a clear error', async () => {
+    const r = await relay({ maxViewers: 1 })
+    try {
+      const stream = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      await waitFor(() => r.lines.length >= 1)
+      const first = attach({ source: r.url, out: capture(), output: () => output })
+      await waitFor(() => r.afters.length === 1)
+      await assert.rejects(
+        attach({ source: r.url, out: capture(), output: () => output }),
+        (error: Error) =>
+          error instanceof EventStreamError &&
+          /has as many viewers as it takes \(1 viewers per run\): detach one and attach again/.test(
+            error.message,
+          ),
+      )
+      await stream.end(0)
+      assert.equal(await first, 0)
+    } finally {
+      await r.close()
+    }
+  })
+
+  test("a socket that closes before the exit line, or that can't connect, is an error", async () => {
+    const r = await relay({ closeAtOnce: true })
+    try {
+      const stream = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      await waitFor(() => r.lines.length >= 1)
+      await assert.rejects(
+        attach({ source: r.url, out: capture(), output: () => output }),
+        /the event stream at http:\/\/127\.0\.0\.1:\d+\/events ended before the run did/,
+      )
+      await stream.end(0)
+    } finally {
+      await r.close()
+    }
     await assert.rejects(
-      attach({
-        source: 'http://relay.test/events',
+      attach({ source: 'ws://127.0.0.1:9/events', out: capture(), output: () => output }),
+      /can't connect to the event stream at ws:\/\/127\.0\.0\.1:9\/events/,
+    )
+  })
+
+  test('a socket that stays down past the reconnect window gives up', async () => {
+    const r = await relay()
+    try {
+      const stream = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      await waitFor(() => r.lines.length >= 1)
+      const done = attach({
+        source: r.url,
         out: capture(),
         output: () => output,
-        follow: {
-          fetch: async () =>
-            new Response(
-              `${JSON.stringify({ type: 'header', schemaVersion: 1, ...header(), pid: 1, host: 'x' })}\n`,
-            ),
-        },
-      }),
-      /the event stream at http:\/\/relay\.test\/events ended before the run did/,
+        follow: { reconnectMs: 300 },
+      })
+      await waitFor(() => r.sent >= 1)
+      r.refuseUpgrades()
+      r.drop()
+      await assert.rejects(
+        done,
+        /lost the connection to http:\/\/127\.0\.0\.1:\d+\/events and couldn't reconnect/,
+      )
+      await stream.end(0)
+    } finally {
+      await r.close()
+    }
+  })
+
+  /** A WebSocket server that answers each connection with `serve`, and the source to attach to. */
+  const scripted = async (serve: (ws: WebSocket, after: string) => void) => {
+    const server = new WebSocketServer({ port: 0, host: '127.0.0.1' })
+    await new Promise((resolve) => server.once('listening', resolve))
+    server.on('connection', (ws, req) =>
+      serve(ws, new URL(req.url ?? '', 'ws://x').searchParams.get('after') ?? ''),
     )
-    await assert.rejects(
-      attach({
-        source: 'http://relay.test/events',
+    return {
+      source: `ws://127.0.0.1:${(server.address() as AddressInfo).port}/events`,
+      close: () => new Promise((resolve) => server.close(resolve)),
+    }
+  }
+  const frame = (seq: number, line: object) => JSON.stringify({ seq, line })
+  const headerLine = { type: 'header', schemaVersion: 1, ...header(), pid: 1, host: 'elsewhere' }
+
+  test('a refusing close code fails at once, naming why', async () => {
+    for (const [code, message] of [
+      [4401, /refused the token \(bad token\)/],
+      [4403, /refused this viewer \(bad token\)/],
+      [4404, /there's no run at .* \(bad token\)/],
+      [4000, /closed with 4000 \(bad token\)/],
+      [1008, /closed with 1008 \(bad token\)/],
+    ] as const) {
+      let connections = 0
+      const s = await scripted((ws) => {
+        connections++
+        ws.close(code, 'bad token')
+      })
+      try {
+        await assert.rejects(
+          attach({ source: s.source, out: capture(), output: () => output }),
+          (error: Error) => error instanceof EventStreamError && message.test(error.message),
+        )
+        assert.equal(connections, 1, `${code} isn't reconnected after`)
+      } finally {
+        await s.close()
+      }
+    }
+  })
+
+  test('replayed lines it already drew are dropped, and a gap is an error', async () => {
+    let connections = 0
+    const replays = await scripted((ws) => {
+      connections++
+      // Ignores `after`, so the reconnect replays from the start.
+      ws.send(frame(1, headerLine))
+      ws.send(frame(2, notice('once')))
+      if (connections === 1) return void ws.terminate()
+      ws.send(frame(3, { type: 'exit', at: 3, code: 7 }))
+      ws.close(1000)
+    })
+    try {
+      const out = capture()
+      assert.equal(await attach({ source: replays.source, out, output: () => output }), 7)
+      assert.equal(out.text.match(/once/g)?.length, 1)
+    } finally {
+      await replays.close()
+    }
+    const gap = await scripted((ws) => {
+      ws.send(frame(1, headerLine))
+      ws.send(frame(3, notice('late')))
+    })
+    try {
+      await assert.rejects(
+        attach({ source: gap.source, out: capture(), output: () => output }),
+        /skipped from line 1 to line 3/,
+      )
+    } finally {
+      await gap.close()
+    }
+  })
+
+  test("a resume's lines follow the run's exit line over the socket: it draws both and exits with the last code", async () => {
+    const r = await relay({ resumes: true })
+    try {
+      const first = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      first.write(notice('first part'))
+      await first.end(130)
+      await waitFor(() => r.lines.length >= 3)
+      const out = capture()
+      let code: number | undefined
+      const done = attach({ source: r.url, out, output: () => output }).then((c) => (code = c))
+      await waitFor(() => r.sent >= 3)
+      await sleep(50)
+      assert.equal(code, undefined, 'an exit line alone does not end attach')
+      const resume = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      resume.write(notice('second part'))
+      await resume.end(0)
+      await waitFor(() => r.sent >= 6)
+      r.finish()
+      await done
+      assert.equal(code, 0)
+      assert.match(out.text, /first part[\s\S]*second part/)
+    } finally {
+      await r.close()
+    }
+  })
+
+  test('a server that accepts then drops is retried with a growing wait, and each open restarts the give-up window', async () => {
+    const opens: number[] = []
+    const s = await scripted((ws) => {
+      opens.push(Date.now())
+      if (opens.length <= 3) return void ws.terminate()
+      ws.send(frame(1, headerLine))
+      ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+      ws.close(1000)
+    })
+    try {
+      const out = capture()
+      const code = await attach({
+        source: s.source,
+        out,
+        output: () => output,
+        // Shorter than the waits added up, so only a reset on each open keeps it reconnecting.
+        follow: { reconnectMs: 600 },
+      })
+      assert.equal(code, 7)
+      const [a = 0, b = 0, c = 0] = opens.slice(1).map((at, i) => at - (opens[i] ?? at))
+      assert.ok(a >= 200 && b >= 450 && c >= 900, `waits ${a}, ${b}, ${c}`)
+    } finally {
+      await s.close()
+    }
+  })
+
+  test("a token in the URL's query is masked in the error", async () => {
+    const s = await scripted((ws) => ws.close(4401, 'expired'))
+    try {
+      await assert.rejects(
+        attach({ source: `${s.source}?token=hunter2`, out: capture(), output: () => output }),
+        (error: Error) =>
+          /\/events\?token=\*\*\* refused the token \(expired\)/.test(error.message) &&
+          !error.message.includes('hunter2'),
+      )
+    } finally {
+      await s.close()
+    }
+  })
+
+  test('a connected viewer sends "ping" and ignores the "pong" answers', async () => {
+    const got: string[] = []
+    const s = await scripted((ws) => {
+      ws.on('message', (data) => {
+        got.push(String(data))
+        ws.send('pong')
+        if (got.length < 2) return
+        ws.send(frame(1, headerLine))
+        ws.send('pong')
+        ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+        ws.close(1000)
+      })
+    })
+    try {
+      const code = await attach({
+        source: s.source,
         out: capture(),
         output: () => output,
-        follow: { fetch: async () => new Response('gone', { status: 404 }) },
-      }),
-      /can't read the event stream at http:\/\/relay\.test\/events: HTTP 404/,
-    )
+        follow: { pingMs: 20 },
+      })
+      assert.equal(code, 7)
+      assert.deepEqual(got.slice(0, 2), ['ping', 'ping'])
+    } finally {
+      await s.close()
+    }
+  })
+
+  test('a viewer evicted as stale (1001) reconnects after the last line it got', async () => {
+    const afters: string[] = []
+    const s = await scripted((ws, after) => {
+      afters.push(after)
+      if (afters.length === 1) {
+        ws.send(frame(1, headerLine))
+        return void ws.close(1001, 'stale viewer')
+      }
+      ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+      ws.close(1000)
+    })
+    try {
+      const out = capture()
+      assert.equal(await attach({ source: s.source, out, output: () => output }), 7)
+      assert.deepEqual(afters, ['0', '1'])
+      assert.match(out.text, /Lost the connection to run run-1; reconnecting/)
+    } finally {
+      await s.close()
+    }
+  })
+
+  test('a frame without a seq and line is an error', async () => {
+    for (const data of ['null', '{"seq":1}', '[1]', 'nope']) {
+      const s = await scripted((ws) => ws.send(data))
+      try {
+        await assert.rejects(
+          attach({ source: s.source, out: capture(), output: () => output }),
+          (error: Error) =>
+            error instanceof EventStreamError &&
+            /sent a frame (without a seq and line|that isn't JSON)/.test(error.message),
+        )
+      } finally {
+        await s.close()
+      }
+    }
   })
 })
 
