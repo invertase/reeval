@@ -169,7 +169,9 @@ CREATE TABLE attempts (
   case_key TEXT, model_ms INTEGER, tool_ms INTEGER, waiting_ms INTEGER, other_ms INTEGER,
   cost_usd REAL, cost_basis TEXT, resource_scope TEXT, machine_size TEXT, machine_vcpus REAL,
   machine_memory_bytes INTEGER, cpu_seconds REAL, avg_cores REAL, peak_cores REAL,
-  peak_memory_bytes INTEGER, disk_read_bytes INTEGER, disk_write_bytes INTEGER,
+  peak_memory_bytes INTEGER, disk_read_bytes INTEGER, disk_write_bytes INTEGER, p95_cores REAL,
+  cgroup_peak_memory_bytes INTEGER, cpu_periods INTEGER, throttled_periods INTEGER,
+  throttled_seconds REAL,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -395,8 +397,10 @@ CREATE VIEW failing_attempts AS
   WHERE a.outcome IN ('fail', 'infra_error');
 
 -- Each attempt's machine (its sandbox's provider and size, and the vCPUs and memory it gave) and
--- what the attempt used there: CPU seconds, average and peak cores, peak memory, and a VM's disk
--- bytes; cpu_share and memory_share are average cores and peak memory over what it gave. scope
+-- what the attempt used there: CPU seconds, average, 95th percentile and peak cores, peak memory,
+-- a container's cgroup memory.peak and CPU throttling, and a VM's disk bytes; cpu_share and
+-- memory_share are average cores and peak memory over what it gave, throttled_share the share of
+-- a container's quota periods the quota held it back in. scope
 -- container counts the container's own processes, machine the whole VM. The fake sandbox's
 -- attempts are left out; one whose sandbox had nothing to read (cgroup v1, a macOS VM) has its
 -- machine and null usage.
@@ -404,9 +408,11 @@ CREATE VIEW attempt_resources AS
   SELECT a.run_id, r.started_at, a.eval_key, a.cell_key, a.key AS attempt_key, c.harness,
     c.model, c.environment, c.sandbox, a.resource_scope AS scope, a.machine_size,
     a.machine_vcpus, a.machine_memory_bytes, a.outcome, a.duration_ms, a.cpu_seconds,
-    a.avg_cores, a.peak_cores, a.peak_memory_bytes, a.disk_read_bytes, a.disk_write_bytes,
-    a.avg_cores / a.machine_vcpus AS cpu_share,
-    CAST(a.peak_memory_bytes AS REAL) / a.machine_memory_bytes AS memory_share
+    a.avg_cores, a.p95_cores, a.peak_cores, a.peak_memory_bytes, a.cgroup_peak_memory_bytes,
+    a.cpu_periods, a.throttled_periods, a.throttled_seconds, a.disk_read_bytes,
+    a.disk_write_bytes, a.avg_cores / a.machine_vcpus AS cpu_share,
+    CAST(a.peak_memory_bytes AS REAL) / a.machine_memory_bytes AS memory_share,
+    CAST(a.throttled_periods AS REAL) / NULLIF(a.cpu_periods, 0) AS throttled_share
   FROM attempts a JOIN runs r USING (run_id)
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   WHERE a.resource_scope IS NOT NULL;
@@ -829,7 +835,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(49).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(54).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -879,6 +885,11 @@ function insertRun(
         a.resources?.usage?.peakMemoryBytes ?? null,
         a.resources?.usage?.diskReadBytes ?? null,
         a.resources?.usage?.diskWriteBytes ?? null,
+        a.resources?.usage?.p95Cores ?? null,
+        a.resources?.usage?.cgroupPeakMemoryBytes ?? null,
+        a.resources?.usage?.throttling?.periods ?? null,
+        a.resources?.usage?.throttling?.throttledPeriods ?? null,
+        a.resources?.usage?.throttling?.throttledSeconds ?? null,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []

@@ -64,8 +64,14 @@ export function resourcesLine(r: AttemptResources): string {
   if (!u) return `${on} · no readings`
   return [
     on,
-    `CPU ${u.cpuSeconds.toFixed(1)} s over ${(u.durationMs / 1000).toFixed(1)} s (avg ${cores(u.avgCores)}${u.peakCores !== undefined ? `, peak ${cores(u.peakCores)}` : ''} cores)`,
+    `CPU ${u.cpuSeconds.toFixed(1)} s over ${(u.durationMs / 1000).toFixed(1)} s (avg ${cores(u.avgCores)}${u.p95Cores !== undefined ? `, p95 ${cores(u.p95Cores)}` : ''}${u.peakCores !== undefined ? `, peak ${cores(u.peakCores)}` : ''} cores)`,
+    u.throttling
+      ? `throttled ${u.throttling.throttledPeriods}/${u.throttling.periods} periods (${u.throttling.throttledSeconds.toFixed(1)} s)`
+      : undefined,
     u.peakMemoryBytes !== undefined ? `memory peak ${formatMemory(u.peakMemoryBytes)}` : undefined,
+    u.cgroupPeakMemoryBytes !== undefined
+      ? `cgroup memory.peak ${formatMemory(u.cgroupPeakMemoryBytes)}`
+      : undefined,
     u.diskReadBytes !== undefined && u.diskWriteBytes !== undefined
       ? `disk ${formatMemory(u.diskReadBytes)} read, ${formatMemory(u.diskWriteBytes)} written`
       : undefined,

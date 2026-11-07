@@ -1,0 +1,488 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261107T112233Z_nogit_ubuntu_4ara",
+  "status": "complete",
+  "startedAt": "2026-11-07T11:22:33.437Z",
+  "endedAt": "2026-11-07T11:22:41.471Z",
+  "durationMs": 8034,
+  "author": "ubuntu",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.21.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.16",
+      "@reeval/harness-opencode": "0.2.16",
+      "@reeval/harness-goose": "0.1.16",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.9",
+      "@ai-sdk/harness-claude-code": "1.0.176-patch.a9d56a8c",
+      "@reeval/harness-codex": "0.1.13",
+      "@reeval/harness-fx": "0.1.11",
+      "@reeval/harness-grok-build": "0.1.12",
+      "ai": "7.0.161",
+      "@ai-sdk/harness": "1.0.172",
+      "@ai-sdk/anthropic": "4.0.95",
+      "@ai-sdk/google": "4.0.110",
+      "@ai-sdk/openai": "4.0.107",
+      "@ai-sdk/typesafe-ai": "3.0.32"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "a3ce9d328e88"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "vm",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 2,
+    "cells": 2,
+    "attempts": 2,
+    "estimateMs": 60000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "boat",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "a0c52aaca03092daa87cdb2a380546541f551c1267dbc92dc1681febe280ad9a"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 2,
+    "attempts": 2,
+    "pass": 1,
+    "fail": 1,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/canary.eval.ts › canary",
+      "key": "evals/canary.eval.ts › canary",
+      "slug": "evals-canary-eval-ts-canary-d06886",
+      "file": "evals/canary.eval.ts",
+      "group": [],
+      "name": "canary",
+      "tags": [],
+      "fingerprint": "b09bf6e1d516bcb86ff4bd658e4f8200dfdac743914f5a74551df637d4553c12",
+      "sources": [
+        {
+          "path": "evals/canary.eval.ts",
+          "sha256": "b78d1ecb79cc7bbd5d83a6da466bfeb36f37ea0fcfdffd1de350df9fd0eefb33"
+        }
+      ],
+      "source": {
+        "body": "59cbd0b42631070d7330e0f14dc36fa14b55d754e2b31277b6ba72b4b6895017",
+        "options": "e651298abb82a56b5d3fcfcbfc669e0c95a0b232c0b3a3eb0ac2cc15544110d3"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/vm/boat",
+          "harness": "fake",
+          "environment": "vm",
+          "sandbox": "boat",
+          "role": "control",
+          "fingerprint": "e34900779aa664ceefeaa5101b10915aa2aeabd3a35879e0d52aee529c073969",
+          "fingerprintParts": {
+            "sources": "844eb44078b1ce60609127a08f247bbf19d0fe1314c1644e1c18850f06ae3985",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+            "image": null,
+            "agentCli": null,
+            "judge": "b532414e87cb5038da23f7aefddae37076af9ec5156e54aa28ef36b1b742f71d",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toBe 0",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/canary.eval.ts › canary # fake/vm/boat#1",
+          "id": "fake/vm/boat#1",
+          "cell": "fake/vm/boat",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-07T11:22:34.834Z",
+          "imageId": null,
+          "resources": {
+            "scope": "machine",
+            "machine": {
+              "sandbox": "boat",
+              "size": "small",
+              "vcpus": 4,
+              "memoryBytes": 16780623872
+            },
+            "usage": {
+              "durationMs": 3300,
+              "sampleMs": 1000,
+              "cpuSeconds": 13.1,
+              "avgCores": 3.97,
+              "peakCores": 4.01,
+              "p95Cores": 4.01,
+              "peakMemoryBytes": 11732635648,
+              "diskReadBytes": 176128,
+              "diskWriteBytes": 46026752
+            }
+          },
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "partial": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected 4 to be +0 // Object.is equality"
+          },
+          "durationMs": 6343,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 2582,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 3212,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-canary-eval-ts-canary-d06886/fake-vm-boat-80a871/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe 0",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": true,
+              "at": "evals/canary.eval.ts:6",
+              "message": "expected 4 to be +0 // Object.is equality"
+            }
+          ],
+          "checks": [
+            {
+              "command": "node -e 'const t = Date.now(); while (Date.now() - t < 3000); console.log(require(\"os\").cpus().length)'",
+              "exitCode": 0,
+              "durationMs": 3213,
+              "log": {
+                "path": "evals-canary-eval-ts-canary-d06886/fake-vm-boat-80a871/1/checks/1.log",
+                "sha256": "dc1c4ae0f55c0c1860b1240e7d8b6deef0552895c635eb6806ed71ebf8375c7a",
+                "bytes": 137
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/lands.eval.ts › lands",
+      "key": "evals/lands.eval.ts › lands",
+      "slug": "evals-lands-eval-ts-lands-2fc777",
+      "file": "evals/lands.eval.ts",
+      "group": [],
+      "name": "lands",
+      "tags": [],
+      "fingerprint": "c6ad2223551b67ff45139bea70ddab343cfaea8f34e1dad3bed8a6dc09bcc021",
+      "sources": [
+        {
+          "path": "evals/lands.eval.ts",
+          "sha256": "e23dc52bc8716b62964d035e35798ff471cc013e0b052b4842137c02678665bb"
+        }
+      ],
+      "source": {
+        "body": "380550da8f88a6e5c552b82ced31f534a19a3697daff5f32f025b29876de1d0e",
+        "options": "e651298abb82a56b5d3fcfcbfc669e0c95a0b232c0b3a3eb0ac2cc15544110d3"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/vm/boat",
+          "harness": "fake",
+          "environment": "vm",
+          "sandbox": "boat",
+          "role": "control",
+          "fingerprint": "52b1cc310a9f8cc9f4702737f9d12e3f419f851edfcb65c292a22b79745bf6e1",
+          "fingerprintParts": {
+            "sources": "6905c775918d3e178d61ff26f8fb34e5e63a2ab203b0ef4154258a848db77026",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+            "image": null,
+            "agentCli": null,
+            "judge": "b532414e87cb5038da23f7aefddae37076af9ec5156e54aa28ef36b1b742f71d",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBeGreaterThanOrEqual 1",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/lands.eval.ts › lands # fake/vm/boat#1",
+          "id": "fake/vm/boat#1",
+          "cell": "fake/vm/boat",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-11-07T11:22:34.839Z",
+          "imageId": null,
+          "resources": {
+            "scope": "machine",
+            "machine": {
+              "sandbox": "boat",
+              "size": "small",
+              "vcpus": 4,
+              "memoryBytes": 16780623872
+            },
+            "usage": {
+              "durationMs": 3280,
+              "sampleMs": 1000,
+              "cpuSeconds": 12.87,
+              "avgCores": 3.924,
+              "peakCores": 3.99,
+              "p95Cores": 3.99,
+              "peakMemoryBytes": 11734077440,
+              "diskReadBytes": 421888,
+              "diskWriteBytes": 47357952
+            }
+          },
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "partial": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 6623,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 3053,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 3194,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": null,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-lands-eval-ts-lands-2fc777/fake-vm-boat-80a871/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThanOrEqual 1",
+              "labelled": false,
+              "matcher": "toBeGreaterThanOrEqual",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/lands.eval.ts:6"
+            }
+          ],
+          "checks": [
+            {
+              "command": "node -e 'const t = Date.now(); while (Date.now() - t < 3000); console.log(require(\"os\").cpus().length)'",
+              "exitCode": 0,
+              "durationMs": 3194,
+              "log": {
+                "path": "evals-lands-eval-ts-lands-2fc777/fake-vm-boat-80a871/1/checks/1.log",
+                "sha256": "dc1c4ae0f55c0c1860b1240e7d8b6deef0552895c635eb6806ed71ebf8375c7a",
+                "bytes": 137
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
