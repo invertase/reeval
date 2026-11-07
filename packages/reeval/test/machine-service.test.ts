@@ -62,6 +62,7 @@ describe('MachineService', () => {
       slot: 0,
       reused: 0,
       start: first.start,
+      lost: [],
     })
     const second = service.call('w2', lease('1')) as Promise<WireLease>
     assert.equal(await settled(second), 'pending', 'one machine, held by w1')
