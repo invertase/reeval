@@ -35,10 +35,13 @@ describe('resources', () => {
     assert.deepEqual(parseLine('limits max 100000 - 8 -', 5), {
       limits: { quota: null, period: 100_000, memory: null, cpus: 8, ticks: null },
     })
-    assert.deepEqual(parseLine('s 1500 2048 - -', 7), {
+    assert.deepEqual(parseLine('s - 1500 2048 - -', 7), {
       reading: { at: 7, cpu: 1500, memory: 2048, read: null, written: null },
     })
-    assert.equal(parseLine('s - 2048 - -', 7), null)
+    // The sandbox's uptime times the reading, not when the line reached the host.
+    assert.equal((parseLine('s 12.34 1500 2048 - -', 7) as { reading: Reading }).reading.at, 12_340)
+    assert.equal(parseLine('s - - 2048 - -', 7), null)
+    assert.equal(parseLine('s 1500 2048 - -', 7), null)
     assert.equal(parseLine('sh: 1: nproc: not found', 7), null)
   })
 

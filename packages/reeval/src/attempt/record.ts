@@ -126,7 +126,7 @@ export function recordFailure(
 
 /** What the sandbox gave the attempt and what it used, into the record, before the sandbox goes. */
 export async function recordResources(a: Attempt): Promise<void> {
-  const resources = await a.meter?.stop({ gone: a.signal.aborted })
+  const resources = await a.meter?.stop({ gone: a.signal.aborted }).catch(() => undefined)
   if (!resources) return
   a.record.resources = resources
   debugLog('teardown', `resources ${resourcesLine(resources)}`)

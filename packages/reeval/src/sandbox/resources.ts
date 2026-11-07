@@ -12,12 +12,16 @@ const FINAL_TIMEOUT_MS = 15_000
 /**
  * `$1` is the scope, `$2` the seconds between readings or `once`. First a line
  * `limits <cpu quota> <cpu period> <memory bytes> <cpus> <clock ticks>`, then a line
- * `s <cpu> <memory bytes> <disk read bytes> <disk written bytes>` per reading, `-` where there's
- * nothing to read. A container's CPU is cgroup v2's `usage_usec` and its memory `memory.current`
- * less `inactive_file`; a VM's CPU is `/proc/stat`'s busy ticks, its memory `MemTotal` less
- * `MemAvailable`, and its disks every block device but loop, RAM, CD and stacked ones.
+ * `s <uptime> <cpu> <memory bytes> <disk read bytes> <disk written bytes>` per reading, `-` where
+ * there's nothing to read. The uptime times each reading in the sandbox, so a late line on the host
+ * doesn't skew the cores between two. A container's CPU is cgroup v2's `usage_usec` and its memory
+ * `memory.current` less `inactive_file`; a VM's CPU is `/proc/stat`'s busy ticks (steal is the
+ * hypervisor's, not the VM's), its memory `MemTotal` less `MemAvailable`, and its disks every block
+ * device but loop, RAM, CD and stacked ones. Its stderr goes nowhere: nothing reads it, and a full
+ * pipe would stop the readings.
  */
-const SCRIPT = `c=/sys/fs/cgroup
+const SCRIPT = `exec 2>/dev/null
+c=/sys/fs/cgroup
 if [ "$1" = container ]; then
   [ -r $c/cpu.stat ] && [ -r $c/memory.current ] && [ -r $c/memory.stat ] || exit 0
   q=- p=- m=-
@@ -30,14 +34,16 @@ else
   echo "limits - - $((t * 1024)) $(nproc 2>/dev/null || echo -) $(getconf CLK_TCK 2>/dev/null || echo 100)"
 fi
 sample() {
+  up=-
+  [ -r /proc/uptime ] && read -r up _ < /proc/uptime
   if [ "$1" = container ]; then
     u=0 i=0
     while read -r k v; do [ "$k" = usage_usec ] && u=$v; done < $c/cpu.stat
     read -r cur < $c/memory.current
     while read -r k v; do [ "$k" = inactive_file ] && i=$v; done < $c/memory.stat
-    echo "s $u $((cur - i)) - -"
+    echo "s $up $u $((cur - i)) - -"
   else
-    read -r _ us ni sy _ _ ir so st _ < /proc/stat
+    read -r _ us ni sy _ _ ir so _ < /proc/stat
     t=0 a=0
     while read -r k v _; do
       case $k in MemTotal:) t=$v ;; MemAvailable:) a=$v ;; esac
@@ -47,7 +53,7 @@ sample() {
       case \${d##*/} in loop*|ram*|zram*|sr*|dm-*|md*) continue ;; esac
       [ -r "$d/stat" ] && read -r _ _ rs _ _ _ ws _ < "$d/stat" && r=$((r + rs)) && w=$((w + ws))
     done
-    echo "s $((us + ni + sy + ir + so + st)) $(((t - a) * 1024)) $((r * 512)) $((w * 512))"
+    echo "s $up $((us + ni + sy + ir + so)) $(((t - a) * 1024)) $((r * 512)) $((w * 512))"
   fi
 }
 sample "$1"
@@ -65,7 +71,7 @@ export type Limits = {
   ticks: number | null
 }
 export type Reading = {
-  /** `performance.now()` when the line arrived. */
+  /** The sandbox's uptime when it was read, in milliseconds, else `performance.now()` when the line arrived. */
   at: number
   cpu: number
   memory: number | null
@@ -96,9 +102,10 @@ export function parseLine(
       },
     }
   }
-  const cpu = num(f[0])
-  if (tag !== 's' || f.length !== 4 || cpu === null) return null
-  return { reading: { at, cpu, memory: num(f[1]), read: num(f[2]), written: num(f[3]) } }
+  const cpu = num(f[1])
+  if (tag !== 's' || f.length !== 5 || cpu === null) return null
+  const up = f[0] !== undefined && /^\d+(\.\d+)?$/.test(f[0]) ? Number(f[0]) * 1000 : at
+  return { reading: { at: up, cpu, memory: num(f[2]), read: num(f[3]), written: num(f[4]) } }
 }
 
 const round = (n: number, places = 3) => Math.round(n * 10 ** places) / 10 ** places
@@ -151,7 +158,7 @@ export function summarize(
     cpuSeconds: round(cpuSeconds),
     avgCores: round(cpuSeconds / (durationMs / 1000)),
     ...(peakCores !== undefined && { peakCores: round(peakCores) }),
-    ...(memory.length && { peakMemoryBytes: Math.max(...memory) }),
+    ...(memory.length && { peakMemoryBytes: memory.reduce((x, y) => Math.max(x, y)) }),
     ...(disk && {
       diskReadBytes: Math.max(0, (last.read ?? 0) - (first.read ?? 0)),
       diskWriteBytes: Math.max(0, (last.written ?? 0) - (first.written ?? 0)),
