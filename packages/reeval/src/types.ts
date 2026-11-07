@@ -1372,8 +1372,20 @@ export type BoatSandboxDescriptor = {
   prefix: string
   /** The machine size. Default `small`. */
   type?: BoatMachineType
-  /** The most Boat sandboxes at once, across the run. */
+  /** The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`. */
   maxConcurrent?: number
+  /**
+   * A machine takes another of the run's attempts once one ends, instead of being deleted: its
+   * user's processes, cron jobs and files are removed and its home put back as it was after the
+   * harness installed, which isn't installed again. Default false, one attempt per slot.
+   */
+  reuse?: boolean
+  /**
+   * The attempts one machine runs at once, each as a user of its own with its own home,
+   * workspace and egress gateway. Default 1. A harness whose bridge takes a fixed port in the
+   * machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.
+   */
+  attemptsPerMachine?: number
 }
 export type SandboxDescriptor =
   | FakeSandboxDescriptor

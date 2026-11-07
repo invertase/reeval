@@ -830,7 +830,12 @@ function checkSecrets(secrets: ReevalConfig['secrets'], file: string): ResolvedC
   return { unbrokered }
 }
 
-export type Capacity = { cpus: number; memoryBytes: number }
+export type Capacity = {
+  cpus: number
+  memoryBytes: number
+  /** A pooled provider's attempts at once, which its machines run, not the host. */
+  attempts?: number
+}
 
 export const hostCapacity = (): Capacity => ({
   cpus: availableParallelism(),
@@ -840,9 +845,11 @@ export const hostCapacity = (): Capacity => ({
 /**
  * Attempts mostly wait on a model, so the default is 8, but no more than one per CPU or per GB
  * of memory where the sandboxes run (the Docker VM, under Docker Desktop): an idle agent
- * container takes about 300 MB, and the rest is headroom for what the agent runs.
+ * container takes about 300 MB, and the rest is headroom for what the agent runs. A pooled
+ * provider's machines run its attempts, so its `attempts` is the default instead.
  */
-export function defaultConcurrency({ cpus, memoryBytes }: Capacity): number {
+export function defaultConcurrency({ cpus, memoryBytes, attempts }: Capacity): number {
+  if (attempts) return Math.max(1, attempts)
   return Math.max(1, Math.min(8, cpus, Math.floor(memoryBytes / 1e9)))
 }
 

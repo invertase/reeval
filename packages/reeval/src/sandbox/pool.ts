@@ -25,12 +25,15 @@ export type RateLimited = { retryAfterMs: number | null }
 export type PoolProvider<M> = {
   /** How messages name the provider: `boat()`. */
   helper: string
-  /** Starts one machine and returns it once it's reachable; removes what it made when it fails. */
-  start(signal: AbortSignal): Promise<{ id: string; info: M }>
+  /**
+   * Starts one machine that expires by itself after `ttlSeconds`, and returns it once it's
+   * reachable; removes what it made when it fails.
+   */
+  start(signal: AbortSignal, ttlSeconds: number): Promise<{ id: string; info: M }>
   /** Removes a machine; one already gone is removed. */
   remove(id: string): Promise<void>
-  /** Keeps a machine about to run another attempt from expiring before it ends. */
-  keepAlive?(id: string): Promise<void>
+  /** Keeps a machine about to run another attempt from expiring for `ttlSeconds` more. */
+  keepAlive?(id: string, ttlSeconds: number): Promise<void>
   /** Whether `error`, from `start`, is the provider refusing for now rather than failing. */
   rateLimited(error: unknown): RateLimited | null
 }
@@ -116,6 +119,7 @@ export class MachinePool<M> {
   #heldUntil = 0
   #held: NodeJS.Timeout | undefined
   #backoffMs: number
+  #ttlSeconds = 0
   #closed: Promise<void> | undefined
   readonly #stats: PoolStats = {
     starts: 0,
@@ -154,7 +158,8 @@ export class MachinePool<M> {
       )
     }
     // A rate limit holds every start, so there's a queue to pause even with no caps to keep.
-    if (!this.#queues.length) this.#queues.push(new PQueue({ concurrency: Number.POSITIVE_INFINITY }))
+    if (!this.#queues.length)
+      this.#queues.push(new PQueue({ concurrency: Number.POSITIVE_INFINITY }))
     const { idleMs, attemptsPerMachine } = this.#options
     this.#slots = new tarn.Pool<Slot<M>>({
       min: 0,
@@ -167,12 +172,18 @@ export class MachinePool<M> {
       reapIntervalMillis: Math.min(1_000, idleMs),
       create: () => this.#claim(),
       destroy: (slot) => this.#retire(slot),
-      validate: (slot) => !slot.dead && !slot.machine.draining && (this.#options.reuse || !slot.uses),
+      validate: (slot) =>
+        !slot.dead && !slot.machine.draining && (this.#options.reuse || !slot.uses),
     })
   }
 
-  /** Waits for a slot, starting a machine for it when none is free. */
-  async acquire(signal?: AbortSignal): Promise<PoolLease<M>> {
+  /**
+   * Waits for a slot, starting a machine for it when none is free. `ttlSeconds` is how long the
+   * attempt may hold it; every machine lives at least as long as the longest any attempt asked.
+   */
+  async acquire(o: { signal?: AbortSignal; ttlSeconds?: number } = {}): Promise<PoolLease<M>> {
+    const { signal } = o
+    this.#ttlSeconds = Math.max(this.#ttlSeconds, o.ttlSeconds ?? 0)
     if (this.#closed) throw new InfraError(`${this.#provider.helper}'s machine pool is closed`)
     signal?.throwIfAborted()
     const pending = this.#slots.acquire()
@@ -195,7 +206,9 @@ export class MachinePool<M> {
     if (reused) this.#stats.reusedLeases++
     const first = machine.start
     machine.start = null
-    if (!first) await this.#provider.keepAlive?.(machine.id as string).catch(() => {})
+    if (!first) {
+      await this.#provider.keepAlive?.(machine.id as string, this.#ttlSeconds).catch(() => {})
+    }
     let released = false
     return {
       machine: machine.id as string,
@@ -239,7 +252,12 @@ export class MachinePool<M> {
   async #claim(): Promise<Slot<M>> {
     let machine = [...this.#machines].find((m) => !m.draining && m.unclaimed.length)
     if (!machine) machine = this.#startMachine()
-    const slot: Slot<M> = { machine, slot: machine.unclaimed.shift() as number, uses: 0, dead: false }
+    const slot: Slot<M> = {
+      machine,
+      slot: machine.unclaimed.shift() as number,
+      uses: 0,
+      dead: false,
+    }
     machine.alive++
     try {
       await machine.ready
@@ -316,7 +334,7 @@ export class MachinePool<M> {
         this.#gate(async () => {
           signal.throwIfAborted()
           this.#stats.starts++
-          return provider.start(signal)
+          return provider.start(signal, this.#ttlSeconds)
         }),
       {
         retries: Number.POSITIVE_INFINITY,

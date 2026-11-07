@@ -6,6 +6,7 @@ import type { ListenerSource } from '../attempt/serve.ts'
 import type { BoatSandboxDescriptor, TartSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { HostPath, SandboxHooks, SandboxKind } from './kinds.ts'
+import type { OpenPool } from './machine-service.ts'
 import type { Sandbox } from './types.ts'
 
 /** The descriptors of the kinds a {@link MachineProvider} makes. */
@@ -33,10 +34,18 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
   hostLimit?: (sandbox: D) => { max: number; why: string }
   /** Boots one machine for an attempt and starts it through `startSandbox`. */
   create(sandbox: D, options: SandboxOptions): Promise<Sandbox>
-  /** How many machines the run may have at once, when the provider says. */
-  capacity?(sandbox: D): Promise<{ machines: number } | null>
+  /**
+   * How many machines the run may have at once, when the provider says, and for a pooled one the
+   * attempts its pool runs at once, which is the run's default concurrency.
+   */
+  capacity?(sandbox: D): Promise<{ machines: number; attempts?: number } | null>
   /** Removes the run's machines: for `sandboxes`, or wherever it can look without them. */
   cleanupRun(runId: string, sandboxes?: readonly D[]): Promise<void>
+  /**
+   * Pools its machines in the run's main process (machine-service.ts): the attempts on sandboxes
+   * with the same `key` share one pool, which `open` makes, and its start rate.
+   */
+  pool?: { key(sandbox: D): string; open: OpenPool<D> }
 }
 
 /**
@@ -70,7 +79,11 @@ export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>)
         const free = await capacity.call(machine, sandbox)
         if (free === null) return null
         const machines = Math.max(1, free.machines)
-        return { cpus: machines, memoryBytes: machines * 1e9 }
+        return {
+          cpus: machines,
+          memoryBytes: machines * 1e9,
+          ...(free.attempts && { attempts: free.attempts }),
+        }
       },
     }),
     cleanupRun: (runId, sandboxes) => machine.cleanupRun(runId, sandboxes),
@@ -79,5 +92,6 @@ export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>)
     ...(machine.doctor && { doctor: machine.doctor }),
     ...(machine.planWarnings && { planWarnings: machine.planWarnings }),
     ...(machine.attemptCap && { attemptCap: machine.attemptCap }),
+    ...(machine.slotsPerMachine && { slotsPerMachine: machine.slotsPerMachine }),
   }
 }

@@ -107,9 +107,7 @@ const installCa = (
   const install = `umask 022 && mkdir -p "$(dirname ${o.caPath})" && cat > ${o.caPath} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${o.caPath})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`
   return execRun(
     transport,
-    o.shared
-      ? ['flock', CA_LOCK, 'sh', '-c', install]
-      : ['sh', '-c', install],
+    o.shared ? ['flock', CA_LOCK, 'sh', '-c', install] : ['sh', '-c', install],
     { input: cert, signal },
   )
 }

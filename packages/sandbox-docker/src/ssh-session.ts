@@ -1,3 +1,4 @@
+import { posix } from 'node:path'
 import type { Gateway } from './egress/gateway.ts'
 import {
   controlOptions,
@@ -6,7 +7,6 @@ import {
   sshArgv,
   sshTransport,
 } from './egress/transport.ts'
-import { posix } from 'node:path'
 import { SANDBOX_USER, type SlotLayout, slotLayout } from './image.ts'
 import { shellQuote as q, run as runHost } from './process.ts'
 import type { DockerSession } from './session.ts'
@@ -151,6 +151,8 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     ...(options.reset ? [`{ ${resetSlot(layout, options.reset.home)}\n}`] : []),
     `{ id -u ${user} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --user-group ${user}; }`,
     `mkdir -p ${layout.root} && chown ${user}:${user} ${layout.root}`,
+    // Slots sharing a machine are users of one host: neither reads the other's work.
+    `chmod 700 ${layout.root} ${layout.home}`,
     `mkdir -p ${layout.state} && chown 0:0 ${layout.state} && chmod 700 ${layout.state}`,
     ...(options.prepare ? [options.prepare] : []),
   ].join(' && ')

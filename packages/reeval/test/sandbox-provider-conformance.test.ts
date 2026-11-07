@@ -408,6 +408,52 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
       })
     })
 
+    describe('pooled machines', { skip: !machine.pool && 'no pool' }, () => {
+      const pooled = (o: object) => ({ ...backend.descriptor(), ...o }) as never
+      test('reuse: the next attempt gets the machine with nothing the last one left', async () => {
+        const id = `${runId}-reuse`
+        const first = await kind.create(pooled({ reuse: true }), options(id))
+        await first.exec(
+          'touch ~/left /tmp/left-$(id -un); n=555111; (setsid sleep $n >/dev/null 2>&1 &)',
+        )
+        await first.destroy()
+        const second = await kind.create(pooled({ reuse: true }), options(id))
+        try {
+          assert.equal(backend.machines(id).length, 1, 'the second attempt reused the machine')
+          const left = await second.exec(
+            'ls ~/left /tmp/left-$(id -un) 2>/dev/null; pgrep -u "$(id -un)" -x -f "sleep 555111"; true',
+          )
+          assert.equal(left.stdout, '', 'the reset left nothing behind')
+        } finally {
+          await second.destroy()
+        }
+        await until('the idle machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test('attemptsPerMachine: slots share a machine as users that see none of each other', async () => {
+        const id = `${runId}-shared`
+        const [a, b] = await Promise.all([
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+        ])
+        try {
+          assert.equal(backend.machines(id).length, 1, 'both slots are on one machine')
+          const who = async (box: Sandbox) => (await box.exec('id -un; echo ~')).stdout
+          assert.notEqual(await who(a), await who(b))
+          assert.notEqual(a.workdir, b.workdir)
+          await a.writeFile('secret.txt', 'slot a')
+          await a.exec('echo slot a > ~/secret.txt')
+          const peek = await b.exec(
+            `cat ${a.workdir}/secret.txt 2>/dev/null; cat ${(await a.exec('echo ~')).stdout.trim()}/secret.txt 2>/dev/null; true`,
+          )
+          assert.equal(peek.stdout, '', "one slot reads neither the other's workspace nor its home")
+        } finally {
+          await Promise.all([a.destroy(), b.destroy()])
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+    })
+
     describe('capabilities hold in the machine', () => {
       const caps = kind.capabilities
       test('processTable: a Linux /proc and bash, when claimed', {

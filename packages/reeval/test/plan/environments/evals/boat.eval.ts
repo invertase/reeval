@@ -19,7 +19,13 @@ const team = defineEnvironment('team', {
   egress: 'allow-all',
 })
 
+const pooled = defineEnvironment('pooled', {
+  sandbox: boat({ reuse: true, attemptsPerMachine: 3 }),
+  egress: 'allow-all',
+})
+
 evaluate('boat', { environments: small }, async () => {})
+evaluate('boat pooled', { environments: pooled }, async () => {})
 evaluate('boat large', { environments: large }, async () => {})
 evaluate('boat on a team prefix', { environments: team }, async () => {})
 evaluate(

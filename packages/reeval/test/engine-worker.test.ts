@@ -12,6 +12,7 @@ import {
   registerTest,
 } from '../src/engine/runtime.ts'
 import { type Channel, startWorker } from '../src/engine/worker.ts'
+import { callService, hasServiceChannel } from '../src/scheduler/services.ts'
 import type { RunContext } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 
@@ -297,5 +298,26 @@ registerTest('never', { mode: 'run' }, async () => {})
     c.disconnect()
     await c.exit
     assert.deepEqual(c.exits, [0])
+  })
+
+  test("points the run's service calls at the main process, and settles each with its reply", async () => {
+    const c = fakeChannel()
+    startWorker(c.channel)
+    assert.ok(hasServiceChannel())
+    const local = () => assert.fail('a worker calls the main process, not a local service')
+    const ok = callService('machines', { lease: 1 }, local)
+    const bad = callService('machines', { lease: 2 }, local)
+    const calls = c.sent.filter((m) => m.t === 'call')
+    assert.deepEqual(calls, [
+      { t: 'call', id: calls[0].id, service: 'machines', body: { lease: 1 } },
+      { t: 'call', id: calls[1].id, service: 'machines', body: { lease: 2 } },
+    ])
+    c.send({ t: 'reply', id: 'unknown', body: 'ignored' })
+    c.send({ t: 'reply', id: calls[1].id, error: 'no machine' })
+    c.send({ t: 'reply', id: calls[0].id, body: { slot: 0 } })
+    assert.deepEqual(await ok, { slot: 0 })
+    await assert.rejects(bad, /^Error: no machine$/)
+    c.disconnect()
+    await c.exit
   })
 })
