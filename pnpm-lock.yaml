@@ -736,10 +736,10 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       p-queue:
-        specifier: ^10.0.0
+        specifier: 10.0.0
         version: 10.0.0
       p-retry:
-        specifier: ^9.0.0
+        specifier: 9.0.0
         version: 9.0.0
       picomatch:
         specifier: 4.0.7
@@ -757,7 +757,7 @@ importers:
         specifier: 8.3.0
         version: 8.3.0
       tarn:
-        specifier: ^3.1.2
+        specifier: 3.1.2
         version: 3.1.2
       tinyglobby:
         specifier: 0.2.17
