@@ -26,7 +26,10 @@ export type SampleMode = AttemptResources['scope'] | 'darwin'
  * `nr_periods`, `nr_throttled` and `throttled_usec`; a VM's CPU is `/proc/stat`'s busy ticks
  * (steal is the hypervisor's, not the VM's), its memory `MemTotal` less `MemAvailable`, and its
  * disks every block device but loop, RAM, CD and stacked ones. A macOS VM has neither, so it
- * prints its `sysctl` sizes and stops. A container's cgroup the script can't find, or that's
+ * prints its `sysctl` sizes and stops. From outside, the container's cgroup is the directory
+ * beside the script's own cgroup, or up to two levels up, named for its id, but not Podman's
+ * `libpod-conmon-<id>.scope`, which holds the container's monitor under systemd. A container's
+ * cgroup the script can't find, or that's
  * gone, ends it. Its stderr goes nowhere: nothing reads it, and a full pipe would stop the
  * readings.
  */
@@ -42,7 +45,10 @@ if [ "$1" = container ]; then
     while IFS= read -r l; do case $l in 0::*) own=\${l#0::} ;; esac; done < /proc/self/cgroup
     d=\${own%/*} t=
     for _ in 1 2 3; do
-      for x in "$c$d"/*"$3"*; do [ -d "$x" ] && t=$x && break; done
+      for x in "$c$d"/*"$3"*; do
+        case \${x##*/} in *conmon*) continue ;; esac
+        [ -d "$x" ] && t=$x && break
+      done
       [ -n "$t" ] || [ -z "$d" ] && break
       d=\${d%/*}
     done
@@ -213,7 +219,7 @@ export function summarize(
     cpuSeconds: round(cpuSeconds),
     avgCores: round(cpuSeconds / (durationMs / 1000)),
     ...(cores.length && {
-      peakCores: round(Math.max(...cores)),
+      peakCores: round(cores.reduce((x, y) => Math.max(x, y))),
       p95Cores: round(quantile(cores, 0.95)),
     }),
     ...(memory.length && { peakMemoryBytes: memory.reduce((x, y) => Math.max(x, y)) }),
