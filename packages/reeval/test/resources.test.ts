@@ -130,15 +130,23 @@ describe('resources', () => {
   test('the script reads this machine as a VM, until stop takes the last reading', {
     skip: process.platform !== 'linux' && 'reads /proc',
   }, async () => {
+    const calls = { kill: 0, run: 0 }
+    const children: ReturnType<typeof spawn>[] = []
     const session = {
       spawn: async ({ command }: { command: string }) => {
         const child = spawn('bash', ['-c', command], { stdio: ['ignore', 'pipe', 'ignore'] })
+        children.push(child)
         return {
+          pid: child.pid,
           stdout: Readable.toWeb(child.stdout),
-          kill: async () => void child.kill('SIGKILL'),
+          kill: async () => {
+            calls.kill++
+            child.kill('SIGKILL')
+          },
         }
       },
       run: async ({ command }: { command: string }) => {
+        calls.run++
         const r = await promisify(execFile)('bash', ['-c', command])
         return { exitCode: 0, stdout: r.stdout, stderr: r.stderr }
       },
@@ -156,6 +164,9 @@ describe('resources', () => {
 
     const gone = startMeter(session, 'machine', { sandbox: 'tart' }, 200)
     await new Promise((resolve) => setTimeout(resolve, 500))
+    const before = { ...calls }
     assert.equal((await gone.stop({ gone: true })).usage?.partial, true)
+    assert.deepEqual(calls, before, 'a gone sandbox gets no final reading and no in-sandbox kill')
+    assert.equal(children.at(-1)?.signalCode, 'SIGKILL')
   })
 })

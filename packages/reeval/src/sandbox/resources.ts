@@ -176,6 +176,13 @@ export type ResourceMeter = {
   stop(o: { gone: boolean }): Promise<AttemptResources>
 }
 
+const killHost = (pid: number | undefined) => {
+  if (pid === undefined) return
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch {}
+}
+
 /** Starts reading what `session`'s sandbox uses. */
 export function startMeter(
   session: Pick<DockerSession, 'spawn' | 'run'>,
@@ -226,7 +233,10 @@ export function startMeter(
         }
       }
       const proc = await sampler
-      await Promise.resolve(proc?.kill()).catch(() => {})
+      // A gone sandbox took the loop with it, and its in-sandbox kill (over SSH, up to 30 s) has
+      // nothing to reach: end only the host's client.
+      if (gone) killHost(proc?.pid)
+      else await Promise.resolve(proc?.kill()).catch(() => {})
       await Promise.race([read, new Promise((resolve) => setTimeout(resolve, 1000))])
       readings.sort((x, y) => x.at - y.at)
       return summarize(scope, machine, limits, readings, { sampleMs, partial: !final })
