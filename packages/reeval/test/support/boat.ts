@@ -42,8 +42,11 @@ export type FakeBoat = {
     /** Answered 429 by {@link FakeBoat.refuseStarts}. */
     refused?: true
   }>
-  /** Answer the next `count` creates with 429 and `Retry-After: retryAfterSeconds`, as Boat does past a start limit. */
-  refuseStarts(count: number, retryAfterSeconds?: number): void
+  /**
+   * Answer the next `count` creates of a name starting `namePrefix` with 429 and
+   * `Retry-After: retryAfterSeconds`, as Boat does past a start limit.
+   */
+  refuseStarts(count: number, o?: { namePrefix?: string; retryAfterSeconds?: number }): void
   close(): Promise<void>
 }
 
@@ -67,7 +70,7 @@ export async function fakeBoat(
   const key = options.key ?? `boat_test_${randomBytes(8).toString('hex')}`
   const sandboxes = new Map<string, FakeSandbox>()
   const requests: FakeBoat['requests'] = []
-  let refusals = { count: 0, retryAfterSeconds: 1 }
+  let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
   const view = (s: FakeSandbox) => ({
     id: s.id,
     name: s.name,
@@ -103,7 +106,12 @@ export async function fakeBoat(
       })
     }
     if (collection !== 'sandboxes') return json(404, { error: { code: 'not_found' } })
-    if (!id && method === 'POST' && refusals.count > 0) {
+    if (
+      !id &&
+      method === 'POST' &&
+      refusals.count > 0 &&
+      String(body?.name).startsWith(refusals.namePrefix)
+    ) {
       refusals.count--
       requests[requests.length - 1].refused = true
       return json(
@@ -198,8 +206,12 @@ export async function fakeBoat(
     key,
     live: () => [...sandboxes.values()].map((s) => s.name),
     requests,
-    refuseStarts(count, retryAfterSeconds = 1) {
-      refusals = { count, retryAfterSeconds }
+    refuseStarts(count, o = {}) {
+      refusals = {
+        count,
+        namePrefix: o.namePrefix ?? '',
+        retryAfterSeconds: o.retryAfterSeconds ?? 1,
+      }
     },
     async close() {
       await Promise.all(
