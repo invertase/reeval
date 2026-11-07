@@ -751,6 +751,31 @@ export const CASES: Record<string, Case[]> = {
       "boat() under egress 'proxy'",
       planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: boat() }),
     ],
+    ['boat() reuse not a boolean', any(boat, { reuse: 'yes' })],
+    ['boat() attemptsPerMachine over 8', any(boat, { attemptsPerMachine: 9 })],
+    ['boat() attemptsPerMachine not whole', any(boat, { attemptsPerMachine: 1.5 })],
+    [
+      'claudeCode sharing a boat() machine',
+      planned(
+        {},
+        {
+          harnesses: claudeCode({ model: 'claude-haiku-5-5' }),
+          sandbox: boat({ attemptsPerMachine: 2 }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
+      'cursor sharing a boat() machine',
+      planned(
+        {},
+        {
+          harnesses: cursor({ model: 'composer-2.5' }),
+          sandbox: boat({ attemptsPerMachine: 3, reuse: true }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
     [
       'opencode mcp: {file:} in an arg',
       mcpOn(OPENCODE, ({ mcp }) => ({

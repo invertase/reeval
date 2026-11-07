@@ -8,7 +8,7 @@ import type { DebugLine } from '../view/debug.ts'
 import type { SerializedError } from './errors.ts'
 
 /** Bumped whenever a message changes shape or meaning, or the framing changes (PROTOCOL.md). */
-export const PROTOCOL = 5
+export const PROTOCOL = 6
 
 /** What one registered test looks like to the main process. */
 export type WireTest = {
@@ -35,6 +35,8 @@ export type ToWorker =
       select: number[] | null
     }
   | { t: 'grant'; id: string }
+  /** The answer to the worker's `call` with this `id`: what the service returned, or its error. */
+  | { t: 'reply'; id: string; body?: unknown; error?: string }
   | { t: 'cancel' }
 
 export type FromWorker =
@@ -47,6 +49,8 @@ export type FromWorker =
   | { t: 'load-error'; error: SerializedError }
   | { t: 'request'; id: string; limits: Limits; rank?: Rank }
   | { t: 'release'; id: string }
+  /** Asks one of the run's services in the main process (`machines`), which answers with `reply`. */
+  | { t: 'call'; id: string; service: string; body: unknown }
   /** Every test this worker runs has asked for its lease (or finished without one). */
   | { t: 'ready' }
   | { t: 'start'; index: number; at: number }

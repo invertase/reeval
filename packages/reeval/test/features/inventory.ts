@@ -991,6 +991,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['tart/two-vms'],
     unit: [
       'reeval/test/sandbox-start.test.ts',
+      'reeval/test/sandbox-provider-conformance.test.ts',
       'sandbox-docker/test/transport-session.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
@@ -1040,12 +1041,29 @@ export const inventory: InventoryFeature[] = [
     plan: ['environments/boat'],
     unit: [
       'reeval/test/sandbox-start.test.ts',
+      'reeval/test/sandbox-provider-conformance.test.ts',
       'sandbox-docker/test/transport-session.test.ts',
       'reeval/test/boat.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/doctor.test.ts',
       'reeval/test/refusals.test.ts',
       'sandbox-docker/test/gateway.test.ts',
+    ],
+  },
+  {
+    id: 'boat.pool',
+    area: 'Sandbox',
+    name: "`boat({ reuse, attemptsPerMachine })`: the run's machine pool, shared by every eval file's attempts, starting machines within Boat's start limits (a 429 holds every start for its `Retry-After`, then retries), handing a finished attempt's machine to the next with its slot reset, running up to `attemptsPerMachine` attempts at once on a machine as their own users, and deleting every machine when the run ends; refused for a harness whose bridge listens on a fixed port",
+    fixtures: ['sandbox/boat-pool-reuse', 'sandbox/boat-shared-machine'],
+    plan: ['environments/boat'],
+    unit: [
+      'reeval/test/machine-pool.test.ts',
+      'reeval/test/machine-service.test.ts',
+      'reeval/test/boat.test.ts',
+      'reeval/test/engine-node.test.ts',
+      'reeval/test/engine-worker.test.ts',
+      'reeval/test/sandbox-provider-conformance.test.ts',
+      'reeval/test/refusals.test.ts',
     ],
   },
   {

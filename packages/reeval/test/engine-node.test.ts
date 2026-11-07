@@ -568,6 +568,92 @@ describe('runEngine: running', () => {
     )
   })
 
+  test("services: a worker's calls get the service's reply or its error, and an exited worker is released", async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    const calls: string[] = []
+    const released: string[] = []
+    const replies: ToWorker[] = []
+    const script: Script = (ctl) => {
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [], traits: [] })
+      if (!ctl.init.select) {
+        ctl.emit({ t: 'done' })
+        ctl.exit()
+        return
+      }
+      for (const [id, service] of [
+        ['1', 'machines'],
+        ['2', 'broken'],
+        ['3', 'thrown'],
+      ])
+        ctl.emit({ t: 'call', id, service, body: { n: Number(id) } })
+      const wait = setInterval(() => {
+        const got = ctl.received.filter((m) => m.t === 'reply')
+        if (got.length < 3) return
+        clearInterval(wait)
+        replies.push(...got)
+        ctl.emit({ t: 'result', index: 0, result: { state: 'passed', errors: [], durationMs: 0 } })
+        ctl.emit({ t: 'ready' })
+        ctl.emit({ t: 'done' })
+        ctl.exit()
+      }, 2)
+    }
+    await engine(
+      {
+        run,
+        services: {
+          call: async (owner, service, body) => {
+            calls.push(`${owner}:${service}`)
+            if (service === 'broken') throw new Error('no machine')
+            if (service === 'thrown') throw 'just a string'
+            return { got: body }
+          },
+          released: (owner) => void released.push(owner),
+        },
+      },
+      fakeSpawn(script).spawn,
+    )
+    assert.equal(calls.length, 3)
+    const owner = calls[0].split(':')[0]
+    assert.deepEqual(
+      replies.sort((x, y) => ((x as { id: string }).id < (y as { id: string }).id ? -1 : 1)),
+      [
+        { t: 'reply', id: '1', body: { got: { n: 1 } } },
+        { t: 'reply', id: '2', error: 'no machine' },
+        { t: 'reply', id: '3', error: 'just a string' },
+      ],
+    )
+    assert.ok(released.includes(owner), 'the worker that called is released once it exits')
+  })
+
+  test('services: a run without them answers every call with an error', async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    let reply: ToWorker | undefined
+    const script: Script = (ctl) => {
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [], traits: [] })
+      if (ctl.init.select) {
+        ctl.emit({ t: 'call', id: '1', service: 'machines', body: {} })
+        const wait = setInterval(() => {
+          reply = ctl.received.find((m) => m.t === 'reply')
+          if (!reply) return
+          clearInterval(wait)
+          ctl.emit({
+            t: 'result',
+            index: 0,
+            result: { state: 'passed', errors: [], durationMs: 0 },
+          })
+          ctl.emit({ t: 'ready' })
+          ctl.emit({ t: 'done' })
+          ctl.exit()
+        }, 2)
+        return
+      }
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    }
+    await engine({ run }, fakeSpawn(script).spawn)
+    assert.deepEqual(reply, { t: 'reply', id: '1', error: 'This run has no machines service' })
+  })
+
   test('workers: up to concurrency files at once, even above the CPU count', async () => {
     const n = availableParallelism() + 2
     const names = Array.from({ length: n }, (_, i) => `f${i}.eval.ts`)

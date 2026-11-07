@@ -15,6 +15,8 @@ export const BOAT_PREFIX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 export const BOAT_PREFIX_MAX = 32
 
 export const BOAT_TYPES = ['small', 'default', 'large', 'xlarge'] as const
+/** Slot `n` listens on the gateway's port plus `n`, and a small VM has 2 vCPUs. */
+export const BOAT_ATTEMPTS_PER_MACHINE_MAX = 8
 
 const apiKeySchema = z.strictObject({ kind: z.literal('secret'), from: z.string().regex(VAR) })
 const prefixSchema = z.string().max(BOAT_PREFIX_MAX).regex(BOAT_PREFIX)
@@ -27,6 +29,8 @@ export const boatSandboxSchema = z.strictObject({
   prefix: prefixSchema,
   type: typeSchema.optional(),
   maxConcurrent: z.number().optional(),
+  reuse: z.boolean().optional(),
+  attemptsPerMachine: z.number().int().min(1).max(BOAT_ATTEMPTS_PER_MACHINE_MAX).optional(),
 })
 
 /** `createBoat()`'s argument: the account and naming every sandbox of the factory shares. */
@@ -49,6 +53,8 @@ export const boatOptionsSchema = z.strictObject({
   id: nonEmpty().optional(),
   type: typeSchema.optional(),
   maxConcurrent: z.number().optional(),
+  reuse: z.boolean().optional(),
+  attemptsPerMachine: z.number().int().min(1).max(BOAT_ATTEMPTS_PER_MACHINE_MAX).optional(),
 })
 
 export type _SameAsSchema = [
@@ -86,7 +92,10 @@ function explain(fn: string) {
     if (issue.code === 'unrecognized_keys' && issue.path.length === 0) {
       const key = issue.keys[0] as string
       if (NOT_ON_BOAT[key]) return `${fn}() doesn't take ${key}: ${NOT_ON_BOAT[key]}.`
-      const known = fn === 'createBoat' ? ['apiKey', 'prefix'] : ['id', 'type', 'maxConcurrent']
+      const known =
+        fn === 'createBoat'
+          ? ['apiKey', 'prefix']
+          : ['id', 'type', 'maxConcurrent', 'reuse', 'attemptsPerMachine']
       const near = closest(key, known)
       return `Unknown ${fn}() option "${key}".${near ? ` Did you mean "${near}"?` : ''}`
     }
@@ -105,6 +114,10 @@ function explain(fn: string) {
         return `${fn}({ id }) must be a non-empty string (got ${got(v)})`
       case 'maxConcurrent':
         return `${fn}({ maxConcurrent }) takes a number (got ${got(v)})`
+      case 'reuse':
+        return `${fn}({ reuse }) is true or false (got ${got(v)})`
+      case 'attemptsPerMachine':
+        return `${fn}({ attemptsPerMachine }) is a whole number from 1 to ${BOAT_ATTEMPTS_PER_MACHINE_MAX} (got ${got(v)})`
       case 'kind':
         return `a Boat sandbox's kind is "boat" (got ${got(v)})`
       default:
@@ -124,7 +137,7 @@ export function checkCreateBoatOptions(options: unknown): void {
 /** `boat()`'s options, checked; throws reeval's sentence for the first problem. */
 export function checkBoatOptions(options: unknown): void {
   const problem = refusal(boatOptionsSchema, options, explain('boat'), {
-    order: ['id', 'type', 'maxConcurrent'],
+    order: ['id', 'type', 'maxConcurrent', 'reuse', 'attemptsPerMachine'],
   })
   if (problem) throw new UsageError(problem)
 }
@@ -132,6 +145,6 @@ export function checkBoatOptions(options: unknown): void {
 /** What's wrong with a Boat descriptor from any source, or undefined; `maxConcurrent` is left out. */
 export const boatProblem = (value: BoatSandboxDescriptor) =>
   refusal(boatSandboxSchema, value, explain('boat'), {
-    order: ['kind', 'apiKey', 'prefix', 'id', 'type'],
+    order: ['kind', 'apiKey', 'prefix', 'id', 'type', 'reuse', 'attemptsPerMachine'],
     skip: ['maxConcurrent'],
   })

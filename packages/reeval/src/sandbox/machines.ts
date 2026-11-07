@@ -84,8 +84,22 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   },
   async capacity(sandbox) {
     const { boatCapacity } = await import('./boat.ts')
-    const free = await boatCapacity(sandbox)
-    return free === null ? null : { machines: free }
+    return boatCapacity(sandbox)
+  },
+  pool: {
+    key: (s) =>
+      JSON.stringify([
+        s.apiKey.from,
+        s.prefix,
+        s.type ?? 'small',
+        s.reuse ?? false,
+        s.attemptsPerMachine ?? 1,
+        s.maxConcurrent ?? null,
+      ]),
+    async open(sandbox, o) {
+      const { openBoatPool } = await import('./boat.ts')
+      return openBoatPool(sandbox, o)
+    },
   },
   async cleanupRun(runId, sandboxes) {
     // Without the run's descriptors there's no key or prefix to look under; each sandbox's TTL
@@ -97,6 +111,7 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   // A run's VMs are found only under a descriptor's account and prefix.
   cleanupScope: (s) => ({ key: JSON.stringify(s), atStart: true }),
   credentials: (s) => [{ names: [s.apiKey.from], line: `${s.apiKey.from} (for boat())` }],
+  slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
   async doctor(sandboxes, ctx) {
     const { boatDoctor } = await import('./boat.ts')
     return boatDoctor(sandboxes, ctx)

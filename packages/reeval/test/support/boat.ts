@@ -1,34 +1,20 @@
 // A fake Boat API for tests: the routes of `@boatdev/sdk` that reeval calls (create, get, sshkey,
-// list by name prefix, delete and limits) on 127.0.0.1, with Boat's own shapes and quirks: a
+// list by name prefix, update, delete and limits) on 127.0.0.1, with Boat's own shapes and quirks: a
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
-// call needs the key as a bearer token. Where its sandboxes run is up to `machines`: a container
-// laid out like a Boat VM (`dockerMachines`), or an address nothing listens on
-// (`unreachableMachines`), for the lifecycle without Docker. Each answers with a `machineIp` in
-// IPv6's documentation range ({@link NO_ROUTE_IP}), which no host reaches, so every attempt falls
-// back to the endpoint as one on a host without IPv6 does. `boatSandboxesLeft` asks the real
-// one, for the contract's rows in boat().
-import { execFileSync, spawn } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+// call needs the key as a bearer token. Where its sandboxes run is up to `machines`: an SSH VM in a
+// container (`startSshVm`, ssh-vm.ts), or an address nothing listens on (`unreachableMachines`),
+// for the lifecycle without Docker. Each answers with a `machineIp` in IPv6's documentation range
+// ({@link NO_ROUTE_IP}), which no host reaches, so every attempt falls back to the endpoint as one
+// on a host without IPv6 does. `boatSandboxesLeft` asks the real one, for the contract's rows in
+// boat().
+import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
-import { type AddressInfo, connect } from 'node:net'
-import { NODE_IMAGE } from '../../../sandbox-docker/src/build-image.ts'
+import type { AddressInfo } from 'node:net'
 import { boatClient, DEAD_STATES, runPrefix } from '../../src/sandbox/boat.ts'
 import { boat } from '../../src/sandbox-boat.ts'
+import type { SshVm } from './ssh-vm.ts'
 
-/** Where one fake sandbox's SSH server is, and how to let a key in. */
-export type FakeMachine = {
-  /** `host:port`, as Boat's `sshEndpoint`. */
-  endpoint: string
-  /** Boat's `machineIp`, whose port 22 reeval tries first. */
-  machineIp: string
-  user: string
-  /** `<type> <base64>`, as Boat's `hostKey`. */
-  hostKey: string
-  authorize(publicKey: string): Promise<void>
-  remove(): Promise<void>
-}
-
-export type Machines = (name: string) => Promise<FakeMachine>
+export type Machines = (name: string) => Promise<SshVm>
 
 type FakeSandbox = {
   id: string
@@ -37,7 +23,7 @@ type FakeSandbox = {
   state: 'starting' | 'ready' | 'error'
   error?: string
   ttlSeconds: number
-  machine: Promise<FakeMachine>
+  machine: Promise<SshVm>
   /** `get` calls answered, so the first says `starting`. */
   polls: number
 }
@@ -49,11 +35,26 @@ export type FakeBoat = {
   /** The sandboxes that exist now, by name. */
   live(): string[]
   /** Every call, as `METHOD /path`, with what reeval sent that a check reads. */
-  requests: Array<{ call: string; idempotencyKey?: string; body?: Record<string, unknown> }>
+  requests: Array<{
+    call: string
+    idempotencyKey?: string
+    body?: Record<string, unknown>
+    /** Answered 429 by {@link FakeBoat.refuseStarts}. */
+    refused?: true
+  }>
+  /**
+   * Answer the next `count` creates of a name starting `namePrefix` with 429 and
+   * `Retry-After: retryAfterSeconds`, as Boat does past a start limit.
+   */
+  refuseStarts(count: number, o?: { namePrefix?: string; retryAfterSeconds?: number }): void
   close(): Promise<void>
 }
 
-const json = (status: number, body: unknown) => ({ status, body })
+const json = (status: number, body: unknown, headers: Record<string, string> = {}) => ({
+  status,
+  body,
+  headers,
+})
 
 async function bodyOf(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
@@ -69,6 +70,7 @@ export async function fakeBoat(
   const key = options.key ?? `boat_test_${randomBytes(8).toString('hex')}`
   const sandboxes = new Map<string, FakeSandbox>()
   const requests: FakeBoat['requests'] = []
+  let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
   const view = (s: FakeSandbox) => ({
     id: s.id,
     name: s.name,
@@ -81,7 +83,7 @@ export async function fakeBoat(
     const url = new URL(req.url ?? '/', 'http://localhost')
     const path = url.pathname.replace(/^\/api\/v1/, '')
     const method = req.method ?? 'GET'
-    const body = method === 'POST' ? await bodyOf(req) : undefined
+    const body = method === 'POST' || method === 'PATCH' ? await bodyOf(req) : undefined
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined
     requests.push({
       call: `${method} ${path}`,
@@ -104,6 +106,20 @@ export async function fakeBoat(
       })
     }
     if (collection !== 'sandboxes') return json(404, { error: { code: 'not_found' } })
+    if (
+      !id &&
+      method === 'POST' &&
+      refusals.count > 0 &&
+      String(body?.name).startsWith(refusals.namePrefix)
+    ) {
+      refusals.count--
+      requests[requests.length - 1].refused = true
+      return json(
+        429,
+        { error: { code: 'rate_limited', message: 'too many sandbox starts this minute' } },
+        { 'retry-after': String(refusals.retryAfterSeconds) },
+      )
+    }
     if (!id && method === 'POST') {
       const request = body as { name: string; type?: string; ttlSeconds?: number }
       const existing = [...sandboxes.values()].find((s) => s.name === request.name)
@@ -146,10 +162,15 @@ export async function fakeBoat(
       await machine.authorize(String((body as { key?: string }).key))
       return json(200, {
         sshUser: machine.user,
-        machineIp: machine.machineIp,
+        machineIp: NO_ROUTE_IP,
         sshEndpoint: machine.endpoint,
         hostKey: machine.hostKey,
       })
+    }
+    if (!sub && method === 'PATCH') {
+      const ttlSeconds = (body as { ttlSeconds?: number }).ttlSeconds
+      if (ttlSeconds) sandbox.ttlSeconds = ttlSeconds
+      return json(200, { sandbox: view(sandbox) })
     }
     if (!sub && method === 'DELETE') {
       if (req.headers['x-ascii-confirm-delete'] !== sandbox.id) {
@@ -168,8 +189,8 @@ export async function fakeBoat(
   }
   const server: Server = createServer((req, res) => {
     handle(req).then(
-      ({ status, body }) => {
-        res.writeHead(status, { 'content-type': 'application/json' })
+      ({ status, body, headers }) => {
+        res.writeHead(status, { 'content-type': 'application/json', ...headers })
         res.end(JSON.stringify(body))
       },
       (error: Error) => {
@@ -185,6 +206,13 @@ export async function fakeBoat(
     key,
     live: () => [...sandboxes.values()].map((s) => s.name),
     requests,
+    refuseStarts(count, o = {}) {
+      refusals = {
+        count,
+        namePrefix: o.namePrefix ?? '',
+        retryAfterSeconds: o.retryAfterSeconds ?? 1,
+      }
+    },
     async close() {
       await Promise.all(
         [...sandboxes.values()].map(async (s) => (await s.machine.catch(() => null))?.remove()),
@@ -201,144 +229,11 @@ export const NO_ROUTE_IP = '2001:db8::1'
 /** Machines whose SSH endpoint nothing listens on: Boat's side of the lifecycle, without a VM. */
 export const unreachableMachines: Machines = async () => ({
   endpoint: '127.0.0.1:1',
-  machineIp: NO_ROUTE_IP,
   user: 'user',
   hostKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOkVnNvZ8lfy5H2wK0ljJm0cz6dJ7l4LwW8kQx2bH9oD',
   authorize: async () => {},
   remove: async () => {},
 })
-
-/**
- * A Boat VM's layout where it matters to reeval: a login user `user` with passwordless sudo, sshd,
- * git, and a Node whose `/usr/local/bin/node` links into that user's nvm, under a home others can't
- * enter. No `reeval` user: the session makes it.
- */
-const BOAT_VM_DOCKERFILE = `FROM ${NODE_IMAGE}
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-server sudo curl git procps ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN useradd --create-home --shell /bin/bash user \\
- && echo 'user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/user \\
- && mkdir -p /home/user/.nvm/versions/node/current/bin /home/user/.ssh /run/sshd \\
- && mv /usr/local/bin/node /home/user/.nvm/versions/node/current/bin/node \\
- && ln -s /home/user/.nvm/versions/node/current/bin/node /usr/local/bin/node \\
- && chown -R user:user /home/user && chmod 750 /home/user && chmod 700 /home/user/.ssh \\
- && ssh-keygen -A
-CMD ["/usr/sbin/sshd", "-D", "-e"]
-`
-
-/** The fake Boat VM image's tag, which changes with its Dockerfile. */
-export const BOAT_VM_IMAGE = `reeval-fake-boat-vm:${createHash('sha256').update(BOAT_VM_DOCKERFILE).digest('hex').slice(0, 12)}`
-/** The label on every fake Boat VM container, for a sweep. */
-export const BOAT_VM_LABEL = 'reeval.test.fake-boat'
-
-/** Builds the fake Boat VM image unless it's there. */
-export function buildBoatVmImage(): void {
-  try {
-    execFileSync('docker', ['image', 'inspect', BOAT_VM_IMAGE], { stdio: 'ignore' })
-    return
-  } catch {}
-  execFileSync('docker', ['build', '-q', '-t', BOAT_VM_IMAGE, '-'], {
-    input: BOAT_VM_DOCKERFILE,
-    stdio: ['pipe', 'ignore', 'inherit'],
-  })
-}
-
-const docker = (args: string[], input?: string) =>
-  new Promise<string>((resolve, reject) => {
-    const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] })
-    let out = ''
-    let err = ''
-    child.stdout.on('data', (d: Buffer) => {
-      out += d
-    })
-    child.stderr.on('data', (d: Buffer) => {
-      err += d
-    })
-    child.on('error', reject)
-    child.on('close', (code) =>
-      code === 0 ? resolve(out.trim()) : reject(new Error(`docker ${args[0]}: ${err.trim()}`)),
-    )
-    // The child may exit before reading its stdin.
-    child.stdin.on('error', () => {})
-    child.stdin.end(input ?? '')
-  })
-
-/** Until `port` on 127.0.0.1 greets with an SSH banner. */
-async function sshUp(port: number, deadline = Date.now() + 30_000): Promise<void> {
-  for (;;) {
-    const banner = await new Promise<string>((resolve) => {
-      const socket = connect(port, '127.0.0.1')
-      socket.setTimeout(2000)
-      socket.once('data', (d) => {
-        resolve(String(d))
-        socket.destroy()
-      })
-      // Docker's port proxy accepts, then closes, until sshd listens.
-      socket.once('close', () => resolve(''))
-      socket.once('error', () => resolve(''))
-      socket.once('timeout', () => {
-        resolve('')
-        socket.destroy()
-      })
-    })
-    if (banner.startsWith('SSH-')) return
-    if (Date.now() > deadline) throw new Error(`the fake Boat VM's sshd never answered on ${port}`)
-    await new Promise((r) => setTimeout(r, 200))
-  }
-}
-
-/** Each sandbox a container of {@link BOAT_VM_IMAGE}, its sshd on a port of 127.0.0.1. */
-export const dockerMachines: Machines = async (name) => {
-  const id = await docker([
-    'run',
-    '-d',
-    '--rm',
-    '--label',
-    `${BOAT_VM_LABEL}=${name}`,
-    // A VM's root reads every process's environment, which the marker kill looks in.
-    '--cap-add',
-    'SYS_PTRACE',
-    '-p',
-    '127.0.0.1::22',
-    BOAT_VM_IMAGE,
-  ])
-  const remove = async () => {
-    await docker(['rm', '-f', id]).catch(() => {})
-  }
-  try {
-    const mapped = await docker(['port', id, '22/tcp'])
-    const port = Number(/:(\d+)\s*$/m.exec(mapped)?.[1])
-    await sshUp(port)
-    const hostKey = (await docker(['exec', id, 'cat', '/etc/ssh/ssh_host_ed25519_key.pub']))
-      .split(' ')
-      .slice(0, 2)
-      .join(' ')
-    return {
-      endpoint: `127.0.0.1:${port}`,
-      machineIp: NO_ROUTE_IP,
-      user: 'user',
-      hostKey,
-      authorize: async (publicKey) => {
-        await docker(
-          [
-            'exec',
-            '-i',
-            '-u',
-            'user',
-            id,
-            'sh',
-            '-c',
-            'cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys',
-          ],
-          `${publicKey}\n`,
-        )
-      },
-      remove,
-    }
-  } catch (error) {
-    await remove()
-    throw error
-  }
-}
 
 /**
  * The run's sandboxes still live on the real Boat account in BOAT_API_KEY (or the one

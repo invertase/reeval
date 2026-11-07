@@ -355,6 +355,21 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
           case 'release':
             scheduler.release(`${id}:${m.id}`)
             break
+          case 'call': {
+            const answer = input.services
+              ? input.services.call(id, m.service, m.body)
+              : Promise.reject(new Error(`This run has no ${m.service} service`))
+            answer.then(
+              (body) => worker.send({ t: 'reply', id: m.id, body }),
+              (error: unknown) =>
+                worker.send({
+                  t: 'reply',
+                  id: m.id,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+            )
+            break
+          }
           case 'ready':
             markReady()
             break
@@ -410,6 +425,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       const exit = await worker.exited
       live.delete(worker)
       scheduler.releaseOwner(id)
+      input.services?.released(id)
       markReady()
       if (done && loadError === undefined) return
       // The file failed to load this time, or its worker died mid-file (killed, out of memory):
