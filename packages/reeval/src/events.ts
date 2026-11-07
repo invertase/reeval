@@ -431,7 +431,7 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
         closed = event
         break
       }
-      let frame: { seq?: unknown; line?: unknown }
+      let frame: { seq?: unknown; line?: unknown } | null
       try {
         frame = JSON.parse(event.data)
       } catch {
@@ -439,7 +439,13 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
           `${source} sent a frame that isn't JSON: ${event.data.slice(0, 80)}`,
         )
       }
-      if (typeof frame.seq !== 'number' || typeof frame.line !== 'object' || !frame.line) {
+      if (
+        typeof frame !== 'object' ||
+        !frame ||
+        typeof frame.seq !== 'number' ||
+        typeof frame.line !== 'object' ||
+        !frame.line
+      ) {
         throw new EventStreamError(
           `${source} sent a frame without a seq and line: ${event.data.slice(0, 80)}`,
         )
