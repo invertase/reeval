@@ -14,10 +14,11 @@ const envStream = (env: Record<string, string>) =>
     .join('')
 
 /**
- * Runs `$2` with bash in `$1` as the sandbox user, after exporting the variables stdin carries.
- * The command itself gets no stdin, as a `docker exec` without `--interactive` would.
+ * Runs `$2` with bash in `$1` as the sandbox user, after exporting the variables stdin carries,
+ * in a process group it leads. The command itself gets no stdin, as a `docker exec` without
+ * `--interactive` would.
  */
-const READER = `${EXEC_UMASK}; while IFS= read -r -d "" kv; do export "$kv"; done; cd -- "$1" || exit 1; exec bash -c "$2" </dev/null`
+const READER = `${EXEC_UMASK}; while IFS= read -r -d "" kv; do export "$kv"; done; cd -- "$1" || exit 1; exec /usr/bin/perl -e 'setpgrp(0, 0); exec @ARGV' bash -c "$2" </dev/null`
 
 /**
  * The Linux profile: the login user has passwordless `sudo`, the agent's commands run as
@@ -42,10 +43,14 @@ export function linuxShell(o: {
       .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`
   const asRoot = (command: string, mark?: string) =>
     `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${SANDBOX_STATE} || exit 1; ${EXEC_UMASK}; ${command}`)}`
-  /** Killing the host's program leaves the command running on the machine, so kill what has its marker. */
+  /**
+   * Killing the host's program leaves the command running on the machine, so kill what has its
+   * marker, and the process group of each: a process that cleared its environment (`env -i`)
+   * keeps the group of the command that started it.
+   */
   const killExec = (mark: string) =>
     asRoot(
-      `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${mark}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
+      `gs=; for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${mark}`)} "$e" || continue; d=\${e%/environ}; g=$(sed 's/.*) //' "$d/stat" 2>/dev/null | cut -d' ' -f3); kill -9 "\${d#/proc/}" 2>/dev/null; [ "\${g:-0}" -gt 1 ] && gs="$gs $g"; done; for g in $gs; do kill -9 "-$g" 2>/dev/null; done; true`,
     )
   return {
     run: (argv, r) => o.run(argv, { ...r, signal: r.signal ?? o.signal }),
@@ -91,17 +96,31 @@ export function execScript(o: {
   ].join('\n')
 }
 
-/** Reads the script {@link execScript} wrote from stdin and runs it, with stdin then empty. */
-const RUN_SCRIPT = ['/bin/bash', '-c', 's=$(cat); eval "$s" </dev/null']
+/**
+ * Reads the script {@link execScript} wrote from stdin and runs it, with stdin then empty, in a
+ * process group its shell leads, so the pid the script records is also the group's.
+ */
+const RUN_SCRIPT = [
+  '/usr/bin/perl',
+  '-e',
+  'setpgrp(0, 0); exec @ARGV',
+  '/bin/bash',
+  '-c',
+  's=$(cat); eval "$s" </dev/null',
+]
 
 /**
- * Kills the command whose shell wrote `pidFile` and everything it started: macOS has no
- * `/proc` to find them by a marker, so it walks the tree from that shell, stopping each first.
+ * Kills the command whose shell wrote `pidFile` and everything it started: macOS has no `/proc`
+ * to find them by a marker, so it stops and kills the shell's process group, which keeps a
+ * process its parent left behind (a double fork's), and walks the tree from the shell for one
+ * that moved to a group of its own (a job-control shell's job). Anything but a pid above 1 in the
+ * file kills nothing: `kill -9 -1` is every process the user can signal.
  */
 export const killTree = (pidFile: string) =>
-  `f=${q(pidFile)}; [ -f "$f" ] || exit 0
+  `f=${q(pidFile)}; [ -f "$f" ] || exit 0; p=$(cat "$f")
+case $p in ''|*[!0-9]*) rm -f "$f"; exit 0 ;; esac; [ "$p" -gt 1 ] || { rm -f "$f"; exit 0; }
 tree() { kill -STOP "$1" 2>/dev/null; for c in $(pgrep -P "$1"); do tree "$c"; done; kill -9 "$1" 2>/dev/null; }
-tree "$(cat "$f")"; rm -f "$f"; true`
+kill -STOP "-$p" 2>/dev/null; tree "$p"; kill -9 "-$p" 2>/dev/null; rm -f "$f"; true`
 
 /**
  * The darwin profile: macOS has no `useradd`, so every command, reeval's own included, runs as
