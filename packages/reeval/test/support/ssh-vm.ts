@@ -106,6 +106,11 @@ export async function startSshVm(name: string): Promise<SshVm> {
     // A VM's root reads every process's environment, which the marker kill looks in.
     '--cap-add',
     'SYS_PTRACE',
+    // And mounts, as a shared machine binds each slot's home where its commands see it.
+    '--cap-add',
+    'SYS_ADMIN',
+    '--security-opt',
+    'apparmor=unconfined',
     '-p',
     '127.0.0.1::22',
     SSH_VM_IMAGE,

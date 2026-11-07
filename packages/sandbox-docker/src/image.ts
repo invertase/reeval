@@ -211,6 +211,10 @@ export const BRIDGE_PORT = 43210
  */
 export type SlotLayout = {
   user: string
+  /**
+   * Where the slot's home is on the machine. Its commands see it at {@link SANDBOX_HOME}, bound
+   * there in a mount namespace of their own when it's elsewhere.
+   */
   home: string
   root: string
   state: string
