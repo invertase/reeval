@@ -42,7 +42,7 @@ import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
-import { boat } from '../src/sandbox-boat.ts'
+import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
@@ -253,8 +253,8 @@ const onFakeBoat: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
   prepare: () => buildSshVmImage(),
 }
 /** No sandbox of the run is left on the fake API. */
-const boatCleanedUp = (run: RunRecord) => {
-  const prefix = runPrefix(boat(), run.runId)
+const boatCleanedUp = (run: RunRecord, sandbox = boat()) => {
+  const prefix = runPrefix(sandbox, run.runId)
   assert.deepEqual(
     boatApi.live().filter((name) => name.startsWith(prefix)),
     [],
@@ -269,8 +269,8 @@ const boatCleanedUp = (run: RunRecord) => {
 }
 
 /** How many sandboxes the run created on the fake API. */
-const boatCreates = (run: RunRecord) => {
-  const prefix = runPrefix(boat(), run.runId)
+const boatCreates = (run: RunRecord, sandbox = boat()) => {
+  const prefix = runPrefix(sandbox, run.runId)
   return boatApi.requests.filter(
     (q) => q.call === 'POST /sandboxes' && !q.refused && String(q.body?.name).startsWith(prefix),
   ).length
@@ -1206,18 +1206,19 @@ export const features: Feature[] = [
     ...onFakeBoat,
     prepare: async () => {
       await buildSshVmImage()
-      boatApi.refuseStarts(1)
+      boatApi.refuseStarts(1, { namePrefix: 'pool-' })
     },
     args: ['--concurrency', '1'],
     canary: /expected 'home-clean' to be 'home-dirty'/,
     record: ({ run }) => {
-      const prefix = runPrefix(boat(), run.runId)
+      const sandbox = createBoat({ prefix: 'pool' })()
+      const prefix = runPrefix(sandbox, run.runId)
       assert.ok(
         boatApi.requests.some((q) => q.refused && String(q.body?.name).startsWith(prefix)),
         'the refused start was retried, not failed',
       )
-      assert.equal(boatCreates(run), 1, 'both attempts ran on one machine')
-      boatCleanedUp(run)
+      assert.equal(boatCreates(run, sandbox), 1, 'both attempts ran on one machine')
+      boatCleanedUp(run, sandbox)
     },
   },
   {
