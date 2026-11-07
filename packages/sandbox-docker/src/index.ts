@@ -155,11 +155,13 @@ export {
   type EgressOptions,
   type EgressStatus,
   EgressUnavailableError,
+  type Observer,
   PRIVILEGED_CAPABILITIES,
   pathOperations,
   ROOT_CAPABILITIES,
   type SandboxLimits,
   type SessionOptions,
+  type Spawned,
 } from './session.ts'
 export { darwinShell } from './shells.ts'
 export { connectSsh, type SshMachine, type SshSessionOptions } from './ssh-session.ts'

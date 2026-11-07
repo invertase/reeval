@@ -99,6 +99,32 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
     }
   }
 
+  /** Starts a host program with its output streamed; its kill ends command `exec` in the machine too. */
+  const streamed = (exec: number, c: HostCommand) => {
+    const [bin = '', ...args] = c.argv
+    const startedAt = Date.now()
+    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+    child.stdin.on('error', () => {})
+    child.stdin.end(c.input)
+    const exited = new Promise<{ exitCode: number }>((resolve) => {
+      child.once('error', () => resolve({ exitCode: 127 }))
+      child.once('close', (code) => {
+        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, bin)
+        resolve({ exitCode: code ?? 1 })
+      })
+    })
+    return {
+      pid: child.pid,
+      stdout: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
+      stderr: Readable.toWeb(child.stderr) as ReadableStream<Uint8Array>,
+      wait: () => exited,
+      kill: async () => {
+        child.kill('SIGKILL')
+        await kill(exec)
+      },
+    }
+  }
+
   const readBinaryFile = async (r: { path: string; abortSignal?: AbortSignal }) => {
     const read = await shell
       .run(shell.direct(['/bin/cat', '--', at(r.path)]), { signal: r.abortSignal })
@@ -182,37 +208,17 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
     spawn: (async (s: Parameters<DockerSession['spawn']>[0]) => {
       if (s.stdin) throw new Error(`A process in ${description} has no writable stdin`)
       const exec = ++execs
-      const c = shell.user({
-        command: s.command,
-        cwd: at(s.workingDirectory),
-        env: o.env(s.env),
+      const p = streamed(
         exec,
-      })
-      const [bin = '', ...args] = c.argv
-      const startedAt = Date.now()
-      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
-      child.stdin.on('error', () => {})
-      child.stdin.end(c.input)
-      const exited = new Promise<{ exitCode: number }>((resolve) => {
-        child.once('error', () => resolve({ exitCode: 127 }))
-        child.once('close', (code) => {
-          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, bin)
-          resolve({ exitCode: code ?? 1 })
-        })
-      })
-      const stop = async () => {
-        child.kill('SIGKILL')
-        await kill(exec)
-      }
-      s.abortSignal?.addEventListener('abort', () => void stop(), { once: true })
-      return {
-        pid: child.pid,
-        stdout: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
-        stderr: Readable.toWeb(child.stderr) as ReadableStream<Uint8Array>,
-        wait: () => exited,
-        kill: stop,
-      }
+        shell.user({ command: s.command, cwd: at(s.workingDirectory), env: o.env(s.env), exec }),
+      )
+      s.abortSignal?.addEventListener('abort', () => void p.kill(), { once: true })
+      return p
     }) as unknown as DockerSession['spawn'],
+    spawnPrivileged: async (s) => {
+      const exec = ++execs
+      return streamed(exec, shell.privileged({ command: s.command, exec }))
+    },
     readBinaryFile,
     async readFile(r) {
       const bytes = await readBinaryFile(r)

@@ -1,6 +1,8 @@
-// What an attempt's sandbox gave it and what it used: one shell loop in the sandbox prints a
-// reading a second (only `sleep` forks), and teardown takes one more before the sandbox goes.
-import type { DockerSession } from '@reeval/sandbox-docker'
+// What an attempt's sandbox gave it and what it used: one shell loop prints a reading a second
+// (only `sleep` forks), and teardown takes one more before the sandbox goes. The loop runs where
+// the agent can't reach it: beside a container in a sibling that reads its cgroup from outside,
+// and on a VM as root.
+import type { DockerSession, Spawned } from '@reeval/sandbox-docker'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import type { AttemptResources } from '../types.ts'
 
@@ -9,20 +11,44 @@ export const SAMPLE_MS = 1000
 /** How long teardown's last reading may take. */
 const FINAL_TIMEOUT_MS = 15_000
 
+/** What the script reads: a container's cgroup, a Linux VM's `/proc`, or a macOS VM's sizes alone. */
+export type SampleMode = AttemptResources['scope'] | 'darwin'
+
 /**
- * `$1` is the scope, `$2` the seconds between readings or `once`. First a line
+ * `$1` is the mode, `$2` the seconds between readings or `once`, `$3` the container whose cgroup
+ * to find from the host's cgroup namespace, when the script runs outside it. First a line
  * `limits <cpu quota> <cpu period> <memory bytes> <cpus> <clock ticks>`, then a line
- * `s <uptime> <cpu> <memory bytes> <disk read bytes> <disk written bytes>` per reading, `-` where
- * there's nothing to read. The uptime times each reading in the sandbox, so a late line on the host
- * doesn't skew the cores between two. A container's CPU is cgroup v2's `usage_usec` and its memory
- * `memory.current` less `inactive_file`; a VM's CPU is `/proc/stat`'s busy ticks (steal is the
- * hypervisor's, not the VM's), its memory `MemTotal` less `MemAvailable`, and its disks every block
- * device but loop, RAM, CD and stacked ones. Its stderr goes nowhere: nothing reads it, and a full
- * pipe would stop the readings.
+ * `s <uptime> <cpu> <memory bytes> <disk read bytes> <disk written bytes> <memory peak bytes>
+ * <cpu periods> <throttled periods> <throttled usec>` per reading, `-` where there's nothing to
+ * read. The uptime times each reading in the sandbox, so a late line on the host doesn't skew the
+ * cores between two. A container's CPU is cgroup v2's `usage_usec`, its memory `memory.current`
+ * less `inactive_file`, its memory peak `memory.peak` and its throttling `cpu.stat`'s
+ * `nr_periods`, `nr_throttled` and `throttled_usec`; a VM's CPU is `/proc/stat`'s busy ticks
+ * (steal is the hypervisor's, not the VM's), its memory `MemTotal` less `MemAvailable`, and its
+ * disks every block device but loop, RAM, CD and stacked ones. A macOS VM has neither, so it
+ * prints its `sysctl` sizes and stops. A container's cgroup the script can't find, or that's
+ * gone, ends it. Its stderr goes nowhere: nothing reads it, and a full pipe would stop the
+ * readings.
  */
 const SCRIPT = `exec 2>/dev/null
 c=/sys/fs/cgroup
+if [ "$1" = darwin ]; then
+  echo "limits - - $(sysctl -n hw.memsize || echo -) $(sysctl -n hw.ncpu || echo -) -"
+  exit 0
+fi
 if [ "$1" = container ]; then
+  if [ -n "$3" ]; then
+    own=
+    while IFS= read -r l; do case $l in 0::*) own=\${l#0::} ;; esac; done < /proc/self/cgroup
+    d=\${own%/*} t=
+    for _ in 1 2 3; do
+      for x in "$c$d"/*"$3"*; do [ -d "$x" ] && t=$x && break; done
+      [ -n "$t" ] || [ -z "$d" ] && break
+      d=\${d%/*}
+    done
+    [ -n "$t" ] || exit 0
+    c=$t
+  fi
   [ -r $c/cpu.stat ] && [ -r $c/memory.current ] && [ -r $c/memory.stat ] || exit 0
   q=- p=- m=-
   [ -r $c/cpu.max ] && read -r q p < $c/cpu.max
@@ -37,11 +63,14 @@ sample() {
   up=-
   [ -r /proc/uptime ] && read -r up _ < /proc/uptime
   if [ "$1" = container ]; then
-    u=0 i=0
-    while read -r k v; do [ "$k" = usage_usec ] && u=$v; done < $c/cpu.stat
-    read -r cur < $c/memory.current
+    u=0 i=0 np=- nt=- tu=- pk=-
+    read -r cur < $c/memory.current || exit 0
+    while read -r k v; do
+      case $k in usage_usec) u=$v ;; nr_periods) np=$v ;; nr_throttled) nt=$v ;; throttled_usec) tu=$v ;; esac
+    done < $c/cpu.stat
     while read -r k v; do [ "$k" = inactive_file ] && i=$v; done < $c/memory.stat
-    echo "s $up $u $((cur - i)) - -"
+    [ -r $c/memory.peak ] && read -r pk < $c/memory.peak
+    echo "s $up $u $((cur - i)) - - $pk $np $nt $tu"
   else
     read -r _ us ni sy _ _ ir so _ < /proc/stat
     t=0 a=0
@@ -53,15 +82,15 @@ sample() {
       case \${d##*/} in loop*|ram*|zram*|sr*|dm-*|md*) continue ;; esac
       [ -r "$d/stat" ] && read -r _ _ rs _ _ _ ws _ < "$d/stat" && r=$((r + rs)) && w=$((w + ws))
     done
-    echo "s $up $((us + ni + sy + ir + so)) $(((t - a) * 1024)) $((r * 512)) $((w * 512))"
+    echo "s $up $((us + ni + sy + ir + so)) $(((t - a) * 1024)) $((r * 512)) $((w * 512)) - - - -"
   fi
 }
 sample "$1"
 [ "$2" = once ] && exit 0
 while sleep "$2"; do sample "$1"; done`
 
-const command = (scope: AttemptResources['scope'], every: string) =>
-  `sh -c ${q(SCRIPT)} sh ${scope} ${every}`
+const command = (mode: SampleMode, every: string, target?: string) =>
+  `sh -c ${q(SCRIPT)} sh ${mode} ${every}${target ? ` ${q(target)}` : ''}`
 
 export type Limits = {
   quota: number | null
@@ -77,6 +106,10 @@ export type Reading = {
   memory: number | null
   read: number | null
   written: number | null
+  memoryPeak: number | null
+  periods: number | null
+  throttled: number | null
+  throttledUsec: number | null
 }
 
 const num = (s: string | undefined) => {
@@ -103,12 +136,31 @@ export function parseLine(
     }
   }
   const cpu = num(f[1])
-  if (tag !== 's' || f.length !== 5 || cpu === null) return null
+  if (tag !== 's' || f.length !== 9 || cpu === null) return null
   const up = f[0] !== undefined && /^\d+(\.\d+)?$/.test(f[0]) ? Number(f[0]) * 1000 : at
-  return { reading: { at: up, cpu, memory: num(f[2]), read: num(f[3]), written: num(f[4]) } }
+  return {
+    reading: {
+      at: up,
+      cpu,
+      memory: num(f[2]),
+      read: num(f[3]),
+      written: num(f[4]),
+      memoryPeak: num(f[5]),
+      periods: num(f[6]),
+      throttled: num(f[7]),
+      throttledUsec: num(f[8]),
+    },
+  }
 }
 
 const round = (n: number, places = 3) => Math.round(n * 10 ** places) / 10 ** places
+
+/** The nearest-rank `p` quantile of `values`, which it sorts. */
+const quantile = (values: number[], p: number) =>
+  values.sort((x, y) => x - y)[Math.max(0, Math.ceil(p * values.length) - 1)] as number
+
+const delta = (first: number | null, last: number | null) =>
+  first === null || last === null ? null : Math.max(0, last - first)
 
 /**
  * The resources from the readings, in order: what the sandbox gave from `limits`, and what it used
@@ -137,28 +189,46 @@ export function summarize(
   if (!first || !last || first === last || !perSecond || last.at <= first.at) return resources
   const durationMs = last.at - first.at
   const cpuSeconds = Math.max(0, last.cpu - first.cpu) / perSecond
-  let peakCores: number | undefined
+  const cores: number[] = []
   // A pair closer than half an interval (teardown's reading right after one) says little.
   for (let i = 1; i < readings.length; i++) {
     const [a, b] = [readings[i - 1] as Reading, readings[i] as Reading]
     if (b.at - a.at < o.sampleMs / 2) continue
-    const cores = Math.max(0, b.cpu - a.cpu) / perSecond / ((b.at - a.at) / 1000)
-    peakCores = Math.max(peakCores ?? 0, cores)
+    cores.push(Math.max(0, b.cpu - a.cpu) / perSecond / ((b.at - a.at) / 1000))
   }
   const memory = readings.flatMap((r) => (r.memory === null ? [] : [r.memory]))
+  const memoryPeak = readings.flatMap((r) => (r.memoryPeak === null ? [] : [r.memoryPeak]))
   const disk =
     scope === 'machine' &&
     first.read !== null &&
     last.read !== null &&
     first.written !== null &&
     last.written !== null
+  const periods = delta(first.periods, last.periods)
+  const throttled = delta(first.throttled, last.throttled)
+  const throttledUsec = delta(first.throttledUsec, last.throttledUsec)
   resources.usage = {
     durationMs: Math.round(durationMs),
     sampleMs: o.sampleMs,
     cpuSeconds: round(cpuSeconds),
     avgCores: round(cpuSeconds / (durationMs / 1000)),
-    ...(peakCores !== undefined && { peakCores: round(peakCores) }),
+    ...(cores.length && {
+      peakCores: round(Math.max(...cores)),
+      p95Cores: round(quantile(cores, 0.95)),
+    }),
     ...(memory.length && { peakMemoryBytes: memory.reduce((x, y) => Math.max(x, y)) }),
+    ...(memoryPeak.length && {
+      cgroupPeakMemoryBytes: memoryPeak.reduce((x, y) => Math.max(x, y)),
+    }),
+    ...(periods !== null &&
+      throttled !== null &&
+      throttledUsec !== null && {
+        throttling: {
+          periods,
+          throttledPeriods: throttled,
+          throttledSeconds: round(throttledUsec / 1e6),
+        },
+      }),
     ...(disk && {
       diskReadBytes: Math.max(0, (last.read ?? 0) - (first.read ?? 0)),
       diskWriteBytes: Math.max(0, (last.written ?? 0) - (first.written ?? 0)),
@@ -176,6 +246,31 @@ export type ResourceMeter = {
   stop(o: { gone: boolean }): Promise<AttemptResources>
 }
 
+/** Somewhere the script can run: it starts the loop there and takes teardown's reading. */
+export type SamplerHost = {
+  spawn(o: { command: string }): Promise<Pick<Spawned, 'pid' | 'stdout' | 'kill'>>
+  run(o: {
+    command: string
+    abortSignal?: AbortSignal
+  }): Promise<{ exitCode: number; stdout: string }>
+  /** The container whose cgroup the script finds, when it runs outside it. */
+  target?: string
+}
+
+/**
+ * Where a session's sampler runs, in order of preference: a container's observer, then root in
+ * the sandbox, where a sandbox user without root can't signal it.
+ */
+export function samplerHosts(
+  session: Pick<DockerSession, 'observer' | 'spawnPrivileged' | 'runPrivileged'>,
+): SamplerHost[] {
+  const privileged: SamplerHost = {
+    spawn: (o) => session.spawnPrivileged(o),
+    run: (o) => session.runPrivileged(o),
+  }
+  return session.observer ? [session.observer, privileged] : [privileged]
+}
+
 const killHost = (pid: number | undefined) => {
   if (pid === undefined) return
   try {
@@ -183,43 +278,60 @@ const killHost = (pid: number | undefined) => {
   } catch {}
 }
 
-/** Starts reading what `session`'s sandbox uses. */
+/**
+ * Starts reading what a sandbox uses, on the first of `hosts` whose script prints its limits: one
+ * that ends without them (no observer, no cgroup to find there) hands over to the next.
+ */
 export function startMeter(
-  session: Pick<DockerSession, 'spawn' | 'run'>,
-  scope: AttemptResources['scope'],
+  hosts: readonly SamplerHost[],
+  mode: SampleMode,
   machine: { sandbox: string; size?: string },
   sampleMs = SAMPLE_MS,
 ): ResourceMeter {
+  const scope: AttemptResources['scope'] = mode === 'container' ? 'container' : 'machine'
   let limits: Limits | null = null
   const readings: Reading[] = []
-  const take = (line: string, at = performance.now()) => {
+  let stopping = false
+  let current: { host: SamplerHost; proc: Pick<Spawned, 'pid' | 'kill'> } | undefined
+  let measuring: SamplerHost | undefined
+  const take = (line: string, host: SamplerHost, at = performance.now()) => {
     const parsed = parseLine(line, at)
     if (!parsed) return
-    if ('limits' in parsed) limits ??= parsed.limits
-    else readings.push(parsed.reading)
+    if ('limits' in parsed) {
+      limits ??= parsed.limits
+      measuring ??= host
+    } else readings.push(parsed.reading)
   }
-  const sampler = Promise.resolve()
-    .then(() => session.spawn({ command: command(scope, String(sampleMs / 1000)) }))
-    .catch(() => null)
-  const read = sampler.then(async (proc) => {
-    if (!proc) return
-    let rest = ''
-    const decoder = new TextDecoder()
-    try {
-      for await (const chunk of proc.stdout as AsyncIterable<Uint8Array>) {
-        const lines = (rest + decoder.decode(chunk, { stream: true })).split('\n')
-        rest = lines.pop() ?? ''
-        for (const line of lines) take(line)
-      }
-    } catch {}
-  })
+  const read = (async () => {
+    for (const host of hosts) {
+      if (stopping) return
+      const proc = await Promise.resolve()
+        .then(() => host.spawn({ command: command(mode, String(sampleMs / 1000), host.target) }))
+        .catch(() => null)
+      if (!proc) continue
+      current = { host, proc }
+      let rest = ''
+      const decoder = new TextDecoder()
+      try {
+        for await (const chunk of proc.stdout as AsyncIterable<Uint8Array>) {
+          const lines = (rest + decoder.decode(chunk, { stream: true })).split('\n')
+          rest = lines.pop() ?? ''
+          for (const line of lines) take(line, host)
+        }
+      } catch {}
+      if (measuring || stopping) return
+      await Promise.resolve(proc.kill()).catch(() => {})
+    }
+  })()
   return {
     async stop({ gone }) {
+      stopping = true
       let final = false
-      if (!gone) {
+      const host = measuring ?? current?.host
+      if (!gone && host) {
         const r = await Promise.resolve(
-          session.run({
-            command: command(scope, 'once'),
+          host.run({
+            command: command(mode, 'once', host.target),
             abortSignal: AbortSignal.timeout(FINAL_TIMEOUT_MS),
           }),
         ).catch(() => null)
@@ -232,9 +344,9 @@ export function startMeter(
           } else if (parsed) limits ??= parsed.limits
         }
       }
-      const proc = await sampler
-      // A gone sandbox took the loop with it, and its in-sandbox kill (over SSH, up to 30 s) has
-      // nothing to reach: end only the host's client.
+      const proc = current?.proc
+      // A gone sandbox took an in-sandbox loop with it, and its in-sandbox kill (over SSH, up to
+      // 30 s) has nothing to reach: end only the host's client. The session removes an observer.
       if (gone) killHost(proc?.pid)
       else await Promise.resolve(proc?.kill()).catch(() => {})
       await Promise.race([read, new Promise((resolve) => setTimeout(resolve, 1000))])

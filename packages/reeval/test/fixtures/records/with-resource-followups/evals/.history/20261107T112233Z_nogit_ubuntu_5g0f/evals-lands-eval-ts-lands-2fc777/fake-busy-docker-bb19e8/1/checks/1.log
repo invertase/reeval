@@ -1,0 +1,5 @@
+$ node -e 'const { Worker } = require("node:worker_threads"); const spin = "const t = Date.now(); while (Date.now() - t < 3000);"; new Worker(spin, { eval: true }); const b = Buffer.alloc(256 << 20, 1); eval(spin); console.log(b.length)'
+exit 0
+--- stdout
+268435456
+--- stderr

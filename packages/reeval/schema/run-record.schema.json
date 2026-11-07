@@ -542,7 +542,7 @@
           "type": "number"
         },
         "resources": {
-          "description": "The container or VM the attempt ran on and the CPU, memory and disk it used there, measured in the sandbox (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in attempts that didn't reach their sandbox.",
+          "description": "The container or VM the attempt ran on and the CPU, memory and disk it used there, measured out of the agent's reach: a container's from a sibling container, a VM's as root (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in attempts that didn't reach their sandbox.",
           "$ref": "#/$defs/AttemptResources"
         },
         "retries": {
@@ -785,7 +785,7 @@
       ]
     },
     "AttemptResources": {
-      "description": "What an attempt's sandbox gave it and what it used, measured in the sandbox from when it started until teardown. A value the sandbox can't measure is left out, never estimated.",
+      "description": "What an attempt's sandbox gave it and what it used, measured from when the sandbox started until teardown. A value the sandbox can't measure is left out, never estimated.",
       "type": "object",
       "properties": {
         "machine": {
@@ -793,7 +793,7 @@
           "type": "object",
           "properties": {
             "memoryBytes": {
-              "description": "Memory the attempt could use, in bytes: the container's limit, else the VM's total.",
+              "description": "Memory the attempt could use, in bytes: the container's limit, else the VM's total (a macOS VM's `sysctl hw.memsize`).",
               "type": "number"
             },
             "sandbox": {
@@ -805,7 +805,7 @@
               "type": "string"
             },
             "vcpus": {
-              "description": "CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has.",
+              "description": "CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has (a macOS VM's `sysctl hw.ncpu`).",
               "type": "number"
             }
           },
@@ -821,6 +821,10 @@
           "properties": {
             "avgCores": {
               "description": "`cpuSeconds` over `durationMs`: how many CPUs it kept busy on average.",
+              "type": "number"
+            },
+            "cgroupPeakMemoryBytes": {
+              "description": "cgroup v2's `memory.peak`, in bytes: the highest `memory.current` the kernel saw since the container started, page cache included, so no spike is missed but it reads higher than `peakMemoryBytes`. `container` scope on Linux 5.19 or later only.",
               "type": "number"
             },
             "cpuSeconds": {
@@ -839,6 +843,10 @@
               "description": "Milliseconds between the first reading and the last.",
               "type": "number"
             },
+            "p95Cores": {
+              "description": "The 95th percentile of the CPUs it kept busy between two readings, a second apart: what it needed but for its busiest twentieth of the time. Absent with fewer than two readings.",
+              "type": "number"
+            },
             "partial": {
               "description": "The sandbox went before the last reading (a timeout or cancel): the values stop at the last sample.",
               "const": true
@@ -854,6 +862,22 @@
             "sampleMs": {
               "description": "Milliseconds between readings while the attempt ran.",
               "type": "number"
+            },
+            "throttling": {
+              "description": "How often the container's CPU quota held it back over `durationMs`, from cgroup v2's `cpu.stat`: `periods` is `nr_periods` (quota periods it ran in), `throttledPeriods` `nr_throttled` (those it used up its quota in and waited out) and `throttledSeconds` `throttled_usec`. `container` scope only.",
+              "type": "object",
+              "properties": {
+                "periods": {
+                  "type": "number"
+                },
+                "throttledPeriods": {
+                  "type": "number"
+                },
+                "throttledSeconds": {
+                  "type": "number"
+                }
+              },
+              "required": ["periods", "throttledPeriods", "throttledSeconds"]
             }
           },
           "required": ["avgCores", "cpuSeconds", "durationMs", "sampleMs"]

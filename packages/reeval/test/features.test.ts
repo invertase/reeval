@@ -1141,6 +1141,22 @@ export const features: Feature[] = [
       assert.ok((r?.usage?.peakMemoryBytes ?? 0) > 0, JSON.stringify(r))
       assert.equal(typeof r?.usage?.diskReadBytes, 'number')
       assert.equal(typeof r?.usage?.diskWriteBytes, 'number')
+      assert.ok((r?.usage?.p95Cores ?? 99) <= (r?.usage?.peakCores ?? 0), JSON.stringify(r))
+      assert.equal(r?.usage?.throttling, undefined)
+    },
+  },
+  {
+    dir: 'sandbox/boat-resources-root',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected 'refused' to be 'killed'/,
+    record: ({ run }) => {
+      boatCleanedUp(run)
+      // The sampler ran while the check looked for it.
+      const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
+      assert.ok((r?.usage?.durationMs ?? 0) >= 3000, JSON.stringify(r))
+      assert.equal(r?.usage?.partial, undefined, JSON.stringify(r))
     },
   },
   {
@@ -1971,10 +1987,30 @@ export const features: Feature[] = [
       assert.ok((used?.peakCores ?? 0) >= (used?.avgCores ?? 1), JSON.stringify(used))
       assert.ok((used?.peakCores ?? 9) <= 1.05, JSON.stringify(used))
       assert.ok((used?.peakMemoryBytes ?? 0) >= 256 * 1024 ** 2, JSON.stringify(used))
+      assert.ok((used?.p95Cores ?? 9) <= (used?.peakCores ?? 0), JSON.stringify(used))
+      assert.ok((used?.cgroupPeakMemoryBytes ?? 0) >= 256 * 1024 ** 2, JSON.stringify(used))
+      // Two busy threads on one CPU's quota.
+      assert.ok((used?.throttling?.throttledPeriods ?? 0) > 0, JSON.stringify(used))
+      assert.ok(
+        (used?.throttling?.throttledSeconds ?? 0) > (idle?.throttling?.throttledSeconds ?? 9),
+        JSON.stringify([used, idle]),
+      )
       assert.equal(used?.partial, undefined)
       assert.equal(used?.diskReadBytes, undefined)
       assert.ok((idle?.cpuSeconds ?? 9) < 1, JSON.stringify(idle))
       assert.ok((idle?.peakMemoryBytes ?? 0) < 128 * 1024 ** 2, JSON.stringify(idle))
+    },
+  },
+  {
+    dir: 'sandbox/resources-hidden',
+    tiers: ['docker', 'podman'],
+    env: 'watched',
+    canary: /expected 'none' to be 'killed'/,
+    record: ({ run }) => {
+      // The sampler ran while the check looked for it.
+      const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
+      assert.ok((r?.usage?.durationMs ?? 0) >= 3000, JSON.stringify(r))
+      assert.equal(r?.usage?.partial, undefined, JSON.stringify(r))
     },
   },
   {

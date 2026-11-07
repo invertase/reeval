@@ -713,7 +713,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="resources" type="AttemptResources" optional>
-  The container or VM the attempt ran on and the CPU, memory and disk it used there, measured in the sandbox (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in attempts that didn't reach their sandbox.
+  The container or VM the attempt ran on and the CPU, memory and disk it used there, measured out of the agent's reach: a container's from a sibling container, a VM's as root (`AttemptResources`). Absent on the fake sandbox, which runs on the host, and in attempts that didn't reach their sandbox.
 </Property>
 
 <Property name="env" type="{vars: string[]; secrets: string[]; brokered: string[]}">
