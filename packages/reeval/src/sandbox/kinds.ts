@@ -76,6 +76,8 @@ export type SandboxHooks<D extends SandboxDescriptor> = {
   doctor?(sandboxes: readonly D[], ctx: DoctorContext): Promise<Check[]>
   /** The plan's warnings about `sandbox`. */
   planWarnings?(sandbox: D): string[]
+  /** How many attempts share one of `sandbox`'s machines, when more than one may. */
+  slotsPerMachine?(sandbox: D): number
   /**
    * When preflight learns how many of `sandbox`'s attempts can run at once (the hosts it kept),
    * reads that cap for the gate.
@@ -107,7 +109,7 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = Sandb
   privileges(sandbox: D): SandboxPrivileges
   create(sandbox: D, options: SandboxOptions): Promise<Sandbox>
   /** What its sandboxes may use at once, when they run somewhere other than the host. */
-  capacity?(sandbox: D): Promise<{ cpus: number; memoryBytes: number } | null>
+  capacity?(sandbox: D): Promise<{ cpus: number; memoryBytes: number; attempts?: number } | null>
   /**
    * Removes what the run left behind (a worker killed mid-attempt never destroys its sandboxes):
    * for `sandboxes`, or for every provider of the kind when unset.

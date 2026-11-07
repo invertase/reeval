@@ -268,6 +268,14 @@ const boatCleanedUp = (run: RunRecord) => {
   )
 }
 
+/** How many sandboxes the run created on the fake API. */
+const boatCreates = (run: RunRecord) => {
+  const prefix = runPrefix(boat(), run.runId)
+  return boatApi.requests.filter(
+    (q) => q.call === 'POST /sandboxes' && !q.refused && String(q.body?.name).startsWith(prefix),
+  ).length
+}
+
 /** Every file under `dir`, for a check that a value was written to none of them. */
 const filesUnder = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true, recursive: true })
@@ -1190,6 +1198,38 @@ export const features: Feature[] = [
     ...onFakeBoat,
     canary: /expected '\d+' to be '0'/,
     record: ({ run }) => boatCleanedUp(run),
+  },
+  {
+    dir: 'sandbox/boat-pool-reuse',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    prepare: async () => {
+      await buildSshVmImage()
+      boatApi.refuseStarts(1)
+    },
+    args: ['--concurrency', '1'],
+    canary: /expected 'home-clean' to be 'home-dirty'/,
+    record: ({ run }) => {
+      const prefix = runPrefix(boat(), run.runId)
+      assert.ok(
+        boatApi.requests.some((q) => q.refused && String(q.body?.name).startsWith(prefix)),
+        'the refused start was retried, not failed',
+      )
+      assert.equal(boatCreates(run), 1, 'both attempts ran on one machine')
+      boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/boat-shared-machine',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected 'reeval(-s1)?' to be 'user'/,
+    record: ({ run }) => {
+      assert.equal(boatCreates(run), 1, 'both attempts ran at once on one machine')
+      boatCleanedUp(run)
+    },
   },
   {
     dir: 'secrets/brokered-checks-see-placeholder',

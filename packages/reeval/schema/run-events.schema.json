@@ -1150,6 +1150,10 @@
           "description": "The host variable with the Boat API key, read on the host only.",
           "$ref": "#/$defs/BoatApiKey"
         },
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own with its own home, workspace and egress gateway. Default 1. A harness whose bridge takes a fixed port in the machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.",
+          "type": "number"
+        },
         "id": {
           "description": "Cell id; defaults to `boat`, or `boat:<type>` with a `type`.",
           "type": "string"
@@ -1158,12 +1162,16 @@
           "const": "boat"
         },
         "maxConcurrent": {
-          "description": "The most Boat sandboxes at once, across the run.",
+          "description": "The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`.",
           "type": "number"
         },
         "prefix": {
           "description": "The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own: lowercase letters, digits and dashes.",
           "type": "string"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted: its user's processes, cron jobs and files are removed and its home put back as it was after the harness installed, which isn't installed again. Default false, one attempt per slot.",
+          "type": "boolean"
         },
         "type": {
           "description": "The machine size. Default `small`.",

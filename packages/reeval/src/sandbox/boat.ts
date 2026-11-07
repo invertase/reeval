@@ -8,15 +8,18 @@ import { connect, isIPv6 } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { connectSsh, SANDBOX_USER } from '@reeval/sandbox-docker'
+import { connectSsh, type SshMachine, slotLayout } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import type { Check } from '../doctor.ts'
 import { egressLabel } from '../egress.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
+import { harnessBake } from './harness-install.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
+import { leaseMachine, type OpenPool } from './machine-service.ts'
+import type { PoolProvider } from './pool.ts'
 import { PrepareError } from './provider.ts'
 import { startSandbox } from './start.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
@@ -64,6 +67,7 @@ export type BoatClient = {
     sandboxes: BoatSandboxInfo[]
     pageInfo?: { nextCursor: string | null; hasMore: boolean }
   }>
+  update(p: { sandboxId: string; updateSandboxRequest: { ttlSeconds: number } }): Promise<unknown>
   deleteSandbox(
     p: { sandboxId: string; xAsciiConfirmDelete: string },
     init?: { signal?: AbortSignal },
@@ -390,36 +394,136 @@ const AGENT_NODE = '/opt/reeval/node'
  * Boat's `/usr/local/bin/node` links into the login user's nvm, under a home other users can't
  * enter: give the sandbox user its own copy of that Node, whose version the record names.
  */
-const NODE_FOR_AGENT = [
-  'real="$(readlink -f "$(command -v node)" 2>/dev/null || true)"',
-  `{ [ -z "$real" ] || sudo -n -u ${SANDBOX_USER} test -x "$real" || { rm -rf ${AGENT_NODE} && mkdir -p ${AGENT_NODE} && cp -a "$(dirname "$(dirname "$real")")/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; }; }`,
-].join(' && ')
+const nodeForAgent = (user: string) =>
+  [
+    'real="$(readlink -f "$(command -v node)" 2>/dev/null || true)"',
+    `{ [ -z "$real" ] || sudo -n -u ${user} test -x "$real" || [ -x ${AGENT_NODE}/bin/node ] || { rm -rf ${AGENT_NODE} && mkdir -p ${AGENT_NODE} && cp -a "$(dirname "$(dirname "$real")")/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; }; }`,
+  ].join(' && ')
 
-export async function createBoatSandbox(
+/** How a worker reaches a pooled Boat machine: its SSH route, user and keys, in the main process's files. */
+export type BoatMachine = {
+  id: string
+  name: string
+  type: string
+  host: string
+  port: number
+  via: SshRoute['via']
+  user: string
+  identityFile: string
+  knownHostsFile: string
+}
+
+/** Boat refused a start for now: 429, with when to try again if it said. */
+export class BoatRateLimited extends Error {
+  readonly retryAfterMs: number | null
+  constructor(message: string, retryAfterMs: number | null) {
+    super(message)
+    this.name = 'BoatRateLimited'
+    this.retryAfterMs = retryAfterMs
+  }
+}
+
+/**
+ * How long a 429 asks to wait: its `Retry-After` (seconds, or an HTTP date), else the time its
+ * message names (`… again at 14:05 UTC`), else null.
+ */
+export function retryAfterMs(
+  header: string | null,
+  message: string,
+  now = Date.now(),
+): number | null {
+  if (header) {
+    const seconds = Number(header)
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000)
+    const at = Date.parse(header)
+    if (Number.isFinite(at)) return Math.max(0, at - now)
+  }
+  const named = /\b(\d{1,2}):(\d{2})(?::(\d{2}))? ?UTC\b/.exec(message)
+  if (named) {
+    const day = new Date(now)
+    let at = Date.UTC(
+      day.getUTCFullYear(),
+      day.getUTCMonth(),
+      day.getUTCDate(),
+      Number(named[1]),
+      Number(named[2]),
+      Number(named[3] ?? 0),
+    )
+    if (at < now) at += 86_400_000
+    return at - now
+  }
+  return null
+}
+
+/** What `boat()` keeps after a machine's harness installed: its sandbox user's home, by harness. */
+const homeLabel = (options: SandboxOptions) => {
+  const bake = options.harness && harnessBake(options.harness)
+  return bake ? bake.label : 'none'
+}
+
+/**
+ * The account's pool: Boat's start caps (the paid ceilings when the account pays for starts past
+ * its plan), less the hour's starts already made, and the machines it would still run.
+ */
+export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) => {
+  const api = await boatClient(sandbox, o.root)
+  const limits = (await api
+    .limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
+    .catch(() => null)) as BoatLimits | null
+  const k = sandbox.attemptsPerMachine ?? 1
+  const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
+  const capped = sandbox.maxConcurrent ? Math.ceil(sandbox.maxConcurrent / k) : free
+  const caps = limits?.startLimitsWithWallet ?? limits?.startLimits
+  const hourUsed = limits?.starts?.hour?.used ?? 0
+  return {
+    provider: boatPoolProvider(sandbox, api, o.runId),
+    options: {
+      limits: {
+        machines: Math.min(free, capped),
+        startsPerMinute: caps?.perMinute ?? null,
+        startsPerHour: caps?.perHour === undefined ? null : Math.max(1, caps.perHour - hourUsed),
+      },
+      attemptsPerMachine: k,
+      reuse: sandbox.reuse ?? false,
+    },
+  }
+}
+
+/** The part of Boat's limits the pool reads. */
+type BoatLimits = {
+  activeSandboxes: number
+  maxActiveSandboxes: number
+  startLimits?: { perMinute?: number; perHour?: number } | null
+  startLimitsWithWallet?: { perMinute?: number; perHour?: number } | null
+  starts?: { hour?: { used?: number } | null } | null
+}
+
+/** Starting, keeping and removing `descriptor`'s machines for the run's pool, in the main process. */
+export function boatPoolProvider(
   descriptor: BoatSandboxDescriptor,
-  options: SandboxOptions,
-): Promise<NetworkSandbox> {
-  const api = await boatClient(descriptor).catch((error: unknown) => {
-    throw error instanceof PrepareError ? new InfraError(error.message) : error
-  })
-  const debug = attemptDebug()
+  api: BoatClient,
+  runId: string,
+): PoolProvider<BoatMachine> {
   const type = descriptor.type ?? 'small'
-  const name = `${runPrefix(descriptor, options.runId)}${randomBytes(3).toString('hex')}`
-  return startSandbox(options, {
+  const dirs = new Map<string, string>()
+  return {
     helper: 'boat()',
-    machine: { sandbox: 'boat', size: type },
-    install: true,
-    networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
-    async boot() {
-      const started = performance.now()
+    rateLimited: (error) =>
+      error instanceof BoatRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
+    async keepAlive(id, ttlSeconds) {
+      await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+    },
+    async remove(id) {
+      await deleteSandbox(api, id).catch(() => {})
+      const dir = dirs.get(id)
+      dirs.delete(id)
+      if (dir) await rm(dir, { recursive: true, force: true })
+    },
+    async start(signal, ttlSeconds) {
+      const name = `${runPrefix(descriptor, runId)}${randomBytes(3).toString('hex')}`
       const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
       let id: string | undefined
       let ready = false
-      const remove = async () => {
-        if (id && ready) await deleteSandbox(api, id).catch(() => {})
-        else if (id) await deleteUntilGone(api, id, { signal: options.signal }).catch(() => {})
-        await rm(dir, { recursive: true, force: true })
-      }
       try {
         const key = await newKey(dir)
         const made = await api
@@ -428,23 +532,31 @@ export async function createBoatSandbox(
             createSandboxRequest: {
               type,
               name,
-              ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
+              ttlSeconds,
               noEnv: true,
               snapshots: false,
               monitoring: false,
             },
           })
           .catch(async (error: unknown) => {
-            throw new InfraError(`Boat didn't create a sandbox: ${await boatError(error)}`)
+            const why = await boatError(error)
+            if (status(error) === 429) {
+              const response = (error as { response?: Response }).response
+              throw new BoatRateLimited(
+                `Boat is limiting starts: ${why}`,
+                retryAfterMs(response?.headers.get('retry-after') ?? null, why),
+              )
+            }
+            throw new InfraError(`Boat didn't create a sandbox: ${why}`)
           })
         id = made.sandbox.id
-        await untilReady(api, id, options.signal)
+        await untilReady(api, id, signal)
         ready = true
         const ssh = await api
           .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
           .catch(async (error: unknown) => {
             throw new InfraError(
-              `Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`,
+              `Boat didn't authorize the machine's SSH key: ${await boatError(error)}`,
             )
           })
         const routes = sshRoutes(ssh)
@@ -455,49 +567,130 @@ export async function createBoatSandbox(
         }
         const knownHostsFile = join(dir, 'known_hosts')
         await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
-        debug?.log(
-          'container',
-          `created ${id} (${name}, ${type}) in ${Math.round(performance.now() - started)}ms`,
-        )
-        const reachStarted = performance.now()
-        const reached = await firstReachable(routes, { signal: options.signal })
-        if (options.signal.aborted) throw options.signal.reason
+        const reached = await firstReachable(routes, { signal })
+        signal.throwIfAborted()
         if ('why' in reached) {
           throw new InfraError(
             `Boat sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
           )
         }
-        debug?.log(
-          'container',
-          `ssh to ${id} over ${routeLabel(reached.route)}, found in ${Math.round(performance.now() - reachStarted)}ms`,
-        )
-        const machine = await connectSsh({
-          target: {
+        dirs.set(id, dir)
+        return {
+          id,
+          info: {
+            id,
+            name,
+            type,
             host: reached.route.host,
             port: reached.route.port,
+            via: reached.route.via,
             user: ssh.sshUser ?? 'user',
             identityFile: key.file,
             knownHostsFile,
-            hostKeyAlias: id,
-            controlPath: join(dir, 'cm'),
-          },
-          description: `boat sandbox ${id} (${type})`,
-          env: options.env,
-          path: [`${AGENT_NODE}/bin`],
-          prepare: NODE_FOR_AGENT,
-          abortSignal: options.signal,
-        })
-        return {
-          root: machine.root,
-          session: machine.session,
-          async destroy() {
-            await machine.close()
-            await remove()
           },
         }
       } catch (error) {
-        await remove()
+        if (id && ready) await deleteSandbox(api, id).catch(() => {})
+        else if (id) await deleteUntilGone(api, id, { signal }).catch(() => {})
+        await rm(dir, { recursive: true, force: true })
         throw error
+      }
+    },
+  }
+}
+
+/** How many times an attempt asks for another machine when the one it got fails to set up. */
+const SETUP_TRIES = 3
+
+export async function createBoatSandbox(
+  descriptor: BoatSandboxDescriptor,
+  options: SandboxOptions,
+): Promise<NetworkSandbox> {
+  const debug = attemptDebug()
+  const shared = (descriptor.attemptsPerMachine ?? 1) > 1
+  const label = homeLabel(options)
+  return startSandbox(options, {
+    helper: 'boat()',
+    machine: { sandbox: 'boat', size: descriptor.type ?? 'small' },
+    install: true,
+    networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
+    async boot() {
+      for (let tries = 1; ; tries++) {
+        const lease = await leaseMachine(
+          {
+            sandbox: descriptor,
+            runId: options.runId,
+            root: process.cwd(),
+            ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
+          },
+          options.signal,
+        ).catch((error: unknown) => {
+          if (options.signal.aborted) throw options.signal.reason
+          throw error instanceof InfraError ? error : new InfraError((error as Error).message)
+        })
+        const info = lease.info as BoatMachine
+        debug?.log(
+          'container',
+          lease.start
+            ? `created ${info.id} (${info.name}, ${info.type}) in ${lease.start.ms}ms${lease.start.rateLimited ? `, after ${lease.start.rateLimited} rate-limited starts` : ''}; slot ${lease.slot}`
+            : `${lease.reused ? 'reused' : 'shared'} ${info.id} (${info.name}, ${info.type}); slot ${lease.slot}${lease.reused ? `, its attempt ${lease.reused + 1}` : ''}`,
+        )
+        const layout = slotLayout(lease.slot)
+        const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-ssh-'))
+        let machine: SshMachine
+        try {
+          machine = await connectSsh({
+            target: {
+              host: info.host,
+              port: info.port,
+              user: info.user,
+              identityFile: info.identityFile,
+              knownHostsFile: info.knownHostsFile,
+              hostKeyAlias: info.id,
+              controlPath: join(dir, 'cm'),
+            },
+            description: `boat sandbox ${info.id} (${info.type})`,
+            env: options.env,
+            path: [`${AGENT_NODE}/bin`],
+            prepare: nodeForAgent(layout.user),
+            abortSignal: options.signal,
+            ...(shared && { layout }),
+            ...(lease.reused && { reset: { home: label } }),
+          })
+        } catch (error) {
+          await rm(dir, { recursive: true, force: true })
+          await lease.release(true)
+          if (options.signal.aborted || !lease.reused || tries >= SETUP_TRIES) throw error
+          debug?.log(
+            'container',
+            `${info.id} slot ${lease.slot} failed to reset: ${(error as Error).message}`,
+          )
+          continue
+        }
+        debug?.log(
+          'container',
+          `ssh to ${info.id} over ${routeLabel({ host: info.host, port: info.port, via: info.via })}${machine.restored ? `, its home from the last attempt's install` : ''}`,
+        )
+        let healthy = true
+        return {
+          root: machine.root,
+          ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
+          installed: machine.restored,
+          ...((descriptor.reuse ?? false) && {
+            async onInstalled() {
+              await machine.snapshotHome(label)
+            },
+          }),
+          session: (o) => machine.session(o),
+          async destroy() {
+            await machine.close()
+            await rm(dir, { recursive: true, force: true })
+            await lease.release(!healthy)
+          },
+          failed() {
+            healthy = false
+          },
+        }
       }
     },
   })
@@ -544,13 +737,23 @@ export async function removeRunSandboxes(
   }
 }
 
-/** Machines Boat would still start for the account: its cap on sandboxes at once, less what's running. */
-export async function boatCapacity(sandbox: BoatSandboxDescriptor): Promise<number | null> {
+/**
+ * Machines Boat would still start for the account (its cap on sandboxes at once, less what's
+ * running), and the attempts the run's pool keeps going on them: a minute's starts' worth of
+ * machines at most, each running `attemptsPerMachine`.
+ */
+export async function boatCapacity(
+  sandbox: BoatSandboxDescriptor,
+): Promise<{ machines: number; attempts: number } | null> {
   const api = await boatClient(sandbox).catch(() => null)
-  const limits = await api
+  const limits = (await api
     ?.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
-    .catch(() => null)
-  return limits ? Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes) : null
+    .catch(() => null)) as BoatLimits | null | undefined
+  if (!limits) return null
+  const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
+  const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
+  const k = sandbox.attemptsPerMachine ?? 1
+  return { machines, attempts: Math.max(1, Math.min(machines, perMinute ?? machines) * k) }
 }
 
 /** The host's OpenSSH tools a Boat sandbox runs on, or the first one missing. */

@@ -586,7 +586,15 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="boat.maxConcurrent" type="number" optional>
-  The most VMs reeval runs at once across the run. A whole number of at least 1. The run's `concurrency` option still caps attempts overall.
+  The most attempts reeval runs on Boat at once across the run: its VMs times `attemptsPerMachine`. A whole number of at least 1. The run's `concurrency` option still caps attempts overall, and defaults to what Boat's account can run.
+</Property>
+
+<Property name="boat.reuse" type="boolean" optional>
+  Whether a VM whose attempt finished runs the next attempt, after reeval resets its sandbox user: its processes, crontab, files in `/tmp`, `/var/tmp` and `/dev/shm`, workspace and home. Defaults to `false`, a new VM per attempt.
+</Property>
+
+<Property name="boat.attemptsPerMachine" type="number" optional>
+  How many attempts run at once on one VM, each as its own user with its own workspace, home and egress gateway. A whole number from 1 to 8; defaults to 1. A harness whose bridge listens on a fixed port (Claude Code, OpenCode, Goose, fx and Grok Build) is refused above 1.
 </Property>
 
 <Property name="createBoat.apiKey" type="SecretRef" optional>
@@ -736,7 +744,7 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 `concurrency` is the most attempts that run in parallel.
 
 <Property name="concurrency" type="number" optional>
-  A whole number of at least 1, below `--concurrency` and `REEVAL_CONCURRENCY`. The default is at least 1 and otherwise the smallest of 8, the CPU count, and the whole gigabytes of memory.
+  A whole number of at least 1, below `--concurrency` and `REEVAL_CONCURRENCY`. The default is at least 1 and otherwise the smallest of 8, the CPU count, and the whole gigabytes of memory; on `boat()`, the attempts its VMs can run at once.
 </Property>
 
 ## `record`

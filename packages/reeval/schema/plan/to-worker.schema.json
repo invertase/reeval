@@ -79,6 +79,12 @@
           "required": ["from", "kind"],
           "additionalProperties": false
         },
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own with its own home, workspace and egress gateway. Default 1. A harness whose bridge takes a fixed port in the machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
         "id": {
           "description": "Cell id; defaults to `boat`, or `boat:<type>` with a `type`.",
           "type": "string",
@@ -89,7 +95,7 @@
           "const": "boat"
         },
         "maxConcurrent": {
-          "description": "The most Boat sandboxes at once, across the run.",
+          "description": "The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`.",
           "type": "number"
         },
         "prefix": {
@@ -97,6 +103,10 @@
           "type": "string",
           "maxLength": 32,
           "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted: its user's processes, cron jobs and files are removed and its home put back as it was after the harness installed, which isn't installed again. Default false, one attempt per slot.",
+          "type": "boolean"
         },
         "type": {
           "description": "The machine size. Default `small`.",
@@ -3335,6 +3345,22 @@
     },
     "ToWorker": {
       "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "body": {},
+            "error": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "t": {
+              "const": "reply"
+            }
+          },
+          "required": ["id", "t"]
+        },
         {
           "type": "object",
           "properties": {

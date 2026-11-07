@@ -1659,6 +1659,24 @@ export function refusedMcp(
   }
 }
 
+/**
+ * Why a harness's agent can't share a machine with `slots - 1` other attempts: its bridge takes
+ * the one port every session exposes. Undefined when it can.
+ */
+export function refusedSharedMachine(
+  harness: HarnessDescriptor,
+  slots: number,
+): string | undefined {
+  if (slots <= 1) return undefined
+  const kind = isAgentKind(harness.kind)
+    ? harness.kind
+    : harness.kind === 'fake' && harness.brokers
+      ? (harness.layout ?? 'cursor')
+      : undefined
+  if (!kind || !AGENTS[kind].bridgePort) return undefined
+  return `${kind}'s bridge listens on a fixed port in the machine, so it runs one attempt per machine: set attemptsPerMachine: 1 for it (got ${slots})`
+}
+
 /** The first host variable a plugin MCP server reads (`${VAR}`), as `VAR`; undefined for none. */
 function hostVariable(s: McpServer): string | undefined {
   const values = Object.entries(s.transport === 'stdio' ? s.env : s.headers)

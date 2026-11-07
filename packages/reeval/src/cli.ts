@@ -1807,6 +1807,8 @@ async function executeRun(
   let engineRun: EngineRun
   // A signal once the engine has returned finds no attempt left to cancel: the run isn't cut short.
   let cutShort = false
+  const { MACHINES, MachineService } = await import('./sandbox/machine-service.ts')
+  const machines = new MachineService()
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
@@ -1814,6 +1816,13 @@ async function executeRun(
       run,
       filters,
       onPlan,
+      services: {
+        call: (owner, service, body) =>
+          service === MACHINES
+            ? machines.call(owner, body)
+            : Promise.reject(new Error(`This run has no ${service} service`)),
+        released: (owner) => machines.released(owner),
+      },
       onRunStart: (files) => {
         writeCurrent(setup.config.root, runId)
         live = writeLiveProgress({
@@ -1927,6 +1936,7 @@ async function executeRun(
     throw error
   } finally {
     clearTimeout(budgetTimer)
+    await machines.close()
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
     const { removePreparedWorkspaces } = await import('./workspace.ts')

@@ -128,11 +128,11 @@ describe('machine pool', () => {
     const leases = await Promise.all([first, second])
     assert.equal(p.stats().rateLimited, 1)
     // The second start was asked for during the hold, so it waited it out too.
-    assert.ok(provider.tries.slice(1).every((t) => t >= 195), String(provider.tries))
-    assert.deepEqual(
-      leases.map((l) => l.start?.rateLimited ?? 0).sort(),
-      [0, 1],
+    assert.ok(
+      provider.tries.slice(1).every((t) => t >= 195),
+      String(provider.tries),
     )
+    assert.deepEqual(leases.map((l) => l.start?.rateLimited ?? 0).sort(), [0, 1])
     await p.close()
   })
 
@@ -152,7 +152,10 @@ describe('machine pool', () => {
   test('rate limits past maxRateWaitMs fail the attempt, naming the provider and its answer', async () => {
     const provider = fakeProvider(() => new RateLimitError(150))
     const p = pool(provider, { maxRateWaitMs: 200 })
-    await assert.rejects(p.acquire(), /fake\(\) kept refusing to start a machine .*429 rate_limited/)
+    await assert.rejects(
+      p.acquire(),
+      /fake\(\) kept refusing to start a machine .*429 rate_limited/,
+    )
     await p.close()
   })
 
@@ -286,7 +289,7 @@ describe('machine pool', () => {
     const p = pool(provider, { limits: { machines: 1 } })
     const a = await p.acquire()
     const stop = new AbortController()
-    const waiting = p.acquire(stop.signal)
+    const waiting = p.acquire({ signal: stop.signal })
     stop.abort(new Error('the attempt was canceled'))
     await assert.rejects(waiting, /the attempt was canceled/)
     a.release()
