@@ -1,5 +1,6 @@
-no profile · 4 evals · 12 cells · 12 attempts
+no profile · 5 evals · 13 cells · 13 attempts
 evals/boat.eval.ts › boat                        fake/small/boat                                 control  gated  ×1  egress "allow-all"
+evals/boat.eval.ts › boat pooled                 fake/pooled/boat                                control  gated  ×1  egress "allow-all"
 evals/boat.eval.ts › boat large                  fake/large/boat:large                           control  gated  ×1  egress "allow-all"
 evals/boat.eval.ts › boat on a team prefix       fake/team/boat                                  control  gated  ×1  egress "allow-all"
 evals/boat.eval.ts › boat on every real harness  cursor:composer-2.5/small/boat                  control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: antigravity:gemini-3.8-flash-medium none (the model id names its effort, medium) · effort: fx:gpt-4.1-mini none (fx sends no effort of its own, and reeval adds one only on vertex()) · efforts differ: not checked on cursor:composer-2.5; medium on claude-code:claude-sonnet-5, opencode:gemini-3.8-flash, goose:gemini-3.8-flash, pi:gemini-3.8-flash, codex:gpt-5.6-luna, grok-build:grok-4.6; none on antigravity:gemini-3.8-flash-medium, fx:gpt-4.1-mini · egress "allow-all"

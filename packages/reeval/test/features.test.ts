@@ -42,7 +42,7 @@ import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
-import { boat } from '../src/sandbox-boat.ts'
+import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
@@ -253,8 +253,8 @@ const onFakeBoat: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
   prepare: () => buildSshVmImage(),
 }
 /** No sandbox of the run is left on the fake API. */
-const boatCleanedUp = (run: RunRecord) => {
-  const prefix = runPrefix(boat(), run.runId)
+const boatCleanedUp = (run: RunRecord, sandbox = boat()) => {
+  const prefix = runPrefix(sandbox, run.runId)
   assert.deepEqual(
     boatApi.live().filter((name) => name.startsWith(prefix)),
     [],
@@ -266,6 +266,14 @@ const boatCleanedUp = (run: RunRecord) => {
     ),
     'the run created its sandboxes on the fake API',
   )
+}
+
+/** How many sandboxes the run created on the fake API. */
+const boatCreates = (run: RunRecord, sandbox = boat()) => {
+  const prefix = runPrefix(sandbox, run.runId)
+  return boatApi.requests.filter(
+    (q) => q.call === 'POST /sandboxes' && !q.refused && String(q.body?.name).startsWith(prefix),
+  ).length
 }
 
 /** Every file under `dir`, for a check that a value was written to none of them. */
@@ -1190,6 +1198,59 @@ export const features: Feature[] = [
     ...onFakeBoat,
     canary: /expected '\d+' to be '0'/,
     record: ({ run }) => boatCleanedUp(run),
+  },
+  {
+    dir: 'sandbox/boat-pool-reuse',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    prepare: async () => {
+      await buildSshVmImage()
+      boatApi.refuseStarts(1, { namePrefix: 'pool-' })
+    },
+    args: ['--concurrency', '1'],
+    canary: /expected 'home-clean' to be 'home-dirty'/,
+    record: ({ run, runDir }) => {
+      const sandbox = createBoat({ prefix: 'pool' })()
+      const prefix = runPrefix(sandbox, run.runId)
+      assert.ok(
+        boatApi.requests.some((q) => q.refused && String(q.body?.name).startsWith(prefix)),
+        'the refused start was retried, not failed',
+      )
+      assert.equal(boatCreates(run, sandbox), 1, 'both attempts ran on one machine')
+      // Whichever attempt ran second, the canary's or lands', found nothing the first left.
+      const saw = run.evals.map((e) => {
+        const path = e.attempts[0]?.files.transcript?.path ?? ''
+        const shell = readFileSync(join(runDir, path), 'utf8')
+          .trim()
+          .split('\n')
+          .map((l) => JSON.parse(l))
+          .find((t) => t.type === 'tool' && t.tool === 'shell')
+        return String(shell?.output).split('\n').slice(0, 3).join(' ')
+      })
+      assert.deepEqual(saw, ['home-clean tmp-clean proc-clean', 'home-clean tmp-clean proc-clean'])
+      boatCleanedUp(run, sandbox)
+    },
+  },
+  {
+    dir: 'sandbox/boat-shared-machine',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected 'reeval(-s1)?' to be 'user'/,
+    record: ({ run }) => {
+      assert.equal(boatCreates(run), 1, 'both attempts ran at once on one machine')
+      boatCleanedUp(run)
+      const resources = run.evals.flatMap((e) => e.attempts.map((a) => a.resources))
+      assert.ok(resources.length >= 2, JSON.stringify(resources))
+      for (const r of resources) {
+        assert.equal(r?.scope, 'machine', JSON.stringify(r))
+        assert.equal(r?.shared, true, JSON.stringify(r))
+        assert.equal(r?.machine.sandbox, 'boat')
+        assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
+        assert.equal(r?.usage, undefined, "another attempt's use would count in the VM's")
+      }
+    },
   },
   {
     dir: 'secrets/brokered-checks-see-placeholder',

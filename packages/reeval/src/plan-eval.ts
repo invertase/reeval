@@ -28,7 +28,7 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelBaseUrl, vercelBaseUrlProblem, vercelCredentialProblem } from './gateway/vercel.ts'
 import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
-import { refusedMcp, refusedPlugins } from './harness/agents.ts'
+import { refusedMcp, refusedPlugins, refusedSharedMachine } from './harness/agents.ts'
 import { withDefaultEffort } from './harness/default-effort.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
@@ -54,7 +54,7 @@ import {
   unbrokered,
   unbrokeredError,
 } from './options.ts'
-import { providerLimit } from './sandbox/kinds.ts'
+import { providerLimit, sandboxKind } from './sandbox/kinds.ts'
 import type { Limits } from './scheduler/core.ts'
 import { controlTraitKeys, filtersLabel, pickTraits, traitFilters } from './traits.ts'
 import type {
@@ -329,6 +329,9 @@ function planTests(
     const on = `${where} on ${harnessId(planned.harness)}`
     const mcp = refusedMcp(planned.harness, planned.environment.layers)
     if (mcp) throw new UsageError(`${on}: ${mcp}`)
+    const slots = sandboxKind(planned.sandbox).slotsPerMachine?.(planned.sandbox) ?? 1
+    const shared = refusedSharedMachine(planned.harness, slots)
+    if (shared) throw new UsageError(`${on}: ${shared}`)
     const plugins = planPlugins(planned, ctx.config.root)
     if (plugins.refusal) throw new UsageError(`${on}: ${plugins.refusal}`)
     for (const note of plugins.notes) if (!pluginNotes.includes(note)) pluginNotes.push(note)

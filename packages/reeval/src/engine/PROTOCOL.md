@@ -66,6 +66,12 @@ run.
   `grant`.
 - `cancel` (main → worker) aborts every attempt. A worker whose channel closes cancels too, lets
   its attempts clean up, and exits.
+- `call` (worker → main) asks one of the run's services in the main process for something, by
+  `service` name and a JSON `body`, numbered by `id`; `reply` answers it with a `body`, or an
+  `error` message. The `machines` service is the remote machine pool: an attempt leases a slot
+  on a machine with it and releases the slot when it's done, so the run's attempts in every file
+  share one pool. When a worker exits, the main process tells each service, which frees what
+  the worker still held.
 - `log` carries console output, by attempt `index` when an attempt wrote it; `debug` carries the
   `-v` trace; `meta` a record written after the attempt's result (after a timeout or cancel).
 
@@ -133,3 +139,4 @@ to a message shows up in review with its snapshot.
 | 3 | The main process closes the channel after `done`, and the worker exits when it closes |
 | 4 | `collected` carries `harnesses` |
 | 5 | `collected` carries `traits` |
+| 6 | `call` and `reply`, the worker's calls on the main process's services |

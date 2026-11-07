@@ -83,11 +83,11 @@ function lineDelta(before: string, after: string): { added: number; removed: num
   return { added, removed }
 }
 
-const WORKSPACE = `${SANDBOX_ROOT}/${WORKSPACE_DIR}/`
+/** The workspace's root, slot 0's (`/reeval/workspace/`) or a shared machine's slot's (`/reeval-s2/…`). */
+const WORKSPACE = new RegExp(`^${SANDBOX_ROOT}(?:-s\\d+)?/${WORKSPACE_DIR}/`)
 
 /** A path under the workspace, relative to it, as Cursor reports them. */
-const inWorkspace = (path: string) =>
-  path.startsWith(WORKSPACE) ? path.slice(WORKSPACE.length) : path
+const inWorkspace = (path: string) => path.replace(WORKSPACE, '')
 
 /** Cursor's and OpenCode's edit tools take `path`, Claude Code's `file_path`. */
 const editPath = (input: Record<string, unknown>) => str(input.path) || str(input.file_path)

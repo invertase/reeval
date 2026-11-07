@@ -57,6 +57,14 @@ export type BootedMachine = {
   }): DockerSession
   /** Where reeval's own privileged commands run, when not `SANDBOX_STATE`. */
   stateDir?: string
+  /** The gateway's port in the machine, when it isn't the machine's only one. */
+  proxyPort?: number
+  /** The harness's CLI is already in the machine, from an attempt before. */
+  installed?: boolean
+  /** Runs once the harness's CLI has installed. */
+  onInstalled?(): Promise<void>
+  /** Starting the sandbox failed after the boot: `destroy` follows, and the machine isn't reused. */
+  failed?(): void
   /** Removes the machine. */
   destroy(): Promise<void>
 }
@@ -66,6 +74,8 @@ export type StartOptions = {
   helper: string
   /** The machine as the record names it: its provider and size. */
   machine: { sandbox: string; size?: string }
+  /** Other attempts run on the machine at the same time, so its usage isn't recorded. */
+  shared?: boolean
   /** A macOS guest, which has no `/proc` to read usage from, only its sizes. */
   darwin?: boolean
   /** What the gateway needs on this machine, for the brokering refusal. */
@@ -103,7 +113,11 @@ export async function startSandbox(
   try {
     let noGateway: string | undefined
     try {
-      gateway = await startGateway(machine.root, glue.egress, signal)
+      gateway = await startGateway(
+        machine.root,
+        machine.proxyPort === undefined ? glue.egress : { ...glue.egress, port: machine.proxyPort },
+        signal,
+      )
     } catch (error) {
       if (signal.aborted) throw signal.reason
       noGateway = (error as Error).message
@@ -133,7 +147,8 @@ export async function startSandbox(
     // A machine with nothing baked in downloads pnpm and the CLI here, before the harness's start
     // is timed: there, a slow download would spend its readiness window and be tried again. The
     // eval's timer is paused while a sandbox starts, so the install has a deadline of its own.
-    const bake = start.install && options.harness && harnessBake(options.harness)
+    const bake =
+      start.install && !machine.installed && options.harness && harnessBake(options.harness)
     if (bake) {
       const installing = performance.now()
       const deadline = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
@@ -157,13 +172,19 @@ export async function startSandbox(
         'container',
         `installed ${bake.name} ${version} in ${Math.round(performance.now() - installing)}ms`,
       )
+      await machine.onInstalled?.()
     }
     return await sessionSandbox(network, glue, {
       ...(machine.stateDir && { stateDir: machine.stateDir }),
       oomKills: async () => null,
-      resources: { mode: start.darwin ? 'darwin' : 'machine', machine: start.machine },
+      resources: {
+        mode: start.darwin ? 'darwin' : 'machine',
+        machine: start.machine,
+        ...(start.shared && { shared: true }),
+      },
     })
   } catch (error) {
+    machine.failed?.()
     await destroy().catch(() => {})
     throw error
   }

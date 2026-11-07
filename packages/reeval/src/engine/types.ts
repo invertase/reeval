@@ -51,4 +51,14 @@ export type EngineOptions = {
    * attempt runs. Resolve false to stop there; throw to fail the run.
    */
   onPlan?: (collected: CollectedPlan) => Promise<boolean>
+  /** What answers workers' `call`s; a call with none fails. */
+  services?: Services
+}
+
+/** Services the run's workers share, in the main process: the machine pools. */
+export type Services = {
+  /** Answers one call from the worker `owner`; a rejection is the call's error. */
+  call(owner: string, service: string, body: unknown): Promise<unknown>
+  /** `owner`'s worker exited: anything it still held is released. */
+  released(owner: string): void
 }

@@ -137,6 +137,8 @@ export {
   SANDBOX_ROOT,
   SANDBOX_STATE,
   SANDBOX_USER,
+  type SlotLayout,
+  slotLayout,
   WORKSPACE_DIR,
 } from './image.ts'
 export { MCP_TIMER } from './mcp-timer.ts'
@@ -164,7 +166,7 @@ export {
   type Spawned,
 } from './session.ts'
 export { darwinShell } from './shells.ts'
-export { connectSsh, type SshMachine, type SshSessionOptions } from './ssh-session.ts'
+export { connectSsh, resetSlot, type SshMachine, type SshSessionOptions } from './ssh-session.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'
 export {
   type HostCommand,

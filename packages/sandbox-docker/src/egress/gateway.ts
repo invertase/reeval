@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
+import { BASE_PROXY_PORT } from '../image.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
 import type { NetworkPolicy } from './policy.ts'
@@ -10,16 +11,36 @@ import type { Substitution } from './substitution.ts'
 import { type ExecTransport, execRun, execSpawn } from './transport.ts'
 
 /** Where the forwarder listens inside the sandbox; every exec gets it as its HTTP(S) proxy. */
-export const PROXY_PORT = 43128
+export const PROXY_PORT = BASE_PROXY_PORT
 /** The gateway's CA certificate in the container. The private key never leaves the host. */
 export const CA_PATH = '/usr/local/share/ca-certificates/reeval-egress.crt'
 /** Debian's system bundle, which `update-ca-certificates` rebuilds with the gateway's CA in it. */
 export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
 const BUNDLED = 'reeval:ca-bundle'
+/** Held while a gateway installs its CA, so gateways sharing a machine don't rebuild the bundle at once. */
+const CA_LOCK = '/var/lock/reeval-egress-ca'
 
 const READY_TIMEOUT_MS = 15_000
 
-export type GatewayOptions = Omit<EgressProxyOptions, 'ca'>
+export type GatewayOptions = Omit<EgressProxyOptions, 'ca'> & {
+  /**
+   * The forwarder's port, for one of several gateways on a machine: its CA and pid files are its
+   * own, and starting it stops only an orphaned forwarder of the same port. Default
+   * {@link PROXY_PORT}, the machine's only gateway.
+   */
+  port?: number
+}
+
+/** Where a gateway on `port` keeps its CA certificate, and the glob of its pid files' tags. */
+const placement = (port: number | undefined) =>
+  port === undefined
+    ? { port: PROXY_PORT, caPath: CA_PATH, tags: '*', tag: '' }
+    : {
+        port,
+        caPath: `/usr/local/share/ca-certificates/reeval-egress-${port}.crt`,
+        tags: `p${port}-*`,
+        tag: `p${port}-`,
+      }
 
 export type Gateway = {
   /** Proxy and CA variables for every process in the sandbox. */
@@ -49,8 +70,8 @@ const PID_FILE = '/tmp/reeval-egress-forwarder'
 const CLOSE_TIMEOUT_MS = 10_000
 
 /** Runs the forwarder; under a transport that orphans it, as the shell that wrote its pid file. */
-function forwarderCommand(transport: ExecTransport, tag: string): string[] {
-  const node = ['node', '-e', forwarderScript(PROXY_PORT)]
+function forwarderCommand(transport: ExecTransport, tag: string, port: number): string[] {
+  const node = ['node', '-e', forwarderScript(port)]
   if (!transport.orphans) return node
   return ['sh', '-c', `echo $$ > ${PID_FILE}-${tag}.pid && exec "$@"`, 'sh', ...node]
 }
@@ -77,16 +98,19 @@ done; true`,
     () => {},
   )
 
-const installCa = (transport: ExecTransport, cert: string, signal?: AbortSignal) =>
-  execRun(
+const installCa = (
+  transport: ExecTransport,
+  cert: string,
+  o: { caPath: string; shared: boolean },
+  signal?: AbortSignal,
+) => {
+  const install = `umask 022 && mkdir -p "$(dirname ${o.caPath})" && cat > ${o.caPath} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${o.caPath})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`
+  return execRun(
     transport,
-    [
-      'sh',
-      '-c',
-      `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
-    ],
+    o.shared ? ['flock', CA_LOCK, 'sh', '-c', install] : ['sh', '-c', install],
     { input: cert, signal },
   )
+}
 
 /**
  * Starts the egress gateway for one sandbox: a forwarder inside it, tunneled over one process
@@ -97,18 +121,26 @@ export async function startGateway(
   options: GatewayOptions,
   signal?: AbortSignal,
 ): Promise<Gateway> {
+  const { port: asked, ...proxyOptions } = options
+  const place = placement(asked)
+  const { port } = place
   const ca = createCertificateAuthority()
-  const installed = await installCa(transport, ca.cert, signal)
+  const installed = await installCa(
+    transport,
+    ca.cert,
+    { caPath: place.caPath, shared: asked !== undefined },
+    signal,
+  )
   if (installed.exitCode !== 0) {
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
-  // One forwarder holds PROXY_PORT in the sandbox, so an orphaned one would refuse this one.
-  if (transport.orphans) await killForwarders(transport, '*', signal)
+  // One forwarder holds the port in the sandbox, so an orphaned one would refuse this one.
+  if (transport.orphans) await killForwarders(transport, place.tags, signal)
   signal?.throwIfAborted()
-  const tag = randomBytes(6).toString('hex')
-  const proxy = createEgressProxy({ ...options, ca })
-  const child = execSpawn(transport, forwarderCommand(transport, tag))
+  const tag = `${place.tag}${randomBytes(6).toString('hex')}`
+  const proxy = createEgressProxy({ ...proxyOptions, ca })
+  const child = execSpawn(transport, forwarderCommand(transport, tag, port))
   let stderr = ''
   child.stderr.on('data', (d) => {
     stderr += d
@@ -122,8 +154,8 @@ export async function startGateway(
     send: (frame) => {
       if (!closed) child.stdin.write(frame)
     },
-    onOpen(stream, port) {
-      if (port === PROXY_PORT) proxy.handle(stream)
+    onOpen(stream, opened) {
+      if (opened === port) proxy.handle(stream)
       else stream.destroy()
     },
     onReady: () => {
@@ -191,7 +223,7 @@ export async function startGateway(
     signal?.removeEventListener('abort', onAbort)
   }
 
-  const proxyUrl = `http://127.0.0.1:${PROXY_PORT}`
+  const proxyUrl = `http://127.0.0.1:${port}`
   // Node's fetch matches an IPv6 URL's host with its brackets, curl without.
   const noProxy = 'localhost,127.0.0.1,::1,[::1]'
   return {
@@ -202,7 +234,7 @@ export async function startGateway(
       http_proxy: proxyUrl,
       NO_PROXY: noProxy,
       no_proxy: noProxy,
-      NODE_EXTRA_CA_CERTS: CA_PATH,
+      NODE_EXTRA_CA_CERTS: place.caPath,
       // Node's fetch (22.21+, 24+) honors the proxy variables only with this.
       NODE_USE_ENV_PROXY: '1',
       // Clients with their own trust store (Python requests, curl builds, git) use the system

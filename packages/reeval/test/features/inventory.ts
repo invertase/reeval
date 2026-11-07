@@ -1051,6 +1051,22 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'boat.pool',
+    area: 'Sandbox',
+    name: "`boat({ reuse, attemptsPerMachine })`: the run's machine pool, shared by every eval file's attempts, starting machines within Boat's start limits (a 429 holds every start for its `Retry-After`, then retries), handing a finished attempt's machine to the next with its slot reset, running up to `attemptsPerMachine` attempts at once on a machine as their own users, and deleting every machine when the run ends; refused for a harness whose bridge listens on a fixed port",
+    fixtures: ['sandbox/boat-pool-reuse', 'sandbox/boat-shared-machine'],
+    plan: ['environments/boat'],
+    unit: [
+      'reeval/test/machine-pool.test.ts',
+      'reeval/test/machine-service.test.ts',
+      'reeval/test/boat.test.ts',
+      'reeval/test/engine-node.test.ts',
+      'reeval/test/engine-worker.test.ts',
+      'reeval/test/sandbox-provider-conformance.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'tart.images',
     area: 'Sandbox',
     name: "`tart()` images: `reeval run` refuses one `tart list` doesn't show (exit 2, its size and `tart pull`), `reeval image build` pulls them with progress once the disk has room and runs no Docker, each attempt records the digest it cloned (`vmImage`), and `:latest` or no tag warns",

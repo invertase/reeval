@@ -1,5 +1,5 @@
 // A fake Boat API for tests: the routes of `@boatdev/sdk` that reeval calls (create, get, sshkey,
-// list by name prefix, delete and limits) on 127.0.0.1, with Boat's own shapes and quirks: a
+// list by name prefix, update, delete and limits) on 127.0.0.1, with Boat's own shapes and quirks: a
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
 // call needs the key as a bearer token. Where its sandboxes run is up to `machines`: an SSH VM in a
 // container (`startSshVm`, ssh-vm.ts), or an address nothing listens on (`unreachableMachines`),
@@ -35,11 +35,26 @@ export type FakeBoat = {
   /** The sandboxes that exist now, by name. */
   live(): string[]
   /** Every call, as `METHOD /path`, with what reeval sent that a check reads. */
-  requests: Array<{ call: string; idempotencyKey?: string; body?: Record<string, unknown> }>
+  requests: Array<{
+    call: string
+    idempotencyKey?: string
+    body?: Record<string, unknown>
+    /** Answered 429 by {@link FakeBoat.refuseStarts}. */
+    refused?: true
+  }>
+  /**
+   * Answer the next `count` creates of a name starting `namePrefix` with 429 and
+   * `Retry-After: retryAfterSeconds`, as Boat does past a start limit.
+   */
+  refuseStarts(count: number, o?: { namePrefix?: string; retryAfterSeconds?: number }): void
   close(): Promise<void>
 }
 
-const json = (status: number, body: unknown) => ({ status, body })
+const json = (status: number, body: unknown, headers: Record<string, string> = {}) => ({
+  status,
+  body,
+  headers,
+})
 
 async function bodyOf(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
@@ -55,6 +70,7 @@ export async function fakeBoat(
   const key = options.key ?? `boat_test_${randomBytes(8).toString('hex')}`
   const sandboxes = new Map<string, FakeSandbox>()
   const requests: FakeBoat['requests'] = []
+  let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
   const view = (s: FakeSandbox) => ({
     id: s.id,
     name: s.name,
@@ -67,7 +83,7 @@ export async function fakeBoat(
     const url = new URL(req.url ?? '/', 'http://localhost')
     const path = url.pathname.replace(/^\/api\/v1/, '')
     const method = req.method ?? 'GET'
-    const body = method === 'POST' ? await bodyOf(req) : undefined
+    const body = method === 'POST' || method === 'PATCH' ? await bodyOf(req) : undefined
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined
     requests.push({
       call: `${method} ${path}`,
@@ -90,6 +106,20 @@ export async function fakeBoat(
       })
     }
     if (collection !== 'sandboxes') return json(404, { error: { code: 'not_found' } })
+    if (
+      !id &&
+      method === 'POST' &&
+      refusals.count > 0 &&
+      String(body?.name).startsWith(refusals.namePrefix)
+    ) {
+      refusals.count--
+      requests[requests.length - 1].refused = true
+      return json(
+        429,
+        { error: { code: 'rate_limited', message: 'too many sandbox starts this minute' } },
+        { 'retry-after': String(refusals.retryAfterSeconds) },
+      )
+    }
     if (!id && method === 'POST') {
       const request = body as { name: string; type?: string; ttlSeconds?: number }
       const existing = [...sandboxes.values()].find((s) => s.name === request.name)
@@ -137,6 +167,11 @@ export async function fakeBoat(
         hostKey: machine.hostKey,
       })
     }
+    if (!sub && method === 'PATCH') {
+      const ttlSeconds = (body as { ttlSeconds?: number }).ttlSeconds
+      if (ttlSeconds) sandbox.ttlSeconds = ttlSeconds
+      return json(200, { sandbox: view(sandbox) })
+    }
     if (!sub && method === 'DELETE') {
       if (req.headers['x-ascii-confirm-delete'] !== sandbox.id) {
         return json(400, {
@@ -154,8 +189,8 @@ export async function fakeBoat(
   }
   const server: Server = createServer((req, res) => {
     handle(req).then(
-      ({ status, body }) => {
-        res.writeHead(status, { 'content-type': 'application/json' })
+      ({ status, body, headers }) => {
+        res.writeHead(status, { 'content-type': 'application/json', ...headers })
         res.end(JSON.stringify(body))
       },
       (error: Error) => {
@@ -171,6 +206,13 @@ export async function fakeBoat(
     key,
     live: () => [...sandboxes.values()].map((s) => s.name),
     requests,
+    refuseStarts(count, o = {}) {
+      refusals = {
+        count,
+        namePrefix: o.namePrefix ?? '',
+        retryAfterSeconds: o.retryAfterSeconds ?? 1,
+      }
+    },
     async close() {
       await Promise.all(
         [...sandboxes.values()].map(async (s) => (await s.machine.catch(() => null))?.remove()),

@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto'
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { parseProbe, probeScript } from '../src/attempt/serve.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import { SANDBOX_KINDS } from '../src/sandbox/kinds.ts'
@@ -405,6 +406,108 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
         )
         assert.equal(outcome, 'rejected', 'the canceled attempt still got its sandbox')
         await until('the canceled machine is gone', () => backend.machines(id).length === 0, 60_000)
+      })
+    })
+
+    describe('pooled machines', { skip: !machine.pool && 'no pool' }, () => {
+      const pooled = (o: object) => ({ ...backend.descriptor(), ...o }) as never
+      test('reuse: the next attempt gets the machine with nothing the last one left', async () => {
+        const id = `${runId}-reuse`
+        const first = await kind.create(pooled({ reuse: true }), options(id))
+        await first.exec(
+          'touch ~/left /tmp/left-$(id -un); n=555111; (setsid sleep $n >/dev/null 2>&1 &)',
+        )
+        await first.destroy()
+        const second = await kind.create(pooled({ reuse: true }), options(id))
+        try {
+          assert.equal(backend.machines(id).length, 1, 'the second attempt reused the machine')
+          const left = await second.exec(
+            'ls ~/left /tmp/left-$(id -un) 2>/dev/null; pgrep -u "$(id -un)" -x -f "sleep 555111"; true',
+          )
+          assert.equal(left.stdout, '', 'the reset left nothing behind')
+        } finally {
+          await second.destroy()
+        }
+        await until('the idle machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test('attemptsPerMachine: slots share a machine as users that see none of each other', async () => {
+        const id = `${runId}-shared`
+        const [a, b] = await Promise.all([
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+        ])
+        try {
+          assert.equal(backend.machines(id).length, 1, 'both slots are on one machine')
+          const who = async (box: Sandbox) => (await box.exec('id -un; echo ~')).stdout
+          assert.notEqual(await who(a), await who(b))
+          assert.notEqual(a.workdir, b.workdir)
+          await a.writeFile('secret.txt', 'slot a')
+          await a.exec('echo slot a > ~/secret.txt')
+          const peek = await b.exec(
+            `cat ${a.workdir}/secret.txt 2>/dev/null; cat ${(await a.exec('echo ~')).stdout.trim()}/secret.txt 2>/dev/null; true`,
+          )
+          assert.equal(peek.stdout, '', "one slot reads neither the other's workspace nor its home")
+          if (kind.capabilities.listeners === 'proc') {
+            await a.exec(
+              `(setsid node -e "require('net').createServer().listen(45111, '127.0.0.1')" >/dev/null 2>&1 &)`,
+            )
+            await until(
+              'slot a listens',
+              async () => {
+                const own = parseProbe((await a.exec(probeScript())).stdout, { byUser: true })
+                return own.proc && own.listeners.some((l) => l.port === 45111)
+              },
+              10_000,
+            )
+            let seen = parseProbe('')
+            await until(
+              "slot b sees slot a's port",
+              async () => {
+                seen = parseProbe((await b.exec(probeScript())).stdout, { byUser: true })
+                return seen.proc && (seen.others ?? []).includes(45111)
+              },
+              10_000,
+            )
+            assert.ok(
+              seen.proc && !seen.listeners.some((l) => l.port === 45111),
+              "c.serve in one slot never takes the other's listener",
+            )
+          }
+        } finally {
+          await Promise.all([a.destroy(), b.destroy()])
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test("attemptsPerMachine: one slot's kill leaves the other's command of the same number running", async () => {
+        const id = `${runId}-shared-kill`
+        const [a, b] = await Promise.all([
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+          kind.create(pooled({ attemptsPerMachine: 2 }), options(id)),
+        ])
+        const [na, nb] = [token(), token()]
+        const stop = new AbortController()
+        const keep = new AbortController()
+        try {
+          // Each slot's first command, so both carry the same exec number.
+          const killed = a.exec(`sleep ${na}`, { signal: stop.signal })
+          const kept = b.exec(`sleep ${nb}`, { signal: keep.signal })
+          for (const p of [killed, kept]) p.catch(() => {})
+          await until(
+            'both started',
+            async () => (await sleeping(b, na)) === 1 && (await sleeping(b, nb)) === 1,
+          )
+          stop.abort(new Error('canceled'))
+          await until('the killed command died', async () => (await sleeping(b, na)) === 0)
+          assert.equal(await sleeping(b, nb), 1, "the other slot's command was killed too")
+          keep.abort()
+          await settled(kept)
+        } finally {
+          for (const k of [na, nb]) await reap(b, k)
+          await Promise.all([a.destroy(), b.destroy()])
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
       })
     })
 

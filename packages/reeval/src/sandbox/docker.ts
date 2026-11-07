@@ -26,7 +26,7 @@ import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
-import { type SampleMode, samplerHosts, startMeter } from './resources.ts'
+import { type SampleMode, samplerHosts, sharedMeter, startMeter } from './resources.ts'
 import { brokeringRefusal, logGateway } from './start.ts'
 import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
 
@@ -233,7 +233,12 @@ export async function sessionSandbox(
     stateDir?: string
     oomKills: Sandbox['oomKills']
     /** What its resources are read from: a container's cgroup, or the whole machine. */
-    resources: { mode: SampleMode; machine: { sandbox: string; size?: string } }
+    resources: {
+      mode: SampleMode
+      machine: { sandbox: string; size?: string }
+      /** Other attempts run on the machine at the same time. */
+      shared?: boolean
+    }
   },
 ): Promise<NetworkSandbox> {
   const workdir = posix.join(network.defaultWorkingDirectory, WORKSPACE_DIR)
@@ -270,7 +275,11 @@ export async function sessionSandbox(
       network.getPortEndpoint({ port, protocol }),
     oomKills: options.oomKills,
     meter: () =>
-      startMeter(samplerHosts(network), options.resources.mode, options.resources.machine),
+      (options.resources.shared ? sharedMeter : startMeter)(
+        samplerHosts(network),
+        options.resources.mode,
+        options.resources.machine,
+      ),
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})
     },
