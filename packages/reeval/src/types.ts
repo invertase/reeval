@@ -1382,7 +1382,8 @@ export type BoatSandboxDescriptor = {
   reuse?: boolean
   /**
    * The attempts one machine runs at once, each as a user of its own with its own home,
-   * workspace and egress gateway. Default 1. A harness whose bridge takes a fixed port in the
+   * workspace and egress gateway. The harness installs once per machine, and every other slot's
+   * home gets its own copy of the install. Default 1. A harness whose bridge takes a fixed port in the
    * machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.
    */
   attemptsPerMachine?: number

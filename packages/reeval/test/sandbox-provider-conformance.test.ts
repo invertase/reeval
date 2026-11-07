@@ -413,18 +413,22 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
       const pooled = (o: object) => ({ ...backend.descriptor(), ...o }) as never
       test('reuse: the next attempt gets the machine with nothing the last one left', async () => {
         const id = `${runId}-reuse`
-        const first = await kind.create(pooled({ reuse: true }), options(id))
+        const harness = { kind: 'fake', bootstrap: 'echo "$$-$RANDOM" > install' } as const
+        const first = await kind.create(pooled({ reuse: true }), options(id, { harness }))
+        const install = (await first.exec('cat ~/install')).stdout
         await first.exec(
           'touch ~/left /tmp/left-$(id -un); n=555111; (setsid sleep $n >/dev/null 2>&1 &)',
         )
         await first.destroy()
-        const second = await kind.create(pooled({ reuse: true }), options(id))
+        const second = await kind.create(pooled({ reuse: true }), options(id, { harness }))
         try {
           assert.equal(backend.machines(id).length, 1, 'the second attempt reused the machine')
           const left = await second.exec(
             'ls ~/left /tmp/left-$(id -un) 2>/dev/null; pgrep -u "$(id -un)" -x -f "sleep 555111"; true',
           )
           assert.equal(left.stdout, '', 'the reset left nothing behind')
+          const again = (await second.exec('cat ~/install')).stdout
+          assert.equal(again, install, "the home is the first attempt's install, not run again")
         } finally {
           await second.destroy()
         }
@@ -476,6 +480,45 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           }
         } finally {
           await Promise.all([a.destroy(), b.destroy()])
+        }
+        await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
+      })
+
+      test('attemptsPerMachine: one slot installs the harness, and each other slot gets its own copy', async () => {
+        const id = `${runId}-shared-install`
+        const harness = {
+          kind: 'fake',
+          bootstrap: `sleep 2; echo "$(id -un) $HOME" > installed; ln -s "$HOME/installed" link`,
+        } as const
+        const boxes = await Promise.all(
+          [0, 1, 2].map(() =>
+            kind.create(pooled({ attemptsPerMachine: 3 }), options(id, { harness })),
+          ),
+        )
+        try {
+          assert.equal(backend.machines(id).length, 1, 'the three slots are on one machine')
+          const saw = await Promise.all(
+            boxes.map(async (box) =>
+              (
+                await box.exec(
+                  'echo "$(id -un) $HOME"; cat ~/installed; stat -c %U ~/installed; readlink ~/link; stat -c %a ~',
+                )
+              ).stdout
+                .trim()
+                .split('\n'),
+            ),
+          )
+          const installers = new Set(saw.map(([, installed]) => installed?.split(' ')[0]))
+          assert.equal(installers.size, 1, `the bootstrap ran in one slot: ${[...installers]}`)
+          for (const [self = '', installed = '', owner, link, mode] of saw) {
+            const [user, home] = self.split(' ')
+            assert.equal(installed.split(' ')[1], home, 'the copy names its own home')
+            assert.equal(owner, user, 'the copy is its own user')
+            assert.equal(link, `${home}/installed`, 'a link into the home points at its own')
+            assert.equal(mode, '700', 'the home stays closed to the other slots')
+          }
+        } finally {
+          await Promise.all(boxes.map((box) => box.destroy()))
         }
         await until('the shared machine is gone', () => backend.machines(id).length === 0, 30_000)
       })

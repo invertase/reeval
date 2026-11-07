@@ -1207,6 +1207,20 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'sandbox/boat-shared-install',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    canary: /expected '\/home\/reeval(-s1)?' not to be '\/home\/reeval(-s1)?'/,
+    record: ({ run, project }) => {
+      assert.equal(boatCreates(run), 1, 'both attempts ran at once on one machine')
+      const said = (re: RegExp) => debugLogs(project).filter((log) => log.some((l) => re.test(l)))
+      assert.equal(said(/installed the fake agent's bootstrap/).length, 1, 'one slot installed')
+      assert.equal(said(/its home from the machine's install/).length, 1, 'the other copied it')
+      boatCleanedUp(run)
+    },
+  },
+  {
     dir: 'secrets/brokered-checks-see-placeholder',
     tiers: ['fake', 'docker'],
     env: 'keys',
