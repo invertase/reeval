@@ -702,7 +702,17 @@ export async function createBoatSandbox(
           ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
           ...(label && {
             async installedElsewhere() {
-              const { restored, waitedMs } = await machine.home()
+              const got = await machine.home().catch((error: unknown) => {
+                if (options.signal.aborted) throw error
+                return { restored: false, waitedMs: 0, copyFailed: (error as Error).message }
+              })
+              const { restored, waitedMs, copyFailed } = got
+              if (copyFailed) {
+                debug?.log(
+                  'container',
+                  `no home from the machine's install, so this slot installs its own: ${copyFailed}`,
+                )
+              }
               if (restored) {
                 debug?.log(
                   'container',
@@ -712,7 +722,9 @@ export async function createBoatSandbox(
               return restored
             },
             async onInstalled() {
-              await machine.snapshotHome()
+              await machine.snapshotHome().catch((error: unknown) => {
+                debug?.log('container', `the machine keeps no copy of the install: ${error}`)
+              })
             },
           }),
           session: (o) => machine.session(o),

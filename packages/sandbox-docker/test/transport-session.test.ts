@@ -225,8 +225,24 @@ describe('linuxShell', () => {
     const s = session(linux(run))
     await s.readTextFile({ path: 'f' })
     await s.writeTextFile({ path: 'f', content: 'x' })
-    assert.equal(calls[0]?.argv[2], "sudo -n -u reeval -- '/bin/cat' '--' '/w/f'")
-    assert.match(calls[1]?.argv[2] ?? '', /^sudo -n -u reeval -- '\/bin\/sh' '-c' /)
+    assert.equal(calls[0]?.argv[2], "sudo -n -H -u reeval -- '/bin/cat' '--' '/w/f'")
+    assert.match(calls[1]?.argv[2] ?? '', /^sudo -n -H -u reeval -- '\/bin\/sh' '-c' /)
+  })
+
+  test("a slot whose home is elsewhere sees it at the user's home, bound in a mount namespace of each command's own", async () => {
+    const { calls, run } = recorder()
+    const shell = linuxShell({
+      run,
+      remote: (command) => ['ssh', 'vm', command],
+      id: 'bx_1',
+      user: { PATH: '/usr/bin', HOME: '/home/reeval' },
+      layout: { user: 'reeval-s1', state: '/var/lib/reeval-s1', home: '/home/reeval-s1' },
+    })
+    const bound =
+      /^sudo -n -- unshare --mount --propagation private \/bin\/sh -c '.*mount --bind .*\/home\/reeval-s1.* .*\/home\/reeval.* && exec setpriv --reuid=reeval-s1 --regid=reeval-s1 --init-groups -- /
+    assert.match(shell.user({ command: 'ls', cwd: '/w', env: {}, exec: 1 }).argv[2] ?? '', bound)
+    await session(shell).readTextFile({ path: 'f' })
+    assert.match(calls[0]?.argv[2] ?? '', bound)
   })
 
   test('a read is null when ssh fails', async () => {

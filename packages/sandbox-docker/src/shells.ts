@@ -38,16 +38,30 @@ export function linuxShell(o: {
   user: Record<string, string>
   /** What a command that gave no signal of its own stops on. */
   signal?: AbortSignal | undefined
-  /** The user the agent's commands run as, and where reeval's own run, when not slot 0's. */
-  layout?: Pick<SlotLayout, 'user' | 'state'>
+  /**
+   * The user the agent's commands run as, and where reeval's own run, when not slot 0's. A home
+   * other than `user.HOME` is bound there for each of the user's commands, in a mount namespace of
+   * the command's own, so every slot's install names the same paths.
+   */
+  layout?: Pick<SlotLayout, 'user' | 'state' | 'home'>
 }): SessionShell {
   const sandboxUser = o.layout?.user ?? SANDBOX_USER
   const stateDir = o.layout?.state ?? SANDBOX_STATE
+  const seenHome = o.user.HOME
+  const bind = o.layout && seenHome && o.layout.home !== seenHome ? o.layout.home : undefined
   const marker = (exec: number) => `${o.id}-${exec}`
+  const asSandboxUser = (command: string) =>
+    bind
+      ? `sudo -n -- unshare --mount --propagation private /bin/sh -c ${q(
+          `mount --bind ${q(bind)} ${q(seenHome ?? '')} && exec setpriv --reuid=${sandboxUser} --regid=${sandboxUser} --init-groups -- ${command}`,
+        )}`
+      : `sudo -n -H -u ${sandboxUser} -- ${command}`
   const asUser = (cwd: string, command: string) =>
-    `sudo -n -H -u ${sandboxUser} -- env -i ${Object.entries(o.user)
-      .map(([k, v]) => q(`${k}=${v}`))
-      .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`
+    asSandboxUser(
+      `env -i ${Object.entries(o.user)
+        .map(([k, v]) => q(`${k}=${v}`))
+        .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`,
+    )
   const asRoot = (command: string, mark?: string) =>
     `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${stateDir} || exit 1; ${EXEC_UMASK}; ${command}`)}`
   /**
@@ -70,7 +84,7 @@ export function linuxShell(o: {
       input: '',
     }),
     kill: (exec) => ({ argv: o.remote(killExec(marker(exec))), input: '' }),
-    direct: (argv) => o.remote(`sudo -n -u ${sandboxUser} -- ${argv.map(q).join(' ')}`),
+    direct: (argv) => o.remote(asSandboxUser(argv.map(q).join(' '))),
   }
 }
 
