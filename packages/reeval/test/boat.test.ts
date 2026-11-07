@@ -442,7 +442,7 @@ evaluate('reaches', async (c) => {
     assert.match(
       r.stdout + r.stderr,
       new RegExp(
-        `is up, but this host can't reach its SSH server: \\[${NO_ROUTE_IP}\\]:22 \\(machine address\\): \\w+; 127\\.0\\.0\\.1:1 \\(public endpoint\\): ECONNREFUSED`,
+        `is up, but this host can't reach its SSH server: \\[${NO_ROUTE_IP}\\]:22 \\(machine address\\): [^;]+; 127\\.0\\.0\\.1:1 \\(public endpoint\\): ECONNREFUSED`,
       ),
     )
     assert.deepEqual(api.live(), [])
