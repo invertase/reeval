@@ -76,7 +76,8 @@ const snapshotFile = (layout: SlotLayout, label: string) =>
 
 /**
  * Root commands that put a used slot back as a new one finds it: none of its user's processes,
- * cron jobs or temporary files, an empty working root and state directory, and its home from the
+ * cron or at jobs, lingering, temporary files, locks or message queues, an empty working root and
+ * state directory, and its home from the
  * snapshot (printing {@link RESTORED}) or the skeleton.
  */
 export function resetSlot(layout: SlotLayout, home?: string): string {
@@ -87,7 +88,9 @@ export function resetSlot(layout: SlotLayout, home?: string): string {
     `if id -u ${u} >/dev/null 2>&1; then`,
     `for i in 1 2 3 4 5 6 7 8 9 10; do pkill -KILL -u ${u} || break; sleep 0.2; done`,
     `crontab -r -u ${u} 2>/dev/null`,
-    `find /tmp /var/tmp /dev/shm -xdev -mindepth 1 -user ${u} -delete 2>/dev/null`,
+    `atq 2>/dev/null | awk -v u=${u} '$NF == u { print $1 }' | xargs -r atrm 2>/dev/null`,
+    `loginctl disable-linger ${u} 2>/dev/null`,
+    `find /tmp /var/tmp /dev/shm /run/lock /dev/mqueue -xdev -mindepth 1 -user ${u} -delete 2>/dev/null`,
     `rm -rf ${q(layout.root)} ${q(layout.state)} ${q(layout.home)}`,
     ...(snapshot
       ? [
