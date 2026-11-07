@@ -430,14 +430,22 @@ BoatSandboxDescriptorApiKey = TypedDict(
 class BoatSandboxDescriptor(TypedDict):
     # The host variable with the Boat API key, read on the host only.
     apiKey: BoatSandboxDescriptorApiKey
+    # The attempts one machine runs at once, each as a user of its own with its own home,
+    # workspace and egress gateway. Default 1. A harness whose bridge takes a fixed port in the
+    # machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.
+    attemptsPerMachine: NotRequired[int]
     # Cell id; defaults to `boat`, or `boat:<type>` with a `type`.
     id: NotRequired[str]
     kind: Literal["boat"]
-    # The most Boat sandboxes at once, across the run.
+    # The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`.
     maxConcurrent: NotRequired[float]
     # The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own:
     # lowercase letters, digits and dashes.
     prefix: str
+    # A machine takes another of the run's attempts once one ends, instead of being deleted: its
+    # user's processes, cron jobs and files are removed and its home put back as it was after
+    # the harness installed, which isn't installed again. Default false, one attempt per slot.
+    reuse: NotRequired[bool]
     # The machine size. Default `small`.
     type: NotRequired[Literal["small", "default", "large", "xlarge"]]
 
@@ -2163,6 +2171,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
     {
         "apiKey",
         "atMs",
+        "attemptsPerMachine",
         "bestOf",
         "cacheRead",
         "cacheWrite",
