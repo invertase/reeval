@@ -752,7 +752,8 @@ export async function boatCapacity(
   const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
   const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
   const k = sandbox.attemptsPerMachine ?? 1
-  return { machines, attempts: Math.max(1, Math.min(machines, perMinute ?? machines) * k) }
+  const attempts = Math.min(machines, perMinute ?? machines) * k
+  return { machines, attempts: Math.max(1, Math.min(attempts, sandbox.maxConcurrent ?? attempts)) }
 }
 
 /** The host's OpenSSH tools a Boat sandbox runs on, or the first one missing. */
