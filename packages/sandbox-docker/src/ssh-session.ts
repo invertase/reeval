@@ -6,7 +6,8 @@ import {
   sshArgv,
   sshTransport,
 } from './egress/transport.ts'
-import { SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_STATE, SANDBOX_USER } from './image.ts'
+import { posix } from 'node:path'
+import { SANDBOX_USER, type SlotLayout, slotLayout } from './image.ts'
 import { shellQuote as q, run as runHost } from './process.ts'
 import type { DockerSession } from './session.ts'
 import { EXEC_UMASK, linuxShell, SYSTEM_PATH } from './shells.ts'
@@ -29,12 +30,26 @@ export type SshSessionOptions = {
   /** How long the VM may take to accept SSH after it reports ready. */
   connectTimeoutMs?: number
   abortSignal?: AbortSignal
+  /**
+   * Where the attempt lives, on a machine that runs several at once; setting up runs under a lock
+   * the others share. Default slot 0's, the machine's only attempt.
+   */
+  layout?: SlotLayout
+  /**
+   * The slot ran an attempt before: kill what its user left running, delete its files and put its
+   * home back, as {@link SshMachine.snapshotHome} took it under `home`, or empty without one.
+   */
+  reset?: { home?: string }
 }
 
 /** A Linux VM reeval set up over SSH, before its session: what the egress gateway starts on. */
 export type SshMachine = {
   /** Runs the gateway's forwarder as root, over the session's connection. */
   root: ExecTransport
+  /** The sandbox user's home came back from a snapshot, with what was installed in it. */
+  restored: boolean
+  /** Keeps the sandbox user's home as it is now under `label`, for a later reset. */
+  snapshotHome(label: string): Promise<void>
   /**
    * The VM as a harness session, on `gateway` when it started (or with why it didn't). Its
    * `destroy` is the caller's: close the gateway, then {@link SshMachine.close}, then the VM.
@@ -50,6 +65,38 @@ export type SshMachine = {
 
 /** ssh's own exit status: it couldn't connect, or the connection dropped. */
 const SSH_FAILED = 255
+/** Held while one slot sets up, so slots sharing a machine don't install the same things at once. */
+const SETUP_LOCK = '/var/lock/reeval-setup'
+/** Each slot's home snapshots, root's: `<user>/home-<label>.tar`. */
+const HOME_SNAPSHOTS = '/var/lib/reeval-pool'
+const RESTORED = 'reeval:home-restored'
+
+const snapshotFile = (layout: SlotLayout, label: string) =>
+  `${HOME_SNAPSHOTS}/${layout.user}/home-${label.replace(/[^A-Za-z0-9._-]/g, '_')}.tar`
+
+/**
+ * Root commands that put a used slot back as a new one finds it: none of its user's processes,
+ * cron jobs or temporary files, an empty working root and state directory, and its home from the
+ * snapshot (printing {@link RESTORED}) or the skeleton.
+ */
+export function resetSlot(layout: SlotLayout, home?: string): string {
+  const u = q(layout.user)
+  const snapshot = home ? q(snapshotFile(layout, home)) : ''
+  const parent = q(posix.dirname(layout.home))
+  return [
+    `if id -u ${u} >/dev/null 2>&1; then`,
+    `for i in 1 2 3 4 5 6 7 8 9 10; do pkill -KILL -u ${u} || break; sleep 0.2; done`,
+    `crontab -r -u ${u} 2>/dev/null`,
+    `find /tmp /var/tmp /dev/shm -xdev -mindepth 1 -user ${u} -delete 2>/dev/null`,
+    `rm -rf ${q(layout.root)} ${q(layout.state)} ${q(layout.home)}`,
+    ...(snapshot
+      ? [
+          `if [ -f ${snapshot} ]; then tar -C ${parent} -xpf ${snapshot} && echo ${RESTORED}; else cp -a /etc/skel ${q(layout.home)} && chown -R ${u}:${u} ${q(layout.home)}; fi`,
+        ]
+      : [`cp -a /etc/skel ${q(layout.home)} && chown -R ${u}:${u} ${q(layout.home)}`]),
+    'fi; true',
+  ].join('\n')
+}
 
 /**
  * Sets up a Linux VM reached over SSH for a harness session: the login user has passwordless
@@ -59,18 +106,19 @@ const SSH_FAILED = 255
  */
 export async function connectSsh(options: SshSessionOptions): Promise<SshMachine> {
   const { target, abortSignal: signal } = options
-  const userPath = [`${SANDBOX_HOME}/.local/bin`, ...(options.path ?? []), SYSTEM_PATH].join(':')
+  const layout = options.layout ?? slotLayout(0)
+  const userPath = [`${layout.home}/.local/bin`, ...(options.path ?? []), SYSTEM_PATH].join(':')
   const baseEnv = {
     PATH: userPath,
-    HOME: SANDBOX_HOME,
-    USER: SANDBOX_USER,
-    LOGNAME: SANDBOX_USER,
+    HOME: layout.home,
+    USER: layout.user,
+    LOGNAME: layout.user,
     SHELL: '/bin/bash',
     LANG: 'C.UTF-8',
   }
   const userEnv = {
     NPM_CONFIG_UPDATE_NOTIFIER: 'false',
-    NPM_CONFIG_PREFIX: `${SANDBOX_HOME}/.local`,
+    NPM_CONFIG_PREFIX: `${layout.home}/.local`,
     ...options.env,
   }
 
@@ -97,17 +145,24 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     throw signal?.aborted ? signal.reason : error
   }
 
+  const { user } = layout
   const setup = [
     EXEC_UMASK,
-    `id -u ${SANDBOX_USER} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --user-group ${SANDBOX_USER}`,
-    `mkdir -p ${SANDBOX_ROOT} && chown ${SANDBOX_USER}:${SANDBOX_USER} ${SANDBOX_ROOT}`,
-    `mkdir -p ${SANDBOX_STATE} && chown 0:0 ${SANDBOX_STATE} && chmod 700 ${SANDBOX_STATE}`,
+    ...(options.reset ? [`{ ${resetSlot(layout, options.reset.home)}\n}`] : []),
+    `{ id -u ${user} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --user-group ${user}; }`,
+    `mkdir -p ${layout.root} && chown ${user}:${user} ${layout.root}`,
+    `mkdir -p ${layout.state} && chown 0:0 ${layout.state} && chmod 700 ${layout.state}`,
     ...(options.prepare ? [options.prepare] : []),
   ].join(' && ')
+  const asRoot = options.layout
+    ? `sudo -n -- flock ${SETUP_LOCK} /bin/sh -c ${q(setup)}`
+    : `sudo -n -- /bin/sh -c ${q(setup)}`
+  let restored = false
   // A VM that just reported ready may not take SSH connections for a few seconds more.
   const deadline = Date.now() + (options.connectTimeoutMs ?? 60_000)
   for (let wait = 500; ; wait = Math.min(wait * 2, 5_000)) {
-    const made = await ssh(`sudo -n -- /bin/sh -c ${q(setup)}`).catch(fail)
+    const made = await ssh(asRoot).catch(fail)
+    restored = made.stdout.toString('utf8').includes(RESTORED)
     if (made.exitCode === 0) break
     if (made.exitCode !== SSH_FAILED || Date.now() + wait > deadline) {
       const why = made.stderr.trim() || made.stdout.toString('utf8').trim()
@@ -123,15 +178,27 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     id: target.hostKeyAlias,
     user: baseEnv,
     signal,
+    layout,
   })
   return {
     root: sshTransport(target),
+    restored,
+    async snapshotHome(label) {
+      const file = snapshotFile(layout, label)
+      const command = `${EXEC_UMASK} && mkdir -p ${q(posix.dirname(file))} && chmod 700 ${q(HOME_SNAPSHOTS)} && tar -C ${q(posix.dirname(layout.home))} -cf ${q(`${file}.tmp`)} ${q(posix.basename(layout.home))} && mv ${q(`${file}.tmp`)} ${q(file)}`
+      const r = await ssh(`sudo -n -- /bin/sh -c ${q(command)}`)
+      if (r.exitCode !== 0) {
+        throw new Error(
+          `Couldn't keep ${layout.user}'s home in ${options.description}: ${r.stderr.trim().slice(-500)}`,
+        )
+      }
+    },
     close: closeConnection,
     session: ({ gateway, noGateway, destroy }) =>
       transportSession({
         id: target.hostKeyAlias,
         description: options.description,
-        defaultWorkingDirectory: SANDBOX_ROOT,
+        defaultWorkingDirectory: layout.root,
         shell,
         env: (env) => ({ ...userEnv, ...gateway?.env, ...env }),
         gateway,
