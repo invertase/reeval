@@ -11,13 +11,15 @@ import {
   type BoatClient,
   checkBoat,
   deleteUntilGone,
+  firstReachable,
   removeRunSandboxes,
   runPrefix,
+  sshRoutes,
 } from '../src/sandbox/boat.ts'
 import { type HarnessBake, installHarness } from '../src/sandbox/harness-install.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { project, readRun, runCli, tempDir } from './helpers.ts'
-import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
+import { type FakeBoat, fakeBoat, NO_ROUTE_IP, unreachableMachines } from './support/boat.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
 let api: FakeBoat
@@ -117,6 +119,106 @@ describe("a run's cleanup", () => {
       for (const socket of held) socket.destroy()
       silent.close()
     }
+  })
+})
+
+describe("reaching a sandbox's SSH server", () => {
+  const servers: Array<{ close(): void }> = []
+  after(() => {
+    for (const s of servers) s.close()
+  })
+  /** A port on 127.0.0.1 that greets as sshd does, or accepts and says nothing. */
+  async function listen(greets: boolean, port = 0): Promise<number> {
+    const sockets: Socket[] = []
+    const server = createServer((socket) => {
+      sockets.push(socket)
+      socket.on('error', () => {})
+      if (greets) socket.write('SSH-2.0-OpenSSH_9.6\r\n')
+    })
+    await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve))
+    servers.push({
+      close: () => {
+        for (const s of sockets) s.destroy()
+        server.close()
+      },
+    })
+    return (server.address() as AddressInfo).port
+  }
+  /** A port nothing listens on, for now. */
+  async function closedPort(): Promise<number> {
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    return port
+  }
+  const at = (port: number, via: 'machine address' | 'public endpoint') =>
+    ({ host: '127.0.0.1', port, via }) as const
+  const quick = { probeMs: 500, reachMs: 0 }
+
+  test("tries the machine's own address on port 22 first, then the public endpoint", () => {
+    assert.deepEqual(sshRoutes({ machineIp: '2001:db8::24', sshEndpoint: '198.51.100.7:19036' }), [
+      { host: '2001:db8::24', port: 22, via: 'machine address' },
+      { host: '198.51.100.7', port: 19036, via: 'public endpoint' },
+    ])
+    assert.deepEqual(sshRoutes({ sshEndpoint: '[2001:db8::7]:2222', machineIp: null }), [
+      { host: '2001:db8::7', port: 2222, via: 'public endpoint' },
+    ])
+    assert.deepEqual(sshRoutes({ machineIp: '198.51.100.9' }), [
+      { host: '198.51.100.9', port: 22, via: 'machine address' },
+    ])
+    assert.deepEqual(sshRoutes({ sshEndpoint: 'no-port' }), [])
+  })
+
+  test('takes the machine address when both greet', async () => {
+    const routes = [
+      at(await listen(true), 'machine address'),
+      at(await listen(true), 'public endpoint'),
+    ]
+    assert.deepEqual(await firstReachable(routes, quick), { route: routes[0] })
+  })
+
+  test('falls back to the endpoint when the machine address has no route from here', async () => {
+    const endpoint = at(await listen(true), 'public endpoint')
+    const started = Date.now()
+    const reached = await firstReachable(
+      [{ host: NO_ROUTE_IP, port: 22, via: 'machine address' }, endpoint],
+      quick,
+    )
+    assert.deepEqual(reached, { route: endpoint })
+    assert.ok(Date.now() - started < 2_000, 'one short probe, at most')
+  })
+
+  test('falls back when the machine address takes the connection and never greets', async () => {
+    const endpoint = at(await listen(true), 'public endpoint')
+    const reached = await firstReachable(
+      [at(await listen(false), 'machine address'), endpoint],
+      quick,
+    )
+    assert.deepEqual(reached, { route: endpoint })
+  })
+
+  test('waits for a VM whose sshd greets late on the only route this host reaches', async () => {
+    const port = await closedPort()
+    setTimeout(() => void listen(true, port), 1_200)
+    const preferred = at(port, 'machine address')
+    const reached = await firstReachable([preferred, at(await listen(false), 'public endpoint')], {
+      probeMs: 300,
+      reachMs: 10_000,
+    })
+    assert.deepEqual(reached, { route: preferred })
+  })
+
+  test('names every route and why it failed once the VM has had its time', async () => {
+    const refused = await closedPort()
+    const silent = await listen(false)
+    const reached = await firstReachable(
+      [at(refused, 'machine address'), at(silent, 'public endpoint')],
+      quick,
+    )
+    assert.deepEqual(reached, {
+      why: `127.0.0.1:${refused} (machine address): ECONNREFUSED; 127.0.0.1:${silent} (public endpoint): no SSH greeting in 0.5s`,
+    })
   })
 })
 
@@ -337,6 +439,12 @@ evaluate('reaches', async (c) => {
     assert.equal(r.code, 3, r.stdout + r.stderr)
     const { evals } = readRun(p.dir)
     assert.equal(evals[0]?.error?.kind, 'infra', JSON.stringify(evals[0]?.error))
+    assert.match(
+      r.stdout + r.stderr,
+      new RegExp(
+        `is up, but this host can't reach its SSH server: \\[${NO_ROUTE_IP}\\]:22 \\(machine address\\): \\w+; 127\\.0\\.0\\.1:1 \\(public endpoint\\): ECONNREFUSED`,
+      ),
+    )
     assert.deepEqual(api.live(), [])
     const created = api.requests.find((q) => q.call === 'POST /sandboxes')
     assert.ok(created, api.requests.map((q) => q.call).join('\n'))
