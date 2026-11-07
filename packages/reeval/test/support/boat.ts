@@ -3,7 +3,9 @@
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
 // call needs the key as a bearer token. Where its sandboxes run is up to `machines`: a container
 // laid out like a Boat VM (`dockerMachines`), or an address nothing listens on
-// (`unreachableMachines`), for the lifecycle without Docker. `boatSandboxesLeft` asks the real
+// (`unreachableMachines`), for the lifecycle without Docker. Each answers with a `machineIp` in
+// IPv6's documentation range ({@link NO_ROUTE_IP}), which no host reaches, so every attempt falls
+// back to the endpoint as one on a host without IPv6 does. `boatSandboxesLeft` asks the real
 // one, for the contract's rows in boat().
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -17,6 +19,8 @@ import { boat } from '../../src/sandbox-boat.ts'
 export type FakeMachine = {
   /** `host:port`, as Boat's `sshEndpoint`. */
   endpoint: string
+  /** Boat's `machineIp`, whose port 22 reeval tries first. */
+  machineIp: string
   user: string
   /** `<type> <base64>`, as Boat's `hostKey`. */
   hostKey: string
@@ -142,6 +146,7 @@ export async function fakeBoat(
       await machine.authorize(String((body as { key?: string }).key))
       return json(200, {
         sshUser: machine.user,
+        machineIp: machine.machineIp,
         sshEndpoint: machine.endpoint,
         hostKey: machine.hostKey,
       })
@@ -190,9 +195,13 @@ export async function fakeBoat(
   }
 }
 
+/** An address in IPv6's documentation range (RFC 3849): routed nowhere. */
+export const NO_ROUTE_IP = '2001:db8::1'
+
 /** Machines whose SSH endpoint nothing listens on: Boat's side of the lifecycle, without a VM. */
 export const unreachableMachines: Machines = async () => ({
   endpoint: '127.0.0.1:1',
+  machineIp: NO_ROUTE_IP,
   user: 'user',
   hostKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOkVnNvZ8lfy5H2wK0ljJm0cz6dJ7l4LwW8kQx2bH9oD',
   authorize: async () => {},
@@ -305,6 +314,7 @@ export const dockerMachines: Machines = async (name) => {
       .join(' ')
     return {
       endpoint: `127.0.0.1:${port}`,
+      machineIp: NO_ROUTE_IP,
       user: 'user',
       hostKey,
       authorize: async (publicKey) => {

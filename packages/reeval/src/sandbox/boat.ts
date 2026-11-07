@@ -4,6 +4,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { connect, isIPv6 } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -31,6 +32,16 @@ type BoatSandboxInfo = {
   error?: string | null
 }
 
+/** What Boat answers when it authorizes a key: the user, the host key and where sshd answers. */
+type BoatSshReply = {
+  sshUser?: string
+  /** The VM's own address, whose sshd is on port 22: IPv6 on Boat's hosts. */
+  machineIp?: string | null
+  /** `<public IPv4>:<port>`, forwarded to the VM's sshd, when it has no public IPv4 of its own. */
+  sshEndpoint?: string | null
+  hostKey?: string
+}
+
 /** The SDK calls reeval makes. */
 export type BoatClient = {
   create(p: {
@@ -45,11 +56,7 @@ export type BoatClient = {
     }
   }): Promise<{ sandbox: BoatSandboxInfo }>
   get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
-  sshKey(p: { sandboxId: string; sshKeyRequest: { key: string } }): Promise<{
-    sshUser?: string
-    sshEndpoint?: string | null
-    hostKey?: string
-  }>
+  sshKey(p: { sandboxId: string; sshKeyRequest: { key: string } }): Promise<BoatSshReply>
   sandboxes(
     p: { namePrefix?: string; limit?: number; cursor?: string },
     init?: { signal?: AbortSignal },
@@ -297,6 +304,86 @@ async function newKey(dir: string): Promise<{ file: string; pub: string }> {
   return { file, pub: (await readFile(`${file}.pub`, 'utf8')).trim() }
 }
 
+/** A host and port the attempt's SSH connection can take to the VM's sshd. */
+type SshRoute = { host: string; port: number; via: 'machine address' | 'public endpoint' }
+
+/**
+ * Where a sandbox's sshd answers, best first: the VM's own address on port 22, then the public
+ * endpoint Boat forwards. The address is IPv6, which a host without IPv6 can't reach; the endpoint
+ * is NAT'd, which another VM on the same Boat host can't reach.
+ */
+export function sshRoutes(reply: BoatSshReply): SshRoute[] {
+  const routes: SshRoute[] = []
+  if (reply.machineIp) routes.push({ host: reply.machineIp, port: 22, via: 'machine address' })
+  const endpoint = /^(.+):(\d+)$/.exec(reply.sshEndpoint ?? '')
+  if (endpoint) {
+    const host = (endpoint[1] as string).replace(/^\[(.*)\]$/, '$1')
+    routes.push({ host, port: Number(endpoint[2]), via: 'public endpoint' })
+  }
+  return routes
+}
+
+const routeLabel = (r: SshRoute) =>
+  `${isIPv6(r.host) ? `[${r.host}]` : r.host}:${r.port} (${r.via})`
+
+/** How long one try at a route may take to greet, so an address that drops packets costs little. */
+const PROBE_MS = 3_000
+/** How long the VM may take, after it reports ready, to greet on any route. */
+const REACH_MS = 60_000
+
+/** Whether `route` greets with an SSH banner within `timeoutMs`, or why not. */
+function probe(route: SshRoute, timeoutMs: number, signal: AbortSignal): Promise<true | string> {
+  return new Promise((resolve) => {
+    const socket = connect({ host: route.host, port: route.port })
+    let banner = ''
+    const done = (result: true | string) => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', stop)
+      socket.destroy()
+      resolve(result)
+    }
+    const stop = () => done('not needed')
+    signal.addEventListener('abort', stop, { once: true })
+    const timer = setTimeout(() => done(`no SSH greeting in ${timeoutMs / 1000}s`), timeoutMs)
+    socket.on('data', (d: Buffer) => {
+      banner += d.toString('latin1')
+      if (banner.startsWith('SSH-')) done(true)
+      else if (banner.length >= 4) done('answered, but not as SSH')
+    })
+    socket.on('error', (e: NodeJS.ErrnoException) => done(e.code ?? e.message))
+    socket.on('close', () => done('closed before an SSH greeting'))
+  })
+}
+
+/**
+ * The first of `routes`, in order, whose sshd greets: each round tries them all at once and takes
+ * the best that answered, so a route this host can't use costs at most one probe. A VM that just
+ * reported ready may not greet yet, so rounds repeat until `reachMs` has passed.
+ */
+export async function firstReachable(
+  routes: readonly SshRoute[],
+  o: { probeMs?: number; reachMs?: number; signal?: AbortSignal } = {},
+): Promise<{ route: SshRoute } | { why: string }> {
+  const probeMs = o.probeMs ?? PROBE_MS
+  const deadline = Date.now() + (o.reachMs ?? REACH_MS)
+  for (;;) {
+    const round = new AbortController()
+    const tries = routes.map((r) => probe(r, probeMs, round.signal))
+    const results: Array<true | string> = []
+    for (const [i, attempt] of tries.entries()) {
+      results.push(await attempt)
+      if (results[i] === true) {
+        round.abort()
+        return { route: routes[i] as SshRoute }
+      }
+    }
+    if (Date.now() >= deadline || o.signal?.aborted) {
+      return { why: routes.map((r, i) => `${routeLabel(r)}: ${results[i]}`).join('; ') }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+}
+
 /** Where the agent's Node lives when the VM's own is somewhere the sandbox user can't read. */
 const AGENT_NODE = '/opt/reeval/node'
 /**
@@ -360,10 +447,10 @@ export async function createBoatSandbox(
               `Boat didn't authorize the attempt's SSH key: ${await boatError(error)}`,
             )
           })
-        const endpoint = /^(.+):(\d+)$/.exec(ssh.sshEndpoint ?? '')
-        if (!endpoint || !ssh.hostKey) {
+        const routes = sshRoutes(ssh)
+        if (!routes.length || !ssh.hostKey) {
           throw new InfraError(
-            `Boat gave sandbox ${id} no SSH endpoint and host key to connect with`,
+            `Boat gave sandbox ${id} no SSH address and host key to connect with`,
           )
         }
         const knownHostsFile = join(dir, 'known_hosts')
@@ -372,10 +459,22 @@ export async function createBoatSandbox(
           'container',
           `created ${id} (${name}, ${type}) in ${Math.round(performance.now() - started)}ms`,
         )
+        const reachStarted = performance.now()
+        const reached = await firstReachable(routes, { signal: options.signal })
+        if (options.signal.aborted) throw options.signal.reason
+        if ('why' in reached) {
+          throw new InfraError(
+            `Boat sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
+          )
+        }
+        debug?.log(
+          'container',
+          `ssh to ${id} over ${routeLabel(reached.route)}, found in ${Math.round(performance.now() - reachStarted)}ms`,
+        )
         const machine = await connectSsh({
           target: {
-            host: endpoint[1] as string,
-            port: Number(endpoint[2]),
+            host: reached.route.host,
+            port: reached.route.port,
             user: ssh.sshUser ?? 'user',
             identityFile: key.file,
             knownHostsFile,
