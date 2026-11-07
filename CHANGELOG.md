@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.22.0](https://github.com/invertase/reeval/compare/v0.21.0...v0.22.0) (2026-11-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sandbox:** key image tags on content and push or pull them through a registry ([#860](https://github.com/invertase/reeval/issues/860))
+
+### Features
+
+* **cli:** bundle a run and run it from the bundle ([#856](https://github.com/invertase/reeval/issues/856)) ([ba52e47](https://github.com/invertase/reeval/commit/ba52e4721849f9f2d56472cc894afeb30bc11905))
+* **cli:** draw reeval run's interactive list in reeval attach on a terminal ([#862](https://github.com/invertase/reeval/issues/862)) ([e1555ea](https://github.com/invertase/reeval/commit/e1555eae43085feed7d567175d94483c21f0cf21))
+* **cli:** stream run events to ndjson and follow them with reeval attach ([#857](https://github.com/invertase/reeval/issues/857)) ([2ddee33](https://github.com/invertase/reeval/commit/2ddee330f80cc2b4a27fdc95129cbf07af475206))
+* **cli:** write heartbeats to reeval run's event stream and show a stalled or lost run in reeval attach ([#863](https://github.com/invertase/reeval/issues/863)) ([e02d954](https://github.com/invertase/reeval/commit/e02d95468cf99d4818586ed9c41bef758f1c2307))
+* **gateway:** send vercel() calls to AI_GATEWAY_BASE_URL ([#859](https://github.com/invertase/reeval/issues/859)) ([5a5d3d0](https://github.com/invertase/reeval/commit/5a5d3d04fa7d96f1a7200cb04637f7d07ec60645))
+* **plan:** list the host files a run reads in --dry-run --json ([#855](https://github.com/invertase/reeval/issues/855)) ([8ac7efe](https://github.com/invertase/reeval/commit/8ac7efee97436b0df7c085fcfddddcee76fdb020))
+* **sandbox:** key image tags on content and push or pull them through a registry ([#860](https://github.com/invertase/reeval/issues/860)) ([5cc52bc](https://github.com/invertase/reeval/commit/5cc52bcd9403d7225888b4c8fa620a4f05b69bf3))
+* **sandbox:** record each attempt's machine and resource use ([#878](https://github.com/invertase/reeval/issues/878)) ([46a1491](https://github.com/invertase/reeval/commit/46a1491ddb16a7b3ee0e59df595b4cccd23859d7))
+* **sandbox:** run every harness in boat() ([#861](https://github.com/invertase/reeval/issues/861)) ([1939454](https://github.com/invertase/reeval/commit/19394540b648e8fdb70a9cd9e16a504a49704320))
+
+
+### Bug Fixes
+
+* **cli:** treat a Ctrl-C that races attach's cancel as the same press ([#865](https://github.com/invertase/reeval/issues/865)) ([cf3b07e](https://github.com/invertase/reeval/commit/cf3b07e3a5b000573bcb59d028597d869615bbd6))
+* **expect:** keep a caught expect.require's chai failure instead of a TypeError ([#871](https://github.com/invertase/reeval/issues/871)) ([305e92f](https://github.com/invertase/reeval/commit/305e92f04287a7d6ef4308aa0b37f6e26457eada))
+* **redaction:** mask secrets in expect failures before the message cuts them ([#867](https://github.com/invertase/reeval/issues/867)) ([7ad30d2](https://github.com/invertase/reeval/commit/7ad30d284ab9d4aaca11bdc86ef228385524f2f3))
+* **ui:** mask what the interactive list draws, and progress at its source ([#866](https://github.com/invertase/reeval/issues/866)) ([820aceb](https://github.com/invertase/reeval/commit/820aceb669cd5d9bd593bcd8c43a1ced334007a4))
+
 ## [0.21.0](https://github.com/invertase/reeval/compare/v0.20.0...v0.21.0) (2026-11-06)
 
 
