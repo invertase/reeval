@@ -1,12 +1,19 @@
 // `reeval attach`: follows a run's event stream, from its file or over its server's WebSocket, and
 // draws it with the renderer `reeval run` would, from the stream's first line, so attaching mid-run
-// replays what already happened and then follows. It exits with the run's own exit code. On a terminal that's the interactive list, whose
-// q and Ctrl-C detach this viewer and leave the run alone; x pressed twice cancels the run, which
-// only a run on this host whose live.json vouches for its pid can be reached for. A run that writes
-// heartbeats (its header says so) and then goes quiet is shown as stalled, and after longer as
-// lost, which ends attach.
+// replays what already happened and then follows. It exits with the run's own exit code. On a
+// terminal that's the interactive list, whose q and Ctrl-C detach this viewer and leave the run
+// alone; x pressed twice cancels the run, which only a run on this host whose live.json vouches for
+// its pid can be reached for. A run that writes heartbeats (its header says so) and then goes quiet
+// is shown as stalled, and after longer as lost, which ends attach.
 import { hostname } from 'node:os'
-import { EventStreamError, type FollowOptions, followEvents, LOST_MS, STALL_MS } from './events.ts'
+import {
+  displayUrl,
+  EventStreamError,
+  type FollowOptions,
+  followEvents,
+  LOST_MS,
+  STALL_MS,
+} from './events.ts'
 import { CANCEL_SIGNAL, cancelable, processAlive } from './resume.ts'
 import { formatDuration } from './text.ts'
 import type { OutputStream, Renderer } from './ui/events.ts'
@@ -83,7 +90,10 @@ export async function attach(options: AttachOptions): Promise<number> {
     renderer?.onEvent({ type: 'notice', at: Date.now(), level, text })
   const lines = followEvents(options.source, {
     onDrop: () =>
-      notice('warn', `Lost the connection to run ${header?.runId ?? ''}; reconnecting.`),
+      notice(
+        'warn',
+        `Lost the connection to ${header ? `run ${header.runId}` : 'the run'}; reconnecting.`,
+      ),
     ...options.follow,
     signal,
   })[Symbol.asyncIterator]()
@@ -180,7 +190,9 @@ export async function attach(options: AttachOptions): Promise<number> {
     return 0
   }
   if (code === undefined) {
-    throw new EventStreamError(`the event stream at ${options.source} ended before the run did`)
+    throw new EventStreamError(
+      `the event stream at ${displayUrl(options.source)} ended before the run did`,
+    )
   }
   return code
 }

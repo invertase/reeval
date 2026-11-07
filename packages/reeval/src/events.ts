@@ -239,6 +239,8 @@ export type FollowOptions = {
   connect?: (url: string) => WebSocket
   /** How long a dropped socket is reconnected to before following gives up; `LOST_MS` unless given. */
   reconnectMs?: number
+  /** How long a socket stays up before its next drop starts the backoff over; 5s unless given. */
+  stableMs?: number
   /** Called once each time the socket drops and following starts reconnecting. */
   onDrop?: () => void
 }
@@ -330,12 +332,27 @@ export const SOCKET_CLOSE = {
 
 /** The waits between reconnects to a run's event socket, the last repeated. */
 const RECONNECT_MS = [250, 500, 1_000, 2_000, 5_000]
+/** How long a connection stays up, with no frame, before the backoff starts over. */
+const STABLE_MS = 5_000
+
+/** A URL as messages show it: no user name or password, and every query value masked. */
+export function displayUrl(source: string): string {
+  let url: URL
+  try {
+    url = new URL(stripCredentials(source))
+  } catch {
+    return stripCredentials(source)
+  }
+  for (const key of new Set(url.searchParams.keys())) url.searchParams.set(key, '***')
+  return url.href.replace(/%2A/g, '*')
+}
 
 type SocketEvent =
+  | { type: 'open' }
   | { type: 'frame'; data: string }
   | { type: 'close'; code: number; reason: string; opened: boolean }
 
-/** One connection's frames, then its close. */
+/** One connection's open, its frames, then its close. */
 async function* socketEvents(
   url: string,
   connect: (url: string) => WebSocket,
@@ -353,6 +370,7 @@ async function* socketEvents(
   const decoder = new TextDecoder()
   socket.onopen = () => {
     opened = true
+    push({ type: 'open' })
   }
   socket.onmessage = (e: MessageEvent) =>
     push({
@@ -411,22 +429,34 @@ function refusal(source: string, code: number, reason: string): string | null {
 /**
  * A run's stream over a WebSocket: each frame is `{"seq":n,"line":<RunEventLine>}`, `seq` counting
  * the run's lines from 1. It connects with `?after=<seq>`, so the server replays the lines after it
- * and then sends each new one; a dropped connection reconnects after the last line it got, until the
- * run's exit line. Reconnecting for longer than `LOST_MS` gives up.
+ * and then sends each new one, and closes with 1000 once the run is over: a resume's lines can
+ * follow an exit line. A dropped connection reconnects after the last line it got; going `LOST_MS`
+ * without one that opens gives up.
  */
 async function* followSocket(source: string, options: FollowOptions): AsyncGenerator<RunEventLine> {
   const connect = options.connect ?? ((url: string) => new WebSocket(url))
   const giveUpMs = options.reconnectMs ?? LOST_MS
+  const stableMs = options.stableMs ?? STABLE_MS
+  const shown = displayUrl(source)
   const base = socketUrl(source)
   let seq = 0
   let everOpened = false
   let failures = 0
+  /** Since when no connection has opened, while reconnecting. */
   let droppedAt: number | undefined
+  /** Reconnecting, which ends with a frame or a connection that stays up. */
+  let reconnecting = false
   for (;;) {
     const url = new URL(base)
     url.searchParams.set('after', String(seq))
     let closed: Extract<SocketEvent, { type: 'close' }> | undefined
+    let openedAt: number | undefined
     for await (const event of socketEvents(url.href, connect, options.signal)) {
+      if (event.type === 'open') {
+        openedAt = Date.now()
+        droppedAt = undefined
+        continue
+      }
       if (event.type === 'close') {
         closed = event
         break
@@ -436,7 +466,7 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
         frame = JSON.parse(event.data)
       } catch {
         throw new EventStreamError(
-          `${source} sent a frame that isn't JSON: ${event.data.slice(0, 80)}`,
+          `${shown} sent a frame that isn't JSON: ${event.data.slice(0, 80)}`,
         )
       }
       if (
@@ -447,36 +477,36 @@ async function* followSocket(source: string, options: FollowOptions): AsyncGener
         !frame.line
       ) {
         throw new EventStreamError(
-          `${source} sent a frame without a seq and line: ${event.data.slice(0, 80)}`,
+          `${shown} sent a frame without a seq and line: ${event.data.slice(0, 80)}`,
         )
       }
+      failures = 0
+      reconnecting = false
       if (frame.seq <= seq) continue
       if (frame.seq !== seq + 1) {
-        throw new EventStreamError(`${source} skipped from line ${seq} to line ${frame.seq}`)
+        throw new EventStreamError(`${shown} skipped from line ${seq} to line ${frame.seq}`)
       }
       seq = frame.seq
-      failures = 0
-      droppedAt = undefined
-      const line = readableEventLine(frame.line as RunEventLine)
-      yield line
-      if (line.type === 'exit') return
+      yield readableEventLine(frame.line as RunEventLine)
     }
     if (options.signal?.aborted || !closed) return
-    if (closed.opened) {
-      everOpened = true
-      failures = 0
-    }
+    if (closed.opened) everOpened = true
     if (closed.code === SOCKET_CLOSE.done) return
-    const refused = refusal(source, closed.code, closed.reason)
+    const refused = refusal(shown, closed.code, closed.reason)
     if (refused) throw new EventStreamError(refused)
-    if (!everOpened) throw new EventStreamError(`can't connect to the event stream at ${source}`)
-    if (droppedAt === undefined) {
-      droppedAt = Date.now()
+    if (!everOpened) throw new EventStreamError(`can't connect to the event stream at ${shown}`)
+    if (openedAt !== undefined && Date.now() - openedAt >= stableMs) {
+      failures = 0
+      reconnecting = false
+    }
+    if (!reconnecting) {
+      reconnecting = true
       options.onDrop?.()
     }
+    droppedAt ??= Date.now()
     if (Date.now() - droppedAt > giveUpMs) {
       throw new EventStreamError(
-        `lost the connection to ${source} and couldn't reconnect for ${formatDuration(giveUpMs)}`,
+        `lost the connection to ${shown} and couldn't reconnect for ${formatDuration(giveUpMs)}`,
       )
     }
     const wait = RECONNECT_MS[Math.min(failures, RECONNECT_MS.length - 1)] ?? 0

@@ -64,14 +64,22 @@ const waitFor = async (ready: () => boolean) => {
 
 /**
  * A relay shaped like the platform's run session: it takes `--events-url` POSTs, numbers each line
- * from 1, and serves them on a WebSocket as `{"seq":n,"line":…}` frames after `?after=`.
+ * from 1, and serves them on a WebSocket as `{"seq":n,"line":…}` frames after `?after=`. It closes
+ * with 1000 once the run is over: after its exit line, or with `resumes`, at `finish()`.
  */
-async function relay(options: { maxViewers?: number; closeAtOnce?: boolean } = {}) {
+async function relay(
+  options: { maxViewers?: number; closeAtOnce?: boolean; resumes?: boolean } = {},
+) {
   const lines: string[] = []
   const afters: string[] = []
   const viewers = new Set<WebSocket>()
   let sent = 0
   let refusing = false
+  let over = false
+  const finish = () => {
+    over = true
+    for (const v of viewers) v.close(1000)
+  }
   const send = (ws: WebSocket, seq: number) => {
     ws.send(`{"seq":${seq},"line":${lines[seq - 1]}}`)
     sent++
@@ -84,6 +92,7 @@ async function relay(options: { maxViewers?: number; closeAtOnce?: boolean } = {
       for (const l of body.split('\n').filter(Boolean)) {
         lines.push(l)
         for (const v of viewers) send(v, lines.length)
+        if (!options.resumes && l.includes('"type":"exit"')) finish()
       }
       res.end()
     })
@@ -100,7 +109,7 @@ async function relay(options: { maxViewers?: number; closeAtOnce?: boolean } = {
       viewers.add(ws)
       ws.on('close', () => viewers.delete(ws))
       for (let seq = Number(after) + 1; seq <= lines.length; seq++) send(ws, seq)
-      if (options.closeAtOnce) ws.close(1000)
+      if (options.closeAtOnce || over) ws.close(1000)
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -114,6 +123,7 @@ async function relay(options: { maxViewers?: number; closeAtOnce?: boolean } = {
     drop: () => {
       for (const v of viewers) v.terminate()
     },
+    finish,
     refuseUpgrades: () => {
       refusing = true
     },
@@ -560,6 +570,7 @@ describe('attach', () => {
       ws.send(frame(2, notice('once')))
       if (connections === 1) return void ws.terminate()
       ws.send(frame(3, { type: 'exit', at: 3, code: 7 }))
+      ws.close(1000)
     })
     try {
       const out = capture()
@@ -579,6 +590,72 @@ describe('attach', () => {
       )
     } finally {
       await gap.close()
+    }
+  })
+
+  test("a resume's lines follow the run's exit line over the socket: it draws both and exits with the last code", async () => {
+    const r = await relay({ resumes: true })
+    try {
+      const first = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      first.write(notice('first part'))
+      await first.end(130)
+      await waitFor(() => r.lines.length >= 3)
+      const out = capture()
+      let code: number | undefined
+      const done = attach({ source: r.url, out, output: () => output }).then((c) => (code = c))
+      await waitFor(() => r.sent >= 3)
+      await sleep(50)
+      assert.equal(code, undefined, 'an exit line alone does not end attach')
+      const resume = openEventStream({ url: r.url, header: header(), warn: assert.fail })
+      resume.write(notice('second part'))
+      await resume.end(0)
+      await waitFor(() => r.sent >= 6)
+      r.finish()
+      await done
+      assert.equal(code, 0)
+      assert.match(out.text, /first part[\s\S]*second part/)
+    } finally {
+      await r.close()
+    }
+  })
+
+  test('a server that accepts then drops is retried with a growing wait, and each open restarts the give-up window', async () => {
+    const opens: number[] = []
+    const s = await scripted((ws) => {
+      opens.push(Date.now())
+      if (opens.length <= 3) return void ws.terminate()
+      ws.send(frame(1, headerLine))
+      ws.send(frame(2, { type: 'exit', at: 2, code: 7 }))
+      ws.close(1000)
+    })
+    try {
+      const out = capture()
+      const code = await attach({
+        source: s.source,
+        out,
+        output: () => output,
+        // Shorter than the waits added up, so only a reset on each open keeps it reconnecting.
+        follow: { reconnectMs: 600 },
+      })
+      assert.equal(code, 7)
+      const [a = 0, b = 0, c = 0] = opens.slice(1).map((at, i) => at - (opens[i] ?? at))
+      assert.ok(a >= 200 && b >= 450 && c >= 900, `waits ${a}, ${b}, ${c}`)
+    } finally {
+      await s.close()
+    }
+  })
+
+  test("a token in the URL's query is masked in the error", async () => {
+    const s = await scripted((ws) => ws.close(4401, 'expired'))
+    try {
+      await assert.rejects(
+        attach({ source: `${s.source}?token=hunter2`, out: capture(), output: () => output }),
+        (error: Error) =>
+          /\/events\?token=\*\*\* refused the token \(expired\)/.test(error.message) &&
+          !error.message.includes('hunter2'),
+      )
+    } finally {
+      await s.close()
     }
   })
 
