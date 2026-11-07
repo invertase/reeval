@@ -204,3 +204,40 @@ export const WORKSPACE_DIR = 'workspace'
  */
 export const SANDBOX_STATE = '/var/lib/reeval'
 export const BRIDGE_PORT = 43210
+
+/**
+ * Where one attempt lives on a Linux machine that runs several at once: its own user, home,
+ * working root, state directory and egress proxy port. Slot 0 is the layout every container has.
+ */
+export type SlotLayout = {
+  user: string
+  home: string
+  root: string
+  state: string
+  /** The egress forwarder's port in the machine. */
+  proxyPort: number
+}
+
+/** The egress forwarder's port for slot 0; slot `n` listens on this plus `n`. */
+export const BASE_PROXY_PORT = 43128
+
+/** Slot `slot`'s layout: slot 0's is {@link SANDBOX_USER}'s, `n` is `reeval-s<n>` in each place. */
+export function slotLayout(slot: number): SlotLayout {
+  if (slot === 0) {
+    return {
+      user: SANDBOX_USER,
+      home: SANDBOX_HOME,
+      root: SANDBOX_ROOT,
+      state: SANDBOX_STATE,
+      proxyPort: BASE_PROXY_PORT,
+    }
+  }
+  const user = `${SANDBOX_USER}-s${slot}`
+  return {
+    user,
+    home: `/home/${user}`,
+    root: `${SANDBOX_ROOT}-s${slot}`,
+    state: `${SANDBOX_STATE}-s${slot}`,
+    proxyPort: BASE_PROXY_PORT + slot,
+  }
+}

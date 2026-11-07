@@ -6,6 +6,7 @@ import { trackLoad } from '../inputs-load.ts'
 import { loadEvalModule } from '../language-runner/load.ts'
 import { evalMatchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
+import { useServiceChannel } from '../scheduler/services.ts'
 import type { LocalInput, RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
 import { extendExpect } from './expect.ts'
@@ -34,9 +35,11 @@ export function startWorker(channel: Channel): Worker {
   let running = false
   const stop = () =>
     cancel.abort(Object.assign(new Error('The run was canceled'), { name: 'AbortError' }))
+  const reply = useServiceChannel((message) => channel.send(message))
   channel.onMessage((message) => {
     if (message.t === 'init') working = init(message.run, message.file, message.select)
     else if (message.t === 'grant') grant?.(message.id)
+    else if (message.t === 'reply') reply(message)
     else stop()
   })
   // The main process closed the channel after `done`, or is gone (the CLI was killed): cancel, let

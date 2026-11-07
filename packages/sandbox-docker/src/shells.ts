@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import { SANDBOX_STATE, SANDBOX_USER } from './image.ts'
+import { SANDBOX_STATE, SANDBOX_USER, type SlotLayout } from './image.ts'
 import { shellQuote as q } from './process.ts'
 import type { SessionShell } from './transport-session.ts'
 
@@ -35,14 +35,18 @@ export function linuxShell(o: {
   user: Record<string, string>
   /** What a command that gave no signal of its own stops on. */
   signal?: AbortSignal | undefined
+  /** The user the agent's commands run as, and where reeval's own run, when not slot 0's. */
+  layout?: Pick<SlotLayout, 'user' | 'state'>
 }): SessionShell {
+  const sandboxUser = o.layout?.user ?? SANDBOX_USER
+  const stateDir = o.layout?.state ?? SANDBOX_STATE
   const marker = (exec: number) => `${o.id}-${exec}`
   const asUser = (cwd: string, command: string) =>
-    `sudo -n -H -u ${SANDBOX_USER} -- env -i ${Object.entries(o.user)
+    `sudo -n -H -u ${sandboxUser} -- env -i ${Object.entries(o.user)
       .map(([k, v]) => q(`${k}=${v}`))
       .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`
   const asRoot = (command: string, mark?: string) =>
-    `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${SANDBOX_STATE} || exit 1; ${EXEC_UMASK}; ${command}`)}`
+    `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${stateDir} || exit 1; ${EXEC_UMASK}; ${command}`)}`
   /**
    * Killing the host's program leaves the command running on the machine, so kill what has its
    * marker, and the process group of each: a process that cleared its environment (`env -i`)
@@ -63,7 +67,7 @@ export function linuxShell(o: {
       input: '',
     }),
     kill: (exec) => ({ argv: o.remote(killExec(marker(exec))), input: '' }),
-    direct: (argv) => o.remote(`sudo -n -u ${SANDBOX_USER} -- ${argv.map(q).join(' ')}`),
+    direct: (argv) => o.remote(`sudo -n -u ${sandboxUser} -- ${argv.map(q).join(' ')}`),
   }
 }
 
