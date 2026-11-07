@@ -705,10 +705,15 @@ export async function createBoatSandbox(
                 return { restored: false, waitedMs: 0, copyFailed: (error as Error).message }
               })
               const { restored, waitedMs, copyFailed } = got
-              if (copyFailed) {
+              if (copyFailed && !restored) {
                 debug?.log(
                   'container',
                   `no home from the machine's install, so this slot installs its own: ${copyFailed}`,
+                )
+              } else if (copyFailed) {
+                debug?.log(
+                  'container',
+                  `the machine's first copy of the install didn't unpack: ${copyFailed}`,
                 )
               }
               if (restored) {
