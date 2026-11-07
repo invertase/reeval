@@ -24,6 +24,8 @@ type Fake = PoolProvider<{ host: string }> & {
   removed: string[]
   kept: string[]
   live: () => string[]
+  /** The most machines that were up at once. */
+  peak: () => number
 }
 
 /**
@@ -32,11 +34,12 @@ type Fake = PoolProvider<{ host: string }> & {
  */
 function fakeProvider(
   answer: (n: number) => 'ok' | RateLimitError | Error | 'hang' = () => 'ok',
-  o: { startMs?: number } = {},
+  o: { startMs?: number; removeMs?: number } = {},
 ): Fake {
   let n = 0
   const t0 = performance.now()
   const live = new Set<string>()
+  let peak = 0
   const fake: Fake = {
     helper: 'fake()',
     started: [],
@@ -44,6 +47,7 @@ function fakeProvider(
     removed: [],
     kept: [],
     live: () => [...live],
+    peak: () => peak,
     async start(signal) {
       const at = performance.now() - t0
       fake.tries.push(at)
@@ -58,10 +62,12 @@ function fakeProvider(
       const id = `m${fake.started.length + 1}`
       fake.started.push({ id, at })
       live.add(id)
+      peak = Math.max(peak, live.size)
       return { id, info: { host: `${id}.test` } }
     },
     async remove(id) {
       fake.removed.push(id)
+      if (o.removeMs) await new Promise((r) => setTimeout(r, o.removeMs))
       live.delete(id)
     },
     async keepAlive(id) {
@@ -184,6 +190,26 @@ describe('machine pool', () => {
     assert.equal(b.reused, 0)
     await p.close()
     assert.equal(p.stats().starts, 2)
+  })
+
+  test('a new machine starts only once the provider has room: one being removed, or still running a slot, holds its place', async () => {
+    const provider = fakeProvider(() => 'ok', { removeMs: 50 })
+    const p = pool(provider, { limits: { machines: 1 }, attemptsPerMachine: 2 })
+    const [a, b] = await Promise.all([p.acquire(), p.acquire()])
+    a?.release()
+    const waiting = p.acquire()
+    await new Promise((r) => setTimeout(r, 30))
+    assert.equal(provider.started.length, 1, 'slot 1 still runs on the only machine')
+    b?.release()
+    const c = await waiting
+    assert.notEqual(c.machine, a?.machine)
+    assert.equal(provider.peak(), 1)
+    c.release()
+    const d = await p.acquire()
+    assert.equal(provider.peak(), 1)
+    d.release()
+    await p.close()
+    assert.deepEqual(provider.live(), [])
   })
 
   test('with reuse, the next attempt takes the slot, keeping the machine alive', async () => {
