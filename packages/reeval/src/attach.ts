@@ -1,6 +1,6 @@
-// `reeval attach`: follows a run's event stream and draws it with the renderer `reeval run` would,
-// from the stream's first line, so attaching mid-run replays what already happened and then
-// follows. It exits with the run's own exit code. On a terminal that's the interactive list, whose
+// `reeval attach`: follows a run's event stream, from its file or over its server's WebSocket, and
+// draws it with the renderer `reeval run` would, from the stream's first line, so attaching mid-run
+// replays what already happened and then follows. It exits with the run's own exit code. On a terminal that's the interactive list, whose
 // q and Ctrl-C detach this viewer and leave the run alone; x pressed twice cancels the run, which
 // only a run on this host whose live.json vouches for its pid can be reached for. A run that writes
 // heartbeats (its header says so) and then goes quiet is shown as stalled, and after longer as
@@ -81,7 +81,12 @@ export async function attach(options: AttachOptions): Promise<number> {
     })
   const notice = (level: 'info' | 'warn', text: string) =>
     renderer?.onEvent({ type: 'notice', at: Date.now(), level, text })
-  const lines = followEvents(options.source, { ...options.follow, signal })[Symbol.asyncIterator]()
+  const lines = followEvents(options.source, {
+    onDrop: () =>
+      notice('warn', `Lost the connection to run ${header?.runId ?? ''}; reconnecting.`),
+    ...options.follow,
+    signal,
+  })[Symbol.asyncIterator]()
   /** The next line, or `SILENT` once the run has been quiet past the next threshold. */
   const next = async (pending: Promise<IteratorResult<RunEventLine>>) => {
     if (!beating || code !== undefined) return pending

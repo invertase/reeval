@@ -1,12 +1,14 @@
 // A run's event stream: `reeval run --events` writes the events its renderer draws as NDJSON, to a
-// file or POSTed to a URL, and `reeval attach` follows it and draws them again. The line shape is
-// `RunEventLine` (src/view/events.ts).
+// file or POSTed to a URL, and `reeval attach` follows it, from the file or over the WebSocket of
+// the server the lines were POSTed to, and draws them again. The line shape is `RunEventLine`
+// (src/view/events.ts).
 import { closeSync, fstatSync, mkdirSync, openSync, readSync, writeSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { redactJson, redactSecrets, stripCredentials } from './redact.ts'
 import { processAlive } from './resume.ts'
+import { formatDuration } from './text.ts'
 import type { PrepareTargetView, ReevalEvent, Renderer } from './ui/events.ts'
 import {
   EVENTS_SCHEMA_VERSION,
@@ -16,6 +18,8 @@ import {
 } from './view/events.ts'
 
 export const isEventsUrl = (target: string) => /^https?:\/\//i.test(target)
+/** A run `reeval attach` follows over a WebSocket, at a `ws:` or `wss:` URL or its `http(s):` form. */
+export const isAttachUrl = (target: string) => /^(?:wss?|https?):\/\//i.test(target)
 
 /** The stream ended, or its writer died, before the run's exit line. Exits 3. */
 export class EventStreamError extends Error {
@@ -231,7 +235,12 @@ export type FollowOptions = {
   pollMs?: number
   /** Whether a run's process is alive, from its header. */
   alive?: (pid: number, host: string) => boolean
-  fetch?: typeof fetch
+  /** Opens a run's event socket; Node's `WebSocket` unless given. */
+  connect?: (url: string) => WebSocket
+  /** How long a dropped socket is reconnected to before following gives up; `LOST_MS` unless given. */
+  reconnectMs?: number
+  /** Called once each time the socket drops and following starts reconnecting. */
+  onDrop?: () => void
 }
 
 /** Splits text into whole lines, keeping a trailing partial line for the next chunk. */
@@ -305,26 +314,172 @@ async function* followFile(file: string, options: FollowOptions): AsyncGenerator
   }
 }
 
-/** Every line a stream URL answers a GET with, as they arrive, until the response ends. */
-async function* followUrl(url: string, options: FollowOptions): AsyncGenerator<RunEventLine> {
-  const get = options.fetch ?? fetch
-  const res = await get(url, {
-    headers: { accept: 'application/x-ndjson' },
-    ...(options.signal ? { signal: options.signal } : {}),
-  }).catch((error: Error) => {
-    throw new EventStreamError(`can't read the event stream at ${url}: ${error.message}`)
-  })
-  if (!res.ok || !res.body) {
-    throw new EventStreamError(`can't read the event stream at ${url}: HTTP ${res.status}`)
+/**
+ * How a run's event socket closes. The server closes with `done` once it has sent the run's last
+ * line and the run is over; any code from 4000 on, or 1008, refuses this viewer for good, and every
+ * other close is a dropped connection that `reeval attach` reconnects after.
+ */
+export const SOCKET_CLOSE = {
+  done: 1000,
+  unauthorized: 4401,
+  forbidden: 4403,
+  notFound: 4404,
+  /** The run already has as many viewers as it takes. */
+  tooManyViewers: 4429,
+} as const
+
+/** The waits between reconnects to a run's event socket, the last repeated. */
+const RECONNECT_MS = [250, 500, 1_000, 2_000, 5_000]
+
+type SocketEvent =
+  | { type: 'frame'; data: string }
+  | { type: 'close'; code: number; reason: string; opened: boolean }
+
+/** One connection's frames, then its close. */
+async function* socketEvents(
+  url: string,
+  connect: (url: string) => WebSocket,
+  signal: AbortSignal | undefined,
+): AsyncGenerator<SocketEvent> {
+  const socket = connect(url)
+  socket.binaryType = 'arraybuffer'
+  const queue: SocketEvent[] = []
+  let wake: (() => void) | undefined
+  let opened = false
+  const push = (event: SocketEvent) => {
+    queue.push(event)
+    wake?.()
   }
-  const state = { rest: '' }
   const decoder = new TextDecoder()
-  for await (const chunk of res.body) {
-    for (const text of lines(state, decoder.decode(chunk, { stream: true }))) yield parse(text, url)
+  socket.onopen = () => {
+    opened = true
   }
-  if (state.rest.trim()) yield parse(state.rest, url)
+  socket.onmessage = (e: MessageEvent) =>
+    push({
+      type: 'frame',
+      data: typeof e.data === 'string' ? e.data : decoder.decode(e.data as ArrayBuffer),
+    })
+  // A refused connection fires only `error`, with no `close` after it.
+  let closed = false
+  const close = (code: number, reason: string) => {
+    if (closed) return
+    closed = true
+    push({ type: 'close', code, reason, opened })
+  }
+  socket.onclose = (e: CloseEvent) => close(e.code, e.reason)
+  socket.onerror = () => close(1006, '')
+  const abort = () => socket.close(SOCKET_CLOSE.done)
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    for (;;) {
+      const next = queue.shift()
+      if (!next) {
+        await new Promise<void>((resolve) => (wake = resolve))
+        wake = undefined
+        continue
+      }
+      yield next
+      if (next.type === 'close') return
+    }
+  } finally {
+    signal?.removeEventListener('abort', abort)
+    if (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN) {
+      socket.close(SOCKET_CLOSE.done)
+    }
+  }
 }
 
-/** A run's stream, from a file or a URL, from its first line on. */
+/** The run's socket URL, from a `ws:`, `wss:`, `http:` or `https:` one. */
+const socketUrl = (source: string) => {
+  const url = new URL(source)
+  url.protocol = url.protocol.replace(/^http/, 'ws')
+  return url
+}
+
+function refusal(source: string, code: number, reason: string): string | null {
+  const why = reason ? ` (${reason})` : ''
+  if (code === SOCKET_CLOSE.tooManyViewers) {
+    return `the run at ${source} has as many viewers as it takes${why}: detach one and attach again`
+  }
+  if (code === SOCKET_CLOSE.unauthorized) return `the run at ${source} refused the token${why}`
+  if (code === SOCKET_CLOSE.forbidden) return `the run at ${source} refused this viewer${why}`
+  if (code === SOCKET_CLOSE.notFound) return `there's no run at ${source}${why}`
+  if (code === 1008 || code >= 4000) return `the run at ${source} closed with ${code}${why}`
+  return null
+}
+
+/**
+ * A run's stream over a WebSocket: each frame is `{"seq":n,"line":<RunEventLine>}`, `seq` counting
+ * the run's lines from 1. It connects with `?after=<seq>`, so the server replays the lines after it
+ * and then sends each new one; a dropped connection reconnects after the last line it got, until the
+ * run's exit line. Reconnecting for longer than `LOST_MS` gives up.
+ */
+async function* followSocket(source: string, options: FollowOptions): AsyncGenerator<RunEventLine> {
+  const connect = options.connect ?? ((url: string) => new WebSocket(url))
+  const giveUpMs = options.reconnectMs ?? LOST_MS
+  const base = socketUrl(source)
+  let seq = 0
+  let everOpened = false
+  let failures = 0
+  let droppedAt: number | undefined
+  for (;;) {
+    const url = new URL(base)
+    url.searchParams.set('after', String(seq))
+    let closed: Extract<SocketEvent, { type: 'close' }> | undefined
+    for await (const event of socketEvents(url.href, connect, options.signal)) {
+      if (event.type === 'close') {
+        closed = event
+        break
+      }
+      let frame: { seq?: unknown; line?: unknown }
+      try {
+        frame = JSON.parse(event.data)
+      } catch {
+        throw new EventStreamError(
+          `${source} sent a frame that isn't JSON: ${event.data.slice(0, 80)}`,
+        )
+      }
+      if (typeof frame.seq !== 'number' || typeof frame.line !== 'object' || !frame.line) {
+        throw new EventStreamError(
+          `${source} sent a frame without a seq and line: ${event.data.slice(0, 80)}`,
+        )
+      }
+      if (frame.seq <= seq) continue
+      if (frame.seq !== seq + 1) {
+        throw new EventStreamError(`${source} skipped from line ${seq} to line ${frame.seq}`)
+      }
+      seq = frame.seq
+      failures = 0
+      droppedAt = undefined
+      const line = readableEventLine(frame.line as RunEventLine)
+      yield line
+      if (line.type === 'exit') return
+    }
+    if (options.signal?.aborted || !closed) return
+    if (closed.opened) {
+      everOpened = true
+      failures = 0
+    }
+    if (closed.code === SOCKET_CLOSE.done) return
+    const refused = refusal(source, closed.code, closed.reason)
+    if (refused) throw new EventStreamError(refused)
+    if (!everOpened) throw new EventStreamError(`can't connect to the event stream at ${source}`)
+    if (droppedAt === undefined) {
+      droppedAt = Date.now()
+      options.onDrop?.()
+    }
+    if (Date.now() - droppedAt > giveUpMs) {
+      throw new EventStreamError(
+        `lost the connection to ${source} and couldn't reconnect for ${formatDuration(giveUpMs)}`,
+      )
+    }
+    const wait = RECONNECT_MS[Math.min(failures, RECONNECT_MS.length - 1)] ?? 0
+    failures++
+    await sleep(wait, undefined, { signal: options.signal }).catch(() => {})
+    if (options.signal?.aborted) return
+  }
+}
+
+/** A run's stream, from a file or a run's socket URL, from its first line on. */
 export const followEvents = (source: string, options: FollowOptions = {}) =>
-  isEventsUrl(source) ? followUrl(source, options) : followFile(source, options)
+  isAttachUrl(source) ? followSocket(source, options) : followFile(source, options)

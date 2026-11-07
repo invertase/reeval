@@ -32,6 +32,7 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import {
   type EventStream,
+  isAttachUrl,
   isEventsUrl,
   notEventStream,
   openEventStream,
@@ -602,7 +603,7 @@ async function imageBuildCommand(
 const short12 = (id: string) => id.replace(/^sha256:/, '').slice(0, 12)
 
 /**
- * `reeval attach`: a stream URL or file as given, else the run a ref names (by default the one in
+ * `reeval attach`: a run's socket URL or stream file as given, else the run a ref names (by default the one in
  * progress) and the stream file it writes. Exits with the run's exit code.
  */
 async function attachCommand(
@@ -614,9 +615,9 @@ async function attachCommand(
   // Where the run's live.json is, which is what lets x cancel it: a stream in a project's
   // `.reeval/events/` is that project's run, any other this project's when there is one.
   let root = configPath === undefined ? undefined : dirname(configPath)
-  if (target && (isEventsUrl(target) || existsSync(target))) {
+  if (target && (isAttachUrl(target) || existsSync(target))) {
     source = target
-    const inEvents = isEventsUrl(target)
+    const inEvents = isAttachUrl(target)
       ? null
       : /^(.*)[\\/]\.reeval[\\/]events[\\/][^\\/]+\.ndjson$/.exec(resolve(target))
     if (inEvents?.[1]) root = inEvents[1]
