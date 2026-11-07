@@ -1,7 +1,8 @@
 // A `tart` on PATH that runs each VM as a directory on this machine, with `sudo`, `security`,
 // `ssh` and `lsof` beside it, so the Tart sandbox's lifecycle runs on Linux. Every `tart` call is logged,
-// one per line. As in a VM, a `tart exec` command runs apart from the host's `tart`: in a process
-// group of its own, led by a shell above it, so killing `tart exec` leaves it running.
+// one per line. As in a VM, a `tart exec` command runs apart from the host's `tart`: a child of
+// it in a process group of its own, led by a shell above it, so killing `tart exec`, or its process
+// group, leaves the command running.
 //
 // FAKE_TART_NO_AGENT=1: `tart exec` fails, as without the Guest Agent, after blocking for
 // FAKE_TART_EXEC_BLOCKS seconds as tart 2.41 does (about 30). FAKE_TART_NO_SUDO=1: `sudo -n` asks
@@ -81,7 +82,7 @@ case "$cmd" in
     [ -n "$FAKE_TART_NO_AGENT" ] && { sleep "\${FAKE_TART_EXEC_BLOCKS:-0}"; echo "is the Tart Guest Agent running?" >&2; exit 1; }
     [ -f "$root/vms/$vm/running" ] || { echo "$vm is not running" >&2; exit 1; }
     cd "$root/vms/$vm/home" || exit 1
-    HOME="$root/vms/$vm/home" exec perl -e 'setpgrp(0, 0); exec @ARGV' /bin/sh -c '"$@"; exit $?' sh "$@" ;;
+    HOME="$root/vms/$vm/home" exec perl -e 'my $p = fork // die; if (!$p) { setpgrp(0, 0); exec @ARGV } waitpid($p, 0); exit($? & 127 ? 128 + ($? & 127) : $? >> 8)' /bin/sh -c '"$@"; exit $?' sh "$@" ;;
   ip) [ -f "$root/vms/$1/running" ] && echo 127.0.0.1 || exit 1 ;;
   get) [ -d "$root/vms/$1" ] || exit 1; printf '{"OS":"%s"}\n' "$(cat "$root/vms/$1/os" 2>/dev/null || echo darwin)" ;;
   stop) [ "$1" = --timeout ] && shift 2; rm -f "$root/vms/$1/running" ;;
