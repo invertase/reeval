@@ -278,7 +278,7 @@ describe('darwinShell', () => {
   test('runs every command as a script on stdin that records its pid', () => {
     const shell = darwin()
     const c = shell.user({ command: 'ls', cwd: '/Users/admin', env: { A: 'a' }, exec: 2 })
-    assert.deepEqual(c.argv.slice(0, 5), ['tart', 'exec', '-i', 'vm', '/bin/bash'])
+    assert.deepEqual(c.argv.slice(0, 5), ['tart', 'exec', '-i', 'vm', '/usr/bin/perl'])
     assert.equal(
       c.input,
       execScript({
