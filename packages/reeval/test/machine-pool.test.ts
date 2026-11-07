@@ -390,26 +390,41 @@ describe('machine pool', () => {
   })
 
   test('an acquire aborted while its start waits for the window, or boots, with none other waiting, stops the start', async () => {
-    const provider = fakeProvider((n) => (n === 1 ? 'hang' : 'ok'))
+    const provider = fakeProvider(() => 'ok', { startMs: 100 })
+    // Like Boat dropping a delete sent mid-provision: a start cut short leaves its machine up.
+    const start = provider.start.bind(provider)
+    provider.start = async (signal, ttlSeconds) => {
+      const started = await start(signal, ttlSeconds)
+      signal.throwIfAborted()
+      return started
+    }
     const p = pool(provider, {
       limits: { machines: 10, startsPerMinute: 2 },
       windowsMs: { minute: 60_000, hour: 3_600_000 },
     })
-    const a = await p.acquire()
-    const booting = new AbortController()
-    const boots = p.acquire({ signal: booting.signal })
-    await until(() => provider.tries.length === 2)
-    booting.abort(new Error('canceled'))
-    await assert.rejects(boots, /canceled/)
-    const queued = new AbortController()
-    const waits = p.acquire({ signal: queued.signal })
-    await new Promise((r) => setTimeout(r, 20))
-    queued.abort(new Error('canceled'))
-    await assert.rejects(waits, /canceled/)
-    await new Promise((r) => setTimeout(r, 20))
-    assert.equal(provider.tries.length, 2, 'the queued start never went out')
-    assert.deepEqual(provider.live(), [a.machine], 'the booting start was stopped')
-    a.release()
-    await p.close()
+    try {
+      const a = await p.acquire()
+      const booting = new AbortController()
+      const boots = p.acquire({ signal: booting.signal })
+      await until(() => provider.tries.length === 2)
+      booting.abort(new Error('canceled'))
+      await assert.rejects(boots, /canceled/)
+      const queued = new AbortController()
+      const waits = p.acquire({ signal: queued.signal })
+      await new Promise((r) => setTimeout(r, 20))
+      queued.abort(new Error('canceled'))
+      await assert.rejects(waits, /canceled/)
+      await until(() => provider.removed.length === 1)
+      assert.equal(provider.tries.length, 2, 'the queued start never went out')
+      assert.deepEqual(
+        provider.removed,
+        ['m2'],
+        'the booting start is removed once up, not cut short',
+      )
+      assert.deepEqual(provider.live(), [a.machine])
+      a.release()
+    } finally {
+      await p.close()
+    }
   })
 })
