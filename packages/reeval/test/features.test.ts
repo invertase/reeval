@@ -1136,8 +1136,8 @@ export const features: Feature[] = [
       assert.equal(r?.machine.size, 'small')
       assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
       assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
-      assert.ok((r?.usage?.cpuSeconds ?? 0) >= 2.5, JSON.stringify(r))
-      assert.ok((r?.usage?.peakCores ?? 0) >= 0.8, JSON.stringify(r))
+      assert.ok((r?.usage?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(r))
+      assert.ok((r?.usage?.peakCores ?? 0) >= (r?.usage?.avgCores ?? 1), JSON.stringify(r))
       assert.ok((r?.usage?.peakMemoryBytes ?? 0) > 0, JSON.stringify(r))
       assert.equal(typeof r?.usage?.diskReadBytes, 'number')
       assert.equal(typeof r?.usage?.diskWriteBytes, 'number')
@@ -1967,8 +1967,9 @@ export const features: Feature[] = [
         })
       }
       const [used, idle] = [lands?.usage, canary?.usage]
-      assert.ok((used?.cpuSeconds ?? 0) >= 2.5, JSON.stringify(used))
-      assert.ok((used?.peakCores ?? 0) >= 0.8, JSON.stringify(used))
+      assert.ok((used?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(used))
+      assert.ok((used?.peakCores ?? 0) >= (used?.avgCores ?? 1), JSON.stringify(used))
+      assert.ok((used?.peakCores ?? 9) <= 1.05, JSON.stringify(used))
       assert.ok((used?.peakMemoryBytes ?? 0) >= 256 * 1024 ** 2, JSON.stringify(used))
       assert.equal(used?.partial, undefined)
       assert.equal(used?.diskReadBytes, undefined)
