@@ -13,6 +13,7 @@ import {
   removeRunSandboxes,
   runLabels,
   sshTarget,
+  whileLimited,
 } from '../src/sandbox/daytona.ts'
 import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
 import { project, readRun, runCli } from './helpers.ts'
@@ -154,6 +155,94 @@ describe("the pool's starts", () => {
     assert.equal(body?.autoStopInterval, 0, "Daytona's idle stop would cut an attempt off")
     assert.equal(body?.autoDeleteInterval, 0, 'a stopped sandbox is deleted, not kept')
     assert.deepEqual(api.live(), [])
+  })
+})
+
+describe('a 429 after the start', () => {
+  const client = () => pointedAt(api.key, () => daytonaClient(daytona()))
+
+  test('on SSH access, waits for its Retry-After and keeps the sandbox', async () => {
+    const provider = daytonaPoolProvider(daytona(), await client(), 'run-ssh-429')
+    api.requests.length = 0
+    api.refuseCalls(1, /^POST \/sandbox\/[\w-]+\/ssh-access$/, { retryAfterSeconds: 0 })
+    // The fake's machines have no SSH server, so the start gets as far as the host key.
+    await assert.rejects(provider.start(new AbortController().signal, 600), {
+      message: /gave no host key/,
+    })
+    const asked = api.requests.filter((q) => /\/ssh-access$/.test(q.call))
+    assert.deepEqual(
+      asked.map((q) => Boolean(q.refused)),
+      [true, false],
+    )
+    assert.equal(api.requests.filter((q) => q.call === 'POST /sandbox').length, 1)
+  })
+
+  test('on the TTL, waits and keeps the machine alive', async () => {
+    const made = await create('kept', runLabels(daytona(), 'run-ttl'))
+    const { id } = (await made.json()) as { id: string }
+    const provider = daytonaPoolProvider(daytona(), await client(), 'run-ttl')
+    api.requests.length = 0
+    api.refuseCalls(2, /^POST \/sandbox\/[\w-]+\/ttl\/\d+$/, { retryAfterSeconds: 0 })
+    await provider.keepAlive?.(id, 1200)
+    assert.deepEqual(
+      api.requests.filter((q) => /\/ttl\//.test(q.call)).map((q) => Boolean(q.refused)),
+      [true, true, false],
+    )
+    assert.ok(api.live().includes('kept'))
+    await pointedAt(api.key, () => removeRunSandboxes('run-ttl', [daytona()]))
+  })
+
+  test('past the wait, is the rate limit', async () => {
+    let calls = 0
+    const refused = Object.assign(new Error('Too Many Requests'), {
+      statusCode: 429,
+      headers: { 'retry-after': '1' },
+    })
+    await assert.rejects(
+      whileLimited(
+        'calls',
+        async () => {
+          calls++
+          throw refused
+        },
+        undefined,
+        { maxRateWaitMs: 1500, backoffMs: 10, maxBackoffMs: 10 },
+      ),
+      DaytonaRateLimited,
+    )
+    assert.equal(calls, 2)
+  })
+})
+
+describe('a cancel during the start', () => {
+  test('stops waiting on the create, and deletes the sandbox it makes', async () => {
+    const slow = await fakeDaytona(
+      (name) =>
+        new Promise((resolve) => setTimeout(() => resolve(unreachableMachines(name)), 3000)),
+    )
+    const saved = { url: process.env.DAYTONA_API_URL, key: process.env.DAYTONA_API_KEY }
+    process.env.DAYTONA_API_URL = slow.url
+    process.env.DAYTONA_API_KEY = slow.key
+    try {
+      const provider = daytonaPoolProvider(daytona(), await daytonaClient(daytona()), 'run-cut')
+      const cut = new AbortController()
+      const startedAt = Date.now()
+      setTimeout(() => cut.abort(new Error('canceled')), 300)
+      await assert.rejects(provider.start(cut.signal, 600), { message: 'canceled' })
+      assert.ok(Date.now() - startedAt < 2000, 'the start gave up before the sandbox came up')
+      for (let i = 0; i < 100 && slow.live().length; i++)
+        await new Promise((r) => setTimeout(r, 100))
+      assert.deepEqual(slow.live(), [], 'the sandbox that came up late is deleted')
+    } finally {
+      for (const [name, value] of [
+        ['DAYTONA_API_URL', saved.url],
+        ['DAYTONA_API_KEY', saved.key],
+      ] as const) {
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      }
+      await slow.close()
+    }
   })
 })
 

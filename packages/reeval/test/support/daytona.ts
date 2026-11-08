@@ -45,6 +45,8 @@ export type FakeDaytona = {
    * `Retry-After: retryAfterSeconds`, as Daytona does past its rate limit.
    */
   refuseStarts(count: number, o?: { namePrefix?: string; retryAfterSeconds?: number }): void
+  /** Answer the next `count` calls whose `METHOD /path` matches `call` with 429, as above. */
+  refuseCalls(count: number, call: RegExp, o?: { retryAfterSeconds?: number }): void
   close(): Promise<void>
 }
 
@@ -70,6 +72,7 @@ export async function fakeDaytona(
   const created: ReturnType<FakeDaytona['created']> = []
   const requests: FakeDaytona['requests'] = []
   let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
+  let callRefusals = { count: 0, call: /^$/, retryAfterSeconds: 1 }
   let base = ''
   const view = (s: FakeSandbox) => ({
     id: s.id,
@@ -100,6 +103,15 @@ export async function fakeDaytona(
     requests.push({ call: `${method} ${path}`, ...(body && { body }) })
     if (req.headers.authorization !== `Bearer ${key}`) {
       return json(401, { statusCode: 401, message: 'Invalid API key', error: 'Unauthorized' })
+    }
+    if (callRefusals.count > 0 && callRefusals.call.test(`${method} ${path}`)) {
+      callRefusals.count--
+      requests[requests.length - 1].refused = true
+      return json(
+        429,
+        { statusCode: 429, message: 'ThrottlerException: Too Many Requests' },
+        { 'retry-after': String(callRefusals.retryAfterSeconds) },
+      )
     }
     const [, collection, id, sub, arg] = path.split('/')
     if (collection !== 'sandbox') return json(404, { statusCode: 404, message: 'Not Found' })
@@ -227,6 +239,9 @@ export async function fakeDaytona(
         namePrefix: o.namePrefix ?? '',
         retryAfterSeconds: o.retryAfterSeconds ?? 1,
       }
+    },
+    refuseCalls(count, call, o = {}) {
+      callRefusals = { count, call, retryAfterSeconds: o.retryAfterSeconds ?? 1 }
     },
     async close() {
       await Promise.all(

@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { run } from '@reeval/sandbox-docker/process'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
@@ -15,7 +16,7 @@ import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
 import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
-import type { PoolProvider, RateLimited } from './pool.ts'
+import { type PoolProvider, RATE_LIMIT_WAITS, type RateLimited } from './pool.ts'
 import { PrepareError } from './provider.ts'
 import {
   createPooledSshSandbox,
@@ -132,6 +133,62 @@ export class DaytonaRateLimited extends Error {
   }
 }
 
+const rateLimited = (error: unknown, what: string) =>
+  statusOf(error) === 429
+    ? new DaytonaRateLimited(
+        `Daytona is limiting ${what}: ${messageOf(error)}`,
+        retryAfterMs(headerOf(error, 'retry-after'), messageOf(error)),
+      )
+    : null
+
+/**
+ * `call` again while Daytona answers 429, waiting as the pool waits out a refused start: its
+ * `Retry-After`, else a backoff that doubles, for at most the pool's time.
+ */
+export async function whileLimited<T>(
+  what: string,
+  call: () => Promise<T>,
+  signal?: AbortSignal,
+  waits: { maxRateWaitMs: number; backoffMs: number; maxBackoffMs: number } = RATE_LIMIT_WAITS,
+): Promise<T> {
+  const startedAt = Date.now()
+  let backoff = waits.backoffMs
+  for (;;) {
+    try {
+      return await call()
+    } catch (error) {
+      const limited = rateLimited(error, what)
+      if (!limited) throw error
+      const wait = limited.retryAfterMs ?? backoff
+      backoff = Math.min(backoff * 2, waits.maxBackoffMs)
+      if (Date.now() - startedAt + wait > waits.maxRateWaitMs) throw limited
+      await sleep(wait, undefined, { signal })
+    }
+  }
+}
+
+/** `work`, or `signal`'s reason as soon as it aborts; `orphan` gets what `work` gives after that. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal, orphan: (value: T) => unknown) {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      work.then(orphan, () => {})
+      reject(signal.reason)
+    }
+    if (signal.aborted) return onAbort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
 /** The default snapshot of each size. */
 export const snapshotOf = (sandbox: Pick<DaytonaSandboxDescriptor, 'size'>) =>
   `daytona-${sandbox.size ?? 'medium'}`
@@ -232,8 +289,8 @@ export function daytonaPoolProvider(
     rateLimited: (error): RateLimited | null =>
       error instanceof DaytonaRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
     async keepAlive(id, ttlSeconds) {
-      const sandbox = made.get(id)?.sandbox ?? (await api.get(id))
-      await sandbox.setTtl(Math.ceil(ttlSeconds / 60))
+      const sandbox = made.get(id)?.sandbox ?? (await whileLimited('calls', () => api.get(id)))
+      await whileLimited('calls', () => sandbox.setTtl(Math.ceil(ttlSeconds / 60)))
     },
     async remove(id) {
       const entry = made.get(id)
@@ -248,33 +305,38 @@ export function daytonaPoolProvider(
       const dir = await mkdtemp(join(tmpdir(), 'reeval-daytona-'))
       let sandbox: DaytonaSandboxInfo | undefined
       try {
-        sandbox = await api
-          .create(
-            {
-              name,
-              snapshot,
-              labels,
-              // The pool says when a machine goes; Daytona's idle stop would cut an attempt off.
-              autoStopInterval: 0,
-              ephemeral: true,
-              ttlMinutes: Math.ceil(ttlSeconds / 60),
-            },
-            { timeout: START_TIMEOUT_S },
-          )
-          .catch(async (error: unknown) => {
-            if (statusOf(error) === 429) {
-              throw new DaytonaRateLimited(
-                `Daytona is limiting starts: ${messageOf(error)}`,
-                retryAfterMs(headerOf(error, 'retry-after'), messageOf(error)),
-              )
-            }
-            // A start that timed out may still come up: find it by name to delete it.
-            const id = (error as { sandboxId?: string }).sandboxId
-            if (id) await api.get(id).then(remove, () => {})
-            throw new InfraError(`Daytona didn't start a sandbox: ${messageOf(error)}`)
-          })
-        signal.throwIfAborted()
-        const access = await sandbox.createSshAccess(SSH_TOKEN_MINUTES).catch((error: unknown) => {
+        const creating = api.create(
+          {
+            name,
+            snapshot,
+            labels,
+            // The pool says when a machine goes; Daytona's idle stop would cut an attempt off.
+            autoStopInterval: 0,
+            ephemeral: true,
+            ttlMinutes: Math.ceil(ttlSeconds / 60),
+          },
+          { timeout: START_TIMEOUT_S },
+        )
+        // The SDK's create takes no signal: a cancel stops the wait, and a sandbox it makes after
+        // that is deleted.
+        const created: DaytonaSandboxInfo = await abortable(creating, signal, (late) =>
+          remove(late).catch(() => {}),
+        ).catch(async (error: unknown) => {
+          if (signal.aborted) throw error
+          const limited = rateLimited(error, 'starts')
+          if (limited) throw limited
+          // A start that timed out may still come up: find it by its id to delete it.
+          const id = (error as { sandboxId?: string }).sandboxId
+          if (id) await api.get(id).then(remove, () => {})
+          throw new InfraError(`Daytona didn't start a sandbox: ${messageOf(error)}`)
+        })
+        sandbox = created
+        const access = await whileLimited(
+          'calls',
+          () => created.createSshAccess(SSH_TOKEN_MINUTES),
+          signal,
+        ).catch((error: unknown) => {
+          if (signal.aborted) throw error
           throw new InfraError(`Daytona didn't give SSH access: ${messageOf(error)}`)
         })
         registerSecret(access.token)

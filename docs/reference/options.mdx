@@ -605,6 +605,34 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
   The start of every VM name reeval gives Boat. Lowercase letters, digits, and dashes, starting and ending with a letter or digit, at most 32 characters. Defaults to `reeval`.
 </Property>
 
+<Property name="daytona.size" type="'small' | 'medium' | 'large'" optional>
+  The Daytona sandbox's default snapshot, `daytona-<size>`: `'small'` (1 vCPU, 1 GiB), `'medium'` (2 vCPUs, 4 GiB) or `'large'` (4 vCPUs, 8 GiB). Defaults to `'medium'`. `daytona()` is from `{{ pkg }}/sandbox/daytona`.
+</Property>
+
+<Property name="daytona.id" type="string" optional>
+  The last segment of the cell key. Defaults to `daytona`, or `daytona:<size>` for a `size` you set.
+</Property>
+
+<Property name="daytona.maxConcurrent" type="number" optional>
+  The most attempts reeval runs on Daytona at once across the run: its sandboxes times `attemptsPerMachine`. Without it, the run's `concurrency` option is the only cap.
+</Property>
+
+<Property name="daytona.reuse" type="boolean" optional>
+  Whether a sandbox whose attempt finished runs the next attempt, after reeval resets its sandbox user, as `boat.reuse` does. Defaults to `false`, a new sandbox per attempt.
+</Property>
+
+<Property name="daytona.attemptsPerMachine" type="number" optional>
+  How many attempts run at once on one sandbox, each as its own user, as `boat.attemptsPerMachine` does. A whole number from 1 to 8; defaults to 1.
+</Property>
+
+<Property name="createDaytona.apiKey" type="SecretRef" optional>
+  The host variable with the Daytona API key, as `secret.fromEnv('TEAM_DAYTONA_API_KEY')`. Defaults to `DAYTONA_API_KEY`. A string key is refused: the key stays on the host.
+</Property>
+
+<Property name="createDaytona.prefix" type="string" optional>
+  The start of every sandbox name reeval gives Daytona, and a label its cleanup lists by. Lowercase letters, digits, and dashes, starting and ending with a letter or digit, at most 32 characters. Defaults to `reeval`.
+</Property>
+
 ## `environments`
 
 `environments` names what an evaluation runs in, one cell each.
