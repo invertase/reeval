@@ -227,6 +227,15 @@ describe("preflight's snapshot", () => {
     assert.match(error.message, /still pulling after 0 seconds/)
   })
 
+  test("waits between tries when a create finds the name a read doesn't", async () => {
+    api.seedSnapshot('t-hidden', { state: 'building', hidden: true })
+    const error = await ensure('t-hidden', { waits: { ...waits, waitMs: 100 } }).catch((e) => e)
+    assert.ok(error instanceof PrepareError, String(error))
+    assert.equal(error.failure.class, 'transient')
+    assert.match(error.message, /still being created by another run after 0 seconds/)
+    assert.ok(posts('t-hidden') <= 10, `${posts('t-hidden')} creates`)
+  })
+
   test('activates an inactive one', async () => {
     api.seedSnapshot('t-inactive', { state: 'inactive' })
     assert.equal((await ensure('t-inactive')).got, 'ready')

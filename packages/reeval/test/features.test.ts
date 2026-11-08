@@ -1436,6 +1436,7 @@ export const features: Feature[] = [
     tiers: ['docker'],
     env: 'vm',
     ...onFakeDaytona,
+    sandbox: 'daytona:debian:bookworm-slim+cd073bbf',
     canary: /expected 'reeval(-s1)?' to be 'root'/,
     record: ({ run, project }) => {
       const recipe = daytona({

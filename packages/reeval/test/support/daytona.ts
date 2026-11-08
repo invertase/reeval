@@ -24,6 +24,8 @@ type FakeSnapshot = {
   errorReason?: string | null
   dockerfile?: string
   resources?: Record<string, unknown>
+  /** Reads answer 404 while creates still find the name, as a read lagging another run's create. */
+  hidden?: boolean
 }
 
 /** Builds a Dockerfile, as Daytona's builder does; a rejection is the build's `errorReason`. */
@@ -64,7 +66,7 @@ export type FakeDaytona = {
   snapshots(): FakeSnapshot[]
   /**
    * Puts snapshot `name` in `state`, as a killed run or another one left it, moving to `settle`'s
-   * state after `afterMs`.
+   * state after `afterMs`. A `hidden` one answers reads 404 while a create still finds it.
    */
   seedSnapshot(
     name: string,
@@ -72,6 +74,7 @@ export type FakeDaytona = {
       state: string
       errorReason?: string
       dockerfile?: string
+      hidden?: boolean
       settle?: { afterMs: number; state: string; errorReason?: string }
     },
   ): void
@@ -181,7 +184,7 @@ export async function fakeDaytona(
       return json(200, snapshotView(snapshot))
     }
     const snapshot = snapshots.get(id ?? '') ?? [...snapshots.values()].find((s) => s.id === id)
-    if (!snapshot) {
+    if (!snapshot || snapshot.hidden) {
       return json(404, { statusCode: 404, message: `Snapshot with ID or name ${id} not found` })
     }
     if (!sub && method === 'GET') return json(200, snapshotView(snapshot))
@@ -411,6 +414,7 @@ export async function fakeDaytona(
         state: o.state,
         ...(o.errorReason !== undefined && { errorReason: o.errorReason }),
         ...(o.dockerfile !== undefined && { dockerfile: o.dockerfile }),
+        ...(o.hidden && { hidden: true }),
       }
       snapshots.set(name, snapshot)
       const settle = o.settle

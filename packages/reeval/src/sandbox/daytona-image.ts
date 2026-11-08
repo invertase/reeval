@@ -54,8 +54,8 @@ export type DaytonaImage = {
  * The commands and files `harness`'s bootstrap runs and writes in a fresh sandbox, as a script run
  * as the sandbox user, or null when there's nothing to install. It replays the bootstrap against a
  * session that records instead of running: every command succeeds with no output, and the home
- * is the sandbox user's. The version probe it ends with runs in the build too, which fails it when
- * the install didn't leave the CLI.
+ * is the sandbox user's. A probe that runs a binary it looked up runs `/bin/true` in the build,
+ * so an install that left no CLI fails in the attempt, not the build.
  */
 export async function harnessScript(harness: HarnessDescriptor): Promise<string | null> {
   const bake = harnessBake(harness)

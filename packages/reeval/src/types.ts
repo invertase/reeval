@@ -1424,7 +1424,7 @@ export type DaytonaSandboxDescriptor = {
    * baked on top.
    */
   dockerfile?: string
-  /** Baked into the snapshot in order, on `from` or reeval's sandbox image: no secrets, no workspace. */
+  /** Baked into the image in order, on `from` or reeval's sandbox image: no secrets, no workspace. */
   install?: InstallStep[]
   /** The sandbox size. Default `medium`. */
   size?: DaytonaSize

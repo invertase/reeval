@@ -239,7 +239,7 @@ export type DaytonaStart = {
   name: string
   /** The snapshot each sandbox starts from; unset when each create builds `dockerfile`. */
   snapshot?: string
-  /** The Dockerfile each create builds, which Daytona's build cache keeps for 24 hours. */
+  /** The Dockerfile each create builds, which Daytona's build cache keeps for a while. */
   dockerfile?: string
   /** The directory its `COPY` sources are in. */
   contextDir?: string
@@ -338,6 +338,7 @@ export async function ensureSnapshot(
       o.log(`daytona: building snapshot ${name}`)
       const built = await build()
       if (built === 'no-permission' || built === 'ready') return built
+      await wait('being created by another run')
       continue
     }
     const state = found.state ?? 'unknown'
@@ -361,6 +362,10 @@ export async function ensureSnapshot(
       })
       continue
     }
+    await wait(state)
+  }
+
+  async function wait(state: string) {
     if (Date.now() >= deadline) {
       throw failed({
         class: 'transient',
