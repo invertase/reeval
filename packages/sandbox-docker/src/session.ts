@@ -442,11 +442,14 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   let gateway: Gateway | undefined
   let removed: Promise<void> | undefined
   const observers: string[] = []
+  const creating = new Set<Promise<unknown>>()
   const remove = () => {
     gateway?.close()
-    removed ??= Promise.all([id, ...observers].map((c) => removeContainerDetached(c, engine))).then(
-      () => {},
-    )
+    // The daemon finishes a create whatever its client does, so a removal that came first would
+    // miss the container and leave it behind.
+    removed ??= Promise.allSettled(creating)
+      .then(() => Promise.all([id, ...observers].map((c) => removeContainerDetached(c, engine))))
+      .then(() => {})
     return removed
   }
   if (signal?.aborted) {
@@ -672,11 +675,15 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   const observer: Observer = {
     target: id,
     async spawn(o) {
-      if (removed) throw new Error(`${spec.name} container ${id.slice(0, 12)} is gone`)
+      const gone = () => new Error(`${spec.name} container ${id.slice(0, 12)} is gone`)
+      if (removed) throw gone()
       const name = `reeval-observer-${nonce}-${observers.length + 1}`
       observers.push(name)
+      // Created before it starts, so the observer exists for every removal and exec that follows:
+      // a container `run` created after its client was killed would never start, so `--rm`
+      // would never remove it.
       const args = [
-        'run',
+        'create',
         '--rm',
         '--name',
         name,
@@ -702,7 +709,12 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         '-c',
         o.command,
       ]
-      return streamed(args, () => removeContainerDetached(name, engine))
+      const created = docker(args, { engine })
+      creating.add(created)
+      const r = await created.finally(() => creating.delete(created))
+      if (r.exitCode !== 0) throw new Error(`${spec.bin} create failed: ${r.stderr.trim()}`)
+      if (removed) throw gone()
+      return streamed(['start', '--attach', name], () => removeContainerDetached(name, engine))
     },
     async run(o) {
       const name = observers.at(-1)

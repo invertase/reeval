@@ -10,6 +10,8 @@ import type { AttemptResources } from '../types.ts'
 export const SAMPLE_MS = 1000
 /** How long teardown's last reading may take. */
 const FINAL_TIMEOUT_MS = 15_000
+/** How long an attempt waits for its sampler to start. */
+const START_TIMEOUT_MS = 15_000
 
 /** What the script reads: a container's cgroup, a Linux VM's `/proc`, or a macOS VM's sizes alone. */
 export type SampleMode = AttemptResources['scope'] | 'darwin'
@@ -246,6 +248,12 @@ export function summarize(
 
 export type ResourceMeter = {
   /**
+   * Resolves once the readings have begun, every host has ended without them, `signal` aborts or
+   * {@link START_TIMEOUT_MS} has passed, so what the attempt does from then on is measured: an
+   * observer's container can take seconds to start on a busy daemon. Never rejects.
+   */
+  ready(signal?: AbortSignal): Promise<void>
+  /**
    * Takes the last reading, unless the sandbox is `gone`, ends the readings and returns the
    * resources. Never throws.
    */
@@ -300,12 +308,17 @@ export function startMeter(
   let stopping = false
   let current: { host: SamplerHost; proc: Pick<Spawned, 'pid' | 'kill'> } | undefined
   let measuring: SamplerHost | undefined
+  let begin = () => {}
+  const started = new Promise<void>((resolve) => {
+    begin = resolve
+  })
   const take = (line: string, host: SamplerHost, at = performance.now()) => {
     const parsed = parseLine(line, at)
     if (!parsed) return
     if ('limits' in parsed) {
       limits ??= parsed.limits
       measuring ??= host
+      begin()
     } else readings.push(parsed.reading)
   }
   const read = (async () => {
@@ -329,8 +342,23 @@ export function startMeter(
       await Promise.resolve(proc.kill()).catch(() => {})
     }
   })()
+  const ready = async (signal?: AbortSignal) => {
+    let end = () => {}
+    const ended = new Promise<void>((resolve) => {
+      end = resolve
+    })
+    const timer = setTimeout(end, START_TIMEOUT_MS)
+    signal?.addEventListener('abort', end, { once: true })
+    if (signal?.aborted) end()
+    await Promise.race([started, read, ended])
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', end)
+  }
   return {
+    ready,
     async stop({ gone }) {
+      // The last reading runs where the readings come from, so it waits for them to have begun.
+      if (!gone) await ready()
       stopping = true
       let final = false
       const host = measuring ?? current?.host
@@ -372,6 +400,7 @@ export function sharedMeter(
   machine: { sandbox: string; size?: string },
 ): ResourceMeter {
   return {
+    ready: async () => {},
     async stop({ gone }) {
       let limits: Limits | null = null
       const host = hosts.at(-1)
