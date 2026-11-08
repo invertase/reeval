@@ -213,15 +213,17 @@ jobs:
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
-      # US English and common misspellings everywhere but the user docs (_typos.toml).
+      # US English and common misspellings everywhere but the user docs (_typos.toml). typos'
+      # PyPI wheel through the runner's pipx: GitHub release downloads (crate-ci/typos) can 504.
       - if: ${{ !cancelled() }}
-        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
+        run: pipx run --spec typos==1.51.1 typos
       # Unused files, exports, types and dependencies across the workspace (knip.json).
       - if: ${{ !cancelled() }}
         run: pnpm knip
       # reeval and the examples resolve their workspace dependencies' types from dist/, and
       # the docs' generated blocks come from dist/cli.js (help, query schema).
-      - run: pnpm build
+      - if: ${{ !cancelled() }}
+        run: pnpm build
       - if: ${{ !cancelled() }}
         run: pnpm typecheck
       - name: persisted shapes (schema/ snapshots)
