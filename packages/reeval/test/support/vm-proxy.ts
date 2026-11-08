@@ -13,7 +13,14 @@ const TYPES = ['small', 'default', 'large', 'xlarge']
 const CREATE_KEYS = ['name', 'type', 'ttlSeconds', 'labels', 'noEnv', 'snapshots', 'monitoring']
 const LIST_KEYS = ['namePrefix', 'limit', 'cursor']
 
-export type VmProxyCaps = { maxLive: number; maxStarts: number; maxType: string; maxTtl: number }
+export type VmProxyCaps = {
+  maxLive: number
+  maxStarts: number
+  maxType: string
+  maxTtl: number
+  /** Seconds until the token expires with the runner VM; no VM lives past it. */
+  tokenTtl: number
+}
 
 export type FakeVmProxy = {
   /** REEVAL_VM_URL. */
@@ -55,7 +62,20 @@ export async function fakeVmProxy(
   boat: FakeBoat,
   caps: Partial<VmProxyCaps> = {},
 ): Promise<FakeVmProxy> {
-  const c: VmProxyCaps = { maxLive: 4, maxStarts: 32, maxType: 'small', maxTtl: 3600, ...caps }
+  const c: VmProxyCaps = {
+    maxLive: 4,
+    maxStarts: 32,
+    maxType: 'small',
+    maxTtl: 3600,
+    tokenTtl: 86_400,
+    ...caps,
+  }
+  const expiresAt = Date.now() + c.tokenTtl * 1000
+  const ttlFor = (asked: unknown) =>
+    Math.max(
+      1,
+      Math.min(Number(asked) || c.maxTtl, c.maxTtl, Math.floor((expiresAt - Date.now()) / 1000)),
+    )
   const runId = `run_${randomBytes(4).toString('hex')}`
   const token = `${runId}.${randomBytes(12).toString('base64url')}`
   const owned = new Set<string>()
@@ -93,7 +113,7 @@ export async function fakeVmProxy(
     const method = req.method ?? 'GET'
     const body = method === 'POST' || method === 'PATCH' ? await bodyOf(req) : undefined
     const bearer = req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1]
-    if (ended || bearer !== token) {
+    if (ended || bearer !== token || Date.now() >= expiresAt) {
       return error(401, 'unauthorized', 'The token is not valid for a live run.')
     }
     const [, collection, id, sub, ...rest] = url.pathname.replace(/^\/api\/vm/, '').split('/')
@@ -131,8 +151,12 @@ export async function fakeVmProxy(
         (b.noEnv !== undefined && b.noEnv !== true) ||
         (b.snapshots !== undefined && b.snapshots !== false) ||
         (b.labels !== undefined && Object.keys(b.labels as object).length > 16) ||
-        Object.keys((b.labels ?? {}) as object).some((k) => k.startsWith('reeval.platform.')) ||
-        String(b.name ?? '').startsWith('reeval-run-')
+        Object.keys((b.labels ?? {}) as object).some((k) =>
+          k.toLowerCase().startsWith('reeval.platform.'),
+        ) ||
+        String(b.name ?? '')
+          .toLowerCase()
+          .startsWith('reeval-run-')
       if (bad) return error(400, 'invalid_request', `Not a create body: ${JSON.stringify(b)}`)
       const type = String(b.type ?? 'small')
       if (TYPES.indexOf(type) > TYPES.indexOf(c.maxType)) {
@@ -145,14 +169,14 @@ export async function fakeVmProxy(
       }
       starts++
       inFlight++
-      const asked = Number(b.ttlSeconds) || c.maxTtl
+      const ttlSeconds = ttlFor(b.ttlSeconds)
       const idempotency = req.headers['idempotency-key']
       const made = await upstream(
         'POST',
         '/sandboxes',
         {
           ...b,
-          ttlSeconds: Math.min(asked, c.maxTtl),
+          ttlSeconds,
           labels: { ...(b.labels as object), [VM_RUN_LABEL]: runId },
         },
         idempotency ? { 'idempotency-key': `${runId}:${idempotency}` } : {},
@@ -160,7 +184,7 @@ export async function fakeVmProxy(
       if (!made.ok) return made.answer
       const sandbox = made.body.sandbox as { id: string }
       owned.add(sandbox.id)
-      return { status: made.status, body: made.body }
+      return { status: made.status, body: { ...made.body, ttlSeconds } }
     }
     if (!id && method === 'GET') {
       if ([...url.searchParams.keys()].some((k) => !LIST_KEYS.includes(k))) {
@@ -189,7 +213,7 @@ export async function fakeVmProxy(
       if (!b || Object.keys(b).some((k) => k !== 'ttlSeconds')) {
         return error(400, 'invalid_request', 'Only ttlSeconds can change.')
       }
-      const ttlSeconds = Math.min(Number(b.ttlSeconds) || c.maxTtl, c.maxTtl)
+      const ttlSeconds = ttlFor(b.ttlSeconds)
       const got = await upstream('PATCH', path, { ttlSeconds })
       return got.ok ? { status: 200, body: got.body } : got.answer
     }

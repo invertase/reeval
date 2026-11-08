@@ -39,6 +39,8 @@ export const HOSTED: VmService = {
   maxLabels: 16,
   reservedLabels: 'reeval.platform.',
   expiry: ", which lasts only as long as the run's runner VM: the run has ended or outlived it",
+  ttlLimit:
+    ": a hosted run's VMs live at most an hour, and never past the run's own end, so give the eval a shorter timeout",
 }
 
 /** The machine type the service takes for each size. */

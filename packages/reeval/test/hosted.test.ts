@@ -150,6 +150,12 @@ describe("preflight's check of the run's VM service", () => {
           /^REEVAL_SANDBOX_LABELS sets reeval\.platform\.vm-run, and keys starting reeval\.platform\. are reeval's own/,
       },
     )
+    await assert.rejects(
+      inRun({ ...on(p), labels: 'Reeval.Platform.Run=mine' }, () =>
+        checkHosted(hosted(), process.cwd()),
+      ),
+      { message: /^REEVAL_SANDBOX_LABELS sets Reeval\.Platform\.Run, and keys starting/ },
+    )
   })
 
   test('refuses more labels than the service takes, naming REEVAL_SANDBOX_LABELS', async () => {
@@ -235,6 +241,52 @@ describe('a token that expires mid-run', () => {
   })
 })
 
+describe('a VM granted less time than the attempt needs', () => {
+  const start = async (p: FakeVmProxy, runId: string, timeoutS: number) => {
+    const { provider } = await inRun(on(p), () =>
+      openHostedPool(hosted(), { runId, root: process.cwd() }),
+    )
+    return (await inRun(on(p), () =>
+      provider.start(new AbortController().signal, timeoutS + 600),
+    ).catch((e: Error) => e)) as Error
+  }
+  const tooShort = (granted: number, needs: number) =>
+    new RegExp(
+      `^reeval gave sandbox bx_\\w+ ${granted}s to live, and the attempt needs ${needs}s, its timeout and setup: a hosted run's VMs live at most an hour, and never past the run's own end, so give the eval a shorter timeout$`,
+    )
+
+  test('fails the start before the attempt runs, past the hour a VM may live, and deletes it', async () => {
+    const p = await proxy()
+    const error = await start(p, 'run-long', 7200)
+    assert.equal(error.name, 'InfraError')
+    assert.match(error.message, tooShort(3600, 7200))
+    assert.deepEqual(p.live(), [])
+  })
+
+  test('fails the start past the run’s own end', async () => {
+    const p = await proxy({ tokenTtl: 900 })
+    const error = await start(p, 'run-late', 1200)
+    assert.match(
+      error.message,
+      /^reeval gave sandbox bx_\w+ (899|900)s to live, and the attempt needs 1200s, its timeout and setup/,
+    )
+    assert.deepEqual(p.live(), [])
+  })
+
+  test('fails a reused VM’s keep-alive the same way, so the pool drops it', async () => {
+    const p = await proxy()
+    const made = (await (await create(p)).json()) as { sandbox: { id: string } }
+    const { provider } = await inRun(on(p), () =>
+      openHostedPool(hosted(), { runId: 'run-kept', root: process.cwd() }),
+    )
+    await inRun(on(p), () => provider.keepAlive?.(made.sandbox.id, 1200 + 600))
+    await assert.rejects(
+      inRun(on(p), async () => provider.keepAlive?.(made.sandbox.id, 7200 + 600)),
+      { message: tooShort(3600, 7200) },
+    )
+  })
+})
+
 describe("a run's cleanup", () => {
   test("deletes the run's VMs, and nobody else's", async () => {
     const p = await proxy()
@@ -274,7 +326,6 @@ export default defineConfig({
   harnesses: fakeHarness({ script: [[{ exec: 'true' }]] }),
   sandbox: hosted(${size}),
   egress: 'allow-all',
-  timeout: '2h',
 })
 `,
     'evals/a.eval.ts': `
@@ -285,7 +336,7 @@ evaluate('reaches', async (c) => {
 `,
   })
 
-  test('fails as infra, labeled, clamped and deleted, and the output never names the provider', async () => {
+  test('fails as infra, labeled and deleted, and the output never names the provider', async () => {
     const p = await proxy({ maxType: 'default' })
     const dir = (await project('hosted-unreachable', files("{ size: 'medium' }"))).dir
     const env = { [VM_URL]: p.url, [VM_TOKEN]: p.token }
@@ -319,7 +370,7 @@ evaluate('reaches', async (c) => {
     const name = String(created.body?.name)
     assert.match(name, /^reeval-[0-9a-f]{8}-[0-9a-f]{6}$/)
     assert.equal(created.body?.type, 'default', "medium is the service's default machine type")
-    assert.equal(created.body?.ttlSeconds, 3600, 'the proxy clamps the TTL')
+    assert.ok(Number(created.body?.ttlSeconds) <= 3600, 'the proxy clamps the TTL')
     assert.deepEqual(created.body?.labels, {
       'platform-run': 'run_42',
       'reeval-prefix': 'reeval',

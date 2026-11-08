@@ -21,6 +21,7 @@ import {
   missingSshTool,
   newKey,
   type PooledSshMachine,
+  TTL_MARGIN_S,
 } from './ssh-pool.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
@@ -53,6 +54,8 @@ export type VmService = {
   reservedLabels?: string
   /** Why a credential that worked at preflight can be refused later: `; it expired …`. */
   expiry?: string
+  /** Why the service can grant a machine less time than asked: `; it …`. */
+  ttlLimit?: string
 }
 
 /** What a pool of the service's machines is asked for. */
@@ -95,6 +98,8 @@ type BoatSandboxInfo = {
   name: string
   state: string
   error?: string | null
+  /** How long it lives from its last create or PATCH, as the service granted it. */
+  ttlSeconds?: number | null
 }
 
 /** What Boat answers when it authorizes a key: the user, the host key and where sshd answers. */
@@ -120,7 +125,7 @@ export type BoatClient = {
       monitoring: boolean
       labels: Record<string, string>
     }
-  }): Promise<{ sandbox: BoatSandboxInfo }>
+  }): Promise<{ sandbox: BoatSandboxInfo; ttlSeconds?: number | null }>
   get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
   sshKey(p: { sandboxId: string; sshKeyRequest: { key: string } }): Promise<BoatSshReply>
   sandboxes(
@@ -130,7 +135,10 @@ export type BoatClient = {
     sandboxes: BoatSandboxInfo[]
     pageInfo?: { nextCursor: string | null; hasMore: boolean }
   }>
-  update(p: { sandboxId: string; updateSandboxRequest: { ttlSeconds: number } }): Promise<unknown>
+  update(p: {
+    sandboxId: string
+    updateSandboxRequest: { ttlSeconds: number }
+  }): Promise<{ sandbox?: BoatSandboxInfo }>
   deleteSandbox(
     p: { sandboxId: string; xAsciiConfirmDelete: string },
     init?: { signal?: AbortSignal },
@@ -221,6 +229,19 @@ export async function boatError(error: unknown): Promise<string> {
 }
 
 const status = (error: unknown) => (error as { response?: Response }).response?.status
+
+/**
+ * The attempt can't finish on a machine granted `granted` seconds of the `asked` it asked for,
+ * which leaves `TTL_MARGIN_S` for teardown: an error saying so, rather than the machine stopping
+ * mid-attempt.
+ */
+function tooShort(service: VmService, id: string, asked: number, granted?: number | null) {
+  const needs = asked - TTL_MARGIN_S
+  if (typeof granted !== 'number' || granted >= needs) return null
+  return new InfraError(
+    `${service.name} gave sandbox ${id} ${granted}s to live, and the attempt needs ${needs}s, its timeout and setup${service.ttlLimit ?? ''}`,
+  )
+}
 
 /** `error` from `doing` as an attempt's infra error, a refused credential saying so. */
 async function serviceFailed(service: VmService, error: unknown, doing: string, why?: string) {
@@ -540,7 +561,9 @@ export function vmPoolProvider(
     rateLimited: (error) =>
       error instanceof BoatRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
     async keepAlive(id, ttlSeconds) {
-      await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+      const updated = await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+      const short = tooShort(service, id, ttlSeconds, updated?.sandbox?.ttlSeconds)
+      if (short) throw short
     },
     async remove(id) {
       await deleteSandbox(api, id).catch(() => {})
@@ -585,6 +608,8 @@ export function vmPoolProvider(
             throw await serviceFailed(service, error, "didn't create a sandbox", why)
           })
         id = made.sandbox.id
+        const short = tooShort(service, id, ttlSeconds, made.ttlSeconds ?? made.sandbox.ttlSeconds)
+        if (short) throw short
         await untilReady(service, api, id, signal)
         ready = true
         const ssh = await api
@@ -744,7 +769,7 @@ export async function checkVmService(
     throw refuse((error as Error).message, true)
   }
   const reserved = Object.keys(labels).find(
-    (key) => service.reservedLabels && key.startsWith(service.reservedLabels),
+    (key) => service.reservedLabels && key.toLowerCase().startsWith(service.reservedLabels),
   )
   if (reserved) {
     throw refuse(
