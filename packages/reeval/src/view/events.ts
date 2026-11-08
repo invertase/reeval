@@ -29,11 +29,11 @@ export type RunEventsHeader = {
    */
   heartbeatMs?: number
   /**
-   * The project root from the `reeval run`'s current directory, as a `/` path (`''` when it ran in
+   * The `reeval run`'s current directory from its project root, as a `/` path (`''` when it ran in
    * the root). The paths the run prints are from that directory, so a reader turns them into the
    * project's with it. Absent from an older reeval's streams, and when the two share no path.
    */
-  root?: string
+  cwd?: string
 }
 
 /** The last line a `reeval run` writes to the stream: its exit code. */

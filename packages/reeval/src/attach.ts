@@ -45,32 +45,17 @@ const SILENT = Symbol('silent')
 
 /**
  * A path the run printed, as this viewer reads it. The run prints paths from its own current
- * directory, which mean nothing where the viewer is, so with the header's `root` each becomes the
+ * directory, which mean nothing where the viewer is, so with the header's `cwd` each becomes the
  * project's: from this viewer's directory when attach knows its project root, else from the root.
- * A stream without `root` keeps its paths, and so does an absolute path.
+ * A stream without `cwd` keeps its paths, and so does an absolute path.
  */
 export function viewerPath(header: RunEventsHeader, root: string | undefined) {
-  const { root: runRoot } = header
+  const { cwd } = header
   return (path: string): string => {
-    if (runRoot === undefined || isAbsolute(path) || win32.isAbsolute(path)) return path
-    const inProject = between(runRoot, path)
-    return root === undefined ? inProject || '.' : fromCwd(join(root, inProject)) || '.'
+    if (cwd === undefined || isAbsolute(path) || win32.isAbsolute(path)) return path
+    const inProject = posix.join(cwd, path)
+    return root === undefined ? inProject : fromCwd(join(root, inProject)) || '.'
   }
-}
-
-/**
- * `path` from `base`, two relative paths from one directory whose name and parents the viewer
- * doesn't know: they climb from it into stand-in parents, which `relative` cancels out.
- */
-function between(base: string, path: string): string {
-  const climbs = (p: string) => {
-    const parts = posix.normalize(p).split('/')
-    let n = 0
-    while (parts[n] === '..') n++
-    return n
-  }
-  const top = `/${'_/'.repeat(Math.max(climbs(base), climbs(path)))}`
-  return posix.relative(posix.join(top, base), posix.join(top, path))
 }
 
 /** The event with the paths the renderers print made the viewer's, by `shown`. */

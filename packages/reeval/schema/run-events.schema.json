@@ -6306,6 +6306,10 @@
       "description": "The first line a `reeval run` writes to the stream: what the renderers need to draw it.",
       "type": "object",
       "properties": {
+        "cwd": {
+          "description": "The `reeval run`'s current directory from its project root, as a `/` path (`''` when it ran in the root). The paths the run prints are from that directory, so a reader turns them into the project's with it. Absent from an older reeval's streams, and when the two share no path.",
+          "type": "string"
+        },
         "harness": {
           "description": "The config's first harness kind, which names attempts' axes on detail lines.",
           "type": "string"
@@ -6323,10 +6327,6 @@
         },
         "reeval": {
           "description": "The reeval that wrote the stream.",
-          "type": "string"
-        },
-        "root": {
-          "description": "The project root from the `reeval run`'s current directory, as a `/` path (`''` when it ran in the root). The paths the run prints are from that directory, so a reader turns them into the project's with it. Absent from an older reeval's streams, and when the two share no path.",
           "type": "string"
         },
         "runId": {

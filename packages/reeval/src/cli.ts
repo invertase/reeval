@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseCli } from './cli-parse.ts'
@@ -43,7 +43,7 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
-import { fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
+import { cwdIn, fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
@@ -743,7 +743,7 @@ async function runCommand(
   if (startedWith && savedEvents) startedWith.events = savedEvents
   const eventsUrl = flags['events-url']
   if (eventsTo || eventsUrl) {
-    const shownRoot = fromCwd(root)
+    const cwd = cwdIn(root)
     eventStream = openEventStream({
       ...(eventsTo ? { file: eventsTo, append: continued } : {}),
       ...(eventsUrl ? { url: eventsUrl } : {}),
@@ -753,7 +753,7 @@ async function runCommand(
         startedAt: new Date().toISOString(),
         harness,
         verbosity: ctx.verbosity ?? 0,
-        ...(isAbsolute(shownRoot) ? {} : { root: shownRoot }),
+        ...(cwd === undefined ? {} : { cwd }),
       },
       warn: (message) => process.stderr.write(yellow(`reeval: ${message}\n`)),
     })
