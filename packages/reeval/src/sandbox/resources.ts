@@ -27,8 +27,11 @@ export type SampleMode = AttemptResources['scope'] | 'darwin'
  * less `inactive_file`, its memory peak `memory.peak` and its throttling `cpu.stat`'s
  * `nr_periods`, `nr_throttled` and `throttled_usec`; a VM's CPU is `/proc/stat`'s busy ticks
  * (steal is the hypervisor's, not the VM's), its memory `MemTotal` less `MemAvailable`, and its
- * disks every block device but loop, RAM, CD and stacked ones. A macOS VM has neither, so it
- * prints its `sysctl` sizes and stops. From outside, the container's cgroup is the directory
+ * disks every block device but loop, RAM, CD and stacked ones. A VM whose cgroup root sets a memory
+ * limit, which a VM's never does, is a container in a cgroup namespace of its own (a `daytona()`
+ * sandbox), where `/proc` is the host's: it reads that cgroup as a container's, with its CPU in
+ * microseconds. A macOS VM has neither, so it prints its `sysctl` sizes and stops. An uptime the
+ * shell can't read (Daytona's) is `-`. From outside, the container's cgroup is the directory
  * beside the script's own cgroup, or up to two levels up, named for its id, but not Podman's
  * `libpod-conmon-<id>.scope`, which holds the container's monitor under systemd. A container's
  * cgroup the script can't find, or that's
@@ -41,7 +44,11 @@ if [ "$1" = darwin ]; then
   echo "limits - - $(sysctl -n hw.memsize || echo -) $(sysctl -n hw.ncpu || echo -) -"
   exit 0
 fi
-if [ "$1" = container ]; then
+cg= tk=-
+if [ "$1" = machine ] && [ -r $c/memory.max ] && read -r m < $c/memory.max && [ "$m" != max ]; then
+  cg=1 tk=1000000
+fi
+if [ "$1" = container ] || [ -n "$cg" ]; then
   if [ -n "$3" ]; then
     own=
     while IFS= read -r l; do case $l in 0::*) own=\${l#0::} ;; esac; done < /proc/self/cgroup
@@ -61,7 +68,7 @@ if [ "$1" = container ]; then
   q=- p=- m=-
   [ -r $c/cpu.max ] && read -r q p < $c/cpu.max
   [ -r $c/memory.max ] && read -r m < $c/memory.max
-  echo "limits $q $p $m $(nproc 2>/dev/null || echo -) -"
+  echo "limits $q $p $m $(nproc 2>/dev/null || echo -) $tk"
 else
   [ -r /proc/stat ] && [ -r /proc/meminfo ] || exit 0
   while read -r k v _; do [ "$k" = MemTotal: ] && t=$v; done < /proc/meminfo
@@ -70,7 +77,8 @@ fi
 sample() {
   up=-
   [ -r /proc/uptime ] && read -r up _ < /proc/uptime
-  if [ "$1" = container ]; then
+  [ -n "$up" ] || up=-
+  if [ "$1" = container ] || [ -n "$cg" ]; then
     u=0 i=0 np=- nt=- tu=- pk=-
     read -r cur < $c/memory.current || exit 0
     while read -r k v; do
