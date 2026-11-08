@@ -797,11 +797,11 @@
               "type": "number"
             },
             "sandbox": {
-              "description": "The sandbox's provider: `docker`, `podman`, `boat` or `tart`.",
+              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`.",
               "type": "string"
             },
             "size": {
-              "description": "The provider's machine size, where it has sizes: `boat({ type })`.",
+              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`.",
               "type": "string"
             },
             "vcpus": {
@@ -812,11 +812,11 @@
           "required": ["sandbox"]
         },
         "scope": {
-          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).",
+          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).",
           "enum": ["container", "machine"]
         },
         "shared": {
-          "description": "The VM ran other attempts at the same time (`boat({ attemptsPerMachine })` above 1), so its whole-VM usage isn't this attempt's: `usage` is left out.",
+          "description": "The VM ran other attempts at the same time (`attemptsPerMachine` above 1), so its whole-VM usage isn't this attempt's: `usage` is left out.",
           "const": true
         },
         "usage": {

@@ -74,7 +74,9 @@ export const loadDaytonaSdk = optionalPeer<DaytonaSdk>(DAYTONA_SDK, {
 })
 
 /** Why `sandbox`'s key can't be read from this process's environment, or null. */
-export function daytonaKeyProblem(sandbox: Pick<DaytonaSandboxDescriptor, 'apiKey'>): string | null {
+export function daytonaKeyProblem(
+  sandbox: Pick<DaytonaSandboxDescriptor, 'apiKey'>,
+): string | null {
   const name = sandbox.apiKey.from
   const value = process.env[name]
   if (!value) return `daytona() needs a Daytona API key in ${name}, which isn't set`
@@ -272,11 +274,9 @@ export function daytonaPoolProvider(
             throw new InfraError(`Daytona didn't start a sandbox: ${messageOf(error)}`)
           })
         signal.throwIfAborted()
-        const access = await sandbox
-          .createSshAccess(SSH_TOKEN_MINUTES)
-          .catch((error: unknown) => {
-            throw new InfraError(`Daytona didn't give SSH access: ${messageOf(error)}`)
-          })
+        const access = await sandbox.createSshAccess(SSH_TOKEN_MINUTES).catch((error: unknown) => {
+          throw new InfraError(`Daytona didn't give SSH access: ${messageOf(error)}`)
+        })
         registerSecret(access.token)
         const target = sshTarget(access.sshCommand)
         if (!target) {

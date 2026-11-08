@@ -57,6 +57,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   vertexToken: async () => SECRET,
   missingSshTool: async () => null,
   boatAccount: async () => {},
+  daytonaAccount: async () => {},
   ...over,
 })
 
@@ -145,6 +146,56 @@ export default defineConfig({
       '.env.local',
     )
     assert.deepEqual(docker, [], 'no rows without boat()')
+  })
+
+  test('daytona(): the OpenSSH client, then each organization by its key', async () => {
+    const config = await loadConfig(
+      join(
+        (
+          await project('doctor-daytona', {
+            'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { daytona } from 'reeval/sandbox/daytona'
+export default defineConfig({
+  harnesses: cursor({ model: 'composer-2.5' }),
+  sandbox: daytona(),
+  egress: 'allow-all',
+})
+`,
+          })
+        ).dir,
+        'reeval.config.ts',
+      ),
+    )
+    const uses = configuredUses(config).map((u) => ({
+      id: '',
+      harness: u.harness,
+      sandbox: u.sandbox,
+    }))
+    const rows = (over: Partial<DoctorDeps>, online = false) =>
+      checkSandboxes(config, deps(over), online, { uses }, '.env.local')
+    const ok = await rows({ env: { DAYTONA_API_KEY: SECRET } }, true)
+    assert.deepEqual(
+      ok.map((c) => `${c.id} ${c.status} ${c.summary}`),
+      [
+        'ssh ok an OpenSSH client for daytona()',
+        'daytona ok Daytona takes the key in DAYTONA_API_KEY',
+      ],
+    )
+    const failing = await rows({
+      env: { DAYTONA_API_KEY: SECRET },
+      daytonaAccount: async () => {
+        throw new Error(`daytona() needs Daytona's SDK, which isn't installed (${SECRET})`)
+      },
+    })
+    assert.deepEqual(statuses(failing), ['ok', 'fail'])
+    assert.match(failing[1]?.summary ?? '', /needs Daytona's SDK/)
+    noSecret(failing)
+    const unset = await rows({ env: {} })
+    assert.equal(
+      unset[1]?.summary,
+      "daytona() needs a Daytona API key in DAYTONA_API_KEY, which isn't set",
+    )
   })
 
   test('a run stops on Docker it cannot use, naming the fix for the platform', () => {

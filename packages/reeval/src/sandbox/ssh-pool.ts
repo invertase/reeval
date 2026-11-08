@@ -57,9 +57,22 @@ const homeLabel = (options: SandboxOptions) => {
 }
 
 /** A fresh ed25519 key pair in `dir`, made by the host's OpenSSH. */
-export async function newKey(dir: string, provider: string): Promise<{ file: string; pub: string }> {
+export async function newKey(
+  dir: string,
+  provider: string,
+): Promise<{ file: string; pub: string }> {
   const file = join(dir, 'id_ed25519')
-  const made = await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'reeval', '-f', file])
+  const made = await run('ssh-keygen', [
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-C',
+    'reeval',
+    '-f',
+    file,
+  ])
   if (made.exitCode !== 0) {
     throw new InfraError(
       `Couldn't make an SSH key for the ${provider} sandbox: ssh-keygen failed: ${made.stderr.trim()}`,

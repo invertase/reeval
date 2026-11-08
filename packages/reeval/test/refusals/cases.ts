@@ -49,6 +49,7 @@ import { PrepareError } from '../../src/sandbox/provider.ts'
 import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-images.ts'
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
+import { daytona } from '../../src/sandbox-daytona.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,
@@ -772,6 +773,31 @@ export const CASES: Record<string, Case[]> = {
         {
           harnesses: cursor({ model: 'composer-2.5' }),
           sandbox: boat({ attemptsPerMachine: 3, reuse: true }),
+          egress: 'allow-all',
+        },
+      ),
+    ],
+    [
+      'cursor on daytona()',
+      planned(
+        {},
+        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: daytona(), egress: 'allow-all' },
+      ),
+    ],
+    [
+      "daytona() under egress 'proxy'",
+      planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: daytona() }),
+    ],
+    ['daytona() size unknown', any(daytona, { size: 'huge' })],
+    ['daytona() type, a boat() option', any(daytona, { type: 'large' })],
+    ['daytona() attemptsPerMachine over 8', any(daytona, { attemptsPerMachine: 9 })],
+    [
+      'claudeCode sharing a daytona() machine',
+      planned(
+        {},
+        {
+          harnesses: claudeCode({ model: 'claude-haiku-5-5' }),
+          sandbox: daytona({ attemptsPerMachine: 2 }),
           egress: 'allow-all',
         },
       ),

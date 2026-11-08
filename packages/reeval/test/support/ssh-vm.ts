@@ -1,5 +1,6 @@
 // An SSH VM in a container, for the fakes of providers whose machines are Linux VMs reached over
-// SSH (Boat's): sshd, a login user with passwordless sudo, and a Node under that user's home.
+// SSH (Boat's and Daytona's): sshd, a login user with passwordless sudo, and a Node under that
+// user's home.
 // Each container is labeled with its VM's name, so a test can look into one from outside.
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -14,6 +15,11 @@ export type SshVm = {
   /** `<type> <base64>`, as Boat's `hostKey`. */
   hostKey: string
   authorize(publicKey: string): Promise<void>
+  /**
+   * Lets `token` log in as the login user with no key or password, as Daytona's SSH gateway takes
+   * a token for a user name.
+   */
+  allowToken(token: string): Promise<void>
   remove(): Promise<void>
 }
 
@@ -30,6 +36,7 @@ RUN useradd --create-home --shell /bin/bash user \\
  && mv /usr/local/bin/node /home/user/.nvm/versions/node/current/bin/node \\
  && ln -s /home/user/.nvm/versions/node/current/bin/node /usr/local/bin/node \\
  && chown -R user:user /home/user && chmod 750 /home/user && chmod 700 /home/user/.ssh \\
+ && echo 'PermitEmptyPasswords yes' > /etc/ssh/sshd_config.d/token.conf \
  && ssh-keygen -A
 CMD ["/usr/sbin/sshd", "-D", "-e"]
 `
@@ -144,6 +151,17 @@ export async function startSshVm(name: string): Promise<SshVm> {
           ],
           `${publicKey}\n`,
         )
+      },
+      // A second name for the login user's uid, with no password: sshd's `none` method lets it in,
+      // and sudo, which goes by uid, finds the user's rule.
+      allowToken: async (token) => {
+        await docker([
+          'exec',
+          id,
+          'sh',
+          '-c',
+          `useradd -o -u "$(id -u user)" -g user -d /home/user -M -s /bin/bash ${token} && passwd -d ${token} >/dev/null`,
+        ])
       },
       remove,
     }

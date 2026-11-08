@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { parseProbe, probeScript } from '../src/attempt/serve.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
+import { runLabels } from '../src/sandbox/daytona.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import { SANDBOX_KINDS } from '../src/sandbox/kinds.ts'
 import type { MachineDescriptor, MachineProvider } from '../src/sandbox/machine.ts'
@@ -19,7 +20,9 @@ import { MACHINE_PROVIDERS } from '../src/sandbox/machines.ts'
 import { vmPrefix } from '../src/sandbox/tart.ts'
 import { hasNetworkSession, type Sandbox } from '../src/sandbox/types.ts'
 import { boat } from '../src/sandbox-boat.ts'
+import { daytona } from '../src/sandbox-daytona.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
+import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import { fakeTart, holdLoopback } from './support/fake-tart.ts'
 import { buildSshVmImage, SSH_VM_IMAGE, SSH_VM_LABEL, startSshVm } from './support/ssh-vm.ts'
 
@@ -56,6 +59,24 @@ let releaseLoopback = () => {}
 const savedTartEnv: Record<string, string | undefined> = {}
 let boatApi: FakeBoat | undefined
 const savedBoatEnv = { url: process.env.BOAT_BASE_URL, key: process.env.BOAT_API_KEY }
+let daytonaApi: FakeDaytona | undefined
+const savedDaytonaEnv = { url: process.env.DAYTONA_API_URL, key: process.env.DAYTONA_API_KEY }
+const sshVmSkip =
+  !requireDocker &&
+  !sshVmReady &&
+  `needs Docker and ${SSH_VM_IMAGE} (REEVAL_TEST_REQUIRE_DOCKER=1 builds it)`
+/** Runs a root shell script in the fake SSH VM named `name`. */
+const inSshVm = (name: string, script: string) => {
+  const container = execFileSync('docker', [
+    'ps',
+    '-q',
+    '--filter',
+    `label=${SSH_VM_LABEL}=${name}`,
+  ])
+    .toString()
+    .trim()
+  return execFileSync('docker', ['exec', container, 'sh', '-c', script]).toString()
+}
 
 const BACKENDS: Record<MachineKind, Backend> = {
   tart: {
@@ -88,10 +109,7 @@ const BACKENDS: Record<MachineKind, Backend> = {
     },
   },
   boat: {
-    skip:
-      !requireDocker &&
-      !sshVmReady &&
-      `needs Docker and ${SSH_VM_IMAGE} (REEVAL_TEST_REQUIRE_DOCKER=1 builds it)`,
+    skip: sshVmSkip,
     async start() {
       buildSshVmImage()
       boatApi = await fakeBoat(startSshVm)
@@ -114,17 +132,42 @@ const BACKENDS: Record<MachineKind, Backend> = {
     asked: (runId) => BACKENDS.boat.machines(runId).length > 0,
     // A container's sshd takes seconds to answer.
     slowBoot: () => () => {},
-    inMachine(name, script) {
-      const container = execFileSync('docker', [
-        'ps',
-        '-q',
-        '--filter',
-        `label=${SSH_VM_LABEL}=${name}`,
-      ])
-        .toString()
-        .trim()
-      return execFileSync('docker', ['exec', container, 'sh', '-c', script]).toString()
+    inMachine: inSshVm,
+  },
+  daytona: {
+    skip: sshVmSkip,
+    async start() {
+      buildSshVmImage()
+      daytonaApi = await fakeDaytona(startSshVm)
+      process.env.DAYTONA_API_URL = daytonaApi.url
+      process.env.DAYTONA_API_KEY = daytonaApi.key
     },
+    async stop() {
+      await daytonaApi?.close()
+      for (const [name, value] of [
+        ['DAYTONA_API_URL', savedDaytonaEnv.url],
+        ['DAYTONA_API_KEY', savedDaytonaEnv.key],
+      ] as const) {
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      }
+    },
+    descriptor: () => daytona(),
+    machines(runId) {
+      const labels = runLabels(daytona(), runId)
+      const mine = new Set(
+        (daytonaApi?.created() ?? [])
+          .filter((s) => Object.entries(labels).every(([k, v]) => s.labels[k] === v))
+          .map((s) => s.name),
+      )
+      return (daytonaApi?.live() ?? []).filter((name) => mine.has(name))
+    },
+    asked: (runId) =>
+      (daytonaApi?.created() ?? []).some(
+        (s) => s.labels['reeval-run'] === runLabels(daytona(), runId)['reeval-run'],
+      ),
+    slowBoot: () => () => {},
+    inMachine: inSshVm,
   },
 }
 

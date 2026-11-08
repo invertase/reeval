@@ -64,7 +64,8 @@ export type _SameAsSchema = [
   Assert<Same<z.input<typeof daytonaOptionsSchema>, DaytonaOptions>>,
 ]
 
-const SIZES = "pick a size with size: 'small' (1 vCPU, 1 GiB), 'medium' (2 vCPUs, 4 GiB) or 'large'"
+const SIZES =
+  "pick a size with size: 'small' (1 vCPU, 1 GiB), 'medium' (2 vCPUs, 4 GiB) or 'large' (4 vCPUs, 8 GiB)"
 
 /** Docker's options, which a Daytona sandbox doesn't have (yet), and what to do instead. */
 const NOT_ON_DAYTONA: Record<string, string> = {

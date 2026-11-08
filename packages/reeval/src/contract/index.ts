@@ -3,7 +3,6 @@
 // hand-written type of the same name.
 import type { z } from 'zod'
 import { boatSandboxSchema } from './boat.ts'
-import { daytonaSandboxSchema } from './daytona.ts'
 import {
   analysisConfigDataSchema,
   budgetSchema,
@@ -19,6 +18,7 @@ import {
   s3StoreDescriptorSchema,
   s3StoreEnvSchema,
 } from './config.ts'
+import { daytonaSandboxSchema } from './daytona.ts'
 import {
   declarationTreeSchema,
   declaredEvalSchema,

@@ -402,6 +402,77 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "DaytonaApiKey": {
+      "description": "The host variable holding a Daytona API key, made by `secret.fromEnv`.",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "secret"
+        }
+      },
+      "required": ["from", "kind"]
+    },
+    "DaytonaSandboxDescriptor": {
+      "description": "A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`.",
+      "type": "object",
+      "properties": {
+        "apiKey": {
+          "description": "The host variable with the Daytona API key, read on the host only.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "kind": {
+              "type": "string",
+              "const": "secret"
+            }
+          },
+          "required": ["from", "kind"],
+          "additionalProperties": false
+        },
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "id": {
+          "description": "Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "daytona"
+        },
+        "maxConcurrent": {
+          "description": "The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`.",
+          "type": "number"
+        },
+        "prefix": {
+          "description": "The start of every sandbox name reeval gives Daytona, so a run's cleanup finds only its own: lowercase letters, digits and dashes.",
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "The sandbox size. Default `medium`.",
+          "type": "string",
+          "enum": ["small", "medium", "large"]
+        }
+      },
+      "required": ["apiKey", "kind", "prefix"],
+      "additionalProperties": false
+    },
     "DebugUpload": {
       "enum": ["all", "none", "requests"]
     },
@@ -2164,6 +2235,9 @@
               "$ref": "#/$defs/BoatSandboxDescriptor"
             },
             {
+              "$ref": "#/$defs/DaytonaSandboxDescriptor"
+            },
+            {
               "$ref": "#/$defs/DockerSandboxDescriptor"
             },
             {
@@ -2892,6 +2966,9 @@
         },
         {
           "$ref": "#/$defs/BoatSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/DaytonaSandboxDescriptor"
         }
       ]
     },

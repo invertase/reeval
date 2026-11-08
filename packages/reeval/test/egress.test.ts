@@ -330,9 +330,10 @@ describe('automatic hosts', () => {
 })
 
 describe('what a sandbox can enforce', () => {
-  test('each provider declares it: Docker all of it and recording, Tart and Boat recording, the fake nothing', () => {
+  test('each provider declares it: Docker all of it and recording, Tart, Boat and Daytona recording, the fake nothing', () => {
     assert.deepEqual(SANDBOX_EGRESS, {
       boat: { enforce: 'none', record: true, switches: false },
+      daytona: { enforce: 'none', record: true, switches: false },
       docker: { enforce: 'allowlist', record: true, switches: true },
       fake: { enforce: 'none', record: false, switches: true },
       tart: { enforce: 'none', record: true, switches: false },
