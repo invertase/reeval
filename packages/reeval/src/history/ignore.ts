@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { git, repoTop } from '../git.ts'
@@ -10,6 +11,7 @@ import { fromCwd, relativeFile } from '../ids.ts'
  */
 export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log drops setup.log and checks/*.log.
 !*.json
+!*.zip
 !*.jsonl
 !*.md
 !*.patch
@@ -19,12 +21,14 @@ export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log dro
 `
 
 /**
- * Marks recorded runs generated, so GitHub collapses them in a pull request's diff. Matches run
- * ids (`RUN_ID`) only: `history.dir` may be a folder that holds other files too.
+ * Marks recorded runs generated, so GitHub collapses them in a pull request's diff, and their
+ * archives binary, so git never diffs or merges one as text. Matches run ids (`RUN_ID`) only:
+ * `history.dir` may be a folder that holds other files too.
  */
 export const HISTORY_GITATTRIBUTES = `# Recorded runs: GitHub collapses them in a pull request's diff.
 /[0-9]*T[0-9]*Z_*.json linguist-generated=true
 /[0-9]*T[0-9]*Z_*/** linguist-generated=true
+/[0-9]*T[0-9]*Z_*.zip binary linguist-generated=true
 `
 
 export const historyGitignorePath = (historyDir: string) => join(historyDir, '.gitignore')
@@ -42,30 +46,45 @@ async function ensureFile(historyDir: string, path: string, content: string): Pr
   return path
 }
 
-/** Writes the history-folder `.gitignore` when it's missing; leaves a file that's already there. */
-export const ensureHistoryGitignore = (historyDir: string): Promise<string> =>
-  ensureFile(historyDir, historyGitignorePath(historyDir), HISTORY_GITIGNORE)
-
 /**
- * Writes the history-folder `.gitattributes`, or appends `HISTORY_GITATTRIBUTES` to one that
- * lacks any of its rules, keeping what's there.
+ * Writes `content` to `path`, or adds the rules of `content` an existing file lacks, keeping
+ * what's there: the whole block when it has none of them.
  */
-export async function ensureHistoryGitattributes(historyDir: string): Promise<string> {
-  const path = historyGitattributesPath(historyDir)
+async function ensureRules(historyDir: string, path: string, content: string): Promise<string> {
   let existing: string
   try {
     existing = await readFile(path, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    return ensureFile(historyDir, path, HISTORY_GITATTRIBUTES)
+    return ensureFile(historyDir, path, content)
   }
   const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
-  const rules = HISTORY_GITATTRIBUTES.split('\n').filter((l) => l && !l.startsWith('#'))
-  if (rules.every((r) => lines.has(r))) return path
-  const gap = existing === '' || existing.endsWith('\n') ? '' : '\n'
-  await writeFile(path, `${existing}${gap}${HISTORY_GITATTRIBUTES}`)
+  const rules = content.split('\n').filter((l) => l && !l.startsWith('#'))
+  const missing = rules.filter((r) => !lines.has(r))
+  if (missing.length === 0) return path
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n'
+  const gap = existing === '' || existing.endsWith('\n') ? '' : eol
+  const added = missing.length === rules.length ? content : `${missing.join('\n')}\n`
+  await writeFile(path, `${existing}${gap}${added.replaceAll('\n', eol)}`)
   return path
 }
+
+/**
+ * Writes the history-folder `.gitignore` when it's missing. An existing one is the user's: a
+ * later `!` rule would undo their own ignores, so it only gains `!*.zip` when runs are archived.
+ */
+export async function ensureHistoryGitignore(
+  historyDir: string,
+  archive: boolean,
+): Promise<string> {
+  const path = historyGitignorePath(historyDir)
+  if (!existsSync(path)) return ensureFile(historyDir, path, HISTORY_GITIGNORE)
+  return archive ? ensureRules(historyDir, path, '!*.zip\n') : path
+}
+
+/** Writes the history-folder `.gitattributes`, or adds the rules of `HISTORY_GITATTRIBUTES` it lacks. */
+export const ensureHistoryGitattributes = (historyDir: string): Promise<string> =>
+  ensureRules(historyDir, historyGitattributesPath(historyDir), HISTORY_GITATTRIBUTES)
 
 export type IgnoredRecorded = { path: string; rule: string; source: string }
 

@@ -516,7 +516,7 @@ describe('run archives', () => {
       /read failed/,
     )
     assert.deepEqual(
-      readdirSync(dir).filter((n) => n.startsWith('failed.zip')),
+      readdirSync(dir).filter((n) => n.endsWith('failed.zip')),
       [],
     )
   })

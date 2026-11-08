@@ -2500,6 +2500,11 @@ export type HistoryConfig = {
    * (`debug.log` and `trace.ndjson` too). Rescanned for secrets first; `local()` takes `'none'` only.
    */
   debug?: DebugUpload
+  /**
+   * Also write each recorded run as one zip, `<runId>.zip` beside its record, holding the record
+   * and every file recorded with it. Off by default; `local()` only.
+   */
+  archive?: boolean
 }
 
 export type DebugUpload = 'none' | 'requests' | 'all'
@@ -2873,6 +2878,8 @@ export type ResolvedHistory = {
   dir: string
   artifacts: ArtifactLevel
   debug: DebugUpload
+  /** Write each recorded run's `<runId>.zip` too (`history.archive`). */
+  archive: boolean
   /**
    * Which recorded runs the history commands list: a remote store holds every branch's, so it
    * lists those whose commit HEAD reaches unless `--all-branches` asks for all. `local()` has none.

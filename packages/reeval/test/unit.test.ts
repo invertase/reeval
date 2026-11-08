@@ -1356,6 +1356,46 @@ test('the history folder sits in the directory the evals live in', () => {
   assert.throws(() => resolveConfig({ history: { artifacts: 'some' as 'all' } }, '/p'), /artifacts/)
 })
 
+test('history.archive is off by default and reads the same from reeval.config.ts and reeval.yaml', () => {
+  assert.equal(resolveConfig({}, '/p').history.archive, false)
+  const ts = resolveConfig(
+    { history: { archive: true }, profiles: { ci: { limit: { runs: 1 } } } },
+    '/p',
+  )
+  const yaml = resolveConfigData(
+    { history: { archive: true }, profiles: { ci: { limit: { runs: 1 } } } },
+    '/p',
+    'reeval.yaml',
+  )
+  assert.equal(ts.history.archive, true)
+  assert.deepEqual(yaml.history, ts.history)
+  const local = { history: { store: { kind: 'local' as const, dir: 'runs' } } }
+  const kept = resolveConfig({ history: { archive: true }, profiles: { mine: local } }, '/p')
+  assert.equal(selectProfile(kept, 'mine', {})?.history?.archive, true, "a profile's keeps it")
+  const off = resolveConfig(
+    { history: { archive: true }, profiles: { mine: { history: { archive: false } } } },
+    '/p',
+  )
+  assert.equal(selectProfile(off, 'mine', {})?.history?.archive, false, 'or turns it off')
+  assert.throws(
+    () => resolveConfig({ history: { archive: null as unknown as boolean } }, '/p'),
+    /history\.archive in reeval\.config\.ts is true or false \(got null\)/,
+    'null is refused as reeval.yaml refuses it',
+  )
+  for (const [config, file] of [
+    [
+      () => resolveConfig({ history: { archive: 'yes' as unknown as boolean } }, '/p'),
+      'reeval.config.ts',
+    ],
+    [
+      () => resolveConfigData({ history: { archive: 'yes' } } as never, '/p', 'reeval.yaml'),
+      'reeval.yaml',
+    ],
+  ] as const) {
+    assert.throws(config, new RegExp(`history.archive in ${file.replace('.', '\\.')}`))
+  }
+})
+
 test("a profile's history.store replaces the config's and keeps its artifacts", () => {
   const config = resolveConfig(
     {
