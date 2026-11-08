@@ -20,7 +20,7 @@
     },
     "packages/reeval": {
       "entry": [
-        "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,sandbox-hosted,store-local,store-s3,judge,testing,bin}.ts",
+        "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,internal-vm,store-local,store-s3,judge,testing,bin}.ts",
         "src/studio/index.ts",
         "test/**/*.{ts,mjs}",
         "scripts/**/*.ts"

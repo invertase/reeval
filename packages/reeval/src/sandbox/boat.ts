@@ -29,8 +29,8 @@ export const BOAT_SDK = '@boatdev/sdk'
 export const BOAT_BASE_URL = 'BOAT_BASE_URL'
 
 /**
- * Whose API the VMs come from, as messages and the record name it: Boat's own for `boat()`, or one
- * that speaks Boat's API under another name (`hosted()`).
+ * Whose API the VMs come from, as messages and the record name it: Boat's own for `boat()`, or
+ * `hosted()`'s, on the same client under another name.
  */
 export type VmService = {
   /** How messages name the sandbox: `boat()`. */

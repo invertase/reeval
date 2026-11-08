@@ -42,10 +42,6 @@
       "types": "./dist/sandbox/daytona.d.ts",
       "default": "./dist/sandbox/daytona.js"
     },
-    "./sandbox/hosted": {
-      "types": "./dist/sandbox/hosted.d.ts",
-      "default": "./dist/sandbox/hosted.js"
-    },
     "./store/local": {
       "types": "./dist/store/local.d.ts",
       "default": "./dist/store/local.js"
@@ -53,6 +49,10 @@
     "./store/s3": {
       "types": "./dist/store/s3.d.ts",
       "default": "./dist/store/s3.js"
+    },
+    "./internal/vm": {
+      "types": "./dist/internal/vm.d.ts",
+      "default": "./dist/internal/vm.js"
     },
     "./judge": {
       "types": "./dist/judge.d.ts",

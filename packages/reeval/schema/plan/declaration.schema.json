@@ -2109,7 +2109,7 @@
       ]
     },
     "HostedSandboxDescriptor": {
-      "description": "A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.",
+      "description": "A VM per attempt from reeval's own VM service, made by `hosted()` from `reeval/internal/vm`.",
       "type": "object",
       "properties": {
         "attemptsPerMachine": {

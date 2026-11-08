@@ -8,7 +8,7 @@ const MAX_VALUE_BYTES = 256
 
 /**
  * The labels {@link SANDBOX_LABELS} adds to reeval's own on every VM it creates, so something
- * outside the run (a sweeper on the host's platform) can find them if the run dies. Throws, naming
+ * outside the run can find them if the run dies. Throws, naming
  * the variable, on a pair either provider would refuse or one that would replace reeval's own.
  */
 export function sandboxLabels(env: NodeJS.ProcessEnv = process.env): Record<string, string> {

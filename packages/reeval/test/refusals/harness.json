@@ -75,7 +75,7 @@
   "hosted() under egress 'proxy'": "UsageError: evaluate(\"e\") runs under egress 'proxy', where the egress gateway is the only way out, but the hosted sandbox enforces no egress policy: its traffic that ignores the proxy goes out directly. Set egress: 'allow-all' to run it there, or run it in docker().",
   "hosted() size unknown": "UsageError: hosted({ size }) is one of 'small', 'medium', 'large', 'xlarge' (got \"huge\")",
   "hosted() type, a boat() option": "UsageError: hosted() doesn't take type: pick a machine size with size: 'small' (2 vCPUs, 4 GB), 'medium', 'large' or 'xlarge'.",
-  "hosted() apiKey": "UsageError: hosted() doesn't take apiKey: a hosted run gives the VMs its own token, so there is no key to name.",
+  "hosted() apiKey": "UsageError: hosted() doesn't take apiKey: its token comes from REEVAL_VM_TOKEN, so there is no key to name.",
   "hosted() attemptsPerMachine over 8": "UsageError: hosted({ attemptsPerMachine }) is a whole number from 1 to 8 (got 9)",
   "opencode mcp: {file:} in an arg": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.args[1] as written: take the reference out, or leave OpenCode out of this cell",
   "opencode mcp: {env:} in an env value": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.env.GREETING as written: take the reference out, or leave OpenCode out of this cell",

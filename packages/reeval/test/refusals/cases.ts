@@ -43,6 +43,7 @@ import {
   opencode,
   pi,
 } from '../../src/harness.ts'
+import { hosted } from '../../src/internal-vm.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
 import { PrepareError } from '../../src/sandbox/provider.ts'
@@ -50,7 +51,6 @@ import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-i
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 import { daytona } from '../../src/sandbox-daytona.ts'
-import { hosted } from '../../src/sandbox-hosted.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,

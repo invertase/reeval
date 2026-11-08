@@ -1,6 +1,6 @@
 import { defineEnvironment, evaluate } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
-import { hosted } from 'reeval/sandbox/hosted'
+import { hosted } from 'reeval/internal/vm'
 
 const small = defineEnvironment('small', { sandbox: hosted(), egress: 'allow-all' })
 const medium = defineEnvironment('medium', {

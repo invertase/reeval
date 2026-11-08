@@ -48,10 +48,10 @@ async function ownModules(): Promise<Record<string, unknown>> {
     '/sandbox': import('./sandbox.ts'),
     '/sandbox/boat': import('./sandbox-boat.ts'),
     '/sandbox/daytona': import('./sandbox-daytona.ts'),
-    '/sandbox/hosted': import('./sandbox-hosted.ts'),
     '/store/local': import('./store-local.ts'),
     '/store/s3': import('./store-s3.ts'),
     '/judge': import('./judge.ts'),
+    '/internal/vm': import('./internal-vm.ts'),
     '/gateway': import('./gateway.ts'),
     '/view': import('./view/index.ts'),
   }

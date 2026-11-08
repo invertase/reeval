@@ -1,5 +1,5 @@
 import { defineEnvironment, type Turn } from 'reeval'
-import { hosted } from 'reeval/sandbox/hosted'
+import { hosted } from 'reeval/internal/vm'
 
 export const vm = defineEnvironment('vm', {
   sandbox: hosted({ attemptsPerMachine: 2, maxConcurrent: 2 }),

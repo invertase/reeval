@@ -1,28 +1,26 @@
-// A fake of the reeval platform's VM proxy (reeval-platform's worker/vm.ts) in front of a fake Boat
-// API: one run's `<runId>.<token>` as a bearer token, only the calls hosted() makes, a strict
-// create body (none of its own labels or names), the run's caps (VMs at once, starts over its
-// life, the largest type, the TTL), its own label on every VM, a token that ends with the run and
-// any other sandbox a 404, with the provider's words rewritten to "vm" in every error.
+// A fake VM service for hosted()'s tests, in front of the fake Boat API: a bearer token, the calls
+// hosted() makes, a strict create body, limits each test picks, a label of its own on every VM
+// and any other sandbox a 404, with the upstream's name left out of every error.
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { FakeBoat } from './boat.ts'
 
-export const VM_RUN_LABEL = 'reeval.platform.vm-run'
+export const VM_RUN_LABEL = 'reeval.platform.fake-run'
 const TYPES = ['small', 'default', 'large', 'xlarge']
 const CREATE_KEYS = ['name', 'type', 'ttlSeconds', 'labels', 'noEnv', 'snapshots', 'monitoring']
 const LIST_KEYS = ['namePrefix', 'limit', 'cursor']
 
-export type VmProxyCaps = {
+export type FakeVmLimits = {
   maxLive: number
   maxStarts: number
   maxType: string
   maxTtl: number
-  /** Seconds until the token expires with the runner VM; no VM lives past it. */
+  /** Seconds until the token expires; no VM lives past it. */
   tokenTtl: number
 }
 
-export type FakeVmProxy = {
+export type FakeVmService = {
   /** REEVAL_VM_URL. */
   url: string
   /** REEVAL_VM_TOKEN. */
@@ -58,16 +56,16 @@ const error = (status: number, code: string, message: string, retryable = false)
   body: { error: { code, message, retryable } },
 })
 
-export async function fakeVmProxy(
+export async function fakeVmService(
   boat: FakeBoat,
-  caps: Partial<VmProxyCaps> = {},
-): Promise<FakeVmProxy> {
-  const c: VmProxyCaps = {
-    maxLive: 4,
-    maxStarts: 32,
+  caps: Partial<FakeVmLimits> = {},
+): Promise<FakeVmService> {
+  const c: FakeVmLimits = {
+    maxLive: 3,
+    maxStarts: 20,
     maxType: 'small',
-    maxTtl: 3600,
-    tokenTtl: 86_400,
+    maxTtl: 3000,
+    tokenTtl: 7200,
     ...caps,
   }
   const expiresAt = Date.now() + c.tokenTtl * 1000
@@ -77,9 +75,9 @@ export async function fakeVmProxy(
       Math.min(Number(asked) || c.maxTtl, c.maxTtl, Math.floor((expiresAt - Date.now()) / 1000)),
     )
   const runId = `run_${randomBytes(4).toString('hex')}`
-  const token = `${runId}.${randomBytes(12).toString('base64url')}`
+  const token = randomBytes(16).toString('base64url')
   const owned = new Set<string>()
-  const requests: FakeVmProxy['requests'] = []
+  const requests: FakeVmService['requests'] = []
   let starts = 0
   let inFlight = 0
   let ended = false
@@ -116,7 +114,7 @@ export async function fakeVmProxy(
     if (ended || bearer !== token || Date.now() >= expiresAt) {
       return error(401, 'unauthorized', 'The token is not valid for a live run.')
     }
-    const [, collection, id, sub, ...rest] = url.pathname.replace(/^\/api\/vm/, '').split('/')
+    const [, collection, id, sub, ...rest] = url.pathname.replace(/^\/vm/, '').split('/')
     const notFound = error(404, 'not_found', 'No such VM.')
     if (collection === 'limits' && !id && method === 'GET') {
       const allowed = TYPES.slice(0, TYPES.indexOf(c.maxType) + 1)
@@ -245,7 +243,7 @@ export async function fakeVmProxy(
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo
   return {
-    url: `http://127.0.0.1:${port}/api/vm`,
+    url: `http://127.0.0.1:${port}/vm`,
     token,
     runId,
     requests,

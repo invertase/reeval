@@ -1091,7 +1091,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'hosted.sandbox',
     area: 'Sandbox',
-    name: "`hosted({ size, reuse, attemptsPerMachine, maxConcurrent })`: a VM per attempt on the reeval platform's VM service, inside a hosted run only (`REEVAL_VM_URL`, `REEVAL_VM_TOKEN`), on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `hosted` with no message, record field or log naming the provider",
+    name: "`hosted({ size, reuse, attemptsPerMachine, maxConcurrent })` (internal, `reeval/internal/vm`): a VM per attempt from the VM service at `REEVAL_VM_URL`, on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `hosted` with no message, record field or log naming the upstream",
     fixtures: ['sandbox/hosted-session', 'sandbox/hosted-shared-machine'],
     plan: ['environments/hosted'],
     unit: [

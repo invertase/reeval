@@ -352,9 +352,9 @@ export const SOCKET_CLOSE = {
 /** The waits between reconnects to a run's event socket, the last repeated. */
 const RECONNECT_MS = [250, 500, 1_000, 2_000, 5_000]
 /**
- * A viewer sends `PING` this often, and the server answers `PONG` (Durable Object hibernation's
- * auto-response, text frames, since Node's WebSocket can't send protocol pings). At its viewer cap
- * the server closes, with 1001, a viewer that has pinged before but not lately.
+ * A viewer sends `PING` this often, and the server answers `PONG` (text frames, since Node's
+ * WebSocket can't send protocol pings). A server may close, with 1001, a viewer that has pinged
+ * before but not lately.
  */
 const PING_MS = 30_000
 const PING = 'ping'

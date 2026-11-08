@@ -130,7 +130,7 @@ describe('machine pool', () => {
     await p.close()
   })
 
-  test("the run's start budget is spent once, never refilled, and a refused start keeps its share", async () => {
+  test('a run-wide start limit is spent once, never refilled, and a refused start keeps its share', async () => {
     const provider = fakeProvider((n) => (n === 0 ? new RateLimitError(10) : 'ok'))
     const p = pool(provider, { limits: { machines: 10, starts: 2 } })
     const results = await Promise.allSettled([p.acquire(), p.acquire(), p.acquire()])

@@ -71,7 +71,7 @@ import { type EvalExpectation, expectRun, type RunExpectation } from './support/
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 import { buildSshVmImage, DAYTONA_VM_SIZE, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
-import { type FakeVmProxy, fakeVmProxy, VM_RUN_LABEL } from './support/vm-proxy.ts'
+import { type FakeVmService, fakeVmService, VM_RUN_LABEL } from './support/vm-service.ts'
 
 /**
  * `podman` is `podman()` where `docker` is `docker()`; `real` is Docker with real Cursor
@@ -246,14 +246,14 @@ after(() => gitHttp.close())
 
 /** The fake Boat API the `boat-*` fixtures run on, its sandboxes sshd containers. */
 let boatApi: FakeBoat
-/** The platform's VM proxy the `hosted-*` fixtures run through, in front of the fake API. */
-let vmProxy: FakeVmProxy
+/** The fake VM service the `hosted-*` fixtures run through, in front of the fake API. */
+let vmService: FakeVmService
 before(async () => {
   boatApi = await fakeBoat(startSshVm)
-  vmProxy = await fakeVmProxy(boatApi, { maxLive: 10, maxStarts: 100 })
+  vmService = await fakeVmService(boatApi, { maxLive: 10, maxStarts: 100 })
 })
 after(async () => {
-  await vmProxy.close()
+  await vmService.close()
   await boatApi.close()
 })
 /** A `boat-*` fixture's host: reeval pointed at the fake API, the VM image built. */
@@ -288,13 +288,13 @@ const boatCreates = (run: RunRecord, sandbox: { prefix: string } = boat()) => {
 
 /** What every hosted VM's name starts with. */
 const HOSTED_VM = { prefix: 'reeval' }
-/** A `hosted-*` fixture's host: a hosted run's variables, pointed at the fake proxy. */
+/** A `hosted-*` fixture's host: REEVAL_VM_URL and REEVAL_VM_TOKEN, pointed at the fake service. */
 const onFakeHosted: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
   sandbox: 'hosted',
   hostEnv: () => ({
-    REEVAL_VM_URL: vmProxy.url,
-    REEVAL_VM_TOKEN: vmProxy.token,
-    REEVAL_SANDBOX_LABELS: 'platform-run=run_42',
+    REEVAL_VM_URL: vmService.url,
+    REEVAL_VM_TOKEN: vmService.token,
+    REEVAL_SANDBOX_LABELS: 'sweep-job=42',
   }),
   prepare: () => buildSshVmImage(),
 }
@@ -305,11 +305,11 @@ const onFakeHosted: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
 const hostedCleanedUp = (run: RunRecord, project: string) => {
   boatCleanedUp(run, HOSTED_VM)
   assert.deepEqual(
-    vmProxy.requests.filter(
+    vmService.requests.filter(
       (q) => q.status >= 400 && !(q.status === 404 && q.call.startsWith('GET ')),
     ),
     [],
-    'the proxy took every call',
+    'the service took every call',
   )
   for (const q of boatApi.requests) {
     if (
@@ -318,9 +318,9 @@ const hostedCleanedUp = (run: RunRecord, project: string) => {
     )
       continue
     assert.deepEqual(q.body?.labels, {
-      'platform-run': 'run_42',
+      'sweep-job': '42',
       ...runLabels(HOSTED_VM, run.runId),
-      [VM_RUN_LABEL]: vmProxy.runId,
+      [VM_RUN_LABEL]: vmService.runId,
     })
   }
   assert.doesNotMatch(JSON.stringify(run), /boat/i, 'the record names no provider')
