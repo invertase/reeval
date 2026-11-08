@@ -32,6 +32,7 @@
           "enum": ["debug", "run"]
         },
         "createdAt": {
+          "description": "When it was written, ISO 8601.",
           "type": "string"
         },
         "debugLevel": {
@@ -53,10 +54,11 @@
           "type": "string"
         },
         "revision": {
-          "description": "1 for a run's first archive, one more each time it's written again: only a resume or `--retry-errors` replacing the record writes it again.",
+          "description": "1 for a run's first archive, one more each time the run's archive is written again.",
           "type": "number"
         },
         "runId": {
+          "description": "The run's id, which names the archive, `<runId>.zip`, and its record.",
           "type": "string"
         },
         "schemaVersion": {

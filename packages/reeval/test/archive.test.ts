@@ -8,10 +8,12 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
+import { crc32 } from 'node:zlib'
 import { ArchiveError, MANIFEST_FILE, openArchive, writeArchive } from '../src/archive/index.ts'
 import type { ArchiveManifest } from '../src/archive/types.ts'
 import {
   bufferSource,
+  crc32Of,
   fileSource,
   readZip,
   safeZipPath,
@@ -100,8 +102,8 @@ describe('zip writer and reader', () => {
     assert.deepEqual(await unzipped(bytes), expected)
   })
 
-  test('past 65,535 entries the count goes in a zip64 end record', async () => {
-    const entries = Array.from({ length: 65_536 }, (_, i) => ({
+  test('from 65,535 entries the count goes in a zip64 end record', async () => {
+    const entries = Array.from({ length: 65_535 }, (_, i) => ({
       path: `f/${i}`,
       data: Buffer.alloc(0),
       method: 'store' as const,
@@ -109,10 +111,18 @@ describe('zip writer and reader', () => {
     const bytes = await zip(entries)
     assert.ok(bytes.includes(Buffer.from([0x50, 0x4b, 0x06, 0x06])), 'a zip64 end record')
     const reader = await readZip(bufferSource(bytes))
-    assert.equal(reader.entries.length, 65_536)
-    assert.equal(reader.entries.at(-1)?.path, 'f/65535')
-    const few = await zip(entries.slice(0, 3))
-    assert.ok(!few.includes(Buffer.from([0x50, 0x4b, 0x06, 0x06])), 'no zip64 when none is needed')
+    assert.equal(reader.entries.length, 65_535)
+    assert.equal(reader.entries.at(-1)?.path, 'f/65534')
+    const fewer = await zip(entries.slice(0, 65_534))
+    assert.ok(!fewer.includes(Buffer.from([0x50, 0x4b, 0x06, 0x06])), 'no zip64 below 65,535')
+    assert.equal((await readZip(bufferSource(fewer))).entries.length, 65_534)
+  })
+
+  test('the CRC-32 of a buffer read in pieces is the CRC-32 of the whole', () => {
+    const data = randomBytes(10_000)
+    assert.equal(crc32Of(data, 1024), crc32(data))
+    assert.equal(crc32Of(data, 3), crc32(data))
+    assert.equal(crc32Of(Buffer.alloc(0)), 0)
   })
 
   test('every timestamp is the one given, in MS-DOS form', async () => {
@@ -207,6 +217,7 @@ describe('zip writer and reader', () => {
       ]),
       /a is in the zip already/,
     )
+    await assert.rejects(zip([{ path: 'x'.repeat(65_536), data: Buffer.from('x') }]), /too long/)
     const writer = new ZipWriter(() => {}, { mtime: MTIME })
     await writer.finish()
     await assert.rejects(writer.add('late', Buffer.from('x')), /the zip is finished/)
@@ -231,7 +242,7 @@ describe('zip writer and reader', () => {
     }
   })
 
-  test('a changed byte, a cut-short zip and a bomb fail with a ZipError', async () => {
+  test('a changed byte, a cut-short zip and a wrong declared size fail with a ZipError', async () => {
     const bytes = await zip(ENTRIES)
     const reader = await readZip(bufferSource(bytes))
     const kept = reader.get('kept.txt')
@@ -239,17 +250,57 @@ describe('zip writer and reader', () => {
     const flipped = Buffer.from(bytes)
     const at = kept.offset + 30 + Buffer.byteLength('kept.txt')
     flipped[at] = (flipped[at] ?? 0) ^ 1
-    await assert.rejects((await readZip(bufferSource(flipped))).read(kept), /CRC-32/)
+    const corrupt = await readZip(bufferSource(flipped))
+    await assert.rejects(corrupt.read(corrupt.get('kept.txt') as never), /CRC-32/)
 
     await assert.rejects(readZip(bufferSource(bytes.subarray(0, bytes.length - 5))), ZipError)
     await assert.rejects(readZip(bufferSource(Buffer.from('not a zip'))), /not a zip/)
 
-    const a = reader.get('a.txt')
-    assert.ok(a)
-    const small = { ...a, size: 10 }
-    await assert.rejects(reader.read(small), /doesn't inflate/)
+    const smaller = await readZip(bufferSource(patchCentral(bytes, 'a.txt', 24, 10, 4)))
+    await assert.rejects(smaller.read(smaller.get('a.txt') as never), /doesn't inflate/)
+    await assert.rejects(reader.read({ ...kept }), /isn't this zip's entry/)
+  })
+
+  test('refuses a cut-short zip64 extra field, overlapping entries and a mismatched local header', async () => {
+    const one = await zip([{ path: 'a.txt', data: Buffer.from('a'.repeat(100)) }], 'always')
+    await assert.rejects(
+      readZip(bufferSource(patchCentral(one, 'a.txt', 30, 12, 2))),
+      /extra field is cut short/,
+    )
+
+    const two = await zip([
+      { path: 'a.txt', data: Buffer.from('a'.repeat(100)) },
+      { path: 'b.txt', data: Buffer.from('b'.repeat(100)) },
+    ])
+    await assert.rejects(
+      readZip(bufferSource(patchCentral(two, 'b.txt', 42, 0, 4))),
+      /overlaps the next entry/,
+    )
+
+    const reader = await readZip(bufferSource(two))
+    const changed = Buffer.from(two)
+    changed.writeUInt16LE(0, (reader.get('b.txt')?.offset ?? 0) + 8)
+    const patched = await readZip(bufferSource(changed))
+    await assert.rejects(
+      patched.read(patched.get('b.txt') as never),
+      /local header doesn't match its central directory entry/,
+    )
   })
 })
+
+/** `bytes` with the field at `at` in `path`'s central directory entry set to `value`. */
+function patchCentral(bytes: Buffer, path: string, at: number, value: number, size: 2 | 4): Buffer {
+  const out = Buffer.from(bytes)
+  const name = Buffer.from(path)
+  const signature = Buffer.from([0x50, 0x4b, 0x01, 0x02])
+  for (let i = out.indexOf(signature); i >= 0; i = out.indexOf(signature, i + 4)) {
+    if (!out.subarray(i + 46, i + 46 + name.length).equals(name)) continue
+    if (size === 2) out.writeUInt16LE(value, i + at)
+    else out.writeUInt32LE(value, i + at)
+    return out
+  }
+  throw new Error(`no central directory entry for ${path}`)
+}
 
 const record = (extra: object = {}) =>
   Buffer.from(
@@ -377,6 +428,10 @@ describe('run archives', () => {
     await assert.rejects(write({ debugLevel: 'all' }), /has no debug level/)
     await assert.rejects(write({ runId: 'not-a-run' }), /isn't a run id/)
     await assert.rejects(
+      write({ files: [...runFiles(), { path: `${RUN}/a//b`, data: Buffer.from('x') }] }),
+      /isn't a relative path/,
+    )
+    await assert.rejects(
       write({ files: [...runFiles(), { path: `${RUN}/summary.md`, data: Buffer.from('2') }] }),
       /given twice/,
     )
@@ -456,6 +511,16 @@ describe('run archives', () => {
         await zip([{ path: 'x', data: Buffer.from('y') }]).then((b) => b.subarray(5)),
         /readable zip/,
       ],
+      [
+        await zip([
+          recordEntry,
+          {
+            path: MANIFEST_FILE,
+            data: Buffer.from(JSON.stringify(manifestOf([recordEntry])) + ' '.repeat(65 * 2 ** 20)),
+          },
+        ]),
+        /too large to read/,
+      ],
     ]
     for (const [bytes, message] of cases) {
       await assert.rejects(openArchive(bufferSource(bytes), 'it'), (e: Error) => {
@@ -473,6 +538,12 @@ describe('run archives', () => {
     const archive = await openArchive(bufferSource(await forged(manifest, [other])), 'it')
     await assert.rejects(archive.read(`${RUN}.json`), /doesn't match the hash in its manifest/)
     await assert.rejects(archive.verify(), ArchiveError)
+  })
+
+  test('a field and a debug level a newer reeval added still open', async () => {
+    const manifest = { ...manifestOf([recordEntry]), addedLater: { x: 1 }, debugLevel: 'more' }
+    const archive = await openArchive(bufferSource(await forged(manifest, [recordEntry])), 'it')
+    await archive.verify()
   })
 
   test('a manifest from a newer reeval throws NewerSchemaError', async () => {

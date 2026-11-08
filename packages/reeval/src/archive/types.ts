@@ -21,14 +21,13 @@ export type ArchiveManifest = {
   schemaVersion: 1
   /** What the archive holds: the recorded run, or its debug data. */
   contents: 'run' | 'debug'
+  /** The run's id, which names the archive, `<runId>.zip`, and its record. */
   runId: string
-  /**
-   * 1 for a run's first archive, one more each time it's written again: only a resume or
-   * `--retry-errors` replacing the record writes it again.
-   */
+  /** 1 for a run's first archive, one more each time the run's archive is written again. */
   revision: number
   /** The reeval that wrote it. */
   reeval: string
+  /** When it was written, ISO 8601. */
   createdAt: string
   /** Of a `debug` archive: which of each attempt's debug files it holds, as `history.debug` names them. */
   debugLevel?: 'requests' | 'all'
