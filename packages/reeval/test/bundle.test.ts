@@ -287,6 +287,46 @@ describe('reeval bundle', () => {
     assert.match(run.git?.worktreePatchNote ?? '', /run from a bundle/)
   })
 
+  test('a run recorded into the history folder leaves the bundled project clean', async () => {
+    const { dir: repo } = await fixtureProject()
+    writeFileSync(join(repo, '.gitignore'), 'node_modules\n.reeval\nsandboxes\n.env\n')
+    const git = (...args: string[]) =>
+      spawnTool('git', args, { cwd: repo, env: baseEnv, encoding: 'utf8' }).stdout.trim()
+    git('init', '-q')
+    git('add', '.')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init')
+    const recorded = await runCli(repo, ['run', '--record'])
+    assert.equal(recorded.code, 0, recorded.stderr)
+    assert.notEqual(git('status', '--porcelain'), '', 'the record is in the working tree')
+    const out = join(tempDir('bundle-out'), 'clean.tar.gz')
+    const made = await runCli(repo, ['bundle', '--out', out])
+    assert.equal(made.code, 0, made.stderr)
+    const manifest = manifestOf(entriesOf(out))
+    assert.equal(manifest.git?.dirty, false)
+    assert.equal(manifest.git?.diffHash, null)
+    assert.doesNotMatch(made.stdout, /uncommitted changes/)
+  })
+
+  test("refuses a manifest whose commit isn't hex or whose author isn't a slug", async () => {
+    const commit = 'a'.repeat(40)
+    for (const [edit, refusal] of [
+      [{ git: { commit: '../../x', dirty: false } }, /git\.commit: must be a git commit in hex/],
+      [{ git: { commit, dirty: false }, author: '../Elsewhere' }, /author: must be lower-case/],
+    ] as const) {
+      const bad = rewrite(entries, join(tempDir('bundle-bad'), 'identity.tar.gz'), (m) => ({
+        ...m,
+        ...edit,
+      }))
+      const r = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', bad], {
+        env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN },
+      })
+      assert.equal(r.code, 2)
+      assert.match(r.stderr, /isn't a bundle manifest/)
+      assert.match(r.stderr, refusal)
+      assert.doesNotMatch(r.stdout, /Run:/)
+    }
+  })
+
   test('refuses a bundle entry that is not a listed regular file, or a manifest path outside it', async () => {
     const at = tempDir('bundle-bad')
     const linked = rewrite(

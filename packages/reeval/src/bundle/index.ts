@@ -22,7 +22,8 @@ import { gunzipSync, gzipSync } from 'node:zlib'
 import { run as runProcess } from '@reeval/sandbox-docker/process'
 import { z } from 'zod'
 import type { Flags } from '../cli-spec.ts'
-import { requireConfig } from '../config.ts'
+import { loadConfig, requireConfig, selectProfile, withProfileHistory } from '../config.ts'
+import { loadEnvFiles } from '../env.ts'
 import { UsageError } from '../errors.ts'
 import { git, repoTop } from '../git.ts'
 import { author, gitInfo } from '../history/provenance.ts'
@@ -316,6 +317,16 @@ async function bundleRoot(project: string, inputs: string[]): Promise<string> {
   return top_ as string
 }
 
+/**
+ * The history folder the bundled run would record into, under the profile its plan picked: like
+ * `.reeval/`, it's reeval's output, so it never makes the bundled project dirty.
+ */
+async function historyDir(config: string, profile: string | undefined): Promise<string> {
+  loadEnvFiles(config)
+  const loaded = await loadConfig(config, 'run', profile)
+  return withProfileHistory(loaded, selectProfile(loaded, profile)).history.dir
+}
+
 /** `reeval bundle`: plans as `reeval run --dry-run` does and writes the run's inputs as one archive. */
 export async function bundleCommand(
   flags: Flags,
@@ -415,8 +426,9 @@ export async function bundleCommand(
     mtime: Math.floor(Date.now() / 1000),
     target: l.target,
   }))
-  const git = await gitInfo(project)
-  const patch = git?.dirty ? await worktreePatch(project, []) : null
+  const ignore = [await historyDir(config, plan.profile?.name)]
+  const git = await gitInfo(project, ignore)
+  const patch = git?.dirty ? await worktreePatch(project, ignore) : null
   const manifest: BundleManifest = {
     schemaVersion: 1,
     reeval: PACKAGE_VERSION,
@@ -538,7 +550,7 @@ const manifestSchema = z.object({
   config: bundlePath,
   git: z
     .object({
-      commit: z.string(),
+      commit: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, 'must be a git commit in hex'),
       dirty: z.boolean(),
       branch: z.string().nullable().optional(),
       diffHash: z.string().nullable().optional(),
@@ -547,7 +559,11 @@ const manifestSchema = z.object({
       remote: z.string().nullable().optional(),
     })
     .nullable(),
-  author: z.string().optional(),
+  author: z
+    .string()
+    .max(24)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'must be lower-case letters, digits and dashes')
+    .optional(),
   plan: z.record(z.string(), z.unknown()),
   files: z.array(
     z.object({
