@@ -286,9 +286,9 @@ const SETTLED = new Set(['ready', 'failed', 'active', 'inactive', 'error', 'buil
 export type CleanChoice = { snapshot: VmSnapshot; keep: string | null }
 
 /**
- * Which snapshots `reeval image clean` deletes, and why it keeps each other one: one an
- * environment of the project uses (unless `all`), one used in the last hour (by this machine or, as Daytona reports, any), one
- * still being saved or built, and one used more recently than `olderThanMs`.
+ * Which snapshots `reeval image clean` deletes, and why it keeps each other one: one used in the
+ * last hour (by this machine, or by any as Daytona reports), one not in a settled state, one an
+ * environment of the project uses (unless `all`), and one used more recently than `olderThanMs`.
  */
 export function cleanChoices(
   snapshots: VmSnapshot[],
