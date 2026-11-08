@@ -431,9 +431,14 @@ async function save(
       if (other?.status === 'ready') return { taken: other }
       if (other) {
         await deleteSnapshot(api, name)
-        throw new InfraError(
-          `Boat snapshot ${name}, which another run was saving, failed${other.error ? `: ${other.error}` : ''}`,
-        )
+        throw new PrepareError({
+          class: 'transient',
+          stage: 'boat-image',
+          ref: name,
+          cause: null,
+          log: null,
+          message: `Boat snapshot ${name}, which another run was saving, failed${other.error ? `: ${other.error}` : ''}`,
+        })
       }
     }
     if (status(error) === 403 || status(error) === 409) {
