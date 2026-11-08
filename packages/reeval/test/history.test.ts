@@ -236,7 +236,7 @@ describe('recording runs into evals/.history', () => {
       'evals/logged.eval.ts': logged,
     })
     mkdirSync(join(p.dir, HISTORY), { recursive: true })
-    await writeFile(join(p.dir, HISTORY, '.gitignore'), `${HISTORY_GITIGNORE}*.log\n`)
+    await writeFile(join(p.dir, HISTORY, '.gitignore'), '# local, no un-ignore\n')
     assert.equal((await runCli(p.dir)).code, 0)
     const r = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(r.code, 0, r.stderr)
@@ -244,7 +244,7 @@ describe('recording runs into evals/.history', () => {
       r.stdout,
       /^warning: git ignores \d+ recorded file\(s\); they won't be committed:$/m,
     )
-    assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\S*\.gitignore:\d+\)$/m)
+    assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\.gitignore:\d+\)$/m)
     assert.match(
       r.stdout,
       /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)$/m,

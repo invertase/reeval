@@ -757,7 +757,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   }
   const committed = options.committed ?? true
   if (committed) {
-    await ensureHistoryGitignore(options.historyDir)
+    await ensureHistoryGitignore(options.historyDir, options.archive ?? false)
     await ensureHistoryGitattributes(options.historyDir)
   }
   const written = await writeRun(options.historyDir, record, files)
@@ -765,7 +765,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     options.archive &&
     (await archiveRun(options.historyDir, runId, encodeRecord(record)).catch((error: unknown) => {
       const why = error instanceof Error ? error.message : String(error)
-      throw new Error(`Recorded ${runId}, but couldn't archive it: ${why}`, { cause: error })
+      throw new HistoryError(`Recorded ${runId}, but couldn't archive it: ${why}`, { cause: error })
     }))
   const archive = zip ? { archive: zip } : {}
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { git, repoTop } from '../git.ts'
@@ -68,9 +69,18 @@ async function ensureRules(historyDir: string, path: string, content: string): P
   return path
 }
 
-/** Writes the history-folder `.gitignore`, or adds the rules of `HISTORY_GITIGNORE` it lacks. */
-export const ensureHistoryGitignore = (historyDir: string): Promise<string> =>
-  ensureRules(historyDir, historyGitignorePath(historyDir), HISTORY_GITIGNORE)
+/**
+ * Writes the history-folder `.gitignore` when it's missing. An existing one is the user's: a
+ * later `!` rule would undo their own ignores, so it only gains `!*.zip` when runs are archived.
+ */
+export async function ensureHistoryGitignore(
+  historyDir: string,
+  archive: boolean,
+): Promise<string> {
+  const path = historyGitignorePath(historyDir)
+  if (!existsSync(path)) return ensureFile(historyDir, path, HISTORY_GITIGNORE)
+  return archive ? ensureRules(historyDir, path, '!*.zip\n') : path
+}
 
 /** Writes the history-folder `.gitattributes`, or adds the rules of `HISTORY_GITATTRIBUTES` it lacks. */
 export const ensureHistoryGitattributes = (historyDir: string): Promise<string> =>
