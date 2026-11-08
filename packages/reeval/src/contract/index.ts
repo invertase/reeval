@@ -3,6 +3,7 @@
 // hand-written type of the same name.
 import type { z } from 'zod'
 import { boatSandboxSchema } from './boat.ts'
+import { daytonaSandboxSchema } from './daytona.ts'
 import {
   analysisConfigDataSchema,
   budgetSchema,
@@ -96,6 +97,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   FakeSandboxDescriptor: fakeSandboxSchema,
   TartSandboxDescriptor: tartSandboxSchema,
   BoatSandboxDescriptor: boatSandboxSchema,
+  DaytonaSandboxDescriptor: daytonaSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

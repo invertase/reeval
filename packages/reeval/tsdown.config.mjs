@@ -159,6 +159,7 @@ export default defineConfig({
     harness: 'src/harness.ts',
     sandbox: 'src/sandbox.ts',
     'sandbox/boat': 'src/sandbox-boat.ts',
+    'sandbox/daytona': 'src/sandbox-daytona.ts',
     'store/local': 'src/store-local.ts',
     'store/s3': 'src/store-s3.ts',
     judge: 'src/judge.ts',
@@ -177,7 +178,7 @@ export default defineConfig({
   deps: {
     alwaysBundle: [/^@reeval\//, ...patched],
     onlyBundle: false,
-    // An optional peer is imported only where reeval uses it (src/sandbox/boat.ts), never bundled.
+    // An optional peer is imported only where reeval uses it (src/sandbox/optional-peer.ts), never bundled.
     onlyImport: [...Object.keys(pkg.dependencies), ...Object.keys(pkg.peerDependencies)],
   },
   plugins: [

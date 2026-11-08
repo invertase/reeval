@@ -11,6 +11,7 @@ import type {
   SetupStep,
 } from '../types.ts'
 import { boatSandboxSchema } from './boat.ts'
+import { daytonaSandboxSchema } from './daytona.ts'
 import { dockerSandboxSchema, fakeSandboxSchema } from './docker.ts'
 import {
   egressSchema,
@@ -32,6 +33,7 @@ export const sandboxDescriptorSchema = z.union([
   dockerSandboxSchema,
   tartSandboxSchema,
   boatSandboxSchema,
+  daytonaSandboxSchema,
 ])
 
 export const setupStepSchema = z.union([

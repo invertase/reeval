@@ -1388,11 +1388,46 @@ export type BoatSandboxDescriptor = {
    */
   attemptsPerMachine?: number
 }
+/**
+ * A Daytona sandbox size, one of Daytona's default snapshots: `small` is 1 vCPU and 1 GiB,
+ * `medium` 2 vCPUs and 4 GiB, `large` 4 vCPUs and 8 GiB.
+ */
+export type DaytonaSize = 'small' | 'medium' | 'large'
+/** The host variable holding a Daytona API key, made by `secret.fromEnv`. */
+export type DaytonaApiKey = { kind: 'secret'; from: string }
+/** A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`. */
+export type DaytonaSandboxDescriptor = {
+  kind: 'daytona'
+  /** Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`. */
+  id?: string
+  /** The host variable with the Daytona API key, read on the host only. */
+  apiKey: DaytonaApiKey
+  /**
+   * The start of every sandbox name reeval gives Daytona, so a run's cleanup finds only its own:
+   * lowercase letters, digits and dashes.
+   */
+  prefix: string
+  /** The sandbox size. Default `medium`. */
+  size?: DaytonaSize
+  /** The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`. */
+  maxConcurrent?: number
+  /**
+   * A machine takes another of the run's attempts once one ends, instead of being deleted, as
+   * `boat({ reuse })` does. Default false, one attempt per slot.
+   */
+  reuse?: boolean
+  /**
+   * The attempts one machine runs at once, each as a user of its own, as
+   * `boat({ attemptsPerMachine })` does. Default 1.
+   */
+  attemptsPerMachine?: number
+}
 export type SandboxDescriptor =
   | FakeSandboxDescriptor
   | DockerSandboxDescriptor
   | TartSandboxDescriptor
   | BoatSandboxDescriptor
+  | DaytonaSandboxDescriptor
 
 /**
  * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by
@@ -3166,19 +3201,19 @@ export type VmImage = {
 export type AttemptResources = {
   /**
    * `container`: the container's own cgroup, so only the attempt's processes count (Docker,
-   * Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).
+   * Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).
    */
   scope: 'container' | 'machine'
   /**
-   * The VM ran other attempts at the same time (`boat({ attemptsPerMachine })` above 1), so its
+   * The VM ran other attempts at the same time (`attemptsPerMachine` above 1), so its
    * whole-VM usage isn't this attempt's: `usage` is left out.
    */
   shared?: true
   /** What the attempt ran on. */
   machine: {
-    /** The sandbox's provider: `docker`, `podman`, `boat` or `tart`. */
+    /** The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`. */
     sandbox: string
-    /** The provider's machine size, where it has sizes: `boat({ type })`. */
+    /** The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`. */
     size?: string
     /**
      * CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has (a macOS

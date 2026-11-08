@@ -3,14 +3,21 @@
 // kindOf() derives the rest of its kinds entry; createProviders() names its prepare provider.
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
-import type { BoatSandboxDescriptor, TartSandboxDescriptor } from '../types.ts'
+import type {
+  BoatSandboxDescriptor,
+  DaytonaSandboxDescriptor,
+  TartSandboxDescriptor,
+} from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { HostPath, SandboxHooks, SandboxKind } from './kinds.ts'
 import type { OpenPool } from './machine-service.ts'
 import type { Sandbox } from './types.ts'
 
 /** The descriptors of the kinds a {@link MachineProvider} makes. */
-export type MachineDescriptor = TartSandboxDescriptor | BoatSandboxDescriptor
+export type MachineDescriptor =
+  | TartSandboxDescriptor
+  | BoatSandboxDescriptor
+  | DaytonaSandboxDescriptor
 
 export interface MachineProvider<D extends MachineDescriptor> extends SandboxHooks<D> {
   kind: D['kind']

@@ -38,6 +38,10 @@
       "types": "./dist/sandbox/boat.d.ts",
       "default": "./dist/sandbox/boat.js"
     },
+    "./sandbox/daytona": {
+      "types": "./dist/sandbox/daytona.d.ts",
+      "default": "./dist/sandbox/daytona.js"
+    },
     "./store/local": {
       "types": "./dist/store/local.d.ts",
       "default": "./dist/store/local.js"
@@ -135,16 +139,21 @@
     "zod": "4.6.7"
   },
   "peerDependencies": {
-    "@boatdev/sdk": "^1.13.0"
+    "@boatdev/sdk": "^1.13.0",
+    "@daytona/sdk": "^0.231.0"
   },
   "peerDependenciesMeta": {
     "@boatdev/sdk": {
+      "optional": true
+    },
+    "@daytona/sdk": {
       "optional": true
     }
   },
   "devDependencies": {
     "@ai-sdk/harness-claude-code": "1.0.176",
     "@boatdev/sdk": "1.13.0",
+    "@daytona/sdk": "0.231.0",
     "@modelcontextprotocol/client": "2.4.0",
     "@reeval/harness-antigravity": "workspace:0.1.16",
     "@reeval/harness-codex": "workspace:0.1.13",
