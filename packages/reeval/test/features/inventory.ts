@@ -422,6 +422,26 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/bundle.test.ts', 'reeval/test/cli.test.ts', 'reeval/test/schema.test.ts'],
   },
   {
+    id: 'run.hosted',
+    area: 'Config and selection',
+    name: "`reeval run` on the hosted platform at `REEVAL_HOSTED_URL`: `hosted: true` in the config or a profile, or `--hosted`, with `--local` to run here; the run is bundled, uploaded, started and followed as `reeval attach` follows one, exiting with its exit code (2 without the URL or for a flag that stays on this machine, 3 when the platform fails); a plan it can't run (`tart()`, files a bundle can't carry) runs here with a note; `--dry-run` names the target and the JSON plan's `target` and `notHosted` say where it goes",
+    plan: [
+      'hosted/config',
+      'hosted/local-flag',
+      'hosted/profile-off',
+      'hosted/profile-keeps',
+      'hosted/profile-on',
+      'hosted/tart-runs-here',
+      'hosted/ci-without',
+      'hosted/ci-flag',
+    ],
+    unit: [
+      'reeval/test/hosted-run.test.ts',
+      'reeval/test/refusals.test.ts',
+      'reeval/test/cli.test.ts',
+    ],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",

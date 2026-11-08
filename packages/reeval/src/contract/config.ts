@@ -142,6 +142,7 @@ export const profileDataSchema = z.strictObject({
   tags: z.array(z.string()).optional(),
   gateway: z.array(gatewayEntryDataSchema).min(1).optional(),
   history: historyConfigDataSchema.optional(),
+  hosted: z.boolean().optional(),
 })
 
 const fakeVote = z.enum(['A', 'B', 'tie'])
@@ -200,6 +201,7 @@ export const reevalConfigDataSchema = z.strictObject({
     .optional(),
   analysis: analysisConfigDataSchema.optional(),
   gateway: z.array(gatewayEntryDataSchema).min(1).optional(),
+  hosted: z.boolean().optional(),
 })
 
 export type _SameAsSchema = [

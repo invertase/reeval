@@ -2562,6 +2562,9 @@
         "history": {
           "$ref": "#/$defs/ResolvedHistory"
         },
+        "hosted": {
+          "type": "boolean"
+        },
         "include": {
           "type": "array",
           "items": {
@@ -2665,6 +2668,10 @@
                   "$ref": "#/$defs/GatewayDescriptor"
                 }
               },
+              "hosted": {
+                "description": "Replaces the config's `hosted` for this profile's runs.",
+                "type": "boolean"
+              },
               "judge": {
                 "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
                 "$ref": "#/$defs/ConfigJudgeOptions"
@@ -2749,6 +2756,7 @@
         "gatewaySet",
         "harness",
         "history",
+        "hosted",
         "include",
         "judge",
         "profileHistory",
@@ -2836,6 +2844,10 @@
         "history": {
           "description": "The profile's `history` merged over the config's, when it sets one.",
           "$ref": "#/$defs/ResolvedHistory"
+        },
+        "hosted": {
+          "description": "The profile's own `hosted`, which replaces the config's.",
+          "type": "boolean"
         },
         "judge": {
           "$ref": "#/$defs/ConfigJudgeOptions"

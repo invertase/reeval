@@ -164,6 +164,10 @@ export function renderPlan(
     ...plan.hints.map((h) => `hint: ${h}`),
     ...table(rows),
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
+    ...(plan.notHosted ?? []).map((why) => `not hosted: ${why}`),
+    ...(plan.target
+      ? [`target ${plan.target.kind === 'hosted' ? 'hosted' : `here: ${plan.target.why}`}`]
+      : []),
     ...images,
     ...(options.cost ? costLines(plan) : []),
     ...(options.inputs ? inputLines(plan) : []),

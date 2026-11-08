@@ -4,3 +4,4 @@ hint: 2 evals run more than once with the default gate, so every attempt must pa
 evals/t.eval.ts › builds the app   fake/mac/tart:macos-sequoia-base:latest  control  gated  ×3  egress "allow-all"
 evals/t.eval.ts › builds it small  fake/small/tart:macos-sequoia-base:15.6  control  gated  ×2  egress "allow-all"
 excluded: —
+not hosted: tart() runs its VMs on a Mac (evals/t.eval.ts › builds the app, evals/t.eval.ts › builds it small)
