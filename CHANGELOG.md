@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.23.0](https://github.com/invertase/reeval/compare/v0.22.0...v0.23.0) (2026-11-08)
+
+
+### Features
+
+* **cli:** list, clean and build boat() and daytona() image snapshots ([#901](https://github.com/invertase/reeval/issues/901)) ([62f01a2](https://github.com/invertase/reeval/commit/62f01a26fb8b492c955bb87a774a2365ce7cd10f))
+* **cli:** run a project on the hosted platform with reeval run ([#899](https://github.com/invertase/reeval/issues/899)) ([9f44441](https://github.com/invertase/reeval/commit/9f4444140430f00f6c009ed30ce2bbec091a39a6))
+* **history:** add history archives, a zip of one recorded run with a hashed manifest ([#904](https://github.com/invertase/reeval/issues/904)) ([e64afd6](https://github.com/invertase/reeval/commit/e64afd6a0ddceb55d07ae2ee5f8c6efffb8e6684))
+* **sandbox:** add a daytona() sandbox ([#883](https://github.com/invertase/reeval/issues/883)) ([d7d5dab](https://github.com/invertase/reeval/commit/d7d5dab98db5aa460f92472807fd5a16cf538589))
+* **sandbox:** add an internal VM sandbox ([a7862bd](https://github.com/invertase/reeval/commit/a7862bdedfd5d4bdd181b36ad504d46dc328ab3c))
+* **sandbox:** build boat image recipes into saved snapshots ([#898](https://github.com/invertase/reeval/issues/898)) ([3f02fc6](https://github.com/invertase/reeval/commit/3f02fc650940472709d348a7973c8eaa38b78dd1))
+* **sandbox:** build daytona() images from image, from, dockerfile and install ([#896](https://github.com/invertase/reeval/issues/896)) ([d799650](https://github.com/invertase/reeval/commit/d79965045dd54874258237f73a5ed6e2799dbac9))
+* **sandbox:** record the VM an attempt ran on and label VMs from REEVAL_SANDBOX_LABELS ([#888](https://github.com/invertase/reeval/issues/888)) ([cd589bf](https://github.com/invertase/reeval/commit/cd589bf22344fc0675ea8c50299e78fffa0df8bb))
+* **sandbox:** run boat() attempts in a container of an image recipe ([#900](https://github.com/invertase/reeval/issues/900)) ([4037242](https://github.com/invertase/reeval/commit/4037242221377bc48eef824e3c76cd92cc031b5e))
+* **sandbox:** run the docker CLI on a remote machine over SSH ([#895](https://github.com/invertase/reeval/issues/895)) ([7e38f85](https://github.com/invertase/reeval/commit/7e38f85a23d1b766b41effca671adfdc3363d5b5))
+* **sandbox:** share an account's limits between its machine pools ([#902](https://github.com/invertase/reeval/issues/902)) ([baf4529](https://github.com/invertase/reeval/commit/baf4529fbf854f48234278d37f09e5447a4d0fed))
+
+
+### Bug Fixes
+
+* **attach:** print a run's paths as the viewer's project's, not the runner's directory ([#887](https://github.com/invertase/reeval/issues/887)) ([4314be2](https://github.com/invertase/reeval/commit/4314be2d44fce47e63a8399c575bef51fed9d70f))
+* **bundle:** record the bundled project's git state and author on a run from a bundle ([#885](https://github.com/invertase/reeval/issues/885)) ([e792b80](https://github.com/invertase/reeval/commit/e792b807519a3c08936cdfdada57b0254a02f4b2))
+* **capture:** allocate c.serve's PORT outside the ephemeral port range ([#894](https://github.com/invertase/reeval/issues/894)) ([a77ef4d](https://github.com/invertase/reeval/commit/a77ef4dbf01179c75a3be8a14d2041ce6d45de45))
+* **sandbox:** create the resource sampler's observer before teardown can race it ([#892](https://github.com/invertase/reeval/issues/892)) ([fabb3e1](https://github.com/invertase/reeval/commit/fabb3e1290e56e31adb73168d58ab87172c35ff2))
+* **sandbox:** give a daytona() sandbox user the login user's node and npm ([#886](https://github.com/invertase/reeval/issues/886)) ([1df403d](https://github.com/invertase/reeval/commit/1df403db31c4c0e15a023ed7c4cbc54760b7af2b))
+* **sandbox:** read a daytona() sandbox's resources from its cgroup ([#889](https://github.com/invertase/reeval/issues/889)) ([76d2005](https://github.com/invertase/reeval/commit/76d200502f0ab8278214d76762eae4ac13f6e4bd))
+
 ## [0.22.0](https://github.com/invertase/reeval/compare/v0.21.0...v0.22.0) (2026-11-07)
 
 
