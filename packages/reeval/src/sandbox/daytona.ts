@@ -3,22 +3,23 @@
 // per machine, the egress gateway's forwarder included, so credentials stay on the host as they do
 // for Docker.
 import { randomBytes } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { run } from '@reeval/sandbox-docker/process'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
-import type { DaytonaSandboxDescriptor } from '../types.ts'
+import type { DaytonaSandboxDescriptor, DaytonaSize, HarnessDescriptor } from '../types.ts'
 import { retryAfterMs, runLabels } from './boat.ts'
+import { daytonaImage } from './daytona-image.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
 import { sandboxLabels } from './labels.ts'
 import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
 import { type PoolProvider, RATE_LIMIT_WAITS, type RateLimited } from './pool.ts'
-import { PrepareError } from './provider.ts'
+import { type PrepareContext, type PreparedHandle, PrepareError } from './provider.ts'
 import {
   createPooledSshSandbox,
   missingSshTool,
@@ -44,21 +45,50 @@ export type DaytonaSandboxInfo = {
   delete(timeout?: number): Promise<void>
 }
 
+/** What reeval reads of a snapshot. */
+export type DaytonaSnapshotInfo = {
+  id: string
+  name: string
+  state?: string
+  errorReason?: string | null
+}
+
+/** A sandbox's (or snapshot's) vCPUs, and memory and disk in GiB. */
+export type DaytonaResources = { cpu: number; memory: number; disk: number }
+
 /** The SDK calls reeval makes. */
 export type DaytonaClient = {
   create(
     params: {
       name: string
-      snapshot: string
+      snapshot?: string
+      /** An SDK `Image`, built for this sandbox (or found in Daytona's build cache). */
+      image?: unknown
+      resources?: DaytonaResources
       labels: Record<string, string>
       autoStopInterval: number
-      ephemeral: boolean
-      ttlMinutes: number
+      autoDeleteInterval?: number
+      ephemeral?: boolean
+      ttlMinutes?: number
     },
     options: { timeout: number },
   ): Promise<DaytonaSandboxInfo>
   get(idOrName: string): Promise<DaytonaSandboxInfo>
   list(query: { labels: Record<string, string>; limit?: number }): AsyncIterable<DaytonaSandboxInfo>
+  snapshot: {
+    get(idOrName: string): Promise<DaytonaSnapshotInfo>
+    create(
+      params: { name: string; image: unknown; resources?: DaytonaResources },
+      options: { timeout?: number },
+    ): Promise<DaytonaSnapshotInfo>
+    delete(snapshot: DaytonaSnapshotInfo): Promise<void>
+    activate(snapshot: DaytonaSnapshotInfo): Promise<DaytonaSnapshotInfo>
+  }
+}
+
+/** The SDK's `Image`: a Dockerfile, and the files its `COPY` lines name, from `contextDir`. */
+type DaytonaImageClass = new () => {
+  dockerfileCommands(commands: string[], contextDir?: string): unknown
 }
 
 type DaytonaSdk = {
@@ -67,6 +97,7 @@ type DaytonaSdk = {
     apiUrl?: string
     useDeprecatedPolling?: boolean
   }) => DaytonaClient
+  Image: DaytonaImageClass
 }
 
 /** Daytona's SDK, from beside reeval or else from the project. */
@@ -194,8 +225,307 @@ function abortable<T>(work: Promise<T>, signal: AbortSignal, orphan: (value: T) 
 export const snapshotOf = (sandbox: Pick<DaytonaSandboxDescriptor, 'size'>) =>
   `daytona-${sandbox.size ?? 'medium'}`
 
+/** Each size's resources, as Daytona's default snapshot of that size has them. */
+const RESOURCES: Record<DaytonaSize, DaytonaResources> = {
+  small: { cpu: 1, memory: 1, disk: 3 },
+  medium: { cpu: 2, memory: 4, disk: 8 },
+  large: { cpu: 4, memory: 8, disk: 10 },
+}
+const resourcesOf = (size: DaytonaSize) => RESOURCES[size]
+
+/** What a recipe's sandboxes start from, as preflight prepared it and the pool's key names it. */
+export type DaytonaStart = {
+  /** The image's name: its snapshot's, when there's one. */
+  name: string
+  /** The snapshot each sandbox starts from; unset when each create builds `dockerfile`. */
+  snapshot?: string
+  /** The Dockerfile each create builds, which Daytona's build cache keeps for a while. */
+  dockerfile?: string
+  /** The directory its `COPY` sources are in. */
+  contextDir?: string
+  /** The image has the harness, so a machine of its own needn't install it. */
+  harnessBaked: boolean
+}
+
+const spell = (ms: number) =>
+  ms >= 60_000 ? `${Math.round(ms / 60_000)} minutes` : `${Math.round(ms / 1000)} seconds`
+
+/** How long a snapshot another run is making may take before preflight stops waiting on it. */
+export const SNAPSHOT_WAITS = { pollMs: 2_000, waitMs: 15 * 60_000, buildMs: 30 * 60_000 }
+
+/** The SDK's `Image` of a Dockerfile, with the files its `COPY` lines name. */
+async function sdkImage(
+  image: { dockerfile?: string; contextDir?: string },
+  root: string,
+): Promise<unknown> {
+  const { Image } = await loadDaytonaSdk(root)
+  const built = new Image()
+  built.dockerfileCommands([(image.dockerfile ?? '').trimEnd()], image.contextDir)
+  return built
+}
+
+const failed = (o: {
+  class: 'config' | 'transient'
+  ref: string | null
+  log?: string | null
+  message: string
+}) =>
+  new PrepareError({
+    class: o.class,
+    stage: 'daytona',
+    ref: o.ref,
+    cause: null,
+    log: o.log ?? null,
+    message: o.message,
+  })
+
+/** Why Daytona's build failed, from the SDK's error: the snapshot's or sandbox's `errorReason`. */
+const buildFailure = (error: unknown): string | null => {
+  const message = messageOf(error)
+  const snapshot = /^Failed to create snapshot\. Name: \S+ Reason: ([\s\S]*)$/.exec(message)
+  if (snapshot) return snapshot[1] ?? ''
+  const sandbox = /failed to start with status: build_failed, error reason: ([\s\S]*)$/.exec(
+    message,
+  )
+  return sandbox ? (sandbox[1] ?? '') : null
+}
+
+/**
+ * Makes sure Daytona has snapshot `name`, building it from `image` when it doesn't, and says
+ * `no-permission` when the key can't make or read snapshots. A snapshot another run (or a CLI
+ * that was killed) left on its way is waited on for up to `waits.waitMs`; an inactive one is
+ * activated; one in `error` or `build_failed` is deleted and built once more, and a build that
+ * fails is a config failure with Daytona's reason.
+ */
+export async function ensureSnapshot(
+  api: DaytonaClient,
+  o: {
+    name: string
+    image: () => Promise<unknown>
+    resources: DaytonaResources
+    signal: AbortSignal
+    log: (line: string) => void
+    /** The generated Dockerfile, which a build failure names. */
+    dockerfileLog: string | null
+    waits?: typeof SNAPSHOT_WAITS
+  },
+): Promise<'ready' | 'no-permission'> {
+  const waits = o.waits ?? SNAPSHOT_WAITS
+  const { name, signal } = o
+  const deadline = Date.now() + waits.waitMs
+  const call = <T>(work: () => Promise<T>) => whileLimited('calls', work, signal)
+  const unreachable = (error: unknown) =>
+    failed({
+      class: 'transient',
+      ref: name,
+      message: `Couldn't reach Daytona: ${messageOf(error)}`,
+    })
+  let rebuilt = false
+  let reported: string | undefined
+  for (;;) {
+    signal.throwIfAborted()
+    let found: DaytonaSnapshotInfo | null
+    try {
+      found = await call(() => api.snapshot.get(name))
+    } catch (error) {
+      if (signal.aborted) throw error
+      const code = statusOf(error)
+      if (code === 401 || code === 403) return 'no-permission'
+      if (code !== 404) throw unreachable(error)
+      found = null
+    }
+    if (!found) {
+      o.log(`daytona: building snapshot ${name}`)
+      const built = await build()
+      if (built === 'no-permission' || built === 'ready') return built
+      await wait('being created by another run')
+      continue
+    }
+    const state = found.state ?? 'unknown'
+    if (state === 'active') return 'ready'
+    if (state === 'error' || state === 'build_failed') {
+      const reason = found.errorReason || 'no reason given'
+      if (rebuilt) throw buildFailed(reason)
+      rebuilt = true
+      o.log(`daytona: snapshot ${name} is in ${state} (${reason}): deleting it to build it again`)
+      await call(() => api.snapshot.delete(found)).catch((error: unknown) => {
+        if (signal.aborted) throw error
+        if (statusOf(error) !== 404) throw unreachable(error)
+      })
+      continue
+    }
+    if (state === 'inactive') {
+      o.log(`daytona: activating snapshot ${name}`)
+      await call(() => api.snapshot.activate(found)).catch((error: unknown) => {
+        if (signal.aborted) throw error
+        if (statusOf(error) !== 409) throw unreachable(error)
+      })
+      continue
+    }
+    await wait(state)
+  }
+
+  async function wait(state: string) {
+    if (Date.now() >= deadline) {
+      throw failed({
+        class: 'transient',
+        ref: name,
+        message: `Daytona's snapshot ${name} was still ${state} after ${spell(waits.waitMs)}. Another run may be building it: run again once it's active, or delete it in Daytona to build it anew.`,
+      })
+    }
+    if (reported !== state) o.log(`daytona: waiting for snapshot ${name}, which is ${state}`)
+    reported = state
+    await sleep(waits.pollMs, undefined, { signal })
+  }
+
+  function buildFailed(reason: string) {
+    return failed({
+      class: 'config',
+      ref: name,
+      log: o.dockerfileLog,
+      message: `Daytona couldn't build snapshot ${name}: ${reason}${o.dockerfileLog ? `\nThe Dockerfile reeval generated is ${o.dockerfileLog}` : ''}`,
+    })
+  }
+
+  async function build(): Promise<'ready' | 'no-permission' | 'again'> {
+    const timeout = AbortSignal.any([signal, AbortSignal.timeout(waits.buildMs)])
+    try {
+      const creating = call(async () =>
+        api.snapshot.create({ name, image: await o.image(), resources: o.resources }, {}),
+      )
+      await abortable(creating, timeout, () => {})
+      return 'ready'
+    } catch (error) {
+      if (signal.aborted) throw error
+      if (timeout.aborted) {
+        throw failed({
+          class: 'transient',
+          ref: name,
+          message: `Daytona's build of snapshot ${name} didn't finish in ${spell(waits.buildMs)}`,
+        })
+      }
+      const code = statusOf(error)
+      if (code === 401 || code === 403) return 'no-permission'
+      // Another run asked for it first: wait on theirs.
+      if (code === 409) return 'again'
+      const reason = buildFailure(error)
+      if (reason !== null) throw buildFailed(reason || 'no reason given')
+      throw unreachable(error)
+    }
+  }
+}
+
+/**
+ * Builds the image once in a sandbox that stops after 15 idle minutes and is deleted as it stops,
+ * so the run's creates find it in Daytona's build cache, and deletes it.
+ */
+export async function warmImage(
+  api: DaytonaClient,
+  sandbox: DaytonaSandboxDescriptor,
+  o: {
+    name: string
+    image: () => Promise<unknown>
+    resources: DaytonaResources
+    signal: AbortSignal
+    dockerfileLog: string | null
+  },
+): Promise<void> {
+  const name = `${sandbox.prefix}-warm-${o.name.slice(-12)}-${randomBytes(2).toString('hex')}`
+  const remove = (s: DaytonaSandboxInfo) => s.delete().catch(() => {})
+  const creating = whileLimited(
+    'starts',
+    async () =>
+      api.create(
+        {
+          name,
+          image: await o.image(),
+          resources: o.resources,
+          labels: { ...sandboxLabels(), ...runLabels(sandbox, 'preflight') },
+          autoStopInterval: 15,
+          autoDeleteInterval: 0,
+        },
+        { timeout: BUILD_TIMEOUT_S },
+      ),
+    o.signal,
+  )
+  const created = await abortable(creating, o.signal, remove).catch(async (error: unknown) => {
+    if (o.signal.aborted) throw error
+    const id = (error as { sandboxId?: string }).sandboxId
+    if (id) await api.get(id).then(remove, () => {})
+    const reason = buildFailure(error)
+    if (reason !== null) {
+      throw failed({
+        class: 'config',
+        ref: o.name,
+        log: o.dockerfileLog,
+        message: `Daytona couldn't build the image ${o.name}: ${reason || 'no reason given'}${o.dockerfileLog ? `\nThe Dockerfile reeval generated is ${o.dockerfileLog}` : ''}`,
+      })
+    }
+    throw failed({
+      class: 'transient',
+      ref: o.name,
+      message: `Daytona didn't start a sandbox to build the image ${o.name}: ${messageOf(error)}`,
+    })
+  })
+  await remove(created)
+}
+
+/**
+ * Preflight for a recipe's sandbox: checks the organization, generates the image and has Daytona
+ * build it, into a snapshot or, when the key can't make snapshots, once into its build cache for
+ * every create to find. Null without a recipe: sandboxes start from Daytona's default snapshot.
+ */
+export async function prepareDaytona(
+  sandbox: DaytonaSandboxDescriptor,
+  harness: HarnessDescriptor,
+  ctx: PrepareContext,
+  waits?: typeof SNAPSHOT_WAITS,
+): Promise<PreparedHandle> {
+  await checkDaytona(sandbox, ctx.root)
+  const image = await ctx.retry(() => daytonaImage(sandbox, harness, { signal: ctx.signal }))
+  if (!image) return null
+  if (image.unpinned) {
+    ctx.log(
+      `daytona: ${image.unpinned.ref} isn't pinned by digest (${image.unpinned.reason}), so the image is keyed on its name`,
+    )
+  }
+  const dockerfileLog = join(ctx.root, '.reeval', 'cache', 'images', `${image.name}.Dockerfile`)
+  await mkdir(dirname(dockerfileLog), { recursive: true })
+  await writeFile(dockerfileLog, image.dockerfile)
+  const api = await daytonaClient(sandbox, ctx.root)
+  const built = () => sdkImage(image, ctx.root)
+  const resources = resourcesOf(sandbox.size ?? 'medium')
+  const common = { name: image.name, image: built, resources, signal: ctx.signal, dockerfileLog }
+  const got = await ensureSnapshot(api, { ...common, log: ctx.log, ...(waits && { waits }) })
+  const start: DaytonaStart = {
+    name: image.name,
+    harnessBaked: image.harnessBaked,
+    ...(got === 'ready'
+      ? { snapshot: image.name }
+      : {
+          dockerfile: image.dockerfile,
+          ...(image.contextDir !== undefined && { contextDir: image.contextDir }),
+        }),
+  }
+  if (got === 'no-permission') {
+    ctx.log(
+      `daytona: the key in ${sandbox.apiKey.from} can't make snapshots, so every sandbox builds ${image.name}; building it once so Daytona's build cache has it`,
+    )
+    await warmImage(api, sandbox, common)
+  }
+  return { start, baked: image.name, key: image.key }
+}
+
+/** What a sandbox starts from, as {@link prepareDaytona} left it. */
+export const daytonaStart = (handle: PreparedHandle): DaytonaStart | undefined => {
+  const start = (handle as { start?: unknown } | null)?.start
+  return start && typeof start === 'object' ? (start as DaytonaStart) : undefined
+}
+
 /** How long a created sandbox may take to start, in seconds. */
 const START_TIMEOUT_S = 180
+/** How long a sandbox whose image Daytona builds (or finds in its build cache) may take, in seconds. */
+const BUILD_TIMEOUT_S = 30 * 60
 /** How long a run's cleanup may wait on one organization, so an unreachable API can't stall it. */
 const CLEANUP_TIMEOUT_MS = 30_000
 /**
@@ -250,8 +580,10 @@ async function hostKeys(host: string, port: number, alias: string): Promise<stri
 export const openDaytonaPool: OpenPool<DaytonaSandboxDescriptor> = async (sandbox, o) => {
   const api = await daytonaClient(sandbox, o.root)
   const k = sandbox.attemptsPerMachine ?? 1
+  const start = o.image as DaytonaStart | undefined
+  const image = start?.dockerfile ? await sdkImage(start, o.root) : undefined
   return {
-    provider: daytonaPoolProvider(sandbox, api, o.runId),
+    provider: daytonaPoolProvider(sandbox, api, o.runId, start && { ...start, image }),
     options: {
       limits: {
         machines: sandbox.maxConcurrent ? Math.ceil(sandbox.maxConcurrent / k) : 1_000,
@@ -269,9 +601,12 @@ export function daytonaPoolProvider(
   descriptor: DaytonaSandboxDescriptor,
   api: DaytonaClient,
   runId: string,
+  start?: DaytonaStart & { image?: unknown },
 ): PoolProvider<PooledSshMachine> {
   const size = descriptor.size ?? 'medium'
-  const snapshot = snapshotOf(descriptor)
+  const snapshot = start ? start.snapshot : snapshotOf(descriptor)
+  // A built image starts as root, with no sudo: reeval's own commands run as it.
+  const loginRoot = start !== undefined
   const labels = runLabels(descriptor, runId)
   const extra = sandboxLabels()
   const made = new Map<string, { sandbox: DaytonaSandboxInfo; dir: string }>()
@@ -304,14 +639,14 @@ export function daytonaPoolProvider(
         const creating = api.create(
           {
             name,
-            snapshot,
+            ...(snapshot ? { snapshot } : { image: start?.image, resources: resourcesOf(size) }),
             labels: { ...extra, ...labels },
             // The pool says when a machine goes; Daytona's idle stop would cut an attempt off.
             autoStopInterval: 0,
             ephemeral: true,
             ttlMinutes: Math.ceil(ttlSeconds / 60),
           },
-          { timeout: START_TIMEOUT_S },
+          { timeout: snapshot ? START_TIMEOUT_S : BUILD_TIMEOUT_S },
         )
         // The SDK's create takes no signal: a cancel stops the wait, and a sandbox it makes after
         // that is deleted.
@@ -360,6 +695,8 @@ export function daytonaPoolProvider(
             knownHostsFile,
             route: `${target.host}:${target.port} (Daytona's SSH gateway)`,
             secretUser: true,
+            ...(loginRoot && { loginRoot: true }),
+            ...(start?.harnessBaked && { harnessBaked: true }),
           },
         }
       } catch (error) {
@@ -375,11 +712,29 @@ const never = (id: string): never => {
   throw new Error(`no Daytona sandbox ${id}`)
 }
 
-export function createDaytonaSandbox(
+export async function createDaytonaSandbox(
   descriptor: DaytonaSandboxDescriptor,
   options: SandboxOptions,
 ): Promise<NetworkSandbox> {
+  let start: DaytonaStart | undefined
+  if (options.harness) {
+    const { preparedFor } = await import('./preflight.ts')
+    const { daytonaProvider } = await import('./providers.ts')
+    const handle = preparedFor(
+      process.cwd(),
+      options.runId,
+      daytonaProvider(),
+      descriptor,
+      options.harness,
+    )
+    start = handle ? daytonaStart(handle) : undefined
+  }
+  const { image, from, dockerfile, install } = descriptor
+  if (!start && (image ?? from ?? dockerfile ?? install) !== undefined) {
+    throw new InfraError("The daytona() sandbox's image wasn't prepared before the run started")
+  }
   return createPooledSshSandbox(descriptor, options, {
+    ...(start && { image: start }),
     helper: 'daytona()',
     sandbox: 'daytona',
     size: descriptor.size ?? 'medium',

@@ -11,6 +11,10 @@ const team = defineEnvironment('team', {
   sandbox: createDaytona({ prefix: 'team' })(),
   egress: 'allow-all',
 })
+const toolchain = defineEnvironment('toolchain', {
+  sandbox: daytona({ from: 'debian:bookworm-slim', install: ['apt-get install -y jq'] }),
+  egress: 'allow-all',
+})
 const shared = defineEnvironment('shared', {
   sandbox: daytona({ size: 'small', reuse: true, attemptsPerMachine: 2, maxConcurrent: 4 }),
   egress: 'allow-all',
@@ -18,6 +22,7 @@ const shared = defineEnvironment('shared', {
 
 evaluate('daytona', { environments: medium }, async () => {})
 evaluate('daytona large', { environments: large }, async () => {})
+evaluate('daytona on a toolchain', { environments: toolchain }, async () => {})
 evaluate('daytona on a team prefix', { environments: team }, async () => {})
 evaluate(
   'daytona shared',

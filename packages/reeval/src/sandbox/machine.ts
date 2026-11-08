@@ -56,7 +56,7 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
    * Pools its machines in the run's main process (machine-service.ts): the attempts on sandboxes
    * with the same `key` share one pool, which `open` makes, and its start rate.
    */
-  pool?: { key(sandbox: D): string; open: OpenPool<D> }
+  pool?: { key(sandbox: D, image?: unknown): string; open: OpenPool<D> }
 }
 
 /**

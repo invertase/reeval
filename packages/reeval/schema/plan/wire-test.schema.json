@@ -577,10 +577,33 @@
           "minimum": 1,
           "maximum": 8
         },
-        "id": {
-          "description": "Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`.",
+        "dockerfile": {
+          "description": "A Dockerfile, absolute or relative to the directory of the file it's written in, that Daytona builds from its directory into a snapshot. `FROM ${REEVAL_BASE}` starts it from reeval's sandbox image; any other base must be Debian or Ubuntu based, and gets Node and the harness baked on top.",
           "type": "string",
           "pattern": "\\S"
+        },
+        "from": {
+          "description": "A Debian or Ubuntu based toolchain image in a registry Daytona can pull; reeval bakes Node and the harness on top into a Daytona snapshot, cached by content.",
+          "type": "string",
+          "pattern": "^\\S+$"
+        },
+        "id": {
+          "description": "Cell id; defaults to `daytona`, or `daytona:<image>` for a recipe as for `docker()`, then `:<size>` with a `size`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "image": {
+          "description": "An image in a registry Daytona can pull, with the harness baked in and a `reeval` user, used as is.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "install": {
+          "description": "Baked into the image in order, on `from` or reeval's sandbox image: no secrets, no workspace.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InstallStep"
+          }
         },
         "kind": {
           "type": "string",

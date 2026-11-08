@@ -3,20 +3,44 @@
 // `starting` on create and `started` once its machine is up, a list pages with `nextCursor`, and
 // every call needs the key as a bearer token. Each sandbox runs as an SSH VM in a container
 // (`startSshVm`, ssh-vm.ts) whose SSH access is a token that logs in as the VM's user with no key,
-// as Daytona's SSH gateway takes `ssh <token>@ssh.app.daytona.io`.
+// as Daytona's SSH gateway takes `ssh <token>@ssh.app.daytona.io`. Snapshots go through
+// Daytona's states (`pending`, `building`, `active`, `build_failed`, `inactive`, `removing`), and
+// a test can seed one in any of them; a sandbox created from a built snapshot or a Dockerfile gets
+// a machine of that Dockerfile.
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { SshVm } from './ssh-vm.ts'
 
-export type DaytonaMachines = (name: string) => Promise<SshVm>
+/** Where a sandbox starts from: Daytona's default snapshot, or the Dockerfile it built. */
+export type DaytonaSource = { snapshot?: string; dockerfile?: string }
+
+export type DaytonaMachines = (name: string, source: DaytonaSource) => Promise<SshVm>
+
+type FakeSnapshot = {
+  id: string
+  name: string
+  state: string
+  errorReason?: string | null
+  dockerfile?: string
+  resources?: Record<string, unknown>
+  /** Reads answer 404 while creates still find the name, as a read lagging another run's create. */
+  hidden?: boolean
+}
+
+/** Builds a Dockerfile, as Daytona's builder does; a rejection is the build's `errorReason`. */
+export type DaytonaBuilder = (dockerfile: string) => Promise<void>
 
 type FakeSandbox = {
   id: string
   name: string
   snapshot: string
+  /** The Dockerfile the create built, for a sandbox from an image. */
+  dockerfile?: string
+  resources?: Record<string, unknown>
+  autoDeleteInterval?: number
   labels: Record<string, string>
-  state: 'starting' | 'started' | 'error'
+  state: 'starting' | 'pending_build' | 'started' | 'error' | 'build_failed'
   errorReason?: string
   ttlMinutes: number
   autoStopInterval?: number
@@ -32,7 +56,30 @@ export type FakeDaytona = {
   /** The sandboxes that exist now, by name. */
   live(): string[]
   /** Every sandbox created, with what reeval asked for. */
-  created(): Array<Pick<FakeSandbox, 'name' | 'snapshot' | 'labels' | 'ttlMinutes'>>
+  created(): Array<
+    Pick<FakeSandbox, 'name' | 'snapshot' | 'labels' | 'ttlMinutes'> &
+      Partial<
+        Pick<FakeSandbox, 'dockerfile' | 'resources' | 'autoStopInterval' | 'autoDeleteInterval'>
+      >
+  >
+  /** The snapshots that exist now, by name. */
+  snapshots(): FakeSnapshot[]
+  /**
+   * Puts snapshot `name` in `state`, as a killed run or another one left it, moving to `settle`'s
+   * state after `afterMs`. A `hidden` one answers reads 404 while a create still finds it.
+   */
+  seedSnapshot(
+    name: string,
+    o: {
+      state: string
+      errorReason?: string
+      dockerfile?: string
+      hidden?: boolean
+      settle?: { afterMs: number; state: string; errorReason?: string }
+    },
+  ): void
+  /** Answer every snapshot call 403, as for a key without snapshot permission. */
+  refuseSnapshots(): void
   /** Every call, as `METHOD /path`, with what reeval sent that a check reads. */
   requests: Array<{
     call: string
@@ -63,12 +110,99 @@ async function bodyOf(req: IncomingMessage): Promise<Record<string, unknown>> {
   return text ? (JSON.parse(text) as Record<string, unknown>) : {}
 }
 
+const uuid = () =>
+  randomBytes(16)
+    .toString('hex')
+    .replace(/(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-')
+
 export async function fakeDaytona(
   machines: DaytonaMachines,
-  options: { key?: string } = {},
+  options: { key?: string; build?: DaytonaBuilder; buildMs?: number } = {},
 ): Promise<FakeDaytona> {
   const key = options.key ?? `dtn_test_${randomBytes(8).toString('hex')}`
+  const build = options.build ?? (async () => {})
+  const buildMs = options.buildMs ?? 50
   const sandboxes = new Map<string, FakeSandbox>()
+  const snapshots = new Map<string, FakeSnapshot>()
+  let snapshotsRefused = false
+  const snapshotView = (s: FakeSnapshot) => ({
+    id: s.id,
+    organizationId: 'org_test',
+    general: false,
+    name: s.name,
+    imageName: null,
+    state: s.state,
+    size: null,
+    entrypoint: null,
+    cpu: 2,
+    gpu: 0,
+    mem: 4,
+    disk: 8,
+    errorReason: s.errorReason ?? null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastUsedAt: null,
+  })
+  const later = (ms: number, work: () => void) => {
+    setTimeout(work, ms).unref()
+  }
+  const snapshotRoute = async (
+    method: string,
+    id: string | undefined,
+    sub: string | undefined,
+    body: Record<string, unknown> | undefined,
+  ) => {
+    if (snapshotsRefused) {
+      return json(403, { statusCode: 403, message: 'Forbidden: missing write:snapshots' })
+    }
+    if (!id && method === 'POST') {
+      const name = String(body?.name)
+      if (snapshots.has(name)) {
+        return json(409, { statusCode: 409, message: `Snapshot with name ${name} already exists` })
+      }
+      const dockerfile = (body?.buildInfo as { dockerfileContent?: string } | undefined)
+        ?.dockerfileContent
+      const { cpu, memory, disk } = body ?? {}
+      const snapshot: FakeSnapshot = {
+        id: uuid(),
+        name,
+        state: 'pending',
+        ...(dockerfile !== undefined && { dockerfile }),
+        resources: { cpu, memory, disk },
+      }
+      snapshots.set(name, snapshot)
+      later(buildMs / 2, () => {
+        snapshot.state = 'building'
+        build(dockerfile ?? '').then(
+          () => later(buildMs / 2, () => (snapshot.state = 'active')),
+          (error: Error) => {
+            snapshot.state = 'build_failed'
+            snapshot.errorReason = error.message
+          },
+        )
+      })
+      return json(200, snapshotView(snapshot))
+    }
+    const snapshot = snapshots.get(id ?? '') ?? [...snapshots.values()].find((s) => s.id === id)
+    if (!snapshot || snapshot.hidden) {
+      return json(404, { statusCode: 404, message: `Snapshot with ID or name ${id} not found` })
+    }
+    if (!sub && method === 'GET') return json(200, snapshotView(snapshot))
+    if (!sub && method === 'DELETE') {
+      snapshot.state = 'removing'
+      later(buildMs / 2, () => snapshots.delete(snapshot.name))
+      return json(200, {})
+    }
+    if (sub === 'activate' && method === 'POST') {
+      if (snapshot.state !== 'inactive') {
+        return json(400, { statusCode: 400, message: `Snapshot ${snapshot.name} is not inactive` })
+      }
+      snapshot.state = 'pulling'
+      later(buildMs, () => (snapshot.state = 'active'))
+      return json(200, snapshotView(snapshot))
+    }
+    return json(404, { statusCode: 404, message: 'Not Found' })
+  }
   const created: ReturnType<FakeDaytona['created']> = []
   const requests: FakeDaytona['requests'] = []
   let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
@@ -114,6 +248,7 @@ export async function fakeDaytona(
       )
     }
     const [, collection, id, sub, arg] = path.split('/')
+    if (collection === 'snapshots') return snapshotRoute(method, id, sub, body)
     if (collection !== 'sandbox') return json(404, { statusCode: 404, message: 'Not Found' })
     if (
       !id &&
@@ -133,25 +268,56 @@ export async function fakeDaytona(
       const request = body as {
         name: string
         snapshot?: string
+        buildInfo?: { dockerfileContent?: string }
+        cpu?: number
+        memory?: number
+        disk?: number
         labels?: Record<string, string>
         ttlMinutes?: number
         autoStopInterval?: number
         autoDeleteInterval?: number
       }
+      const built = request.snapshot ? snapshots.get(request.snapshot) : undefined
+      if (
+        request.snapshot &&
+        !request.snapshot.startsWith('daytona-') &&
+        built?.state !== 'active'
+      ) {
+        return json(400, {
+          statusCode: 400,
+          message: `Snapshot ${request.snapshot} is ${built?.state ?? 'missing'}`,
+        })
+      }
+      const dockerfile = request.buildInfo?.dockerfileContent ?? built?.dockerfile
+      const fromImage = request.buildInfo !== undefined
+      const machine = (async () => {
+        if (fromImage) await build(dockerfile ?? '')
+        return machines(request.name, {
+          ...(request.snapshot && { snapshot: request.snapshot }),
+          ...(dockerfile !== undefined && { dockerfile }),
+        })
+      })()
+      const resources =
+        request.cpu === undefined
+          ? undefined
+          : { cpu: request.cpu, memory: request.memory, disk: request.disk }
       const sandbox: FakeSandbox = {
-        id: randomBytes(16)
-          .toString('hex')
-          .replace(/(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-'),
+        id: uuid(),
         name: request.name,
-        snapshot: request.snapshot ?? 'daytona-small',
+        snapshot: request.snapshot ?? '',
+        ...(dockerfile !== undefined && { dockerfile }),
+        ...(resources && { resources }),
         labels: request.labels ?? {},
-        state: 'starting',
+        state: fromImage ? 'pending_build' : 'starting',
         ttlMinutes: request.ttlMinutes ?? 0,
         ...(request.autoStopInterval !== undefined && {
           autoStopInterval: request.autoStopInterval,
         }),
+        ...(request.autoDeleteInterval !== undefined && {
+          autoDeleteInterval: request.autoDeleteInterval,
+        }),
         ephemeral: request.autoDeleteInterval === 0,
-        machine: machines(request.name),
+        machine,
         tokens: [],
       }
       sandbox.machine.then(
@@ -159,7 +325,7 @@ export async function fakeDaytona(
           sandbox.state = 'started'
         },
         (error: Error) => {
-          sandbox.state = 'error'
+          sandbox.state = fromImage ? 'build_failed' : 'error'
           sandbox.errorReason = error.message
         },
       )
@@ -169,6 +335,14 @@ export async function fakeDaytona(
         snapshot: sandbox.snapshot,
         labels: sandbox.labels,
         ttlMinutes: sandbox.ttlMinutes,
+        ...(dockerfile !== undefined && { dockerfile }),
+        ...(resources && { resources }),
+        ...(sandbox.autoStopInterval !== undefined && {
+          autoStopInterval: sandbox.autoStopInterval,
+        }),
+        ...(sandbox.autoDeleteInterval !== undefined && {
+          autoDeleteInterval: sandbox.autoDeleteInterval,
+        }),
       })
       return json(200, view(sandbox))
     }
@@ -232,6 +406,28 @@ export async function fakeDaytona(
     key,
     live: () => [...sandboxes.values()].map((s) => s.name),
     created: () => created,
+    snapshots: () => [...snapshots.values()],
+    seedSnapshot(name, o) {
+      const snapshot: FakeSnapshot = {
+        id: uuid(),
+        name,
+        state: o.state,
+        ...(o.errorReason !== undefined && { errorReason: o.errorReason }),
+        ...(o.dockerfile !== undefined && { dockerfile: o.dockerfile }),
+        ...(o.hidden && { hidden: true }),
+      }
+      snapshots.set(name, snapshot)
+      const settle = o.settle
+      if (settle) {
+        later(settle.afterMs, () => {
+          snapshot.state = settle.state
+          if (settle.errorReason !== undefined) snapshot.errorReason = settle.errorReason
+        })
+      }
+    },
+    refuseSnapshots() {
+      snapshotsRefused = true
+    },
     requests,
     refuseStarts(count, o = {}) {
       refusals = {

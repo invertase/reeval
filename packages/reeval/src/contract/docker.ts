@@ -15,10 +15,17 @@ import { boatProblem } from './boat.ts'
 import { daytonaProblem } from './daytona.ts'
 import { hostedProblem } from './hosted.ts'
 import {
+  installMessage,
+  type installStepSchema,
+  oneRecipe,
+  recipeFieldMessage,
+  recipeFields,
+  recipeMessage,
+} from './recipe.ts'
+import {
   type Assert,
   closest,
-  durationProblem,
-  durationSchema,
+  type durationSchema,
   got,
   type Issue,
   nonEmpty,
@@ -30,20 +37,10 @@ import { tartProblem } from './tart.ts'
 /** Docker's memory size: bytes, or a number with `b`, `k`, `m` or `g`. */
 const MEMORY = /^\d+(\.\d+)?[bkmg]?$/i
 
-export const installStepSchema = z.union([
-  nonEmpty(),
-  z.strictObject({
-    run: nonEmpty(),
-    timeout: durationSchema.optional(),
-  }),
-])
-
 /** Every field but `kind` and `dockerfile`, shared by the descriptor and `docker()`'s options. */
 const fields = {
   id: nonEmpty().optional(),
-  image: nonEmpty().optional(),
-  from: z.string().regex(/^\S+$/, 'one word').optional(),
-  install: z.array(installStepSchema).min(1).optional(),
+  ...recipeFields,
   maxConcurrent: z.number().optional(),
   root: z.boolean().optional(),
   capabilities: z.array(z.string().regex(/^(CAP_)?[A-Z_]+$/)).optional(),
@@ -51,16 +48,6 @@ const fields = {
   swap: z.union([z.string().regex(MEMORY), z.int().nonnegative()]).optional(),
   cpus: z.number().positive().optional(),
   pids: z.int().positive().optional(),
-}
-
-const BASES = ['image', 'from', 'dockerfile'] as const
-
-function oneRecipe(value: Record<string, unknown>, ctx: z.RefinementCtx): void {
-  const bases = BASES.filter((k) => value[k] !== undefined)
-  if (bases.length > 1) ctx.addIssue({ code: 'custom', message: 'one base', params: { bases } })
-  else if (value.dockerfile !== undefined && value.install !== undefined) {
-    ctx.addIssue({ code: 'custom', message: 'dockerfile or install' })
-  }
 }
 
 export const dockerSandboxSchema = z
@@ -126,9 +113,6 @@ const DOCKER_HINTS: Record<string, string> = {
 /** The sentence for a field whose value the schema refused, given the value. */
 const FIELD: Record<string, (value: unknown) => string> = {
   id: (v) => `docker({ id }) must be a non-empty string (got ${got(v)})`,
-  image: (v) => `docker({ image }) must be a non-empty string (got ${got(v)})`,
-  from: (v) =>
-    `docker({ from }) takes an image reference with no spaces or line breaks, e.g. from: 'python:3.12-slim' (got ${got(v)})`,
   root: (v) => `docker({ root }) is true or false (got ${got(v)})`,
   capabilities: (v) =>
     `docker({ capabilities }) takes Linux capability names, e.g. capabilities: ['NET_RAW'] (got ${got(v)})`,
@@ -141,10 +125,6 @@ const FIELD: Record<string, (value: unknown) => string> = {
   maxConcurrent: (v) => `docker({ maxConcurrent }) takes a number (got ${got(v)})`,
   kind: (v) => `a Docker sandbox's kind is "docker" (got ${got(v)})`,
   engine: (v) => `a Docker sandbox's engine is "docker" or "podman" (got ${got(v)})`,
-  dockerfile: (v) =>
-    `docker({ dockerfile }) takes a path, e.g. dockerfile: './Dockerfile' (got ${got(v)})`,
-  install: (v) =>
-    `docker({ install }) takes a non-empty list of shell commands, e.g. install: ['apt-get update && apt-get install -y jq'] (got ${got(v)})`,
 }
 
 /** Which refusal to report when there are several: the order `docker()` has always checked in. */
@@ -162,25 +142,6 @@ const ORDER = [
   'pids',
 ]
 
-// Zod reports a bad timeout inside the step's union, so the step itself says which sentence fits.
-function installMessage(step: unknown): string {
-  const { run, timeout } = (typeof step === 'object' && step !== null ? step : {}) as {
-    run?: unknown
-    timeout?: unknown
-  }
-  const keys = typeof step === 'object' && step !== null ? Object.keys(step) : []
-  if (typeof run === 'string' && run.trim()) {
-    const extra = keys.find((k) => k !== 'run' && k !== 'timeout')
-    if (extra) {
-      const hint = closest(extra, ['timeout']) ? ' Did you mean "timeout"?' : ''
-      return `docker({ install }) command "${run}" has an unknown key "${extra}"; a command is a string or { run, timeout? }.${hint}`
-    }
-    const problem = timeout === undefined ? undefined : durationProblem(timeout)
-    if (problem) return `docker({ install }) command "${run}": ${problem}`
-  }
-  return `docker({ install }) commands are strings or { run, timeout? } objects (got ${got(step)})`
-}
-
 /** reeval's sentence for the first thing Zod refused, in the words `docker()` has always used. */
 function explainDocker(issue: Issue, value: unknown): string {
   const options = value as Record<string, unknown>
@@ -193,16 +154,14 @@ function explainDocker(issue: Issue, value: unknown): string {
     return `Unknown docker() option "${key}".${hint}`
   }
   if (issue.path[0] === 'install' && issue.path.length > 1) {
-    return installMessage((options.install as unknown[])[issue.path[1] as number])
+    return installMessage('docker', (options.install as unknown[])[issue.path[1] as number])
   }
-  if (issue.code === 'custom') {
-    const { bases } = (issue.params ?? {}) as { bases?: string[] }
-    return bases
-      ? `docker() takes one base image, but got ${bases.join(' and ')}. Use image (has the harness), from (a toolchain image reeval bakes the harness onto) or dockerfile.`
-      : "docker() takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines, so there's one recipe for the image."
-  }
+  if (issue.code === 'custom') return recipeMessage('docker', issue.params)
   const key = String(issue.path[0])
-  return (FIELD[key] ?? ((v) => `docker({ ${key} }) is invalid (got ${got(v)})`))(options[key])
+  return (
+    recipeFieldMessage('docker', key, options[key]) ??
+    (FIELD[key] ?? ((v) => `docker({ ${key} }) is invalid (got ${got(v)})`))(options[key])
+  )
 }
 
 function explainFake(issue: Issue, value: unknown): string {

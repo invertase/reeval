@@ -1090,6 +1090,14 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'daytona.images',
+    area: 'Sandbox',
+    name: "`daytona({ image, from, dockerfile, install })`: preflight generates one Dockerfile (reeval's toolchain on the base, the harness's bootstrap as steps run by the sandbox user, the install and a home copy for shared slots) and has Daytona build it into a snapshot named by its content key, waiting on one being built, activating an inactive one and rebuilding a failed one once, or, when the key can't make snapshots, builds it once in a sandbox that stops idle and is deleted, for every create to build from Daytona's cache; each sandbox logs in as root and runs the agent as `reeval`, with the harness already installed",
+    fixtures: ['sandbox/daytona-image'],
+    plan: ['environments/daytona'],
+    unit: ['reeval/test/daytona-image.test.ts', 'reeval/test/refusals.test.ts'],
+  },
+  {
     id: 'hosted.sandbox',
     area: 'Sandbox',
     name: "`hosted({ size, reuse, attemptsPerMachine, maxConcurrent })` (internal, `reeval/internal/vm`): a VM per attempt from the VM service at `REEVAL_VM_URL`, on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `hosted` with no message, record field or log naming the upstream",

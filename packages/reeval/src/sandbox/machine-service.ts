@@ -16,6 +16,8 @@ export type MachineCall =
       /** Names the request, so the worker can abandon it while it waits. */
       ticket: string
       sandbox: MachineDescriptor
+      /** What the provider starts machines from, as its preflight prepared it. */
+      image?: unknown
       runId: string
       /** The project, where the provider's SDK resolves from. */
       root: string
@@ -32,7 +34,10 @@ export type WireLease = LeaseFacts & { info: unknown }
 type Held = { owner: string; lease?: PoolLease<unknown>; waiting?: AbortController }
 
 /** How a sandbox kind pools its machines: one pool per `key`, opened with `open`. */
-export type Pooled = { key(s: MachineDescriptor): string; open: OpenPool<MachineDescriptor> }
+export type Pooled = {
+  key(s: MachineDescriptor, image?: unknown): string
+  open: OpenPool<MachineDescriptor>
+}
 
 const registered = (sandbox: MachineDescriptor) =>
   MACHINE_PROVIDERS.find((m) => m.kind === sandbox.kind)?.pool as Pooled | undefined
@@ -116,10 +121,11 @@ export class MachineService {
   #pool(call: Extract<MachineCall, { op: 'lease' }>): Promise<MachinePool<unknown>> {
     const pooled = this.#pooled(call.sandbox)
     if (!pooled) throw new Error(`${call.sandbox.kind} sandboxes have no machine pool`)
-    const key = `${call.runId}\0${pooled.key(call.sandbox)}`
+    const key = `${call.runId}\0${pooled.key(call.sandbox, call.image)}`
     let pool = this.#pools.get(key)
     if (!pool) {
-      pool = pooled.open(call.sandbox, { runId: call.runId, root: call.root }).then(
+      const o = { runId: call.runId, root: call.root, image: call.image }
+      pool = pooled.open(call.sandbox, o).then(
         ({ provider, options }) =>
           new MachinePool(provider, {
             ...options,
@@ -136,7 +142,7 @@ export class MachineService {
 /** How a provider opens its pool for one account and size. */
 export type OpenPool<D extends MachineDescriptor> = (
   sandbox: D,
-  o: { runId: string; root: string },
+  o: { runId: string; root: string; image?: unknown },
 ) => Promise<{
   provider: import('./pool.ts').PoolProvider<unknown>
   options: import('./pool.ts').PoolOptions

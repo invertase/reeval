@@ -30,7 +30,7 @@ import {
   declaredTodoSchema,
   evalOptionsDataSchema,
 } from './declaration.ts'
-import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
+import { dockerSandboxSchema, fakeSandboxSchema } from './docker.ts'
 import {
   environmentDataSchema,
   environmentLayerSchema,
@@ -83,6 +83,7 @@ import {
   substituteInSchema,
 } from './plain.ts'
 import { pairFactorSchema, questionOptionsSchema, questionSchema } from './questions.ts'
+import { installStepSchema } from './recipe.ts'
 import { durationSchema, jsonValueSchema } from './shared.ts'
 import { tartSandboxSchema } from './tart.ts'
 

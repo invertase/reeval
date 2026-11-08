@@ -1398,7 +1398,7 @@ export type DaytonaApiKey = { kind: 'secret'; from: string }
 /** A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`. */
 export type DaytonaSandboxDescriptor = {
   kind: 'daytona'
-  /** Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`. */
+  /** Cell id; defaults to `daytona`, or `daytona:<image>` for a recipe as for `docker()`, then `:<size>` with a `size`. */
   id?: string
   /** The host variable with the Daytona API key, read on the host only. */
   apiKey: DaytonaApiKey
@@ -1407,6 +1407,25 @@ export type DaytonaSandboxDescriptor = {
    * lowercase letters, digits and dashes.
    */
   prefix: string
+  /**
+   * An image in a registry Daytona can pull, with the harness baked in and a `reeval` user, used as
+   * is.
+   */
+  image?: string
+  /**
+   * A Debian or Ubuntu based toolchain image in a registry Daytona can pull; reeval bakes Node and
+   * the harness on top into a Daytona snapshot, cached by content.
+   */
+  from?: string
+  /**
+   * A Dockerfile, absolute or relative to the directory of the file it's written in, that Daytona
+   * builds from its directory into a snapshot. `FROM ${REEVAL_BASE}` starts it from reeval's
+   * sandbox image; any other base must be Debian or Ubuntu based, and gets Node and the harness
+   * baked on top.
+   */
+  dockerfile?: string
+  /** Baked into the image in order, on `from` or reeval's sandbox image: no secrets, no workspace. */
+  install?: InstallStep[]
   /** The sandbox size. Default `medium`. */
   size?: DaytonaSize
   /** The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`. */

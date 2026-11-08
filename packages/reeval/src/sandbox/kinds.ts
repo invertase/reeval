@@ -2,7 +2,6 @@
 // prepared, created and cleaned up. Code outside a kind's own modules asks this table, not the
 // kind's name, so a new kind is one more entry. A kind whose attempts each run on a machine of
 // their own is a MachineProvider (machines.ts), whose entry kindOf() derives.
-import { createHash } from 'node:crypto'
 import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
 import type { Check, DoctorDeps } from '../doctor.ts'
@@ -10,11 +9,10 @@ import type {
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
-  InstallStep,
   SandboxDescriptor,
 } from '../types.ts'
 import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
-import { idPart } from './id-part.ts'
+import { recipeId } from './id-part.ts'
 import type { SandboxOptions } from './index.ts'
 import { kindOf } from './machine.ts'
 import { BOAT_MACHINE, DAYTONA_MACHINE, HOSTED_MACHINE, TART_MACHINE } from './machines.ts'
@@ -119,17 +117,6 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = Sandb
   cleanupRun?(runId: string, sandboxes?: readonly D[]): Promise<void>
 }
 
-/** `+` and a hash of the install steps, or nothing without any. */
-function installId(install: readonly InstallStep[] | undefined): string {
-  if (!install?.length) return ''
-  const key = JSON.stringify(
-    install.map((step) =>
-      typeof step === 'string' ? step : { run: step.run, timeout: step.timeout },
-    ),
-  )
-  return `+${createHash('sha256').update(key).digest('hex').slice(0, 8)}`
-}
-
 const engineOf = (s: DockerSandboxDescriptor) => s.engine ?? 'docker'
 
 const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
@@ -147,16 +134,7 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     pluginBuilds: true,
   },
   provider: engineOf,
-  id(s) {
-    const install = installId(s.install)
-    const engine = engineOf(s)
-    if (s.dockerfile) {
-      const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
-      return `${engine}:${idPart(file === 'Dockerfile' ? dir || file : file)}${install}`
-    }
-    const image = s.image ?? s.from
-    return image ? `${engine}:${idPart(image)}${install}` : `${engine}${install}`
-  },
+  id: (s) => recipeId(engineOf(s), s),
   hostPaths: { dockerfile: 'file' },
   buildsAtStart: (s) => !!(s.from || s.dockerfile || s.install?.length),
   privileges: (s) => ({ root: !!s.root, capabilities: s.capabilities ?? [] }),

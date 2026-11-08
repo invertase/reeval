@@ -35,6 +35,10 @@ export type PooledSshMachine = {
   route: string
   /** The login user is a credential (a token), which every trace masks. */
   secretUser?: true
+  /** The login user is root, with no `sudo`: a machine started from a built image. */
+  loginRoot?: true
+  /** The machine's image has the harness installed in the sandbox user's home. */
+  harnessBaked?: true
 }
 
 /** Past the attempt's timeout, so a machine whose worker was killed still goes away by itself. */
@@ -50,10 +54,10 @@ const AGENT_NODE = '/opt/reeval/node'
  * user's nvm, under a home other users can't enter (Boat's). The sandbox user gets that Node's
  * directory linked when it can read it and a copy when it can't; the record names its version.
  */
-const nodeForAgent = (user: string) =>
+const nodeForAgent = (user: string, loginRoot: boolean) =>
   [
     'real="$(PATH="$1"; readlink -f "$(command -v node)" 2>/dev/null || true)"',
-    `{ [ -z "$real" ] || [ -x ${AGENT_NODE}/bin/node ] || { prefix="$(dirname "$(dirname "$real")")" && rm -rf ${AGENT_NODE} && mkdir -p "$(dirname ${AGENT_NODE})" && if sudo -n -u ${user} test -x "$real"; then ln -s "$prefix" ${AGENT_NODE}; else mkdir -p ${AGENT_NODE} && cp -a "$prefix/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; fi; }; }`,
+    `{ [ -z "$real" ] || [ -x ${AGENT_NODE}/bin/node ] || { prefix="$(dirname "$(dirname "$real")")" && rm -rf ${AGENT_NODE} && mkdir -p "$(dirname ${AGENT_NODE})" && if ${loginRoot ? `setpriv --reuid=${user} --regid=${user} --init-groups --` : `sudo -n -u ${user}`} test -x "$real"; then ln -s "$prefix" ${AGENT_NODE}; else mkdir -p ${AGENT_NODE} && cp -a "$prefix/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; fi; }; }`,
   ].join(' && ')
 
 /** The harness install a machine keeps a home for, so its slots and resets copy it: by harness. */
@@ -110,6 +114,8 @@ export type PooledSshOptions = {
   size: string
   /** How messages name one machine: `boat sandbox bx_… (small)`. */
   description(info: PooledSshMachine): string
+  /** What the provider's pool starts machines from, as preflight prepared it; part of its key. */
+  image?: unknown
 }
 
 /**
@@ -137,6 +143,7 @@ export async function createPooledSshSandbox(
         const lease = await leaseMachine(
           {
             sandbox: descriptor,
+            ...(o.image !== undefined && { image: o.image }),
             runId: options.runId,
             root: process.cwd(),
             ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
@@ -169,12 +176,13 @@ export async function createPooledSshSandbox(
               identityFile: info.identityFile,
               knownHostsFile: info.knownHostsFile,
               hostKeyAlias: info.id,
+              ...(info.loginRoot && { loginRoot: true }),
               controlPath: join(dir, 'cm'),
             },
             description: o.description(info),
             env: options.env,
             path: [`${AGENT_NODE}/bin`],
-            prepare: nodeForAgent(layout.user),
+            prepare: nodeForAgent(layout.user, info.loginRoot === true),
             abortSignal: options.signal,
             ...(shared && { layout }),
             ...(lease.reused && { reset: true }),
@@ -194,6 +202,8 @@ export async function createPooledSshSandbox(
         let healthy = true
         return {
           vm: { id: info.id, name: info.name },
+          // Its own slot of an image with the harness has it already; a shared or reused one restores the image's copy.
+          ...(info.harnessBaked && !label && { installed: true }),
           root: machine.root,
           ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
           ...(label && {

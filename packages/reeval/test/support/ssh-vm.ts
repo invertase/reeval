@@ -151,8 +151,48 @@ const DAYTONA_VM_LIMITS = [
   String(DAYTONA_VM_SIZE.memoryBytes),
 ]
 
+/** sshd on a built image, logging in as root as a Daytona sandbox from an image does. */
+const sshdOn = (image: string) => `FROM ${image}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server && rm -rf /var/lib/apt/lists/* \\
+ && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh && ssh-keygen -A \\
+ && printf 'PermitEmptyPasswords yes\\nPermitRootLogin yes\\n' > /etc/ssh/sshd_config.d/token.conf
+ENTRYPOINT []
+CMD ["/usr/sbin/sshd", "-D", "-e"]
+`
+
+const built = new Map<string, Promise<string>>()
+
+/**
+ * Builds `dockerfile` as Daytona's builder would, with no build context, then sshd on it; resolves
+ * to the image with sshd. A failed build rejects with the build's last lines.
+ */
+export function buildDaytonaImage(dockerfile: string): Promise<string> {
+  const hash = createHash('sha256').update(dockerfile).digest('hex').slice(0, 12)
+  let image = built.get(hash)
+  if (!image) {
+    image = (async () => {
+      const base = `reeval-fake-daytona-image:${hash}`
+      await docker(['build', '-q', '-t', base, '-'], dockerfile).catch((error: Error) => {
+        throw new Error(error.message.split('\n').slice(-8).join('\n'))
+      })
+      const ssh = `reeval-fake-daytona-image:${hash}-sshd`
+      await docker(['build', '-q', '-t', ssh, '-'], sshdOn(base))
+      return ssh
+    })()
+    image.catch(() => built.delete(hash))
+    built.set(hash, image)
+  }
+  return image
+}
+
 /** A fake VM of `layout`'s image named `name` by its label, its sshd on a port of 127.0.0.1. */
-export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Promise<SshVm> {
+export async function startSshVm(
+  name: string,
+  layout: SshVmLayout | { image: string } = 'boat',
+): Promise<SshVm> {
+  const root = typeof layout === 'object'
+  const user = root ? 'root' : 'user'
   const id = await docker([
     'run',
     '-d',
@@ -168,12 +208,12 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
     '--security-opt',
     'apparmor=unconfined',
     // A Daytona sandbox is a container with limits of its own, which it reads its sizes from.
-    ...(layout === 'daytona' ? DAYTONA_VM_LIMITS : []),
+    ...(layout === 'daytona' || root ? DAYTONA_VM_LIMITS : []),
     // Its Docker is the host's: images it builds and containers it makes are the host daemon's.
     ...(layout === 'boat-docker' ? ['-v', `${DOCKER_SOCKET}:/var/run/docker.sock`] : []),
     '-p',
     '127.0.0.1::22',
-    imageOf(layout),
+    typeof layout === 'object' ? layout.image : imageOf(layout),
   ])
   const remove = async () => {
     await docker(['rm', '-f', id]).catch(() => {})
@@ -198,7 +238,7 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
       .join(' ')
     return {
       endpoint: `127.0.0.1:${port}`,
-      user: 'user',
+      user,
       hostKey,
       authorize: async (publicKey) => {
         await docker(
@@ -206,7 +246,7 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
             'exec',
             '-i',
             '-u',
-            'user',
+            user,
             id,
             'sh',
             '-c',
@@ -223,7 +263,9 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
           id,
           'sh',
           '-c',
-          `useradd -o -u "$(id -u user)" -g user -d /home/user -M -s /bin/bash ${token} && passwd -d ${token} >/dev/null`,
+          root
+            ? `useradd -o -u 0 -g root -d /root -M -s /bin/bash ${token} && passwd -d ${token} >/dev/null`
+            : `useradd -o -u "$(id -u user)" -g user -d /home/user -M -s /bin/bash ${token} && passwd -d ${token} >/dev/null`,
         ])
       },
       remove,
@@ -239,8 +281,11 @@ const DOCKER_SOCKET = '/var/run/docker.sock'
 /** A fake Boat VM whose Docker CLI reaches the host's daemon, for builds over its SSH. */
 export const startBoatDockerVm = (name: string) => startSshVm(name, 'boat-docker')
 
-/** A fake VM laid out as Daytona's sandboxes are. */
-export const startDaytonaVm = (name: string) => startSshVm(name, 'daytona')
+/** A fake VM laid out as Daytona's sandboxes are, or of the Dockerfile Daytona built for it. */
+export const startDaytonaVm = async (name: string, source?: { dockerfile?: string }) =>
+  source?.dockerfile !== undefined
+    ? startSshVm(name, { image: await buildDaytonaImage(source.dockerfile) })
+    : startSshVm(name, 'daytona')
 
 /** The container of the fake VM named `name`, or `null` once it's gone. */
 export function sshVmContainer(name: string): string | null {

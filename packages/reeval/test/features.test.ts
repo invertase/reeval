@@ -70,7 +70,13 @@ import {
 import { type EvalExpectation, expectRun, type RunExpectation } from './support/oracle.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
-import { buildSshVmImage, DAYTONA_VM_SIZE, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
+import {
+  buildDaytonaImage,
+  buildSshVmImage,
+  DAYTONA_VM_SIZE,
+  startDaytonaVm,
+  startSshVm,
+} from './support/ssh-vm.ts'
 import { type FakeVmService, fakeVmService, VM_RUN_LABEL } from './support/vm-service.ts'
 
 /**
@@ -336,7 +342,11 @@ const hostedCleanedUp = (run: RunRecord, project: string) => {
 /** The fake Daytona API the `daytona-*` fixtures run on, its sandboxes sshd containers. */
 let daytonaApi: FakeDaytona
 before(async () => {
-  daytonaApi = await fakeDaytona(startDaytonaVm)
+  daytonaApi = await fakeDaytona(startDaytonaVm, {
+    build: async (dockerfile) => {
+      await buildDaytonaImage(dockerfile)
+    },
+  })
 })
 after(() => daytonaApi.close())
 /** A `daytona-*` fixture's host: reeval pointed at the fake API, the VM image built. */
@@ -1419,6 +1429,38 @@ export const features: Feature[] = [
         assert.equal(s.snapshot, 'daytona-medium')
         assert.ok(s.ttlMinutes > 0, 'each sandbox has a TTL, in case the run never deletes it')
       }
+    },
+  },
+  {
+    dir: 'sandbox/daytona-image',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeDaytona,
+    sandbox: 'daytona:debian:bookworm-slim+cd073bbf',
+    canary: /expected 'reeval(-s1)?' to be 'root'/,
+    record: ({ run, project }) => {
+      const recipe = daytona({
+        from: 'debian:bookworm-slim',
+        install: ['echo installed > /etc/reeval-install-proof'],
+        attemptsPerMachine: 2,
+      })
+      daytonaCleanedUp(run, recipe)
+      const made = daytonaCreated(run, recipe)
+      const [snapshot, ...others] = new Set(made.map((s) => s.snapshot))
+      assert.equal(others.length, 0, 'every sandbox starts from the one snapshot')
+      assert.match(String(snapshot), /^reeval-img-[0-9a-f]{12}$/)
+      const built = daytonaApi.snapshots().find((s) => s.name === snapshot)
+      assert.equal(built?.state, 'active')
+      assert.match(String(built?.dockerfile), /^FROM debian:bookworm-slim@sha256:/)
+      const logs = debugLogs(project).flat()
+      assert.ok(
+        logs.some((l) => l.includes(`starts each attempt from ${snapshot}, which has the harness`)),
+        'the debug log names the image each attempt started from',
+      )
+      assert.ok(
+        !logs.some((l) => /installed the fake agent's bootstrap/.test(l)),
+        "the attempt didn't install the harness again",
+      )
     },
   },
   {

@@ -10,7 +10,7 @@ import type {
   HostedSandboxDescriptor,
   TartSandboxDescriptor,
 } from '../types.ts'
-import { idPart } from './id-part.ts'
+import { idPart, recipeId } from './id-part.ts'
 import type { MachineProvider } from './machine.ts'
 import type { TartTarget } from './tart-cli.ts'
 import { tartTagWarning } from './tart-ref.ts'
@@ -135,8 +135,11 @@ export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
   helpers: ['daytona'],
   os: 'linux',
   capabilities: { egress: DAYTONA_EGRESS, processTable: true, listeners: 'proc' },
-  id: (s) => (s.size ? `daytona:${s.size}` : 'daytona'),
-  hostPaths: {},
+  id: (s) => {
+    const base = recipeId('daytona', s)
+    return s.size ? `${base}:${s.size}` : base
+  },
+  hostPaths: { dockerfile: 'file' },
   async create(sandbox, options) {
     const { createDaytonaSandbox } = await import('./daytona.ts')
     return createDaytonaSandbox(sandbox, options)
@@ -146,7 +149,7 @@ export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
     return daytonaCapacity(sandbox)
   },
   pool: {
-    key: (s) =>
+    key: (s, image) =>
       JSON.stringify([
         s.apiKey.from,
         s.prefix,
@@ -154,6 +157,7 @@ export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
         s.reuse ?? false,
         s.attemptsPerMachine ?? 1,
         s.maxConcurrent ?? null,
+        (image as { name?: string } | undefined)?.name ?? null,
       ]),
     async open(sandbox, o) {
       const { openDaytonaPool } = await import('./daytona.ts')

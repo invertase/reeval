@@ -792,6 +792,16 @@ export const CASES: Record<string, Case[]> = {
     ['daytona() size unknown', any(daytona, { size: 'huge' })],
     ['daytona() type, a boat() option', any(daytona, { type: 'large' })],
     ['daytona() attemptsPerMachine over 8', any(daytona, { attemptsPerMachine: 9 })],
+    ['daytona() two bases', any(daytona, { image: 'a/b:1', from: 'debian:12' })],
+    [
+      'daytona() dockerfile and install',
+      any(daytona, { dockerfile: new URL(import.meta.url), install: ['true'] }),
+    ],
+    ['daytona() dockerfile missing', any(daytona, { dockerfile: `${DIR}/nope/Dockerfile` })],
+    ['daytona() from with a space', any(daytona, { from: 'debian 12' })],
+    ['daytona() install empty', any(daytona, { install: [] })],
+    ['daytona() install step key', any(daytona, { install: [{ run: 'true', timeot: '1m' }] })],
+    ['daytona() root', any(daytona, { root: true })],
     [
       'claudeCode sharing a daytona() machine',
       planned(
