@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { appendFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, test } from 'node:test'
 import { withUnknownFields } from '../scripts/schema/validate.ts'
 import { openArchive, writeArchive } from '../src/archive/index.ts'
@@ -389,6 +389,80 @@ describe('recording runs into evals/.history', () => {
       `${older}!*.zip\n`,
       'a history .gitignore without the rule gains it',
     )
+  })
+
+  test("history.debugArchive zips the run's .reeval/debug data there, and reeval clean removes it", async () => {
+    const p = await gitProject(
+      'record-debug-archive',
+      { 'evals/agent.eval.ts': agent() },
+      'history: { debugArchive: true },',
+    )
+    const r = await runCli(p.dir, ['run', '--record'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [runId] = recordedRuns(p.dir)
+    assert.ok(runId)
+    const debug = join(p.dir, '.reeval', 'debug')
+    const zip = join(debug, `${runId}.zip`)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `Commit it with git\\.\\nZipped its debug data in \\.reeval/debug/${runId}\\.zip, which stays out of git\\.`,
+      ),
+    )
+    const loose = readdirSync(join(debug, runId), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => `${runId}/${relative(join(debug, runId), join(e.parentPath, e.name))}`)
+      .sort()
+    assert.ok(loose.length > 0, 'the run left debug data')
+    const archive = await openArchive(zip)
+    try {
+      await archive.verify()
+      assert.equal(archive.manifest.contents, 'debug')
+      assert.equal(archive.manifest.debugLevel, 'all')
+      assert.deepEqual(
+        archive.manifest.files.map((f) => f.path),
+        loose,
+        'the zip holds every debug file of the run',
+      )
+    } finally {
+      await archive.close()
+    }
+    assert.deepEqual(
+      readdirSync(join(p.dir, HISTORY)).filter((n) => n.endsWith('.zip')),
+      [],
+      'nothing lands in the history folder',
+    )
+    const again = await runCli(p.dir, ['record', runId])
+    assert.match(again.stdout, /is already recorded$/m, 'a debug archive that lists it is kept')
+
+    const [log] = loose
+    assert.ok(log)
+    await appendFile(join(debug, log), 'later\n')
+    const changed = await runCli(p.dir, ['record', runId])
+    assert.match(changed.stdout, /is already recorded\nZipped its debug data in /)
+    const rewritten = await openArchive(zip)
+    assert.equal(rewritten.manifest.revision, 2, 'debug data that changed is zipped again')
+    await rewritten.close()
+
+    await rm(join(debug, runId), { recursive: true })
+    assert.equal((await runCli(p.dir, ['record', runId])).code, 0)
+    assert.ok(existsSync(zip), 'with its folder gone, the zip is the only copy and stays')
+    for (let i = 0; i < 2; i++) assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const cutShort = [`.tmp-${runId}.claim`, `.tmp-0a1b2c3d-${runId}.zip`]
+    for (const name of cutShort) await writeFile(join(debug, name), '')
+    const kept = await runCli(p.dir, ['clean', '--keep', '2'])
+    assert.match(kept.stdout, /Removed debug data and snapshots for 1 run /)
+    assert.equal(existsSync(zip), false, 'a run with only its zip left counts, and goes first')
+    for (const name of cutShort) {
+      assert.equal(existsSync(join(debug, name)), false, `${name}, cut short, goes with its run`)
+    }
+    const newer = readdirSync(debug).filter((n) => n.endsWith('.zip'))
+    assert.equal(newer.length, 2, 'the newer runs keep theirs')
+
+    const clean = await runCli(p.dir, ['clean'])
+    assert.equal(clean.code, 0, clean.stderr)
+    assert.match(clean.stdout, /Removed debug data and snapshots for 2 runs /)
+    assert.deepEqual(readdirSync(debug), [], 'reeval clean removes each zip with its run')
   })
 
   test('without history.archive no zip is written', async () => {

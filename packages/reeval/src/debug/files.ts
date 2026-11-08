@@ -2,8 +2,15 @@ import { readdir, rm, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { evalSlug, RUN_ID } from '../ids.ts'
 
-/** Local debug data, one directory per run. Gitignored with `.reeval/`, never recorded. */
+/**
+ * Local debug data, one directory per run, and with `history.debugArchive` its zip beside it.
+ * Gitignored with `.reeval/`, never recorded.
+ */
 export const debugRoot = (root: string) => join(root, '.reeval', 'debug')
+
+/** A run's debug data as one zip (`history.debugArchive`). */
+export const debugArchiveFile = (root: string, runId: string) =>
+  join(debugRoot(root), `${runId}.zip`)
 
 /** Where one attempt's debug data goes: the same layout as its artifacts in the run. */
 export const attemptDebugDir = (
@@ -25,13 +32,11 @@ export function parseAttemptKey(key: string): { evalId: string; cell: string; n:
   return { evalId: key.slice(0, split), cell: attempt.slice(0, hash), n }
 }
 
-/** Runs with debug data, oldest first. */
+/** Runs with debug data, a directory or its zip, oldest first. */
 export async function debugRuns(root: string): Promise<string[]> {
-  try {
-    return (await readdir(debugRoot(root))).filter((name) => RUN_ID.test(name)).sort()
-  } catch {
-    return []
-  }
+  const names = await readdir(debugRoot(root)).catch((): string[] => [])
+  const runs = new Set(names.map((n) => n.replace(/\.zip$/, '')).filter((n) => RUN_ID.test(n)))
+  return [...runs].sort()
 }
 
 async function size(path: string): Promise<number> {
@@ -79,10 +84,16 @@ export async function pruneDebug(
   const older = (runs: string[]) => runs.slice(0, Math.max(0, runs.length - keep))
   const removed = new Set<string>()
   let bytes = 0
+  const leftovers = (await readdir(debugRoot(root)).catch(() => [])).filter((n) =>
+    n.startsWith('.tmp-'),
+  )
   for (const runId of older(await debugRuns(root))) {
-    const dir = join(debugRoot(root), runId)
-    bytes += await size(dir)
-    await rm(dir, { recursive: true, force: true })
+    // A debug archive cut short leaves its claim and temp zip, both named for the run.
+    const temps = leftovers.filter((n) => n.includes(runId)).map((n) => join(debugRoot(root), n))
+    for (const path of [join(debugRoot(root), runId), debugArchiveFile(root, runId), ...temps]) {
+      bytes += await size(path)
+      await rm(path, { recursive: true, force: true })
+    }
     removed.add(runId)
   }
   for (const runId of older(await snapshotRuns(root))) {

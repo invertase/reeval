@@ -175,6 +175,7 @@ export async function record(
       skipSecretScan: flags['skip-secret-scan'],
       committed: !remote,
       archive: config.history.archive,
+      debugArchive: config.history.debugArchive,
       ...(remote && remote.debug !== 'none'
         ? { debug: { level: remote.debug, staging: debugStaging(remote, runId) } }
         : {}),
@@ -193,12 +194,17 @@ export async function record(
           ...result.ignored.map((i) => `  ${i.path}  ignored by ${i.rule} (${i.source})`),
         ]
   const archived = result.archive?.written ? `; archived it in ${rel(result.archive.path)}` : ''
-  if (!result.created) return [...ignored, `${where} is already recorded${archived}`].join('\n')
+  const debugZip = result.debugArchive?.written
+    ? `\nZipped its debug data in ${rel(result.debugArchive.path)}, which stays out of git.`
+    : ''
+  if (!result.created) {
+    return [...ignored, `${where} is already recorded${archived}${debugZip}`].join('\n')
+  }
   const kb = (result.bytes / 1024).toFixed(1)
   const extra = result.artifactDir
     ? ` + ${result.files} artifact files in ${rel(result.artifactDir)}/`
     : ''
-  const recorded = `recorded ${where}${extra} (${kb} KB)${archived}. Commit it with git.`
+  const recorded = `recorded ${where}${extra} (${kb} KB)${archived}. Commit it with git.${debugZip}`
   if (result.droppedPatch.length === 0) {
     return ignored.length === 0 ? recorded : `${ignored.join('\n')}\n${recorded}`
   }

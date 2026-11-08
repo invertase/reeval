@@ -1944,6 +1944,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'history.debugArchive',
+    area: 'Records and studio',
+    name: "`history.debugArchive`: each recorded run's `.reeval/debug/<runId>/` also as `.reeval/debug/<runId>.zip`, removed with it by `debug.keep` and `reeval clean`, refused on `s3()`",
+    fixtures: ['history/debug-archive'],
+    unit: [
+      'reeval/test/history.test.ts',
+      'reeval/test/unit.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'history.store',
     area: 'Records and studio',
     name: "`history.store`: `local()` or `s3()` from `reeval/store/*` (anything else refused), a profile's `history` over the config's, `--profile` on the commands that read runs, and every credential refused in the config",

@@ -1,4 +1,5 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import {
   link,
   mkdir,
@@ -15,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { ArchiveError, openArchive, writeArchive } from '../archive/index.ts'
 import type { ArchiveManifest } from '../archive/types.ts'
-import { debugRoot } from '../debug/files.ts'
+import { debugArchiveFile, debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
 import type { QuestionInput } from '../types.ts'
@@ -507,6 +508,8 @@ export type RecordOptions = {
   debug?: { level: RunDebug['level']; staging: string }
   /** Write the run's `<runId>.zip` beside its record too (`history.archive`). */
   archive?: boolean
+  /** Write the run's debug data as `.reeval/debug/<runId>.zip` too (`history.debugArchive`). */
+  debugArchive?: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -520,12 +523,60 @@ export type RecordResult = WrittenRun & {
   debug?: RunDebug
   /** With `archive`, the run's zip, and whether this recording wrote it. */
   archive?: WrittenArchive
+  /** With `debugArchive`, its debug data's zip; none when the run has no debug data. */
+  debugArchive?: WrittenArchive
 }
 
 type WrittenArchive = { path: string; written: boolean }
 
 /** `<dir>/<runId>.zip`: a recorded run, its record and every file recorded with it, as one zip. */
 export const archiveFile = (dir: string, runId: string) => join(dir, `${runId}.zip`)
+
+/** The whole of the run's `.reeval/debug/<runId>/` as its zip; none when it has no debug data. */
+async function archiveDebug(root: string, runId: string): Promise<WrittenArchive | undefined> {
+  const dir = join(debugRoot(root), runId)
+  if ((await pathsUnder(dir)).length === 0) return undefined
+  const release = await claimRun(debugRoot(root), runId)
+  try {
+    // A run's trace files can be large: each is hashed as a stream and read again only to zip it.
+    const files = []
+    for (const path of await pathsUnder(dir)) {
+      const file = join(dir, ...path.split('/'))
+      files.push({
+        path: `${runId}/${path}`,
+        sha256: await sha256File(file),
+        data: () => readFile(file),
+      })
+    }
+    if (files.length === 0) return undefined
+    return await freshArchive(debugArchiveFile(root, runId), {
+      contents: 'debug',
+      runId,
+      debugLevel: 'all',
+      files,
+    })
+  } finally {
+    await release()
+  }
+}
+
+/** Every file under `dir`, by posix path, sorted. */
+async function pathsUnder(dir: string, at = ''): Promise<string[]> {
+  const entries = await readdir(join(dir, at), { withFileTypes: true }).catch(() => [])
+  const out: string[] = []
+  for (const entry of entries) {
+    const path = at ? `${at}/${entry.name}` : entry.name
+    if (entry.isDirectory()) out.push(...(await pathsUnder(dir, path)))
+    else if (entry.isFile()) out.push(path)
+  }
+  return out.sort()
+}
+
+async function sha256File(file: string): Promise<string> {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(file)) hash.update(chunk)
+  return hash.digest('hex')
+}
 
 /** What a run's archive holds of `<runId>/`: everything but what's added after recording. */
 const archived = (path: string) => !path.startsWith('analysis/')
@@ -537,11 +588,16 @@ const archived = (path: string) => !path.startsWith('analysis/')
  */
 async function freshArchive(
   path: string,
-  options: Pick<Parameters<typeof writeArchive>[1], 'contents' | 'runId'> & {
-    files: Array<{ path: string; data: Uint8Array }>
+  options: Pick<Parameters<typeof writeArchive>[1], 'contents' | 'runId' | 'debugLevel'> & {
+    files: Array<
+      | { path: string; data: Uint8Array }
+      | { path: string; sha256: string; data: () => Promise<Uint8Array> }
+    >
   },
 ): Promise<WrittenArchive> {
-  const wanted = new Map(options.files.map((f) => [f.path, sha256(f.data)]))
+  const wanted = new Map(
+    options.files.map((f) => [f.path, 'sha256' in f ? f.sha256 : sha256(f.data)]),
+  )
   let was: ArchiveManifest | null = null
   try {
     const archive = await openArchive(path)
@@ -767,7 +823,15 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       const why = error instanceof Error ? error.message : String(error)
       throw new HistoryError(`Recorded ${runId}, but couldn't archive it: ${why}`, { cause: error })
     }))
-  const archive = zip ? { archive: zip } : {}
+  const debugArchive =
+    options.debugArchive &&
+    (await archiveDebug(options.root, runId).catch((error: unknown) => {
+      const why = error instanceof Error ? error.message : String(error)
+      throw new HistoryError(`Recorded ${runId}, but couldn't archive its debug data: ${why}`, {
+        cause: error,
+      })
+    }))
+  const archive = { ...(zip ? { archive: zip } : {}), ...(debugArchive ? { debugArchive } : {}) }
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!committed) {
     return {
