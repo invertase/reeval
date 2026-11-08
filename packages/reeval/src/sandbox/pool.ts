@@ -1,24 +1,20 @@
-// A pool of remote machines for one provider account, in the run's main process, under the
-// scheduler: an attempt asks for a slot only once its lease is granted. tarn pools the slots,
-// p-queue holds starts to the provider's rate and p-retry waits out a rate-limited start. What a
+// A pool of remote machines for one machine size and image of a provider account, in the run's
+// main process, under the scheduler: an attempt asks for a slot only once its lease is granted.
+// tarn pools the slots, the account (`pool-account.ts`) holds starts to the provider's rate and
+// counts the machines of every pool on it, and p-retry waits out a rate-limited start. What a
 // provider gives it is how to start and remove a machine, how to keep one alive, its limits, and
 // how to tell a rate limit from a real failure.
-import PQueue from 'p-queue'
 import pRetry from 'p-retry'
 import tarn, { type Pool } from 'tarn'
+import {
+  type AccountMember,
+  PoolAccount,
+  type PoolLimits,
+  RATE_LIMIT_WAITS,
+} from './pool-account.ts'
 import { InfraError } from './types.ts'
 
-/** How many machines and starts the provider allows the pool. */
-export type PoolLimits = {
-  /** The most machines at once. */
-  machines: number
-  /** Starts in any 60 s, when the provider caps them. */
-  startsPerMinute?: number | null
-  /** Starts in any hour, counting the ones the account made before this run. */
-  startsPerHour?: number | null
-  /** Starts left for the rest of the run, when the provider limits them run-wide. */
-  starts?: number | null
-}
+export { RATE_LIMIT_WAITS }
 
 /** A rate-limited start, and how long the provider asked to wait (null: it didn't say). */
 export type RateLimited = { retryAfterMs: number | null }
@@ -44,15 +40,16 @@ export type PoolProvider<M> = {
   rateLimited(error: unknown): RateLimited | null
 }
 
-/** How long a pool waits out a provider's rate limits, unless its options say otherwise. */
-export const RATE_LIMIT_WAITS = {
-  maxRateWaitMs: 15 * 60_000,
-  backoffMs: 5_000,
-  maxBackoffMs: 60_000,
-} as const
-
 export type PoolOptions = {
+  /** The account's limits, which a pool opened with an `account` takes from it instead. */
   limits: PoolLimits
+  /**
+   * The account this pool shares with the run's other pools on it, whose limits, backoff and
+   * windows hold instead of this pool's; else one of its own.
+   */
+  account?: PoolAccount
+  /** The most machines this pool holds at once, within the account's. Default the account's. */
+  machines?: number
   /** Attempts one machine runs at once, each in a slot of its own. */
   attemptsPerMachine: number
   /** A slot takes another attempt after its first, reset; else each slot runs one. */
@@ -101,6 +98,8 @@ export type PoolStats = {
   reusedLeases: number
   /** Machines dropped because keeping them alive for another attempt failed. */
   keepAliveFailed: number
+  /** Idle machines removed so another pool on the account could start one. */
+  evicted: number
 }
 
 type Machine<M> = {
@@ -117,9 +116,22 @@ type Machine<M> = {
    * removed once up.
    */
   stop: AbortController
+  /** Slots out of tarn: leased, or being kept alive for a lease. */
+  busy: number
+  /** When `busy` last went to 0. */
+  idleSince: number
+  /** It's being removed so another pool on the account can start one. */
+  evicted: boolean
 }
 
-type Slot<M> = { machine: Machine<M>; slot: number; uses: number; dead: boolean }
+type Slot<M> = {
+  machine: Machine<M>
+  slot: number
+  uses: number
+  dead: boolean
+  /** Counted in its machine's `busy`. */
+  out: boolean
+}
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
@@ -137,19 +149,18 @@ const FOREVER_MS = 2 ** 31 - 1
 
 export class MachinePool<M> {
   readonly #provider: PoolProvider<M>
-  readonly #options: Required<Omit<PoolOptions, 'limits'>> & { limits: PoolLimits }
+  readonly #options: Required<Omit<PoolOptions, 'limits' | 'account' | 'machines'>>
+  readonly #account: PoolAccount
+  readonly #ownAccount: boolean
+  readonly #member: AccountMember
+  /** The most machines this pool holds at once. */
+  readonly #cap: number
   readonly #machines = new Set<Machine<M>>()
   readonly #leased = new Set<Slot<M>>()
   readonly #slots: Pool<Slot<M>>
-  readonly #queues: PQueue[] = []
-  #startsLeft: number | null
   readonly #closing = new AbortController()
-  readonly #roomWaiters = new Set<() => void>()
   readonly #stopReason: InfraError
-  #heldUntil = 0
-  #held: NodeJS.Timeout | undefined
   #reaping: NodeJS.Timeout | undefined
-  #backoffMs: number
   #ttlSeconds = 0
   #closed: Promise<void> | undefined
   readonly #stats: PoolStats = {
@@ -159,43 +170,32 @@ export class MachinePool<M> {
     leases: 0,
     reusedLeases: 0,
     keepAliveFailed: 0,
+    evicted: 0,
   }
 
   constructor(provider: PoolProvider<M>, options: PoolOptions) {
     this.#provider = provider
     this.#stopReason = new InfraError(`${provider.helper}: no attempt waits for this machine`)
+    const { limits, account, machines, ...rest } = options
     this.#options = {
       idleMs: 15_000,
       ...RATE_LIMIT_WAITS,
       windowsMs: { minute: 60_000, hour: 3_600_000 },
-      ...options,
+      ...rest,
       attemptsPerMachine: Math.max(1, Math.floor(options.attemptsPerMachine)),
     }
-    this.#backoffMs = this.#options.backoffMs
-    this.#startsLeft = options.limits.starts ?? null
-    const { startsPerMinute, startsPerHour } = options.limits
-    const { windowsMs } = this.#options
-    for (const [cap, interval] of [
-      [startsPerHour, windowsMs.hour],
-      [startsPerMinute, windowsMs.minute],
-    ] as const) {
-      if (cap === null || cap === undefined) continue
-      this.#queues.push(
-        new PQueue({
-          concurrency: Number.POSITIVE_INFINITY,
-          intervalCap: Math.max(1, cap),
-          interval,
-          strict: true,
-        }),
-      )
-    }
-    // A rate limit holds every start, so there's a queue to pause even with no caps to keep.
-    if (!this.#queues.length)
-      this.#queues.push(new PQueue({ concurrency: Number.POSITIVE_INFINITY }))
+    this.#ownAccount = !account
+    this.#account = account ?? new PoolAccount(provider.helper, { ...this.#options, limits })
+    this.#cap = Math.max(
+      1,
+      Math.min(machines ?? Number.POSITIVE_INFINITY, this.#account.limits.machines),
+    )
+    this.#member = { idlest: () => this.#idlest() }
+    this.#account.join(this.#member)
     const { idleMs, attemptsPerMachine } = this.#options
     this.#slots = new tarn.Pool<Slot<M>>({
       min: 0,
-      max: Math.max(1, options.limits.machines) * attemptsPerMachine,
+      max: this.#cap * attemptsPerMachine,
       propagateCreateError: true,
       acquireTimeoutMillis: FOREVER_MS,
       createTimeoutMillis: FOREVER_MS,
@@ -220,6 +220,12 @@ export class MachinePool<M> {
     for (;;) {
       const slot = await this.#take(signal)
       const { machine } = slot
+      if (machine.draining) {
+        this.#slots.release(slot)
+        continue
+      }
+      machine.busy++
+      slot.out = true
       const first = machine.start
       machine.start = null
       if (!first && this.#provider.keepAlive) {
@@ -286,9 +292,9 @@ export class MachinePool<M> {
   close(): Promise<void> {
     this.#closed ??= (async () => {
       this.#closing.abort(new InfraError(`${this.#provider.helper}'s machine pool closed`))
-      clearTimeout(this.#held)
       clearInterval(this.#reaping)
-      for (const queue of this.#queues) queue.clear()
+      this.#account.leave(this.#member)
+      if (this.#ownAccount) this.#account.close()
       for (const slot of [...this.#leased]) this.#release(slot, true)
       await this.#slots.destroy().catch(() => {})
       await Promise.all([...this.#machines].map((m) => this.#remove(m)))
@@ -324,7 +330,25 @@ export class MachinePool<M> {
 
   #release(slot: Slot<M>, broken: boolean) {
     this.#leased.delete(slot)
-    if (broken) slot.machine.draining = true
+    const { machine } = slot
+    if (slot.out) {
+      slot.out = false
+      if (--machine.busy === 0) {
+        machine.idleSince = performance.now()
+        // A pool already waiting on the account gets the room before this pool's next attempt,
+        // which then starts a machine of its own.
+        if (
+          !broken &&
+          !machine.draining &&
+          !this.#closing.signal.aborted &&
+          this.#account.wanted(this.#member)
+        ) {
+          this.#account.evicting()
+          this.#evict(machine)
+        }
+      }
+    }
+    if (broken) machine.draining = true
     if (broken || !this.#options.reuse) this.#kill(slot)
     this.#slots.release(slot)
   }
@@ -349,16 +373,23 @@ export class MachinePool<M> {
   async #claimOnce(): Promise<Slot<M>> {
     const open = () => [...this.#machines].find((m) => !m.draining && m.unclaimed.length)
     let machine = open()
-    while (!machine && this.#machines.size >= Math.max(1, this.#options.limits.machines)) {
-      await this.#room()
+    while (!machine) {
+      const own = this.#machines.size < this.#cap
+      if (own && this.#account.reserve()) {
+        machine = this.#startMachine()
+        break
+      }
+      const room = this.#room(own)
+      if (own) this.#account.evictFor(this.#member)
+      await room
       machine = open()
     }
-    machine ??= this.#startMachine()
     const slot: Slot<M> = {
       machine,
       slot: machine.unclaimed.shift() as number,
       uses: 0,
       dead: false,
+      out: false,
     }
     machine.alive++
     try {
@@ -396,27 +427,50 @@ export class MachinePool<M> {
   }
 
   #forget(machine: Machine<M>) {
-    this.#machines.delete(machine)
-    for (const wake of [...this.#roomWaiters]) wake()
+    if (this.#machines.delete(machine)) this.#account.free(machine.evicted)
   }
 
-  /** Resolves once a machine has gone; rejects when the pool closes. */
-  #room(): Promise<void> {
+  /**
+   * Resolves once a machine on the account has gone; rejects when the pool closes. `evicts`: the
+   * pool is under its own cap, so another pool's machine going would let it start one.
+   */
+  #room(evicts: boolean): Promise<void> {
     const closing = this.#closing.signal
     closing.throwIfAborted()
     return new Promise((resolve, reject) => {
-      const wake = () => {
-        this.#roomWaiters.delete(wake)
+      const unwait = this.#account.wait(this.#member, evicts, () => {
         closing.removeEventListener('abort', stop)
         resolve()
-      }
+      })
       const stop = () => {
-        this.#roomWaiters.delete(wake)
+        unwait()
         reject(closing.reason)
       }
-      this.#roomWaiters.add(wake)
       closing.addEventListener('abort', stop, { once: true })
     })
+  }
+
+  /**
+   * The machine idle longest, for the account to remove for another pool. A machine no attempt has
+   * leased yet is on its way to one, or is reaped once no attempt wants it.
+   */
+  #idlest(): { since: number; evict(): void } | null {
+    let idlest: Machine<M> | undefined
+    for (const m of this.#machines) {
+      if (m.id === undefined || m.start !== null || m.draining || m.busy > 0) continue
+      if (!idlest || m.idleSince < idlest.idleSince) idlest = m
+    }
+    if (!idlest) return null
+    const machine = idlest
+    return { since: machine.idleSince, evict: () => this.#evict(machine) }
+  }
+
+  #evict(machine: Machine<M>) {
+    this.#stats.evicted++
+    machine.evicted = true
+    machine.draining = true
+    machine.unclaimed = []
+    void this.#remove(machine)
   }
 
   #startMachine(): Machine<M> {
@@ -428,6 +482,9 @@ export class MachinePool<M> {
       draining: false,
       start: null,
       stop: new AbortController(),
+      busy: 0,
+      idleSince: 0,
+      evicted: false,
     }
     this.#machines.add(machine)
     this.#stats.machinesAtOnce = Math.max(this.#stats.machinesAtOnce, this.#machines.size)
@@ -449,7 +506,7 @@ export class MachinePool<M> {
           queuedMs: Math.round(queuedMs),
           rateLimited,
         }
-        this.#backoffMs = this.#options.backoffMs
+        this.#account.resetBackoff()
       },
       (error: unknown) => {
         machine.draining = true
@@ -472,17 +529,10 @@ export class MachinePool<M> {
     const startedAt = performance.now()
     return pRetry(
       () =>
-        this.#gate(
+        this.#account.gate(
           async () => {
             signal.throwIfAborted()
-            if (this.#startsLeft !== null) {
-              if (this.#startsLeft <= 0) {
-                throw new InfraError(
-                  `${provider.helper} has used every machine start the run has (${this.#options.limits.starts})`,
-                )
-              }
-              this.#startsLeft--
-            }
+            this.#account.takeStart()
             this.#stats.starts++
             // Only the pool's close cuts a start short: a machine stopped mid-provision can come up
             // anyway (Boat drops a delete sent then), and only a canceled run reaps by name.
@@ -509,84 +559,19 @@ export class MachinePool<M> {
         onFailedAttempt: async ({ error }) => {
           const limited = provider.rateLimited(error)
           if (!limited) return
-          // A refused start started nothing, so the run's limit keeps it.
-          if (this.#startsLeft !== null) this.#startsLeft++
+          this.#account.giveStart()
           this.#stats.rateLimited++
           onRateLimit()
-          const wait = limited.retryAfterMs ?? this.#nextBackoff()
+          const wait = limited.retryAfterMs ?? this.#account.nextBackoff()
           if (performance.now() - startedAt + wait > this.#options.maxRateWaitMs) {
             throw new InfraError(
               `${provider.helper} kept refusing to start a machine for ${Math.round((performance.now() - startedAt) / 1000)}s, asking to wait ${Math.round(wait / 1000)}s more: ${error.message}`,
             )
           }
-          this.#hold(wait)
+          this.#account.hold(wait)
           await sleep(wait, signal)
         },
       },
     )
-  }
-
-  #nextBackoff(): number {
-    const wait = this.#backoffMs
-    this.#backoffMs = Math.min(this.#backoffMs * 2, this.#options.maxBackoffMs)
-    return wait
-  }
-
-  /** No start of this pool goes out for `ms`: the provider is limiting the account, not one start. */
-  #hold(ms: number) {
-    const until = Date.now() + ms
-    if (until <= this.#heldUntil) return
-    this.#heldUntil = until
-    for (const queue of this.#queues) queue.pause()
-    clearTimeout(this.#held)
-    this.#held = setTimeout(() => {
-      for (const queue of this.#queues) queue.start()
-    }, ms)
-  }
-
-  /**
-   * Runs `fn` once every window has room, hour then minute, or fails once it has waited
-   * `withinMs`. Only the wait is bounded: a start under way is never cut short, or its machine
-   * would be left running.
-   */
-  #gate<T>(
-    fn: () => Promise<T>,
-    withinMs: number,
-    stop: AbortSignal,
-    onQueued: (ms: number) => void,
-  ): Promise<T> {
-    const queued = performance.now()
-    const waiting = new AbortController()
-    const stopped = () => waiting.abort(stop.reason)
-    stop.addEventListener('abort', stopped, { once: true })
-    const { startsPerHour, startsPerMinute } = this.#options.limits
-    const caps = [
-      startsPerHour != null && `${startsPerHour} an hour`,
-      startsPerMinute != null && `${startsPerMinute} a minute`,
-    ].filter(Boolean)
-    const timer = setTimeout(
-      () =>
-        waiting.abort(
-          new InfraError(
-            `${this.#provider.helper} had no room to start a machine for ${Math.round((performance.now() - queued) / 1000)}s${caps.length ? `: the account's starts are capped at ${caps.join(' and ')}, counting the ones it made before this run` : ''}`,
-          ),
-        ),
-      Math.max(0, withinMs),
-    )
-    const run = () => {
-      clearTimeout(timer)
-      stop.removeEventListener('abort', stopped)
-      onQueued(performance.now() - queued)
-      return fn()
-    }
-    return this.#queues
-      .reduceRight<() => Promise<T>>(
-        (inner, queue) => () => queue.add(inner, { signal: waiting.signal }) as Promise<T>,
-        run,
-      )()
-      .finally(() => {
-        clearTimeout(timer)
-        stop.removeEventListener('abort', stopped)
-      })
   }
 }

@@ -13,6 +13,7 @@ import {
   checkBoat,
   deleteUntilGone,
   firstReachable,
+  openBoatPool,
   removeRunSandboxes,
   runPrefix,
   sshRoutes,
@@ -425,6 +426,16 @@ describe("the account's capacity", () => {
       await pointedAt('boat_wrong', () => boatCapacity(boat({ attemptsPerMachine: 2 }))),
       { machines: 1, attempts: 2 },
     )
+  })
+  test("a pool's own cap is maxConcurrent's machines, under the account's free ones", async () => {
+    const open = (o: Parameters<typeof boat>[0]) =>
+      pointedAt(api.key, () => openBoatPool(boat(o), { runId: 'run', root: process.cwd() }))
+    const plain = await open({})
+    assert.equal(plain.options.limits.machines, 4)
+    assert.equal(plain.options.machines, undefined, 'the account caps it alone')
+    const capped = await open({ attemptsPerMachine: 2, maxConcurrent: 3 })
+    assert.equal(capped.options.limits.machines, 4)
+    assert.equal(capped.options.machines, 2)
   })
 })
 

@@ -1,6 +1,7 @@
 // The `machines` service the main process answers workers' leases with: one pool per account and
 // size across every worker, a released slot handed to the next attempt, a waiting lease
-// abandoned, a dead worker's slots broken, and close removing every machine.
+// abandoned, a dead worker's slots broken, pools on one account under its limits, and close
+// removing every machine.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { MachineDescriptor } from '../src/sandbox/machine.ts'
@@ -150,6 +151,26 @@ describe('MachineService', () => {
     assert.notEqual(saved.machine, base.machine, "the base pool's one machine is held")
     assert.deepEqual(images, [undefined, 'img-1'])
     assert.deepEqual(Object.keys(await service.stats()), ['run\0a', 'run\0a:img-1'])
+    await service.close()
+  })
+
+  test("the pools of one account share its machines, an idle one making way for another image's", async () => {
+    const fake = fakePooled(1)
+    const service = new MachineService({
+      pooled: () => ({
+        key: (s, image) => `${fake.pooled.key(s)}${image ? `:${image}` : ''}`,
+        account: (s) => fake.pooled.key(s),
+        open: fake.pooled.open,
+      }),
+    })
+    const first = (await service.call('w', { ...lease('1'), image: 'img-1' })) as WireLease
+    await service.call('w', { op: 'release', ticket: '1', broken: false })
+    const second = (await service.call('w', { ...lease('2'), image: 'img-2' })) as WireLease
+    assert.notEqual(second.machine, first.machine)
+    assert.deepEqual(fake.removed, [first.machine], "img-1's idle machine went for img-2's")
+    const other = (await service.call('w', { ...lease('3', 'b'), image: 'img-1' })) as WireLease
+    assert.ok(other.machine, 'another account has room of its own')
+    assert.deepEqual(fake.removed, [first.machine])
     await service.close()
   })
 })
