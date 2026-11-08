@@ -345,6 +345,7 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
   { dir: 'environments', name: 'boat', args: ['evals/boat.eval.ts'] },
+  { dir: 'environments', name: 'daytona', args: ['evals/daytona.eval.ts'] },
   { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
   { dir: 'environments', name: 'control-over-config', args: ['evals/compare.eval.ts'] },
   { dir: 'environments', name: 'inherit-config', args: ['evals/inherit.eval.ts'] },

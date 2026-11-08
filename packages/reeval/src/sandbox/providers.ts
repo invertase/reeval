@@ -15,6 +15,7 @@ import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
   BoatSandboxDescriptor,
+  DaytonaSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
@@ -608,6 +609,29 @@ export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
   },
 })
 
+/** Daytona has nothing to build either: `prepare` checks each organization the run uses, once. */
+export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => ({
+  kind: 'daytona',
+  check: async () => {},
+  key: (sandbox) => JSON.stringify({ apiKey: sandbox.apiKey.from }),
+  async prepare(sandbox, _harness, ctx) {
+    const { checkDaytona } = await import('./daytona.ts')
+    await checkDaytona(sandbox, ctx.root)
+    return null
+  },
+  classify: (error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      class: isTransient(message) ? 'transient' : 'config',
+      stage: 'daytona',
+      ref: null,
+      cause: null,
+      log: null,
+      message,
+    }
+  },
+})
+
 /**
  * A fresh set of providers, one per run: each keeps the run's builds. `pull` lets Tart pull the
  * images it doesn't have, which only `reeval image build` does; with `force` too, it pulls each
@@ -630,4 +654,5 @@ const machineProviders = (options: {
 }): Record<(typeof MACHINE_PROVIDERS)[number]['kind'], SandboxProvider> => ({
   tart: tartProvider(options),
   boat: boatProvider(),
+  daytona: daytonaProvider(),
 })

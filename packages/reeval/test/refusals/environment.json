@@ -14,7 +14,7 @@
   "traits: an empty list": "DefinitionError: defineEnvironment(\"e\") trait \"auth\" is an empty list",
   "traits: a repeated value": "DefinitionError: defineEnvironment(\"e\") trait \"auth\" must be a string of 1–80 characters or a list of distinct ones (got [\"clerk\",\"clerk\"])",
   "traits: too many": "DefinitionError: defineEnvironment(\"e\") has 17 traits; at most 16",
-  "a sandbox that is not one": "DefinitionError: sandbox in defineEnvironment(\"e\") must come from docker(), podman(), fakeSandbox(), tart() or boat() (got \"docker\")",
+  "a sandbox that is not one": "DefinitionError: sandbox in defineEnvironment(\"e\") must come from docker(), podman(), fakeSandbox(), tart(), boat() or daytona() (got \"docker\")",
   "a sandbox maxConcurrent 0": "DefinitionError: sandbox.maxConcurrent in defineEnvironment(\"e\") must be a whole number of at least 1 (got 0)",
   "a missing dockerfile as data": "DefinitionError: sandbox.dockerfile in defineEnvironment(\"e\"): <dir>/nope/Dockerfile doesn't exist. Paths are relative to the file that defines the environment.",
   "a dockerfile as data": null,

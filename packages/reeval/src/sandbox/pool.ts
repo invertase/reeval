@@ -42,6 +42,13 @@ export type PoolProvider<M> = {
   rateLimited(error: unknown): RateLimited | null
 }
 
+/** How long a pool waits out a provider's rate limits, unless its options say otherwise. */
+export const RATE_LIMIT_WAITS = {
+  maxRateWaitMs: 15 * 60_000,
+  backoffMs: 5_000,
+  maxBackoffMs: 60_000,
+} as const
+
 export type PoolOptions = {
   limits: PoolLimits
   /** Attempts one machine runs at once, each in a slot of its own. */
@@ -156,9 +163,7 @@ export class MachinePool<M> {
     this.#stopReason = new InfraError(`${provider.helper}: no attempt waits for this machine`)
     this.#options = {
       idleMs: 15_000,
-      maxRateWaitMs: 15 * 60_000,
-      backoffMs: 5_000,
-      maxBackoffMs: 60_000,
+      ...RATE_LIMIT_WAITS,
       windowsMs: { minute: 60_000, hour: 3_600_000 },
       ...options,
       attemptsPerMachine: Math.max(1, Math.floor(options.attemptsPerMachine)),

@@ -671,6 +671,48 @@ class CursorHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
 
 
+# The host variable holding a Daytona API key, made by `secret.fromEnv`.
+DaytonaApiKey = TypedDict(
+    "DaytonaApiKey",
+    {
+        "from": "str",
+        "kind": "Literal[\"secret\"]",
+    },
+)
+
+
+# The host variable with the Daytona API key, read on the host only.
+DaytonaSandboxDescriptorApiKey = TypedDict(
+    "DaytonaSandboxDescriptorApiKey",
+    {
+        "from": "str",
+        "kind": "Literal[\"secret\"]",
+    },
+)
+
+
+# A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`.
+class DaytonaSandboxDescriptor(TypedDict):
+    # The host variable with the Daytona API key, read on the host only.
+    apiKey: DaytonaSandboxDescriptorApiKey
+    # The attempts one machine runs at once, each as a user of its own, as `boat({
+    # attemptsPerMachine })` does. Default 1.
+    attemptsPerMachine: NotRequired[int]
+    # Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`.
+    id: NotRequired[str]
+    kind: Literal["daytona"]
+    # The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`.
+    maxConcurrent: NotRequired[float]
+    # The start of every sandbox name reeval gives Daytona, so a run's cleanup finds only its
+    # own: lowercase letters, digits and dashes.
+    prefix: str
+    # A machine takes another of the run's attempts once one ends, instead of being deleted, as
+    # `boat({ reuse })` does. Default false, one attempt per slot.
+    reuse: NotRequired[bool]
+    # The sandbox size. Default `medium`.
+    size: NotRequired[Literal["small", "medium", "large"]]
+
+
 # An eval file's top-level groups, evals and todos, in declaration order.
 class DeclarationTree(TypedDict):
     children: list[DeclaredNode]
@@ -926,7 +968,7 @@ class EvalOptionsDataCompare(TypedDict):
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[BoatSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1002,7 +1044,7 @@ class EvalOptionsData2(TypedDict):
     runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[BoatSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1731,7 +1773,7 @@ class QuestionOptions(TypedDict):
     model: NotRequired[str]
 
 
-SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor | BoatSandboxDescriptor"
+SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor | BoatSandboxDescriptor | DaytonaSandboxDescriptor"
 
 
 # A host environment variable, redacted everywhere reeval writes and recorded by name only. Made

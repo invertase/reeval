@@ -1,9 +1,13 @@
-// The machine providers reeval has: Tart's macOS VMs and Boat's Linux VMs. Each loads its own
+// The machine providers reeval has: Tart's macOS VMs, and Boat's and Daytona's Linux VMs. Each loads its own
 // modules only when asked, so the kinds table stays cheap to import. kinds.ts builds its entries
 // from these as it loads, so nothing this module imports may import kinds.ts in turn.
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import { tartVmLimit } from '../contract/tart.ts'
-import type { BoatSandboxDescriptor, TartSandboxDescriptor } from '../types.ts'
+import type {
+  BoatSandboxDescriptor,
+  DaytonaSandboxDescriptor,
+  TartSandboxDescriptor,
+} from '../types.ts'
 import { idPart } from './id-part.ts'
 import type { MachineProvider } from './machine.ts'
 import type { TartTarget } from './tart-cli.ts'
@@ -118,5 +122,57 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   },
 }
 
+/**
+ * Enforces nothing, as on Boat: the sandbox keeps Daytona's network (whose own policies only some
+ * tiers can set), so only `allow-all` plans on it. The gateway brokers and records.
+ */
+const DAYTONA_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
+
+export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
+  kind: 'daytona',
+  helpers: ['daytona'],
+  os: 'linux',
+  capabilities: { egress: DAYTONA_EGRESS, processTable: true, listeners: 'proc' },
+  id: (s) => (s.size ? `daytona:${s.size}` : 'daytona'),
+  hostPaths: {},
+  async create(sandbox, options) {
+    const { createDaytonaSandbox } = await import('./daytona.ts')
+    return createDaytonaSandbox(sandbox, options)
+  },
+  async capacity(sandbox) {
+    const { daytonaCapacity } = await import('./daytona.ts')
+    return daytonaCapacity(sandbox)
+  },
+  pool: {
+    key: (s) =>
+      JSON.stringify([
+        s.apiKey.from,
+        s.prefix,
+        s.size ?? 'medium',
+        s.reuse ?? false,
+        s.attemptsPerMachine ?? 1,
+        s.maxConcurrent ?? null,
+      ]),
+    async open(sandbox, o) {
+      const { openDaytonaPool } = await import('./daytona.ts')
+      return openDaytonaPool(sandbox, o)
+    },
+  },
+  async cleanupRun(runId, sandboxes) {
+    // Without the run's descriptors there's no key or prefix to look under; each sandbox's TTL
+    // is the backstop.
+    if (!sandboxes?.length) return
+    const { removeRunSandboxes } = await import('./daytona.ts')
+    await removeRunSandboxes(runId, sandboxes)
+  },
+  cleanupScope: (s) => ({ key: JSON.stringify(s), atStart: true }),
+  credentials: (s) => [{ names: [s.apiKey.from], line: `${s.apiKey.from} (for daytona())` }],
+  slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
+  async doctor(sandboxes, ctx) {
+    const { daytonaDoctor } = await import('./daytona.ts')
+    return daytonaDoctor(sandboxes, ctx)
+  },
+}
+
 /** Every machine provider. */
-export const MACHINE_PROVIDERS = [TART_MACHINE, BOAT_MACHINE] as const
+export const MACHINE_PROVIDERS = [TART_MACHINE, BOAT_MACHINE, DAYTONA_MACHINE] as const

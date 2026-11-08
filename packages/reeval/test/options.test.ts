@@ -1419,12 +1419,12 @@ describe('common mistakes', { concurrency: 4 }, () => {
       [
         'a sandbox that is not one of the sandbox helpers on defineConfig',
         { sandbox: { kind: 'vm' } },
-        /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\) or boat\(\)/,
+        /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\), boat\(\) or daytona\(\)/,
       ],
       [
         'a sandbox that is not one of the sandbox helpers on profile defaults',
         { profiles: { pr: { defaults: { sandbox: { kind: 'vm' } } } } },
-        /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\) or boat\(\)/,
+        /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\), fakeSandbox\(\), tart\(\), boat\(\) or daytona\(\)/,
       ],
     ]
     for (const [what, extra, message] of configCases) {

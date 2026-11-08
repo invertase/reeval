@@ -2,26 +2,25 @@
 // them, and every process runs over SSH with a per-attempt key, the egress gateway's forwarder
 // included, so credentials stay on the host as they do for Docker.
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { connect, isIPv6 } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { connectSsh, type SshMachine, slotLayout } from '@reeval/sandbox-docker'
-import { run } from '@reeval/sandbox-docker/process'
-import { attemptDebug } from '../debug/attempt.ts'
 import type { Check } from '../doctor.ts'
-import { egressLabel } from '../egress.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
-import { harnessBake } from './harness-install.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
-import { leaseMachine, type OpenPool } from './machine-service.ts'
+import type { OpenPool } from './machine-service.ts'
+import { optionalPeer } from './optional-peer.ts'
 import type { PoolProvider } from './pool.ts'
 import { PrepareError } from './provider.ts'
-import { startSandbox } from './start.ts'
+import {
+  createPooledSshSandbox,
+  missingSshTool,
+  newKey,
+  type PooledSshMachine,
+} from './ssh-pool.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
 const BOAT_SDK = '@boatdev/sdk'
@@ -92,43 +91,14 @@ type BoatSdk = {
 /** The fix for a project without the SDK. */
 export const INSTALL_SDK = `Install the Boat SDK in this project: npm i ${BOAT_SDK}`
 
-const missing = (error: unknown) =>
-  (error as { code?: string }).code === 'ERR_MODULE_NOT_FOUND' ||
-  (error as { code?: string }).code === 'MODULE_NOT_FOUND'
-
-let loaded: Promise<BoatSdk> | undefined
 /**
  * The Boat SDK, from beside reeval or else from the project: a package manager that doesn't link
  * peers into reeval's own `node_modules` still has it in the project's.
  */
-export function loadBoatSdk(projectRoot = process.cwd()): Promise<BoatSdk> {
-  loaded ??= (async () => {
-    try {
-      return (await import(BOAT_SDK)) as BoatSdk
-    } catch (error) {
-      if (!missing(error)) throw error
-    }
-    try {
-      const path = createRequire(join(projectRoot, 'noop.js')).resolve(BOAT_SDK)
-      return (await import(pathToFileURL(path).href)) as BoatSdk
-    } catch (error) {
-      if (!missing(error)) throw error
-      throw new PrepareError({
-        class: 'config',
-        stage: 'boat',
-        ref: null,
-        cause: null,
-        log: null,
-        usage: true,
-        message: `boat() needs the Boat SDK, which isn't installed. ${INSTALL_SDK}`,
-      })
-    }
-  })()
-  loaded.catch(() => {
-    loaded = undefined
-  })
-  return loaded
-}
+export const loadBoatSdk = optionalPeer<BoatSdk>(BOAT_SDK, {
+  stage: 'boat',
+  message: `boat() needs the Boat SDK, which isn't installed. ${INSTALL_SDK}`,
+})
 
 /** Why `sandbox`'s key can't be read from this process's environment, or null. */
 export function boatKeyProblem(sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): string | null {
@@ -204,8 +174,6 @@ const LIMITS_TIMEOUT_MS = 15_000
 const CLEANUP_TIMEOUT_MS = 15_000
 /** Boat's states a sandbox never leaves for `ready`; 'cancelled' answers 404 after it's reported. */
 export const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
-/** Past the attempt's timeout, so a sandbox whose worker was killed still goes away by itself. */
-const TTL_MARGIN_S = 600
 /**
  * How long reeval keeps deleting a sandbox that never got ready: Boat can drop a delete sent while
  * it provisions and bring the VM up idle minutes later.
@@ -284,28 +252,6 @@ export async function deleteUntilGone(
       o.signal?.addEventListener('abort', done, { once: true })
     })
   }
-}
-
-/** A fresh ed25519 key pair in `dir`, made by the host's OpenSSH. */
-async function newKey(dir: string): Promise<{ file: string; pub: string }> {
-  const file = join(dir, 'id_ed25519')
-  const made = await run('ssh-keygen', [
-    '-q',
-    '-t',
-    'ed25519',
-    '-N',
-    '',
-    '-C',
-    'reeval',
-    '-f',
-    file,
-  ])
-  if (made.exitCode !== 0) {
-    throw new InfraError(
-      `Couldn't make an SSH key for the Boat sandbox: ssh-keygen failed: ${made.stderr.trim()}`,
-    )
-  }
-  return { file, pub: (await readFile(`${file}.pub`, 'utf8')).trim() }
 }
 
 /** A host and port the attempt's SSH connection can take to the VM's sshd. */
@@ -388,31 +334,6 @@ export async function firstReachable(
   }
 }
 
-/** Where the agent's Node lives when the VM's own is somewhere the sandbox user can't read. */
-const AGENT_NODE = '/opt/reeval/node'
-/**
- * Boat's `/usr/local/bin/node` links into the login user's nvm, under a home other users can't
- * enter: give the sandbox user its own copy of that Node, whose version the record names.
- */
-const nodeForAgent = (user: string) =>
-  [
-    'real="$(readlink -f "$(command -v node)" 2>/dev/null || true)"',
-    `{ [ -z "$real" ] || sudo -n -u ${user} test -x "$real" || [ -x ${AGENT_NODE}/bin/node ] || { rm -rf ${AGENT_NODE} && mkdir -p ${AGENT_NODE} && cp -a "$(dirname "$(dirname "$real")")/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; }; }`,
-  ].join(' && ')
-
-/** How a worker reaches a pooled Boat machine: its SSH route, user and keys, in the main process's files. */
-export type BoatMachine = {
-  id: string
-  name: string
-  type: string
-  host: string
-  port: number
-  via: SshRoute['via']
-  user: string
-  identityFile: string
-  knownHostsFile: string
-}
-
 /** Boat refused a start for now: 429, with when to try again if it said. */
 export class BoatRateLimited extends Error {
   readonly retryAfterMs: number | null
@@ -453,12 +374,6 @@ export function retryAfterMs(
     return at - now
   }
   return null
-}
-
-/** The harness install a machine keeps a home for, so its slots and resets copy it: by harness. */
-const homeLabel = (options: SandboxOptions) => {
-  const bake = options.harness && harnessBake(options.harness)
-  return bake ? bake.label : undefined
 }
 
 /**
@@ -522,7 +437,7 @@ export function boatPoolProvider(
   descriptor: BoatSandboxDescriptor,
   api: BoatClient,
   runId: string,
-): PoolProvider<BoatMachine> {
+): PoolProvider<PooledSshMachine> {
   const type = descriptor.type ?? 'small'
   const dirs = new Map<string, string>()
   return {
@@ -544,7 +459,7 @@ export function boatPoolProvider(
       let id: string | undefined
       let ready = false
       try {
-        const key = await newKey(dir)
+        const key = await newKey(dir, 'Boat')
         const made = await api
           .create({
             idempotencyKey: name,
@@ -599,10 +514,10 @@ export function boatPoolProvider(
           info: {
             id,
             name,
-            type,
+            size: type,
             host: reached.route.host,
             port: reached.route.port,
-            via: reached.route.via,
+            route: routeLabel(reached.route),
             user: ssh.sshUser ?? 'user',
             identityFile: key.file,
             knownHostsFile,
@@ -618,132 +533,15 @@ export function boatPoolProvider(
   }
 }
 
-/** How many times an attempt asks for another machine when the one it got fails to set up. */
-const SETUP_TRIES = 3
-
-export async function createBoatSandbox(
+export function createBoatSandbox(
   descriptor: BoatSandboxDescriptor,
   options: SandboxOptions,
 ): Promise<NetworkSandbox> {
-  const debug = attemptDebug()
-  const shared = (descriptor.attemptsPerMachine ?? 1) > 1
-  // A machine of its own that's never reused installs once anyway, so it keeps no copy.
-  const label = shared || descriptor.reuse ? homeLabel(options) : undefined
-  return startSandbox(options, {
+  return createPooledSshSandbox(descriptor, options, {
     helper: 'boat()',
-    machine: { sandbox: 'boat', size: descriptor.type ?? 'small' },
-    shared,
-    install: true,
-    networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
-    async boot() {
-      for (let tries = 1; ; tries++) {
-        const lease = await leaseMachine(
-          {
-            sandbox: descriptor,
-            runId: options.runId,
-            root: process.cwd(),
-            ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
-          },
-          options.signal,
-        ).catch((error: unknown) => {
-          if (options.signal.aborted) throw options.signal.reason
-          throw error instanceof InfraError ? error : new InfraError((error as Error).message)
-        })
-        const info = lease.info as BoatMachine
-        debug?.log(
-          'container',
-          lease.start
-            ? `created ${info.id} (${info.name}, ${info.type}) in ${lease.start.ms}ms${lease.start.queuedMs >= 1000 ? `, ${Math.round(lease.start.queuedMs / 1000)}s of it waiting for the account's start caps` : ''}${lease.start.rateLimited ? `, after ${lease.start.rateLimited} rate-limited starts` : ''}; slot ${lease.slot}`
-            : `${lease.reused ? 'reused' : 'shared'} ${info.id} (${info.name}, ${info.type}); slot ${lease.slot}${lease.reused ? `, its attempt ${lease.reused + 1}` : ''}`,
-        )
-        for (const lost of lease.lost) {
-          debug?.log('container', `dropped ${lost.machine}: keeping it alive failed: ${lost.error}`)
-        }
-        const layout = slotLayout(lease.slot)
-        const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-ssh-'))
-        let machine: SshMachine
-        try {
-          machine = await connectSsh({
-            target: {
-              host: info.host,
-              port: info.port,
-              user: info.user,
-              identityFile: info.identityFile,
-              knownHostsFile: info.knownHostsFile,
-              hostKeyAlias: info.id,
-              controlPath: join(dir, 'cm'),
-            },
-            description: `boat sandbox ${info.id} (${info.type})`,
-            env: options.env,
-            path: [`${AGENT_NODE}/bin`],
-            prepare: nodeForAgent(layout.user),
-            abortSignal: options.signal,
-            ...(shared && { layout }),
-            ...(lease.reused && { reset: true }),
-            ...(label && { home: label }),
-          })
-        } catch (error) {
-          await rm(dir, { recursive: true, force: true })
-          await lease.release(true)
-          if (options.signal.aborted || !lease.reused || tries >= SETUP_TRIES) throw error
-          debug?.log(
-            'container',
-            `${info.id} slot ${lease.slot} failed to reset: ${(error as Error).message}`,
-          )
-          continue
-        }
-        debug?.log(
-          'container',
-          `ssh to ${info.id} over ${routeLabel({ host: info.host, port: info.port, via: info.via })}`,
-        )
-        let healthy = true
-        return {
-          root: machine.root,
-          ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
-          ...(label && {
-            async installedElsewhere() {
-              const got = await machine.home().catch((error: unknown) => {
-                if (options.signal.aborted) throw error
-                return { restored: false, waitedMs: 0, copyFailed: (error as Error).message }
-              })
-              const { restored, waitedMs, copyFailed } = got
-              if (copyFailed && !restored) {
-                debug?.log(
-                  'container',
-                  `no home from the machine's install, so this slot installs its own: ${copyFailed}`,
-                )
-              } else if (copyFailed) {
-                debug?.log(
-                  'container',
-                  `the machine's first copy of the install didn't unpack: ${copyFailed}`,
-                )
-              }
-              if (restored) {
-                debug?.log(
-                  'container',
-                  `its home from the machine's install${waitedMs >= 1000 ? `, after waiting ${Math.round(waitedMs / 1000)}s for another slot to install it` : ''}`,
-                )
-              }
-              return restored
-            },
-            async onInstalled() {
-              await machine.snapshotHome().catch((error: unknown) => {
-                debug?.log('container', `the machine keeps no copy of the install: ${error}`)
-              })
-            },
-          }),
-          session: (o) => machine.session(o),
-          async destroy() {
-            await machine.close()
-            await rm(dir, { recursive: true, force: true })
-            await lease.release(!healthy)
-          },
-          failed() {
-            healthy = false
-          },
-        }
-      }
-    },
+    sandbox: 'boat',
+    size: descriptor.type ?? 'small',
+    description: (info) => `boat sandbox ${info.id} (${info.size})`,
   })
 }
 
@@ -804,18 +602,6 @@ export async function boatCapacity(
   const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
   const attempts = Math.min(machines, perMinute ?? machines) * k
   return { machines, attempts: Math.max(1, Math.min(attempts, sandbox.maxConcurrent ?? attempts)) }
-}
-
-/** The host's OpenSSH tools a Boat sandbox runs on, or the first one missing. */
-export async function missingSshTool(): Promise<string | null> {
-  for (const [tool, args] of [
-    ['ssh', ['-V']],
-    ['ssh-keygen', ['-?']],
-  ] as const) {
-    const r = await run(tool, [...args]).catch(() => null)
-    if (!r) return tool
-  }
-  return null
 }
 
 /**

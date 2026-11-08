@@ -20,7 +20,7 @@
     },
     "packages/reeval": {
       "entry": [
-        "src/{index,harness,sandbox,sandbox-boat,store-local,store-s3,judge,testing,bin}.ts",
+        "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,store-local,store-s3,judge,testing,bin}.ts",
         "src/studio/index.ts",
         "test/**/*.{ts,mjs}",
         "scripts/**/*.ts"
@@ -33,6 +33,7 @@
         "@ai-sdk/provider",
         "@balena/dockerignore",
         "@boatdev/sdk",
+        "@daytona/sdk",
         "studio-web"
       ]
     },

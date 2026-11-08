@@ -1071,6 +1071,24 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'daytona.sandbox',
+    area: 'Sandbox',
+    name: "`daytona()` and `createDaytona({ apiKey, prefix })`: a Daytona sandbox of a default snapshot's `size` per attempt, over Daytona's SSH gateway with a token per machine, under `allow-all`, labeled with the run and deleted when it ends, with a TTL past the attempt in case it never is; its machine pool is `boat()`'s (`reuse`, `attemptsPerMachine`, a 429 holding every start for its `Retry-After`), capped by `maxConcurrent` alone",
+    fixtures: [
+      'sandbox/daytona-session',
+      'sandbox/daytona-resources',
+      'sandbox/daytona-pool-reuse',
+      'sandbox/daytona-shared-machine',
+    ],
+    plan: ['environments/daytona'],
+    unit: [
+      'reeval/test/daytona.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/doctor.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'tart.images',
     area: 'Sandbox',
     name: "`tart()` images: `reeval run` refuses one `tart list` doesn't show (exit 2, its size and `tart pull`), `reeval image build` pulls them with progress once the disk has room and runs no Docker, each attempt records the digest it cloned (`vmImage`), and `:latest` or no tag warns",

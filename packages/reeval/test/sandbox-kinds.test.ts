@@ -40,7 +40,13 @@ const IMAGE = 'ghcr.io/cirruslabs/macos-sequoia-base:latest'
 
 describe('sandbox kinds', () => {
   test('every kind is in the table, and nothing else is a kind', () => {
-    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), ['boat', 'docker', 'fake', 'tart'])
+    assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), [
+      'boat',
+      'daytona',
+      'docker',
+      'fake',
+      'tart',
+    ])
     assert.ok(isSandboxKind('docker'))
     assert.ok(isSandboxKind('tart'))
     assert.ok(!isSandboxKind('vm'))
@@ -49,7 +55,7 @@ describe('sandbox kinds', () => {
   })
 
   test('each kind names its helpers, and messages list them all', () => {
-    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart() or boat()')
+    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart(), boat() or daytona()')
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),
       'docker()',
@@ -179,7 +185,7 @@ describe('which sandbox a real harness runs in', () => {
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
       agentSandboxProblem(AGENTS.cursor, fakeSandbox()),
-      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() for this eval, or use fakeHarness() with fakeSandbox()",
+      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() or daytona() for this eval, or use fakeHarness() with fakeSandbox()",
     )
   })
 

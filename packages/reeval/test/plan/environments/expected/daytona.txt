@@ -1,0 +1,9 @@
+no profile · 5 evals · 6 cells · 7 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/daytona.eval.ts › daytona                    fake/medium/daytona                         control  gated  ×1  egress "allow-all"
+evals/daytona.eval.ts › daytona large              fake/large/daytona:large                    control  gated  ×1  egress "allow-all"
+evals/daytona.eval.ts › daytona on a team prefix   fake/team/daytona                           control  gated  ×1  egress "allow-all"
+evals/daytona.eval.ts › daytona shared             fake/shared/daytona:small                   control  gated  ×2  egress "allow-all"
+evals/daytona.eval.ts › daytona on real harnesses  cursor:composer-2.5/medium/daytona          control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on claude-code:claude-sonnet-5 · egress "allow-all"
+                                                   claude-code:claude-sonnet-5/medium/daytona  control  gated  ×1  effort medium · egress "allow-all"
+excluded: —

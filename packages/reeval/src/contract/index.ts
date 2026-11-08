@@ -18,6 +18,7 @@ import {
   s3StoreDescriptorSchema,
   s3StoreEnvSchema,
 } from './config.ts'
+import { daytonaSandboxSchema } from './daytona.ts'
 import {
   declarationTreeSchema,
   declaredEvalSchema,
@@ -96,6 +97,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   FakeSandboxDescriptor: fakeSandboxSchema,
   TartSandboxDescriptor: tartSandboxSchema,
   BoatSandboxDescriptor: boatSandboxSchema,
+  DaytonaSandboxDescriptor: daytonaSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

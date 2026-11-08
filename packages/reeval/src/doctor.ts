@@ -69,6 +69,7 @@ import { SANDBOX_KINDS, type SandboxKind } from './sandbox/kinds.ts'
 import { plural } from './text.ts'
 import type {
   BoatSandboxDescriptor,
+  DaytonaSandboxDescriptor,
   Egress,
   EgressPolicy,
   FakeJudgeModel,
@@ -85,7 +86,7 @@ type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
   /**
-   * The area: runtime, config, docker, image, ssh, boat, key, judge, analysis, gateway, vertex,
+   * The area: runtime, config, docker, image, ssh, boat, daytona, key, judge, analysis, gateway, vertex,
    * egress, gitignore or env-files.
    */
   id: string
@@ -128,6 +129,15 @@ export type DoctorDeps = {
    * starts the machine size; throws with why not.
    */
   boatAccount: (sandbox: BoatSandboxDescriptor, root: string, online: boolean) => Promise<void>
+  /**
+   * Loads Daytona's SDK for `root` and, `online`, asks Daytona whether the organization takes the
+   * key; throws with why not.
+   */
+  daytonaAccount: (
+    sandbox: DaytonaSandboxDescriptor,
+    root: string,
+    online: boolean,
+  ) => Promise<void>
 }
 
 const run = (command: string, args: string[], cwd?: string) =>
@@ -198,11 +208,16 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
       const { adcTokenSource } = await import('./gateway/vertex.ts')
       return (await adcTokenSource()()).token
     },
-    missingSshTool: async () => (await import('./sandbox/boat.ts')).missingSshTool(),
+    missingSshTool: async () => (await import('./sandbox/ssh-pool.ts')).missingSshTool(),
     boatAccount: async (sandbox, root, online) => {
       const boat = await import('./sandbox/boat.ts')
       if (online) await boat.checkBoat(sandbox, root)
       else await boat.loadBoatSdk(root)
+    },
+    daytonaAccount: async (sandbox, root, online) => {
+      const daytona = await import('./sandbox/daytona.ts')
+      if (online) await daytona.checkDaytona(sandbox, root)
+      else await daytona.loadDaytonaSdk(root)
     },
   }
 }

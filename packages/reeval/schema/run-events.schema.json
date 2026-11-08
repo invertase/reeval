@@ -1021,11 +1021,11 @@
               "type": "number"
             },
             "sandbox": {
-              "description": "The sandbox's provider: `docker`, `podman`, `boat` or `tart`.",
+              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`.",
               "type": "string"
             },
             "size": {
-              "description": "The provider's machine size, where it has sizes: `boat({ type })`.",
+              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`.",
               "type": "string"
             },
             "vcpus": {
@@ -1036,11 +1036,11 @@
           "required": ["sandbox"]
         },
         "scope": {
-          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `tart()`).",
+          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).",
           "enum": ["container", "machine"]
         },
         "shared": {
-          "description": "The VM ran other attempts at the same time (`boat({ attemptsPerMachine })` above 1), so its whole-VM usage isn't this attempt's: `usage` is left out.",
+          "description": "The VM ran other attempts at the same time (`attemptsPerMachine` above 1), so its whole-VM usage isn't this attempt's: `usage` is left out.",
           "const": true
         },
         "usage": {
@@ -2048,6 +2048,57 @@
         }
       },
       "required": ["kind", "model"]
+    },
+    "DaytonaApiKey": {
+      "description": "The host variable holding a Daytona API key, made by `secret.fromEnv`.",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "secret"
+        }
+      },
+      "required": ["from", "kind"]
+    },
+    "DaytonaSandboxDescriptor": {
+      "description": "A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`.",
+      "type": "object",
+      "properties": {
+        "apiKey": {
+          "description": "The host variable with the Daytona API key, read on the host only.",
+          "$ref": "#/$defs/DaytonaApiKey"
+        },
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
+          "type": "number"
+        },
+        "id": {
+          "description": "Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`.",
+          "type": "string"
+        },
+        "kind": {
+          "const": "daytona"
+        },
+        "maxConcurrent": {
+          "description": "The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`.",
+          "type": "number"
+        },
+        "prefix": {
+          "description": "The start of every sandbox name reeval gives Daytona, so a run's cleanup finds only its own: lowercase letters, digits and dashes.",
+          "type": "string"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "The sandbox size. Default `medium`.",
+          "enum": ["large", "medium", "small"]
+        }
+      },
+      "required": ["apiKey", "kind", "prefix"]
     },
     "DebugLine": {
       "description": "One debug line: level 1 is `-v`, level 2 is `-vv` only.",
@@ -7011,6 +7062,9 @@
       "anyOf": [
         {
           "$ref": "#/$defs/BoatSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/DaytonaSandboxDescriptor"
         },
         {
           "$ref": "#/$defs/DockerSandboxDescriptor"

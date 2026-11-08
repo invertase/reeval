@@ -232,6 +232,7 @@ export const unreachableMachines: Machines = async () => ({
   user: 'user',
   hostKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOkVnNvZ8lfy5H2wK0ljJm0cz6dJ7l4LwW8kQx2bH9oD',
   authorize: async () => {},
+  allowToken: async () => {},
   remove: async () => {},
 })
 

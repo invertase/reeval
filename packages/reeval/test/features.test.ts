@@ -42,12 +42,15 @@ import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
+import { runLabels } from '../src/sandbox/daytona.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
+import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
 import { seedModelsDev } from './support/cost.ts'
+import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import {
   fakeDigest,
   fakeTart,
@@ -274,6 +277,36 @@ const boatCreates = (run: RunRecord, sandbox = boat()) => {
   return boatApi.requests.filter(
     (q) => q.call === 'POST /sandboxes' && !q.refused && String(q.body?.name).startsWith(prefix),
   ).length
+}
+
+/** The fake Daytona API the `daytona-*` fixtures run on, its sandboxes sshd containers. */
+let daytonaApi: FakeDaytona
+before(async () => {
+  daytonaApi = await fakeDaytona(startSshVm)
+})
+after(() => daytonaApi.close())
+/** A `daytona-*` fixture's host: reeval pointed at the fake API, the VM image built. */
+const onFakeDaytona: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
+  sandbox: 'daytona',
+  hostEnv: () => ({ DAYTONA_API_URL: daytonaApi.url, DAYTONA_API_KEY: daytonaApi.key }),
+  prepare: () => buildSshVmImage(),
+}
+/** The sandboxes the run created on the fake API, by the labels its cleanup lists by. */
+const daytonaCreated = (run: RunRecord, sandbox = daytona()) => {
+  const labels = runLabels(sandbox, run.runId)
+  return daytonaApi
+    .created()
+    .filter((s) => Object.entries(labels).every(([k, v]) => s.labels[k] === v))
+}
+/** No sandbox of the run is left on the fake API. */
+const daytonaCleanedUp = (run: RunRecord, sandbox = daytona()) => {
+  const made = daytonaCreated(run, sandbox).map((s) => s.name)
+  assert.ok(made.length > 0, 'the run created its sandboxes on the fake API')
+  assert.deepEqual(
+    daytonaApi.live().filter((name) => made.includes(name)),
+    [],
+    'every Daytona sandbox of the run is deleted',
+  )
 }
 
 /** Every file under `dir`, for a check that a value was written to none of them. */
@@ -1264,6 +1297,78 @@ export const features: Feature[] = [
       assert.equal(said(/installed the fake agent's bootstrap/).length, 1, 'one slot installed')
       assert.equal(said(/its home from the machine's install/).length, 1, 'the other copied it')
       boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/daytona-session',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeDaytona,
+    canary: /expected 'reeval' to be 'user'/,
+    record: ({ run }) => {
+      daytonaCleanedUp(run)
+      for (const s of daytonaCreated(run)) {
+        assert.equal(s.snapshot, 'daytona-medium')
+        assert.ok(s.ttlMinutes > 0, 'each sandbox has a TTL, in case the run never deletes it')
+      }
+    },
+  },
+  {
+    dir: 'sandbox/daytona-resources',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeDaytona,
+    canary: /expected \d+ to be \+0/,
+    record: ({ run }) => {
+      daytonaCleanedUp(run)
+      const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
+      assert.equal(r?.scope, 'machine', JSON.stringify(r))
+      assert.equal(r?.machine.sandbox, 'daytona')
+      assert.equal(r?.machine.size, 'medium')
+      assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
+      assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
+      assert.ok((r?.usage?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(r))
+      assert.ok((r?.usage?.peakMemoryBytes ?? 0) > 0, JSON.stringify(r))
+    },
+  },
+  {
+    dir: 'sandbox/daytona-pool-reuse',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeDaytona,
+    prepare: async () => {
+      await buildSshVmImage()
+      daytonaApi.refuseStarts(1, { namePrefix: 'pool-' })
+    },
+    args: ['--concurrency', '1'],
+    canary: /expected 'home-clean' to be 'home-dirty'/,
+    record: ({ run }) => {
+      const sandbox = createDaytona({ prefix: 'pool' })()
+      assert.ok(
+        daytonaApi.requests.some((q) => q.refused && String(q.body?.name).startsWith('pool-')),
+        'the refused start was retried, not failed',
+      )
+      assert.equal(daytonaCreated(run, sandbox).length, 1, 'both attempts ran on one machine')
+      daytonaCleanedUp(run, sandbox)
+    },
+  },
+  {
+    dir: 'sandbox/daytona-shared-machine',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeDaytona,
+    canary: /expected 'reeval(-s1)?' to be 'user'/,
+    record: ({ run }) => {
+      assert.equal(daytonaCreated(run).length, 1, 'both attempts ran at once on one machine')
+      daytonaCleanedUp(run)
+      const resources = run.evals.flatMap((e) => e.attempts.map((a) => a.resources))
+      assert.ok(resources.length >= 2, JSON.stringify(resources))
+      for (const r of resources) {
+        assert.equal(r?.scope, 'machine', JSON.stringify(r))
+        assert.equal(r?.shared, true, JSON.stringify(r))
+        assert.equal(r?.machine.sandbox, 'daytona')
+        assert.equal(r?.usage, undefined, "another attempt's use would count in the VM's")
+      }
     },
   },
   {
