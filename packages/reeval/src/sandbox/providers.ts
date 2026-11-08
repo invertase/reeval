@@ -634,7 +634,7 @@ export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => 
   },
 })
 
-/** A hosted run's VMs have nothing to build either: `prepare` checks the service, per size. */
+/** hosted()'s VMs have nothing to build either: `prepare` checks the service, per size. */
 export const hostedProvider = (): SandboxProvider<HostedSandboxDescriptor> => ({
   kind: 'hosted',
   check: async () => {},

@@ -92,6 +92,8 @@ export type SandboxHooks<D extends SandboxDescriptor> = {
 export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = SandboxHooks<D> & {
   /** The helpers that make it, as messages name them: `docker`, then `podman`. */
   helpers: readonly string[]
+  /** Left out of the helpers messages and the docs list, since it isn't public API. */
+  internal?: true
   capabilities: SandboxCapabilities
   /** The provider that prepares and runs it, which keys preflight and `maxConcurrent`. */
   provider(sandbox: D): string
@@ -229,7 +231,7 @@ export function sandboxHelpers(
   which: (capabilities: SandboxCapabilities) => boolean = () => true,
 ): string {
   const calls = Object.values(SANDBOX_KINDS)
-    .filter((k) => which(k.capabilities))
+    .filter((k) => !k.internal && which(k.capabilities))
     .flatMap((k) => k.helpers.map((h) => `${h}()`))
   return calls.length > 1 ? `${calls.slice(0, -1).join(', ')} or ${calls.at(-1)}` : (calls[0] ?? '')
 }
@@ -244,7 +246,7 @@ export const runsAgent = (platforms: readonly NodeJS.Platform[]) => (c: SandboxC
 /** The first helper of each kind that can, for a fix: `docker()`. */
 export const suggestedSandbox = (which: (capabilities: SandboxCapabilities) => boolean) =>
   Object.values(SANDBOX_KINDS)
-    .filter((k) => which(k.capabilities))
+    .filter((k) => !k.internal && which(k.capabilities))
     .map((k) => `${k.helpers[0]}()`)
     .join(' or ')
 

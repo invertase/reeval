@@ -11,6 +11,7 @@ import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { parseProbe, probeScript } from '../src/attempt/serve.ts'
+import { hosted } from '../src/internal-vm.ts'
 import { runLabels, runPrefix } from '../src/sandbox/boat.ts'
 import { HOSTED_PREFIX, VM_TOKEN, VM_URL } from '../src/sandbox/hosted.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
@@ -21,7 +22,6 @@ import { vmPrefix } from '../src/sandbox/tart.ts'
 import { hasNetworkSession, type Sandbox } from '../src/sandbox/types.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { daytona } from '../src/sandbox-daytona.ts'
-import { hosted } from '../src/sandbox-hosted.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
 import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import { fakeTart, holdLoopback } from './support/fake-tart.ts'
@@ -32,7 +32,7 @@ import {
   startDaytonaVm,
   startSshVm,
 } from './support/ssh-vm.ts'
-import { type FakeVmProxy, fakeVmProxy } from './support/vm-proxy.ts'
+import { type FakeVmService, fakeVmService } from './support/vm-service.ts'
 
 type MachineKind = (typeof MACHINE_PROVIDERS)[number]['kind']
 
@@ -68,7 +68,7 @@ const savedTartEnv: Record<string, string | undefined> = {}
 let boatApi: FakeBoat | undefined
 const savedBoatEnv = { url: process.env.BOAT_BASE_URL, key: process.env.BOAT_API_KEY }
 let hostedApi: FakeBoat | undefined
-let vmProxy: FakeVmProxy | undefined
+let vmService: FakeVmService | undefined
 const savedHostedEnv = { url: process.env[VM_URL], token: process.env[VM_TOKEN] }
 let daytonaApi: FakeDaytona | undefined
 const savedDaytonaEnv = { url: process.env.DAYTONA_API_URL, key: process.env.DAYTONA_API_KEY }
@@ -150,12 +150,12 @@ const BACKENDS: Record<MachineKind, Backend> = {
     async start() {
       buildSshVmImage()
       hostedApi = await fakeBoat(startSshVm)
-      vmProxy = await fakeVmProxy(hostedApi, { maxLive: 10, maxStarts: 100 })
-      process.env[VM_URL] = vmProxy.url
-      process.env[VM_TOKEN] = vmProxy.token
+      vmService = await fakeVmService(hostedApi, { maxLive: 10, maxStarts: 100 })
+      process.env[VM_URL] = vmService.url
+      process.env[VM_TOKEN] = vmService.token
     },
     async stop() {
-      await vmProxy?.close()
+      await vmService?.close()
       await hostedApi?.close()
       for (const [name, value] of [
         [VM_URL, savedHostedEnv.url],

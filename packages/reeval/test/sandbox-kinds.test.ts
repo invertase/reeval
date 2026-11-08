@@ -55,10 +55,12 @@ describe('sandbox kinds', () => {
     assert.ok(!isSandboxKind(undefined))
   })
 
-  test('each kind names its helpers, and messages list them all', () => {
-    assert.equal(
-      sandboxHelpers(),
-      'docker(), podman(), fakeSandbox(), tart(), boat(), daytona() or hosted()',
+  test('each kind names its helpers, and messages list every one but the internal kinds', () => {
+    assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart(), boat() or daytona()')
+    assert.equal(SANDBOX_KINDS.hosted.internal, true)
+    assert.doesNotMatch(
+      suggestedSandbox(() => true),
+      /hosted/,
     )
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),
@@ -189,7 +191,7 @@ describe('which sandbox a real harness runs in', () => {
   test('the fake sandbox names what it lacks and the sandbox that has it', () => {
     assert.equal(
       agentSandboxProblem(AGENTS.cursor, fakeSandbox()),
-      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() or daytona() or hosted() for this eval, or use fakeHarness() with fakeSandbox()",
+      "The Cursor harness can't run in the fake sandbox, which has no harness session and can't keep CURSOR_API_KEY out of it: set sandbox: docker() or tart() or boat() or daytona() for this eval, or use fakeHarness() with fakeSandbox()",
     )
   })
 

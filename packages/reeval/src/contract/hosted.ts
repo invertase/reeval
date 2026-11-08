@@ -58,9 +58,9 @@ const NOT_HOSTED: Record<string, string> = {
   swap: SIZES,
   type: SIZES,
   pids: 'a VM has no container process limit',
-  engine: 'hosted() runs on the reeval platform, not a container engine',
-  apiKey: 'a hosted run gives the VMs its own token, so there is no key to name',
-  prefix: 'reeval names the VMs of a hosted run itself',
+  engine: 'hosted() runs VMs, not a container engine',
+  apiKey: 'its token comes from REEVAL_VM_TOKEN, so there is no key to name',
+  prefix: 'reeval names its VMs itself',
 }
 
 const ORDER = ['id', 'size', 'maxConcurrent', 'reuse', 'attemptsPerMachine']

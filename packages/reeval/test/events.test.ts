@@ -63,7 +63,7 @@ const waitFor = async (ready: () => boolean) => {
 }
 
 /**
- * A relay shaped like the platform's run session: it takes `--events-url` POSTs, numbers each line
+ * A relay that takes `--events-url` POSTs, numbers each line
  * from 1, and serves them on a WebSocket as `{"seq":n,"line":…}` frames after `?after=`. It closes
  * with 1000 once the run is over: after its exit line, or with `resumes`, at `finish()`.
  */
@@ -289,14 +289,14 @@ describe('the stream', () => {
       fetch: async () =>
         Response.json(
           {
-            error: { code: 'payload_too_large', message: 'line 2 is over 4 MiB', retryable: false },
+            error: { code: 'payload_too_large', message: 'line 2 is too large', retryable: false },
           },
           { status: 413 },
         ),
     })
     await stream.end(0)
     assert.deepEqual(warnings, [
-      'stopped posting the event stream to https://relay.test/api/runs/r1/events?token=***: HTTP 413: the server refused a batch as too large, likely a line over its size limit (line 2 is over 4 MiB)',
+      'stopped posting the event stream to https://relay.test/api/runs/r1/events?token=***: HTTP 413: the server refused a batch as too large, likely a line over its size limit (line 2 is too large)',
     ])
   })
 

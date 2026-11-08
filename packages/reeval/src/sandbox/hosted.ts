@@ -1,6 +1,5 @@
-// A hosted run's VMs: the platform's VM service speaks the same API boat() calls, so this reuses
-// boat.ts under another name, with the service's URL and the run's token from the environment.
-// The service labels, caps and removes the run's VMs too; reeval still cleans up its own.
+// hosted()'s VMs: boat.ts's client and pool under another name, with the service's URL and token
+// from the environment.
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import type { HostedMachineSize, HostedSandboxDescriptor } from '../types.ts'
@@ -26,21 +25,20 @@ import type { NetworkSandbox } from './types.ts'
 
 export const VM_URL = 'REEVAL_VM_URL'
 export const VM_TOKEN = 'REEVAL_VM_TOKEN'
-/** The start of every hosted VM's name: hex follows it, never `run-`, which the service keeps. */
+/** The start of every hosted VM's name: hex follows it, never `run-`. */
 export const HOSTED_PREFIX = 'reeval'
 
 export const HOSTED: VmService = {
   helper: 'hosted()',
   kind: 'hosted',
   name: 'reeval',
-  credential: `the run's token in ${VM_TOKEN}`,
+  credential: `the token in ${VM_TOKEN}`,
   scope: 'run',
   starts: 'per run',
   maxLabels: 16,
   reservedLabels: 'reeval.platform.',
-  expiry: ", which lasts only as long as the run's runner VM: the run has ended or outlived it",
-  ttlLimit:
-    ": a hosted run's VMs live at most an hour, and never past the run's own end, so give the eval a shorter timeout",
+  expiry: ', which is no longer valid',
+  ttlLimit: ': the VM service grants no more, so give the eval a shorter timeout',
 }
 
 /** The machine type the service takes for each size. */
@@ -70,17 +68,17 @@ const loadClient = optionalPeer<BoatSdk>(BOAT_SDK, {
   message: `hosted() needs its VM client, ${BOAT_SDK}, which isn't installed. Install it in this project: npm i ${BOAT_SDK}`,
 })
 
-/** Why this process can't reach the platform's VM service, or null. */
+/** Why this process can't reach the VM service, or null. */
 export function hostedProblem(env: NodeJS.ProcessEnv = process.env): string | null {
   const unset = [VM_URL, VM_TOKEN].filter((name) => !env[name])
   if (unset.length) {
-    return `hosted() runs only inside a hosted reeval run, which sets ${VM_URL} and ${VM_TOKEN}, and ${unset.join(' and ')} ${unset.length > 1 ? "aren't" : "isn't"} set here. To run these evals elsewhere, pick another sandbox`
+    return `hosted() needs ${VM_URL} and ${VM_TOKEN}, and ${unset.join(' and ')} ${unset.length > 1 ? "aren't" : "isn't"} set here. To run these evals elsewhere, pick another sandbox`
   }
   if (/\s/.test(env[VM_TOKEN] ?? '')) return `${VM_TOKEN} has whitespace or a line break in it`
   return null
 }
 
-/** A client for the run's VM service; the token goes from the environment to the client only. */
+/** A client for the VM service; the token goes from the environment to the client only. */
 export async function hostedClient(projectRoot?: string): Promise<BoatClient> {
   const problem = hostedProblem()
   if (problem) {
@@ -121,14 +119,14 @@ export const hostedCapacity = async (sandbox: HostedSandboxDescriptor) =>
 export const checkHosted = (sandbox: HostedSandboxDescriptor, projectRoot: string) =>
   checkVmService(HOSTED, hostedSpec(sandbox), () => hostedClient(projectRoot))
 
-/** Deletes the VMs the run left; the service removes them at the run's end as well. */
+/** Deletes the VMs the run left. */
 export async function removeRunVms(runId: string): Promise<void> {
   if (hostedProblem()) return
   const api = await hostedClient().catch(() => null)
   if (api) await removeNamed(api, runPrefix({ prefix: HOSTED_PREFIX }, runId))
 }
 
-/** `reeval doctor`: the OpenSSH client and the run's VM service, for each size `sandboxes` use. */
+/** `reeval doctor`: the OpenSSH client and the VM service, for each size `sandboxes` use. */
 export async function hostedDoctor(
   sandboxes: readonly HostedSandboxDescriptor[],
   ctx: DoctorContext,
@@ -159,7 +157,7 @@ export async function hostedDoctor(
         id: 'hosted',
         status: 'ok',
         summary: ctx.online
-          ? `the run's VM service takes its token and starts ${size} machines`
+          ? `the VM service takes the token and starts ${size} machines`
           : `the VM client loads, and ${VM_URL} and ${VM_TOKEN} are set (--online asks the service whether it takes the token)`,
       })
     } catch (error) {

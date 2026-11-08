@@ -16,7 +16,7 @@ export type PoolLimits = {
   startsPerMinute?: number | null
   /** Starts in any hour, counting the ones the account made before this run. */
   startsPerHour?: number | null
-  /** Starts left for the rest of the run, when the provider gives the run a budget of them. */
+  /** Starts left for the rest of the run, when the provider limits them run-wide. */
   starts?: number | null
 }
 
@@ -509,7 +509,7 @@ export class MachinePool<M> {
         onFailedAttempt: async ({ error }) => {
           const limited = provider.rateLimited(error)
           if (!limited) return
-          // A refused start started nothing, so the run's budget keeps it.
+          // A refused start started nothing, so the run's limit keeps it.
           if (this.#startsLeft !== null) this.#startsLeft++
           this.#stats.rateLimited++
           onRateLimit()

@@ -793,7 +793,7 @@
           "type": "object",
           "properties": {
             "id": {
-              "description": "The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, a hosted VM's id, or the name of `tart()`'s VM on its host.",
+              "description": "The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, or the name of `tart()`'s VM on its host.",
               "type": "string"
             },
             "memoryBytes": {
@@ -805,11 +805,11 @@
               "type": "string"
             },
             "sandbox": {
-              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona`, `hosted` or `tart`.",
+              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`.",
               "type": "string"
             },
             "size": {
-              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`, `hosted({ size })`.",
+              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`.",
               "type": "string"
             },
             "vcpus": {
@@ -820,7 +820,7 @@
           "required": ["sandbox"]
         },
         "scope": {
-          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `hosted()`, `tart()`).",
+          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).",
           "enum": ["container", "machine"]
         },
         "shared": {

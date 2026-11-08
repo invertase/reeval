@@ -25,6 +25,8 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
   kind: D['kind']
   /** The helpers that make it, as messages name them. */
   helpers: readonly string[]
+  /** Left out of the helpers messages and the docs list, since it isn't public API. */
+  internal?: true
   /** The OS its machines run, which picks the harness builds their bootstraps install. */
   os: 'linux' | 'darwin'
   capabilities: {
@@ -66,6 +68,7 @@ export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>)
   const { capacity } = machine
   return {
     helpers: machine.helpers,
+    ...(machine.internal && { internal: true as const }),
     capabilities: {
       platform: machine.os,
       ...machine.capabilities,

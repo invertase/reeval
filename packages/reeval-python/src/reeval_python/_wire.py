@@ -1349,8 +1349,7 @@ class HostFile(TypedDict):
     path: str
 
 
-# A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It
-# runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.
+# A VM per attempt from reeval's own VM service, made by `hosted()` from `reeval/internal/vm`.
 class HostedSandboxDescriptor(TypedDict):
     # The attempts one machine runs at once, each as a user of its own, as `boat({
     # attemptsPerMachine })` does. Default 1.
