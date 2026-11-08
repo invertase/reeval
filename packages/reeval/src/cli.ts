@@ -86,7 +86,7 @@ import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity, sandboxKind } from './sandbox/kinds.ts'
 import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
-import { clip } from './text.ts'
+import { clip, formatDuration } from './text.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from './traits.ts'
 import type {
   CursorEfforts,
@@ -226,9 +226,11 @@ async function run(argv: string[]): Promise<number> {
   }
   const configPath = configPathFor(values.config)
   if (command === 'image') {
+    if (filters[0] === 'list') return imageListCommand(values, configPath, filters.slice(1))
+    if (filters[0] === 'clean') return imageCleanCommand(values, configPath)
     if (filters[0] !== 'build') {
       throw new UsageError(
-        `Unknown command "image ${filters[0] ?? ''}". Did you mean reeval image build?`,
+        `Unknown command "image ${filters[0] ?? ''}". Did you mean reeval image build, list or clean?`,
       )
     }
     return imageBuildCommand(values, configPath, filters.slice(1))
@@ -485,20 +487,14 @@ async function imageBuildCommand(
     tartPlanLines,
     tartTargets,
   } = await import('./sandbox/images.ts')
-  const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
-  const ctx = await startRun(setup)
-  const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
-  const root = config.root
-  const uses = await plannedImageUses(
-    { runId, stagingDir, config, runs, tags, concurrency, profile },
-    filters,
-    (parts) => unmatchedFilter(config, parts),
-  )
+  const { buildVmImages, vmImageTargets, vmPlanLines } = await import('./sandbox/vm-images.ts')
+  const { setup, root, uses } = await imageUses(flags, configPath, filters, plannedImageUses)
   const targets = imageTargets(uses)
   const vms = tartTargets(uses)
-  if (targets.length === 0 && vms.length === 0) {
+  const snapshots = vmImageTargets(uses)
+  if (targets.length === 0 && vms.length === 0 && snapshots.length === 0) {
     console.log(
-      'No eval runs in a Docker or Tart sandbox, so there are no images to build or pull.',
+      'No eval runs in a Docker or Tart sandbox, or a boat() or daytona() sandbox with an image recipe, so there are no images to build or pull.',
     )
     return EXIT.ok
   }
@@ -510,6 +506,7 @@ async function imageBuildCommand(
   if (flags['dry-run']) {
     if (vms.length) for (const line of await tartPlanLines(vms)) console.log(line)
     if (targets.length) for (const line of await imagePlanLines(targets, root)) console.log(line)
+    if (snapshots.length) for (const line of await vmPlanLines(snapshots, root)) console.log(line)
     return EXIT.ok
   }
   const { PrepareError } = await import('./sandbox/provider.ts')
@@ -538,7 +535,7 @@ async function imageBuildCommand(
       ? await pullTartImages(vms, root, {
           log: (line) => console.log(line.startsWith('warning: ') ? yellow(line) : dim(line)),
           force: !!flags.force,
-        }).catch(refusal('tart', vms, targets.length))
+        }).catch(refusal('tart', vms, targets.length + snapshots.length))
       : []
     for (const p of pulled) {
       outcomes.push(
@@ -559,12 +556,37 @@ async function imageBuildCommand(
         force: !!flags.force,
         registry: setup.registry,
         push: !!flags.push,
-      }).catch(refusal('docker', targets, vms.length))
+      }).catch(refusal('docker', targets, vms.length + snapshots.length))
       for (const b of built) {
         outcomes.push(
           b.ok
             ? { id: b.id, evals: b.evals, ok: true, ref: b.image.ref, id12: short12(b.image.id) }
             : { id: b.id, evals: b.evals, ok: false, failure: b.failure },
+        )
+      }
+    }
+    if (snapshots.length) {
+      const built = await buildVmImages(snapshots, root, {
+        log: (line) => console.log(dim(line)),
+      }).catch(
+        refusal(
+          'vm',
+          snapshots.map((t) => ({ evals: t.ids.length })),
+          targets.length + vms.length,
+        ),
+      )
+      for (const b of built) {
+        const evals = b.ids.length
+        outcomes.push(
+          b.ok
+            ? {
+                id: b.id,
+                evals,
+                ok: true,
+                ref: `snapshot ${b.name}`,
+                id12: b.cached ? 'saved' : `built in ${formatDuration(b.ms)}`,
+              }
+            : { id: b.id, evals, ok: false, failure: b.failure },
         )
       }
     }
@@ -591,7 +613,7 @@ async function imageBuildCommand(
   console.log(
     failed.length
       ? red(
-          `${failed.length} of ${n} image${n === 1 ? '' : 's'} failed to ${vms.length ? (targets.length ? 'build or pull' : 'pull') : 'build'}`,
+          `${failed.length} of ${n} image${n === 1 ? '' : 's'} failed to ${vms.length ? (targets.length || snapshots.length ? 'build or pull' : 'pull') : 'build'}`,
         )
       : dim(`${n} image${n === 1 ? '' : 's'} ready`),
   )
@@ -600,6 +622,197 @@ async function imageBuildCommand(
   if (refused || failed.every((o) => !o.ok && o.failure.usage)) return EXIT.usage
   invocation.machineState = failed.every((o) => !o.ok && o.failure.cause === 'enospc')
   return EXIT.infra
+}
+
+/** What `reeval image` plans for: the harness and sandbox of each attempt, collected as `--dry-run` does. */
+async function imageUses(
+  flags: Flags,
+  configPath: string | undefined,
+  filters: string[],
+  planned?: typeof import('./sandbox/images.ts').plannedImageUses,
+) {
+  const plannedImageUses = planned ?? (await import('./sandbox/images.ts')).plannedImageUses
+  const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
+  const ctx = await startRun(setup)
+  const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
+  const uses = await plannedImageUses(
+    { runId, stagingDir, config, runs, tags, concurrency, profile },
+    filters,
+    (parts) => unmatchedFilter(config, parts),
+  )
+  return { setup, root: config.root, uses }
+}
+
+/**
+ * `reeval image list`: the image snapshots under each `boat()` and `daytona()` account and prefix
+ * the evals use, with the environments that start from each.
+ */
+async function imageListCommand(
+  flags: Flags,
+  configPath: string | undefined,
+  filters: string[],
+): Promise<number> {
+  const vm = await import('./sandbox/vm-images.ts')
+  const { formatSize } = await import('./sandbox/tart-images.ts')
+  const { root, uses } = await imageUses(flags, configPath, filters)
+  const accounts = vm.vmAccounts(uses)
+  if (!accounts.length) {
+    console.log(
+      'No eval runs in a boat() or daytona() sandbox, so there are no image snapshots to list.',
+    )
+    return EXIT.ok
+  }
+  const [{ snapshots, failed }, { usedBy }] = await Promise.all([
+    vm.listAccounts(accounts, root),
+    vm.usedSnapshots(vm.vmImageTargets(uses), root),
+  ])
+  const cache = vm.readVmImageCache()
+  const rows = snapshots.map((s) => ({
+    ...s,
+    lastUsedAt: vm.lastUsed(s, cache),
+    usedBy: usedBy.get(s.name) ?? [],
+  }))
+  if (flags.json) {
+    const iso = (t: number | null) => (t === null ? null : new Date(t).toISOString())
+    console.log(
+      JSON.stringify(
+        {
+          snapshots: rows.map((r) => ({
+            ...r,
+            createdAt: iso(r.createdAt),
+            lastUsedAt: iso(r.lastUsedAt),
+          })),
+          failed: failed.map((f) => ({
+            provider: f.account.provider,
+            account: f.account.sandbox.apiKey.from,
+            prefix: f.account.sandbox.prefix,
+            error: f.error.message,
+          })),
+        },
+        null,
+        2,
+      ),
+    )
+    return failed.length ? EXIT.infra : EXIT.ok
+  }
+  const table = rows.map((r) => [
+    r.provider,
+    r.name,
+    r.status,
+    r.sizeBytes === null ? '-' : formatSize(r.sizeBytes),
+    `saved ${vm.ago(r.createdAt)}`,
+    `used ${vm.ago(r.lastUsedAt)}`,
+    r.usedBy.length ? r.usedBy.join(', ') : dim('no environment'),
+  ])
+  const widths =
+    table[0]?.map((_, i) => Math.max(...table.map((row) => (row[i] ?? '').length))) ?? []
+  for (const row of table) {
+    console.log(
+      row.map((cell, i) => (i === row.length - 1 ? cell : cell.padEnd(widths[i] ?? 0))).join('  '),
+    )
+  }
+  for (const f of failed) console.log(red(`✗ ${vm.accountLabel(f.account)}: ${f.error.message}`))
+  const n = rows.length
+  console.log(
+    dim(`${n} snapshot${n === 1 ? '' : 's'} under ${accounts.map(vm.accountLabel).join(', ')}`),
+  )
+  return failed.length ? EXIT.infra : EXIT.ok
+}
+
+/**
+ * `reeval image clean`: deletes the image snapshots no environment of the evals starts from, under
+ * each `boat()` and `daytona()` account and prefix they use, never one used in the
+ * last hour or one still being saved.
+ */
+async function imageCleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
+  const vm = await import('./sandbox/vm-images.ts')
+  const { formatSize } = await import('./sandbox/tart-images.ts')
+  const provider = flags.provider
+  if (provider !== undefined && provider !== 'boat' && provider !== 'daytona') {
+    throw new UsageError(`--provider is boat or daytona (got "${provider}")`)
+  }
+  const olderThanMs =
+    flags['older-than'] !== undefined
+      ? vm.parseAge(flags['older-than'])
+      : flags.all
+        ? undefined
+        : vm.DEFAULT_OLDER_THAN_MS
+  const { root, uses } = await imageUses(flags, configPath, [])
+  const accounts = vm.vmAccounts(uses).filter((a) => !provider || a.provider === provider)
+  if (!accounts.length) {
+    console.log(
+      `No eval runs in a ${provider ? `${provider}()` : 'boat() or daytona()'} sandbox, so there are no image snapshots to clean.`,
+    )
+    return EXIT.ok
+  }
+  const [{ snapshots, failed }, { usedBy, unknown }] = await Promise.all([
+    vm.listAccounts(accounts, root),
+    vm.usedSnapshots(
+      vm.vmImageTargets(uses).filter((t) => !provider || t.provider === provider),
+      root,
+    ),
+  ])
+  const refused = unknown.find((u) => (u.error as { failure?: { usage?: boolean } }).failure?.usage)
+  if (refused) throw new UsageError(refused.error.message)
+  if (unknown.length && !flags.all) {
+    for (const u of unknown) {
+      console.log(
+        red(
+          `✗ couldn't tell which snapshot ${u.target.id} starts from: ${u.error.message.split('\n')[0]}`,
+        ),
+      )
+    }
+    console.log(red("Nothing was deleted, so a snapshot in use isn't. Fix that, or pass --all."))
+    return EXIT.infra
+  }
+  const choices = vm.cleanChoices(snapshots, {
+    cache: vm.readVmImageCache(),
+    usedBy,
+    now: Date.now(),
+    ...(olderThanMs !== undefined && { olderThanMs }),
+    all: !!flags.all,
+  })
+  const doomed = choices.filter((c) => c.keep === null)
+  const byAccount = (s: { provider: string; account: string; prefix: string }) =>
+    accounts.find(
+      (a) =>
+        a.provider === s.provider &&
+        a.sandbox.apiKey.from === s.account &&
+        a.sandbox.prefix === s.prefix,
+    ) as import('./sandbox/vm-images.ts').VmAccount
+  let freed = 0
+  let deleted = 0
+  let failures = failed.length
+  for (const c of choices) {
+    const size = c.snapshot.sizeBytes === null ? '' : ` (${formatSize(c.snapshot.sizeBytes)})`
+    if (c.keep !== null) {
+      console.log(dim(`  kept ${c.snapshot.provider} ${c.snapshot.name}: ${c.keep}`))
+      continue
+    }
+    if (flags['dry-run']) {
+      console.log(`  would delete ${c.snapshot.provider} ${c.snapshot.name}${size}`)
+      continue
+    }
+    try {
+      await vm.deleteVmSnapshot(byAccount(c.snapshot), c.snapshot, root)
+      deleted++
+      freed += c.snapshot.sizeBytes ?? 0
+      console.log(`${green('✓')} deleted ${c.snapshot.provider} ${c.snapshot.name}${size}`)
+    } catch (error) {
+      failures++
+      console.log(red(`✗ ${c.snapshot.provider} ${c.snapshot.name}: ${(error as Error).message}`))
+    }
+  }
+  for (const f of failed) console.log(red(`✗ ${vm.accountLabel(f.account)}: ${f.error.message}`))
+  const n = doomed.length
+  console.log(
+    dim(
+      flags['dry-run']
+        ? `${n} snapshot${n === 1 ? '' : 's'} to delete (nothing deleted: --dry-run)`
+        : `Deleted ${deleted} snapshot${deleted === 1 ? '' : 's'}${freed ? ` (${formatSize(freed)})` : ''}`,
+    ),
+  )
+  return failures ? EXIT.infra : EXIT.ok
 }
 
 /** The first 12 hex digits of an image id or digest. */

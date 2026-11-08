@@ -97,6 +97,7 @@ export function viewerEvent(
       setBy: t.setBy.map((by) => (by === config ? shown(by) : by)),
     })
     if (event.state === 'start') return { ...event, targets: event.targets.map(target) }
+    if (event.state === 'image') return { ...event, target: target(event.target) }
     return {
       ...event,
       outcome: { ...event.outcome, target: target(event.outcome.target) },

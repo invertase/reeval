@@ -48,6 +48,8 @@ export type PrepareOutcome =
 export type PrepareEvent =
   | { state: 'start'; targets: PrepareTarget[] }
   | { state: 'ready' | 'failed'; outcome: PrepareOutcome }
+  /** The machine image a target starts from: found saved, or being built. */
+  | { state: 'image'; target: PrepareTarget; image: { name: string; cached: boolean } }
 
 /** How many environments are prepared at once. */
 export const PREPARE_LIMIT = 3
@@ -182,7 +184,14 @@ export async function prepareAll(
     }
     const start = performance.now()
     try {
-      const ctx = { root, signal, log: options.log ?? (() => {}), retry }
+      const ctx = {
+        root,
+        signal,
+        log: options.log ?? (() => {}),
+        retry,
+        image: (image: { name: string; cached: boolean }) =>
+          options.onEvent?.({ state: 'image', target, image }),
+      }
       // A provider that doesn't retry its own steps is retried as a whole.
       const handle = await retry(() =>
         provider.prepare(target.sandbox, target.harness, ctx, target.plugins),

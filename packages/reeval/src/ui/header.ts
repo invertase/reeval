@@ -160,33 +160,74 @@ export function noticeLines(
   return e.level === 'info' ? lines.map((l) => c.dim(l)) : lines
 }
 
-/** Preflight: which sandboxes it prepares, each one ready, and each failure. */
-export function prepareStepLines(
-  c: Colors,
-  e: Extract<ReevalEvent, { type: 'prepare' }>,
-  width: number,
-  max: number,
-): string[] {
-  if (e.state === 'start') {
-    const n = e.targets.length
-    const names = e.targets.map((t) => t.label).join(', ')
-    return stepLines(
-      c.teal('◆'),
-      `Preparing ${plural(n, 'sandbox', 'sandboxes')} (${names})...`,
-      width,
-    )
+/**
+ * Preflight's lines: which sandboxes it prepares, each machine image it builds, each one ready,
+ * each failure, and once every sandbox has settled, how their machine images stood. One per run.
+ */
+export class PrepareLines {
+  #pending = new Set<string>()
+  #images = new Map<string, { name: string; cached: boolean }>()
+  #ready = 0
+  #failed = 0
+  #builds: number[] = []
+
+  lines(
+    c: Colors,
+    e: Extract<ReevalEvent, { type: 'prepare' }>,
+    width: number,
+    max: number,
+  ): string[] {
+    if (e.state === 'start') {
+      for (const t of e.targets) this.#pending.add(targetKey(t))
+      const n = e.targets.length
+      const names = e.targets.map((t) => t.label).join(', ')
+      return stepLines(
+        c.teal('◆'),
+        `Preparing ${plural(n, 'sandbox', 'sandboxes')} (${names})...`,
+        width,
+      )
+    }
+    if (e.state === 'image') {
+      this.#images.set(targetKey(e.target), e.image)
+      return e.image.cached
+        ? []
+        : [`  ${c.teal('◌')}  ${e.target.label} ${c.dim(`building image ${e.image.name}...`)}`]
+    }
+    const { outcome } = e
+    this.#pending.delete(targetKey(outcome.target))
+    const image = this.#images.get(targetKey(outcome.target))
+    if (image) {
+      if (!outcome.ok) this.#failed++
+      else {
+        this.#ready++
+        if (!image.cached) this.#builds.push(outcome.ms)
+      }
+    }
+    const lines = outcome.ok
+      ? [
+          `  ${c.green('✓')}  ${outcome.target.label} ready${image ? c.dim(`, ${image.cached ? 'from saved' : 'built'} image ${image.name}`) : ''}${outcome.ms >= 1000 ? ` ${c.dim(formatDuration(outcome.ms))}` : ''}`,
+        ]
+      : [
+          `  ${c.red('✗')}  ${outcome.target.label} failed to prepare ${c.dim(`(set by ${outcome.target.setBy.join(', ')}; only its attempts fail)`)}`,
+          ...tailLines(outcome.failure.message, max).map((l) => `${indent(GLYPH)}${c.orange(l)}`),
+        ]
+    if (this.#pending.size === 0 && this.#images.size) lines.push(this.#summary(c))
+    return lines
   }
-  const { outcome } = e
-  if (outcome.ok) {
-    const took = outcome.ms >= 1000 ? ` ${c.dim(formatDuration(outcome.ms))}` : ''
-    return [`  ${c.green('✓')}  ${outcome.target.label} ready${took}`]
+
+  /** `images: 3 ready (1 built in 1m48s)`. */
+  #summary(c: Colors): string {
+    const built = this.#builds.length
+    const longest = Math.max(0, ...this.#builds)
+    const parts = [
+      `${this.#ready} ready${built ? ` (${built} built in ${formatDuration(longest)})` : ''}`,
+      ...(this.#failed ? [`${this.#failed} failed`] : []),
+    ]
+    return `  ${c.dim(`images: ${parts.join(', ')}`)}`
   }
-  const who = outcome.target.setBy.join(', ')
-  return [
-    `  ${c.red('✗')}  ${outcome.target.label} failed to prepare ${c.dim(`(set by ${who}; only its attempts fail)`)}`,
-    ...tailLines(outcome.failure.message, max).map((l) => `${indent(GLYPH)}${c.orange(l)}`),
-  ]
 }
+
+const targetKey = (t: { kind: string; key: string }) => `${t.kind}\0${t.key}`
 
 /** The start line's text: how the attempts' logs will print. */
 export function startText(output: OutputOptions): string {

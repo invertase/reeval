@@ -26,6 +26,10 @@ type FakeSnapshot = {
   resources?: Record<string, unknown>
   /** Reads answer 404 while creates still find the name, as a read lagging another run's create. */
   hidden?: boolean
+  /** In GB, as Daytona reports it. */
+  size?: number
+  createdAt: string
+  lastUsedAt?: string
 }
 
 /** Builds a Dockerfile, as Daytona's builder does; a rejection is the build's `errorReason`. */
@@ -76,6 +80,9 @@ export type FakeDaytona = {
       dockerfile?: string
       hidden?: boolean
       settle?: { afterMs: number; state: string; errorReason?: string }
+      size?: number
+      createdAt?: string
+      lastUsedAt?: string
     },
   ): void
   /** Answer every snapshot call 403, as for a key without snapshot permission. */
@@ -132,16 +139,16 @@ export async function fakeDaytona(
     name: s.name,
     imageName: null,
     state: s.state,
-    size: null,
+    size: s.size ?? null,
     entrypoint: null,
     cpu: 2,
     gpu: 0,
     mem: 4,
     disk: 8,
     errorReason: s.errorReason ?? null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    lastUsedAt: null,
+    createdAt: s.createdAt,
+    updatedAt: s.createdAt,
+    lastUsedAt: s.lastUsedAt ?? null,
   })
   const later = (ms: number, work: () => void) => {
     setTimeout(work, ms).unref()
@@ -151,9 +158,21 @@ export async function fakeDaytona(
     id: string | undefined,
     sub: string | undefined,
     body: Record<string, unknown> | undefined,
+    query: URLSearchParams,
   ) => {
     if (snapshotsRefused) {
       return json(403, { statusCode: 403, message: 'Forbidden: missing write:snapshots' })
+    }
+    if (!id && method === 'GET') {
+      const all = [...snapshots.values()].filter((s) => !s.hidden)
+      const limit = Number(query.get('limit') ?? 100)
+      const page = Number(query.get('page') ?? 1)
+      return json(200, {
+        items: all.slice((page - 1) * limit, page * limit).map(snapshotView),
+        total: all.length,
+        page,
+        totalPages: Math.max(1, Math.ceil(all.length / limit)),
+      })
     }
     if (!id && method === 'POST') {
       const name = String(body?.name)
@@ -169,6 +188,7 @@ export async function fakeDaytona(
         state: 'pending',
         ...(dockerfile !== undefined && { dockerfile }),
         resources: { cpu, memory, disk },
+        createdAt: new Date().toISOString(),
       }
       snapshots.set(name, snapshot)
       later(buildMs / 2, () => {
@@ -248,7 +268,7 @@ export async function fakeDaytona(
       )
     }
     const [, collection, id, sub, arg] = path.split('/')
-    if (collection === 'snapshots') return snapshotRoute(method, id, sub, body)
+    if (collection === 'snapshots') return snapshotRoute(method, id, sub, body, url.searchParams)
     if (collection !== 'sandbox') return json(404, { statusCode: 404, message: 'Not Found' })
     if (
       !id &&
@@ -415,6 +435,9 @@ export async function fakeDaytona(
         ...(o.errorReason !== undefined && { errorReason: o.errorReason }),
         ...(o.dockerfile !== undefined && { dockerfile: o.dockerfile }),
         ...(o.hidden && { hidden: true }),
+        ...(o.size !== undefined && { size: o.size }),
+        createdAt: o.createdAt ?? new Date().toISOString(),
+        ...(o.lastUsedAt !== undefined && { lastUsedAt: o.lastUsedAt }),
       }
       snapshots.set(name, snapshot)
       const settle = o.settle

@@ -635,6 +635,7 @@ export const boatProvider = (
       const { boatImage } = await import('./boat-images.ts')
       const identity = imageIdentity(sandbox, recipe, harness, plugins)
       let image = images.get(identity)
+      const shared = !!image
       if (!image) {
         const api = (await boat.boatClient(sandbox, ctx.root)) as BoatSnapshotClient
         image = boatImage(boat.boatService(sandbox), api, sandbox, recipe, harness, ctx, {
@@ -645,7 +646,17 @@ export const boatProvider = (
         // A failed build is tried again by preflight's retry, not handed to the next size.
         image.catch(() => images.delete(identity))
       }
-      return await image
+      const made = await image
+      if (shared) ctx.image?.({ name: made.snapshot, cached: true })
+      const { noteVmImage } = await import('./vm-images.ts')
+      noteVmImage({
+        provider: 'boat',
+        account: sandbox.apiKey.from,
+        name: made.snapshot,
+        key: made.key,
+        built: made.built && !shared,
+      })
+      return made
     },
     classify: (error) => {
       if (error instanceof ImageBuildError) return classifyDocker(error)
@@ -699,8 +710,27 @@ export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => 
     })
   },
   async prepare(sandbox, harness, ctx) {
-    const { prepareDaytona } = await import('./daytona.ts')
-    return prepareDaytona(sandbox, harness, ctx)
+    const { daytonaStart, prepareDaytona } = await import('./daytona.ts')
+    let built = false
+    const handle = await prepareDaytona(sandbox, harness, {
+      ...ctx,
+      image: (image) => {
+        built ||= !image.cached
+        ctx.image?.(image)
+      },
+    })
+    const start = daytonaStart(handle)
+    if (start?.snapshot) {
+      const { noteVmImage } = await import('./vm-images.ts')
+      noteVmImage({
+        provider: 'daytona',
+        account: sandbox.apiKey.from,
+        name: start.snapshot,
+        key: String((handle as { key?: unknown }).key),
+        built,
+      })
+    }
+    return handle
   },
   classify: (error) => {
     const message = error instanceof Error ? error.message : String(error)

@@ -51,6 +51,10 @@ export type DaytonaSnapshotInfo = {
   name: string
   state?: string
   errorReason?: string | null
+  /** In GB. */
+  size?: number | null
+  createdAt?: string | Date
+  lastUsedAt?: string | Date | null
 }
 
 /** A sandbox's (or snapshot's) vCPUs, and memory and disk in GiB. */
@@ -83,6 +87,10 @@ export type DaytonaClient = {
     ): Promise<DaytonaSnapshotInfo>
     delete(snapshot: DaytonaSnapshotInfo): Promise<void>
     activate(snapshot: DaytonaSnapshotInfo): Promise<DaytonaSnapshotInfo>
+    list(query: {
+      page: number
+      limit: number
+    }): Promise<{ items: DaytonaSnapshotInfo[]; totalPages?: number }>
   }
 }
 
@@ -308,6 +316,8 @@ export async function ensureSnapshot(
     /** The generated Dockerfile, which a build failure names. */
     dockerfileLog: string | null
     waits?: typeof SNAPSHOT_WAITS
+    /** Called once, when the snapshot isn't ready to use: it's built, rebuilt or waited on. */
+    building?: () => void
   },
 ): Promise<'ready' | 'no-permission'> {
   const waits = o.waits ?? SNAPSHOT_WAITS
@@ -322,6 +332,11 @@ export async function ensureSnapshot(
     })
   let rebuilt = false
   let reported: string | undefined
+  let busy = false
+  const building = () => {
+    if (!busy) o.building?.()
+    busy = true
+  }
   for (;;) {
     signal.throwIfAborted()
     let found: DaytonaSnapshotInfo | null
@@ -335,6 +350,7 @@ export async function ensureSnapshot(
       found = null
     }
     if (!found) {
+      building()
       o.log(`daytona: building snapshot ${name}`)
       const built = await build()
       if (built === 'no-permission' || built === 'ready') return built
@@ -347,6 +363,7 @@ export async function ensureSnapshot(
       const reason = found.errorReason || 'no reason given'
       if (rebuilt) throw buildFailed(reason)
       rebuilt = true
+      building()
       o.log(`daytona: snapshot ${name} is in ${state} (${reason}): deleting it to build it again`)
       await call(() => api.snapshot.delete(found)).catch((error: unknown) => {
         if (signal.aborted) throw error
@@ -366,6 +383,7 @@ export async function ensureSnapshot(
   }
 
   async function wait(state: string) {
+    building()
     if (Date.now() >= deadline) {
       throw failed({
         class: 'transient',
@@ -496,7 +514,17 @@ export async function prepareDaytona(
   const built = () => sdkImage(image, ctx.root)
   const resources = resourcesOf(sandbox.size ?? 'medium')
   const common = { name: image.name, image: built, resources, signal: ctx.signal, dockerfileLog }
-  const got = await ensureSnapshot(api, { ...common, log: ctx.log, ...(waits && { waits }) })
+  let building = false
+  const got = await ensureSnapshot(api, {
+    ...common,
+    log: ctx.log,
+    ...(waits && { waits }),
+    building: () => {
+      building = true
+      ctx.image?.({ name: image.name, cached: false })
+    },
+  })
+  if (!building) ctx.image?.({ name: image.name, cached: got === 'ready' })
   const start: DaytonaStart = {
     name: image.name,
     harnessBaked: image.harnessBaked,
