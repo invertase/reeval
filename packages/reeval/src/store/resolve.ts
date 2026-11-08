@@ -207,14 +207,15 @@ export function resolveHistory(
     )
   }
   const archive = own ?? base?.archive ?? false
+  const storeAt = (value as HistoryConfig | undefined)?.store === undefined ? 'history' : where
   if (archive && resolved.store.kind !== 'local' && own === undefined) {
     throw new UsageError(
-      `history.archive in ${file} writes each run's zip into a local() history, and ${where}.store keeps runs in ${resolved.store.name}. Set archive: false in ${where}, or drop it from history.`,
+      `history.archive in ${file} writes each run's zip into a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. Set archive: false in ${where}, or drop it from history.`,
     )
   }
   if (archive && resolved.store.kind !== 'local') {
     throw new UsageError(
-      `${where}.archive in ${file} writes each run's zip into a local() history, and ${where}.store keeps runs in ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
+      `${where}.archive in ${file} writes each run's zip into a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
     )
   }
   return { ...resolved, debug, archive }

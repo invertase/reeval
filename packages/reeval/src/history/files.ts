@@ -537,7 +537,7 @@ const archived = (path: string) => !path.startsWith('analysis/')
  */
 async function freshArchive(
   path: string,
-  options: Pick<Parameters<typeof writeArchive>[1], 'contents' | 'runId' | 'debugLevel'> & {
+  options: Pick<Parameters<typeof writeArchive>[1], 'contents' | 'runId'> & {
     files: Array<{ path: string; data: Uint8Array }>
   },
 ): Promise<WrittenArchive> {
@@ -761,7 +761,12 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     await ensureHistoryGitattributes(options.historyDir)
   }
   const written = await writeRun(options.historyDir, record, files)
-  const zip = options.archive && (await archiveRun(options.historyDir, runId, encodeRecord(record)))
+  const zip =
+    options.archive &&
+    (await archiveRun(options.historyDir, runId, encodeRecord(record)).catch((error: unknown) => {
+      const why = error instanceof Error ? error.message : String(error)
+      throw new Error(`Recorded ${runId}, but couldn't archive it: ${why}`, { cause: error })
+    }))
   const archive = zip ? { archive: zip } : {}
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!committed) {

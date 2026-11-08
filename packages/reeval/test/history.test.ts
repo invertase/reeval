@@ -236,7 +236,7 @@ describe('recording runs into evals/.history', () => {
       'evals/logged.eval.ts': logged,
     })
     mkdirSync(join(p.dir, HISTORY), { recursive: true })
-    await writeFile(join(p.dir, HISTORY, '.gitignore'), '# local, no un-ignore\n')
+    await writeFile(join(p.dir, HISTORY, '.gitignore'), `${HISTORY_GITIGNORE}*.log\n`)
     assert.equal((await runCli(p.dir)).code, 0)
     const r = await runCli(p.dir, ['record', '--artifacts', 'all'])
     assert.equal(r.code, 0, r.stderr)
@@ -244,7 +244,7 @@ describe('recording runs into evals/.history', () => {
       r.stdout,
       /^warning: git ignores \d+ recorded file\(s\); they won't be committed:$/m,
     )
-    assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\.gitignore:\d+\)$/m)
+    assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\S*\.gitignore:\d+\)$/m)
     assert.match(
       r.stdout,
       /\.history\/\.gitattributes {2}ignored by \.gitattributes \(\.gitignore:\d+\)$/m,
@@ -363,7 +363,7 @@ describe('recording runs into evals/.history', () => {
     try {
       const r = await runCli(p.dir, ['record', runId])
       assert.notEqual(r.code, 0, r.stdout)
-      assert.match(r.stderr, /EACCES/)
+      assert.match(r.stderr, new RegExp(`Recorded ${runId}, but couldn't archive it: EACCES`))
     } finally {
       chmodSync(zip, 0o644)
     }
@@ -377,10 +377,18 @@ describe('recording runs into evals/.history', () => {
       'history: { archive: true },',
     )
     await appendFile(join(p.dir, '.gitignore'), '*.zip\n')
+    mkdirSync(join(p.dir, HISTORY), { recursive: true })
+    const older = HISTORY_GITIGNORE.replace('!*.zip\n', '')
+    await writeFile(join(p.dir, HISTORY, '.gitignore'), older)
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     const [runId] = recordedRuns(p.dir)
     const r = spawnSync('git', ['check-ignore', '-q', `${HISTORY}/${runId}.zip`], { cwd: p.dir })
     assert.equal(r.status, 1, 'git does not ignore the archive')
+    assert.equal(
+      readFileSync(join(p.dir, HISTORY, '.gitignore'), 'utf8'),
+      `${older}!*.zip\n`,
+      'a history .gitignore without the rule gains it',
+    )
   })
 
   test('without history.archive no zip is written', async () => {

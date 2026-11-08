@@ -43,6 +43,7 @@
   "history.archive on s3()": "UsageError: history.archive in reeval.config.ts writes each run's zip into a local() history, and history.store keeps runs in s3://runs. Drop archive, or set it where history.store is local().",
   "yaml: history.archive on s3()": "UsageError: history.archive in reeval.yaml writes each run's zip into a local() history, and history.store keeps runs in s3://runs. Drop archive, or set it where history.store is local().",
   "history.archive kept by a profile on s3()": "UsageError: history.archive in reeval.config.ts writes each run's zip into a local() history, and profiles.ci.history.store keeps runs in s3://runs. Set archive: false in profiles.ci.history, or drop it from history.",
+  "history.archive set by a profile on the s3() it inherits": "UsageError: profiles.ci.history.archive in reeval.config.ts writes each run's zip into a local() history, and history.store keeps runs in s3://runs. Drop archive, or set it where history.store is local().",
   "yaml: history.archive not true or false": "UsageError: history.archive in reeval.yaml is true or false (got \"yes please\")",
   "yaml: history.debug unknown": "UsageError: history.debug in reeval.yaml is one of 'none', 'requests' or 'all' (got \"some\")",
   "history.store s3 without a bucket": "UsageError: history.store in reeval.config.ts names no bucket. Set bucket, or env: { bucket: 'MY_BUCKET' } to read it from a host variable.",

@@ -2085,6 +2085,13 @@ export const CASES: Record<string, Case[]> = {
         profiles: { ci: { history: { store: { kind: 's3', bucket: 'runs' } } } },
       }),
     ],
+    [
+      'history.archive set by a profile on the s3() it inherits',
+      config({
+        history: { store: { kind: 's3', bucket: 'runs' } },
+        profiles: { ci: { history: { archive: true } } },
+      }),
+    ],
     ['yaml: history.archive not true or false', yaml('history:\n  archive: yes please\n')],
     [
       'yaml: history.debug unknown',
