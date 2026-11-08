@@ -4,11 +4,12 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
-import { docker } from '../src/docker-cli.ts'
+import { docker, removeContainerDetached, sweepLabelDetached } from '../src/docker-cli.ts'
+import { containerTransport } from '../src/egress/transport.ts'
 import type { RemoteEngine } from '../src/engine.ts'
 import { DEFAULT_IMAGE } from '../src/image.ts'
 import { hostCommand, isSshFailure, remoteBuild } from '../src/remote-engine.ts'
@@ -29,7 +30,7 @@ writeFileSync(
   `#!/bin/sh
 printf '%s\\n' "$*" >> ${sshLog}
 n=$(cat ${failures} 2>/dev/null || echo 0)
-if [ "$n" -gt 0 ]; then echo $((n - 1)) > ${failures}; echo "ssh: connect to host vm.test port 22: Connection refused" >&2; exit 255; fi
+if [ "$n" -gt 0 ]; then echo $((n - 1)) > ${failures}; echo "ssh: connect to host vm.test port 2222: Connection refused" >&2; exit 255; fi
 for last; do :; done
 exec sh -c "$last"
 `,
@@ -45,6 +46,11 @@ const args = process.argv.slice(2)
 process.stdout.write(JSON.stringify({ args, secret: process.env.REEVAL_SECRET ?? null,
   stdin: require('node:crypto').createHash('sha256').update(input).digest('hex'), bytes: input.length }))
 if (args[0] === 'fail') { process.stderr.write('Error: it failed\\n'); process.exit(3) }
+if (args[0] === 'exec') {
+  require('node:fs').appendFileSync(process.env.FAKE_DOCKER_RUNS, 'ran\\n')
+  process.stderr.write(args.at(-1) + '\\n')
+  process.exit(255)
+}
 `,
   { mode: 0o755 },
 )
@@ -88,23 +94,26 @@ describe('hostCommand', () => {
     assert.throws(() => hostCommand(remote, ['ps'], { 'A;B': '1' }), /isn't a variable name/)
   })
 
-  test('only a failure to connect is ssh failing before the command ran', () => {
-    const refused = 'ssh: connect to host vm.test port 22: Connection refused\n'
-    assert.equal(isSshFailure({ exitCode: 255, stderr: refused }), true)
+  test('only ssh failing to connect to the machine is ssh failing before the command ran', () => {
+    const refused = 'ssh: connect to host vm.test port 2222: Connection refused\n'
+    assert.equal(isSshFailure({ exitCode: 255, stderr: refused }, target), true)
+    const reset =
+      'kex_exchange_identification: read: Connection reset by peer\nConnection reset by 10.0.0.2 port 2222'
+    assert.equal(isSshFailure({ exitCode: 255, stderr: reset }, target), true)
+    // Canary: the remote command's own 255, a connection that dropped after it started, another
+    // machine's refusal, and ssh's message among the command's own output.
+    assert.equal(isSshFailure({ exitCode: 255, stderr: '' }, target), false)
     assert.equal(
-      isSshFailure({
-        exitCode: 255,
-        stderr: 'kex_exchange_identification: read: Connection reset by peer',
-      }),
-      true,
-    )
-    // Canary: the remote command's own 255, and a connection that dropped after it started.
-    assert.equal(isSshFailure({ exitCode: 255, stderr: '' }), false)
-    assert.equal(
-      isSshFailure({ exitCode: 255, stderr: 'Connection to vm.test closed by remote host.' }),
+      isSshFailure(
+        { exitCode: 255, stderr: 'Connection to vm.test closed by remote host.' },
+        target,
+      ),
       false,
     )
-    assert.equal(isSshFailure({ exitCode: 1, stderr: refused }), false)
+    const other = 'ssh: connect to host github.com port 22: Connection refused\n'
+    assert.equal(isSshFailure({ exitCode: 255, stderr: other }, target), false)
+    assert.equal(isSshFailure({ exitCode: 255, stderr: `pushing\n${refused}` }, target), false)
+    assert.equal(isSshFailure({ exitCode: 1, stderr: refused }, target), false)
   })
 })
 
@@ -136,8 +145,9 @@ describe('remoteBuild', () => {
     const sent = entries(r.input)
     assert.deepEqual(
       sent.map((e) => e.path),
-      ['.dockerignore', 'Dockerfile', 'src/kept.txt', 'src/tool.sh'],
+      ['src', '.dockerignore', 'Dockerfile', 'src/kept.txt', 'src/tool.sh'],
     )
+    assert.equal(sent[0]?.type, 'dir')
     assert.equal(sent.find((e) => e.path === 'src/tool.sh')?.mode, 0o755, 'modes kept')
     // No --file: the context's own Dockerfile, as docker reads it.
     assert.deepEqual(
@@ -145,20 +155,64 @@ describe('remoteBuild', () => {
       ['build', '--file=Dockerfile', '-'],
     )
     assert.deepEqual(remoteBuild(['build', root], undefined).args, ['build', '-'])
+    assert.deepEqual(
+      remoteBuild(['build', `-f${join(root, 'Dockerfile')}`, root], undefined).args,
+      ['build', '-fDockerfile', '-'],
+    )
+    assert.deepEqual(remoteBuild(['build', '--memory', '1g', root], undefined).args, [
+      'build',
+      '--memory',
+      '1g',
+      '-',
+    ])
+  })
+
+  test('a flag naming a path on this machine is refused', () => {
+    const root = context()
+    for (const flags of [
+      ['--iidfile', '/tmp/id'],
+      ['--metadata-file=/tmp/m'],
+      ['--secret', 'id=npm,src=/home/me/.npmrc'],
+      ['--ssh', 'default'],
+      ['--build-context', 'lib=/src/lib'],
+      ['--output', 'type=local,dest=out'],
+      ['-o', 'out'],
+      ['--cache-to', 'type=local,dest=/cache'],
+    ]) {
+      assert.throws(
+        () => remoteBuild(['build', ...flags, root], undefined),
+        /names a path on this machine/,
+        flags.join(' '),
+      )
+    }
+    // Canary: values that name nothing here.
+    for (const flags of [
+      ['--secret', 'id=token,env=TOKEN'],
+      ['--build-context', 'base=docker-image://alpine'],
+      ['--output', 'type=registry'],
+      ['--cache-from', 'type=registry,ref=r/cache'],
+    ]) {
+      assert.doesNotThrow(() => remoteBuild(['build', ...flags, root], undefined), flags.join(' '))
+    }
   })
 
   test('a Dockerfile outside the context, or on stdin, goes in the tar under its own name', () => {
     const root = context()
     const outside = join(tmp(), 'Other.Dockerfile')
     writeFileSync(outside, 'FROM scratch\n')
-    writeFileSync(`${outside}.dockerignore`, '*\n')
+    writeFileSync(`${outside}.dockerignore`, 'src/tool.sh\n')
     const r = remoteBuild(['build', '-f', outside, root], undefined)
     const name = r.args[2] as string
     assert.match(name, /^\.reeval-[0-9a-f]{12}\.Dockerfile$/)
     assert.deepEqual(r.args, ['build', '-f', name, '-'])
     const sent = entries(r.input)
     assert.equal(sent.find((e) => e.path === name)?.text, 'FROM scratch\n')
-    assert.equal(sent.find((e) => e.path === `${name}.dockerignore`)?.text, '*\n')
+    assert.equal(sent.find((e) => e.path === `${name}.dockerignore`)?.text, 'src/tool.sh\n')
+    // The Dockerfile's own ignore file replaces the context's, as the builder applies it.
+    const paths = sent.map((e) => e.path)
+    assert.ok(paths.includes('secret.env'), 'the context .dockerignore no longer applies')
+    assert.ok(!paths.includes('src/tool.sh'))
+    assert.ok(!paths.some((p) => p.startsWith('..')))
     const stdin = remoteBuild(['build', '--progress', 'plain', '-f', '-', root], 'FROM busybox\n')
     assert.deepEqual(stdin.args, [
       'build',
@@ -174,7 +228,10 @@ describe('remoteBuild', () => {
     )
   })
 
-  test('a build from stdin and any other command are as they are', () => {
+  test('a build from stdin, a URL or git, and any other command are as they are', () => {
+    for (const url of ['https://github.com/o/r.git#main', 'git@github.com:o/r.git']) {
+      assert.deepEqual(remoteBuild(['build', url], undefined).args, ['build', url])
+    }
     assert.deepEqual(remoteBuild(['build', '--tag', 't', '-'], 'FROM x'), {
       args: ['build', '--tag', 't', '-'],
       input: 'FROM x',
@@ -203,8 +260,9 @@ describe('docker() on a remote engine', () => {
     assert.match(failed.stderr, /it failed/)
   })
 
-  test('a failure to connect is tried again; the remote command runs once', async () => {
+  test('a failure to connect is tried again; the remote command runs once', async (t) => {
     process.env.PATH = `${bin}:${fakeDockerDir}:${PATH}`
+    t.after(() => writeFileSync(failures, '0'))
     writeFileSync(failures, '2')
     const r = await docker(['ps'], { engine: remote })
     assert.equal(r.exitCode, 0, r.stderr)
@@ -213,7 +271,34 @@ describe('docker() on a remote engine', () => {
     writeFileSync(failures, '9')
     const refused = await docker(['ps'], { engine: remote })
     assert.equal(refused.exitCode, 255)
-    writeFileSync(failures, '0')
+  })
+
+  test("a container's process failing like ssh is never run again", async (t) => {
+    process.env.PATH = `${bin}:${fakeDockerDir}:${PATH}`
+    const runs = join(tmp(), 'runs')
+    process.env.FAKE_DOCKER_RUNS = runs
+    t.after(() => {
+      delete process.env.FAKE_DOCKER_RUNS
+    })
+    const message = 'ssh: connect to host vm.test port 2222: Connection refused'
+    const r = await docker(['exec', 'c', 'sh', '-c', message], { engine: remote })
+    assert.equal(r.exitCode, 255)
+    assert.equal(readFileSync(runs, 'utf8'), 'ran\n', 'ran once')
+    const transport = containerTransport('c', remote)
+    await transport.run?.([message], { input: Buffer.alloc(0) })
+    assert.equal(readFileSync(runs, 'utf8'), 'ran\nran\n')
+  })
+
+  test('removing and sweeping containers run on the machine', async () => {
+    process.env.PATH = `${bin}:${fakeDockerDir}:${PATH}`
+    writeFileSync(sshLog, '')
+    await removeContainerDetached('abc', remote, { delays: [] })
+    assert.match(readFileSync(sshLog, 'utf8'), /exec 'docker' 'rm' '-f' 'abc'/)
+    sweepLabelDetached('reeval.run=r1', 1, remote)
+    for (let i = 0; i < 50 && !readFileSync(sshLog, 'utf8').includes('label=reeval.run=r1'); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    assert.match(readFileSync(sshLog, 'utf8'), /docker ps -aq --filter .*label=reeval\.run=r1/)
   })
 })
 
@@ -231,7 +316,7 @@ const reevalImage = realDocker && (REQUIRE_ENGINE || answers(['image', 'inspect'
 describe('the remote engine on a real Docker', {
   skip: !realDocker && "Docker isn't running",
 }, () => {
-  test('a build sends the context, and the builder leaves out what .dockerignore names', async () => {
+  test('a build sends the context, and the builder leaves out what .dockerignore names', async (t) => {
     process.env.PATH = `${bin}:${PATH}`
     const root = tmp()
     mkdirSync(join(root, 'src'))
@@ -240,31 +325,38 @@ describe('the remote engine on a real Docker', {
     writeFileSync(join(root, '.dockerignore'), 'secret.env\n')
     const dockerfile = join(tmp(), 'Dockerfile')
     writeFileSync(dockerfile, 'FROM scratch\nCOPY . /\n')
-    const out = join(tmp(), 'out')
-    const r = await docker(
-      [
-        'build',
-        '--progress',
-        'plain',
-        '--output',
-        `type=local,dest=${out}`,
-        '--file',
-        dockerfile,
-        root,
-      ],
-      { engine: remote },
-    )
-    assert.equal(r.exitCode, 0, r.stderr)
-    assert.equal(readFileSync(join(out, 'src', 'kept.txt'), 'utf8'), 'kept')
-    assert.equal(existsSync(join(out, 'secret.env')), false, 'left out by .dockerignore')
+    const outside = join(tmp(), 'Other.Dockerfile')
+    writeFileSync(outside, 'FROM scratch\nCOPY . /\n')
+    writeFileSync(`${outside}.dockerignore`, 'src/dropped.txt\n')
+    writeFileSync(join(root, 'src', 'dropped.txt'), 'no')
+    const tag = `reeval-remote-engine-test:${process.pid}`
+    t.after(() => answers(['image', 'rm', '-f', tag]))
+    const files = async (args: string[], input?: string) => {
+      const r = await docker(['build', '--progress', 'plain', '--tag', tag, ...args], {
+        engine: remote,
+        ...(input !== undefined ? { input } : {}),
+      })
+      assert.equal(r.exitCode, 0, r.stderr)
+      const id = execFileSync('docker', ['create', tag, '/none'], { encoding: 'utf8' }).trim()
+      try {
+        const tar = execFileSync('docker', ['export', id], { maxBuffer: 64 << 20 })
+        return new Map(
+          readTar(tar).flatMap((e) => (e.type === 'file' ? [[e.path, e.data.toString()]] : [])),
+        )
+      } finally {
+        answers(['rm', '-f', id])
+      }
+    }
+    const built = await files(['--file', dockerfile, root])
+    assert.equal(built.get('src/kept.txt'), 'kept')
+    assert.equal(built.has('secret.env'), false, 'left out by .dockerignore')
+    // A Dockerfile outside the context with its own ignore file, which replaces the context's.
+    const own = await files(['-f', outside, root])
+    assert.equal(own.get('secret.env'), 'no')
+    assert.equal(own.has('src/dropped.txt'), false)
     // A Dockerfile on stdin with a context.
-    const viaStdin = join(tmp(), 'out')
-    const s = await docker(
-      ['build', '--progress', 'plain', '--output', `type=local,dest=${viaStdin}`, '-f', '-', root],
-      { engine: remote, input: 'FROM scratch\nCOPY src/ /from-stdin/\n' },
-    )
-    assert.equal(s.exitCode, 0, s.stderr)
-    assert.equal(readFileSync(join(viaStdin, 'from-stdin', 'kept.txt'), 'utf8'), 'kept')
+    const viaStdin = await files(['-f', '-', root], 'FROM scratch\nCOPY src/ /from-stdin/\n')
+    assert.equal(viaStdin.get('from-stdin/kept.txt'), 'kept')
   })
 
   test('a session runs, streams and removes its container over the remote engine', {

@@ -2,9 +2,9 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { lstatSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { docker } from '../docker-cli.ts'
-import { type Engine, engineSpec } from '../engine.ts'
+import type { Engine } from '../engine.ts'
 import { type RunResult, run, shellQuote } from '../process.ts'
-import { hostCommand } from '../remote-engine.ts'
+import { engineLabel, hostCommand } from '../remote-engine.ts'
 import { traceDocker } from '../trace.ts'
 
 /** How a host command ended, as a debug trace records it. */
@@ -197,7 +197,7 @@ export function sshTransport(target: SshTarget): ExecTransport {
 
 /** `docker exec` (or `podman exec`) into a running container, as root. */
 export function containerTransport(containerId: string, engine?: Engine): ExecTransport {
-  const { bin } = engineSpec(engine)
+  const sent = new WeakMap<readonly string[], readonly string[]>()
   const exec = (command: readonly string[]) => [
     'exec',
     '--interactive',
@@ -209,10 +209,13 @@ export function containerTransport(containerId: string, engine?: Engine): ExecTr
   return {
     argv: (command) => {
       const host = hostCommand(engine, exec(command))
-      return [host.bin, ...host.args]
+      const argv = [host.bin, ...host.args]
+      sent.set(argv, exec(command))
+      return argv
     },
     env: hostCommand(engine, []).env,
     run: (command, { input, signal }) => docker(exec(command), { input, signal, engine }),
-    trace: (argv, startedAt, end) => traceDocker(argv.slice(1), startedAt, end, bin),
+    trace: (argv, startedAt, end) =>
+      traceDocker(sent.get(argv) ?? argv.slice(1), startedAt, end, engineLabel(engine)),
   }
 }

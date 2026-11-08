@@ -25,7 +25,7 @@ export type EngineCommand = {
  * CLI's own.
  */
 const WITH_ENV =
-  'IFS= read -r reeval_env || exit 125; eval "$(printf %s "$reeval_env" | base64 -d)" || exit 125; unset reeval_env; exec "$@"'
+  'IFS= read -r reeval_env || exit 125; reeval_env=$(printf %s "$reeval_env" | base64 -d) || exit 125; eval "$reeval_env" || exit 125; unset reeval_env; exec "$@"'
 
 /**
  * How to run the engine's CLI with `args`: the CLI itself here, or ssh to it on a remote engine.
@@ -83,15 +83,33 @@ export function spawnEngine(
   return child as unknown as ChildProcessByStdio<null, Readable, Readable>
 }
 
+const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /**
- * ssh failing to connect, so the remote CLI never ran and running it again is safe. A connection
- * that drops later isn't one: the command may have run.
+ * ssh failing to connect to `target`, so the remote CLI never ran and running it again is safe:
+ * the whole of stderr is ssh's own message naming the machine. A connection that drops later
+ * isn't one, since the command may have run, and nor is a remote command that printed the same.
  */
-export const isSshFailure = (r: { exitCode: number | null; stderr: string }) =>
-  r.exitCode === 255 &&
-  /^(ssh: connect to host |kex_exchange_identification: |ssh_exchange_identification: |Connection timed out during banner exchange|mux_client_request_session: )/m.test(
-    r.stderr,
-  )
+export const isSshFailure = (
+  r: { exitCode: number | null; stderr: string },
+  target: { host: string; port: number },
+) => {
+  if (r.exitCode !== 255) return false
+  const at = `${literal(target.host)} port ${target.port}`
+  return new RegExp(
+    `^(?:ssh: connect to host ${at}: [^\\n]+|kex_exchange_identification: [^\\n]+\\n(?:Connection (?:closed|reset) by \\S+ port ${target.port}|banner exchange: Connection to \\S+ port ${target.port}: [^\\n]+)|Connection timed out during banner exchange\\nConnection to \\S+ port ${target.port} timed out)$`,
+  ).test(r.stderr.trim())
+}
+
+/** Commands that run a container's process, whose output and exit code are that process's. */
+const RUNS_A_PROCESS = new Set(['exec', 'run', 'start', 'attach'])
+
+/** Whether `args` is safe to run again after ssh failed to connect. */
+export const retriesSafely = (args: readonly string[]) => !RUNS_A_PROCESS.has(args[0] ?? '')
+
+/** How traces and messages name the engine's CLI. */
+export const engineLabel = (engine: Engine | undefined) =>
+  isRemoteEngine(engine) ? `docker on ${engine.description}` : engineSpec(engine).bin
 
 /** Option flags of `docker build` that take a value as the next argument. */
 const BUILD_VALUE_FLAGS = new Set([
@@ -106,11 +124,20 @@ const BUILD_VALUE_FLAGS = new Set([
   '--cache-to',
   '--call',
   '--cgroup-parent',
+  '--cpu-period',
+  '--cpu-quota',
+  '--cpu-shares',
+  '-c',
+  '--cpuset-cpus',
+  '--cpuset-mems',
   '--file',
   '-f',
   '--iidfile',
+  '--isolation',
   '--label',
-  '--load',
+  '--memory',
+  '-m',
+  '--memory-swap',
   '--metadata-file',
   '--network',
   '--no-cache-filter',
@@ -121,6 +148,7 @@ const BUILD_VALUE_FLAGS = new Set([
   '--provenance',
   '--sbom',
   '--secret',
+  '--security-opt',
   '--shm-size',
   '--ssh',
   '--tag',
@@ -129,10 +157,43 @@ const BUILD_VALUE_FLAGS = new Set([
   '--ulimit',
 ])
 
+/** Whether a `docker build` flag's value names a file, directory or socket on this machine. */
+function namesLocalPath(flag: string, value: string): boolean {
+  switch (flag) {
+    case '--iidfile':
+    case '--metadata-file':
+    case '--ssh':
+      return true
+    case '--secret':
+      return !/(?:^|,)env=/.test(value)
+    case '--build-context':
+      return !value.slice(value.indexOf('=') + 1).includes('://')
+    case '--output':
+    case '-o':
+      return !/(?:^|,)type=/.test(value) || /(?:^|,)(?:type=(?:local|tar)|dest=)/.test(value)
+    case '--cache-to':
+    case '--cache-from':
+      return /(?:^|,)type=local/.test(value)
+    default:
+      return false
+  }
+}
+
 const STDIN_DOCKERFILE = '.reeval-stdin.Dockerfile'
 
 function contextEntries(context: string, files: readonly string[]): TarEntry[] {
   const entries: TarEntry[] = []
+  const dirs = new Set<string>()
+  for (const path of files) {
+    for (let at = path.indexOf('/'); at !== -1; at = path.indexOf('/', at + 1)) {
+      dirs.add(path.slice(0, at))
+    }
+  }
+  for (const path of [...dirs].sort()) {
+    const stat = lstatSync(join(context, path))
+    const mtime = Math.floor(stat.mtimeMs / 1000)
+    entries.push({ type: 'dir', path, mode: stat.mode & 0o7777, mtime })
+  }
   for (const path of files) {
     const full = join(context, path)
     const stat = lstatSync(full, { throwIfNoEntry: false })
@@ -152,8 +213,11 @@ function contextEntries(context: string, files: readonly string[]): TarEntry[] {
  * `docker build` arguments and input for a remote engine: a build context on this machine goes as
  * a tar on stdin (`-`), with its `.dockerignore` rules applied by the builder as they would be
  * here. The Dockerfile keeps its path in the context; one outside it, or one read from stdin,
- * goes in the tar under a name of its own. Directories go only as the files' parents, so an
- * empty one isn't sent. Any other command, and a build whose context is already stdin, is as is.
+ * goes in the tar under a name of its own. Directories go as the files' parents, with their modes,
+ * so an empty one isn't sent. The context is read into memory whole. A flag that names a path on
+ * this machine (`--iidfile`, `--secret`, a local `--output`, …) is refused: the CLI would read or
+ * write it on the other one. Any other command, and a build whose context is stdin, a URL or a
+ * git repository, is as is.
  */
 export function remoteBuild(
   args: readonly string[],
@@ -164,9 +228,18 @@ export function remoteBuild(
   let contextAt = -1
   for (let i = 1; i < args.length; i++) {
     const arg = args[i] as string
+    const [flag = arg, joined] = arg.startsWith('--') ? arg.split(/=(.*)/s) : [arg]
+    const value = joined ?? args[i + 1] ?? ''
+    if (namesLocalPath(flag, value)) {
+      throw new Error(
+        `docker build ${flag} names a path on this machine, which a remote engine can't reach`,
+      )
+    }
     if (BUILD_VALUE_FLAGS.has(arg)) {
       if (arg === '--file' || arg === '-f') file = { at: i + 1, value: args[i + 1] ?? '' }
       i++
+    } else if (/^-f[^-]/.test(arg)) {
+      file = { at: i, value: arg.slice(2) }
     } else if (arg.startsWith('--file=')) {
       file = { at: i, value: arg.slice('--file='.length) }
     } else if (!arg.startsWith('-') || arg === '-') {
@@ -175,16 +248,21 @@ export function remoteBuild(
   }
   const context = contextAt === -1 ? null : (args[contextAt] as string)
   if (context === null || context === '-') return { args: [...args], input }
+  if (!lstatSync(context, { throwIfNoEntry: false })?.isDirectory())
+    return { args: [...args], input }
   const root = resolve(context)
   const out = [...args]
   out[contextAt] = '-'
   const setFile = (value: string) => {
     if (!file) out.splice(contextAt, 0, '--file', value)
     else if (out[file.at]?.startsWith('--file=')) out[file.at] = `--file=${value}`
+    else if (/^-f[^-]/.test(out[file.at] ?? '') && file.at !== contextAt)
+      out[file.at] = `-f${value}`
     else out[file.at] = value
   }
   const extra: TarEntry[] = []
   const now = Math.floor(Date.now() / 1000)
+  // Whose `<Dockerfile>.dockerignore` decides what's sent, as the builder will.
   let dockerfile: string | null = null
   if (file?.value === '-') {
     const data = Buffer.from(input ?? '')
@@ -211,9 +289,10 @@ export function remoteBuild(
         extra.push({ type: 'file', path: `${name}.dockerignore`, mode: 0o644, mtime: now, data })
       }
       setFile(name)
-      dockerfile = null
     }
   }
-  const files = contextFiles(root, dockerfile).filter((path) => !extra.some((e) => e.path === path))
+  const files = contextFiles(root, dockerfile).filter(
+    (path) => !/^\.\.(?:[\\/]|$)/.test(path) && !extra.some((e) => e.path === path),
+  )
   return { args: out, input: writeTar([...contextEntries(root, files), ...extra]) }
 }

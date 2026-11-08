@@ -15,6 +15,7 @@ export type LocalEngine = 'docker' | 'podman'
  * Docker on another machine, whose CLI runs over its SSH as the login user (who must be able to
  * reach the daemon). A command's input and environment go on its stdin, and a build context on
  * this machine goes as a tar there too, so nothing but the command's arguments is in argv.
+ * Ending a command here ends its ssh, which doesn't stop a CLI already running on the machine.
  */
 export type RemoteEngine = {
   kind: 'ssh'

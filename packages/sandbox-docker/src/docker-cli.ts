@@ -2,7 +2,13 @@ import { spawn } from 'node:child_process'
 import { sshArgv } from './egress/transport.ts'
 import { type Engine, engineEnv, engineSpec, isRemoteEngine, normalizeImageId } from './engine.ts'
 import { shellQuote as q, type RunResult, run } from './process.ts'
-import { hostCommand, isSshFailure, remoteBuild } from './remote-engine.ts'
+import {
+  engineLabel,
+  hostCommand,
+  isSshFailure,
+  remoteBuild,
+  retriesSafely,
+} from './remote-engine.ts'
 import { traceDocker } from './trace.ts'
 
 export type DockerResult = RunResult<Buffer>
@@ -76,7 +82,7 @@ export async function docker(args: string[], options: DockerOptions = {}): Promi
   const input = command.preamble
     ? Buffer.concat([command.preamble, Buffer.from(call.input ?? '')])
     : call.input
-  const bin = remote ? `docker on ${engine.description}` : command.bin
+  const bin = engineLabel(engine)
   const stdin = call.input?.length ?? 0
   const once = async () => {
     const startedAt = Date.now()
@@ -94,7 +100,11 @@ export async function docker(args: string[], options: DockerOptions = {}): Promi
       throw error
     }
   }
-  if (remote) return retryConnection(once, { signal, failed: isSshFailure })
+  if (remote) {
+    if (!retriesSafely(call.args)) return once()
+    const { target } = engine
+    return retryConnection(once, { signal, failed: (r) => isSshFailure(r, target) })
+  }
   return engine === 'podman' ? retryConnection(once, { signal }) : once()
 }
 
@@ -139,7 +149,7 @@ export async function removeContainerDetached(
         if (settled) return
         settled = true
         clearInterval(keepAlive)
-        traceDocker(args, startedAt, { exitCode, stderr }, bin)
+        traceDocker(args, startedAt, { exitCode, stderr }, engineLabel(engine))
         resolve({ exitCode, stderr })
       }
       const child = spawn(bin, command.args, {

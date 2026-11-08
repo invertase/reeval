@@ -24,7 +24,7 @@ import {
   SANDBOX_USER,
 } from './image.ts'
 import { shellQuote as q } from './process.ts'
-import { spawnEngine } from './remote-engine.ts'
+import { engineLabel, spawnEngine } from './remote-engine.ts'
 import { traceDocker } from './trace.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
@@ -631,7 +631,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     const exited = new Promise<{ exitCode: number }>((resolve) => {
       child.once('error', () => resolve({ exitCode: 127 }))
       child.once('close', (code) => {
-        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
+        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, engineLabel(engine))
         resolve({ exitCode: code ?? 1 })
       })
     })
@@ -821,7 +821,12 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const child = spawnEngine(engine, args, env)
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => {
-          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
+          traceDocker(
+            args,
+            startedAt,
+            { exitCode: code, stdout: '<streamed>' },
+            engineLabel(engine),
+          )
           resolve({ exitCode: code ?? 1 })
         }),
       )
