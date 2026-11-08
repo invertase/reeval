@@ -1,6 +1,6 @@
 import { type ChildProcessByStdio, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
+import { lstatSync, readFileSync, readlinkSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Readable } from 'node:stream'
 import { contextFiles } from './dockerignore.ts'
@@ -166,8 +166,10 @@ function namesLocalPath(flag: string, value: string): boolean {
       return true
     case '--secret':
       return !/(?:^|,)env=/.test(value)
-    case '--build-context':
-      return !value.slice(value.indexOf('=') + 1).includes('://')
+    case '--build-context': {
+      const source = value.slice(value.indexOf('=') + 1)
+      return source.startsWith('oci-layout://') || !/^[a-z][a-z0-9+.-]*:\/\//.test(source)
+    }
     case '--output':
     case '-o':
       return !/(?:^|,)type=/.test(value) || /(?:^|,)(?:type=(?:local|tar)|dest=)/.test(value)
@@ -228,7 +230,11 @@ export function remoteBuild(
   let contextAt = -1
   for (let i = 1; i < args.length; i++) {
     const arg = args[i] as string
-    const [flag = arg, joined] = arg.startsWith('--') ? arg.split(/=(.*)/s) : [arg]
+    const [flag = arg, joined] = arg.startsWith('--')
+      ? arg.split(/=(.*)/s)
+      : /^-[fo]./.test(arg)
+        ? [arg.slice(0, 2), arg.slice(2).replace(/^=/, '')]
+        : [arg]
     const value = joined ?? args[i + 1] ?? ''
     if (namesLocalPath(flag, value)) {
       throw new Error(
@@ -238,8 +244,8 @@ export function remoteBuild(
     if (BUILD_VALUE_FLAGS.has(arg)) {
       if (arg === '--file' || arg === '-f') file = { at: i + 1, value: args[i + 1] ?? '' }
       i++
-    } else if (/^-f[^-]/.test(arg)) {
-      file = { at: i, value: arg.slice(2) }
+    } else if (flag === '-f' && joined !== undefined) {
+      file = { at: i, value: joined }
     } else if (arg.startsWith('--file=')) {
       file = { at: i, value: arg.slice('--file='.length) }
     } else if (!arg.startsWith('-') || arg === '-') {
@@ -248,7 +254,7 @@ export function remoteBuild(
   }
   const context = contextAt === -1 ? null : (args[contextAt] as string)
   if (context === null || context === '-') return { args: [...args], input }
-  if (!lstatSync(context, { throwIfNoEntry: false })?.isDirectory())
+  if (!statSync(context, { throwIfNoEntry: false })?.isDirectory())
     return { args: [...args], input }
   const root = resolve(context)
   const out = [...args]

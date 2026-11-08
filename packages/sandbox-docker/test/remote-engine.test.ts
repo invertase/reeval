@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -159,6 +159,13 @@ describe('remoteBuild', () => {
       remoteBuild(['build', `-f${join(root, 'Dockerfile')}`, root], undefined).args,
       ['build', '-fDockerfile', '-'],
     )
+    assert.deepEqual(
+      remoteBuild(['build', `-f=${join(root, 'Dockerfile')}`, root], undefined).args,
+      ['build', '-fDockerfile', '-'],
+    )
+    const link = join(tmp(), 'link')
+    symlinkSync(root, link)
+    assert.deepEqual(remoteBuild(['build', link], undefined).args, ['build', '-'])
     assert.deepEqual(remoteBuild(['build', '--memory', '1g', root], undefined).args, [
       'build',
       '--memory',
@@ -177,6 +184,8 @@ describe('remoteBuild', () => {
       ['--build-context', 'lib=/src/lib'],
       ['--output', 'type=local,dest=out'],
       ['-o', 'out'],
+      ['-otype=local,dest=/x'],
+      ['--build-context', 'l=oci-layout:///tmp/x'],
       ['--cache-to', 'type=local,dest=/cache'],
     ]) {
       assert.throws(
