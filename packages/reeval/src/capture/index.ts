@@ -249,17 +249,38 @@ export function checkCaptureName(name: string): void {
   }
 }
 
-/** A free host port. Closed before the promise resolves, so the caller can bind it. */
-export function allocatePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
+/**
+ * Where `allocatePort` picks from: below the ephemeral ranges of Linux (32768 and up), macOS and
+ * Windows (49152 and up), the ones `listen(0)` and an outgoing connection take a port from. The
+ * port is free when it's handed out but nothing holds it until the command binds it, so on the
+ * fake sandbox, which shares the host's network, one the kernel hands out can be taken in between.
+ */
+export const PORT_RANGE = { min: 20_000, max: 32_767 } as const
+/** Ports this process handed out lately, which a concurrent attempt hasn't bound yet. */
+const handedOut: number[] = []
+const HANDED_OUT_KEEP = 256
+const PICK_TRIES = 50
+
+const bindable = (port: number) =>
+  new Promise<boolean>((resolve) => {
     const server = createServer()
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      const port = typeof addr === 'object' && addr ? addr.port : 0
-      server.close((error) => (error ? reject(error) : resolve(port)))
-    })
+    server.once('error', () => resolve(false))
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)))
   })
+
+/** A free host port in `PORT_RANGE`. Closed before the promise resolves, so the caller can bind it. */
+export async function allocatePort(): Promise<number> {
+  const span = PORT_RANGE.max - PORT_RANGE.min + 1
+  for (let i = 0; i < PICK_TRIES; i++) {
+    const port = PORT_RANGE.min + Math.floor(Math.random() * span)
+    if (handedOut.includes(port) || !(await bindable(port))) continue
+    handedOut.push(port)
+    if (handedOut.length > HANDED_OUT_KEEP) handedOut.shift()
+    return port
+  }
+  throw new Error(
+    `found no free port between ${PORT_RANGE.min} and ${PORT_RANGE.max} in ${PICK_TRIES} tries`,
+  )
 }
 
 /** Origin plus a path (`/login`), without a doubled slash. */
