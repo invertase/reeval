@@ -232,7 +232,7 @@ export function remoteBuild(
     const arg = args[i] as string
     const [flag = arg, joined] = arg.startsWith('--')
       ? arg.split(/=(.*)/s)
-      : /^-[fo]./.test(arg)
+      : /^-(?:f|o)./.test(arg)
         ? [arg.slice(0, 2), arg.slice(2).replace(/^=/, '')]
         : [arg]
     const value = joined ?? args[i + 1] ?? ''
