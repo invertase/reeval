@@ -606,11 +606,27 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="daytona.size" type="'small' | 'medium' | 'large'" optional>
-  The Daytona sandbox's default snapshot, `daytona-<size>`: `'small'` (1 vCPU, 1 GiB), `'medium'` (2 vCPUs, 4 GiB) or `'large'` (4 vCPUs, 8 GiB). Defaults to `'medium'`. `daytona()` is from `{{ pkg }}/sandbox/daytona`.
+  The Daytona sandbox's size: `'small'` (1 vCPU, 1 GiB), `'medium'` (2 vCPUs, 4 GiB) or `'large'` (4 vCPUs, 8 GiB), Daytona's default snapshot `daytona-<size>` without an image option. Defaults to `'medium'`. `daytona()` is from `{{ pkg }}/sandbox/daytona`.
+</Property>
+
+<Property name="daytona.image" type="string" optional>
+  As `docker.image`, in a registry Daytona can pull.
+</Property>
+
+<Property name="daytona.from" type="string" optional>
+  As `docker.from`, in a registry Daytona can pull. Daytona builds the image into a snapshot before the run.
+</Property>
+
+<Property name="daytona.dockerfile" type="string | URL" optional>
+  As `docker.dockerfile`, built by Daytona into a snapshot before the run.
+</Property>
+
+<Property name="daytona.install" type="(string | { run: string; timeout?: Duration })[]" optional>
+  As `docker.install`, baked into the snapshot.
 </Property>
 
 <Property name="daytona.id" type="string" optional>
-  The last segment of the cell key. Defaults to `daytona`, or `daytona:<size>` for a `size` you set.
+  The last segment of the cell key. Defaults to `daytona`, or `daytona:<image>` for an image option as for `docker.id`, then `:<size>` for a `size` you set.
 </Property>
 
 <Property name="daytona.maxConcurrent" type="number" optional>

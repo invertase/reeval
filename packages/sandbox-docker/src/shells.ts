@@ -21,7 +21,7 @@ const envStream = (env: Record<string, string>) =>
 const READER = `${EXEC_UMASK}; while IFS= read -r -d "" kv; do export "$kv"; done; cd -- "$1" || exit 1; exec /usr/bin/perl -e 'setpgrp(0, 0); exec @ARGV' bash -c "$2" </dev/null`
 
 /**
- * The Linux profile: the login user has passwordless `sudo`, the agent's commands run as
+ * The Linux profile: the login user has passwordless `sudo` or is root, the agent's commands run as
  * {@link SANDBOX_USER} with only `user`'s variables, and reeval's own run as root in
  * {@link SANDBOX_STATE}. Each command carries a marker in its environment, which `kill` finds in
  * `/proc`. `remote` is the host argv that runs one command line as the login user (`ssh`).
@@ -44,18 +44,24 @@ export function linuxShell(o: {
    * the command's own, so every slot's install names the same paths.
    */
   layout?: Pick<SlotLayout, 'user' | 'state' | 'home'>
+  /** The login user is root, with no `sudo`: the sandbox user is reached through `setpriv`. */
+  loginRoot?: boolean
 }): SessionShell {
   const sandboxUser = o.layout?.user ?? SANDBOX_USER
   const stateDir = o.layout?.state ?? SANDBOX_STATE
   const seenHome = o.user.HOME
   const bind = o.layout && seenHome && o.layout.home !== seenHome ? o.layout.home : undefined
   const marker = (exec: number) => `${o.id}-${exec}`
+  const sudo = o.loginRoot ? '' : 'sudo -n -- '
+  const setpriv = `setpriv --reuid=${sandboxUser} --regid=${sandboxUser} --init-groups --`
   const asSandboxUser = (command: string) =>
     bind
-      ? `sudo -n -- unshare --mount --propagation private /bin/sh -c ${q(
-          `mount --bind ${q(bind)} ${q(seenHome ?? '')} && exec setpriv --reuid=${sandboxUser} --regid=${sandboxUser} --init-groups -- ${command}`,
+      ? `${sudo}unshare --mount --propagation private /bin/sh -c ${q(
+          `mount --bind ${q(bind)} ${q(seenHome ?? '')} && exec ${setpriv} ${command}`,
         )}`
-      : `sudo -n -H -u ${sandboxUser} -- ${command}`
+      : o.loginRoot
+        ? `${setpriv} env -i HOME=${q(seenHome ?? '/')} PATH=${SYSTEM_PATH} ${command}`
+        : `sudo -n -H -u ${sandboxUser} -- ${command}`
   const asUser = (cwd: string, command: string) =>
     asSandboxUser(
       `env -i ${Object.entries(o.user)
@@ -63,7 +69,7 @@ export function linuxShell(o: {
         .join(' ')} bash -c ${q(READER)} bash ${q(cwd)} ${q(command)}`,
     )
   const asRoot = (command: string, mark?: string) =>
-    `sudo -n -- env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${stateDir} || exit 1; ${EXEC_UMASK}; ${command}`)}`
+    `${sudo}env -i PATH=${SYSTEM_PATH} HOME=/root${mark ? ` ${EXEC_MARKER}=${mark}` : ''} /bin/sh -c ${q(`cd ${stateDir} || exit 1; ${EXEC_UMASK}; ${command}`)}`
   /**
    * Killing the host's program leaves the command running on the machine, so kill what has its
    * marker, and the process group of each: a process that cleared its environment (`env -i`)

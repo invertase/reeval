@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { posix } from 'node:path'
 import type { Gateway } from './egress/gateway.ts'
 import {
+  asRootPrefix,
   controlOptions,
   type ExecTransport,
   type SshTarget,
@@ -98,6 +99,13 @@ const homeFiles = (label: string) => {
 }
 
 /**
+ * Root commands that keep the sandbox user's home as the machine's copy for `label`, which a slot
+ * unpacks into its own home rather than installing: what an image with the install baked in runs.
+ */
+export const keepHomeCopy = (label: string) =>
+  `mkdir -p ${q(HOMES)} && chmod 700 ${q(HOMES)} && tar -C ${q(posix.dirname(SANDBOX_HOME))} -cf ${q(homeFiles(label).tar)} ${q(posix.basename(SANDBOX_HOME))}`
+
+/**
  * Root commands that empty a slot's home back to the skeleton. The directory itself stays: on a
  * shared machine, slot 0's is where the other slots' commands see their own homes.
  */
@@ -155,7 +163,7 @@ function slotHome(layout: SlotLayout, label: string): string {
 
 /**
  * Sets up a Linux VM reached over SSH for a harness session: the login user has passwordless
- * `sudo`, and the agent, setup steps and checks run as {@link SANDBOX_USER}, a user made here with
+ * `sudo` or is root ({@link SshTarget.loginRoot}), and the agent, setup steps and checks run as {@link SANDBOX_USER}, a user made here with
  * no `sudo` and none of the login user's groups or variables. Ports are reached through the
  * egress gateway's tunnel. When setting up fails, the connection is closed.
  */
@@ -222,9 +230,10 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     `mkdir -p ${layout.state} && chown 0:0 ${layout.state} && chmod 700 ${layout.state}`,
     ...(options.prepare ? [options.prepare] : []),
   ].join(' && ')
+  const sudo = asRootPrefix(target)
   const asRoot = options.layout
-    ? `sudo -n -- flock ${SETUP_LOCK} /bin/sh -c ${q(setup)} sh "$PATH"`
-    : `sudo -n -- /bin/sh -c ${q(setup)} sh "$PATH"`
+    ? `${sudo}flock ${SETUP_LOCK} /bin/sh -c ${q(setup)} sh "$PATH"`
+    : `${sudo}/bin/sh -c ${q(setup)} sh "$PATH"`
   // A VM that just reported ready may not take SSH connections for a few seconds more.
   const deadline = Date.now() + (options.connectTimeoutMs ?? 60_000)
   for (let wait = 500; ; wait = Math.min(wait * 2, 5_000)) {
@@ -259,6 +268,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     user: baseEnv,
     signal,
     layout,
+    ...(target.loginRoot && { loginRoot: true }),
   })
   return {
     root: sshTransport(target),
@@ -267,7 +277,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
       if (!options.home) return { restored: false, waitedMs: 0 }
       const [bin = 'ssh', ...args] = sshArgv(
         target,
-        `sudo -n -- /bin/sh -c ${q(`${EXEC_UMASK}\n${slotHome(layout, options.home)}`)}`,
+        `${sudo}/bin/sh -c ${q(`${EXEC_UMASK}\n${slotHome(layout, options.home)}`)}`,
       )
       const startedAt = Date.now()
       const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] })
@@ -321,7 +331,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
         `mv ${q(f.tar)}.$$ ${q(f.tar)}`,
       ].join(' && ')
       try {
-        const r = await ssh(`sudo -n -- /bin/sh -c ${q(command)}`)
+        const r = await ssh(`${sudo}/bin/sh -c ${q(command)}`)
         if (r.exitCode !== 0) {
           throw new Error(
             `Couldn't keep ${layout.user}'s home in ${options.description}: ${r.stderr.trim().slice(-500)}`,

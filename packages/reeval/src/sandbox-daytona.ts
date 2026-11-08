@@ -1,11 +1,15 @@
 // `reeval/sandbox/daytona`: Daytona sandboxes. This module only describes them; Daytona's SDK
 // (`@daytona/sdk`, an optional peer) loads in the run's main process, which starts them.
+import { existsSync, statSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   type CreateDaytonaOptions,
   checkCreateDaytonaOptions,
   checkDaytonaOptions,
   type DaytonaOptions,
 } from './contract/daytona.ts'
+import { callerDir } from './environment.ts'
 import { UsageError } from './errors.ts'
 import type { DaytonaSandboxDescriptor } from './types.ts'
 
@@ -34,7 +38,24 @@ export function createDaytona(
       throw new UsageError(`daytona() takes an options object (got ${JSON.stringify(sandbox)})`)
     }
     checkDaytonaOptions(sandbox)
-    return { kind: 'daytona', apiKey, prefix, ...structuredClone(sandbox) }
+    const { dockerfile, ...rest } = sandbox
+    const descriptor: DaytonaSandboxDescriptor = {
+      kind: 'daytona',
+      apiKey,
+      prefix,
+      ...structuredClone(rest),
+    }
+    if (dockerfile !== undefined) {
+      const path = dockerfile instanceof URL ? fileURLToPath(dockerfile) : dockerfile
+      const full = isAbsolute(path) ? path : resolve(callerDir() ?? process.cwd(), path)
+      if (!existsSync(full) || !statSync(full).isFile()) {
+        throw new UsageError(
+          `daytona({ dockerfile: ${JSON.stringify(path)} }): ${full} doesn't exist. Paths are relative to the file that calls daytona().`,
+        )
+      }
+      descriptor.dockerfile = full
+    }
+    return descriptor
   }
 }
 

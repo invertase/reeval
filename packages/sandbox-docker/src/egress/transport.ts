@@ -139,8 +139,13 @@ export function controlOptions(path: string | undefined, persistS: number): stri
 export type SshTarget = {
   host: string
   port: number
-  /** The login user, who has passwordless `sudo`. */
+  /** The login user, who has passwordless `sudo` unless {@link SshTarget.loginRoot}. */
   user: string
+  /**
+   * The login user is root, as in an image with no `sudo` (a `daytona()` image): root's commands
+   * run as it, and the sandbox user's through `setpriv`.
+   */
+  loginRoot?: boolean
   /** The private key `ssh -i` takes. */
   identityFile: string
   /** A known_hosts file whose one line names {@link hostKeyAlias}. */
@@ -187,10 +192,15 @@ export function sshArgv(target: SshTarget, remote: string): string[] {
   ]
 }
 
-/** `ssh -T` into a VM, as root through `sudo -n`, with sudo's own `secure_path`. */
+/** How a command line on `target` runs as root: through `sudo -n`, unless it logs in as root. */
+export const asRootPrefix = (target: Pick<SshTarget, 'loginRoot'>) =>
+  target.loginRoot ? '' : 'sudo -n -- '
+
+/** `ssh -T` into a VM, as root through `sudo -n` (with sudo's own `secure_path`) or as its login. */
 export function sshTransport(target: SshTarget): ExecTransport {
   return {
-    argv: (command) => sshArgv(target, `sudo -n -- ${command.map(shellQuote).join(' ')}`),
+    argv: (command) =>
+      sshArgv(target, `${asRootPrefix(target)}${command.map(shellQuote).join(' ')}`),
     trace: (argv, startedAt, end) => traceDocker(argv.slice(1), startedAt, end, 'ssh'),
   }
 }

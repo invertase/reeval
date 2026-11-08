@@ -130,7 +130,7 @@ export const versionLabel = (output: string) =>
  * from the official image, so the base's own toolchain is untouched, with libatomic1, which Node
  * 25+ links against), pnpm, git, curl and bash.
  */
-const toolchainDockerfile = (from: string) => `FROM ${imageReference(from)}
+export const toolchainDockerfile = (from: string) => `FROM ${imageReference(from)}
 SHELL ["/bin/sh", "-c"]
 RUN command -v apt-get >/dev/null || { echo "reeval needs a Debian or Ubuntu based image (glibc and apt-get)" >&2; exit 1; } \\
   && apt-get update \\
@@ -606,6 +606,25 @@ export function installScript(steps: InstallStep[]): string {
   return `${lines.join('\n')}\n`
 }
 
+/**
+ * The Dockerfile lines after `FROM` that run an install `script`: as root, but with the sandbox
+ * user's home as HOME, so what an installer puts in `~` (uv, bun, rustup…) is where the agent
+ * runs, and is then handed to that user.
+ */
+export function installLayerLines(script: string): string[] {
+  // Base64, so no command's quoting or newlines can break the Dockerfile.
+  const encoded = Buffer.from(script).toString('base64')
+  const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
+  return [
+    'USER root',
+    `RUN echo ${encoded} | base64 -d > /tmp/reeval-install.sh \\`,
+    `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
+    '  && bash /tmp/reeval-install.sh && rm /tmp/reeval-install.sh \\',
+    `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
+    `WORKDIR ${SANDBOX_ROOT}`,
+  ]
+}
+
 /** Where a build's full output goes, and the path its failure names. */
 export type BuildOutput = { write: (text: string) => void; path: string }
 
@@ -623,20 +642,7 @@ export async function buildInstallLayer(
   const previous = (await imageInfo(tag, engine))?.id
   if (previous && !options.force) return tag
   const script = installScript(steps)
-  // Base64, so no command's quoting or newlines can break the Dockerfile.
-  const encoded = Buffer.from(script).toString('base64')
-  // As root, but with the sandbox user's home as HOME, so what an installer puts in `~` (uv, bun,
-  // rustup…) is where the agent runs, and is then handed to that user.
-  const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
-  const dockerfile = [
-    `FROM ${parent.ref}`,
-    'USER root',
-    `RUN echo ${encoded} | base64 -d > /tmp/reeval-install.sh \\`,
-    `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
-    '  && bash /tmp/reeval-install.sh && rm /tmp/reeval-install.sh \\',
-    `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
-    `WORKDIR ${SANDBOX_ROOT}`,
-  ].join('\n')
+  const dockerfile = [`FROM ${parent.ref}`, ...installLayerLines(script)].join('\n')
   const build = await docker(
     ['build', '--progress', 'plain', ...BUILT_BY, ...keyLabel(tag), '--tag', tag, '-'],
     { input: dockerfile, signal, engine },

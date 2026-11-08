@@ -33,11 +33,13 @@ export {
   harnessImageFor,
   type InstallStep,
   imageKey,
+  installLayerLines,
   installLayerTag,
   installScript,
   isLocalKey,
   type Layer,
   localKey,
+  NODE_IMAGE,
   PLATFORM,
   PLUGIN_BUILDS_DIR,
   type PluginBuildSpec,
@@ -50,6 +52,7 @@ export {
   reevalImageKey,
   resolveFrom,
   sourceTreeHash,
+  toolchainDockerfile,
   usesReevalBase,
 } from './build-image.ts'
 export {
@@ -184,7 +187,13 @@ export {
   type Spawned,
 } from './session.ts'
 export { darwinShell } from './shells.ts'
-export { connectSsh, resetSlot, type SshMachine, type SshSessionOptions } from './ssh-session.ts'
+export {
+  connectSsh,
+  keepHomeCopy,
+  resetSlot,
+  type SshMachine,
+  type SshSessionOptions,
+} from './ssh-session.ts'
 export {
   extractTar,
   readTar,

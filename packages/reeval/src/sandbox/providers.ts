@@ -662,15 +662,30 @@ const imageIdentity = (
     ...(plugins.length ? { plugins: plugins.map(pluginBuildId) } : {}),
   })
 
-/** Daytona has nothing to build either: `prepare` checks each organization the run uses, once. */
+/**
+ * Daytona: `prepare` checks each organization the run uses, once, and has Daytona build each
+ * recipe's image for each harness.
+ */
 export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => ({
   kind: 'daytona',
   check: async () => {},
-  key: (sandbox) => JSON.stringify({ apiKey: sandbox.apiKey.from }),
-  async prepare(sandbox, _harness, ctx) {
-    const { checkDaytona } = await import('./daytona.ts')
-    await checkDaytona(sandbox, ctx.root)
-    return null
+  key: (sandbox, harness) => {
+    const { image, from, dockerfile, install } = sandbox
+    if (image === undefined && from === undefined && dockerfile === undefined && !install) {
+      return JSON.stringify({ apiKey: sandbox.apiKey.from })
+    }
+    const bake = harnessBake(harness)
+    return JSON.stringify({
+      apiKey: sandbox.apiKey.from,
+      prefix: sandbox.prefix,
+      size: sandbox.size ?? 'medium',
+      recipe: { image, from, dockerfile, install },
+      harness: bake?.label ?? harness.kind,
+    })
+  },
+  async prepare(sandbox, harness, ctx) {
+    const { prepareDaytona } = await import('./daytona.ts')
+    return prepareDaytona(sandbox, harness, ctx)
   },
   classify: (error) => {
     const message = error instanceof Error ? error.message : String(error)

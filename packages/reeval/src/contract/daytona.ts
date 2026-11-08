@@ -6,6 +6,13 @@ import { UsageError } from '../errors.ts'
 import type { DaytonaApiKey, DaytonaSandboxDescriptor, DaytonaSize } from '../types.ts'
 import { BOAT_ATTEMPTS_PER_MACHINE_MAX, BOAT_PREFIX, BOAT_PREFIX_MAX } from './boat.ts'
 import { VAR } from './plain.ts'
+import {
+  installMessage,
+  oneRecipe,
+  recipeFieldMessage,
+  recipeFields,
+  recipeMessage,
+} from './recipe.ts'
 import { type Assert, closest, got, type Issue, nonEmpty, refusal, type Same } from './shared.ts'
 
 /** reeval adds `-<run>-<attempt>` (16 characters) to a sandbox's prefix, as for Boat. */
@@ -20,16 +27,20 @@ const prefixSchema = z.string().max(DAYTONA_PREFIX_MAX).regex(DAYTONA_PREFIX)
 const sizeSchema = z.enum(DAYTONA_SIZES)
 const attemptsSchema = z.number().int().min(1).max(DAYTONA_ATTEMPTS_PER_MACHINE_MAX)
 
-export const daytonaSandboxSchema = z.strictObject({
-  kind: z.literal('daytona'),
-  id: nonEmpty().optional(),
-  apiKey: apiKeySchema,
-  prefix: prefixSchema,
-  size: sizeSchema.optional(),
-  maxConcurrent: z.number().optional(),
-  reuse: z.boolean().optional(),
-  attemptsPerMachine: attemptsSchema.optional(),
-})
+export const daytonaSandboxSchema = z
+  .strictObject({
+    kind: z.literal('daytona'),
+    id: nonEmpty().optional(),
+    apiKey: apiKeySchema,
+    prefix: prefixSchema,
+    ...recipeFields,
+    dockerfile: nonEmpty().optional(),
+    size: sizeSchema.optional(),
+    maxConcurrent: z.number().optional(),
+    reuse: z.boolean().optional(),
+    attemptsPerMachine: attemptsSchema.optional(),
+  })
+  .superRefine(oneRecipe)
 
 /** `createDaytona()`'s argument: the account and naming every sandbox of the factory shares. */
 export type CreateDaytonaOptions = {
@@ -40,20 +51,30 @@ export type CreateDaytonaOptions = {
 }
 
 /** `daytona()`'s argument. */
-export type DaytonaOptions = Omit<DaytonaSandboxDescriptor, 'kind' | 'apiKey' | 'prefix'>
+export type DaytonaOptions = Omit<
+  DaytonaSandboxDescriptor,
+  'kind' | 'apiKey' | 'prefix' | 'dockerfile'
+> & {
+  /** Relative to the file that calls `daytona()`, or an absolute path or `URL`. */
+  dockerfile?: string | URL
+}
 
 export const createDaytonaOptionsSchema = z.strictObject({
   apiKey: apiKeySchema.optional(),
   prefix: prefixSchema.optional(),
 })
 
-export const daytonaOptionsSchema = z.strictObject({
-  id: nonEmpty().optional(),
-  size: sizeSchema.optional(),
-  maxConcurrent: z.number().optional(),
-  reuse: z.boolean().optional(),
-  attemptsPerMachine: attemptsSchema.optional(),
-})
+export const daytonaOptionsSchema = z
+  .strictObject({
+    id: nonEmpty().optional(),
+    ...recipeFields,
+    dockerfile: z.union([nonEmpty(), z.instanceof(URL)]).optional(),
+    size: sizeSchema.optional(),
+    maxConcurrent: z.number().optional(),
+    reuse: z.boolean().optional(),
+    attemptsPerMachine: attemptsSchema.optional(),
+  })
+  .superRefine(oneRecipe)
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof daytonaSandboxSchema>, DaytonaSandboxDescriptor>>,
@@ -69,12 +90,6 @@ const SIZES =
 
 /** Docker's options, which a Daytona sandbox doesn't have (yet), and what to do instead. */
 const NOT_ON_DAYTONA: Record<string, string> = {
-  image:
-    "Daytona sandboxes start from Daytona's default snapshot, and the harness installs as the attempt starts",
-  from: "Daytona sandboxes start from Daytona's default snapshot; run your toolchain's installs in the environment's setup",
-  dockerfile:
-    "Daytona sandboxes start from Daytona's default snapshot; run your toolchain's installs in the environment's setup",
-  install: "run them in the environment's setup, which runs in the sandbox before the agent starts",
   root: 'the agent, setup steps and checks run as the unprivileged reeval user, and a Daytona sandbox has no root mode yet',
   capabilities: 'a Daytona sandbox has no container capabilities to add',
   memory: SIZES,
@@ -85,7 +100,17 @@ const NOT_ON_DAYTONA: Record<string, string> = {
   type: SIZES,
 }
 
-const ORDER = ['id', 'size', 'maxConcurrent', 'reuse', 'attemptsPerMachine']
+const ORDER = [
+  'id',
+  'image',
+  'from',
+  'dockerfile',
+  'install',
+  'size',
+  'maxConcurrent',
+  'reuse',
+  'attemptsPerMachine',
+]
 
 function explain(fn: string) {
   return (issue: Issue, value: unknown): string => {
@@ -96,8 +121,14 @@ function explain(fn: string) {
       const near = closest(key, fn === 'createDaytona' ? ['apiKey', 'prefix'] : ORDER)
       return `Unknown ${fn}() option "${key}".${near ? ` Did you mean "${near}"?` : ''}`
     }
+    if (issue.path[0] === 'install' && issue.path.length > 1) {
+      return installMessage(fn, (options.install as unknown[])[issue.path[1] as number])
+    }
+    if (issue.code === 'custom') return recipeMessage(fn, issue.params)
     const key = String(issue.path[0])
     const v = options[key]
+    const recipe = recipeFieldMessage(fn, key, v)
+    if (recipe) return recipe
     switch (key) {
       case 'apiKey':
         return typeof v === 'string'
@@ -140,6 +171,18 @@ export function checkDaytonaOptions(options: unknown): void {
 /** What's wrong with a Daytona descriptor from any source, or undefined; `maxConcurrent` is left out. */
 export const daytonaProblem = (value: DaytonaSandboxDescriptor) =>
   refusal(daytonaSandboxSchema, value, explain('daytona'), {
-    order: ['kind', 'apiKey', 'prefix', 'id', 'size', 'reuse', 'attemptsPerMachine'],
+    order: [
+      'kind',
+      'apiKey',
+      'prefix',
+      'id',
+      'image',
+      'from',
+      'dockerfile',
+      'install',
+      'size',
+      'reuse',
+      'attemptsPerMachine',
+    ],
     skip: ['maxConcurrent'],
   })
