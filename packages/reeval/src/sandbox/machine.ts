@@ -37,6 +37,8 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
     /** How `c.serve` lists what listens in the machine. */
     listeners: ListenerSource
   }
+  /** What `sandbox` can do instead, when its options change it; null for {@link capabilities}. */
+  sandboxCapabilities?(sandbox: D): MachineProvider<D>['capabilities'] | null
   /** The cell id when `id` is unset. */
   id(sandbox: D): string
   /** The descriptor's host paths, which a declaration written as data makes absolute. */
@@ -65,20 +67,28 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
  * from an image preflight builds or runs a plugin's `build`.
  */
 export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>): SandboxKind<D> {
-  const { capacity } = machine
+  const { capacity, sandboxCapabilities } = machine
+  const full = (own: MachineProvider<D>['capabilities']) => ({
+    platform: machine.os,
+    ...own,
+    brokers: true,
+    harnessSession: true,
+    isolated: true,
+    images: false,
+    preflight: true,
+    pluginBuilds: false,
+  })
+  const capabilities = full(machine.capabilities)
   return {
     helpers: machine.helpers,
     ...(machine.internal && { internal: true as const }),
-    capabilities: {
-      platform: machine.os,
-      ...machine.capabilities,
-      brokers: true,
-      harnessSession: true,
-      isolated: true,
-      images: false,
-      preflight: true,
-      pluginBuilds: false,
-    },
+    capabilities,
+    ...(sandboxCapabilities && {
+      capabilitiesFor(sandbox: D) {
+        const own = sandboxCapabilities.call(machine, sandbox)
+        return own ? full(own) : capabilities
+      },
+    }),
     provider: () => machine.kind,
     id: (s) => machine.id(s),
     hostPaths: machine.hostPaths,
@@ -106,5 +116,6 @@ export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>)
     ...(machine.attemptCap && { attemptCap: machine.attemptCap }),
     ...(machine.slotsPerMachine && { slotsPerMachine: machine.slotsPerMachine }),
     ...(machine.notHosted && { notHosted: machine.notHosted }),
+    ...(machine.slotNetworks && { slotNetworks: machine.slotNetworks }),
   }
 }

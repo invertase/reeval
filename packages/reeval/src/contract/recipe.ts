@@ -1,5 +1,5 @@
-// An image recipe's fields, shared by every sandbox that builds an image: `docker()`, `podman()`
-// and `daytona()`. Each one's refusals name the function the user called.
+// An image recipe's fields, shared by every sandbox that builds an image: `docker()`, `podman()`,
+// `daytona()` and `boat()`. Each one's refusals name the function the user called.
 import { z } from 'zod'
 import { closest, durationProblem, durationSchema, got, nonEmpty } from './shared.ts'
 

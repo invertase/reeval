@@ -16,6 +16,7 @@ import type {
   HarnessDescriptor,
   JudgeOptions,
   ResolvedSnapshot,
+  SandboxBase,
   TokenUsage,
   Turn,
   TurnRecord,
@@ -60,6 +61,8 @@ export type Attempt = {
   image?: string
   /** The hosts of `tart({ hosts })` preflight kept, once prepared. */
   hosts?: readonly PreparedHost[]
+  /** The saved image a VM sandbox's attempt runs in, once prepared. */
+  base?: SandboxBase
   /** As soon as it exists, so teardown can remove it even when the start fails later. */
   sandbox?: Sandbox
   /** Reads what the sandbox uses, from its start until teardown. */

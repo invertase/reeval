@@ -84,7 +84,7 @@ export async function prepareEnvironment(
     )
   } else if (kind.capabilities.isolated) {
     const { preparedFor } = await import('../sandbox/preflight.ts')
-    const { bakedImage, createProviders, preparedHosts, vmImage } = await import(
+    const { bakedImage, createProviders, preparedHosts, sandboxBase, vmImage } = await import(
       '../sandbox/providers.ts'
     )
     const provider = createProviders()[kind.provider(spec.sandbox)]
@@ -95,11 +95,21 @@ export async function prepareEnvironment(
     if (baked) a.image = baked
     const hosts = prepared ? preparedHosts(prepared) : null
     if (hosts) a.hosts = hosts
+    const base = prepared ? sandboxBase(prepared) : null
+    if (base) {
+      record.sandboxBase = base
+      a.base = base
+      debugLog(
+        'image',
+        `${base.image} in ${base.provider} snapshot ${base.snapshot} · ${base.built ? 'built by this run' : 'saved before'}${base.pinned ? '' : ' · a base tag that could not be resolved to a digest'}`,
+      )
+    }
     const from = vm?.ref ?? ('image' in spec.sandbox ? spec.sandbox.image : undefined)
-    debugLog(
-      'image',
-      `${from ?? 'none recorded'}${vm?.digest ? ` (${vm.digest})` : ''} · ${kind.helpers[0]}() checked it before the run and starts each attempt from ${baked ? `${baked}, which has the harness baked in` : 'it'}`,
-    )
+    if (!base)
+      debugLog(
+        'image',
+        `${from ?? 'none recorded'}${vm?.digest ? ` (${vm.digest})` : ''} · ${kind.helpers[0]}() checked it before the run and starts each attempt from ${baked ? `${baked}, which has the harness baked in` : 'it'}`,
+      )
   } else {
     debugLog(
       'image',

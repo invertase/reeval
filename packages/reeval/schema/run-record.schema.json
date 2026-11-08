@@ -552,6 +552,10 @@
             "$ref": "#/$defs/AttemptRetry"
           }
         },
+        "sandboxBase": {
+          "description": "The saved image a `boat()` attempt with an image recipe ran in: the snapshot its VM started from and the image its container ran. Absent in other sandboxes, and in attempts that didn't reach their sandbox.",
+          "$ref": "#/$defs/SandboxBase"
+        },
         "seq": {
           "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
@@ -3779,6 +3783,37 @@
         }
       },
       "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]
+    },
+    "SandboxBase": {
+      "description": "The saved image a VM sandbox's attempt ran in: the provider's snapshot its VM started from, and the image in it that the attempt's container ran, built from the sandbox's image recipe.",
+      "type": "object",
+      "properties": {
+        "built": {
+          "description": "This run built the snapshot, rather than finding it saved.",
+          "type": "boolean"
+        },
+        "image": {
+          "description": "The image in the snapshot the attempt's container ran.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The recipe's content key, which names both.",
+          "type": "string"
+        },
+        "pinned": {
+          "description": "False when a base image couldn't be resolved to a digest, so the key names its tag.",
+          "type": "boolean"
+        },
+        "provider": {
+          "description": "Who keeps the snapshot: `boat`.",
+          "const": "boat"
+        },
+        "snapshot": {
+          "description": "The snapshot's name.",
+          "type": "string"
+        }
+      },
+      "required": ["built", "image", "key", "pinned", "provider", "snapshot"]
     },
     "SandboxWarning": {
       "description": "A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user: `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox, however many evaluations inherit it.",

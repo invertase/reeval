@@ -1,0 +1,580 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261108T133503Z_nogit_cursor-agent_rkhb",
+  "status": "complete",
+  "startedAt": "2026-11-08T13:35:03.287Z",
+  "endedAt": "2026-11-08T13:35:09.816Z",
+  "durationMs": 6529,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.22.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.16",
+      "@reeval/harness-opencode": "0.2.16",
+      "@reeval/harness-goose": "0.1.16",
+      "@reeval/harness-pi": "0.2.9",
+      "@reeval/harness-cursor-sdk": "0.1.9",
+      "@ai-sdk/harness-claude-code": "1.0.176-patch.a9d56a8c",
+      "@reeval/harness-codex": "0.1.13",
+      "@reeval/harness-fx": "0.1.11",
+      "@reeval/harness-grok-build": "0.1.12",
+      "ai": "7.0.161",
+      "@ai-sdk/harness": "1.0.172",
+      "@ai-sdk/anthropic": "4.0.95",
+      "@ai-sdk/google": "4.0.110",
+      "@ai-sdk/openai": "4.0.107",
+      "@ai-sdk/typesafe-ai": "3.0.32"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "2443ca66db9b"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "closed",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "deny-all"
+    },
+    {
+      "name": "open",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "invocation": {
+    "filters": [],
+    "tags": []
+  },
+  "plan": {
+    "evals": 2,
+    "cells": 2,
+    "attempts": 2,
+    "estimateMs": 10477,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "boat+68c24521",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "c9f719ddc130376463bd238466c8673012540b8c51008441d1d0f9fdce29da6b"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "failures",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 2,
+    "attempts": 2,
+    "pass": 2,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/canary.eval.ts › canary",
+      "key": "evals/canary.eval.ts › canary",
+      "slug": "evals-canary-eval-ts-canary-d06886",
+      "file": "evals/canary.eval.ts",
+      "group": [],
+      "name": "canary",
+      "tags": [],
+      "fingerprint": "f4b7505c5b5cab413f8f329e91c7773d06c1c20ea8250415dc32c042d89a8b81",
+      "sources": [
+        {
+          "path": "evals/canary.eval.ts",
+          "sha256": "9f1e1950e682a788ea96c3bf1755fb0165046055d5ef88bcb2af342dee1b9240"
+        }
+      ],
+      "source": {
+        "body": "4b2fcaa8ab3f6b401a4000bbd9f2cbf47ec60d3f34e4b293a1da0124ee923dad",
+        "options": "ab8ae282cecfe58d3e384b3f3ce3a55d95643f74bfe4dc5969ee0eafb6eccfee"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/open/boat+68c24521",
+          "harness": "fake",
+          "environment": "open",
+          "sandbox": "boat+68c24521",
+          "role": "control",
+          "fingerprint": "65b1c6bc7f75e1094be7f452ad200fe19ee4a5d3b5a430e270914c84ee1f9db2",
+          "fingerprintParts": {
+            "sources": "4c15486a75a80fc7ef97e34158355acf22b7752510bbdff752d496f446d946e7",
+            "harness": "09ad9bbcbc2ce5af27ac5471790679d13cb7215a152e5f99876e93df191a99c1",
+            "environment": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+            "image": "e0b19c43cf48c9781eed12d7e84be76d42a1565f78f6ef2a508463210d140262",
+            "agentCli": null,
+            "judge": "f8d0a50acc3755ac7bb378df9914efdaf6bc71e8b03a8f11a3a90b5c34154ef5",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:c689fe3f689368a45a26a033402d9f9cfbbb3479a3e415df0e422b61c78e261b",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toMatch /^000 exit=[1-9]\\d*$/",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/canary.eval.ts › canary # fake/open/boat+68c24521#1",
+          "id": "fake/open/boat+68c24521#1",
+          "cell": "fake/open/boat+68c24521",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-11-08T13:35:04.286Z",
+          "imageId": null,
+          "sandboxBase": {
+            "provider": "boat",
+            "snapshot": "reeval-img-e0b19c43cf48",
+            "image": "reeval-vm-image:e0b19c43cf48",
+            "key": "e0b19c43cf48c9781eed12d7e84be76d42a1565f78f6ef2a508463210d140262",
+            "pinned": true,
+            "built": false
+          },
+          "resources": {
+            "scope": "container",
+            "machine": {
+              "sandbox": "boat",
+              "size": "small",
+              "id": "bx_2641c121",
+              "name": "reeval-d44a06bb-73aea2",
+              "vcpus": 4,
+              "memoryBytes": 16780623872
+            },
+            "usage": {
+              "durationMs": 500,
+              "sampleMs": 1000,
+              "cpuSeconds": 0.113,
+              "avgCores": 0.226,
+              "peakCores": 0.226,
+              "p95Cores": 0.226,
+              "peakMemoryBytes": 27918336,
+              "cgroupPeakMemoryBytes": 82542592,
+              "throttling": {
+                "periods": 5,
+                "throttledPeriods": 0,
+                "throttledSeconds": 0
+              }
+            }
+          },
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "partial": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 5275,
+          "turns": [
+            {
+              "prompt": "reach the listener",
+              "status": "completed",
+              "startedAt": "2026-11-08T13:35:08.625Z",
+              "durationMs": 99,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "timeSplit": {
+                "modelMs": null,
+                "toolMs": 98,
+                "waitingMs": 0,
+                "otherMs": 1
+              },
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timeSplit": {
+            "modelMs": null,
+            "toolMs": 98,
+            "waitingMs": 0,
+            "otherMs": 1
+          },
+          "timings": {
+            "setupMs": 4281,
+            "agentMs": 97,
+            "diffMs": 199,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 98
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-canary-eval-ts-canary-d06886/fake-open-boat-68c24521-92f4d2/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toMatch /^000 exit=[1-9]\\d*$/",
+              "labelled": false,
+              "matcher": "toMatch",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/canary.eval.ts:7"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/lands.eval.ts › lands",
+      "key": "evals/lands.eval.ts › lands",
+      "slug": "evals-lands-eval-ts-lands-2fc777",
+      "file": "evals/lands.eval.ts",
+      "group": [],
+      "name": "lands",
+      "tags": [],
+      "fingerprint": "9926e16a2e53977b5fda7e3b4d2ce266ce2c626a6b651b52625c8ad253c89775",
+      "sources": [
+        {
+          "path": "evals/lands.eval.ts",
+          "sha256": "897cf1e165ff1b371f08019af7431d28dbeae4de7f358d8980dbc2ac06629de5"
+        }
+      ],
+      "source": {
+        "body": "ab9a7973e3b3d525b26ab2c52a9b33ef37063c8aab7a66c85fb24492a1291121",
+        "options": "c128e4090b26fe9dc2679fc7c76a9fd345ed6166b56d3308a4a700b775870652"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/closed/boat+68c24521",
+          "harness": "fake",
+          "environment": "closed",
+          "sandbox": "boat+68c24521",
+          "role": "control",
+          "fingerprint": "2ba200deb1e60aaec2faa91becae97c958b9ee4ae19e59ae1ec400314032ba28",
+          "fingerprintParts": {
+            "sources": "eec7ae578e11d90aecd975d1ddee86677235bbb81064057357a1513c6854d92c",
+            "harness": "09ad9bbcbc2ce5af27ac5471790679d13cb7215a152e5f99876e93df191a99c1",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "e0b19c43cf48c9781eed12d7e84be76d42a1565f78f6ef2a508463210d140262",
+            "agentCli": null,
+            "judge": "f8d0a50acc3755ac7bb378df9914efdaf6bc71e8b03a8f11a3a90b5c34154ef5",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toEqual [\"baked-by-boat-image\",\"reeval\"]",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "toMatch /^000 exit=[1-9]\\d*$/",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "not.toBe 200",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/lands.eval.ts › lands # fake/closed/boat+68c24521#1",
+          "id": "fake/closed/boat+68c24521#1",
+          "cell": "fake/closed/boat+68c24521",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-11-08T13:35:04.286Z",
+          "imageId": null,
+          "sandboxBase": {
+            "provider": "boat",
+            "snapshot": "reeval-img-e0b19c43cf48",
+            "image": "reeval-vm-image:e0b19c43cf48",
+            "key": "e0b19c43cf48c9781eed12d7e84be76d42a1565f78f6ef2a508463210d140262",
+            "pinned": true,
+            "built": false
+          },
+          "resources": {
+            "scope": "container",
+            "machine": {
+              "sandbox": "boat",
+              "size": "small",
+              "id": "bx_3473cef3",
+              "name": "reeval-d44a06bb-d38583",
+              "vcpus": 4,
+              "memoryBytes": 16780623872
+            },
+            "usage": {
+              "durationMs": 450,
+              "sampleMs": 1000,
+              "cpuSeconds": 0.112,
+              "avgCores": 0.248,
+              "peakMemoryBytes": 27791360,
+              "cgroupPeakMemoryBytes": 81252352,
+              "throttling": {
+                "periods": 4,
+                "throttledPeriods": 0,
+                "throttledSeconds": 0
+              }
+            }
+          },
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [],
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": [],
+            "unresolved": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 5260,
+          "turns": [
+            {
+              "prompt": "where am I",
+              "status": "completed",
+              "startedAt": "2026-11-08T13:35:08.797Z",
+              "durationMs": 75,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "timeSplit": {
+                "modelMs": null,
+                "toolMs": 73,
+                "waitingMs": 0,
+                "otherMs": 2
+              },
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timeSplit": {
+            "modelMs": null,
+            "toolMs": 73,
+            "waitingMs": 0,
+            "otherMs": 2
+          },
+          "timings": {
+            "setupMs": 4455,
+            "agentMs": 72,
+            "diffMs": 199,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 73
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-lands-eval-ts-lands-2fc777/fake-closed-boat-68c24521-61a210/1/snapshots/final",
+              "bytes": 0,
+              "files": 0,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toEqual [\"baked-by-boat-image\",\"reeval\"]",
+              "labelled": false,
+              "matcher": "toEqual",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/lands.eval.ts:8"
+            },
+            {
+              "label": "toMatch /^000 exit=[1-9]\\d*$/",
+              "labelled": false,
+              "matcher": "toMatch",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/lands.eval.ts:9"
+            },
+            {
+              "label": "not.toBe 200",
+              "labelled": false,
+              "matcher": "not.toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/lands.eval.ts:10"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

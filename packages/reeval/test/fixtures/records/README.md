@@ -58,6 +58,7 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `before-vm-image` | The fake harness in `tart()` on the fake `tart`, from before `evals[].attempts[].vmImage` (the image an attempt's VM was cloned from, with its digest), when a run pulled the image itself |
 | `with-vm-image` | The same run with `evals[].attempts[].vmImage`, its digest also the cell's `fingerprintParts.image` |
 | `with-vm-id` | The fake harness on `boat()` and `daytona()` on their fake APIs, with `evals[].attempts[].resources.machine.id` and `name` (the VM each attempt ran on) |
+| `with-sandbox-base` | The fake harness on `boat()` with an image recipe on its fake API, under `deny-all`: `evals[].attempts[].sandboxBase` (the saved snapshot each attempt's VM started from and the image its container ran, also the cell's `fingerprintParts.image`), built by the first run and found saved by the second |
 | `before-debug-upload` | The corpus project's fake-harness runs from before `debug` (each attempt's debug data uploaded with the run to a remote store, `history.debug`) |
 | `before-heartbeats` | The corpus project's fake-harness runs and their event stream (`events/<run>.ndjson`, as `reeval run --events` wrote it), from before the stream's `heartbeat` lines |
 | `before-resources` | The fake harness in Docker (`docker({ memory: '512m', cpus: 1 })`), recorded by reeval at `3a175eb4`: an attempt that burned a CPU and held 256 MiB beside an idle one, from before `evals[].attempts[].resources` |

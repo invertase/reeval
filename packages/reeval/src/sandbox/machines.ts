@@ -2,7 +2,7 @@
 // VMs. Each loads its own
 // modules only when asked, so the kinds table stays cheap to import. kinds.ts builds its entries
 // from these as it loads, so nothing this module imports may import kinds.ts in turn.
-import type { EgressCapabilities } from '@reeval/sandbox-docker'
+import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import { tartVmLimit } from '../contract/tart.ts'
 import type {
   BoatSandboxDescriptor,
@@ -73,18 +73,26 @@ export const TART_MACHINE: MachineProvider<TartSandboxDescriptor> = {
 }
 
 /**
- * Enforces nothing yet: the VM keeps its own network, so only `allow-all` plans on it, for the
- * whole attempt. The gateway still brokers credentials and records what goes through it.
+ * Enforces nothing on the VM itself: it keeps its own network, so only `allow-all` plans on it, for
+ * the whole attempt. The gateway still brokers credentials and records what goes through it.
  */
 const BOAT_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
+
+/** A Boat sandbox with an image recipe, whose attempts each run in a container of the image. */
+const inImage = (s: BoatSandboxDescriptor) =>
+  !!(s.image || s.from || s.dockerfile || s.install?.length)
 
 export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   kind: 'boat',
   helpers: ['boat'],
   os: 'linux',
   capabilities: { egress: BOAT_EGRESS, processTable: true, listeners: 'proc' },
-  id: (s) => (s.type ? `boat:${s.type}` : 'boat'),
-  hostPaths: {},
+  // A container in the VM's Docker, as `docker()` runs one: its networks detach, so the gateway
+  // can be its only way out.
+  sandboxCapabilities: (s) =>
+    inImage(s) ? { egress: DOCKER_EGRESS, processTable: true, listeners: 'proc' } : null,
+  id: (s) => recipeId(`boat${s.type ? `:${s.type}` : ''}`, s),
+  hostPaths: { dockerfile: 'file' },
   async create(sandbox, options) {
     const { createBoatSandbox } = await import('./boat.ts')
     return createBoatSandbox(sandbox, options)
@@ -94,7 +102,7 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
     return boatCapacity(sandbox)
   },
   pool: {
-    key: (s) =>
+    key: (s, image) =>
       JSON.stringify([
         s.apiKey.from,
         s.prefix,
@@ -102,6 +110,7 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
         s.reuse ?? false,
         s.attemptsPerMachine ?? 1,
         s.maxConcurrent ?? null,
+        typeof image === 'string' ? image : null,
       ]),
     async open(sandbox, o) {
       const { openBoatPool } = await import('./boat.ts')
@@ -119,6 +128,7 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
   cleanupScope: (s) => ({ key: JSON.stringify(s), atStart: true }),
   credentials: (s) => [{ names: [s.apiKey.from], line: `${s.apiKey.from} (for boat())` }],
   slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
+  slotNetworks: inImage,
   async doctor(sandboxes, ctx) {
     const { boatDoctor } = await import('./boat.ts')
     return boatDoctor(sandboxes, ctx)

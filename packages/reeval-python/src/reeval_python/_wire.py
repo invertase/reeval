@@ -427,29 +427,23 @@ BoatSandboxDescriptorApiKey = TypedDict(
 
 
 # A boat.dev VM per attempt, made by `boat()` from `reeval/sandbox/boat`.
-class BoatSandboxDescriptor(TypedDict):
-    # The host variable with the Boat API key, read on the host only.
-    apiKey: BoatSandboxDescriptorApiKey
-    # The attempts one machine runs at once, each as a user of its own with its own home (which
-    # each sees at `/home/reeval`), workspace and egress gateway. The harness installs once per
-    # machine, and every other slot's home gets its own copy of the install. Default 1. A
-    # harness whose bridge takes a fixed port in the machine (Claude Code, OpenCode, Goose, fx,
-    # Grok Build) runs one per machine.
-    attemptsPerMachine: NotRequired[int]
-    # Cell id; defaults to `boat`, or `boat:<type>` with a `type`.
-    id: NotRequired[str]
-    kind: Literal["boat"]
-    # The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`.
-    maxConcurrent: NotRequired[float]
-    # The start of every sandbox name reeval gives Boat, so a run's cleanup finds only its own:
-    # lowercase letters, digits and dashes.
-    prefix: str
-    # A machine takes another of the run's attempts once one ends, instead of being deleted: its
-    # user's processes, cron jobs and files are removed and its home put back as it was after
-    # the harness installed, which isn't installed again. Default false, one attempt per slot.
-    reuse: NotRequired[bool]
-    # The machine size. Default `small`.
-    type: NotRequired[Literal["small", "default", "large", "xlarge"]]
+BoatSandboxDescriptor = TypedDict(
+    "BoatSandboxDescriptor",
+    {
+        "apiKey": "BoatSandboxDescriptorApiKey",
+        "attemptsPerMachine": "NotRequired[int]",
+        "dockerfile": "NotRequired[str]",
+        "from": "NotRequired[str]",
+        "id": "NotRequired[str]",
+        "image": "NotRequired[str]",
+        "install": "NotRequired[list[InstallStep]]",
+        "kind": "Literal[\"boat\"]",
+        "maxConcurrent": "NotRequired[float]",
+        "prefix": "str",
+        "reuse": "NotRequired[bool]",
+        "type": "NotRequired[Literal[\"small\", \"default\", \"large\", \"xlarge\"]]",
+    },
+)
 
 
 class CaptureConsoleItem(TypedDict):

@@ -329,7 +329,10 @@ function planTests(
     const on = `${where} on ${harnessId(planned.harness)}`
     const mcp = refusedMcp(planned.harness, planned.environment.layers)
     if (mcp) throw new UsageError(`${on}: ${mcp}`)
-    const slots = sandboxKind(planned.sandbox).slotsPerMachine?.(planned.sandbox) ?? 1
+    const kind = sandboxKind(planned.sandbox)
+    const slots = kind.slotNetworks?.(planned.sandbox)
+      ? 1
+      : (kind.slotsPerMachine?.(planned.sandbox) ?? 1)
     const shared = refusedSharedMachine(planned.harness, slots)
     if (shared) throw new UsageError(`${on}: ${shared}`)
     const plugins = planPlugins(planned, ctx.config.root)

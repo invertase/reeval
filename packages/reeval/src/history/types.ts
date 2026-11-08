@@ -24,6 +24,7 @@ import type {
   PhaseTimings,
   ResolvedJudgeStateOptions,
   Revision,
+  SandboxBase,
   SandboxWarning,
   ServeRecord,
   SetupProcess,
@@ -205,6 +206,12 @@ export type AttemptRecord = {
    * other sandboxes, and in attempts that didn't reach their sandbox.
    */
   vmImage?: VmImage
+  /**
+   * The saved image a `boat()` attempt with an image recipe ran in: the snapshot its VM started
+   * from and the image its container ran. Absent in other sandboxes, and in attempts that didn't
+   * reach their sandbox.
+   */
+  sandboxBase?: SandboxBase
   /**
    * The container or VM the attempt ran on and the CPU, memory and disk it used there, measured
    * out of the agent's reach: a container's from a sibling container, a VM's as root

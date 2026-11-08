@@ -5,6 +5,13 @@ import { z } from 'zod'
 import { UsageError } from '../errors.ts'
 import type { BoatApiKey, BoatMachineType, BoatSandboxDescriptor } from '../types.ts'
 import { VAR } from './plain.ts'
+import {
+  installMessage,
+  oneRecipe,
+  recipeFieldMessage,
+  recipeFields,
+  recipeMessage,
+} from './recipe.ts'
 import { type Assert, closest, got, type Issue, nonEmpty, refusal, type Same } from './shared.ts'
 
 /**
@@ -22,16 +29,24 @@ const apiKeySchema = z.strictObject({ kind: z.literal('secret'), from: z.string(
 const prefixSchema = z.string().max(BOAT_PREFIX_MAX).regex(BOAT_PREFIX)
 const typeSchema = z.enum(BOAT_TYPES)
 
-export const boatSandboxSchema = z.strictObject({
-  kind: z.literal('boat'),
+const fields = {
   id: nonEmpty().optional(),
-  apiKey: apiKeySchema,
-  prefix: prefixSchema,
   type: typeSchema.optional(),
+  ...recipeFields,
   maxConcurrent: z.number().optional(),
   reuse: z.boolean().optional(),
   attemptsPerMachine: z.number().int().min(1).max(BOAT_ATTEMPTS_PER_MACHINE_MAX).optional(),
-})
+}
+
+export const boatSandboxSchema = z
+  .strictObject({
+    kind: z.literal('boat'),
+    apiKey: apiKeySchema,
+    prefix: prefixSchema,
+    ...fields,
+    dockerfile: nonEmpty().optional(),
+  })
+  .superRefine(oneRecipe)
 
 /** `createBoat()`'s argument: the account and naming every sandbox of the factory shares. */
 export type CreateBoatOptions = {
@@ -42,20 +57,22 @@ export type CreateBoatOptions = {
 }
 
 /** `boat()`'s argument. */
-export type BoatOptions = Omit<BoatSandboxDescriptor, 'kind' | 'apiKey' | 'prefix'>
+export type BoatOptions = Omit<
+  BoatSandboxDescriptor,
+  'kind' | 'apiKey' | 'prefix' | 'dockerfile'
+> & {
+  /** Relative to the file that calls `boat()`, or an absolute path or `URL`. */
+  dockerfile?: string | URL
+}
 
 export const createBoatOptionsSchema = z.strictObject({
   apiKey: apiKeySchema.optional(),
   prefix: prefixSchema.optional(),
 })
 
-export const boatOptionsSchema = z.strictObject({
-  id: nonEmpty().optional(),
-  type: typeSchema.optional(),
-  maxConcurrent: z.number().optional(),
-  reuse: z.boolean().optional(),
-  attemptsPerMachine: z.number().int().min(1).max(BOAT_ATTEMPTS_PER_MACHINE_MAX).optional(),
-})
+export const boatOptionsSchema = z
+  .strictObject({ ...fields, dockerfile: z.union([nonEmpty(), z.instanceof(URL)]).optional() })
+  .superRefine(oneRecipe)
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof boatSandboxSchema>, BoatSandboxDescriptor>>,
@@ -68,12 +85,6 @@ export type _SameAsSchema = [
 
 /** Docker's options, which a Boat VM doesn't have (yet), and what to do instead. */
 const NOT_ON_BOAT: Record<string, string> = {
-  image:
-    "Boat VMs start from boat's own Ubuntu 24.04 base, and the harness installs as the attempt starts",
-  from: "Boat VMs start from boat's own Ubuntu 24.04 base; run your toolchain's installs in the environment's setup",
-  dockerfile:
-    "Boat VMs start from boat's own Ubuntu 24.04 base; run your toolchain's installs in the environment's setup",
-  install: "run them in the environment's setup, which runs in the VM before the agent starts",
   root: 'the agent, setup steps and checks run as the unprivileged reeval user, and a Boat sandbox has no root mode yet',
   capabilities: 'a VM has no container capabilities to add',
   memory: "pick a machine size with type: 'small' (4 GB), 'default', 'large' or 'xlarge'",
@@ -82,6 +93,18 @@ const NOT_ON_BOAT: Record<string, string> = {
   pids: 'a VM has no container process limit',
   engine: 'boat() runs on boat.dev, not a container engine',
 }
+
+const KNOWN = [
+  'id',
+  'type',
+  'image',
+  'from',
+  'dockerfile',
+  'install',
+  'maxConcurrent',
+  'reuse',
+  'attemptsPerMachine',
+]
 
 const prefixMessage = (v: unknown, where: string) =>
   `${where} takes lowercase letters, digits and dashes, starting and ending with a letter or digit, at most ${BOAT_PREFIX_MAX} characters, e.g. prefix: 'acme-evals' (got ${got(v)})`
@@ -92,15 +115,18 @@ function explain(fn: string) {
     if (issue.code === 'unrecognized_keys' && issue.path.length === 0) {
       const key = issue.keys[0] as string
       if (NOT_ON_BOAT[key]) return `${fn}() doesn't take ${key}: ${NOT_ON_BOAT[key]}.`
-      const known =
-        fn === 'createBoat'
-          ? ['apiKey', 'prefix']
-          : ['id', 'type', 'maxConcurrent', 'reuse', 'attemptsPerMachine']
+      const known = fn === 'createBoat' ? ['apiKey', 'prefix'] : KNOWN
       const near = closest(key, known)
       return `Unknown ${fn}() option "${key}".${near ? ` Did you mean "${near}"?` : ''}`
     }
+    if (issue.code === 'custom') return recipeMessage(fn, (issue as { params?: unknown }).params)
     const key = String(issue.path[0])
     const v = options[key]
+    if (key === 'install' && issue.path.length > 1) {
+      return installMessage(fn, (v as unknown[])[issue.path[1] as number])
+    }
+    const recipe = recipeFieldMessage(fn, key, v)
+    if (recipe) return recipe
     switch (key) {
       case 'apiKey':
         return typeof v === 'string'
@@ -137,7 +163,7 @@ export function checkCreateBoatOptions(options: unknown): void {
 /** `boat()`'s options, checked; throws reeval's sentence for the first problem. */
 export function checkBoatOptions(options: unknown): void {
   const problem = refusal(boatOptionsSchema, options, explain('boat'), {
-    order: ['id', 'type', 'maxConcurrent', 'reuse', 'attemptsPerMachine'],
+    order: KNOWN,
   })
   if (problem) throw new UsageError(problem)
 }
@@ -145,6 +171,6 @@ export function checkBoatOptions(options: unknown): void {
 /** What's wrong with a Boat descriptor from any source, or undefined; `maxConcurrent` is left out. */
 export const boatProblem = (value: BoatSandboxDescriptor) =>
   refusal(boatSandboxSchema, value, explain('boat'), {
-    order: ['kind', 'apiKey', 'prefix', 'id', 'type', 'reuse', 'attemptsPerMachine'],
+    order: ['kind', 'apiKey', 'prefix', ...KNOWN],
     skip: ['maxConcurrent'],
   })
