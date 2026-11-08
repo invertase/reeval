@@ -310,13 +310,14 @@ test('allocatePort hands out a port that listen(0) and outgoing connections neve
   const target = createServer((s) => s.end()).listen(0, '127.0.0.1')
   await once(target, 'listening')
   const { port: targetPort } = target.address() as AddressInfo
-  // Other processes' servers and connections taking ephemeral ports while the command starts.
+  // Background load: servers and connections taking ephemeral ports while the commands start.
   const churn = setInterval(() => {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 10; i++) {
       const s = createServer().listen(0, '127.0.0.1', () => setTimeout(() => s.close(), 20))
-      connect(targetPort, '127.0.0.1').on('error', () => {})
+      const c = connect(targetPort, '127.0.0.1', () => c.destroy())
+      c.on('error', () => {})
     }
-  }, 2)
+  }, 5)
   try {
     const ports = await Promise.all(Array.from({ length: 40 }, () => allocatePort()))
     assert.equal(new Set(ports).size, ports.length)

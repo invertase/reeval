@@ -250,8 +250,8 @@ export function checkCaptureName(name: string): void {
 }
 
 /**
- * Where `allocatePort` picks from: below the ephemeral ranges of Linux (32768 and up), macOS and
- * Windows (49152 and up), the ones `listen(0)` and an outgoing connection take a port from. The
+ * Where `allocatePort` picks from: below the default ephemeral ranges of Linux (32768 and up),
+ * macOS and Windows (49152 and up), the ones `listen(0)` and an outgoing connection take a port from. The
  * port is free when it's handed out but nothing holds it until the command binds it, so on the
  * fake sandbox, which shares the host's network, one the kernel hands out can be taken in between.
  */
@@ -273,13 +273,17 @@ export async function allocatePort(): Promise<number> {
   const span = PORT_RANGE.max - PORT_RANGE.min + 1
   for (let i = 0; i < PICK_TRIES; i++) {
     const port = PORT_RANGE.min + Math.floor(Math.random() * span)
-    if (handedOut.includes(port) || !(await bindable(port))) continue
+    if (handedOut.includes(port)) continue
+    // Held before the bind check, so a concurrent call can't pick it while this one awaits.
     handedOut.push(port)
-    if (handedOut.length > HANDED_OUT_KEEP) handedOut.shift()
-    return port
+    if (await bindable(port)) {
+      if (handedOut.length > HANDED_OUT_KEEP) handedOut.shift()
+      return port
+    }
+    handedOut.splice(handedOut.lastIndexOf(port), 1)
   }
   throw new Error(
-    `found no free port between ${PORT_RANGE.min} and ${PORT_RANGE.max} in ${PICK_TRIES} tries`,
+    `c.serve() found no free port for PORT between ${PORT_RANGE.min} and ${PORT_RANGE.max} in ${PICK_TRIES} tries`,
   )
 }
 
