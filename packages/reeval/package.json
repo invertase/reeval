@@ -42,6 +42,10 @@
       "types": "./dist/sandbox/daytona.d.ts",
       "default": "./dist/sandbox/daytona.js"
     },
+    "./sandbox/hosted": {
+      "types": "./dist/sandbox/hosted.d.ts",
+      "default": "./dist/sandbox/hosted.js"
+    },
     "./store/local": {
       "types": "./dist/store/local.d.ts",
       "default": "./dist/store/local.js"

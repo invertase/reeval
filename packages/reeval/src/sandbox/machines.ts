@@ -1,4 +1,5 @@
-// The machine providers reeval has: Tart's macOS VMs, and Boat's and Daytona's Linux VMs. Each loads its own
+// The machine providers reeval has: Tart's macOS VMs, and Boat's, Daytona's and a hosted run's
+// Linux VMs. Each loads its own
 // modules only when asked, so the kinds table stays cheap to import. kinds.ts builds its entries
 // from these as it loads, so nothing this module imports may import kinds.ts in turn.
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
@@ -6,6 +7,7 @@ import { tartVmLimit } from '../contract/tart.ts'
 import type {
   BoatSandboxDescriptor,
   DaytonaSandboxDescriptor,
+  HostedSandboxDescriptor,
   TartSandboxDescriptor,
 } from '../types.ts'
 import { idPart } from './id-part.ts'
@@ -174,5 +176,57 @@ export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
   },
 }
 
+/** Enforces nothing, as on Boat, whose API the platform's VM service speaks. */
+const HOSTED_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
+
+export const HOSTED_MACHINE: MachineProvider<HostedSandboxDescriptor> = {
+  kind: 'hosted',
+  helpers: ['hosted'],
+  os: 'linux',
+  capabilities: { egress: HOSTED_EGRESS, processTable: true, listeners: 'proc' },
+  id: (s) => (s.size ? `hosted:${s.size}` : 'hosted'),
+  hostPaths: {},
+  async create(sandbox, options) {
+    const { createHostedSandbox } = await import('./hosted.ts')
+    return createHostedSandbox(sandbox, options)
+  },
+  async capacity(sandbox) {
+    const { hostedCapacity } = await import('./hosted.ts')
+    return hostedCapacity(sandbox)
+  },
+  pool: {
+    key: (s) =>
+      JSON.stringify([
+        s.size ?? 'small',
+        s.reuse ?? false,
+        s.attemptsPerMachine ?? 1,
+        s.maxConcurrent ?? null,
+      ]),
+    async open(sandbox, o) {
+      const { openHostedPool } = await import('./hosted.ts')
+      return openHostedPool(sandbox, o)
+    },
+  },
+  // The run's VMs are under one name prefix on the one service, so no descriptor is needed.
+  async cleanupRun(runId) {
+    const { removeRunVms } = await import('./hosted.ts')
+    await removeRunVms(runId)
+  },
+  credentials: () => [
+    { names: ['REEVAL_VM_URL'], line: 'REEVAL_VM_URL (for hosted(), set by a hosted run)' },
+    { names: ['REEVAL_VM_TOKEN'], line: 'REEVAL_VM_TOKEN (for hosted(), set by a hosted run)' },
+  ],
+  slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
+  async doctor(sandboxes, ctx) {
+    const { hostedDoctor } = await import('./hosted.ts')
+    return hostedDoctor(sandboxes, ctx)
+  },
+}
+
 /** Every machine provider. */
-export const MACHINE_PROVIDERS = [TART_MACHINE, BOAT_MACHINE, DAYTONA_MACHINE] as const
+export const MACHINE_PROVIDERS = [
+  TART_MACHINE,
+  BOAT_MACHINE,
+  DAYTONA_MACHINE,
+  HOSTED_MACHINE,
+] as const

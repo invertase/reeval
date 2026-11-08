@@ -1463,6 +1463,42 @@
         }
       ]
     },
+    "HostedSandboxDescriptor": {
+      "description": "A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.",
+      "type": "object",
+      "properties": {
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "id": {
+          "description": "Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "hosted"
+        },
+        "maxConcurrent": {
+          "description": "The most attempts on hosted VMs at once, across the run: machines times `attemptsPerMachine`.",
+          "type": "number"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "The machine size. Default `small`.",
+          "type": "string",
+          "enum": ["small", "medium", "large", "xlarge"]
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
     "HostFile": {
       "description": "A file on the host, read when an attempt starts. Made by the `file` helper.",
       "type": "object",
@@ -2244,6 +2280,9 @@
               "$ref": "#/$defs/FakeSandboxDescriptor"
             },
             {
+              "$ref": "#/$defs/HostedSandboxDescriptor"
+            },
+            {
               "$ref": "#/$defs/TartSandboxDescriptor"
             }
           ]
@@ -2969,6 +3008,9 @@
         },
         {
           "$ref": "#/$defs/DaytonaSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/HostedSandboxDescriptor"
         }
       ]
     },

@@ -71,6 +71,7 @@ import { type EvalExpectation, expectRun, type RunExpectation } from './support/
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 import { buildSshVmImage, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
+import { type FakeVmProxy, fakeVmProxy, VM_RUN_LABEL } from './support/vm-proxy.ts'
 
 /**
  * `podman` is `podman()` where `docker` is `docker()`; `real` is Docker with real Cursor
@@ -245,10 +246,16 @@ after(() => gitHttp.close())
 
 /** The fake Boat API the `boat-*` fixtures run on, its sandboxes sshd containers. */
 let boatApi: FakeBoat
+/** The platform's VM proxy the `hosted-*` fixtures run through, in front of the fake API. */
+let vmProxy: FakeVmProxy
 before(async () => {
   boatApi = await fakeBoat(startSshVm)
+  vmProxy = await fakeVmProxy(boatApi, { maxLive: 10, maxStarts: 100 })
 })
-after(() => boatApi.close())
+after(async () => {
+  await vmProxy.close()
+  await boatApi.close()
+})
 /** A `boat-*` fixture's host: reeval pointed at the fake API, the VM image built. */
 const onFakeBoat: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
   sandbox: 'boat',
@@ -256,7 +263,7 @@ const onFakeBoat: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
   prepare: () => buildSshVmImage(),
 }
 /** No sandbox of the run is left on the fake API. */
-const boatCleanedUp = (run: RunRecord, sandbox = boat()) => {
+const boatCleanedUp = (run: RunRecord, sandbox: { prefix: string } = boat()) => {
   const prefix = runPrefix(sandbox, run.runId)
   assert.deepEqual(
     boatApi.live().filter((name) => name.startsWith(prefix)),
@@ -272,11 +279,58 @@ const boatCleanedUp = (run: RunRecord, sandbox = boat()) => {
 }
 
 /** How many sandboxes the run created on the fake API. */
-const boatCreates = (run: RunRecord, sandbox = boat()) => {
+const boatCreates = (run: RunRecord, sandbox: { prefix: string } = boat()) => {
   const prefix = runPrefix(sandbox, run.runId)
   return boatApi.requests.filter(
     (q) => q.call === 'POST /sandboxes' && !q.refused && String(q.body?.name).startsWith(prefix),
   ).length
+}
+
+/** What every hosted VM's name starts with. */
+const HOSTED_VM = { prefix: 'reeval' }
+/** A `hosted-*` fixture's host: a hosted run's variables, pointed at the fake proxy. */
+const onFakeHosted: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
+  sandbox: 'hosted',
+  hostEnv: () => ({
+    REEVAL_VM_URL: vmProxy.url,
+    REEVAL_VM_TOKEN: vmProxy.token,
+    REEVAL_SANDBOX_LABELS: 'platform-run=run_42',
+  }),
+  prepare: () => buildSshVmImage(),
+}
+/**
+ * Every VM of the run was made labeled and deleted, and neither the record nor the attempts'
+ * debug logs name the provider.
+ */
+const hostedCleanedUp = (run: RunRecord, project: string) => {
+  boatCleanedUp(run, HOSTED_VM)
+  assert.deepEqual(
+    vmProxy.requests.filter(
+      (q) => q.status >= 400 && !(q.status === 404 && q.call.startsWith('GET ')),
+    ),
+    [],
+    'the proxy took every call',
+  )
+  for (const q of boatApi.requests) {
+    if (
+      q.call !== 'POST /sandboxes' ||
+      !String(q.body?.name).startsWith(runPrefix(HOSTED_VM, run.runId))
+    )
+      continue
+    assert.deepEqual(q.body?.labels, {
+      'platform-run': 'run_42',
+      ...runLabels(HOSTED_VM, run.runId),
+      [VM_RUN_LABEL]: vmProxy.runId,
+    })
+  }
+  assert.doesNotMatch(JSON.stringify(run), /boat/i, 'the record names no provider')
+  for (const log of debugLogs(project)) {
+    assert.deepEqual(
+      log.filter((l) => /boat/i.test(l)),
+      [],
+      'nor does the debug log',
+    )
+  }
 }
 
 /** The fake Daytona API the `daytona-*` fixtures run on, its sandboxes sshd containers. */
@@ -1317,6 +1371,40 @@ export const features: Feature[] = [
       assert.equal(said(/installed the fake agent's bootstrap/).length, 1, 'one slot installed')
       assert.equal(said(/its home from the machine's install/).length, 1, 'the other copied it')
       boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/hosted-session',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeHosted,
+    canary: /expected 'reeval' to be 'user'/,
+    record: ({ run, project }) => {
+      hostedCleanedUp(run, project)
+      const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
+      assert.equal(r?.scope, 'machine', JSON.stringify(r))
+      assert.equal(r?.machine.sandbox, 'hosted')
+      assert.equal(r?.machine.size, 'small')
+      assert.match(r?.machine.id ?? '', /^bx_[0-9a-f]{8}$/, JSON.stringify(r))
+      assert.ok(r?.machine.name?.startsWith(runPrefix(HOSTED_VM, run.runId)), JSON.stringify(r))
+    },
+  },
+  {
+    dir: 'sandbox/hosted-shared-machine',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeHosted,
+    canary: /expected 'reeval(-s1)?' to be 'user'/,
+    record: ({ run, project }) => {
+      assert.equal(boatCreates(run, HOSTED_VM), 1, 'both attempts ran at once on one machine')
+      hostedCleanedUp(run, project)
+      const resources = run.evals.flatMap((e) => e.attempts.map((a) => a.resources))
+      assert.ok(resources.length >= 2, JSON.stringify(resources))
+      for (const r of resources) {
+        assert.equal(r?.shared, true, JSON.stringify(r))
+        assert.equal(r?.machine.sandbox, 'hosted')
+        assert.equal(r?.usage, undefined, "another attempt's use would count in the VM's")
+      }
     },
   },
   {

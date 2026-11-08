@@ -50,6 +50,7 @@ import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-i
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 import { daytona } from '../../src/sandbox-daytona.ts'
+import { hosted } from '../../src/sandbox-hosted.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,
@@ -802,6 +803,21 @@ export const CASES: Record<string, Case[]> = {
         },
       ),
     ],
+    [
+      'cursor on hosted()',
+      planned(
+        {},
+        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: hosted(), egress: 'allow-all' },
+      ),
+    ],
+    [
+      "hosted() under egress 'proxy'",
+      planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: hosted() }),
+    ],
+    ['hosted() size unknown', any(hosted, { size: 'huge' })],
+    ['hosted() type, a boat() option', any(hosted, { type: 'large' })],
+    ['hosted() apiKey', any(hosted, { apiKey: 'k' })],
+    ['hosted() attemptsPerMachine over 8', any(hosted, { attemptsPerMachine: 9 })],
     [
       'opencode mcp: {file:} in an arg',
       mcpOn(OPENCODE, ({ mcp }) => ({

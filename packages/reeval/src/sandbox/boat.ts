@@ -11,7 +11,7 @@ import { redactSecrets, registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
-import { sandboxLabels } from './labels.ts'
+import { SANDBOX_LABELS, sandboxLabels } from './labels.ts'
 import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
 import type { PoolProvider } from './pool.ts'
@@ -21,11 +21,76 @@ import {
   missingSshTool,
   newKey,
   type PooledSshMachine,
+  TTL_MARGIN_S,
 } from './ssh-pool.ts'
 import { InfraError, type NetworkSandbox } from './types.ts'
 
-const BOAT_SDK = '@boatdev/sdk'
+export const BOAT_SDK = '@boatdev/sdk'
 export const BOAT_BASE_URL = 'BOAT_BASE_URL'
+
+/**
+ * Whose API the VMs come from, as messages and the record name it: Boat's own for `boat()`, or one
+ * that speaks Boat's API under another name (`hosted()`).
+ */
+export type VmService = {
+  /** How messages name the sandbox: `boat()`. */
+  helper: string
+  /** The record's provider and preflight's stage: `boat`. */
+  kind: string
+  /** How messages name who runs the VMs: `Boat`. */
+  name: string
+  /** How a refusal names the credential: `the API key in BOAT_API_KEY`. */
+  credential: string
+  /** What its caps hold to, as refusals name it: `account`. */
+  scope: 'account' | 'run'
+  /**
+   * What `/limits`' hourly start cap counts: starts in any hour, or every start the run may make,
+   * which never comes back.
+   */
+  starts: 'per hour' | 'per run'
+  /** The most labels a create takes, reeval's own included. */
+  maxLabels: number
+  /** The start of the label keys the service keeps for itself and refuses on a create. */
+  reservedLabels?: string
+  /** Why a credential that worked at preflight can be refused later: `; it expired …`. */
+  expiry?: string
+  /** Why the service can grant a machine less time than asked: `; it …`. */
+  ttlLimit?: string
+}
+
+/** What a pool of the service's machines is asked for. */
+export type VmSpec = {
+  /** The start of every machine's name. */
+  prefix: string
+  /** The machine type the API takes. */
+  type: string
+  /** The size the record names. */
+  size: string
+  maxConcurrent?: number
+  reuse?: boolean
+  attemptsPerMachine?: number
+}
+
+const boatService = (sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): VmService => ({
+  helper: 'boat()',
+  kind: 'boat',
+  name: 'Boat',
+  credential: `the API key in ${sandbox.apiKey.from}`,
+  scope: 'account',
+  starts: 'per hour',
+  maxLabels: 20,
+})
+
+const boatSpec = (sandbox: BoatSandboxDescriptor): VmSpec => ({
+  prefix: sandbox.prefix,
+  type: sandbox.type ?? 'small',
+  size: sandbox.type ?? 'small',
+  ...(sandbox.maxConcurrent !== undefined && { maxConcurrent: sandbox.maxConcurrent }),
+  ...(sandbox.reuse !== undefined && { reuse: sandbox.reuse }),
+  ...(sandbox.attemptsPerMachine !== undefined && {
+    attemptsPerMachine: sandbox.attemptsPerMachine,
+  }),
+})
 
 /** What reeval reads of a sandbox, typed here so no SDK type reaches reeval's own. */
 type BoatSandboxInfo = {
@@ -33,6 +98,8 @@ type BoatSandboxInfo = {
   name: string
   state: string
   error?: string | null
+  /** How long it lives from its last create or PATCH, as the service granted it. */
+  ttlSeconds?: number | null
 }
 
 /** What Boat answers when it authorizes a key: the user, the host key and where sshd answers. */
@@ -58,7 +125,7 @@ export type BoatClient = {
       monitoring: boolean
       labels: Record<string, string>
     }
-  }): Promise<{ sandbox: BoatSandboxInfo }>
+  }): Promise<{ sandbox: BoatSandboxInfo; ttlSeconds?: number | null }>
   get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
   sshKey(p: { sandboxId: string; sshKeyRequest: { key: string } }): Promise<BoatSshReply>
   sandboxes(
@@ -68,7 +135,10 @@ export type BoatClient = {
     sandboxes: BoatSandboxInfo[]
     pageInfo?: { nextCursor: string | null; hasMore: boolean }
   }>
-  update(p: { sandboxId: string; updateSandboxRequest: { ttlSeconds: number } }): Promise<unknown>
+  update(p: {
+    sandboxId: string
+    updateSandboxRequest: { ttlSeconds: number }
+  }): Promise<{ sandbox?: BoatSandboxInfo }>
   deleteSandbox(
     p: { sandboxId: string; xAsciiConfirmDelete: string },
     init?: { signal?: AbortSignal },
@@ -85,7 +155,7 @@ export type BoatClient = {
   }>
 }
 
-type BoatSdk = {
+export type BoatSdk = {
   BoatApi: new (configuration: unknown) => BoatClient
   Configuration: new (p: { basePath?: string; accessToken?: string }) => unknown
 }
@@ -160,6 +230,30 @@ export async function boatError(error: unknown): Promise<string> {
 
 const status = (error: unknown) => (error as { response?: Response }).response?.status
 
+/**
+ * The attempt can't finish on a machine granted `granted` seconds of the `asked` it asked for,
+ * which leaves `TTL_MARGIN_S` for teardown: an error saying so, rather than the machine stopping
+ * mid-attempt.
+ */
+function tooShort(service: VmService, id: string, asked: number, granted?: number | null) {
+  const needs = asked - TTL_MARGIN_S
+  if (typeof granted !== 'number' || granted >= needs) return null
+  return new InfraError(
+    `${service.name} gave sandbox ${id} ${granted}s to live, and the attempt needs ${needs}s, its timeout and setup${service.ttlLimit ?? ''}`,
+  )
+}
+
+/** `error` from `doing` as an attempt's infra error, a refused credential saying so. */
+async function serviceFailed(service: VmService, error: unknown, doing: string, why?: string) {
+  why ??= await boatError(error)
+  if (status(error) === 401) {
+    return new InfraError(
+      `${service.name} refused ${service.credential}${service.expiry ?? ''}: ${why}`,
+    )
+  }
+  return new InfraError(`${service.name} ${doing}: ${why}`)
+}
+
 /** The part of every sandbox name that says which run made it. */
 export const runTag = (runId: string) =>
   createHash('sha256').update(runId).digest('hex').slice(0, 8)
@@ -189,6 +283,7 @@ export const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 const UNREADY_DELETE_MS = 10 * 60_000
 
 async function untilReady(
+  service: VmService,
   api: BoatClient,
   id: string,
   signal: AbortSignal,
@@ -196,17 +291,17 @@ async function untilReady(
   const deadline = Date.now() + READY_TIMEOUT_MS
   for (;;) {
     const { sandbox } = await api.get({ sandboxId: id }).catch(async (error: unknown) => {
-      throw new InfraError(`Boat didn't report sandbox ${id}: ${await boatError(error)}`)
+      throw await serviceFailed(service, error, `didn't report sandbox ${id}`)
     })
     if (['ready', 'idle', 'running'].includes(sandbox.state)) return sandbox
     if (DEAD_STATES.includes(sandbox.state)) {
       throw new InfraError(
-        `Boat sandbox ${id} stopped starting: ${sandbox.state}${sandbox.error ? ` (${sandbox.error})` : ''}`,
+        `${service.name} sandbox ${id} stopped starting: ${sandbox.state}${sandbox.error ? ` (${sandbox.error})` : ''}`,
       )
     }
     if (Date.now() > deadline) {
       throw new InfraError(
-        `Boat sandbox ${id} wasn't ready after ${READY_TIMEOUT_MS / 1000}s (still ${sandbox.state})`,
+        `${service.name} sandbox ${id} wasn't ready after ${READY_TIMEOUT_MS / 1000}s (still ${sandbox.state})`,
       )
     }
     if (signal.aborted) throw signal.reason
@@ -388,43 +483,54 @@ export function retryAfterMs(
  * The account's pool: Boat's start caps (the paid ceilings when the account pays for starts past
  * its plan), less the hour's starts already made, and the machines it would still run.
  */
-export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) => {
-  const api = await boatClient(sandbox, o.root)
-  const limits = await readLimits(api)
-  const k = sandbox.attemptsPerMachine ?? 1
+export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) =>
+  openVmPool(boatService(sandbox), boatSpec(sandbox), await boatClient(sandbox, o.root), o.runId)
+
+/** The pool of `spec`'s machines on `api`, within the start caps and machines its limits allow. */
+export async function openVmPool(
+  service: VmService,
+  spec: VmSpec,
+  api: BoatClient,
+  runId: string,
+): ReturnType<OpenPool<BoatSandboxDescriptor>> {
+  const limits = await readLimits(service, api)
+  const k = spec.attemptsPerMachine ?? 1
   const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
-  const capped = sandbox.maxConcurrent ? Math.ceil(sandbox.maxConcurrent / k) : free
+  const capped = spec.maxConcurrent ? Math.ceil(spec.maxConcurrent / k) : free
   const caps = limits?.startLimitsWithWallet ?? limits?.startLimits
   const hourUsed = limits?.starts?.hour?.used ?? 0
+  const left = caps?.perHour === undefined ? null : caps.perHour - hourUsed
   return {
-    provider: boatPoolProvider(sandbox, api, o.runId),
+    provider: vmPoolProvider(service, spec, api, runId),
     options: {
       limits: {
         machines: Math.min(free, capped),
         startsPerMinute: caps?.perMinute ?? null,
-        startsPerHour: caps?.perHour === undefined ? null : Math.max(1, caps.perHour - hourUsed),
+        ...(service.starts === 'per run'
+          ? { startsPerHour: null, starts: left === null ? null : Math.max(0, left) }
+          : { startsPerHour: left === null ? null : Math.max(1, left) }),
       },
       attemptsPerMachine: k,
-      reuse: sandbox.reuse ?? false,
+      reuse: spec.reuse ?? false,
     },
   }
 }
 
-let limitsWarned = false
+const limitsWarned = new Set<string>()
 
 /**
- * The account's limits, or null, warning once, when Boat doesn't answer: the pool then runs one
- * machine with no start caps of its own, holding back only when Boat refuses a start.
+ * The account's limits, or null, warning once, when the service doesn't answer: the pool then
+ * runs one machine with no start caps of its own, holding back only when a start is refused.
  */
-async function readLimits(api: BoatClient | null): Promise<BoatLimits | null> {
+async function readLimits(service: VmService, api: BoatClient | null): Promise<BoatLimits | null> {
   try {
-    if (!api) throw new Error('no Boat client')
+    if (!api) throw new Error(`no ${service.name} client`)
     return (await api.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })) as BoatLimits
   } catch (error) {
-    if (!limitsWarned) {
-      limitsWarned = true
+    if (!limitsWarned.has(service.kind)) {
+      limitsWarned.add(service.kind)
       console.warn(
-        `warning: boat() couldn't read the account's limits (${(error as Error)?.message ?? error}), so the run starts one machine at a time and runs its attemptsPerMachine attempts on it`,
+        `warning: ${service.helper} couldn't read the account's limits (${(error as Error)?.message ?? error}), so the run starts one machine at a time and runs its attemptsPerMachine attempts on it`,
       )
     }
     return null
@@ -440,21 +546,24 @@ type BoatLimits = {
   starts?: { hour?: { used?: number } | null } | null
 }
 
-/** Starting, keeping and removing `descriptor`'s machines for the run's pool, in the main process. */
-export function boatPoolProvider(
-  descriptor: BoatSandboxDescriptor,
+/** Starting, keeping and removing `spec`'s machines for the run's pool, in the main process. */
+export function vmPoolProvider(
+  service: VmService,
+  spec: VmSpec,
   api: BoatClient,
   runId: string,
 ): PoolProvider<PooledSshMachine> {
-  const type = descriptor.type ?? 'small'
-  const labels = { ...sandboxLabels(), ...runLabels(descriptor, runId) }
+  const { type, size } = spec
+  const labels = { ...sandboxLabels(), ...runLabels(spec, runId) }
   const dirs = new Map<string, string>()
   return {
-    helper: 'boat()',
+    helper: service.helper,
     rateLimited: (error) =>
       error instanceof BoatRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
     async keepAlive(id, ttlSeconds) {
-      await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+      const updated = await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+      const short = tooShort(service, id, ttlSeconds, updated?.sandbox?.ttlSeconds)
+      if (short) throw short
     },
     async remove(id) {
       await deleteSandbox(api, id).catch(() => {})
@@ -463,12 +572,12 @@ export function boatPoolProvider(
       if (dir) await rm(dir, { recursive: true, force: true })
     },
     async start(signal, ttlSeconds) {
-      const name = `${runPrefix(descriptor, runId)}${randomBytes(3).toString('hex')}`
-      const dir = await mkdtemp(join(tmpdir(), 'reeval-boat-'))
+      const name = `${runPrefix(spec, runId)}${randomBytes(3).toString('hex')}`
+      const dir = await mkdtemp(join(tmpdir(), `reeval-${service.kind}-`))
       let id: string | undefined
       let ready = false
       try {
-        const key = await newKey(dir, 'Boat')
+        const key = await newKey(dir, service.name)
         const made = await api
           .create({
             idempotencyKey: name,
@@ -487,26 +596,31 @@ export function boatPoolProvider(
             if (status(error) === 429) {
               const response = (error as { response?: Response }).response
               throw new BoatRateLimited(
-                `Boat is limiting starts: ${why}`,
+                `${service.name} is limiting starts: ${why}`,
                 retryAfterMs(response?.headers.get('retry-after') ?? null, why),
               )
             }
-            throw new InfraError(`Boat didn't create a sandbox: ${why}`)
+            if (status(error) === 403) {
+              throw new InfraError(
+                `${service.name} won't start another sandbox for this ${service.scope}: ${why}`,
+              )
+            }
+            throw await serviceFailed(service, error, "didn't create a sandbox", why)
           })
         id = made.sandbox.id
-        await untilReady(api, id, signal)
+        const short = tooShort(service, id, ttlSeconds, made.ttlSeconds ?? made.sandbox.ttlSeconds)
+        if (short) throw short
+        await untilReady(service, api, id, signal)
         ready = true
         const ssh = await api
           .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
           .catch(async (error: unknown) => {
-            throw new InfraError(
-              `Boat didn't authorize the machine's SSH key: ${await boatError(error)}`,
-            )
+            throw await serviceFailed(service, error, "didn't authorize the machine's SSH key")
           })
         const routes = sshRoutes(ssh)
         if (!routes.length || !ssh.hostKey) {
           throw new InfraError(
-            `Boat gave sandbox ${id} no SSH address and host key to connect with`,
+            `${service.name} gave sandbox ${id} no SSH address and host key to connect with`,
           )
         }
         const knownHostsFile = join(dir, 'known_hosts')
@@ -515,7 +629,7 @@ export function boatPoolProvider(
         signal.throwIfAborted()
         if ('why' in reached) {
           throw new InfraError(
-            `Boat sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
+            `${service.name} sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
           )
         }
         dirs.set(id, dir)
@@ -524,7 +638,7 @@ export function boatPoolProvider(
           info: {
             id,
             name,
-            size: type,
+            size,
             host: reached.route.host,
             port: reached.route.port,
             route: routeLabel(reached.route),
@@ -574,6 +688,13 @@ async function sandboxesNamed(
   return found
 }
 
+/** Deletes every sandbox on `api` whose name starts with `prefix`, waiting on it for so long. */
+export async function removeNamed(api: BoatClient, prefix: string): Promise<void> {
+  const signal = AbortSignal.timeout(CLEANUP_TIMEOUT_MS)
+  const left = await sandboxesNamed(api, prefix, signal).catch(() => [])
+  await Promise.all(left.map((s) => deleteSandbox(api, s.id, signal).catch(() => {})))
+}
+
 /**
  * Deletes every sandbox the run left on each account and prefix in `sandboxes`. Nothing else
  * names them: another prefix, or another run's tag, is someone else's.
@@ -589,89 +710,117 @@ export async function removeRunSandboxes(
     if (seen.has(key) || boatKeyProblem(sandbox)) continue
     seen.add(key)
     const api = await boatClient(sandbox).catch(() => null)
-    if (!api) continue
-    const signal = AbortSignal.timeout(CLEANUP_TIMEOUT_MS)
-    const left = await sandboxesNamed(api, prefix, signal).catch(() => [])
-    await Promise.all(left.map((s) => deleteSandbox(api, s.id, signal).catch(() => {})))
+    if (api) await removeNamed(api, prefix)
   }
 }
 
+export const boatCapacity = async (sandbox: BoatSandboxDescriptor) =>
+  vmCapacity(boatService(sandbox), boatSpec(sandbox), await boatClient(sandbox).catch(() => null))
+
 /**
- * Machines Boat would still start for the account (its cap on sandboxes at once, less what's
- * running), and the attempts the run's pool keeps going on them: a minute's starts' worth of
- * machines at most, each running `attemptsPerMachine`.
+ * Machines the service would still start for the account (its cap on sandboxes at once, less
+ * what's running), and the attempts the run's pool keeps going on them: a minute's starts' worth
+ * of machines at most, each running `attemptsPerMachine`.
  */
-export async function boatCapacity(
-  sandbox: BoatSandboxDescriptor,
+export async function vmCapacity(
+  service: VmService,
+  spec: VmSpec,
+  api: BoatClient | null,
 ): Promise<{ machines: number; attempts: number }> {
-  const api = await boatClient(sandbox).catch(() => null)
-  const limits = await readLimits(api)
-  const k = sandbox.attemptsPerMachine ?? 1
-  if (!limits) return { machines: 1, attempts: Math.min(k, sandbox.maxConcurrent ?? k) }
+  const limits = await readLimits(service, api)
+  const k = spec.attemptsPerMachine ?? 1
+  if (!limits) return { machines: 1, attempts: Math.min(k, spec.maxConcurrent ?? k) }
   const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
   const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
   const attempts = Math.min(machines, perMinute ?? machines) * k
-  return { machines, attempts: Math.max(1, Math.min(attempts, sandbox.maxConcurrent ?? attempts)) }
+  return { machines, attempts: Math.max(1, Math.min(attempts, spec.maxConcurrent ?? attempts)) }
 }
 
 /**
  * Preflight's check of one account: the host has OpenSSH, the key is set, the SDK loads, Boat
  * takes the key and would start the machine size asked for.
  */
-export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: string) {
+export const checkBoat = (sandbox: BoatSandboxDescriptor, projectRoot: string) =>
+  checkVmService(boatService(sandbox), boatSpec(sandbox), () => boatClient(sandbox, projectRoot))
+
+/**
+ * Preflight's check of a service: the labels parse, the host has OpenSSH, `client` makes a client,
+ * the service takes its credential and would start `spec`'s machine type.
+ */
+export async function checkVmService(
+  service: VmService,
+  spec: VmSpec,
+  client: () => Promise<BoatClient>,
+): Promise<void> {
   const refuse = (message: string, usage: boolean) =>
     new PrepareError({
       class: 'config',
-      stage: 'boat',
+      stage: service.kind,
       ref: null,
       cause: null,
       log: null,
       usage,
       message,
     })
+  let labels: Record<string, string>
   try {
-    sandboxLabels()
+    labels = sandboxLabels()
   } catch (error) {
     throw refuse((error as Error).message, true)
+  }
+  const reserved = Object.keys(labels).find(
+    (key) => service.reservedLabels && key.toLowerCase().startsWith(service.reservedLabels),
+  )
+  if (reserved) {
+    throw refuse(
+      `${SANDBOX_LABELS} sets ${reserved}, and keys starting ${service.reservedLabels} are ${service.name}'s own`,
+      true,
+    )
+  }
+  const own = Object.keys(runLabels(spec, 'run')).length
+  if (Object.keys(labels).length + own > service.maxLabels) {
+    throw refuse(
+      `${SANDBOX_LABELS} sets more than the ${service.maxLabels - own} labels ${service.helper} takes beside reeval's own`,
+      true,
+    )
   }
   const tool = await missingSshTool()
   if (tool) {
     throw refuse(
-      `boat() runs every command over SSH, and there's no ${tool} on PATH: install an OpenSSH client (openssh-client on Debian and Ubuntu)`,
+      `${service.helper} runs every command over SSH, and there's no ${tool} on PATH: install an OpenSSH client (openssh-client on Debian and Ubuntu)`,
       true,
     )
   }
-  const api = await boatClient(sandbox, projectRoot)
+  const api = await client()
   const limits = await api
     .limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
     .catch(async (error: unknown) => {
       const code = status(error)
       if (code === 401 || code === 403) {
         throw refuse(
-          `Boat refused the API key in ${sandbox.apiKey.from}: ${await boatError(error)}`,
+          `${service.name} refused ${service.credential}: ${await boatError(error)}`,
           true,
         )
       }
       throw new PrepareError({
         class: 'transient',
-        stage: 'boat',
+        stage: service.kind,
         ref: null,
         cause: null,
         log: null,
-        message: `Couldn't reach Boat: ${await boatError(error)}`,
+        message: `Couldn't reach ${service.name}: ${await boatError(error)}`,
       })
     })
-  const type = sandbox.type ?? 'small'
-  const machine = limits.machineTypes?.find((m) => m.type === type)
+  const machine = limits.machineTypes?.find((m) => m.type === spec.type)
   if (machine && !machine.available) {
     throw refuse(
-      `Boat won't start a ${type} machine on this account: ${machine.reason ?? 'unavailable'}`,
+      `${service.name} won't start a ${spec.size} machine on this ${service.scope}: ${machine.reason ?? 'unavailable'}`,
       true,
     )
   }
   if (!limits.canStart) {
     throw refuse(
-      `Boat won't start sandboxes on this account: ${limits.startBlockedReason ?? 'no reason given'}`,
+      `${service.name} won't start sandboxes on this ${service.scope}: ${limits.startBlockedReason ?? 'no reason given'}`,
       false,
     )
   }

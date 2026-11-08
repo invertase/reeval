@@ -16,6 +16,8 @@ export type PoolLimits = {
   startsPerMinute?: number | null
   /** Starts in any hour, counting the ones the account made before this run. */
   startsPerHour?: number | null
+  /** Starts left for the rest of the run, when the provider gives the run a budget of them. */
+  starts?: number | null
 }
 
 /** A rate-limited start, and how long the provider asked to wait (null: it didn't say). */
@@ -140,6 +142,7 @@ export class MachinePool<M> {
   readonly #leased = new Set<Slot<M>>()
   readonly #slots: Pool<Slot<M>>
   readonly #queues: PQueue[] = []
+  #startsLeft: number | null
   readonly #closing = new AbortController()
   readonly #roomWaiters = new Set<() => void>()
   readonly #stopReason: InfraError
@@ -169,6 +172,7 @@ export class MachinePool<M> {
       attemptsPerMachine: Math.max(1, Math.floor(options.attemptsPerMachine)),
     }
     this.#backoffMs = this.#options.backoffMs
+    this.#startsLeft = options.limits.starts ?? null
     const { startsPerMinute, startsPerHour } = options.limits
     const { windowsMs } = this.#options
     for (const [cap, interval] of [
@@ -471,6 +475,14 @@ export class MachinePool<M> {
         this.#gate(
           async () => {
             signal.throwIfAborted()
+            if (this.#startsLeft !== null) {
+              if (this.#startsLeft <= 0) {
+                throw new InfraError(
+                  `${provider.helper} has used every machine start the run has (${this.#options.limits.starts})`,
+                )
+              }
+              this.#startsLeft--
+            }
             this.#stats.starts++
             // Only the pool's close cuts a start short: a machine stopped mid-provision can come up
             // anyway (Boat drops a delete sent then), and only a canceled run reaps by name.
@@ -497,6 +509,8 @@ export class MachinePool<M> {
         onFailedAttempt: async ({ error }) => {
           const limited = provider.rateLimited(error)
           if (!limited) return
+          // A refused start started nothing, so the run's budget keeps it.
+          if (this.#startsLeft !== null) this.#startsLeft++
           this.#stats.rateLimited++
           onRateLimit()
           const wait = limited.retryAfterMs ?? this.#nextBackoff()

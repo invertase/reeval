@@ -13,6 +13,7 @@ import type {
 } from '../types.ts'
 import { boatProblem } from './boat.ts'
 import { daytonaProblem } from './daytona.ts'
+import { hostedProblem } from './hosted.ts'
 import {
   type Assert,
   closest,
@@ -240,6 +241,7 @@ export function sandboxProblem(value: SandboxDescriptor) {
   if (value.kind === 'tart') return tartProblem(value)
   if (value.kind === 'boat') return boatProblem(value)
   if (value.kind === 'daytona') return daytonaProblem(value)
+  if (value.kind === 'hosted') return hostedProblem(value)
   return value.kind === 'docker'
     ? named(
         refusal(dockerSandboxSchema, value, explainDocker, {
