@@ -71,7 +71,7 @@ export type VmSpec = {
   attemptsPerMachine?: number
 }
 
-const boatService = (sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): VmService => ({
+export const boatService = (sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): VmService => ({
   helper: 'boat()',
   kind: 'boat',
   name: 'Boat',
@@ -310,7 +310,11 @@ async function untilReady(
 }
 
 /** Deletes a sandbox; one already gone is deleted. */
-async function deleteSandbox(api: BoatClient, id: string, signal?: AbortSignal): Promise<void> {
+export async function deleteSandbox(
+  api: BoatClient,
+  id: string,
+  signal?: AbortSignal,
+): Promise<void> {
   try {
     await api.deleteSandbox({ sandboxId: id, xAsciiConfirmDelete: id }, { signal })
   } catch (error) {
@@ -573,87 +577,122 @@ export function vmPoolProvider(
     },
     async start(signal, ttlSeconds) {
       const name = `${runPrefix(spec, runId)}${randomBytes(3).toString('hex')}`
-      const dir = await mkdtemp(join(tmpdir(), `reeval-${service.kind}-`))
-      let id: string | undefined
-      let ready = false
-      try {
-        const key = await newKey(dir, service.name)
-        const made = await api
-          .create({
-            idempotencyKey: name,
-            createSandboxRequest: {
-              type,
-              name,
-              ttlSeconds,
-              noEnv: true,
-              snapshots: false,
-              monitoring: false,
-              labels,
-            },
-          })
-          .catch(async (error: unknown) => {
-            const why = await boatError(error)
-            if (status(error) === 429) {
-              const response = (error as { response?: Response }).response
-              throw new BoatRateLimited(
-                `${service.name} is limiting starts: ${why}`,
-                retryAfterMs(response?.headers.get('retry-after') ?? null, why),
-              )
-            }
-            if (status(error) === 403) {
-              throw new InfraError(
-                `${service.name} won't start another sandbox for this ${service.scope}: ${why}`,
-              )
-            }
-            throw await serviceFailed(service, error, "didn't create a sandbox", why)
-          })
-        id = made.sandbox.id
-        const short = tooShort(service, id, ttlSeconds, made.ttlSeconds ?? made.sandbox.ttlSeconds)
-        if (short) throw short
-        await untilReady(service, api, id, signal)
-        ready = true
-        const ssh = await api
-          .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
-          .catch(async (error: unknown) => {
-            throw await serviceFailed(service, error, "didn't authorize the machine's SSH key")
-          })
-        const routes = sshRoutes(ssh)
-        if (!routes.length || !ssh.hostKey) {
-          throw new InfraError(
-            `${service.name} gave sandbox ${id} no SSH address and host key to connect with`,
-          )
-        }
-        const knownHostsFile = join(dir, 'known_hosts')
-        await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
-        const reached = await firstReachable(routes, { signal })
-        signal.throwIfAborted()
-        if ('why' in reached) {
-          throw new InfraError(
-            `${service.name} sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
-          )
-        }
-        dirs.set(id, dir)
-        return {
-          id,
-          info: {
-            id,
-            name,
-            size,
-            host: reached.route.host,
-            port: reached.route.port,
-            route: routeLabel(reached.route),
-            user: ssh.sshUser ?? 'user',
-            identityFile: key.file,
-            knownHostsFile,
-          },
-        }
-      } catch (error) {
-        if (id && ready) await deleteSandbox(api, id).catch(() => {})
-        else if (id) await deleteUntilGone(api, id, { signal }).catch(() => {})
-        await rm(dir, { recursive: true, force: true })
-        throw error
-      }
+      const vm = await startVm(service, api, {
+        name,
+        type,
+        size,
+        ttlSeconds,
+        snapshots: false,
+        labels,
+        signal,
+      })
+      dirs.set(vm.id, vm.dir)
+      return { id: vm.id, info: vm.info }
     },
+  }
+}
+
+/** A machine {@link startVm} started: its id, how to reach it, and its key's directory. */
+export type StartedVm = { id: string; info: PooledSshMachine; dir: string }
+
+/**
+ * Creates a machine named `name`, waits until it's ready and reachable over SSH with a key of its
+ * own, and returns it; one that fails on the way is deleted. The caller removes `dir` with it.
+ */
+export async function startVm(
+  service: VmService,
+  api: BoatClient,
+  o: {
+    name: string
+    type: string
+    size: string
+    ttlSeconds: number
+    /** Whether the machine can be saved as a snapshot. */
+    snapshots: boolean
+    labels: Record<string, string>
+    signal: AbortSignal
+  },
+): Promise<StartedVm> {
+  const { name, type, size, ttlSeconds, signal } = o
+  const dir = await mkdtemp(join(tmpdir(), `reeval-${service.kind}-`))
+  let id: string | undefined
+  let ready = false
+  try {
+    const key = await newKey(dir, service.name)
+    const made = await api
+      .create({
+        idempotencyKey: name,
+        createSandboxRequest: {
+          type,
+          name,
+          ttlSeconds,
+          noEnv: true,
+          snapshots: o.snapshots,
+          monitoring: false,
+          labels: o.labels,
+        },
+      })
+      .catch(async (error: unknown) => {
+        const why = await boatError(error)
+        if (status(error) === 429) {
+          const response = (error as { response?: Response }).response
+          throw new BoatRateLimited(
+            `${service.name} is limiting starts: ${why}`,
+            retryAfterMs(response?.headers.get('retry-after') ?? null, why),
+          )
+        }
+        if (status(error) === 403) {
+          throw new InfraError(
+            `${service.name} won't start another sandbox for this ${service.scope}: ${why}`,
+          )
+        }
+        throw await serviceFailed(service, error, "didn't create a sandbox", why)
+      })
+    id = made.sandbox.id
+    const short = tooShort(service, id, ttlSeconds, made.ttlSeconds ?? made.sandbox.ttlSeconds)
+    if (short) throw short
+    await untilReady(service, api, id, signal)
+    ready = true
+    const ssh = await api
+      .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
+      .catch(async (error: unknown) => {
+        throw await serviceFailed(service, error, "didn't authorize the machine's SSH key")
+      })
+    const routes = sshRoutes(ssh)
+    if (!routes.length || !ssh.hostKey) {
+      throw new InfraError(
+        `${service.name} gave sandbox ${id} no SSH address and host key to connect with`,
+      )
+    }
+    const knownHostsFile = join(dir, 'known_hosts')
+    await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
+    const reached = await firstReachable(routes, { signal })
+    signal.throwIfAborted()
+    if ('why' in reached) {
+      throw new InfraError(
+        `${service.name} sandbox ${id} is up, but this host can't reach its SSH server: ${reached.why}`,
+      )
+    }
+    return {
+      id,
+      dir,
+      info: {
+        id,
+        name,
+        size,
+        host: reached.route.host,
+        port: reached.route.port,
+        route: routeLabel(reached.route),
+        user: ssh.sshUser ?? 'user',
+        identityFile: key.file,
+        knownHostsFile,
+      },
+    }
+  } catch (error) {
+    if (id && ready) await deleteSandbox(api, id).catch(() => {})
+    else if (id) await deleteUntilGone(api, id, { signal }).catch(() => {})
+    await rm(dir, { recursive: true, force: true })
+    throw error
   }
 }
 

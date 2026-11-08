@@ -1,5 +1,5 @@
 // A fake Boat API for tests: the routes of `@boatdev/sdk` that reeval calls (create, get, sshkey,
-// list by name prefix, update, delete and limits) on 127.0.0.1, with Boat's own shapes and quirks: a
+// list by name prefix, update, delete, limits and saved snapshots) on 127.0.0.1, with Boat's own shapes and quirks: a
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
 // call needs the key as a bearer token. Where its sandboxes run is up to `machines`: an SSH VM in a
 // container (`startSshVm`, ssh-vm.ts), or an address nothing listens on (`unreachableMachines`),
@@ -28,6 +28,18 @@ type FakeSandbox = {
   polls: number
 }
 
+export type FakeSnapshot = {
+  name: string
+  status: 'saving' | 'ready' | 'failed'
+  error?: string
+  sourceSandboxId: string
+  /** The saved sandbox's name, as the snapshot's own record of where it came from. */
+  sourceName?: string
+  sizeBytes?: number
+  /** `get` calls still to answer `saving`. */
+  polls: number
+}
+
 export type FakeBoat = {
   /** BOAT_BASE_URL for reeval. */
   url: string
@@ -42,6 +54,18 @@ export type FakeBoat = {
     /** Answered 429 by {@link FakeBoat.refuseStarts}. */
     refused?: true
   }>
+  /**
+   * Saved snapshots by name. A save reports `saving` for its first `savePolls` gets, then `ready`
+   * with the sandbox it was saved from, or `failed` when {@link FakeBoat.failSaves} says so.
+   */
+  snapshots: Map<string, FakeSnapshot>
+  /** The next `count` saves fail with `error`, as a save Boat couldn't capture. */
+  failSaves(count: number, error?: string): void
+  /**
+   * The next `count` saves find the name taken by a ready snapshot another run saved first, and
+   * are answered 409, as Boat refuses a name that's in use.
+   */
+  loseSaves(count: number): void
   /**
    * Answer the next `count` creates of a name starting `namePrefix` with 429 and
    * `Retry-After: retryAfterSeconds`, as Boat does past a start limit.
@@ -65,12 +89,24 @@ async function bodyOf(req: IncomingMessage): Promise<Record<string, unknown>> {
 
 export async function fakeBoat(
   machines: Machines,
-  options: { key?: string; maxActive?: number } = {},
+  options: { key?: string; maxActive?: number; savePolls?: number } = {},
 ): Promise<FakeBoat> {
   const key = options.key ?? `boat_test_${randomBytes(8).toString('hex')}`
   const sandboxes = new Map<string, FakeSandbox>()
   const requests: FakeBoat['requests'] = []
   let refusals = { count: 0, namePrefix: '', retryAfterSeconds: 1 }
+  const snapshots = new Map<string, FakeSnapshot>()
+  const snapshotsOn = new Set<string>()
+  let saveFailures = { count: 0, error: 'capture failed' }
+  let lostSaves = 0
+  const snapshotView = (s: FakeSnapshot) => ({
+    name: s.name,
+    status: s.status,
+    sourceSandboxId: s.sourceSandboxId,
+    createdAt: new Date(0).toISOString(),
+    ...(s.error && { error: s.error }),
+    ...(s.sizeBytes !== undefined && { sizeBytes: s.sizeBytes }),
+  })
   const view = (s: FakeSandbox) => ({
     id: s.id,
     name: s.name,
@@ -105,6 +141,69 @@ export async function fakeBoat(
         ],
       })
     }
+    if (collection === 'saved-snapshots') {
+      if (!id && method === 'POST') {
+        const request = body as { sandboxId: string; name: string }
+        const source = sandboxes.get(request.sandboxId)
+        if (!source) return json(404, { error: { code: 'not_found' } })
+        if (!snapshotsOn.has(source.id)) {
+          return json(409, {
+            error: { code: 'snapshots_disabled', message: 'this sandbox has snapshots off' },
+          })
+        }
+        if (lostSaves > 0) {
+          lostSaves--
+          snapshots.set(request.name, {
+            name: request.name,
+            status: 'ready',
+            sourceSandboxId: 'bx_other_run',
+            sizeBytes: 300_000_000,
+            polls: 0,
+          })
+        }
+        if (snapshots.has(request.name)) {
+          return json(409, {
+            error: { code: 'snapshot_exists', message: `a snapshot named ${request.name} exists` },
+          })
+        }
+        const failing = saveFailures.count > 0
+        if (failing) saveFailures.count--
+        const snapshot: FakeSnapshot = {
+          name: request.name,
+          status: 'saving',
+          sourceSandboxId: source.id,
+          sourceName: source.name,
+          polls: options.savePolls ?? 1,
+          ...(failing && { error: saveFailures.error }),
+        }
+        snapshots.set(request.name, snapshot)
+        return json(202, {
+          ok: true,
+          type: 'snapshot.saved.saving',
+          status: 'saving',
+          snapshot: snapshotView(snapshot),
+        })
+      }
+      const snapshot = snapshots.get(decodeURIComponent(id ?? ''))
+      if (!snapshot) {
+        return json(404, { error: { code: 'snapshot_not_found', message: `no snapshot ${id}` } })
+      }
+      if (method === 'GET') {
+        if (snapshot.status === 'saving' && snapshot.polls-- <= 0) {
+          snapshot.status = snapshot.error ? 'failed' : 'ready'
+          if (snapshot.status === 'ready') snapshot.sizeBytes = 400_000_000
+        }
+        return json(200, {
+          ok: true,
+          type: 'snapshot.saved.info',
+          snapshot: snapshotView(snapshot),
+        })
+      }
+      if (method === 'DELETE') {
+        snapshots.delete(snapshot.name)
+        return json(200, { ok: true })
+      }
+    }
     if (collection !== 'sandboxes') return json(404, { error: { code: 'not_found' } })
     if (
       !id &&
@@ -121,7 +220,12 @@ export async function fakeBoat(
       )
     }
     if (!id && method === 'POST') {
-      const request = body as { name: string; type?: string; ttlSeconds?: number }
+      const request = body as {
+        name: string
+        type?: string
+        ttlSeconds?: number
+        snapshots?: boolean
+      }
       const existing = [...sandboxes.values()].find((s) => s.name === request.name)
       if (existing) return json(200, { ok: true, sandbox: view(existing) })
       const sandbox: FakeSandbox = {
@@ -143,6 +247,7 @@ export async function fakeBoat(
         },
       )
       sandboxes.set(sandbox.id, sandbox)
+      if (request.snapshots) snapshotsOn.add(sandbox.id)
       return json(201, { ok: true, type: sandbox.type, status: 'starting', sandbox: view(sandbox) })
     }
     if (!id && method === 'GET') {
@@ -206,6 +311,13 @@ export async function fakeBoat(
     key,
     live: () => [...sandboxes.values()].map((s) => s.name),
     requests,
+    snapshots,
+    failSaves(count, error = 'capture failed') {
+      saveFailures = { count, error }
+    },
+    loseSaves(count) {
+      lostSaves = count
+    },
     refuseStarts(count, o = {}) {
       refusals = {
         count,

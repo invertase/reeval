@@ -4,6 +4,7 @@
 // Each container is labeled with its VM's name, so a test can look into one from outside.
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { statSync } from 'node:fs'
 import { connect } from 'node:net'
 import { NODE_IMAGE } from '../../../sandbox-docker/src/build-image.ts'
 
@@ -33,8 +34,12 @@ RUN useradd --create-home --shell /bin/bash user \\
  && ssh-keygen -A
 `
 
-/** The Node an image has where reeval looks for it: each provider's VMs have their own. */
-export type SshVmLayout = 'boat' | 'daytona'
+/**
+ * The Node an image has where reeval looks for it: each provider's VMs have their own.
+ * `boat-docker` is Boat's with the Docker CLI on the host's daemon, as Boat's VMs have Docker;
+ * its prunes do nothing, since the daemon is the host's.
+ */
+export type SshVmLayout = 'boat' | 'daytona' | 'boat-docker'
 
 /**
  * A cloud Linux VM's layout where it matters to reeval: a login user `user` with passwordless
@@ -43,11 +48,22 @@ export type SshVmLayout = 'boat' | 'daytona'
  * on the login user's `PATH` but not the system's, which has a Node with no npm beside it. No
  * `reeval` user: the session makes it.
  */
-const SSH_VM_DOCKERFILES: Record<SshVmLayout, string> = {
-  boat: `${SSH_VM_BASE}RUN mkdir -p /home/user/.nvm/versions/node/current/bin \\
+const BOAT_VM = `${SSH_VM_BASE}RUN mkdir -p /home/user/.nvm/versions/node/current/bin \\
  && mv /usr/local/bin/node /home/user/.nvm/versions/node/current/bin/node \\
  && ln -s /home/user/.nvm/versions/node/current/bin/node /usr/local/bin/node \\
  && chown -R user:user /home/user/.nvm
+`
+/** The Docker CLI and buildx the `boat-docker` layout copies in. */
+const DOCKER_CLI_IMAGE = 'docker:29-cli'
+const SSH_VM_DOCKERFILES: Record<SshVmLayout, string> = {
+  boat: `${BOAT_VM}CMD ["/usr/sbin/sshd", "-D", "-e"]
+`,
+  'boat-docker': `${BOAT_VM}COPY --from=${DOCKER_CLI_IMAGE} /usr/local/bin/docker /usr/local/libexec/docker/docker
+COPY --from=${DOCKER_CLI_IMAGE} /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+RUN printf '%s\\n' '#!/bin/sh' \\
+  'case "$1 $2" in "builder prune"|"image prune"|"system prune") exit 0;; esac' \\
+  'exec /usr/local/libexec/docker/docker "$@"' > /usr/local/bin/docker \\
+ && chmod +x /usr/local/bin/docker
 CMD ["/usr/sbin/sshd", "-D", "-e"]
 `,
   daytona: `${SSH_VM_BASE}RUN v=/usr/local/share/nvm/versions/node/v0 && mkdir -p $v/bin $v/lib \\
@@ -67,9 +83,9 @@ export const SSH_VM_IMAGE = imageOf('boat')
 /** The label on every fake VM's container, its value the VM's name. */
 export const SSH_VM_LABEL = 'reeval.test.fake-ssh-vm'
 
-/** Builds each layout's fake VM image unless it's there. */
-export function buildSshVmImage(): void {
-  for (const layout of Object.keys(SSH_VM_DOCKERFILES) as SshVmLayout[]) {
+/** Builds each of `layouts`' fake VM image unless it's there. */
+export function buildSshVmImage(layouts: readonly SshVmLayout[] = ['boat', 'daytona']): void {
+  for (const layout of layouts) {
     const image = imageOf(layout)
     try {
       execFileSync('docker', ['image', 'inspect', image], { stdio: 'ignore' })
@@ -153,6 +169,8 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
     'apparmor=unconfined',
     // A Daytona sandbox is a container with limits of its own, which it reads its sizes from.
     ...(layout === 'daytona' ? DAYTONA_VM_LIMITS : []),
+    // Its Docker is the host's: images it builds and containers it makes are the host daemon's.
+    ...(layout === 'boat-docker' ? ['-v', `${DOCKER_SOCKET}:/var/run/docker.sock`] : []),
     '-p',
     '127.0.0.1::22',
     imageOf(layout),
@@ -161,6 +179,16 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
     await docker(['rm', '-f', id]).catch(() => {})
   }
   try {
+    if (layout === 'boat-docker') {
+      const gid = statSync(DOCKER_SOCKET).gid
+      await docker([
+        'exec',
+        id,
+        'sh',
+        '-c',
+        `getent group ${gid} >/dev/null || groupadd -g ${gid} docker; usermod -aG "$(getent group ${gid} | cut -d: -f1)" user`,
+      ])
+    }
     const mapped = await docker(['port', id, '22/tcp'])
     const port = Number(/:(\d+)\s*$/m.exec(mapped)?.[1])
     await sshUp(port)
@@ -205,6 +233,11 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
     throw error
   }
 }
+
+const DOCKER_SOCKET = '/var/run/docker.sock'
+
+/** A fake Boat VM whose Docker CLI reaches the host's daemon, for builds over its SSH. */
+export const startBoatDockerVm = (name: string) => startSshVm(name, 'boat-docker')
 
 /** A fake VM laid out as Daytona's sandboxes are. */
 export const startDaytonaVm = (name: string) => startSshVm(name, 'daytona')
