@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseCli } from './cli-parse.ts'
@@ -743,6 +743,7 @@ async function runCommand(
   if (startedWith && savedEvents) startedWith.events = savedEvents
   const eventsUrl = flags['events-url']
   if (eventsTo || eventsUrl) {
+    const shownRoot = fromCwd(root)
     eventStream = openEventStream({
       ...(eventsTo ? { file: eventsTo, append: continued } : {}),
       ...(eventsUrl ? { url: eventsUrl } : {}),
@@ -752,6 +753,7 @@ async function runCommand(
         startedAt: new Date().toISOString(),
         harness,
         verbosity: ctx.verbosity ?? 0,
+        ...(isAbsolute(shownRoot) ? {} : { root: shownRoot }),
       },
       warn: (message) => process.stderr.write(yellow(`reeval: ${message}\n`)),
     })
