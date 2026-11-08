@@ -220,6 +220,65 @@ describe('resources', () => {
     })
   })
 
+  test('the last reading waits for a sampler that starts after the attempt ended', {
+    skip: process.platform !== 'linux' && 'reads /proc',
+  }, async (t) => {
+    const calls = { kill: 0, run: 0 }
+    const children: ReturnType<typeof spawn>[] = []
+    t.after(() => {
+      for (const c of children) c.kill('SIGKILL')
+    })
+    const bash = bashHost(calls, children)
+    let running = false
+    const late: SamplerHost = {
+      spawn: async ({ command }) => {
+        setTimeout(() => {
+          running = true
+        }, 500)
+        return bash.spawn({ command: `sleep 0.5; ${command}` })
+      },
+      // As `docker exec` into an observer whose container hasn't started.
+      run: async (o) => (running ? bash.run(o) : { exitCode: 1, stdout: '' }),
+    }
+    const meter = startMeter([late], 'machine', { sandbox: 'boat' }, 200)
+    const r = await meter.stop({ gone: false })
+    assert.ok((r.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
+    assert.ok((r.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
+    assert.equal(r.usage?.partial, undefined, JSON.stringify(r))
+    assert.equal(calls.run, 1)
+  })
+
+  test('ready waits for the readings to begin, but not past an abort', {
+    skip: process.platform !== 'linux' && 'reads /proc',
+  }, async (t) => {
+    const children: ReturnType<typeof spawn>[] = []
+    t.after(() => {
+      for (const c of children) c.kill('SIGKILL')
+    })
+    const bash = bashHost({ kill: 0, run: 0 }, children)
+    const late: SamplerHost = {
+      spawn: ({ command }) => bash.spawn({ command: `sleep 0.5; ${command}` }),
+      run: bash.run,
+    }
+    const meter = startMeter([late], 'machine', { sandbox: 'boat' }, 200)
+    const from = performance.now()
+    await meter.ready()
+    assert.ok(performance.now() - from >= 450)
+    await meter.stop({ gone: false })
+
+    const stuck = startMeter(
+      [{ spawn: () => new Promise(() => {}), run: async () => ({ exitCode: 1, stdout: '' }) }],
+      'machine',
+      { sandbox: 'boat' },
+    )
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 100)
+    const at = performance.now()
+    await stuck.ready(controller.signal)
+    assert.ok(performance.now() - at < 1000)
+    await stuck.stop({ gone: true })
+  })
+
   test('a host whose script ends without its limits hands over to the next', {
     skip: process.platform !== 'linux' && 'reads /proc',
   }, async () => {

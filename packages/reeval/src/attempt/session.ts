@@ -683,6 +683,8 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     `${harnessId(spec.harness)} session ready in ${formatDuration(performance.now() - harnessStart)}`,
   )
   a.session = session
+  // The sampler started with the sandbox; the eval's body waits for it, so it's measured whole.
+  await a.meter?.ready(a.signal)
   const startMs = performance.now() - startedAt
   debugLog('container', `sandbox and session started in ${formatDuration(startMs)}`)
   // The environment's preparation plus this start, not the eval's own code before its first call.

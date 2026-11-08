@@ -5106,9 +5106,11 @@ async function containersGone(runId: string, cli: string, deadlineMs = 20_000): 
   const until = Date.now() + deadlineMs
   let left = ''
   do {
-    left = execFileSync(cli, ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
-      encoding: 'utf8',
-    }).trim()
+    left = execFileSync(
+      cli,
+      ['ps', '-a', '--filter', `label=${LABEL.run}=${runId}`, '--format', '{{.Names}} {{.State}}'],
+      { encoding: 'utf8' },
+    ).trim()
     if (!left) return
     await new Promise((r) => setTimeout(r, 250))
   } while (Date.now() < until)
