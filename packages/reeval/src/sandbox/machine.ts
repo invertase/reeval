@@ -56,9 +56,15 @@ export interface MachineProvider<D extends MachineDescriptor> extends SandboxHoo
   cleanupRun(runId: string, sandboxes?: readonly D[]): Promise<void>
   /**
    * Pools its machines in the run's main process (machine-service.ts): the attempts on sandboxes
-   * with the same `key` share one pool, which `open` makes, and its start rate.
+   * with the same `key` share one pool, which `open` makes. The pools whose sandboxes have the
+   * same `account` share its limits: the machines at once and the start rate. Without `account`,
+   * each pool has limits of its own.
    */
-  pool?: { key(sandbox: D, image?: unknown): string; open: OpenPool<D> }
+  pool?: {
+    key(sandbox: D, image?: unknown): string
+    account?(sandbox: D): string
+    open: OpenPool<D>
+  }
 }
 
 /**

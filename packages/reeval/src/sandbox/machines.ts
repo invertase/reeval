@@ -112,6 +112,7 @@ export const BOAT_MACHINE: MachineProvider<BoatSandboxDescriptor> = {
         s.maxConcurrent ?? null,
         typeof image === 'string' ? image : null,
       ]),
+    account: (s) => s.apiKey.from,
     async open(sandbox, o) {
       const { openBoatPool } = await import('./boat.ts')
       return openBoatPool(sandbox, o)
@@ -218,6 +219,8 @@ export const HOSTED_MACHINE: MachineProvider<HostedSandboxDescriptor> = {
         s.attemptsPerMachine ?? 1,
         s.maxConcurrent ?? null,
       ]),
+    // Every hosted VM of the run is on one service.
+    account: () => '',
     async open(sandbox, o) {
       const { openHostedPool } = await import('./hosted.ts')
       return openHostedPool(sandbox, o)

@@ -489,8 +489,9 @@ export function retryAfterMs(
 }
 
 /**
- * The account's pool: Boat's start caps (the paid ceilings when the account pays for starts past
- * its plan), less the hour's starts already made, and the machines it would still run.
+ * A pool on the account: Boat's start caps (the paid ceilings when the account pays for starts
+ * past its plan), less the hour's starts already made, and the machines it would still run, are
+ * the account's limits; `maxConcurrent` caps the pool's own machines.
  */
 export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) =>
   openVmPool(
@@ -518,12 +519,13 @@ export async function openVmPool(
     provider: vmPoolProvider(service, spec, api, runId),
     options: {
       limits: {
-        machines: Math.min(free, capped),
+        machines: free,
         startsPerMinute: caps?.perMinute ?? null,
         ...(service.starts === 'per run'
           ? { startsPerHour: null, starts: left === null ? null : Math.max(0, left) }
           : { startsPerHour: left === null ? null : Math.max(1, left) }),
       },
+      machines: Math.min(free, capped),
       attemptsPerMachine: k,
       reuse: spec.reuse ?? false,
     },

@@ -1074,7 +1074,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'boat.pool',
     area: 'Sandbox',
-    name: "`boat({ reuse, attemptsPerMachine })`: the run's machine pool, shared by every eval file's attempts, starting machines within Boat's start limits (a 429 holds every start for its `Retry-After`, then retries), handing a finished attempt's machine to the next with its slot reset, running up to `attemptsPerMachine` attempts at once on a machine as their own users, installing the harness's CLI once per machine and copying it into each slot's home, and deleting every machine when the run ends; refused for a harness whose bridge listens on a fixed port, unless the sandbox has an image recipe",
+    name: "`boat({ reuse, attemptsPerMachine })`: the run's machine pool, shared by every eval file's attempts, starting machines within Boat's limits, which the pools of every machine size and image on one account share (a 429 holds every start on the account for its `Retry-After`, then retries, and a pool that needs a machine when the account has none to spare has the machine idle longest in another pool removed), handing a finished attempt's machine to the next with its slot reset, running up to `attemptsPerMachine` attempts at once on a machine as their own users, installing the harness's CLI once per machine and copying it into each slot's home, and deleting every machine when the run ends; refused for a harness whose bridge listens on a fixed port, unless the sandbox has an image recipe",
     fixtures: [
       'sandbox/boat-pool-reuse',
       'sandbox/boat-shared-machine',

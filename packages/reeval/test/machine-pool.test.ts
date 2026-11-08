@@ -1,6 +1,8 @@
 // The machine pool on a fake provider that rate-limits: starts held to the windows, 429s waited
 // out (as the provider asks, else with backoff) without failing an attempt, real failures failing
-// one, slots reused or not, machines shared, idle and broken ones removed, and close removing all.
+// one, slots reused or not, machines shared, idle and broken ones removed, and close removing all;
+// and pools on one account sharing its machines and starts, an idle machine making way for
+// another pool's.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
@@ -9,6 +11,7 @@ import {
   type PoolProvider,
   type RateLimited,
 } from '../src/sandbox/pool.ts'
+import { type AccountOptions, PoolAccount } from '../src/sandbox/pool-account.ts'
 
 class RateLimitError extends Error {
   readonly retryAfterMs: number | null
@@ -248,6 +251,7 @@ describe('machine pool', () => {
       leases: 2,
       reusedLeases: 1,
       keepAliveFailed: 0,
+      evicted: 0,
     })
     await p.close()
     assert.deepEqual(provider.live(), [])
@@ -436,6 +440,161 @@ describe('machine pool', () => {
       a.release()
     } finally {
       await p.close()
+    }
+  })
+})
+
+describe('pools on one account', () => {
+  const account = (o: AccountOptions) => new PoolAccount('fake()', o)
+
+  test("share the account's machines: a pool waits while the others hold them all", async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 2 } })
+    const a = pool(provider, { account: shared })
+    const b = pool(provider, { account: shared })
+    try {
+      const [a1, a2] = await Promise.all([a.acquire(), a.acquire()])
+      let got: string | undefined
+      const waiting = b.acquire().then((l) => {
+        got = l.machine
+        return l
+      })
+      await new Promise((r) => setTimeout(r, 50))
+      assert.equal(got, undefined, 'b waits: the account has no machine to spare')
+      a1.release()
+      const b1 = await waiting
+      assert.equal(provider.peak(), 2)
+      a2.release()
+      b1.release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+    assert.deepEqual(provider.live(), [])
+  })
+
+  test("share the account's start windows", async () => {
+    const provider = fakeProvider()
+    const shared = account({
+      limits: { machines: 10, startsPerMinute: 2 },
+      windowsMs: { minute: 300, hour: 60_000 },
+    })
+    const a = pool(provider, { account: shared })
+    const b = pool(provider, { account: shared })
+    try {
+      const leases = await Promise.all([a.acquire(), b.acquire(), a.acquire(), b.acquire()])
+      const at = provider.started.map((s) => s.at).sort((x, y) => x - y)
+      assert.ok((at[2] as number) - (at[0] as number) >= 250, `starts at ${at.join(', ')}`)
+      for (const l of leases) l.release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+  })
+
+  test("a 429 in one pool holds the other pool's starts too", async () => {
+    let refused = false
+    const provider = fakeProvider((n) => {
+      if (n !== 0 || refused) return 'ok'
+      refused = true
+      return new RateLimitError(200)
+    })
+    const shared = account({ limits: { machines: 10 } })
+    const a = pool(provider, { account: shared })
+    const b = pool(provider, { account: shared })
+    try {
+      const first = a.acquire()
+      await until(() => provider.tries.length === 1)
+      await new Promise((r) => setTimeout(r, 20))
+      const second = await b.acquire()
+      assert.ok((provider.tries[1] as number) >= 150, `b tried at ${provider.tries[1]}ms`)
+      second.release()
+      ;(await first).release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+  })
+
+  test("a pool that needs a machine has another pool's idle one removed for it", async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 1 } })
+    const a = pool(provider, { account: shared, reuse: true })
+    const b = pool(provider, { account: shared, reuse: true })
+    try {
+      const a1 = await a.acquire()
+      a1.release()
+      const b1 = await b.acquire()
+      assert.deepEqual(provider.removed, [a1.machine])
+      assert.notEqual(b1.machine, a1.machine)
+      assert.equal(a.stats().evicted, 1)
+      b1.release()
+      const a2 = await a.acquire()
+      assert.deepEqual(provider.removed, [a1.machine, b1.machine], 'and back again')
+      a2.release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+    assert.deepEqual(provider.live(), [])
+  })
+
+  test('the machine idle longest goes, never one in use', async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 3 } })
+    const a = pool(provider, { account: shared, reuse: true })
+    const c = pool(provider, { account: shared, reuse: true })
+    const b = pool(provider, { account: shared, reuse: true })
+    try {
+      const [a1, c1, c2] = await Promise.all([a.acquire(), c.acquire(), c.acquire()])
+      a1.release()
+      await new Promise((r) => setTimeout(r, 20))
+      c1.release()
+      const b1 = await b.acquire()
+      assert.deepEqual(provider.removed, [a1.machine], "a's went idle first")
+      const b2 = b.acquire()
+      await until(() => provider.removed.length === 2)
+      assert.deepEqual(provider.removed, [a1.machine, c1.machine], "c's other machine is in use")
+      ;(await b2).release()
+      b1.release()
+      c2.release()
+    } finally {
+      await Promise.all([a.close(), b.close(), c.close()])
+    }
+  })
+
+  test("a pool at its own cap waits for its own machines, removing none of another pool's", async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 2 } })
+    const a = pool(provider, { account: shared, reuse: true })
+    const b = pool(provider, { account: shared, machines: 1 })
+    try {
+      ;(await a.acquire()).release()
+      const b1 = await b.acquire()
+      let got = false
+      const waiting = b.acquire().then((l) => {
+        got = true
+        return l
+      })
+      await new Promise((r) => setTimeout(r, 50))
+      assert.equal(got, false)
+      assert.deepEqual(provider.removed, [], "a's idle machine stays")
+      b1.release()
+      ;(await waiting).release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+  })
+
+  test("a closed pool's machines give the account its room back", async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 1 } })
+    const a = pool(provider, { account: shared })
+    const b = pool(provider, { account: shared })
+    try {
+      await a.acquire()
+      const waiting = b.acquire()
+      await new Promise((r) => setTimeout(r, 20))
+      await a.close()
+      ;(await waiting).release()
+    } finally {
+      await Promise.all([a.close(), b.close()])
     }
   })
 })

@@ -1,11 +1,13 @@
 // The run's machine pools, as the `machines` service: the main process holds one pool per
-// provider account and size, so every eval file's worker shares its start rate and its machines,
-// and closes them all when the run ends. A worker leases a slot over its IPC channel (or, outside
+// provider account, machine size and image, so every eval file's worker shares its machines, and
+// the pools on one account share its limits (`pool-account.ts`). It closes them all when the run
+// ends. A worker leases a slot over its IPC channel (or, outside
 // a worker, from pools in its own process) and gives it back when its attempt is done.
 import { callService } from '../scheduler/services.ts'
 import type { MachineDescriptor } from './machine.ts'
 import { MACHINE_PROVIDERS } from './machines.ts'
 import { type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
+import { PoolAccount } from './pool-account.ts'
 
 export const MACHINES = 'machines'
 
@@ -33,9 +35,13 @@ export type WireLease = LeaseFacts & { info: unknown }
 
 type Held = { owner: string; lease?: PoolLease<unknown>; waiting?: AbortController }
 
-/** How a sandbox kind pools its machines: one pool per `key`, opened with `open`. */
+/**
+ * How a sandbox kind pools its machines: one pool per `key`, opened with `open`, and the pools of
+ * one `account` under its limits.
+ */
 export type Pooled = {
   key(s: MachineDescriptor, image?: unknown): string
+  account?(s: MachineDescriptor): string
   open: OpenPool<MachineDescriptor>
 }
 
@@ -45,6 +51,7 @@ const registered = (sandbox: MachineDescriptor) =>
 /** The run's pools, keyed by provider account and size. */
 export class MachineService {
   readonly #pools = new Map<string, Promise<MachinePool<unknown>>>()
+  readonly #accounts = new Map<string, PoolAccount>()
   readonly #held = new Map<string, Held>()
   readonly #idleMs: number | undefined
   readonly #pooled: (sandbox: MachineDescriptor) => Pooled | undefined
@@ -116,6 +123,7 @@ export class MachineService {
     await Promise.all(
       [...this.#pools.values()].map((p) => p.then((pool) => pool.close()).catch(() => {})),
     )
+    for (const account of this.#accounts.values()) account.close()
   }
 
   #pool(call: Extract<MachineCall, { op: 'lease' }>): Promise<MachinePool<unknown>> {
@@ -125,13 +133,21 @@ export class MachineService {
     let pool = this.#pools.get(key)
     if (!pool) {
       const o = { runId: call.runId, root: call.root, image: call.image }
-      pool = pooled.open(call.sandbox, o).then(
-        ({ provider, options }) =>
-          new MachinePool(provider, {
-            ...options,
-            ...(this.#idleMs !== undefined && { idleMs: this.#idleMs }),
-          }),
-      )
+      const name =
+        pooled.account && `${call.runId}\0${call.sandbox.kind}\0${pooled.account(call.sandbox)}`
+      pool = pooled.open(call.sandbox, o).then(({ provider, options }) => {
+        let account = name ? this.#accounts.get(name) : undefined
+        if (name && !account) {
+          // The first pool's reading of the account's limits holds for the run.
+          account = new PoolAccount(provider.helper, options)
+          this.#accounts.set(name, account)
+        }
+        return new MachinePool(provider, {
+          ...options,
+          ...(account && { account }),
+          ...(this.#idleMs !== undefined && { idleMs: this.#idleMs }),
+        })
+      })
       pool.catch(() => this.#pools.delete(key))
       this.#pools.set(key, pool)
     }
