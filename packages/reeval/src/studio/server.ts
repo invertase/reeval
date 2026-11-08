@@ -4,12 +4,12 @@ import { readFile, stat } from 'node:fs/promises'
 import { extname, relative, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { gzipSync } from 'node:zlib'
+import { readTree, writeTar } from '@reeval/sandbox-docker'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
 import { attemptDebugDir, debugRoot, parseAttemptKey } from '../debug/files.ts'
 import { scratchDir } from '../history/files.ts'
-import { readTree, writeTar } from '../tarball.ts'
 import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
   DEBUG_LOG,

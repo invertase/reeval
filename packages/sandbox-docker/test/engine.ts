@@ -1,9 +1,9 @@
 // The engine the container tests run on: Docker, or Podman with REEVAL_TEST_ENGINE=podman. Each
 // test file drives the CLI as `CLI` and the session through `createSession`, so one suite covers both.
-import { ENGINES, type Engine } from '../src/engine.ts'
+import { ENGINES, type LocalEngine } from '../src/engine.ts'
 import { createDockerSession, type SessionOptions } from '../src/session.ts'
 
-export const ENGINE: Engine = process.env.REEVAL_TEST_ENGINE === 'podman' ? 'podman' : 'docker'
+export const ENGINE: LocalEngine = process.env.REEVAL_TEST_ENGINE === 'podman' ? 'podman' : 'docker'
 /**
  * Fail instead of skipping when the engine or reeval's image isn't there: CI's docker job sets
  * REEVAL_TEST_REQUIRE_DOCKER=1, its podman job REEVAL_TEST_REQUIRE_PODMAN=1.

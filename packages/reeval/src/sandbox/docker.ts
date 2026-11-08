@@ -9,10 +9,10 @@ import {
   type EgressOptions,
   EgressUnavailableError,
   ENGINES,
-  type Engine,
   engineSpec,
   imageInfo,
   LABEL,
+  type LocalEngine,
   SANDBOX_HOME,
   SANDBOX_ROOT,
   SANDBOX_STATE,
@@ -36,7 +36,7 @@ import { InfraError, type NetworkSandbox, type Sandbox } from './types.ts'
  */
 export async function removeRunContainers(
   runId: string,
-  engines: readonly Engine[] = ['docker'],
+  engines: readonly LocalEngine[] = ['docker'],
 ): Promise<void> {
   for (const engine of engines) {
     const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {

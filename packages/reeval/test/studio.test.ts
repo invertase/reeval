@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import { gunzipSync, gzipSync } from 'node:zlib'
+import { readTar, writeTar } from '@reeval/sandbox-docker'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { appFiles } from '../src/studio/app.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
-import { readTar, writeTar } from '../src/tarball.ts'
 import type { AnalysisNote } from '../src/view/analysis.ts'
 import {
   activityLabel,
