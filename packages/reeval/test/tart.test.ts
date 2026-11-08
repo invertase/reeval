@@ -283,8 +283,14 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
       const reader = child.stdout.getReader()
       const first = await reader.read()
       assert.equal(new TextDecoder().decode(first.value), 'started\n')
-      await eventually('the process started', () => existsSync(join(box.home, 'spawned')))
-      const grandchild = Number(readFileSync(join(box.home, 'spawned'), 'utf8'))
+      const pidFile = join(box.home, 'spawned')
+      // The shell creates the file before echo writes the pid, and alive(0) is always true.
+      await eventually(
+        'the process started',
+        () => existsSync(pidFile) && readFileSync(pidFile, 'utf8').endsWith('\n'),
+      )
+      const grandchild = Number(readFileSync(pidFile, 'utf8'))
+      assert.ok(grandchild > 0)
       assert.ok(alive(grandchild))
       await child.kill()
       assert.notEqual((await child.wait()).exitCode, 0)
