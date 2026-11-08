@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -321,12 +321,66 @@ describe('recording runs into evals/.history', () => {
 
     await writeFile(zip, 'not a zip')
     assert.equal((await runCli(p.dir, ['record', runId])).code, 0)
-    assert.equal((await manifest()).revision, 1, 'an unreadable one is written afresh')
+    assert.equal((await manifest()).revision, 1, 'one that is not an archive is written afresh')
+
+    await rm(zip)
+    await writeFile(join(p.dir, HISTORY, runId, 'summary.md'), '# edited by hand\n')
+    mkdirSync(join(p.dir, HISTORY, runId, 'analysis'))
+    await writeFile(join(p.dir, HISTORY, runId, 'analysis', 'later.json'), '{}\n')
+    assert.equal((await runCli(p.dir, ['record', runId])).code, 0)
+    const fromDisk = await openArchive(zip)
+    try {
+      assert.deepEqual(
+        (await fromDisk.read(`${runId}/summary.md`)).toString(),
+        '# edited by hand\n',
+        'the zip holds the files as they are in the history folder',
+      )
+      assert.equal(fromDisk.has(`${runId}/analysis/later.json`), false, 'not what came later')
+    } finally {
+      await fromDisk.close()
+    }
     assert.deepEqual(
       readdirSync(join(p.dir, HISTORY)).filter((n) => n.startsWith('.tmp-')),
       [],
       'no write in progress is left behind',
     )
+  })
+
+  test('an archive reeval cannot open is never written over', {
+    skip: (process.getuid?.() === 0 || process.platform === 'win32') && 'needs file permissions',
+  }, async () => {
+    const p = await gitProject(
+      'record-archive-unreadable',
+      { 'evals/agent.eval.ts': agent() },
+      'history: { archive: true },',
+    )
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const [runId] = recordedRuns(p.dir)
+    assert.ok(runId)
+    const zip = join(p.dir, HISTORY, `${runId}.zip`)
+    const before = readFileSync(zip)
+    chmodSync(zip, 0o000)
+    try {
+      const r = await runCli(p.dir, ['record', runId])
+      assert.notEqual(r.code, 0, r.stdout)
+      assert.match(r.stderr, /EACCES/)
+    } finally {
+      chmodSync(zip, 0o644)
+    }
+    assert.deepEqual(readFileSync(zip), before)
+  })
+
+  test('a parent *.zip ignore leaves the history folder archives committed', async () => {
+    const p = await gitProject(
+      'record-archive-ignored',
+      { 'evals/agent.eval.ts': agent() },
+      'history: { archive: true },',
+    )
+    await appendFile(join(p.dir, '.gitignore'), '*.zip\n')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const [runId] = recordedRuns(p.dir)
+    const r = spawnSync('git', ['check-ignore', '-q', `${HISTORY}/${runId}.zip`], { cwd: p.dir })
+    assert.equal(r.status, 1, 'git does not ignore the archive')
   })
 
   test('without history.archive no zip is written', async () => {
@@ -351,6 +405,14 @@ describe('recording runs into evals/.history', () => {
     assert.equal(readFileSync(join(dir, '.gitattributes'), 'utf8'), `${before}${zip}\n`)
     await ensureHistoryGitattributes(dir)
     assert.equal(readFileSync(join(dir, '.gitattributes'), 'utf8'), `${before}${zip}\n`, 'once')
+    const crlf = before.replaceAll('\n', '\r\n')
+    await writeFile(join(dir, '.gitattributes'), crlf)
+    await ensureHistoryGitattributes(dir)
+    assert.equal(
+      readFileSync(join(dir, '.gitattributes'), 'utf8'),
+      `${crlf}${zip}\r\n`,
+      'its line ends',
+    )
   })
 
   test("an existing .gitattributes keeps its lines and gains the history's", async () => {

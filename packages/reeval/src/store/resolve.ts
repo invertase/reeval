@@ -200,13 +200,13 @@ export function resolveHistory(
       `${where}.debug in ${file} uploads debug data to a remote store, and history.store is local(): .reeval/debug already holds it. Drop debug, or set it where history.store is s3().`,
     )
   }
-  const own = (value as HistoryConfig | undefined)?.archive
-  const archive = own ?? base?.archive ?? false
-  if (typeof archive !== 'boolean') {
+  const own: unknown = (value as HistoryConfig | undefined)?.archive
+  if (own !== undefined && typeof own !== 'boolean') {
     throw new UsageError(
-      `${where}.archive in ${file} is true or false (got ${JSON.stringify(archive)})`,
+      `${where}.archive in ${file} is true or false (got ${JSON.stringify(own)})`,
     )
   }
+  const archive = own ?? base?.archive ?? false
   if (archive && resolved.store.kind !== 'local' && own === undefined) {
     throw new UsageError(
       `history.archive in ${file} writes each run's zip into a local() history, and ${where}.store keeps runs in ${resolved.store.name}. Set archive: false in ${where}, or drop it from history.`,
@@ -214,7 +214,7 @@ export function resolveHistory(
   }
   if (archive && resolved.store.kind !== 'local') {
     throw new UsageError(
-      `${where}.archive in ${file} writes each run's zip into a local() history, and history.store is ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
+      `${where}.archive in ${file} writes each run's zip into a local() history, and ${where}.store keeps runs in ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
     )
   }
   return { ...resolved, debug, archive }

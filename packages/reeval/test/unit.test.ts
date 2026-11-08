@@ -1377,6 +1377,11 @@ test('history.archive is off by default and reads the same from reeval.config.ts
     '/p',
   )
   assert.equal(selectProfile(off, 'mine', {})?.history?.archive, false, 'or turns it off')
+  assert.throws(
+    () => resolveConfig({ history: { archive: null as unknown as boolean } }, '/p'),
+    /history\.archive in reeval\.config\.ts is true or false \(got null\)/,
+    'null is refused as reeval.yaml refuses it',
+  )
   for (const [config, file] of [
     [
       () => resolveConfig({ history: { archive: 'yes' as unknown as boolean } }, '/p'),

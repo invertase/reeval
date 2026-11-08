@@ -13,7 +13,7 @@ import {
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { openArchive, writeArchive } from '../archive/index.ts'
+import { ArchiveError, openArchive, writeArchive } from '../archive/index.ts'
 import type { ArchiveManifest } from '../archive/types.ts'
 import { debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
@@ -519,51 +519,69 @@ export type RecordResult = WrittenRun & {
   /** The debug data the record names, staged to upload with it. */
   debug?: RunDebug
   /** With `archive`, the run's zip, and whether this recording wrote it. */
-  archive?: { path: string; written: boolean }
+  archive?: WrittenArchive
 }
+
+type WrittenArchive = { path: string; written: boolean }
 
 /** `<dir>/<runId>.zip`: a recorded run, its record and every file recorded with it, as one zip. */
 export const archiveFile = (dir: string, runId: string) => join(dir, `${runId}.zip`)
 
+/** What a run's archive holds of `<runId>/`: everything but what's added after recording. */
+const archived = (path: string) => !path.startsWith('analysis/')
+
 /**
- * Writes the run's archive under its claim, unless the one there already lists exactly these
- * files. A missing one is written at revision 1; one that lists other files (the record was
- * replaced, or a file changed since) is written again a revision on. One a newer reeval wrote is
- * left as it is.
+ * Writes an archive of `files`, unless the one at `path` already lists exactly them. A missing
+ * zip, or one that isn't a readable archive, is written at revision 1; one that lists other
+ * files is written again a revision on. One a newer reeval wrote is left as it is.
+ */
+async function freshArchive(
+  path: string,
+  options: Pick<Parameters<typeof writeArchive>[1], 'contents' | 'runId' | 'debugLevel'> & {
+    files: Array<{ path: string; data: Uint8Array }>
+  },
+): Promise<WrittenArchive> {
+  const wanted = new Map(options.files.map((f) => [f.path, sha256(f.data)]))
+  let was: ArchiveManifest | null = null
+  try {
+    const archive = await openArchive(path)
+    was = archive.manifest
+    await archive.close()
+  } catch (error) {
+    if (error instanceof NewerSchemaError) return { path, written: false }
+    if (!isMissing(error) && !(error instanceof ArchiveError)) throw error
+  }
+  const same =
+    was?.files.length === wanted.size && was.files.every((f) => wanted.get(f.path) === f.sha256)
+  if (was && same) return { path, written: false }
+  await writeArchive(path, { ...options, revision: was ? was.revision + 1 : 1 })
+  return { path, written: true }
+}
+
+/**
+ * The run's archive beside its record: under the run's claim, of the record and files as they
+ * are in the folder, so it never holds what this reeval would write but didn't. Nothing when the
+ * record there isn't `record` any more: another recording replaced it meanwhile and archives its
+ * own.
  */
 async function archiveRun(
   dir: string,
   runId: string,
   record: Uint8Array,
-  files: Map<string, Uint8Array>,
-): Promise<{ path: string; written: boolean }> {
-  const path = archiveFile(dir, runId)
-  const inputs = [
-    { path: `${runId}.json`, data: record },
-    ...[...files].map(([file, data]) => ({ path: `${runId}/${file}`, data })),
-  ]
-  const wanted = new Map(inputs.map((i) => [i.path, sha256(i.data)]))
+): Promise<WrittenArchive | undefined> {
   const release = await claimRun(dir, runId)
   try {
-    let was: ArchiveManifest | null = null
-    try {
-      const archive = await openArchive(path)
-      was = archive.manifest
-      await archive.close()
-    } catch (error) {
-      if (error instanceof NewerSchemaError) return { path, written: false }
-      // A missing or unreadable zip is written again.
-    }
-    const same =
-      was?.files.length === wanted.size && was.files.every((f) => wanted.get(f.path) === f.sha256)
-    if (was && same) return { path, written: false }
-    await writeArchive(path, {
+    const landed = await readIfThere(recordFile(dir, runId))
+    if (!landed?.equals(record)) return undefined
+    const files = (await filesUnder(runDir(dir, runId))).filter(([path]) => archived(path))
+    return await freshArchive(archiveFile(dir, runId), {
       contents: 'run',
       runId,
-      files: inputs,
-      revision: was ? was.revision + 1 : 1,
+      files: [
+        { path: `${runId}.json`, data: landed },
+        ...files.map(([file, data]) => ({ path: `${runId}/${file}`, data })),
+      ],
     })
-    return { path, written: true }
   } finally {
     await release()
   }
@@ -743,9 +761,8 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     await ensureHistoryGitattributes(options.historyDir)
   }
   const written = await writeRun(options.historyDir, record, files)
-  const archive = options.archive
-    ? { archive: await archiveRun(options.historyDir, runId, encodeRecord(record), files) }
-    : {}
+  const zip = options.archive && (await archiveRun(options.historyDir, runId, encodeRecord(record)))
+  const archive = zip ? { archive: zip } : {}
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!committed) {
     return {

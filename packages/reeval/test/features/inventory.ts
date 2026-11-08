@@ -1935,7 +1935,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history.archive',
     area: 'Records and studio',
-    name: '`history.archive`: each recorded run also as `<runId>.zip` beside its record, `reeval record` rebuilding a missing or stale one, refused on `s3()`',
+    name: '`history.archive`: each recorded run also as `<runId>.zip` beside its record, `reeval record` on a run still in `.reeval/runs` rebuilding a missing or stale one, refused on `s3()`',
     fixtures: ['history/archive'],
     unit: [
       'reeval/test/history.test.ts',

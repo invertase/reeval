@@ -10,6 +10,7 @@ import { fromCwd, relativeFile } from '../ids.ts'
  */
 export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log drops setup.log and checks/*.log.
 !*.json
+!*.zip
 !*.jsonl
 !*.md
 !*.patch
@@ -65,9 +66,10 @@ export async function ensureHistoryGitattributes(historyDir: string): Promise<st
   const rules = HISTORY_GITATTRIBUTES.split('\n').filter((l) => l && !l.startsWith('#'))
   const missing = rules.filter((r) => !lines.has(r))
   if (missing.length === 0) return path
-  const gap = existing === '' || existing.endsWith('\n') ? '' : '\n'
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n'
+  const gap = existing === '' || existing.endsWith('\n') ? '' : eol
   const added = missing.length === rules.length ? HISTORY_GITATTRIBUTES : `${missing.join('\n')}\n`
-  await writeFile(path, `${existing}${gap}${added}`)
+  await writeFile(path, `${existing}${gap}${added.replaceAll('\n', eol)}`)
   return path
 }
 
