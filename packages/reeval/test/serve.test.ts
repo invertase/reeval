@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
+import { type AddressInfo, connect, createServer } from 'node:net'
 import { test } from 'node:test'
 import {
   awaitListening,
@@ -14,6 +15,7 @@ import {
   type ServeProbe,
   servePort,
 } from '../src/attempt/serve.ts'
+import { allocatePort, PORT_RANGE } from '../src/capture/index.ts'
 
 const linux = process.platform === 'linux' ? false : 'reads /proc'
 
@@ -302,6 +304,34 @@ test('servePort refuses a given port already in use and allocates PORT past one'
         'c.serve("npm start") found every port it allocated for PORT already in use in the sandbox',
     },
   )
+})
+
+test('allocatePort hands out a port that listen(0) and outgoing connections never take', async () => {
+  const target = createServer((s) => s.end()).listen(0, '127.0.0.1')
+  await once(target, 'listening')
+  const { port: targetPort } = target.address() as AddressInfo
+  // Background load: servers and connections taking ephemeral ports while the commands start.
+  const churn = setInterval(() => {
+    for (let i = 0; i < 10; i++) {
+      const s = createServer().listen(0, '127.0.0.1', () => setTimeout(() => s.close(), 20))
+      const c = connect(targetPort, '127.0.0.1', () => c.destroy())
+      c.on('error', () => {})
+    }
+  }, 5)
+  try {
+    const ports = await Promise.all(Array.from({ length: 40 }, () => allocatePort()))
+    assert.equal(new Set(ports).size, ports.length)
+    for (const port of ports) {
+      assert.ok(port >= PORT_RANGE.min && port <= PORT_RANGE.max, `${port}`)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const server = createServer().listen(port, '127.0.0.1')
+      await once(server, 'listening')
+      await new Promise((resolve) => server.close(resolve))
+    }
+  } finally {
+    clearInterval(churn)
+    target.close()
+  }
 })
 
 test('the probe script reads the listeners from /proc and whether the pid runs', {
