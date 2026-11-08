@@ -24,7 +24,13 @@ import { daytona } from '../src/sandbox-daytona.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
 import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import { fakeTart, holdLoopback } from './support/fake-tart.ts'
-import { buildSshVmImage, SSH_VM_IMAGE, SSH_VM_LABEL, startSshVm } from './support/ssh-vm.ts'
+import {
+  buildSshVmImage,
+  SSH_VM_IMAGE,
+  SSH_VM_LABEL,
+  startDaytonaVm,
+  startSshVm,
+} from './support/ssh-vm.ts'
 
 type MachineKind = (typeof MACHINE_PROVIDERS)[number]['kind']
 
@@ -138,7 +144,7 @@ const BACKENDS: Record<MachineKind, Backend> = {
     skip: sshVmSkip,
     async start() {
       buildSshVmImage()
-      daytonaApi = await fakeDaytona(startSshVm)
+      daytonaApi = await fakeDaytona(startDaytonaVm)
       process.env.DAYTONA_API_URL = daytonaApi.url
       process.env.DAYTONA_API_KEY = daytonaApi.key
     },

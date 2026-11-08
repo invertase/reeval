@@ -38,16 +38,18 @@ export const TTL_MARGIN_S = 600
 /** How many times an attempt asks for another machine when the one it got fails to set up. */
 const SETUP_TRIES = 3
 
-/** Where the agent's Node lives when the VM's own is somewhere the sandbox user can't read. */
+/** Where the sandbox user finds the Node (and its npm) the VM's login user runs. */
 const AGENT_NODE = '/opt/reeval/node'
 /**
- * A VM's `node` can link into the login user's nvm, under a home other users can't enter: give the
- * sandbox user its own copy of that Node, whose version the record names.
+ * The login user's `node`, not root's: a VM can have a system Node without npm on the system
+ * `PATH` and the one it means in an nvm off it (Daytona's), or link its `node` into the login
+ * user's nvm, under a home other users can't enter (Boat's). The sandbox user gets that Node's
+ * directory linked when it can read it and a copy when it can't; the record names its version.
  */
 const nodeForAgent = (user: string) =>
   [
-    'real="$(readlink -f "$(command -v node)" 2>/dev/null || true)"',
-    `{ [ -z "$real" ] || sudo -n -u ${user} test -x "$real" || [ -x ${AGENT_NODE}/bin/node ] || { rm -rf ${AGENT_NODE} && mkdir -p ${AGENT_NODE} && cp -a "$(dirname "$(dirname "$real")")/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; }; }`,
+    'real="$(PATH="$1"; readlink -f "$(command -v node)" 2>/dev/null || true)"',
+    `{ [ -z "$real" ] || [ -x ${AGENT_NODE}/bin/node ] || { prefix="$(dirname "$(dirname "$real")")" && rm -rf ${AGENT_NODE} && mkdir -p "$(dirname ${AGENT_NODE})" && if sudo -n -u ${user} test -x "$real"; then ln -s "$prefix" ${AGENT_NODE}; else mkdir -p ${AGENT_NODE} && cp -a "$prefix/." ${AGENT_NODE} && chmod -R a+rX ${AGENT_NODE}; fi; }; }`,
   ].join(' && ')
 
 /** The harness install a machine keeps a home for, so its slots and resets copy it: by harness. */

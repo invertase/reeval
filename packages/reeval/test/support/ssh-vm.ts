@@ -1,6 +1,6 @@
 // An SSH VM in a container, for the fakes of providers whose machines are Linux VMs reached over
-// SSH (Boat's and Daytona's): sshd, a login user with passwordless sudo, and a Node under that
-// user's home.
+// SSH (Boat's and Daytona's): sshd, a login user with passwordless sudo, and a Node where that
+// provider's VMs have it.
 // Each container is labeled with its VM's name, so a test can look into one from outside.
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -23,39 +23,63 @@ export type SshVm = {
   remove(): Promise<void>
 }
 
-/**
- * A cloud Linux VM's layout where it matters to reeval, as Boat's VMs have it: a login user `user` with passwordless sudo, sshd,
- * git, and a Node whose `/usr/local/bin/node` links into that user's nvm, under a home others can't
- * enter. No `reeval` user: the session makes it.
- */
-const SSH_VM_DOCKERFILE = `FROM ${NODE_IMAGE}
+const SSH_VM_BASE = `FROM ${NODE_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-server sudo curl git procps ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --shell /bin/bash user \\
  && echo 'user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/user \\
- && mkdir -p /home/user/.nvm/versions/node/current/bin /home/user/.ssh /run/sshd \\
- && mv /usr/local/bin/node /home/user/.nvm/versions/node/current/bin/node \\
- && ln -s /home/user/.nvm/versions/node/current/bin/node /usr/local/bin/node \\
+ && mkdir -p /home/user/.ssh /run/sshd \\
  && chown -R user:user /home/user && chmod 750 /home/user && chmod 700 /home/user/.ssh \\
- && echo 'PermitEmptyPasswords yes' > /etc/ssh/sshd_config.d/token.conf \
+ && echo 'PermitEmptyPasswords yes' > /etc/ssh/sshd_config.d/token.conf \\
  && ssh-keygen -A
-CMD ["/usr/sbin/sshd", "-D", "-e"]
 `
 
-/** The fake VM image's tag, which changes with its Dockerfile. */
-export const SSH_VM_IMAGE = `reeval-fake-ssh-vm:${createHash('sha256').update(SSH_VM_DOCKERFILE).digest('hex').slice(0, 12)}`
+/** The Node an image has where reeval looks for it: each provider's VMs have their own. */
+export type SshVmLayout = 'boat' | 'daytona'
+
+/**
+ * A cloud Linux VM's layout where it matters to reeval: a login user `user` with passwordless
+ * sudo, sshd and git, and a Node where its provider has it. Boat's `/usr/local/bin/node` links
+ * into that user's nvm, under a home others can't enter. Daytona's is an nvm everyone can read,
+ * on the login user's `PATH` but not the system's, which has a Node with no npm beside it. No
+ * `reeval` user: the session makes it.
+ */
+const SSH_VM_DOCKERFILES: Record<SshVmLayout, string> = {
+  boat: `${SSH_VM_BASE}RUN mkdir -p /home/user/.nvm/versions/node/current/bin \\
+ && mv /usr/local/bin/node /home/user/.nvm/versions/node/current/bin/node \\
+ && ln -s /home/user/.nvm/versions/node/current/bin/node /usr/local/bin/node \\
+ && chown -R user:user /home/user/.nvm
+CMD ["/usr/sbin/sshd", "-D", "-e"]
+`,
+  daytona: `${SSH_VM_BASE}RUN v=/usr/local/share/nvm/versions/node/v0 && mkdir -p $v/bin $v/lib \\
+ && mv /usr/local/lib/node_modules $v/lib/ && cp /usr/local/bin/node $v/bin/node \\
+ && ln -s ../lib/node_modules/npm/bin/npm-cli.js $v/bin/npm \\
+ && mv /usr/local/bin/node /usr/bin/node && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \\
+ && ln -s $v /usr/local/share/nvm/current \\
+ && echo 'SetEnv PATH=/usr/local/share/nvm/current/bin:/usr/local/bin:/usr/bin:/bin' > /etc/ssh/sshd_config.d/path.conf
+CMD ["/usr/sbin/sshd", "-D", "-e"]
+`,
+}
+
+const imageOf = (layout: SshVmLayout) =>
+  `reeval-fake-ssh-vm:${createHash('sha256').update(SSH_VM_DOCKERFILES[layout]).digest('hex').slice(0, 12)}`
+/** Boat's fake VM image's tag, which changes with its Dockerfile. */
+export const SSH_VM_IMAGE = imageOf('boat')
 /** The label on every fake VM's container, its value the VM's name. */
 export const SSH_VM_LABEL = 'reeval.test.fake-ssh-vm'
 
-/** Builds the fake VM image unless it's there. */
+/** Builds each layout's fake VM image unless it's there. */
 export function buildSshVmImage(): void {
-  try {
-    execFileSync('docker', ['image', 'inspect', SSH_VM_IMAGE], { stdio: 'ignore' })
-    return
-  } catch {}
-  execFileSync('docker', ['build', '-q', '-t', SSH_VM_IMAGE, '-'], {
-    input: SSH_VM_DOCKERFILE,
-    stdio: ['pipe', 'ignore', 'inherit'],
-  })
+  for (const layout of Object.keys(SSH_VM_DOCKERFILES) as SshVmLayout[]) {
+    const image = imageOf(layout)
+    try {
+      execFileSync('docker', ['image', 'inspect', image], { stdio: 'ignore' })
+      continue
+    } catch {}
+    execFileSync('docker', ['build', '-q', '-t', image, '-'], {
+      input: SSH_VM_DOCKERFILES[layout],
+      stdio: ['pipe', 'ignore', 'inherit'],
+    })
+  }
 }
 
 const docker = (args: string[], input?: string) =>
@@ -102,8 +126,8 @@ async function sshUp(port: number, deadline = Date.now() + 30_000): Promise<void
   }
 }
 
-/** A container of {@link SSH_VM_IMAGE} named `name` by its label, its sshd on a port of 127.0.0.1. */
-export async function startSshVm(name: string): Promise<SshVm> {
+/** A fake VM of `layout`'s image named `name` by its label, its sshd on a port of 127.0.0.1. */
+export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Promise<SshVm> {
   const id = await docker([
     'run',
     '-d',
@@ -120,7 +144,7 @@ export async function startSshVm(name: string): Promise<SshVm> {
     'apparmor=unconfined',
     '-p',
     '127.0.0.1::22',
-    SSH_VM_IMAGE,
+    imageOf(layout),
   ])
   const remove = async () => {
     await docker(['rm', '-f', id]).catch(() => {})
@@ -170,6 +194,9 @@ export async function startSshVm(name: string): Promise<SshVm> {
     throw error
   }
 }
+
+/** A fake VM laid out as Daytona's sandboxes are. */
+export const startDaytonaVm = (name: string) => startSshVm(name, 'daytona')
 
 /** The container of the fake VM named `name`, or `null` once it's gone. */
 export function sshVmContainer(name: string): string | null {
