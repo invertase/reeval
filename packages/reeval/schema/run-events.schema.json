@@ -6172,6 +6172,36 @@
             "at": {
               "type": "number"
             },
+            "image": {
+              "type": "object",
+              "properties": {
+                "cached": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["cached", "name"]
+            },
+            "state": {
+              "const": "image"
+            },
+            "target": {
+              "$ref": "#/$defs/PrepareTargetView"
+            },
+            "type": {
+              "const": "prepare"
+            }
+          },
+          "required": ["at", "image", "state", "target", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
             "key": {
               "type": "string"
             },

@@ -497,11 +497,13 @@ reeval image build [filter...]
                               disk has room for them, counting what Tart prunes from its cache
                               (exit 3 if not), then bakes each real harness's CLI into a local copy
                               of its image that attempts clone; runs no Docker without a Docker
-                              sandbox
+                              sandbox. Builds each boat() and daytona() image recipe into a
+                              snapshot in its account, unless one is saved already
   --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
                               harness, sandbox and tags pick the images (also REEVAL_PROFILE)
   --force                     Rebuild every image, pulling each base again (and each tart() tag),
-                              and bake each tart() harness image anew
+                              and bake each tart() harness image anew. A saved boat() or
+                              daytona() snapshot is used as is: delete it with reeval image clean
   --registry <prefix>         Pull each image that isn't built here from this registry
                               (host[:port]/path) before building it. Its tags hash the inputs
                               and the platform, not this machine's image ids; a pulled image is
@@ -513,12 +515,51 @@ reeval image build [filter...]
                               Dockerfile base included, so push only where those may go
   --dry-run                   List the images, how each is made and how each stands, building
                               and pulling nothing (a from tag or tart() image is looked up in its
-                              registry, not pulled), and whether the tart() pulls fit the disk
+                              registry, not pulled), whether the tart() pulls fit the disk, and
+                              which boat() and daytona() snapshots are saved
 ```
 
 [//]: # (/generated:cli-help:image-build)
 
-Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build` exits 2.
+Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build`, `list` or `clean` exits 2.
+
+## `reeval image list`
+
+[//]: # (generated:cli-help:image-list)
+
+```text
+reeval image list [filter...]
+                              List the image snapshots reeval saved in each boat() and daytona()
+                              account and prefix the evals use (names under <prefix>-img-): size,
+                              when it was saved and last used, and the environments that start
+                              from it
+  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does
+                              (also REEVAL_PROFILE)
+  --json                      The snapshots as JSON
+```
+
+[//]: # (/generated:cli-help:image-list)
+
+## `reeval image clean`
+
+[//]: # (generated:cli-help:image-clean)
+
+```text
+reeval image clean [filter...]
+                              Delete the image snapshots reeval saved in each boat() and daytona()
+                              account and prefix the evals use that none of their environments
+                              starts from. Only names under <prefix>-img- are touched, and never
+                              one this machine used in the last hour or one still being saved
+  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does
+                              (also REEVAL_PROFILE)
+  --provider <name>           Only boat or daytona snapshots
+  --older-than <duration>     Only snapshots last used (or else saved) longer ago than this,
+                              e.g. 14d or 12h
+  --all                       Also delete the snapshots the evals' environments start from
+  --dry-run                   List what would be deleted, and why each other snapshot is kept
+```
+
+[//]: # (/generated:cli-help:image-clean)
 
 ## Exit codes
 

@@ -62,7 +62,12 @@ describe('cli', () => {
     assert.match(build, /--force/)
     assert.doesNotMatch(build, /^ {2}reeval (run|init)\b/m)
     assert.match(build, /^Options: --config <path>/m)
-    assert.equal(commandHelpText('V', ['image']), build)
+    assert.doesNotMatch(build, /^ {2}reeval image (list|clean)/m)
+    const image = commandHelpText('V', ['image'])
+    for (const sub of ['build', 'list', 'clean']) {
+      assert.match(image, new RegExp(`^ {2}reeval image ${sub} \\[filter\\.\\.\\.\\]$`, 'm'))
+    }
+    assert.match(commandHelpText('V', ['image', 'clean']), /--older-than <duration>/)
     const studio = commandHelpText('V', ['studio'])
     assert.match(studio, /reeval studio build/)
     assert.doesNotMatch(commandHelpText('V', ['studio', 'build']), /--no-token/)
@@ -143,6 +148,17 @@ describe('cli', () => {
     assert.deepEqual(parseCli(['image', 'build', 'x', '--profile', 'nightly', '--dry-run']), {
       positionals: ['image', 'build', 'x'],
       values: { profile: 'nightly', 'dry-run': true },
+    })
+    assert.deepEqual(
+      parseCli(['image', 'clean', 'x', '--provider', 'boat', '--older-than', '14d', '--all']),
+      {
+        positionals: ['image', 'clean', 'x'],
+        values: { provider: 'boat', 'older-than': '14d', all: true },
+      },
+    )
+    assert.deepEqual(parseCli(['image', 'list', '--json']), {
+      positionals: ['image', 'list'],
+      values: { json: true },
     })
     assert.deepEqual(parseCli(['studio', '--no-token', '--no-scratch']).values, {
       'no-token': true,
@@ -232,10 +248,13 @@ describe('cli', () => {
     const cases: Array<[string[], RegExp]> = [
       [['bogus'], /^reeval: Unknown command "bogus"\. Run reeval --help\.\n$/],
       [['help'], /^reeval: Unknown command "help"\./],
-      [['image'], /^reeval: Unknown command "image "\. Did you mean reeval image build\?\n$/],
+      [
+        ['image'],
+        /^reeval: Unknown command "image "\. Did you mean reeval image build, list or clean\?\n$/,
+      ],
       [
         ['image', 'foo'],
-        /^reeval: Unknown command "image foo"\. Did you mean reeval image build\?\n$/,
+        /^reeval: Unknown command "image foo"\. Did you mean reeval image build, list or clean\?\n$/,
       ],
       [['--bogus'], /^reeval: Unknown option '--bogus'\. Run reeval --help\.\n$/],
       [

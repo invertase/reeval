@@ -38,6 +38,7 @@ export type FakeSnapshot = {
   sizeBytes?: number
   /** `get` calls still to answer `saving`. */
   polls: number
+  createdAt?: string
 }
 
 export type FakeBoat = {
@@ -110,7 +111,7 @@ export async function fakeBoat(
     name: s.name,
     status: s.status,
     sourceSandboxId: s.sourceSandboxId,
-    createdAt: new Date(0).toISOString(),
+    createdAt: s.createdAt ?? new Date(0).toISOString(),
     ...(s.error && { error: s.error }),
     ...(s.sizeBytes !== undefined && { sizeBytes: s.sizeBytes }),
   })
@@ -149,6 +150,13 @@ export async function fakeBoat(
       })
     }
     if (collection === 'saved-snapshots') {
+      if (!id && method === 'GET') {
+        return json(200, {
+          ok: true,
+          type: 'snapshot.saved.list',
+          snapshots: [...snapshots.values()].map(snapshotView),
+        })
+      }
       if (!id && method === 'POST') {
         const request = body as { sandboxId: string; name: string }
         const source = sandboxes.get(request.sandboxId)
@@ -184,6 +192,7 @@ export async function fakeBoat(
           sourceSandboxId: source.id,
           sourceName: source.name,
           polls: options.savePolls ?? 1,
+          createdAt: new Date().toISOString(),
           ...(failing && { error: saveFailures.error }),
         }
         snapshots.set(request.name, snapshot)

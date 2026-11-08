@@ -61,7 +61,7 @@ function helpSections(text) {
       sections.set('footer', [...(sections.get('footer') ?? []), line])
       continue
     }
-    const head = /^ {2}reeval ((?:[a-z]+)(?: build)?)\b/.exec(line)
+    const head = /^ {2}reeval ((?:[a-z]+)(?: (?:build|list|clean))?)\b/.exec(line)
     if (head) current = head[1]
     else if (!line.startsWith('    ')) current = null
     if (current) sections.set(current, [...(sections.get(current) ?? []), line.slice(2)])

@@ -52,6 +52,12 @@ const targetView = (t: PrepareTargetView): PrepareTargetView => ({
 function wire(e: ReevalEvent): ReevalEvent {
   if (e.type !== 'prepare') return e
   if (e.state === 'start') return { ...e, targets: e.targets.map(targetView) }
+  if (e.state === 'image')
+    return {
+      ...e,
+      target: targetView(e.target),
+      image: { name: e.image.name, cached: e.image.cached },
+    }
   const { outcome } = e
   return {
     ...e,

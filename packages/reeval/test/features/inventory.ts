@@ -1274,6 +1274,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts', 'reeval/test/docker.test.ts'],
   },
   {
+    id: 'image.vm-snapshots',
+    area: 'Sandbox',
+    name: "`boat()` and `daytona()` image snapshots: `reeval image build` builds each recipe's snapshot (or reports it saved), `reeval image list` lists every `<prefix>-img-` snapshot with its size, dates and the environments that use it, `reeval image clean` deletes the unused ones (`--provider`, `--older-than`, `--all`, `--dry-run`), never one this machine used in the last hour or one still saving; preflight prints which images it built and which it found",
+    unit: ['reeval/test/vm-images.test.ts', 'reeval/test/ui.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'egress',
     area: 'Sandbox',
     name: "`egress`: allowlist or deny-all, enforced in Docker and recorded per attempt; `--dry-run` and `reeval doctor` show each environment's policy",

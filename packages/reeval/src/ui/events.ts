@@ -147,6 +147,8 @@ export type PrepareView =
         | { target: PrepareTargetView; ok: true; ms: number }
         | { target: PrepareTargetView; ok: false; failure: PrepareFailure; ms: number }
     }
+  /** The machine image a sandbox starts from: found saved, or being built. */
+  | { state: 'image'; target: PrepareTargetView; image: { name: string; cached: boolean } }
 
 /** What a line about an attempt needs to name it. */
 export type AttemptRef = { id: string; key: string; attempt?: AttemptMeta }

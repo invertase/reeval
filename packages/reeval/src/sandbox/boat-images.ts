@@ -270,7 +270,11 @@ export async function boatImage(
       built: false,
     }
   }
-  if (found?.status === 'ready') return saved(found)
+  if (found?.status === 'ready') {
+    ctx.image?.({ name, cached: true })
+    return saved(found)
+  }
+  ctx.image?.({ name, cached: false })
   if (found) {
     ctx.log(
       `Building Boat snapshot ${name} again: it failed to save${found.error ? ` (${found.error})` : ''}`,

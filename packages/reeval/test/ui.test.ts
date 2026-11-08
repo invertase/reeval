@@ -1915,3 +1915,52 @@ describe('reeval attach', () => {
     assert.equal(text, once + once)
   })
 })
+
+describe('preparing VM images', () => {
+  test('a built image says so as it starts, and the images line ends the step', () => {
+    const boat = { label: 'boat · fake', kind: 'boat', key: 'b' } as never
+    const daytona = { label: 'daytona · fake', kind: 'daytona', key: 'd' } as never
+    const out = stripAnsi(
+      draw(
+        [
+          planEvent(),
+          { type: 'prepare', at: T0, state: 'start', targets: [boat, daytona] },
+          {
+            type: 'prepare',
+            at: T0,
+            state: 'image',
+            target: boat,
+            image: { name: 'reeval-img-aaaaaaaaaaaa', cached: true },
+          },
+          {
+            type: 'prepare',
+            at: T0,
+            state: 'image',
+            target: daytona,
+            image: { name: 'reeval-img-bbbbbbbbbbbb', cached: false },
+          },
+          {
+            type: 'prepare',
+            at: s(1),
+            state: 'ready',
+            outcome: { ok: true, ms: 1_000, target: boat } as never,
+          },
+          {
+            type: 'prepare',
+            at: s(108),
+            state: 'ready',
+            outcome: { ok: true, ms: 108_000, target: daytona } as never,
+          },
+        ],
+        options({ statusLine: false, color: false, logOrder: 'stream' }),
+        100,
+      ),
+    )
+    const lines = out.split('\n')
+    const at = (text: string) => lines.findIndex((l) => l.includes(text))
+    assert.ok(at('daytona · fake building image reeval-img-bbbbbbbbbbbb') >= 0, out)
+    assert.ok(at('boat · fake ready, from saved image reeval-img-aaaaaaaaaaaa') >= 0, out)
+    assert.ok(at('daytona · fake ready, built image reeval-img-bbbbbbbbbbbb') >= 0, out)
+    assert.ok(at('images: 2 ready (1 built in 1m 48s)') > at('daytona · fake ready'), out)
+  })
+})

@@ -6,7 +6,7 @@ import { suiteResult } from '../view/suite.ts'
 import { colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'
 import { attemptAxes, debugLines, progressLine } from './format.ts'
-import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
+import { noticeLines, PrepareLines, planLines, startLine } from './header.ts'
 import { listLines } from './list.ts'
 import type { OutputOptions } from './mode.ts'
 import { pointerLine, statusList } from './status.ts'
@@ -23,6 +23,7 @@ export type AgentRendererOptions = {
 }
 
 export class AgentRenderer implements Renderer {
+  #prepare = new PrepareLines()
   readonly #o: AgentRendererOptions
   readonly #c = colors(false)
   /** `[key]` prefixes for `-v` lines, from each attempt's start. */
@@ -68,7 +69,7 @@ export class AgentRenderer implements Renderer {
         return
       }
       case 'prepare':
-        for (const line of prepareStepLines(this.#c, e, WIDTH, MAX_LINES)) this.#write(line)
+        for (const line of this.#prepare.lines(this.#c, e, WIDTH, MAX_LINES)) this.#write(line)
         return
       case 'notice':
         for (const line of noticeLines(this.#c, e, WIDTH)) this.#write(line)

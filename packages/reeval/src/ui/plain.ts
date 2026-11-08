@@ -25,7 +25,7 @@ import {
   phaseOf,
   progressLine,
 } from './format.ts'
-import { noticeLines, planLines, prepareStepLines, startLine } from './header.ts'
+import { noticeLines, PrepareLines, planLines, startLine } from './header.ts'
 import { LiveList, listLines, progressText } from './list.ts'
 import type { OutputOptions } from './mode.ts'
 import { pointerLine, statusList } from './status.ts'
@@ -95,6 +95,7 @@ const splitAt = (at: string): [string, string] => {
 }
 
 export class PlainRenderer implements Renderer {
+  #prepare = new PrepareLines()
   readonly #o: RendererOptions
   readonly #c: Colors
   readonly #tags = new Tagger()
@@ -267,7 +268,7 @@ export class PlainRenderer implements Renderer {
         this.#drawStatus()
         return
       case 'prepare': {
-        for (const line of prepareStepLines(c, e, this.#columns, ERROR_LINES)) this.#write(line)
+        for (const line of this.#prepare.lines(c, e, this.#columns, ERROR_LINES)) this.#write(line)
         if (e.state === 'failed' && this.#o.output.githubActions) {
           const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
           const what = target.kind === 'workspace' ? 'The' : 'Sandbox'
