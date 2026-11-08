@@ -223,7 +223,11 @@ and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
 and no sandbox images. Boat enforces no egress policy, so there the `deny-all` environments are
 `allow-all`, the `egress` evals are left out (2 fewer attempts a row), the deny-all check and the
 hermetic check's egress half skip, no captures are written, and clean teardown asks Boat for
-the run's live VMs. Each attempt is one Boat start: mind the account's starts an hour and a day.
+the run's live VMs. `REEVAL_CONTRACT_SANDBOX=boat-image` runs them in
+`boat({ from: 'debian:bookworm-slim' })` instead: preflight builds the image into a Boat snapshot
+(once; `reeval image clean --all` deletes it), each attempt runs in a container of it, and every
+check runs, the deny-all ones included. Each attempt is one Boat start, plus the image's build VM
+once in `boat-image`: mind the account's starts an hour and a day.
 
 ## Flake policy
 

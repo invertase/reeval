@@ -948,8 +948,13 @@ const imageBuilt = (ref: string) => {
   }
 }
 
-/** The rows run in boat() rather than Docker: `REEVAL_CONTRACT_SANDBOX=boat`. */
-export const ON_BOAT = process.env.REEVAL_CONTRACT_SANDBOX === 'boat'
+/**
+ * The rows run in boat() rather than Docker: `REEVAL_CONTRACT_SANDBOX=boat`, or `boat-image` for
+ * boat() with an image recipe, whose attempts run in a container of it.
+ */
+export const ON_BOAT = ['boat', 'boat-image'].includes(process.env.REEVAL_CONTRACT_SANDBOX ?? '')
+/** Whether the rows' sandbox enforces a restricted egress policy: all but boat() without a recipe. */
+export const POLICY_ENFORCED = process.env.REEVAL_CONTRACT_SANDBOX !== 'boat'
 /** What a run in boat() takes from the host: the switch itself, and Boat's key and API. */
 const BOAT_ENV = ['REEVAL_CONTRACT_SANDBOX', 'BOAT_API_KEY', 'BOAT_BASE_URL']
 

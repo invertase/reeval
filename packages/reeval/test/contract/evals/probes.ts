@@ -46,8 +46,8 @@ export const planted = scanned.extendEnvironment('planted', {
   files: { '~/.contract-planted': `${PLANTED}\n` },
 })
 /**
- * `boat()` enforces no policy, so on it (`REEVAL_CONTRACT_SANDBOX=boat`) the environments below
- * are `allow-all` and contract.test.ts leaves out what checks deny-all.
+ * `boat()` without an image recipe enforces no policy, so on it (`REEVAL_CONTRACT_SANDBOX=boat`)
+ * the environments below are `allow-all` and contract.test.ts leaves out what checks deny-all.
  */
 const policy = process.env.REEVAL_CONTRACT_SANDBOX === 'boat' ? 'allow-all' : 'deny-all'
 export const closed = defineEnvironment('closed', { egress: policy })

@@ -787,6 +787,7 @@ export const CASES: Record<string, Case[]> = {
       'boat() install with a dockerfile',
       any(boat, { dockerfile: join(DIR, 'Dockerfile'), install: ['x'] }),
     ],
+    ['boat() install step key', any(boat, { install: [{ run: 'make', timeot: '1m' }] })],
     ['boat() root', any(boat, { root: true })],
     [
       'boat() in an image with egress phases',
@@ -833,7 +834,18 @@ export const CASES: Record<string, Case[]> = {
     ['daytona() from with a space', any(daytona, { from: 'debian 12' })],
     ['daytona() install empty', any(daytona, { install: [] })],
     ['daytona() install step key', any(daytona, { install: [{ run: 'true', timeot: '1m' }] })],
+    [
+      'daytona() install bad timeout',
+      any(daytona, { install: [{ run: 'make', timeout: 'soon' }] }),
+    ],
     ['daytona() root', any(daytona, { root: true })],
+    [
+      "daytona() in an image under egress 'proxy'",
+      planned(
+        {},
+        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: daytona({ from: 'dart:3.5' }) },
+      ),
+    ],
     [
       'claudeCode sharing a daytona() machine',
       planned(
