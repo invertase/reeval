@@ -609,8 +609,8 @@ export const tartProvider = (
 
 /**
  * Boat: `prepare` checks each account and machine size the run uses, once, and builds a sandbox's
- * image recipe into a saved snapshot when it has one. One recipe is built once per run, whatever machine sizes use it, on a build VM of the
- * size of the first target that asks for it.
+ * image recipe into a saved snapshot when it has one. One recipe is built once per run, whatever
+ * machine sizes use it, on a build VM of the size of the first target that asks for it.
  */
 export const boatProvider = (
   options: { resolve?: ResolveDigest; timings?: BoatImageTimings } = {},
