@@ -40,13 +40,7 @@ import type {
 } from '../types.ts'
 import { type HarnessBake, harnessBake } from './harness-install.ts'
 import { prepareAll } from './preflight.ts'
-import {
-  imageHarness,
-  installSteps,
-  pluginBuildSpec,
-  projectPath,
-  usesReevalBase,
-} from './prepare.ts'
+import { imageHarness, pluginBuildSpec, projectPath, usesReevalBase } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
 import {
   attemptImage,
@@ -56,6 +50,7 @@ import {
   dockerKey,
   vmImage,
 } from './providers.ts'
+import { installSteps } from './recipe.ts'
 import { bakedTartImage, tartBakeKey } from './tart-bake.ts'
 import type { MissingImage } from './tart-images.ts'
 

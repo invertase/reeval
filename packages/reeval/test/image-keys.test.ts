@@ -8,16 +8,20 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
   contextHash,
+  dockerfileTag,
   harnessImageFor,
   harnessLabel,
   imageFor,
+  installLayerTag,
   LABEL,
   PLATFORM,
+  pluginLayerTag,
   reevalImageKey,
   registryProblem,
   registryRef,
 } from '@reeval/sandbox-docker'
 import { createBuilds, prepareImage } from '../src/sandbox/prepare.ts'
+import { imageRecipeKey } from '../src/sandbox/recipe.ts'
 import type { DockerSandboxDescriptor } from '../src/types.ts'
 import { fakeConfig, project, runCli, tempDir } from './helpers.ts'
 
@@ -447,6 +451,131 @@ describe('sandbox image tags are content keys', () => {
     c.seedReeval()
     await c.prepare({ install }, { registry })
     assert.deepEqual(c.builds(), [ref])
+  })
+})
+
+describe('imageRecipeKey: the key prepareImage builds, named from the recipe alone', () => {
+  const node = `sha256:${'1'.repeat(64)}`
+  const python = `sha256:${'3'.repeat(64)}`
+  const digests: Record<string, string> = { 'node:22': node, 'python:3.12-slim': python }
+  const resolve = (map: Record<string, string>) => async (ref: string) =>
+    map[ref] ? { digest: map[ref] } : { error: `${ref} isn't in the test registry` }
+
+  test('each kind of recipe, with an install layer on it: the same layers, in order, and the same key', async () => {
+    const { project, machine } = world()
+    const dir = join(project, 'images')
+    mkdirSync(dir)
+    const write = (name: string, text: string) => {
+      mkdirSync(join(dir, name))
+      writeFileSync(join(dir, name, 'Dockerfile'), text)
+      return join(dir, name, 'Dockerfile')
+    }
+    const onReevalBase = write(
+      'on-base',
+      'FROM node:22 AS node\nARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nCOPY --from=node /usr/local/bin/node /opt/\n',
+    )
+    const onNode = write('on-node', 'FROM node:22\nRUN true\n')
+    const a = machine('a')
+    a.seedReeval()
+    a.upstream(digests)
+    a.seed(harnessImageFor(harness, 'python:3.12-slim'), {
+      [LABEL.fromDigest]: python,
+      [LABEL.agentVersion]: '1.0.0',
+    })
+    const install = ['echo recipe']
+    const recipes: Record<string, Omit<DockerSandboxDescriptor, 'kind'>> = {
+      "reeval's image": { install },
+      from: { from: 'python:3.12-slim', install },
+      'a Dockerfile FROM ${REEVAL_BASE}': { dockerfile: onReevalBase, install },
+      'a Dockerfile on another base, with the harness baked on': { dockerfile: onNode, install },
+    }
+    for (const [what, sandbox] of Object.entries(recipes)) {
+      if (sandbox.dockerfile === onNode) {
+        const { tag } = dockerfileTag(onNode, harness)
+        a.seed(harnessImageFor(harness, tag), { [LABEL.agentVersion]: '1.0.0' })
+      }
+      const prepared = await a.prepare(sandbox)
+      const recipe = await imageRecipeKey(sandbox, harness, { resolve: resolve(digests) })
+      assert.ok('key' in recipe, what)
+      // An install layer's tag hashes its parent's key, so the same tag is the same key chain.
+      assert.equal(recipe.layers.at(-1)?.ref, prepared.ref, what)
+      assert.equal(recipe.key, prepared.ref, what)
+      assert.equal(recipe.layers.at(-2)?.ref, prepared.base, what)
+      // Canary: a base that moved upstream is another key.
+      const moved = await imageRecipeKey(sandbox, harness, {
+        resolve: resolve({ 'node:22': `sha256:${'2'.repeat(64)}`, 'python:3.12-slim': node }),
+      })
+      assert.ok('key' in moved, what)
+      if (sandbox.from || sandbox.dockerfile) assert.notEqual(moved.key, recipe.key, what)
+      else assert.equal(moved.key, recipe.key, `${what}: nothing in it moves`)
+    }
+    const onNodeRecipe = await imageRecipeKey({ dockerfile: onNode }, harness, {
+      resolve: resolve(digests),
+    })
+    assert.ok('key' in onNodeRecipe)
+    assert.deepEqual(
+      onNodeRecipe.layers.map((l) => l.ref),
+      [
+        dockerfileTag(onNode, harness).tag,
+        harnessImageFor(harness, dockerfileTag(onNode, harness).tag),
+      ],
+    )
+    const onBaseRecipe = await imageRecipeKey({ dockerfile: onReevalBase }, harness, {
+      resolve: resolve(digests),
+    })
+    assert.ok('key' in onBaseRecipe)
+    assert.deepEqual(
+      onBaseRecipe.layers.map((l) => l.ref),
+      [reevalImage, dockerfileTag(onReevalBase, harness).tag],
+      'built on the harness image: nothing baked on',
+    )
+  })
+
+  test('plugin builds stack on the install layer, each keyed on the one below', async () => {
+    const spec = (tree: string) => ({
+      context: '/nowhere',
+      commit: null,
+      tree,
+      path: '.',
+      cwd: '.',
+      steps: [{ run: 'make' }],
+    })
+    const recipe = await imageRecipeKey({ install: ['true'] }, harness, {
+      plugins: [spec('a'), spec('b')],
+    })
+    assert.ok('key' in recipe)
+    const [base, install, one, two] = recipe.layers
+    assert.equal(base?.key, reevalImageKey(harness))
+    assert.equal(install?.ref, installLayerTag({ key: reevalImageKey(harness) }, [{ run: 'true' }]))
+    assert.equal(one?.ref, pluginLayerTag({ key: install?.key ?? '' }, spec('a')))
+    assert.equal(two?.ref, pluginLayerTag({ key: one?.key ?? '' }, spec('b')))
+    assert.equal(recipe.key, two?.key)
+  })
+
+  test("a base the registry doesn't answer for, or a FROM behind a build arg, leaves it unresolved", async () => {
+    const dir = tempDir('reeval-recipe-')
+    const file = join(dir, 'Dockerfile')
+    writeFileSync(file, 'ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nCOPY --from=node:23 /a /b\n')
+    assert.deepEqual(
+      await imageRecipeKey({ dockerfile: file }, harness, { resolve: resolve({}) }),
+      {
+        unresolved: { ref: 'node:23', reason: "node:23 isn't in the test registry" },
+      },
+    )
+    writeFileSync(file, 'ARG BASE=node:22\nFROM ${BASE}\n')
+    assert.deepEqual(
+      await imageRecipeKey({ dockerfile: file }, harness, { resolve: resolve(digests) }),
+      { unresolved: { ref: file, reason: 'a FROM names a build argument' } },
+    )
+    assert.deepEqual(await imageRecipeKey({ from: 'ghost:1' }, harness, { resolve: resolve({}) }), {
+      unresolved: { ref: 'ghost:1', reason: "ghost:1 isn't in the test registry" },
+    })
+    // Canary: an image used as is keys on what its registry names.
+    const asIs = await imageRecipeKey({ image: 'node:22' }, harness, { resolve: resolve(digests) })
+    assert.deepEqual(asIs, {
+      key: `node:22@${node}`,
+      layers: [{ ref: 'node:22', key: `node:22@${node}` }],
+    })
   })
 })
 
