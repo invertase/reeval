@@ -3216,6 +3216,13 @@ export type AttemptResources = {
     /** The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`. */
     size?: string
     /**
+     * The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, or the name
+     * of `tart()`'s VM on its host.
+     */
+    id?: string
+    /** The name reeval gave the VM, where the provider keeps one apart from its id. */
+    name?: string
+    /**
      * CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has (a macOS
      * VM's `sysctl hw.ncpu`).
      */

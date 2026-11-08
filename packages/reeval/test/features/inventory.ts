@@ -1089,6 +1089,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'sandbox.vm-identity',
+    area: 'Sandbox',
+    name: "A VM attempt's record names its VM (`resources.machine.id` and `name`: Boat's or Daytona's sandbox, Tart's VM), and `REEVAL_SANDBOX_LABELS` adds labels to reeval's own on every VM `boat()` and `daytona()` create, refused before any starts when a provider would refuse them",
+    fixtures: [
+      'sandbox/boat-session',
+      'sandbox/boat-resources',
+      'sandbox/daytona-resources',
+      'sandbox/tart-clones-image',
+    ],
+    unit: ['reeval/test/boat.test.ts', 'reeval/test/daytona.test.ts'],
+  },
+  {
     id: 'tart.images',
     area: 'Sandbox',
     name: "`tart()` images: `reeval run` refuses one `tart list` doesn't show (exit 2, its size and `tart pull`), `reeval image build` pulls them with progress once the disk has room and runs no Docker, each attempt records the digest it cloned (`vmImage`), and `:latest` or no tag warns",

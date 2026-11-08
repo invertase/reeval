@@ -174,7 +174,7 @@ const delta = (first: number | null, last: number | null) =>
  */
 export function summarize(
   scope: AttemptResources['scope'],
-  machine: { sandbox: string; size?: string },
+  machine: { sandbox: string; size?: string; id?: string; name?: string },
   limits: Limits | null,
   readings: readonly Reading[],
   o: { sampleMs: number; partial: boolean },
@@ -291,7 +291,7 @@ const killHost = (pid: number | undefined) => {
 export function startMeter(
   hosts: readonly SamplerHost[],
   mode: SampleMode,
-  machine: { sandbox: string; size?: string },
+  machine: { sandbox: string; size?: string; id?: string; name?: string },
   sampleMs = SAMPLE_MS,
 ): ResourceMeter {
   const scope: AttemptResources['scope'] = mode === 'container' ? 'container' : 'machine'
@@ -369,7 +369,7 @@ export function startMeter(
 export function sharedMeter(
   hosts: readonly SamplerHost[],
   mode: SampleMode,
-  machine: { sandbox: string; size?: string },
+  machine: { sandbox: string; size?: string; id?: string; name?: string },
 ): ResourceMeter {
   return {
     async stop({ gone }) {

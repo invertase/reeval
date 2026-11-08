@@ -18,6 +18,7 @@ import {
   sshRoutes,
 } from '../src/sandbox/boat.ts'
 import { type HarnessBake, installHarness } from '../src/sandbox/harness-install.ts'
+import { sandboxLabels } from '../src/sandbox/labels.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { project, readRun, runCli, tempDir } from './helpers.ts'
 import { type FakeBoat, fakeBoat, NO_ROUTE_IP, unreachableMachines } from './support/boat.ts'
@@ -451,7 +452,11 @@ evaluate('reaches', async (c) => {
     const p = await project('boat-unreachable', files)
     api.requests.length = 0
     const r = await runCli(p.dir, ['run'], {
-      env: { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key },
+      env: {
+        BOAT_BASE_URL: api.url,
+        BOAT_API_KEY: api.key,
+        REEVAL_SANDBOX_LABELS: 'sweep-job=job_42, owner=ci',
+      },
       timeoutMs: 90_000,
     })
     assert.equal(r.code, 3, r.stdout + r.stderr)
@@ -472,6 +477,12 @@ evaluate('reaches', async (c) => {
     assert.equal(created.body?.noEnv, true)
     assert.equal(created.body?.snapshots, false, 'a stopped sandbox is erased, not kept')
     assert.ok(Number(created.body?.ttlSeconds) > 600, 'the TTL outlasts the attempt')
+    assert.deepEqual(created.body?.labels, {
+      'sweep-job': 'job_42',
+      owner: 'ci',
+      'reeval-prefix': 'reeval',
+      'reeval-run': name.split('-')[1],
+    })
     assert.ok(api.requests.some((q) => /^POST \/sandboxes\/bx_\w+\/sshkey$/.test(q.call)))
     assert.ok(api.requests.some((q) => /^DELETE \/sandboxes\/bx_\w+$/.test(q.call)))
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(api.key))
@@ -498,5 +509,46 @@ evaluate('reaches', async (c) => {
     const r = await runCli(p.dir, ['run'], { env: { BOAT_BASE_URL: api.url } })
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stdout + r.stderr, /BOAT_API_KEY/)
+  })
+
+  test('stops the run with exit 2, before any VM, on labels Boat would refuse', async () => {
+    const p = await project('boat-bad-labels', files)
+    api.requests.length = 0
+    const r = await runCli(p.dir, ['run'], {
+      env: { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key, REEVAL_SANDBOX_LABELS: 'reeval-run=x' },
+    })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stdout + r.stderr,
+      /REEVAL_SANDBOX_LABELS has "reeval-run=x": keys starting reeval- are reeval's own/,
+    )
+    assert.ok(!api.requests.some((q) => q.call === 'POST /sandboxes'), 'no VM was started')
+  })
+})
+
+describe('REEVAL_SANDBOX_LABELS', () => {
+  const parse = (value: string) => sandboxLabels({ REEVAL_SANDBOX_LABELS: value })
+
+  test('is key=value pairs separated by commas, an empty value allowed', () => {
+    assert.deepEqual(parse(''), {})
+    assert.deepEqual(parse(' a=1 , team/b.c_d-e = x y ,empty='), {
+      a: '1',
+      'team/b.c_d-e': 'x y',
+      empty: '',
+    })
+  })
+
+  test("refuses what Boat would, and keys that would replace reeval's", () => {
+    for (const [value, why] of [
+      ['a', /each label is key=value/],
+      ['-a=1', /a key is 1 to 63 letters/],
+      [`${'k'.repeat(64)}=1`, /a key is 1 to 63 letters/],
+      ['reeval-prefix=x', /keys starting reeval- are reeval's own/],
+      ['a=1,a=2', /a is set twice/],
+      [`a=${'v'.repeat(257)}`, /a value is at most 256 bytes/],
+      [Array.from({ length: 19 }, (_, i) => `k${i}=v`).join(','), /more than 18 labels/],
+    ] as const) {
+      assert.throws(() => parse(value), { message: why }, value)
+    }
   })
 })

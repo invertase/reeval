@@ -3,6 +3,7 @@
 // (support/daytona.ts) through the real SDK.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
+import { runLabels } from '../src/sandbox/boat.ts'
 import {
   checkDaytona,
   type DaytonaClient,
@@ -11,7 +12,6 @@ import {
   daytonaClient,
   daytonaPoolProvider,
   removeRunSandboxes,
-  runLabels,
   sshTarget,
   whileLimited,
 } from '../src/sandbox/daytona.ts'
@@ -280,7 +280,11 @@ evaluate('reaches', async (c) => {
     const p = await project('daytona-unreachable', files)
     api.requests.length = 0
     const r = await runCli(p.dir, ['run'], {
-      env: { DAYTONA_API_URL: api.url, DAYTONA_API_KEY: api.key },
+      env: {
+        DAYTONA_API_URL: api.url,
+        DAYTONA_API_KEY: api.key,
+        REEVAL_SANDBOX_LABELS: 'sweep-job=job_42',
+      },
       timeoutMs: 90_000,
     })
     assert.equal(r.code, 3, r.stdout + r.stderr)
@@ -290,6 +294,12 @@ evaluate('reaches', async (c) => {
     assert.deepEqual(api.live(), [])
     const created = api.requests.find((q) => q.call === 'POST /sandbox')
     assert.match(String(created?.body?.name), /^reeval-[0-9a-f]{8}-[0-9a-f]{6}$/)
+    assert.deepEqual(created?.body?.labels, {
+      'sweep-job': 'job_42',
+      'reeval-prefix': 'reeval',
+      'reeval-run': String(created?.body?.name).split('-')[1],
+      'code-toolbox-language': 'python',
+    })
     assert.ok(api.requests.some((q) => /^POST \/sandbox\/[\w-]+\/ssh-access$/.test(q.call)))
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(api.key))
   })
@@ -299,5 +309,16 @@ evaluate('reaches', async (c) => {
     const r = await runCli(p.dir, ['run'], { env: { DAYTONA_API_URL: api.url } })
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stdout + r.stderr, /DAYTONA_API_KEY/)
+  })
+
+  test('stops the run with exit 2, before any sandbox, on labels it would refuse', async () => {
+    const p = await project('daytona-bad-labels', files)
+    api.requests.length = 0
+    const r = await runCli(p.dir, ['run'], {
+      env: { DAYTONA_API_URL: api.url, DAYTONA_API_KEY: api.key, REEVAL_SANDBOX_LABELS: 'x' },
+    })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stdout + r.stderr, /REEVAL_SANDBOX_LABELS has "x": each label is key=value/)
+    assert.ok(!api.requests.some((q) => q.call === 'POST /sandbox'), 'no sandbox was started')
   })
 })

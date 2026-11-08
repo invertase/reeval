@@ -11,9 +11,10 @@ import { run } from '@reeval/sandbox-docker/process'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import type { DaytonaSandboxDescriptor } from '../types.ts'
-import { retryAfterMs, runTag } from './boat.ts'
+import { retryAfterMs, runLabels } from './boat.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
+import { sandboxLabels } from './labels.ts'
 import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
 import { type PoolProvider, RATE_LIMIT_WAITS, type RateLimited } from './pool.ts'
@@ -193,12 +194,6 @@ function abortable<T>(work: Promise<T>, signal: AbortSignal, orphan: (value: T) 
 export const snapshotOf = (sandbox: Pick<DaytonaSandboxDescriptor, 'size'>) =>
   `daytona-${sandbox.size ?? 'medium'}`
 
-/** The labels every sandbox of the run carries, which its cleanup lists by. */
-export const runLabels = (sandbox: Pick<DaytonaSandboxDescriptor, 'prefix'>, runId: string) => ({
-  'reeval-prefix': sandbox.prefix,
-  'reeval-run': runTag(runId),
-})
-
 /** How long a created sandbox may take to start, in seconds. */
 const START_TIMEOUT_S = 180
 /** How long a run's cleanup may wait on one organization, so an unreachable API can't stall it. */
@@ -278,6 +273,7 @@ export function daytonaPoolProvider(
   const size = descriptor.size ?? 'medium'
   const snapshot = snapshotOf(descriptor)
   const labels = runLabels(descriptor, runId)
+  const extra = sandboxLabels()
   const made = new Map<string, { sandbox: DaytonaSandboxInfo; dir: string }>()
   const remove = async (sandbox: DaytonaSandboxInfo) => {
     await sandbox.delete().catch((error: unknown) => {
@@ -309,7 +305,7 @@ export function daytonaPoolProvider(
           {
             name,
             snapshot,
-            labels,
+            labels: { ...extra, ...labels },
             // The pool says when a machine goes; Daytona's idle stop would cut an attempt off.
             autoStopInterval: 0,
             ephemeral: true,
@@ -443,6 +439,11 @@ export const missingDaytonaSshTool = () =>
  * Daytona takes the key (listing the run's sandboxes, which it refuses for a bad one).
  */
 export async function checkDaytona(sandbox: DaytonaSandboxDescriptor, projectRoot: string) {
+  try {
+    sandboxLabels()
+  } catch (error) {
+    throw usage((error as Error).message)
+  }
   const tool = await missingDaytonaSshTool()
   if (tool) {
     throw usage(

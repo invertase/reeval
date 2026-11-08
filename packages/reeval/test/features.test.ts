@@ -41,8 +41,8 @@ import {
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { runPrefix } from '../src/sandbox/boat.ts'
-import { runLabels } from '../src/sandbox/daytona.ts'
+import { runLabels, runPrefix } from '../src/sandbox/boat.ts'
+import { vmPrefix } from '../src/sandbox/tart.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
 import { readTar } from '../src/tarball.ts'
@@ -1155,8 +1155,22 @@ export const features: Feature[] = [
     tiers: ['docker'],
     env: 'vm',
     ...onFakeBoat,
+    hostEnv: () => ({
+      BOAT_BASE_URL: boatApi.url,
+      BOAT_API_KEY: boatApi.key,
+      REEVAL_SANDBOX_LABELS: 'sweep-job=job_42',
+    }),
     canary: /expected 'reeval' to be 'user'/,
-    record: ({ run }) => boatCleanedUp(run),
+    record: ({ run }) => {
+      boatCleanedUp(run)
+      const prefix = runPrefix(boat(), run.runId)
+      const creates = boatApi.requests.filter(
+        (q) => q.call === 'POST /sandboxes' && String(q.body?.name).startsWith(prefix),
+      )
+      for (const q of creates) {
+        assert.deepEqual(q.body?.labels, { 'sweep-job': 'job_42', ...runLabels(boat(), run.runId) })
+      }
+    },
   },
   {
     dir: 'sandbox/boat-resources',
@@ -1170,6 +1184,12 @@ export const features: Feature[] = [
       assert.equal(r?.scope, 'machine', JSON.stringify(r))
       assert.equal(r?.machine.sandbox, 'boat')
       assert.equal(r?.machine.size, 'small')
+      assert.match(r?.machine.id ?? '', /^bx_[0-9a-f]{8}$/, JSON.stringify(r))
+      assert.ok(r?.machine.name?.startsWith(runPrefix(boat(), run.runId)), JSON.stringify(r))
+      assert.ok(
+        boatApi.requests.some((q) => q.call === `DELETE /sandboxes/${r?.machine.id}`),
+        'the recorded id is the sandbox reeval deleted',
+      )
       assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
       assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
       assert.ok((r?.usage?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(r))
@@ -1325,6 +1345,12 @@ export const features: Feature[] = [
       assert.equal(r?.scope, 'machine', JSON.stringify(r))
       assert.equal(r?.machine.sandbox, 'daytona')
       assert.equal(r?.machine.size, 'medium')
+      const made = daytonaCreated(run).map((s) => s.name)
+      assert.ok(made.includes(r?.machine.name ?? ''), JSON.stringify(r))
+      assert.ok(
+        daytonaApi.requests.some((q) => q.call === `DELETE /sandbox/${r?.machine.id}`),
+        'the recorded id is the sandbox reeval deleted',
+      )
       assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
       assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
       assert.ok((r?.usage?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(r))
@@ -3724,6 +3750,7 @@ export const features: Feature[] = [
     record: ({ run, project, stdout }) => {
       const image = 'ghcr.io/cirruslabs/macos-sequoia-base:15.6'
       assert.deepEqual(landed(run)?.vmImage, { ref: image, digest: fakeDigest(image) })
+      assert.ok(landed(run)?.resources?.machine.id?.startsWith(vmPrefix(run.runId)))
       const log = readFileSync(join(fakeTarts.get(project) ?? '', 'log'), 'utf8')
       assert.doesNotMatch(log, /^pull /m, 'the run pulled nothing')
       assert.doesNotMatch(stdout, /moving tag/, 'a pinned tag has no warning')

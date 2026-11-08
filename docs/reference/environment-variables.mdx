@@ -147,6 +147,10 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 `DAYTONA_API_URL` points `daytona()` at another Daytona API, such as `http://127.0.0.1:3000/api` for a local one. With no value, reeval uses Daytona's own.
 
+## `REEVAL_SANDBOX_LABELS`
+
+`REEVAL_SANDBOX_LABELS` adds labels to every VM `boat()` and `daytona()` create, beside reeval's own: `key=value` pairs separated by commas, such as `sweep-job=42`.
+
 ## `AWS_REGION`
 
 `AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [OpenCode providers table](/reference/options#opencode-providers).

@@ -189,6 +189,7 @@ export async function createPooledSshSandbox(
         debug?.log('container', `ssh to ${info.id} over ${info.route}`)
         let healthy = true
         return {
+          vm: { id: info.id, name: info.name },
           root: machine.root,
           ...(shared && { proxyPort: layout.proxyPort, stateDir: layout.state }),
           ...(label && {
