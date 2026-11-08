@@ -24,6 +24,18 @@ import type { DockerSandboxDescriptor } from '../types.ts'
 /** The sandbox options that decide what's in an attempt's image. */
 export type ImageRecipe = Pick<DockerSandboxDescriptor, 'image' | 'from' | 'dockerfile' | 'install'>
 
+/** The recipe options `sandbox` sets, or null when it sets none. */
+export function recipeOf(sandbox: Partial<ImageRecipe>): ImageRecipe | null {
+  const { image, from, dockerfile, install } = sandbox
+  if (!image && !from && !dockerfile && !install?.length) return null
+  return {
+    ...(image !== undefined && { image }),
+    ...(from !== undefined && { from }),
+    ...(dockerfile !== undefined && { dockerfile }),
+    ...(install !== undefined && { install }),
+  }
+}
+
 /** What a registry reference names now: its top-level manifest's digest, or why it doesn't. */
 export type ResolveDigest = (
   ref: string,

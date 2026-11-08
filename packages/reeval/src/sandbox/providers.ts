@@ -15,7 +15,6 @@ import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
-  BoatSandboxDescriptor,
   DaytonaSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
@@ -25,6 +24,12 @@ import type {
   TartSandboxDescriptor,
   VmImage,
 } from '../types.ts'
+import type {
+  BoatImage,
+  BoatImageTarget,
+  BoatImageTimings,
+  BoatSnapshotClient,
+} from './boat-images.ts'
 import { harnessBake } from './harness-install.ts'
 import type { MACHINE_PROVIDERS } from './machines.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
@@ -35,6 +40,7 @@ import {
   type PrepareFailure,
   type SandboxProvider,
 } from './provider.ts'
+import { type ImageRecipe, type ResolveDigest, recipeOf } from './recipe.ts'
 import { tartBakeKey } from './tart-bake.ts'
 import { LOCAL_TART, type TartTarget } from './tart-cli.ts'
 import type { HostProbe, PreparedHost } from './tart-hosts.ts'
@@ -586,30 +592,74 @@ export const tartProvider = (
 }
 
 /**
- * Boat has nothing to build yet (each attempt's VM installs the harness as it starts): `prepare`
- * checks each account and machine size the run uses, once.
+ * Boat: `prepare` checks each account and machine size the run uses, once, and builds a sandbox's
+ * image recipe into a saved snapshot when it has one (`boat()` doesn't take the recipe options
+ * yet). One recipe is built once per run, whatever machine sizes use it.
  */
-export const boatProvider = (): SandboxProvider<BoatSandboxDescriptor> => ({
-  kind: 'boat',
-  check: async () => {},
-  key: (sandbox) => JSON.stringify({ apiKey: sandbox.apiKey.from, type: sandbox.type ?? 'small' }),
-  async prepare(sandbox, _harness, ctx) {
-    const { checkBoat } = await import('./boat.ts')
-    await checkBoat(sandbox, ctx.root)
-    return null
-  },
-  classify: (error) => {
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      class: isTransient(message) ? 'transient' : 'config',
-      stage: 'boat',
-      ref: null,
-      cause: null,
-      log: null,
-      message,
-    }
-  },
-})
+export const boatProvider = (
+  options: { resolve?: ResolveDigest; timings?: BoatImageTimings } = {},
+): SandboxProvider<BoatImageTarget> => {
+  const images = new Map<string, Promise<BoatImage>>()
+  return {
+    kind: 'boat',
+    check: async () => {},
+    key: (sandbox, harness, plugins = []) => {
+      const recipe = recipeOf(sandbox)
+      return JSON.stringify({
+        apiKey: sandbox.apiKey.from,
+        type: sandbox.type ?? 'small',
+        ...(recipe && { image: imageIdentity(sandbox, recipe, harness, plugins) }),
+      })
+    },
+    async prepare(sandbox, harness, ctx, plugins = []) {
+      const boat = await import('./boat.ts')
+      await boat.checkBoat(sandbox, ctx.root)
+      const recipe = recipeOf(sandbox)
+      if (!recipe) return null
+      const { boatImage } = await import('./boat-images.ts')
+      const identity = imageIdentity(sandbox, recipe, harness, plugins)
+      let image = images.get(identity)
+      if (!image) {
+        const api = (await boat.boatClient(sandbox, ctx.root)) as BoatSnapshotClient
+        image = boatImage(boat.boatService(sandbox), api, sandbox, recipe, harness, ctx, {
+          plugins,
+          ...options,
+        })
+        images.set(identity, image)
+        // A failed build is tried again by preflight's retry, not handed to the next size.
+        image.catch(() => images.delete(identity))
+      }
+      return await image
+    },
+    classify: (error) => {
+      if (error instanceof ImageBuildError) return { ...classifyDocker(error) }
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        class: isTransient(message) ? 'transient' : 'config',
+        stage: 'boat',
+        ref: null,
+        cause: null,
+        log: null,
+        message,
+      }
+    },
+  }
+}
+
+/** What decides a Boat sandbox's image beside its machine size: the account, prefix and recipe. */
+const imageIdentity = (
+  sandbox: BoatImageTarget,
+  recipe: ImageRecipe,
+  harness: HarnessDescriptor,
+  plugins: readonly PluginSource[],
+) =>
+  JSON.stringify({
+    apiKey: sandbox.apiKey.from,
+    prefix: sandbox.prefix,
+    harness: harness.kind === 'fake' ? (harness.layout ?? 'cursor') : harness.kind,
+    recipe,
+    ...(plugins.length ? { plugins: plugins.map(pluginBuildId) } : {}),
+  })
 
 /** Daytona has nothing to build either: `prepare` checks each organization the run uses, once. */
 export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => ({
