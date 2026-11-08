@@ -2094,6 +2094,23 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['yaml: history.archive not true or false', yaml('history:\n  archive: yes please\n')],
     [
+      'history.debugArchive on s3()',
+      config({ history: { store: { kind: 's3', bucket: 'runs' }, debugArchive: true } }),
+    ],
+    [
+      'history.debugArchive set by a profile on the s3() it inherits',
+      config({
+        history: { store: { kind: 's3', bucket: 'runs' } },
+        profiles: { ci: { history: { debugArchive: true } } },
+      }),
+    ],
+    [
+      'yaml: history.debugArchive kept by a profile on s3()',
+      yaml(
+        'history:\n  debugArchive: true\nprofiles:\n  ci:\n    history:\n      store: { kind: s3, bucket: runs }\n',
+      ),
+    ],
+    [
       'yaml: history.debug unknown',
       yaml('history:\n  store: { kind: s3, bucket: runs }\n  debug: some\n'),
     ],

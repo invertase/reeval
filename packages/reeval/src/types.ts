@@ -2505,6 +2505,13 @@ export type HistoryConfig = {
    * and every file recorded with it. Off by default; `local()` only.
    */
   archive?: boolean
+  /**
+   * Also write each recorded run's debug data, the whole of `.reeval/debug/<runId>/`, as
+   * `.reeval/debug/<runId>.zip`. It stays there, never committed with the history, and
+   * `debug.keep` and `reeval clean` remove it with the run's debug data. Off by default;
+   * `local()` only.
+   */
+  debugArchive?: boolean
 }
 
 export type DebugUpload = 'none' | 'requests' | 'all'
@@ -2880,6 +2887,8 @@ export type ResolvedHistory = {
   debug: DebugUpload
   /** Write each recorded run's `<runId>.zip` too (`history.archive`). */
   archive: boolean
+  /** Write each recorded run's `.reeval/debug/<runId>.zip` too (`history.debugArchive`). */
+  debugArchive: boolean
   /**
    * Which recorded runs the history commands list: a remote store holds every branch's, so it
    * lists those whose commit HEAD reaches unless `--all-branches` asks for all. `local()` has none.

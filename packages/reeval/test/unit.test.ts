@@ -1377,6 +1377,13 @@ test('history.archive is off by default and reads the same from reeval.config.ts
     '/p',
   )
   assert.equal(selectProfile(off, 'mine', {})?.history?.archive, false, 'or turns it off')
+  const both = { history: { archive: true, debugArchive: true } }
+  assert.equal(resolveConfig({}, '/p').history.debugArchive, false)
+  assert.deepEqual(
+    resolveConfigData(both, '/p', 'reeval.yaml').history,
+    resolveConfig(both, '/p').history,
+  )
+  assert.equal(resolveConfig(both, '/p').history.debugArchive, true)
   assert.throws(
     () => resolveConfig({ history: { archive: null as unknown as boolean } }, '/p'),
     /history\.archive in reeval\.config\.ts is true or false \(got null\)/,

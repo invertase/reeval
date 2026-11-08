@@ -2518,6 +2518,34 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'history/debug-archive',
+    tiers: ['fake'],
+    env: 'archived',
+    canary: /has the marker: expected file missing\.txt to exist/,
+    record: async ({ project }) => {
+      const { runId } = readRun(project, { history: 'evals/.history' }).run
+      const debug = join(project, '.reeval', 'debug')
+      const loose = readdirSync(join(debug, runId), { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile())
+        .map((e) => `${runId}/${relative(join(debug, runId), join(e.parentPath, e.name))}`)
+        .sort()
+      assert.ok(loose.length > 0, 'the run left debug data')
+      const archive = await openArchive(join(debug, `${runId}.zip`))
+      try {
+        await archive.verify()
+        assert.equal(archive.manifest.debugLevel, 'all')
+        assert.deepEqual(
+          archive.manifest.files.map((f) => f.path),
+          loose,
+          "the zip holds the whole of the run's debug data",
+        )
+      } finally {
+        await archive.close()
+      }
+      assert.equal(existsSync(join(project, 'evals/.history', `${runId}.zip`)), false)
+    },
+  },
+  {
     dir: 'compare/check-not-run',
     tiers: ['fake'],
     env: 'marked',

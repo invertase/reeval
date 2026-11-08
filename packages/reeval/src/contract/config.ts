@@ -106,6 +106,7 @@ export const historyConfigDataSchema = z.strictObject({
   artifacts: z.enum(['all', 'failures', 'none']).optional(),
   debug: z.enum(['none', 'requests', 'all']).optional(),
   archive: z.boolean().optional(),
+  debugArchive: z.boolean().optional(),
 })
 
 const recordMode = z.enum(['manual', 'ci', 'always'])

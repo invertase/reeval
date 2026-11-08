@@ -15,7 +15,7 @@ import type {
 } from '../types.ts'
 
 const ARTIFACTS = ['all', 'failures', 'none'] as const
-const HISTORY_KEYS = ['store', 'artifacts', 'debug', 'archive']
+const HISTORY_KEYS = ['store', 'artifacts', 'debug', 'archive', 'debugArchive']
 const DEBUG = ['none', 'requests', 'all'] as const
 const LOCAL_KEYS = ['kind', 'dir']
 const S3_KEYS = ['kind', 'bucket', 'endpoint', 'region', 'prefix', 'env']
@@ -200,25 +200,36 @@ export function resolveHistory(
       `${where}.debug in ${file} uploads debug data to a remote store, and history.store is local(): .reeval/debug already holds it. Drop debug, or set it where history.store is s3().`,
     )
   }
-  const own: unknown = (value as HistoryConfig | undefined)?.archive
-  if (own !== undefined && typeof own !== 'boolean') {
-    throw new UsageError(
-      `${where}.archive in ${file} is true or false (got ${JSON.stringify(own)})`,
-    )
-  }
-  const archive = own ?? base?.archive ?? false
   const storeAt = (value as HistoryConfig | undefined)?.store === undefined ? 'history' : where
-  if (archive && resolved.store.kind !== 'local' && own === undefined) {
+  const zips = (key: 'archive' | 'debugArchive', what: string, instead: string) => {
+    const own: unknown = (value as HistoryConfig | undefined)?.[key]
+    if (own !== undefined && typeof own !== 'boolean') {
+      throw new UsageError(
+        `${where}.${key} in ${file} is true or false (got ${JSON.stringify(own)})`,
+      )
+    }
+    const on = own ?? base?.[key] ?? false
+    if (!on || resolved.store.kind === 'local') return on
+    if (own === undefined) {
+      throw new UsageError(
+        `history.${key} in ${file} ${what} a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. Set ${key}: false in ${where}, or drop it from history.`,
+      )
+    }
     throw new UsageError(
-      `history.archive in ${file} writes each run's zip into a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. Set archive: false in ${where}, or drop it from history.`,
+      `${where}.${key} in ${file} ${what} a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. ${instead}`,
     )
   }
-  if (archive && resolved.store.kind !== 'local') {
-    throw new UsageError(
-      `${where}.archive in ${file} writes each run's zip into a local() history, and ${storeAt}.store keeps runs in ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
-    )
-  }
-  return { ...resolved, debug, archive }
+  const archive = zips(
+    'archive',
+    "writes each run's zip into",
+    'Drop archive, or set it where history.store is local().',
+  )
+  const debugArchive = zips(
+    'debugArchive',
+    "zips each run's debug data in .reeval/debug for",
+    'Drop debugArchive: set debug to upload the debug data with the run instead.',
+  )
+  return { ...resolved, debug, archive, debugArchive }
 }
 
 function resolveStore(
@@ -228,7 +239,7 @@ function resolveStore(
   root: string,
   defaultDir: string,
   base?: ResolvedHistory,
-): Omit<ResolvedHistory, 'debug' | 'archive'> {
+): Omit<ResolvedHistory, 'debug' | 'archive' | 'debugArchive'> {
   if (value !== undefined && !isObjectLike(value)) {
     throw new UsageError(
       `${where} in ${file} must be an object like { store: local(), artifacts: 'failures' } (got ${JSON.stringify(value)})`,
@@ -281,7 +292,7 @@ function localHistory(
   root: string,
   defaultDir: string,
   artifacts: ArtifactLevel,
-): Omit<ResolvedHistory, 'debug' | 'archive'> {
+): Omit<ResolvedHistory, 'debug' | 'archive' | 'debugArchive'> {
   return {
     dir: resolve(root, store.dir ?? defaultDir),
     artifacts,

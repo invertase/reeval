@@ -1606,6 +1606,10 @@
           "type": "string",
           "enum": ["none", "requests", "all"]
         },
+        "debugArchive": {
+          "description": "Also write each recorded run's debug data, the whole of `.reeval/debug/<runId>/`, as `.reeval/debug/<runId>.zip`. It stays there, never committed with the history, and `debug.keep` and `reeval clean` remove it with the run's debug data. Off by default; `local()` only.",
+          "type": "boolean"
+        },
         "store": {
           "description": "Where recorded runs are kept: `{ kind: local }` (the default) or `{ kind: s3, … }`.",
           "oneOf": [
