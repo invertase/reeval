@@ -8,8 +8,8 @@ snapshot on each provider, and later runs start from that snapshot. The agent wr
 
 **Needs:** `BOAT_API_KEY` for the Boat cell and `DAYTONA_API_KEY` for the Daytona cell, even for
 the fake agent. `package.json` adds `@boatdev/sdk` and `@daytona/sdk`, which `boat()` and
-`daytona()` load; in this repo, run `pnpm install && pnpm build` at the root first. A real agent also needs its key in `.env.local`
-(`ANTHROPIC_API_KEY` for Claude Code).
+`daytona()` load; in this repo, run `pnpm install && pnpm build` at the root first. A real agent
+also needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code).
 
 **Run:**
 

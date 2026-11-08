@@ -77,7 +77,10 @@ const PLUGIN_FILE =
 
 const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => name.test(e.name))
 
-/** The sandbox's segment of every attempt id. */
+/**
+ * The sandbox's segment of every attempt id: in boat(), the mode's name, which reeval.config.ts
+ * gives `boat()` as its `id`.
+ */
 const SANDBOX_ID = ON_BOAT ? (process.env.REEVAL_CONTRACT_SANDBOX as string) : 'docker'
 /** Why a row in boat() skips a deny-all check. */
 const NO_POLICY =

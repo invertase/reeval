@@ -226,8 +226,8 @@ hermetic check's egress half skip, no captures are written, and clean teardown a
 the run's live VMs. `REEVAL_CONTRACT_SANDBOX=boat-image` runs them in
 `boat({ from: 'debian:bookworm-slim' })` instead: preflight builds the image into a Boat snapshot
 (once; `reeval image clean --all` deletes it), each attempt runs in a container of it, and every
-check runs, the deny-all ones included. Each attempt is one Boat start: mind the account's starts
-an hour and a day.
+check runs, the deny-all ones included. Each attempt is one Boat start, plus the image's build VM
+once in `boat-image`: mind the account's starts an hour and a day.
 
 ## Flake policy
 
