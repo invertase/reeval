@@ -65,6 +65,7 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `with-resources` | The fake harness in Docker (`docker({ memory: '512m', cpus: 1 })`) and in `boat()` on the fake Boat API: `evals[].attempts[].resources`, a container's (scope `container`, an attempt that burned a CPU and held 256 MiB beside an idle one) and a VM's (scope `machine`, with its size and disk bytes), from before `usage.p95Cores`, `usage.cgroupPeakMemoryBytes` and `usage.throttling` |
 | `with-resource-followups` | The same fixtures read from out of the agent's reach (the container from a sibling container, the VM as root), with `usage.p95Cores`, and a container's `usage.cgroupPeakMemoryBytes` and `usage.throttling` from an attempt whose two busy threads its one CPU's quota throttled |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
+| `with-archive` | The corpus recipe's run with its history archive, `<runId>.zip` beside it (written by `corpus:add --archive`): the record and every file recorded with it, and `reeval-archive.json` (`ArchiveManifest`) listing each with its sha256; the saved analysis, added after recording, stays beside the zip |
 
 What reads them:
 

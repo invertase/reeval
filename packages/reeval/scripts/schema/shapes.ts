@@ -97,6 +97,13 @@ export const SHAPES: PersistedShape[] = [
     where: 'manifest.json at the root of a reeval bundle archive, read by reeval run --bundle',
     versionField: 'schemaVersion',
   },
+  {
+    name: 'archive-manifest',
+    file: 'src/archive/types.ts',
+    type: 'ArchiveManifest',
+    where: "reeval-archive.json, the last entry of a history archive: a run's <runId>.zip",
+    versionField: 'schemaVersion',
+  },
 ]
 
 /** Where the plan shapes' snapshots live: `schema/plan/<name>.schema.json`. */

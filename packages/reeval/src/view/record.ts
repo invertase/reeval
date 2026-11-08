@@ -3,6 +3,7 @@
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
 
+import type { ArchiveManifest } from '../archive/types.ts'
 import type { BundleManifest } from '../bundle/types.ts'
 import { foldCases } from '../history/cases.ts'
 import type { RunRecord } from '../history/types.ts'
@@ -27,6 +28,7 @@ export type ShapeName =
   | 'capture-page'
   | 'run-events'
   | 'bundle-manifest'
+  | 'archive-manifest'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -59,6 +61,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'capture-page': [],
   'run-events': [],
   'bundle-manifest': [],
+  'archive-manifest': [],
 }
 
 /**
@@ -76,6 +79,7 @@ export const SCHEMA_VERSIONS = {
   'capture-page': 1,
   'run-events': 1,
   'bundle-manifest': 1,
+  'archive-manifest': 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -210,3 +214,9 @@ export const readableBundleManifest = (
   manifest: BundleManifest,
   what = 'This bundle',
 ): BundleManifest => fillDefaults('bundle-manifest', upgrade('bundle-manifest', manifest, what))
+
+/** A history archive's `reeval-archive.json` as `openArchive` sees it; one from a newer reeval throws. */
+export const readableArchiveManifest = (
+  manifest: ArchiveManifest,
+  what = 'This archive',
+): ArchiveManifest => fillDefaults('archive-manifest', upgrade('archive-manifest', manifest, what))

@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Is greet.js perfect?",
+    "model": "fake",
+    "stateOptions": {
+      "task": false,
+      "output": false,
+      "files": false,
+      "diff": true,
+      "contents": [],
+      "transcript": false,
+      "turns": "last",
+      "checks": false
+    },
+    "state": {
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2"
+      }
+    }
+  }
+]

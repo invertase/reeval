@@ -263,6 +263,7 @@ describe('read defaults', () => {
       'cli-invocation': [],
       'capture-page': [],
       'bundle-manifest': [],
+      'archive-manifest': [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {
@@ -275,10 +276,10 @@ describe('read defaults', () => {
     }
   })
 
-  test('every corpus record, transcript line and saved analysis, read, fits the current schema', () => {
+  test('every corpus record, transcript line and saved analysis, read, fits the current schema', async () => {
     assert.ok(records.length > 0 && lines.length > 0 && analyses.length > 0)
     const current = new Map(SHAPES.map((s) => [s.name, snapshot(s.name)]))
-    assert.equal(checkCorpus(current).join('\n'), '')
+    assert.equal((await checkCorpus(current)).join('\n'), '')
   })
 
   test('a default fills in only what is missing, through arrays and union variants', () => {

@@ -56,6 +56,8 @@ export function corpus(): {
   capturePages: Array<{ file: string; value: Record<string, unknown> }>
   /** Runs' event streams, kept in an entry's `events/`. */
   eventStreams: string[]
+  /** History archives, `<runId>.zip` beside a run. */
+  archives: string[]
 } {
   const records: Array<{ file: string; value: Record<string, unknown> }> = []
   const transcripts: string[] = []
@@ -63,11 +65,13 @@ export function corpus(): {
   const remarks: Array<{ file: string; value: Record<string, unknown> }> = []
   const capturePages: Array<{ file: string; value: Record<string, unknown> }> = []
   const eventStreams: string[] = []
+  const archives: string[] = []
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, e.name)
       if (e.isDirectory()) walk(path)
       else if (e.name === 'transcript.jsonl') transcripts.push(path)
+      else if (e.name.endsWith('.zip')) archives.push(path)
       else if (e.name === 'remarks.json') {
         remarks.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       } else if (e.name.endsWith('.capture.json')) {
@@ -86,5 +90,5 @@ export function corpus(): {
       if (n.endsWith('.ndjson')) eventStreams.push(join(events, n))
     }
   }
-  return { records, transcripts, analyses, remarks, capturePages, eventStreams }
+  return { records, transcripts, analyses, remarks, capturePages, eventStreams, archives }
 }

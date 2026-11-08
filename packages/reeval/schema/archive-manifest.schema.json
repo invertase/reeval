@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from ArchiveManifest in src/archive/types.ts by `pnpm schema:update`; don't edit. reeval-archive.json, the last entry of a history archive: a run's <runId>.zip.",
+  "title": "ArchiveManifest",
+  "$ref": "#/$defs/ArchiveManifest",
+  "$defs": {
+    "ArchiveFile": {
+      "description": "One file in an archive, by its path from the archive's root.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "Its size in bytes, uncompressed.",
+          "type": "number"
+        },
+        "path": {
+          "description": "Relative to the archive's root, with `/`: `<runId>.json` or under `<runId>/`.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "sha256 of its bytes, uncompressed.",
+          "type": "string"
+        }
+      },
+      "required": ["bytes", "path", "sha256"]
+    },
+    "ArchiveManifest": {
+      "description": "The manifest of a history archive: a zip of one recorded run, laid out as the run is in a history folder. A `run` archive holds the record, `<runId>.json`, and the files beside it under `<runId>/`; a `debug` archive holds the run's debug data under `<runId>/`, as `.reeval/debug/<runId>/` keeps it. The manifest is the zip's last entry and lists every other.",
+      "type": "object",
+      "properties": {
+        "contents": {
+          "description": "What the archive holds: the recorded run, or its debug data.",
+          "enum": ["debug", "run"]
+        },
+        "createdAt": {
+          "description": "When it was written, ISO 8601.",
+          "type": "string"
+        },
+        "debugLevel": {
+          "description": "Of a `debug` archive: which of each attempt's debug files it holds, as `history.debug` names them. A level a newer reeval added reads back as written.",
+          "enum": ["all", "requests"]
+        },
+        "files": {
+          "description": "Every other entry, sorted by path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArchiveFile"
+          }
+        },
+        "kind": {
+          "const": "reeval-archive"
+        },
+        "reeval": {
+          "description": "The reeval that wrote it.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "1 for a run's first archive, one more each time the run's archive is written again.",
+          "type": "number"
+        },
+        "runId": {
+          "description": "The run's id, which names the archive, `<runId>.zip`, and its record.",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": [
+        "contents",
+        "createdAt",
+        "files",
+        "kind",
+        "reeval",
+        "revision",
+        "runId",
+        "schemaVersion"
+      ]
+    }
+  },
+  "x-schemaVersion": 1
+}

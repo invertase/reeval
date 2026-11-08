@@ -11,6 +11,9 @@
 //     copies runs (every one, or those named), their artifacts, event streams and the evals they ran
 //     from other projects, e.g. runs on real harnesses: recorded runs from evals/.history, and runs
 //     never recorded (the harness contract's) from .reeval/runs
+//
+//   --archive also writes each run's history archive, <runId>.zip beside it, of the record and
+//     the files recorded with it; a saved analysis, added after recording, stays beside the zip
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -27,6 +30,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { writeArchive } from '../../src/archive/index.ts'
+import { filesUnder } from '../../src/history/files.ts'
 
 const PACKAGE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 const RECIPE = join(PACKAGE_DIR, 'scripts/corpus/project')
@@ -116,14 +121,20 @@ function sourcesIn(project: string): Source[] {
   return [...found.values()]
 }
 
-function main(): number {
+async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { from: { type: 'string', multiple: true }, note: { type: 'string' } },
+    options: {
+      from: { type: 'string', multiple: true },
+      note: { type: 'string' },
+      archive: { type: 'boolean' },
+    },
   })
   const [name, ...only] = positionals
   if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-    process.stderr.write('usage: corpus:add <name> [--from <project>… [<runId>…]] [--note "why"]\n')
+    process.stderr.write(
+      'usage: corpus:add <name> [--from <project>… [<runId>…]] [--archive] [--note "why"]\n',
+    )
     return 2
   }
   const target = join(CORPUS, name)
@@ -184,6 +195,9 @@ function main(): number {
     mkdirSync(dirname(join(target, file)), { recursive: true })
     cpSync(path, join(target, file))
   }
+  if (values.archive) {
+    for (const { runId } of sources) await archiveRun(join(target, HISTORY), runId)
+  }
   if (!from.length) rmSync(projects[0] as string, { recursive: true, force: true })
   const ids = sources.map((s) => s.runId)
   process.stdout.write(
@@ -192,4 +206,19 @@ function main(): number {
   return 0
 }
 
-process.exitCode = main()
+/** Writes `<runId>.zip` beside the run: its record and every file under it but `analysis/`. */
+async function archiveRun(history: string, runId: string): Promise<void> {
+  const files = (await filesUnder(join(history, runId)))
+    .filter(([path]) => !path.startsWith('analysis/'))
+    .map(([path, data]) => ({ path: `${runId}/${path}`, data }))
+  await writeArchive(join(history, `${runId}.zip`), {
+    contents: 'run',
+    runId,
+    files: [
+      { path: `${runId}.json`, data: readFileSync(join(history, `${runId}.json`)) },
+      ...files,
+    ],
+  })
+}
+
+process.exitCode = await main()
