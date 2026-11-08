@@ -6,10 +6,10 @@
 import { createHash } from 'node:crypto'
 import type { AttachOptions } from './attach.ts'
 import type { MadeBundle } from './bundle/index.ts'
-import type { Flags } from './cli-spec.ts'
+import { type FlagName, type Flags, RUN_FLAGS } from './cli-spec.ts'
 import type { PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
-import { displayUrl, EventStreamError } from './events.ts'
+import { displayUrl, EventStreamError, type FollowOptions } from './events.ts'
 import type { PlanDocument } from './plan.ts'
 import { stripCredentials } from './redact.ts'
 import { sandboxKind } from './sandbox/kinds.ts'
@@ -20,6 +20,9 @@ import type { ResolvedConfig, ResolvedProfile } from './types.ts'
 export const HOSTED_URL_VAR = 'REEVAL_HOSTED_URL'
 /** A bearer token the hosted run sends the platform, when it's set. */
 export const HOSTED_TOKEN_VAR = 'REEVAL_TOKEN'
+
+/** The exit code of a run this terminal detached from, as of one it interrupted. */
+const INTERRUPTED = 130
 
 /** A failure of the platform or the way to it: exit 3. */
 export class HostedError extends Error {
@@ -50,25 +53,34 @@ export function wantsHosted(
   return profile?.hosted ?? config.hosted
 }
 
-/** Run flags whose effect stays on this machine, which a hosted run can't take. */
-const LOCAL_ONLY = [
-  'resume',
-  'retry-errors',
-  'events',
-  'events-file',
-  'events-url',
-  'record',
-  'concurrency',
-  'registry',
-  'force',
-] as const
+/**
+ * The run flags a hosted run takes: the ones its bundle carries (filters aside) and the ones that
+ * only change how this terminal shows it. `--json` only with `--dry-run`.
+ */
+const HOSTED_FLAGS = new Set<FlagName>([
+  'profile',
+  'tag',
+  'trait',
+  'runs',
+  'dry-run',
+  'json',
+  'hosted',
+  'local',
+  'ui',
+  'log-order',
+  'log-prefix',
+  'output-logs',
+  'verbose',
+])
 
-/** Refuses the flags a hosted run can't take, naming them; `--json` only outside a dry run. */
+/** Refuses, naming them, the run flags a hosted run can't take. */
 export function refuseLocalFlags(flags: Flags): void {
-  const given = [
-    ...LOCAL_ONLY.filter((f) => flags[f] !== undefined && flags[f] !== false),
-    ...(flags.json && !flags['dry-run'] ? ['json'] : []),
-  ]
+  const given = RUN_FLAGS.filter(
+    (f) =>
+      flags[f] !== undefined &&
+      flags[f] !== false &&
+      (!HOSTED_FLAGS.has(f) || (f === 'json' && !flags['dry-run'])),
+  )
   if (!given.length) return
   const names = given.map((f) => `--${f}`).join(', ')
   throw new UsageError(
@@ -140,7 +152,34 @@ export async function hostedLine(
 /** The headers every platform request carries: the bearer token, when one is set. */
 function authHeaders(env: NodeJS.ProcessEnv): Record<string, string> {
   const token = env[HOSTED_TOKEN_VAR]?.trim()
-  return token ? { authorization: `Bearer ${token}` } : {}
+  if (!token) return {}
+  const bad = [...token].findIndex((c) => /[\s\p{Cc}]/u.test(c))
+  if (bad >= 0) {
+    const code = token.codePointAt(bad)?.toString(16).padStart(4, '0')
+    throw new UsageError(
+      `${HOSTED_TOKEN_VAR} has whitespace or a control character (U+${code}) at position ${bad + 1}: set it to the token alone.`,
+    )
+  }
+  return { authorization: `Bearer ${token}` }
+}
+
+/**
+ * How `reeval attach` follows `source`: with the bearer token when it's the hosted platform's,
+ * else as any other stream.
+ */
+export function hostedFollow(
+  source: string,
+  env: NodeJS.ProcessEnv = process.env,
+): FollowOptions | undefined {
+  const raw = env[HOSTED_URL_VAR]?.trim()
+  const platform = raw ? URL.parse(raw) : null
+  const url = URL.parse(source)
+  if (!platform || !url) return undefined
+  const origin = (u: URL) => `${u.protocol.replace(/^ws/, 'http')}//${u.host}`
+  if (origin(platform) !== origin(url)) return undefined
+  const headers = authHeaders(env)
+  if (!headers.authorization) return undefined
+  return { connect: (u) => new WebSocket(u, { headers } as unknown as string[]) }
 }
 
 type PlatformRun = {
@@ -175,7 +214,8 @@ async function call<T>(
   } catch {}
   if (!res.ok) {
     const said = (body as { error?: { message?: unknown } } | null)?.error?.message
-    const why = typeof said === 'string' ? said : `HTTP ${res.status}`
+    const auth = res.status === 401 || res.status === 403 ? ` (check ${HOSTED_TOKEN_VAR})` : ''
+    const why = `${typeof said === 'string' ? said : `HTTP ${res.status}`}${auth}`
     const message = `the hosted platform refused to ${what}: ${why}`
     throw res.status >= 400 && res.status < 500
       ? new UsageError(message)
@@ -205,7 +245,7 @@ export type HostedRunOptions = {
   bundle: MadeBundle
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
-  follow: (options: Pick<AttachOptions, 'source' | 'follow'>) => Promise<number>
+  follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
   env?: NodeJS.ProcessEnv
 }
 
@@ -232,7 +272,7 @@ export async function runHosted(options: HostedRunOptions): Promise<number> {
     throw new HostedError('the hosted platform created a run without a run id and upload URL')
   }
   const runUrl = (path = '') => new URL(`api/runs/${encodeURIComponent(runId)}${path}`, base)
-  // An upload URL elsewhere (a signed storage URL) is authorized by itself.
+  // An upload URL on another origin carries its own authorization.
   const uploadHeaders = uploadUrl.origin === base.origin ? headers : {}
   await call(
     uploadUrl,
@@ -240,22 +280,34 @@ export async function runHosted(options: HostedRunOptions): Promise<number> {
       method: typeof created.upload?.method === 'string' ? created.upload.method : 'PUT',
       what: `upload the bundle of run ${runId}`,
       headers: { 'content-type': 'application/gzip' },
-      body: new Uint8Array(archive),
+      body: new Blob([new Uint8Array(archive)]),
       timeoutMs: 10 * 60_000,
     },
     uploadHeaders,
   )
   await call(runUrl('/start'), { method: 'POST', what: `start run ${runId}` }, headers)
   const events = runUrl('/events')
-  log(`Started hosted run ${runId}; reeval attach ${displayUrl(events.href)} follows it`)
+  const reattach = `reeval attach ${displayUrl(events.href)}`
+  log(`Started hosted run ${runId}; ${reattach} follows it`)
+  let detached = false
   try {
-    return await options.follow({
-      source: events.href,
-      follow: {
-        connect: (url) =>
-          new WebSocket(url, { headers } as unknown as string[]) as unknown as WebSocket,
-      },
-    })
+    return await options
+      .follow({
+        source: events.href,
+        ...(headers.authorization && {
+          follow: {
+            connect: (url) => new WebSocket(url, { headers } as unknown as string[]),
+          },
+        }),
+        onDetach: () => {
+          detached = true
+        },
+      })
+      .then((code) => {
+        if (!detached) return code
+        log(`Hosted run ${runId} goes on: ${reattach} follows it again`)
+        return INTERRUPTED
+      })
   } catch (error) {
     if (!(error instanceof EventStreamError)) throw error
     const run = await call<PlatformRun>(
@@ -263,8 +315,13 @@ export async function runHosted(options: HostedRunOptions): Promise<number> {
       { method: 'GET', what: `read run ${runId}` },
       headers,
     ).catch(() => null)
-    if (run?.status === 'failed' && run.error?.message) {
-      throw new HostedError(`hosted run ${runId} failed: ${run.error.message}`)
+    const why = run?.error?.message ?? run?.error?.code
+    if (typeof run?.exitCode === 'number') {
+      if (why) log(`hosted run ${runId} ended: ${why}`)
+      return run.exitCode
+    }
+    if (run?.status === 'failed') {
+      throw new HostedError(`hosted run ${runId} failed${why ? `: ${why}` : ''}`)
     }
     throw error
   }

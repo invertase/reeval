@@ -42,10 +42,11 @@ type Seen = { method: string; path: string; auth: string | undefined }
 /**
  * The platform's API as the hosted run uses it: create, upload, start, the run's status and its
  * event socket. Starting runs the bundle with `reeval run --bundle --events-url`, posting to this
- * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `vmFails`,
- * starting runs nothing: the socket closes with no exit line and the run reads as failed.
+ * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `fails`,
+ * starting runs nothing: the socket closes with no exit line and the run reads as failed, with
+ * `exitCode` when given.
  */
-async function platform(options: { vmFails?: string } = {}) {
+async function platform(options: { fails?: string; exitCode?: number } = {}) {
   const seen: Seen[] = []
   const lines: string[] = []
   const viewers = new Set<WebSocket>()
@@ -63,8 +64,9 @@ async function platform(options: { vmFails?: string } = {}) {
   }
   const run = () => ({
     id: 'run_1',
-    status: options.vmFails ? 'failed' : over ? 'succeeded' : 'running',
-    error: options.vmFails ? { code: 'vm_failed', message: options.vmFails } : null,
+    status: options.fails ? 'failed' : over ? 'succeeded' : 'running',
+    error: options.fails ? { code: 'start_failed', message: options.fails } : null,
+    exitCode: options.exitCode ?? null,
   })
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://platform')
@@ -88,7 +90,7 @@ async function platform(options: { vmFails?: string } = {}) {
     }
     if (req.method === 'POST' && url.pathname === '/api/runs/run_1/start') {
       if (!uploaded) return json(res, 409, { error: { code: 'no_bundle', message: 'no bundle' } })
-      if (options.vmFails) {
+      if (options.fails) {
         over = true
       } else {
         const file = join(tempDir('hosted-bundle'), 'bundle.tar.gz')
@@ -181,6 +183,11 @@ describe('reeval run on the hosted platform', () => {
         bundleBytes: archive.length,
       })
       assert.ok(!archive.includes(TOKEN), 'no secret value in the bundle')
+      const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
+        env: { REEVAL_HOSTED_URL: p.base, REEVAL_TOKEN: 'hosted-test-token' },
+      })
+      assert.equal(again.code, 0, again.stdout + again.stderr)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer hosted-test-token', 'reeval attach sends it too')
     } finally {
       await p.close()
     }
@@ -209,13 +216,26 @@ describe('reeval run on the hosted platform', () => {
   })
 
   test("a run that fails on the platform before its exit line exits 3 with the platform's reason", async () => {
-    const p = await platform({ vmFails: 'the machine could not start' })
+    const p = await platform({ fails: 'the run could not start' })
     try {
       const r = await runCli(await fixtureProject(), ['run', '--hosted'], {
         env: { REEVAL_HOSTED_URL: p.base },
       })
       assert.equal(r.code, 3, r.stdout + r.stderr)
-      assert.match(r.stderr, /hosted run run_1 failed: the machine could not start/)
+      assert.match(r.stderr, /hosted run run_1 failed: the run could not start/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("a run that ends on the platform before its exit line exits with the platform's code", async () => {
+    const p = await platform({ fails: 'the plan differs from the bundle', exitCode: 2 })
+    try {
+      const r = await runCli(await fixtureProject(), ['run', '--hosted'], {
+        env: { REEVAL_HOSTED_URL: p.base },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stdout, /hosted run run_1 ended: the plan differs from the bundle/)
     } finally {
       await p.close()
     }
@@ -240,6 +260,16 @@ describe('reeval run on the hosted platform', () => {
     assert.equal(creds.code, 2)
     assert.match(creds.stderr, /can't carry a user name or password/)
     assert.ok(!creds.stderr.includes('secret@'))
+    const p = await platform()
+    try {
+      const token = await runCli(dir, ['run', '--hosted'], {
+        env: { REEVAL_HOSTED_URL: p.base, REEVAL_TOKEN: 'abc\ndef' },
+      })
+      assert.equal(token.code, 2, token.stdout + token.stderr)
+      assert.match(token.stderr, /REEVAL_TOKEN has whitespace or a control character \(U\+000a\)/)
+    } finally {
+      await p.close()
+    }
   })
 
   test('an unreachable platform exits 3', async () => {
@@ -300,10 +330,7 @@ evaluate('on a mac', { environments: mac }, async () => {})
       assert.equal(r.code, 0, r.stdout + r.stderr)
       assert.match(r.stdout, /Running here, not on hosted: .*outside the bundle root/)
       assert.match(r.stdout, /1 passed/)
-      assert.deepEqual(
-        p.seen.map((s) => `${s.method} ${s.path}`),
-        ['GET /api/config'],
-      )
+      assert.deepEqual(p.seen, [], 'a run that stays here never calls the platform')
     } finally {
       await p.close()
     }

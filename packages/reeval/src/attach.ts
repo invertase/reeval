@@ -39,6 +39,8 @@ export type AttachOptions = {
   signalRun?: (pid: number) => void
   /** `STALL_MS` and `LOST_MS` unless given. */
   silence?: { stallMs?: number; lostMs?: number }
+  /** Told when the viewer detaches, before `attach` returns 0. */
+  onDetach?: () => void
 }
 
 const SILENT = Symbol('silent')
@@ -255,6 +257,7 @@ export async function attach(options: AttachOptions): Promise<number> {
           : `Detached from run ${header.runId}.\n`,
       )
     }
+    options.onDetach?.()
     return 0
   }
   if (code === undefined) {

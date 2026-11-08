@@ -104,7 +104,7 @@ export type CommandSpec = {
   sub?: Record<string, Omit<CommandSpec, 'sub'>>
 }
 
-const RUN_FLAGS: FlagName[] = [
+export const RUN_FLAGS: FlagName[] = [
   'profile',
   'dry-run',
   'json',

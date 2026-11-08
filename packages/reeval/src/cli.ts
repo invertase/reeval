@@ -43,7 +43,7 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
-import type { RunTarget } from './hosted-run.ts'
+import { type RunTarget, wantsHosted } from './hosted-run.ts'
 import { cwdIn, fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -628,13 +628,19 @@ async function attachCommand(
     root = dirname(requireConfig(configPath))
     source = (await resolveAttach(root, target)).file
   }
-  return attachHere(flags, { source, ...(root === undefined ? {} : { root }) })
+  const { hostedFollow } = await import('./hosted-run.ts')
+  const follow = isAttachUrl(source) ? hostedFollow(source) : undefined
+  return attachHere(flags, {
+    source,
+    ...(root === undefined ? {} : { root }),
+    ...(follow ? { follow } : {}),
+  })
 }
 
 /** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
 async function attachHere(
   flags: Flags,
-  options: Pick<import('./attach.ts').AttachOptions, 'source' | 'root' | 'follow'>,
+  options: Pick<import('./attach.ts').AttachOptions, 'source' | 'root' | 'follow' | 'onDetach'>,
 ): Promise<number> {
   const { attach } = await import('./attach.ts')
   return attach({
@@ -673,31 +679,55 @@ async function hostedTarget(
 ): Promise<{ exit: number } | { target: RunTarget; detail: string } | undefined> {
   const hosted = await import('./hosted-run.ts')
   if (!hosted.wantsHosted(flags, setup.config, setup.profile)) return undefined
-  hosted.refuseLocalFlags(flags)
-  const base = setup.dryRun ? null : hosted.hostedUrl()
-  const env = base ? await hosted.hostedPlanEnv(base) : {}
   const { makeBundle } = await import('./bundle/index.ts')
-  let made: Awaited<ReturnType<typeof makeBundle>> | undefined
-  let why: string | undefined
-  try {
-    // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
-    // bundle's arguments, so the platform's machine plans with the same one.
-    const picked = setup.profile ? { profile: setup.profile.name } : {}
-    made = await makeBundle({ ...flags, ...picked }, filters, configPath, process.argv.slice(2), {
-      env,
-      prices: true,
-    })
-  } catch (error) {
-    if (!(error instanceof UsageError)) throw error
-    why = (error.message.split('\n')[0] ?? '').replace(/:$/, '')
+  // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
+  // bundle's arguments, so the platform's machine plans with the same one.
+  const picked = setup.profile ? { profile: setup.profile.name } : {}
+  type Made =
+    | { code: number }
+    | { why: string }
+    | { made: Exclude<Awaited<ReturnType<typeof makeBundle>>, { code: number }> }
+  const bundle = async (env: Record<string, string>): Promise<Made> => {
+    try {
+      const made = await makeBundle(
+        { ...flags, ...picked },
+        filters,
+        configPath,
+        process.argv.slice(2),
+        { env, prices: true },
+      )
+      if ('code' in made) return made
+      const blocked = made.plan.notHosted ?? []
+      return blocked.length ? { why: blocked.join('; ') } : { made }
+    } catch (error) {
+      if (!(error instanceof UsageError)) throw error
+      return { why: error.message }
+    }
   }
-  if (made && 'code' in made) return { exit: made.code }
-  if (made?.plan.notHosted?.length) why = made.plan.notHosted.join('; ')
-  if (why !== undefined || !made) {
-    const reason = why ?? 'the bundle could not be made'
-    if (!setup.dryRun) console.log(dim(`Running here, not on hosted: ${reason}`))
-    return { target: { kind: 'local', why: reason }, detail: `target  here, not hosted: ${reason}` }
+  let result = await bundle({})
+  let base: URL | null = null
+  if ('made' in result) {
+    hosted.refuseLocalFlags(flags)
+    if (!setup.dryRun) {
+      base = hosted.hostedUrl()
+      const env = await hosted.hostedPlanEnv(base)
+      const differs = Object.entries(env).some(([k, v]) => process.env[k] !== v)
+      if (differs) result = await bundle(env)
+    }
   }
+  if ('code' in result) return { exit: result.code }
+  if ('why' in result) {
+    const why = result.why.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+    if (!setup.dryRun) {
+      console.log(dim(`Running here, not on hosted: ${why}`))
+      if (setup.recording) storeCredentials(setup.config.history)
+    }
+    return {
+      target: { kind: 'local', why },
+      detail: `target  here, not hosted: ${why.split('\n')[0]}`,
+    }
+  }
+  const { made } = result
   if (!base) {
     const unset = process.env[hosted.HOSTED_URL_VAR]?.trim()
       ? ''
@@ -706,6 +736,9 @@ async function hostedTarget(
     return { target: { kind: 'hosted' }, detail: `${line}${unset}` }
   }
   console.log(await hosted.hostedLine(made.plan))
+  if (setup.recording) {
+    console.log(dim("record: a hosted run isn't recorded into this machine's history"))
+  }
   const exit = await hosted.runHosted({
     base,
     bundle: made,
@@ -1101,7 +1134,10 @@ async function prepareRun(
     flags.record ||
     (profile?.record ?? config.record) === 'always' ||
     ((profile?.record ?? config.record) === 'ci' && inCI())
-  if (recording && !flags['dry-run']) storeCredentials(config.history)
+  // A hosted run's credentials are checked once it's known to run here.
+  if (recording && !flags['dry-run'] && !wantsHosted(flags, config, profile)) {
+    storeCredentials(config.history)
+  }
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)
@@ -1135,6 +1171,8 @@ async function prepareRun(
       concurrency ?? defaultConcurrency((await sandboxCapacity(sandboxes)) ?? hostCapacity()),
     budget: profile?.budget ?? config.budget,
     record: profile?.record ?? config.record,
+    /** Whether the run is recorded into the history once it ends. */
+    recording: !!recording,
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     /** What loading the config read, for `--dry-run --json`'s `inputs`. */

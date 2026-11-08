@@ -322,7 +322,7 @@ export const cases: PlanCase[] = [
     dir: 'hosted',
     name: 'ci-without',
     args: ['--config', 'reeval.local.config.ts', 'evals/a.eval.ts'],
-    env: { CI: 'true' },
+    env: { CI: 'true', REEVAL_HOSTED_URL: 'https://platform.test', REEVAL_TOKEN: 'token' },
   },
   {
     dir: 'hosted',
