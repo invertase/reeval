@@ -335,7 +335,8 @@ export class MachinePool<M> {
       slot.out = false
       if (--machine.busy === 0) {
         machine.idleSince = performance.now()
-        // Kept, tarn would hand it to this pool's next attempt before a pool already waiting.
+        // A pool already waiting on the account gets the room before this pool's next attempt,
+        // which then starts a machine of its own.
         if (
           !broken &&
           !machine.draining &&
