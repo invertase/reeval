@@ -1,7 +1,8 @@
 // One provider account's limits, shared by the run's pools on it: a pool per machine size and
 // image, each with its own machines and slots, while the account counts every machine they hold
 // and holds every start to its windows. A pool that needs a machine when the account has none to
-// spare has the machine idle longest in another pool removed.
+// spare has the machine idle longest in another pool removed, one for each pool waiting, or the
+// next one another pool is done with.
 import PQueue from 'p-queue'
 import { InfraError } from './types.ts'
 
@@ -40,14 +41,19 @@ export type AccountMember = {
   idlest(): { since: number; evict(): void } | null
 }
 
+/** A pool waiting for a machine; `evicts` when another pool's machine going would let it start one. */
+type Waiter = { member: AccountMember; evicts: boolean; wake: () => void }
+
 export class PoolAccount {
   readonly helper: string
   readonly limits: PoolLimits
   readonly #members = new Set<AccountMember>()
-  readonly #waiters = new Set<() => void>()
+  readonly #waiters = new Set<Waiter>()
   readonly #queues: PQueue[] = []
   readonly #backoff: { first: number; max: number }
   #machines = 0
+  /** Machines removed for a waiting pool that haven't gone yet. */
+  #evicting = 0
   #startsLeft: number | null
   #backoffMs: number
   #heldUntil = 0
@@ -98,40 +104,60 @@ export class PoolAccount {
     return true
   }
 
-  /** A machine `reserve` made room for has gone. */
-  free(): void {
-    this.#machines = Math.max(0, this.#machines - 1)
-    this.wake()
-  }
-
-  /** Every pool waiting for room checks again. */
-  wake(): void {
-    for (const wake of [...this.#waiters]) wake()
-  }
-
-  /** Calls `wake` on the next `wake`; returns how to stop waiting. */
-  onRoom(wake: () => void): () => void {
-    const once = () => {
-      this.#waiters.delete(once)
-      wake()
-    }
-    this.#waiters.add(once)
-    return () => this.#waiters.delete(once)
+  /** A machine `reserve` made room for has gone; `evicted` when it went for a waiting pool. */
+  free(evicted: boolean): void {
+    this.#machines--
+    if (evicted) this.#evicting--
+    for (const waiter of [...this.#waiters]) waiter.wake()
   }
 
   /**
-   * Removes the machine idle longest in a pool other than `member`, so `member` can start one
-   * once it has gone. False when no other pool has an idle machine.
+   * Calls `wake` once a machine on the account has gone, in the order the pools began waiting.
+   * `evicts` says another pool's machine going would let `member` start one. Returns how to stop
+   * waiting.
    */
-  evictFor(member: AccountMember): boolean {
+  wait(member: AccountMember, evicts: boolean, wake: () => void): () => void {
+    const waiter: Waiter = {
+      member,
+      evicts,
+      wake: () => {
+        this.#waiters.delete(waiter)
+        wake()
+      },
+    }
+    this.#waiters.add(waiter)
+    return () => this.#waiters.delete(waiter)
+  }
+
+  /** Whether a pool other than `member` waits for a machine that no removal under way will free. */
+  wanted(member: AccountMember): boolean {
+    let waiting = 0
+    for (const w of this.#waiters) if (w.evicts && w.member !== member) waiting++
+    return waiting > this.#evicting
+  }
+
+  /** `member` is removing a machine of its own for a waiting pool. */
+  evicting(): void {
+    this.#evicting++
+  }
+
+  /**
+   * Removes the machine idle longest in a pool other than `member`, while fewer are going than
+   * pools wait for one.
+   */
+  evictFor(member: AccountMember): void {
+    let waiting = 0
+    for (const w of this.#waiters) if (w.evicts) waiting++
+    if (this.#evicting >= waiting) return
     let idlest: { since: number; evict(): void } | null = null
     for (const other of this.#members) {
       if (other === member) continue
       const idle = other.idlest()
       if (idle && (!idlest || idle.since < idlest.since)) idlest = idle
     }
-    idlest?.evict()
-    return idlest !== null
+    if (!idlest) return
+    this.#evicting++
+    idlest.evict()
   }
 
   /** Spends one of the run's starts, failing once there's none left. */

@@ -597,4 +597,48 @@ describe('pools on one account', () => {
       await Promise.all([a.close(), b.close()])
     }
   })
+
+  test('pools waiting at once have one idle machine removed each, not one per wake-up', async () => {
+    const provider = fakeProvider(() => 'ok', { removeMs: 30 })
+    const shared = account({ limits: { machines: 8 } })
+    const a = pool(provider, { account: shared, reuse: true })
+    const others = [1, 2, 3, 4].map(() => pool(provider, { account: shared, reuse: true }))
+    try {
+      const held = await Promise.all(Array.from({ length: 8 }, () => a.acquire()))
+      for (const l of held) l.release()
+      const got = await Promise.all(others.map((p) => p.acquire()))
+      await new Promise((r) => setTimeout(r, 100))
+      assert.equal(a.stats().evicted, 4)
+      assert.equal(provider.removed.length, 4)
+      for (const l of got) l.release()
+    } finally {
+      await Promise.all([a, ...others].map((p) => p.close()))
+    }
+  })
+
+  test("a pool waiting while another's machine is in use gets it next, before that pool's next attempt", async () => {
+    const provider = fakeProvider()
+    const shared = account({ limits: { machines: 1 } })
+    const a = pool(provider, { account: shared, reuse: true })
+    const b = pool(provider, { account: shared, reuse: true })
+    try {
+      const order: string[] = []
+      const first = await a.acquire()
+      const waiting = b.acquire().then((l) => {
+        order.push('b')
+        l.release()
+      })
+      await new Promise((r) => setTimeout(r, 10))
+      const next = a.acquire().then((l) => {
+        order.push('a')
+        l.release()
+      })
+      first.release()
+      await Promise.all([waiting, next])
+      assert.deepEqual(order, ['b', 'a'])
+      assert.deepEqual(provider.removed, [first.machine, 'm2'], "and b's goes for a's attempt")
+    } finally {
+      await Promise.all([a.close(), b.close()])
+    }
+  })
 })

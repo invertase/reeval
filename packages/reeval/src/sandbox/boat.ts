@@ -511,7 +511,6 @@ export async function openVmPool(
   const limits = await readLimits(service, api)
   const k = spec.attemptsPerMachine ?? 1
   const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
-  const capped = spec.maxConcurrent ? Math.ceil(spec.maxConcurrent / k) : free
   const caps = limits?.startLimitsWithWallet ?? limits?.startLimits
   const hourUsed = limits?.starts?.hour?.used ?? 0
   const left = caps?.perHour === undefined ? null : caps.perHour - hourUsed
@@ -525,7 +524,7 @@ export async function openVmPool(
           ? { startsPerHour: null, starts: left === null ? null : Math.max(0, left) }
           : { startsPerHour: left === null ? null : Math.max(1, left) }),
       },
-      machines: Math.min(free, capped),
+      ...(spec.maxConcurrent && { machines: Math.ceil(spec.maxConcurrent / k) }),
       attemptsPerMachine: k,
       reuse: spec.reuse ?? false,
     },

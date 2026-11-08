@@ -43,7 +43,10 @@ export type PoolProvider<M> = {
 export type PoolOptions = {
   /** The account's limits, which a pool opened with an `account` takes from it instead. */
   limits: PoolLimits
-  /** The account this pool shares with the run's other pools on it; else one of its own. */
+  /**
+   * The account this pool shares with the run's other pools on it, whose limits, backoff and
+   * windows hold instead of this pool's; else one of its own.
+   */
   account?: PoolAccount
   /** The most machines this pool holds at once, within the account's. Default the account's. */
   machines?: number
@@ -115,11 +118,20 @@ type Machine<M> = {
   stop: AbortController
   /** Slots out of tarn: leased, or being kept alive for a lease. */
   busy: number
-  /** When `busy` last went to 0, or the machine came up. */
+  /** When `busy` last went to 0. */
   idleSince: number
+  /** It's being removed so another pool on the account can start one. */
+  evicted: boolean
 }
 
-type Slot<M> = { machine: Machine<M>; slot: number; uses: number; dead: boolean }
+type Slot<M> = {
+  machine: Machine<M>
+  slot: number
+  uses: number
+  dead: boolean
+  /** Counted in its machine's `busy`. */
+  out: boolean
+}
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
@@ -213,6 +225,7 @@ export class MachinePool<M> {
         continue
       }
       machine.busy++
+      slot.out = true
       const first = machine.start
       machine.start = null
       if (!first && this.#provider.keepAlive) {
@@ -317,8 +330,24 @@ export class MachinePool<M> {
 
   #release(slot: Slot<M>, broken: boolean) {
     this.#leased.delete(slot)
-    if (--slot.machine.busy === 0) slot.machine.idleSince = performance.now()
-    if (broken) slot.machine.draining = true
+    const { machine } = slot
+    if (slot.out) {
+      slot.out = false
+      if (--machine.busy === 0) {
+        machine.idleSince = performance.now()
+        // Kept, tarn would hand it to this pool's next attempt before a pool already waiting.
+        if (
+          !broken &&
+          !machine.draining &&
+          !this.#closing.signal.aborted &&
+          this.#account.wanted(this.#member)
+        ) {
+          this.#account.evicting()
+          this.#evict(machine)
+        }
+      }
+    }
+    if (broken) machine.draining = true
     if (broken || !this.#options.reuse) this.#kill(slot)
     this.#slots.release(slot)
   }
@@ -349,7 +378,7 @@ export class MachinePool<M> {
         machine = this.#startMachine()
         break
       }
-      const room = this.#room()
+      const room = this.#room(own)
       if (own) this.#account.evictFor(this.#member)
       await room
       machine = open()
@@ -359,6 +388,7 @@ export class MachinePool<M> {
       slot: machine.unclaimed.shift() as number,
       uses: 0,
       dead: false,
+      out: false,
     }
     machine.alive++
     try {
@@ -396,15 +426,18 @@ export class MachinePool<M> {
   }
 
   #forget(machine: Machine<M>) {
-    if (this.#machines.delete(machine)) this.#account.free()
+    if (this.#machines.delete(machine)) this.#account.free(machine.evicted)
   }
 
-  /** Resolves once a machine on the account has gone; rejects when the pool closes. */
-  #room(): Promise<void> {
+  /**
+   * Resolves once a machine on the account has gone; rejects when the pool closes. `evicts`: the
+   * pool is under its own cap, so another pool's machine going would let it start one.
+   */
+  #room(evicts: boolean): Promise<void> {
     const closing = this.#closing.signal
     closing.throwIfAborted()
     return new Promise((resolve, reject) => {
-      const unwait = this.#account.onRoom(() => {
+      const unwait = this.#account.wait(this.#member, evicts, () => {
         closing.removeEventListener('abort', stop)
         resolve()
       })
@@ -416,24 +449,27 @@ export class MachinePool<M> {
     })
   }
 
-  /** The machine up longest with no slot out, for the account to remove for another pool. */
+  /**
+   * The machine idle longest, for the account to remove for another pool. A machine no attempt has
+   * leased yet is on its way to one, or is reaped once no attempt wants it.
+   */
   #idlest(): { since: number; evict(): void } | null {
     let idlest: Machine<M> | undefined
     for (const m of this.#machines) {
-      if (m.id === undefined || m.draining || m.busy > 0) continue
+      if (m.id === undefined || m.start !== null || m.draining || m.busy > 0) continue
       if (!idlest || m.idleSince < idlest.idleSince) idlest = m
     }
     if (!idlest) return null
     const machine = idlest
-    return {
-      since: machine.idleSince,
-      evict: () => {
-        this.#stats.evicted++
-        machine.draining = true
-        machine.unclaimed = []
-        void this.#remove(machine)
-      },
-    }
+    return { since: machine.idleSince, evict: () => this.#evict(machine) }
+  }
+
+  #evict(machine: Machine<M>) {
+    this.#stats.evicted++
+    machine.evicted = true
+    machine.draining = true
+    machine.unclaimed = []
+    void this.#remove(machine)
   }
 
   #startMachine(): Machine<M> {
@@ -447,6 +483,7 @@ export class MachinePool<M> {
       stop: new AbortController(),
       busy: 0,
       idleSince: 0,
+      evicted: false,
     }
     this.#machines.add(machine)
     this.#stats.machinesAtOnce = Math.max(this.#stats.machinesAtOnce, this.#machines.size)
@@ -468,7 +505,6 @@ export class MachinePool<M> {
           queuedMs: Math.round(queuedMs),
           rateLimited,
         }
-        machine.idleSince = performance.now()
         this.#account.resetBackoff()
       },
       (error: unknown) => {

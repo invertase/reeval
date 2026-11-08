@@ -48,7 +48,7 @@ export type Pooled = {
 const registered = (sandbox: MachineDescriptor) =>
   MACHINE_PROVIDERS.find((m) => m.kind === sandbox.kind)?.pool as Pooled | undefined
 
-/** The run's pools, keyed by provider account and size. */
+/** The run's pools, keyed by provider account, machine size and image. */
 export class MachineService {
   readonly #pools = new Map<string, Promise<MachinePool<unknown>>>()
   readonly #accounts = new Map<string, PoolAccount>()
