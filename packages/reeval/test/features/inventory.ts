@@ -418,7 +418,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'run.bundle',
     area: 'Config and selection',
-    name: "`reeval bundle` and `reeval run --bundle`: the dry run's plan and `inputs` as one `.tar.gz` with a `manifest.json` (reeval version, arguments, git commit and dirty flag, each file's sha256, the `.env` files' variable names and the secret names, never values or `node_modules`), rooted at the git repository when the project reads outside itself; run from it, the files are checked against the manifest, the lockfile installed and the plan and inputs compared before any attempt, naming each missing or differing file",
+    name: "`reeval bundle` and `reeval run --bundle`: the dry run's plan and `inputs` as one `.tar.gz` with a `manifest.json` (reeval version, arguments, the git commit, branch, dirty flag, diff hash, remote and author, each file's sha256, the `.env` files' variable names and the secret names, never values or `node_modules`), rooted at the git repository when the project reads outside itself; run from it, the files are checked against the manifest, the lockfile installed and the plan and inputs compared before any attempt, naming each missing or differing file, and the run's record and run id take the bundled git state and author",
     unit: ['reeval/test/bundle.test.ts', 'reeval/test/cli.test.ts', 'reeval/test/schema.test.ts'],
   },
   {

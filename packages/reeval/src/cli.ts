@@ -300,10 +300,10 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   }
   const file = flags.bundle as string
   const log = (s: string) => (flags.json ? console.error(s) : console.log(s))
-  const { openBundle } = await import('./bundle/index.ts')
+  const { bundledGit, openBundle } = await import('./bundle/index.ts')
   const opened = await openBundle(file, log)
   if (opened.exit !== undefined) return opened.exit
-  const { args } = opened.manifest
+  const { args, author } = opened.manifest
   log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
   process.chdir(opened.project)
   return runCommand(
@@ -317,6 +317,7 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
     },
     opened.config,
     args.filters,
+    { git: bundledGit(opened.manifest), ...(author ? { author } : {}) },
   )
 }
 
@@ -655,6 +656,7 @@ async function runCommand(
   flags: Flags,
   configPath: string | undefined,
   given: string[],
+  bundled?: Bundled,
 ): Promise<number> {
   const retry = flags['retry-errors']
   const url = flags['events-url']
@@ -700,7 +702,7 @@ async function runCommand(
     ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
-  const ctx = await startRun(setup)
+  const ctx = await startRun(setup, bundled)
   const startedWith: RunInvocation | undefined = resumed
     ? (resumed.saved ?? undefined)
     : {
@@ -1124,26 +1126,33 @@ const retryVerb = (retry: { resume: boolean }, runId: string) =>
     ? `--resume finishes run ${runId}'s --retry-errors, which runs its errors again`
     : '--retry-errors runs its errors again'
 
+/** A run from a bundle: the bundled project's git state and author, which its copy lacks. */
+type Bundled = { git: GitInfo | null; author?: string }
+
 /** The run's id and the state it starts from: commit, uncommitted changes, author. */
-async function startRun({
-  config,
-  profile,
-  runs,
-  tags,
-  traits,
-  sandboxes,
-  sizeRun,
-  verbosity,
-  configFile,
-  resume,
-  retry,
-  dryRun,
-}: Prepared): Promise<StartedRun> {
+async function startRun(
+  {
+    config,
+    profile,
+    runs,
+    tags,
+    traits,
+    sandboxes,
+    sizeRun,
+    verbosity,
+    configFile,
+    resume,
+    retry,
+    dryRun,
+  }: Prepared,
+  bundled?: Bundled,
+): Promise<StartedRun> {
   const startedAt = new Date()
-  const git = await gitInfo(config.root, [config.history.dir])
+  const git = bundled ? bundled.git : await gitInfo(config.root, [config.history.dir])
   const { worktreePatch } = await import('./history/state.ts')
-  const patch = git?.dirty ? await worktreePatch(config.root, [config.history.dir]) : null
-  const who = await author(config.root)
+  const patch =
+    git?.dirty && !bundled ? await worktreePatch(config.root, [config.history.dir]) : null
+  const who = bundled?.author ?? (await author(config.root))
   const { stagingDir } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)

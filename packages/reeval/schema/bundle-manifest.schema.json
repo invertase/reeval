@@ -83,6 +83,59 @@
       },
       "required": ["kind", "path", "sha256", "size"]
     },
+    "BundleGit": {
+      "description": "The project's git state when it was bundled, as the run record's `git` keeps it.",
+      "type": "object",
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "commit": {
+          "description": "HEAD's commit.",
+          "type": "string"
+        },
+        "commitTime": {
+          "type": "string"
+        },
+        "diffHash": {
+          "description": "sha256 of the uncommitted changes as a binary patch, when dirty.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "dirty": {
+          "description": "Uncommitted changes outside `.reeval/`; the bundle carries the changed files.",
+          "type": "boolean"
+        },
+        "remote": {
+          "description": "The `origin` URL with any credentials removed.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "shallow": {
+          "type": "boolean"
+        }
+      },
+      "required": ["commit", "dirty"]
+    },
     "BundleLink": {
       "description": "A symbolic link in a skill or plugin folder, carried as a link to a file or folder in the bundle.",
       "type": "object",
@@ -103,6 +156,10 @@
       "properties": {
         "args": {
           "$ref": "#/$defs/BundleArgs"
+        },
+        "author": {
+          "description": "Who the run belongs to, as the bundling machine named it: its git user, or `ci` in CI.",
+          "type": "string"
         },
         "config": {
           "description": "The config file, relative to the bundle root.",
@@ -126,22 +183,13 @@
           }
         },
         "git": {
-          "description": "The commit the project was at, and whether it had uncommitted changes; null outside git.",
+          "description": "The project's git state when it was bundled, which a run from the bundle records as its own (the extracted copy has no history); null outside git.",
           "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/BundleGit"
             },
             {
-              "type": "object",
-              "properties": {
-                "commit": {
-                  "type": "string"
-                },
-                "dirty": {
-                  "type": "boolean"
-                }
-              },
-              "required": ["commit", "dirty"]
+              "type": "null"
             }
           ]
         },

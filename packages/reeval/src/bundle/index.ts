@@ -25,8 +25,10 @@ import type { Flags } from '../cli-spec.ts'
 import { requireConfig } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { git, repoTop } from '../git.ts'
-import { gitInfo } from '../history/provenance.ts'
+import { author, gitInfo } from '../history/provenance.ts'
 import { findingLines, scanText } from '../history/secret-scan.ts'
+import { worktreePatch } from '../history/state.ts'
+import type { GitInfo } from '../history/types.ts'
 import { PreflightInfraError } from '../preflight.ts'
 import { savedFilters } from '../resume.ts'
 import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
@@ -414,6 +416,7 @@ export async function bundleCommand(
     target: l.target,
   }))
   const git = await gitInfo(project)
+  const patch = git?.dirty ? await worktreePatch(project, []) : null
   const manifest: BundleManifest = {
     schemaVersion: 1,
     reeval: PACKAGE_VERSION,
@@ -425,7 +428,18 @@ export async function bundleCommand(
     },
     project: posix(relative(root, project)),
     config: posix(relative(root, config)),
-    git: git ? { commit: git.sha, dirty: git.dirty } : null,
+    git: git
+      ? {
+          commit: git.sha,
+          dirty: git.dirty,
+          branch: git.branch,
+          diffHash: patch ? sha256(patch) : null,
+          commitTime: git.commitTime,
+          shallow: git.shallow,
+          remote: git.remote,
+        }
+      : null,
+    author: await author(project),
     plan: rooted({ ...rest, inputs: plan.inputs ?? [], secrets }, root),
     files,
     ...(bundleLinks.length ? { links: bundleLinks } : {}),
@@ -522,7 +536,18 @@ const manifestSchema = z.object({
   }),
   project: z.union([z.literal(''), bundlePath]),
   config: bundlePath,
-  git: z.object({ commit: z.string(), dirty: z.boolean() }).nullable(),
+  git: z
+    .object({
+      commit: z.string(),
+      dirty: z.boolean(),
+      branch: z.string().nullable().optional(),
+      diffHash: z.string().nullable().optional(),
+      commitTime: z.string().optional(),
+      shallow: z.boolean().optional(),
+      remote: z.string().nullable().optional(),
+    })
+    .nullable(),
+  author: z.string().optional(),
   plan: z.record(z.string(), z.unknown()),
   files: z.array(
     z.object({
@@ -751,6 +776,27 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
     throw error
   } finally {
     process.off('SIGINT', interrupted)
+  }
+}
+
+/**
+ * The git state a run from the bundle records: the bundled project's, since the extracted copy
+ * is a repository with no commits. The bundle carries the changed files, not a patch, so a dirty
+ * run keeps no `worktree.patch`.
+ */
+export function bundledGit(manifest: BundleManifest): GitInfo | null {
+  const g = manifest.git
+  if (!g) return null
+  return {
+    sha: g.commit,
+    branch: g.branch ?? null,
+    dirty: g.dirty,
+    diffHash: g.dirty ? (g.diffHash ?? null) : null,
+    worktreePatch: null,
+    worktreePatchNote: g.dirty ? 'run from a bundle, which carries the changed files' : null,
+    commitTime: g.commitTime ?? '',
+    shallow: g.shallow ?? false,
+    remote: g.remote ?? null,
   }
 }
 
