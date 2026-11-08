@@ -16,6 +16,7 @@ import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
 import type { PoolProvider } from './pool.ts'
 import { PrepareError } from './provider.ts'
+import { recipeOf } from './recipe.ts'
 import {
   createPooledSshSandbox,
   missingSshTool,
@@ -69,6 +70,8 @@ export type VmSpec = {
   maxConcurrent?: number
   reuse?: boolean
   attemptsPerMachine?: number
+  /** The saved snapshot each machine starts from, rather than the service's own base. */
+  from?: string
 }
 
 export const boatService = (sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): VmService => ({
@@ -124,6 +127,8 @@ export type BoatClient = {
       snapshots: boolean
       monitoring: boolean
       labels: Record<string, string>
+      /** A saved snapshot to start from. */
+      from?: string
     }
   }): Promise<{ sandbox: BoatSandboxInfo; ttlSeconds?: number | null }>
   get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
@@ -488,7 +493,12 @@ export function retryAfterMs(
  * its plan), less the hour's starts already made, and the machines it would still run.
  */
 export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) =>
-  openVmPool(boatService(sandbox), boatSpec(sandbox), await boatClient(sandbox, o.root), o.runId)
+  openVmPool(
+    boatService(sandbox),
+    { ...boatSpec(sandbox), ...(typeof o.image === 'string' && { from: o.image }) },
+    await boatClient(sandbox, o.root),
+    o.runId,
+  )
 
 /** The pool of `spec`'s machines on `api`, within the start caps and machines its limits allow. */
 export async function openVmPool(
@@ -583,6 +593,7 @@ export function vmPoolProvider(
         size,
         ttlSeconds,
         snapshots: false,
+        ...(spec.from !== undefined && { from: spec.from }),
         labels,
         signal,
       })
@@ -609,6 +620,8 @@ export async function startVm(
     ttlSeconds: number
     /** Whether the machine can be saved as a snapshot. */
     snapshots: boolean
+    /** The saved snapshot it starts from. */
+    from?: string
     labels: Record<string, string>
     signal: AbortSignal
   },
@@ -628,6 +641,7 @@ export async function startVm(
           ttlSeconds,
           noEnv: true,
           snapshots: o.snapshots,
+          ...(o.from !== undefined && { from: o.from }),
           monitoring: false,
           labels: o.labels,
         },
@@ -696,10 +710,22 @@ export async function startVm(
   }
 }
 
-export function createBoatSandbox(
+export async function createBoatSandbox(
   descriptor: BoatSandboxDescriptor,
   options: SandboxOptions,
 ): Promise<NetworkSandbox> {
+  if (recipeOf(descriptor)) {
+    if (!options.base) {
+      throw new InfraError("The boat() sandbox's image wasn't prepared before the run started")
+    }
+    const { createVmContainerSandbox } = await import('./vm-container.ts')
+    return createVmContainerSandbox(descriptor, options.base, options, {
+      fn: 'boat',
+      sandbox: 'boat',
+      size: 'small',
+      description: (info) => `boat sandbox ${info.id} (${info.size})`,
+    })
+  }
   return createPooledSshSandbox(descriptor, options, {
     helper: 'boat()',
     sandbox: 'boat',

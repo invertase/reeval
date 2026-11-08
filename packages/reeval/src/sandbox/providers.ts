@@ -15,21 +15,18 @@ import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
+  BoatSandboxDescriptor,
   DaytonaSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
   HostedSandboxDescriptor,
   PluginSource,
+  SandboxBase,
   TartSandboxDescriptor,
   VmImage,
 } from '../types.ts'
-import type {
-  BoatImage,
-  BoatImageTarget,
-  BoatImageTimings,
-  BoatSnapshotClient,
-} from './boat-images.ts'
+import type { BoatImage, BoatImageTimings, BoatSnapshotClient } from './boat-images.ts'
 import { harnessBake } from './harness-install.ts'
 import type { MACHINE_PROVIDERS } from './machines.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
@@ -295,6 +292,20 @@ export const vmImage = (handle: PreparedHandle): VmImage | null => {
   const h = handle as { image?: unknown; digest?: unknown } | null
   if (typeof h?.image !== 'string') return null
   return { ref: h.image, digest: typeof h.digest === 'string' ? h.digest : null }
+}
+
+/** The saved snapshot and image the Boat provider's `prepare` found or built, if there's one. */
+export const sandboxBase = (handle: PreparedHandle): SandboxBase | null => {
+  const h = handle as Partial<BoatImage> | null
+  if (typeof h?.snapshot !== 'string' || typeof h.imageRef !== 'string') return null
+  return {
+    provider: 'boat',
+    snapshot: h.snapshot,
+    image: h.imageRef,
+    key: String(h.key),
+    pinned: h.pinned !== false,
+    built: h.built === true,
+  }
 }
 
 /** The image with the harness baked in that the Tart provider's `prepare` made, if it made one. */
@@ -599,7 +610,7 @@ export const tartProvider = (
  */
 export const boatProvider = (
   options: { resolve?: ResolveDigest; timings?: BoatImageTimings } = {},
-): SandboxProvider<BoatImageTarget> => {
+): SandboxProvider<BoatSandboxDescriptor> => {
   const images = new Map<string, Promise<BoatImage>>()
   return {
     kind: 'boat',
@@ -649,7 +660,7 @@ export const boatProvider = (
 
 /** What decides a Boat sandbox's image beside its machine size: the account, prefix and recipe. */
 const imageIdentity = (
-  sandbox: BoatImageTarget,
+  sandbox: BoatSandboxDescriptor,
   recipe: ImageRecipe,
   harness: HarnessDescriptor,
   plugins: readonly PluginSource[],

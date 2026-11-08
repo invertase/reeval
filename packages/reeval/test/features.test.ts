@@ -43,6 +43,7 @@ import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { runLabels, runPrefix } from '../src/sandbox/boat.ts'
+import { installId } from '../src/sandbox/id-part.ts'
 import { vmPrefix } from '../src/sandbox/tart.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
@@ -74,6 +75,7 @@ import {
   buildDaytonaImage,
   buildSshVmImage,
   DAYTONA_VM_SIZE,
+  startBoatDockerVm,
   startDaytonaVm,
   startSshVm,
 } from './support/ssh-vm.ts'
@@ -255,7 +257,7 @@ let boatApi: FakeBoat
 /** The fake VM service the `hosted-*` fixtures run through, in front of the fake API. */
 let vmService: FakeVmService
 before(async () => {
-  boatApi = await fakeBoat(startSshVm)
+  boatApi = await fakeBoat(startSshVm, { saved: startBoatDockerVm })
   vmService = await fakeVmService(boatApi, { maxLive: 10, maxStarts: 100 })
 })
 after(async () => {
@@ -1381,6 +1383,47 @@ export const features: Feature[] = [
       assert.equal(said(/installed the fake agent's bootstrap/).length, 1, 'one slot installed')
       assert.equal(said(/its home from the machine's install/).length, 1, 'the other copied it')
       boatCleanedUp(run)
+    },
+  },
+  {
+    dir: 'sandbox/boat-image',
+    tiers: ['docker'],
+    env: 'closed',
+    canaryEnv: 'open',
+    ...onFakeBoat,
+    sandbox: `boat${installId(['echo baked-by-boat-image > /etc/reeval-recipe'])}`,
+    hostEnv: () => ({ BOAT_BASE_URL: boatApi.url, BOAT_API_KEY: boatApi.key, ...egressEnv() }),
+    prepare: () => buildSshVmImage(['boat', 'boat-docker']),
+    canary: /expected '200 exit=0' to match/,
+    record: ({ run }) => {
+      boatCleanedUp(run)
+      const attempt = landed(run)
+      const base = attempt?.sandboxBase
+      assert.equal(base?.provider, 'boat', JSON.stringify(attempt))
+      assert.match(base?.snapshot ?? '', /^reeval-img-[0-9a-f]{12}$/)
+      assert.equal(base?.image, `reeval-vm-image:${base?.key.slice(0, 12)}`)
+      const prefix = runPrefix(boat(), run.runId)
+      const creates = boatApi.requests.filter(
+        (q) => q.call === 'POST /sandboxes' && String(q.body?.name).startsWith(prefix),
+      )
+      assert.ok(creates.length > 0)
+      for (const q of creates)
+        assert.equal(q.body?.from, base?.snapshot, 'started from the snapshot')
+      assert.equal(attempt?.resources?.scope, 'container', JSON.stringify(attempt?.resources))
+      assert.equal(attempt?.resources?.machine.sandbox, 'boat')
+      assert.deepEqual(attempt?.egress?.blocked, [
+        {
+          host: egressTarget.host,
+          port: egressTarget.port,
+          connections: 1,
+          reason: 'the policy denies all egress',
+        },
+      ])
+      const key = base?.key.slice(0, 12)
+      execFileSync('docker', ['rm', '--force', `reeval-keep-${key}`], { stdio: 'ignore' })
+      execFileSync('docker', ['image', 'rm', '--force', `reeval-vm-image:${key}`], {
+        stdio: 'ignore',
+      })
     },
   },
   {

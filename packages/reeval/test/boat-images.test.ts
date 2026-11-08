@@ -316,7 +316,9 @@ describe('building a snapshot on a VM with Docker', {
     assert.equal(builds(api).length, 1)
   })
 
-  test('a save another run beat uses its snapshot', { timeout: 300_000 }, async () => {
+  test('a save another run is making is waited on, and its snapshot used', {
+    timeout: 300_000,
+  }, async () => {
     const recipe = { install: [`echo lost-save-${process.pid}`] }
     const { key } = await vmImageKey(recipe, harness, { root, resolve })
     made.push(`reeval-keep-${key.slice(0, 12)}`, vmImageRef(key))

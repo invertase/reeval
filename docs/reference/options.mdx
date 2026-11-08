@@ -583,7 +583,7 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="boat.id" type="string" optional>
-  The last segment of the cell key. Defaults to `boat`, or `boat:<type>` for another `type`.
+  The last segment of the cell key. Defaults to `boat`, or `boat:<type>` for another `type`, plus `:<image>` and an install hash with an image recipe.
 </Property>
 
 <Property name="boat.maxConcurrent" type="number" optional>
@@ -595,7 +595,7 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="boat.attemptsPerMachine" type="number" optional>
-  How many attempts run at once on one VM, each as its own user with its own workspace, home and egress gateway. A whole number from 1 to 8; defaults to 1. A harness whose bridge listens on a fixed port (Claude Code, OpenCode, Goose, fx and Grok Build) is refused above 1.
+  How many attempts run at once on one VM, each as its own user with its own workspace, home and egress gateway. A whole number from 1 to 8; defaults to 1. A harness whose bridge listens on a fixed port (Claude Code, OpenCode, Goose, fx and Grok Build) is refused above 1, unless the sandbox has an image recipe, whose attempts each run in a container with a network of its own.
 </Property>
 
 <Property name="createBoat.apiKey" type="SecretRef" optional>
@@ -691,7 +691,7 @@ For more information about environments, see [Define an environment](/configurat
 `egress` is where the sandbox may connect. An environment accepts it too.
 
 <Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] } | { setup?: EgressPolicy; agent?: EgressPolicy }" optional>
-  `'proxy'` (the default) allows any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also allows raw TCP and UDP around the gateway, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. `{ setup, agent }` sets one of those policies per phase: `setup` for the files and setup steps, `agent` for the harness's start, its turns and the checks. A group or an evaluation overrides the environment, which overrides the inherited policy, one phase at a time; a plain policy sets both. Only `docker()` and `podman()` switch policies during an attempt, so `tart()` and `boat()` refuse two different ones.
+  `'proxy'` (the default) allows any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also allows raw TCP and UDP around the gateway, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. `{ setup, agent }` sets one of those policies per phase: `setup` for the files and setup steps, `agent` for the harness's start, its turns and the checks. A group or an evaluation overrides the environment, which overrides the inherited policy, one phase at a time; a plain policy sets both. Only `docker()`, `podman()` and `boat()` with an image recipe switch policies during an attempt, so `tart()` and `boat()` without one refuse two different ones.
 </Property>
 
 A plain `allow` entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The gateway carries HTTP and HTTPS only, so SSH and database clients get no network under every policy but `'allow-all'`. Under `'allow-all'`, raw traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`.

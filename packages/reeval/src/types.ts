@@ -1361,7 +1361,10 @@ export type BoatApiKey = { kind: 'secret'; from: string }
 /** A boat.dev VM per attempt, made by `boat()` from `reeval/sandbox/boat`. */
 export type BoatSandboxDescriptor = {
   kind: 'boat'
-  /** Cell id; defaults to `boat`, or `boat:<type>` with a `type`. */
+  /**
+   * Cell id; defaults to `boat`, plus `:<type>` with a `type` and `:<image>` with an image
+   * recipe, and an install hash.
+   */
   id?: string
   /** The host variable with the Boat API key, read on the host only. */
   apiKey: BoatApiKey
@@ -1372,6 +1375,21 @@ export type BoatSandboxDescriptor = {
   prefix: string
   /** The machine size. Default `small`. */
   type?: BoatMachineType
+  /**
+   * An image that already has the harness baked in, pulled from its registry on a build VM. With
+   * any of `image`, `from`, `dockerfile` or `install`, preflight builds the image once into a Boat
+   * saved snapshot, and each attempt runs in a container of it on a VM started from the snapshot.
+   */
+  image?: string
+  /** A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top. */
+  from?: string
+  /**
+   * A Dockerfile, absolute or relative to the directory of the file it's written in, built from its
+   * directory with `REEVAL_BASE` set to reeval's sandbox image.
+   */
+  dockerfile?: string
+  /** Baked onto the sandbox image in one build container: in order, no secrets, no workspace. */
+  install?: InstallStep[]
   /** The most attempts on Boat at once, across the run: machines times `attemptsPerMachine`. */
   maxConcurrent?: number
   /**
@@ -1384,7 +1402,8 @@ export type BoatSandboxDescriptor = {
    * The attempts one machine runs at once, each as a user of its own with its own home (which
    * each sees at `/home/reeval`), workspace and egress gateway. The harness installs once per
    * machine, and every other slot's home gets its own copy of the install. Default 1. A harness whose bridge takes a fixed port in the
-   * machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.
+   * machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine, unless the sandbox
+   * has an image recipe: then each attempt is a container with a network of its own.
    */
   attemptsPerMachine?: number
 }
@@ -3242,6 +3261,25 @@ export type AttemptImage = {
   from?: { ref: string; digest: string | null }
 }
 
+/**
+ * The saved image a VM sandbox's attempt ran in: the provider's snapshot its VM started from, and
+ * the image in it that the attempt's container ran, built from the sandbox's image recipe.
+ */
+export type SandboxBase = {
+  /** Who keeps the snapshot: `boat`. */
+  provider: 'boat'
+  /** The snapshot's name. */
+  snapshot: string
+  /** The image in the snapshot the attempt's container ran. */
+  image: string
+  /** The recipe's content key, which names both. */
+  key: string
+  /** False when a base image couldn't be resolved to a digest, so the key names its tag. */
+  pinned: boolean
+  /** This run built the snapshot, rather than finding it saved. */
+  built: boolean
+}
+
 /** The image a `tart()` attempt's VM was cloned from. */
 export type VmImage = {
   /** The image as `tart({ image })` names it. */
@@ -3466,6 +3504,8 @@ export type EvalRecord = {
   image?: AttemptImage | null
   /** See `AttemptRecord.vmImage`. */
   vmImage?: VmImage
+  /** See `AttemptRecord.sandboxBase`. */
+  sandboxBase?: SandboxBase
   /** See `AttemptRecord.resources`. */
   resources?: AttemptResources
   /** Names of the variables and secrets set in the sandbox, and of the brokered secrets among them. */

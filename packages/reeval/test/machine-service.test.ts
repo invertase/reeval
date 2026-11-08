@@ -132,4 +132,24 @@ describe('MachineService', () => {
     assert.deepEqual(Object.keys(await service.stats()), ['run\0a'])
     await service.close()
   })
+
+  test('machines that start from a prepared image pool apart from the base ones', async () => {
+    const fake = fakePooled()
+    const images: unknown[] = []
+    const service = new MachineService({
+      pooled: () => ({
+        key: (s, image) => `${fake.pooled.key(s)}${image ? `:${image}` : ''}`,
+        open: (s, o) => {
+          images.push(o.image)
+          return fake.pooled.open(s, o)
+        },
+      }),
+    })
+    const base = (await service.call('w', lease('1'))) as WireLease
+    const saved = (await service.call('w', { ...lease('2'), image: 'img-1' })) as WireLease
+    assert.notEqual(saved.machine, base.machine, "the base pool's one machine is held")
+    assert.deepEqual(images, [undefined, 'img-1'])
+    assert.deepEqual(Object.keys(await service.stats()), ['run\0a', 'run\0a:img-1'])
+    await service.close()
+  })
 })

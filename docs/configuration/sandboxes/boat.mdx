@@ -25,7 +25,7 @@ export default defineConfig({
 - **A Boat API key in `BOAT_API_KEY`**, in the shell or the `.env.local` file. The key stays on the host.
 - **An OpenSSH client.** reeval runs every command in the VM through `ssh` on the host, with a key `ssh-keygen` makes for each attempt.
 - **reeval from npm, on Node.** The standalone `reeval` binary isn't verified with the Boat SDK yet.
-- **`egress: 'allow-all'`.** The VM keeps its own network, so reeval can't enforce a restricted policy there, and refuses `proxy`, the default, at plan time. The egress gateway still brokers the harness's key.
+- **`egress: 'allow-all'`, without an image recipe.** The VM keeps its own network, so reeval can't enforce a restricted policy there, and refuses `proxy`, the default, at plan time. The egress gateway still brokers the harness's key. With an image recipe, each attempt runs in a container whose only way out is the gateway, and every policy is enforced.
 
 ## `boat()`
 
@@ -41,7 +41,7 @@ export default defineConfig({
 | `id` | The last segment of the cell key, `boat` or `boat:<type>` by default |
 | `maxConcurrent` | The most VMs reeval runs at once across the run |
 
-`boat()` refuses the `docker()` options a VM doesn't have, and names what to use instead: `type` for `memory`, `cpus`, and `swap`, and the environment's `setup` for `image`, `from`, `dockerfile`, and `install`. The agent runs as the unprivileged `reeval` user, and `root` isn't available yet.
+`boat()` refuses the `docker()` options a VM doesn't have, and names what to use instead: `type` for `memory`, `cpus`, and `swap`. It takes `image`, `from`, `dockerfile`, and `install` as `docker()` does: preflight builds the image once into a Boat saved snapshot, which later runs reuse, and each attempt runs in a container of it on a VM started from the snapshot. The agent runs as the unprivileged `reeval` user, and `root` isn't available yet.
 
 ## `createBoat()`
 

@@ -776,6 +776,10 @@
             "$ref": "#/$defs/AttemptRetry"
           }
         },
+        "sandboxBase": {
+          "description": "The saved image a `boat()` attempt with an image recipe ran in: the snapshot its VM started from and the image its container ran. Absent in other sandboxes, and in attempts that didn't reach their sandbox.",
+          "$ref": "#/$defs/SandboxBase"
+        },
         "seq": {
           "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
@@ -1163,12 +1167,31 @@
           "$ref": "#/$defs/BoatApiKey"
         },
         "attemptsPerMachine": {
-          "description": "The attempts one machine runs at once, each as a user of its own with its own home (which each sees at `/home/reeval`), workspace and egress gateway. The harness installs once per machine, and every other slot's home gets its own copy of the install. Default 1. A harness whose bridge takes a fixed port in the machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine.",
+          "description": "The attempts one machine runs at once, each as a user of its own with its own home (which each sees at `/home/reeval`), workspace and egress gateway. The harness installs once per machine, and every other slot's home gets its own copy of the install. Default 1. A harness whose bridge takes a fixed port in the machine (Claude Code, OpenCode, Goose, fx, Grok Build) runs one per machine, unless the sandbox has an image recipe: then each attempt is a container with a network of its own.",
           "type": "number"
         },
-        "id": {
-          "description": "Cell id; defaults to `boat`, or `boat:<type>` with a `type`.",
+        "dockerfile": {
+          "description": "A Dockerfile, absolute or relative to the directory of the file it's written in, built from its directory with `REEVAL_BASE` set to reeval's sandbox image.",
           "type": "string"
+        },
+        "from": {
+          "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Cell id; defaults to `boat`, plus `:<type>` with a `type` and `:<image>` with an image recipe, and an install hash.",
+          "type": "string"
+        },
+        "image": {
+          "description": "An image that already has the harness baked in, pulled from its registry on a build VM. With any of `image`, `from`, `dockerfile` or `install`, preflight builds the image once into a Boat saved snapshot, and each attempt runs in a container of it on a VM started from the snapshot.",
+          "type": "string"
+        },
+        "install": {
+          "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InstallStep"
+          }
         },
         "kind": {
           "const": "boat"
@@ -7118,6 +7141,37 @@
         }
       },
       "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]
+    },
+    "SandboxBase": {
+      "description": "The saved image a VM sandbox's attempt ran in: the provider's snapshot its VM started from, and the image in it that the attempt's container ran, built from the sandbox's image recipe.",
+      "type": "object",
+      "properties": {
+        "built": {
+          "description": "This run built the snapshot, rather than finding it saved.",
+          "type": "boolean"
+        },
+        "image": {
+          "description": "The image in the snapshot the attempt's container ran.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The recipe's content key, which names both.",
+          "type": "string"
+        },
+        "pinned": {
+          "description": "False when a base image couldn't be resolved to a digest, so the key names its tag.",
+          "type": "boolean"
+        },
+        "provider": {
+          "description": "Who keeps the snapshot: `boat`.",
+          "const": "boat"
+        },
+        "snapshot": {
+          "description": "The snapshot's name.",
+          "type": "string"
+        }
+      },
+      "required": ["built", "image", "key", "pinned", "provider", "snapshot"]
     },
     "SandboxDescriptor": {
       "anyOf": [

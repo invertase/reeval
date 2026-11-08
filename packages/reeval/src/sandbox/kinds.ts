@@ -78,6 +78,10 @@ export type SandboxHooks<D extends SandboxDescriptor> = {
   notHosted?(sandbox: D): string
   /** How many attempts share one of `sandbox`'s machines, when more than one may. */
   slotsPerMachine?(sandbox: D): number
+  /** Whether each attempt on a shared machine has a network of its own, so no port collides. */
+  slotNetworks?(sandbox: D): boolean
+  /** What `sandbox` can do, when its options change what its kind can. */
+  capabilitiesFor?(sandbox: D): SandboxCapabilities
   /**
    * When preflight learns how many of `sandbox`'s attempts can run at once (the hosts it kept),
    * reads that cap for the gate.
@@ -203,8 +207,10 @@ export const sandboxKind = <D extends SandboxDescriptor>(sandbox: D): SandboxKin
   SANDBOX_KINDS[sandbox.kind] as unknown as SandboxKind<D>
 
 /** What `sandbox`'s kind can do. */
-export const capabilitiesOf = (sandbox: SandboxDescriptor): SandboxCapabilities =>
-  SANDBOX_KINDS[sandbox.kind].capabilities
+export const capabilitiesOf = (sandbox: SandboxDescriptor): SandboxCapabilities => {
+  const kind = sandboxKind(sandbox)
+  return kind.capabilitiesFor?.(sandbox) ?? kind.capabilities
+}
 
 /** Every helper that makes a sandbox, as a list a message reads: `docker(), podman() or fakeSandbox()`. */
 export function sandboxHelpers(

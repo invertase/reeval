@@ -1,11 +1,13 @@
 // `reeval/sandbox/boat`: boat.dev VMs as sandboxes. This module only describes them; the Boat SDK
 // (`@boatdev/sdk`, an optional peer) loads in the worker that creates one.
+import { existsSync, statSync } from 'node:fs'
 import {
   type BoatOptions,
   type CreateBoatOptions,
   checkBoatOptions,
   checkCreateBoatOptions,
 } from './contract/boat.ts'
+import { callerDir, toPath } from './environment.ts'
 import { UsageError } from './errors.ts'
 import type { BoatSandboxDescriptor } from './types.ts'
 
@@ -34,13 +36,34 @@ export function createBoat(
       throw new UsageError(`boat() takes an options object (got ${JSON.stringify(sandbox)})`)
     }
     checkBoatOptions(sandbox)
-    return { kind: 'boat', apiKey, prefix, ...structuredClone(sandbox) }
+    const { dockerfile, ...rest } = sandbox
+    const descriptor: BoatSandboxDescriptor = {
+      kind: 'boat',
+      apiKey,
+      prefix,
+      ...structuredClone(rest),
+    }
+    if (dockerfile !== undefined) {
+      const full = toPath(dockerfile, callerDir() ?? process.cwd())
+      if (!existsSync(full) || !statSync(full).isFile()) {
+        throw new UsageError(
+          `boat({ dockerfile: ${JSON.stringify(String(dockerfile))} }): ${full} doesn't exist. Paths are relative to the file that calls boat().`,
+        )
+      }
+      descriptor.dockerfile = full
+    }
+    return descriptor
   }
 }
 
 /**
  * One boat.dev VM per attempt, on the account whose key is in `BOAT_API_KEY`. The agent, setup
  * steps and checks run as an unprivileged user over SSH; credentials stay on the host behind the
- * egress gateway, as in Docker. Needs `npm i @boatdev/sdk` and `egress: 'allow-all'`.
+ * egress gateway, as in Docker. Needs `npm i @boatdev/sdk`, and `egress: 'allow-all'` unless the
+ * sandbox has an image recipe.
+ *
+ * With `image`, `from`, `dockerfile` or `install` (as `docker()` takes them), preflight builds the
+ * image once into a Boat saved snapshot, and each attempt runs in a container of the image on a VM
+ * started from it, where every egress policy is enforced.
  */
 export const boat = createBoat()

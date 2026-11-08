@@ -31,9 +31,6 @@ import { InfraError } from './types.ts'
 /** What reeval itself puts in a VM image beside the recipe's; a change rebuilds every snapshot. */
 const VM_IMAGE_REVISION = 1
 
-/** A Boat sandbox with the image recipe its attempts run in. */
-export type BoatImageTarget = BoatSandboxDescriptor & Partial<ImageRecipe>
-
 /** What an attempt starts from: the saved snapshot, and the image in it. */
 export type BoatImage = {
   snapshot: string
@@ -235,7 +232,7 @@ export type BoatImageTimings = { pollMs?: number; saveTimeoutMs?: number; settle
 export async function boatImage(
   service: VmService,
   api: BoatSnapshotClient,
-  sandbox: BoatImageTarget,
+  sandbox: BoatSandboxDescriptor,
   recipe: ImageRecipe,
   harness: HarnessDescriptor,
   ctx: PrepareContext,
@@ -340,6 +337,8 @@ export async function boatImage(
       signal,
     )
     const keep = keepContainer(key)
+    // A Docker the build VM shares can still hold one from an earlier build.
+    await docker(['rm', '--force', keep], { engine, signal })
     await vmDocker(
       engine,
       [
@@ -369,7 +368,7 @@ export async function boatImage(
       pollMs,
       timeoutMs: o.timings?.saveTimeoutMs ?? SAVE_TIMEOUT_MS,
     })
-    // Another run saved the same recipe first: its snapshot holds the same image.
+    // Another run was saving the same recipe: its snapshot holds the same image.
     if ('taken' in result) return saved(result.taken)
     ctx.log(`Saved Boat snapshot ${name} in ${Math.round((Date.now() - started) / 1000)}s`)
     return {
@@ -412,8 +411,9 @@ async function deleteSnapshot(api: BoatSnapshotClient, name: string): Promise<vo
 }
 
 /**
- * Saves the build VM as `name` and waits until it's ready; a failed save is deleted. `taken` when
- * another run's snapshot already has the name and is ready.
+ * Saves the build VM as `name` and waits until it's ready; a failed save is deleted. Boat replaces
+ * a ready snapshot of that name, and refuses the name while another save of it is in progress:
+ * then `taken`, with that save once it's ready.
  */
 async function save(
   api: BoatSnapshotClient,
@@ -426,20 +426,18 @@ async function save(
     await api.saveSavedSnapshot({ savedSnapshotSaveRequest: { sandboxId, name } })
   } catch (error) {
     const why = await boatError(error)
-    if (status(error) === 409) {
+    if (status(error) === 409 && why.startsWith('409 save_in_progress')) {
       const other = await settled(api, name, signal, o)
       if (other?.status === 'ready') return { taken: other }
-      if (other) {
-        await deleteSnapshot(api, name)
-        throw new PrepareError({
-          class: 'transient',
-          stage: 'boat-image',
-          ref: name,
-          cause: null,
-          log: null,
-          message: `Boat snapshot ${name}, which another run was saving, failed${other.error ? `: ${other.error}` : ''}`,
-        })
-      }
+      if (other) await deleteSnapshot(api, name)
+      throw new PrepareError({
+        class: 'transient',
+        stage: 'boat-image',
+        ref: name,
+        cause: null,
+        log: null,
+        message: `Boat snapshot ${name}, which another run was saving, ${other ? `failed${other.error ? `: ${other.error}` : ''}` : 'disappeared'}`,
+      })
     }
     if (status(error) === 403 || status(error) === 409) {
       throw refusal(`Boat won't save snapshot ${name}: ${why}`, name, false)

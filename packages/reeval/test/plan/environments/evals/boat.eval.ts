@@ -46,3 +46,19 @@ evaluate(
   },
   async () => {},
 )
+
+const inImage = defineEnvironment('in-image', {
+  sandbox: boat({ from: 'python:3.12-slim', install: ['pip install pytest'] }),
+  egress: 'deny-all',
+})
+const sharedImage = defineEnvironment('shared-image', {
+  sandbox: boat({ image: 'ghcr.io/acme/agent:1', attemptsPerMachine: 2, reuse: true }),
+  egress: { setup: 'allow-all', agent: { allow: ['example.com'] } },
+})
+
+evaluate('boat in an image under deny-all', { environments: inImage }, async () => {})
+evaluate(
+  'boat image slots share a machine on claude-code',
+  { environments: sharedImage, harnesses: claudeCode({ model: 'claude-sonnet-5' }) },
+  async () => {},
+)

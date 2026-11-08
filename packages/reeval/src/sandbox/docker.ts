@@ -9,13 +9,16 @@ import {
   type EgressOptions,
   EgressUnavailableError,
   ENGINES,
+  type Engine,
   engineSpec,
   imageInfo,
+  isRemoteEngine,
   LABEL,
   type LocalEngine,
   SANDBOX_HOME,
   SANDBOX_ROOT,
   SANDBOX_STATE,
+  type SandboxLimits,
   type Substitution,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
@@ -296,21 +299,11 @@ export async function createDockerSandbox(
   if (!(await imageInfo(image, engine))) {
     throw new InfraError(`${spec.name} image ${image} not found. Build it with: reeval image build`)
   }
-  const glue = gatewayGlue(options)
-  const { brokered, debug } = glue
-  const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
-  const nodeHint = `The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
-  const needsNode = (reason: string) =>
-    brokered.length > 0
-      ? brokeringRefusal(`${spec.fn}()`, brokered, reason, nodeHint)
-      : new InfraError(
-          `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). ${nodeHint}`,
-        )
-  const network = await createDockerSession({
+  return containerSandbox(options, {
     image,
     engine,
-    env: options.env,
+    fn: spec.fn,
     ...(root !== undefined && { root }),
     ...(capabilities && { capabilities }),
     limits: {
@@ -319,10 +312,51 @@ export async function createDockerSandbox(
       ...(cpus !== undefined && { cpus }),
       ...(pids !== undefined && { pids }),
     },
+    machine: { sandbox: engine },
+  })
+}
+
+/**
+ * The attempt in a new container of `image` on `engine`, the local CLI or a machine's over SSH,
+ * with the egress gateway as its way out: always started, so every attempt's egress is recorded.
+ */
+export async function containerSandbox(
+  options: SandboxOptions,
+  o: {
+    image: string
+    engine: Engine
+    /** The helper messages name: `docker`, `boat`. */
+    fn: string
+    root?: boolean
+    capabilities?: string[]
+    limits: Partial<SandboxLimits>
+    /** The machine its resources are read on, as the record names it. */
+    machine: { sandbox: string; size?: string; id?: string; name?: string }
+  },
+): Promise<NetworkSandbox> {
+  const { image, engine, root, limits } = o
+  const spec = engineSpec(engine)
+  const glue = gatewayGlue(options)
+  const { brokered, debug } = glue
+  const started = performance.now()
+  const nodeHint = `The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${o.fn}({ from: '${image}' }) or ${o.fn}({ dockerfile }), and reeval adds it.`
+  const needsNode = (reason: string) =>
+    brokered.length > 0
+      ? brokeringRefusal(`${o.fn}()`, brokered, reason, nodeHint)
+      : new InfraError(
+          `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). ${nodeHint}`,
+        )
+  const network = await createDockerSession({
+    image,
+    engine,
+    env: options.env,
+    ...(root !== undefined && { root }),
+    ...(o.capabilities && { capabilities: o.capabilities }),
+    limits,
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    // Always, so every attempt's egress is recorded; a detached container can't start without it.
+    // A detached container can't start without the gateway.
     egress: {
       ...glue.egress,
       direct: isDirect(setupEgress(options.egress).policy),
@@ -338,7 +372,7 @@ export async function createDockerSandbox(
   })
   debug?.log(
     'container',
-    `created ${network.id.slice(0, 12)} from ${image} in ${Math.round(performance.now() - started)}ms`,
+    `created ${network.id.slice(0, 12)} from ${image}${isRemoteEngine(engine) ? ` on ${engine.description}` : ''} in ${Math.round(performance.now() - started)}ms`,
   )
   debug?.log(
     'container',
@@ -351,13 +385,13 @@ export async function createDockerSandbox(
   }
   return sessionSandbox(network, glue, {
     ...(root !== undefined && { root }),
-    resources: { mode: 'container', machine: { sandbox: engine } },
+    resources: { mode: 'container', machine: o.machine },
     oomKills: async () => {
       const kills = await network.oomKills()
       if (kills === null) return null
-      const limit = String(memory ?? DEFAULT_LIMITS.memory)
+      const limit = String(limits.memory ?? DEFAULT_LIMITS.memory)
       // Unset swap is as much as memory; any spelling of zero is none.
-      const onTop = swap === undefined ? limit : String(swap)
+      const onTop = limits.swap === undefined ? limit : String(limits.swap)
       return { kills, limit, swap: /^0+(\.0+)?[bkmg]?$/i.test(onTop) ? null : onTop }
     },
   })

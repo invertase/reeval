@@ -6,7 +6,7 @@ export const idPart = (text: string) =>
   (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
 
 /** `+` and a hash of the install steps, or nothing without any. */
-function installId(install: readonly InstallStep[] | undefined): string {
+export function installId(install: readonly InstallStep[] | undefined): string {
   if (!install?.length) return ''
   const key = JSON.stringify(
     install.map((step) =>

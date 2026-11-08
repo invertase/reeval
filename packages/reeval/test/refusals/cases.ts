@@ -778,6 +778,38 @@ export const CASES: Record<string, Case[]> = {
         },
       ),
     ],
+    ['boat() image and from', any(boat, { image: 'acme/agent:1', from: 'python:3.12' })],
+    ['boat() from with a space', any(boat, { from: 'python 3.12' })],
+    ['boat() install empty', any(boat, { install: [] })],
+    ['boat() install bad timeout', any(boat, { install: [{ run: 'make', timeout: 'soon' }] })],
+    ['boat() dockerfile missing', any(boat, { dockerfile: join(DIR, 'nope/Dockerfile') })],
+    [
+      'boat() install with a dockerfile',
+      any(boat, { dockerfile: join(DIR, 'Dockerfile'), install: ['x'] }),
+    ],
+    ['boat() root', any(boat, { root: true })],
+    [
+      'boat() in an image with egress phases',
+      planned(
+        {},
+        {
+          harnesses: cursor({ model: 'composer-2.5' }),
+          sandbox: boat({ from: 'python:3.12-slim' }),
+          egress: { setup: 'allow-all', agent: 'deny-all' },
+        },
+      ),
+    ],
+    [
+      'claudeCode sharing a boat() machine in an image',
+      planned(
+        {},
+        {
+          harnesses: claudeCode({ model: 'claude-haiku-5-5' }),
+          sandbox: boat({ image: 'acme/agent:1', attemptsPerMachine: 2 }),
+          egress: 'deny-all',
+        },
+      ),
+    ],
     [
       'cursor on daytona()',
       planned(
