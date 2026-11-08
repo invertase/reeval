@@ -297,12 +297,17 @@ export const vmImage = (handle: PreparedHandle): VmImage | null => {
 /** The saved snapshot and image the Boat provider's `prepare` found or built, if there's one. */
 export const sandboxBase = (handle: PreparedHandle): SandboxBase | null => {
   const h = handle as Partial<BoatImage> | null
-  if (typeof h?.snapshot !== 'string' || typeof h.imageRef !== 'string') return null
+  if (
+    typeof h?.snapshot !== 'string' ||
+    typeof h.imageRef !== 'string' ||
+    typeof h.key !== 'string'
+  )
+    return null
   return {
     provider: 'boat',
     snapshot: h.snapshot,
     image: h.imageRef,
-    key: String(h.key),
+    key: h.key,
     pinned: h.pinned !== false,
     built: h.built === true,
   }
@@ -604,8 +609,7 @@ export const tartProvider = (
 
 /**
  * Boat: `prepare` checks each account and machine size the run uses, once, and builds a sandbox's
- * image recipe into a saved snapshot when it has one (`boat()` doesn't take the recipe options
- * yet). One recipe is built once per run, whatever machine sizes use it, on a build VM of the
+ * image recipe into a saved snapshot when it has one. One recipe is built once per run, whatever machine sizes use it, on a build VM of the
  * size of the first target that asks for it.
  */
 export const boatProvider = (

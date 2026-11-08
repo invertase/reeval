@@ -53,7 +53,7 @@ async function untilImage(
     if (r.exitCode === 0) return Date.now() - started
     if (Date.now() > deadline) {
       throw new InfraError(
-        `${engine.description} has no image ${image} from its snapshot after ${Math.round((o.waitMs ?? IMAGE_WAIT_MS) / 1000)}s: ${r.stderr.trim().split('\n').at(-1) ?? `exit ${r.exitCode}`}`,
+        `${engine.description} has no image ${image} from its snapshot after ${Math.round((o.waitMs ?? IMAGE_WAIT_MS) / 1000)}s: ${r.stderr.trim().split('\n').at(-1) || `exit ${r.exitCode}`}`,
       )
     }
     await new Promise((resolve) => setTimeout(resolve, o.pollMs ?? IMAGE_POLL_MS))
@@ -80,6 +80,7 @@ export async function createVmContainerSandbox(
 ): Promise<NetworkSandbox> {
   const debug = attemptDebug()
   for (let tries = 1; ; tries++) {
+    const dir = await mkdtemp(join(tmpdir(), `reeval-${o.sandbox}-ssh-`))
     const lease = await leaseMachine(
       {
         sandbox: descriptor,
@@ -89,7 +90,8 @@ export async function createVmContainerSandbox(
         image: base.snapshot,
       },
       options.signal,
-    ).catch((error: unknown) => {
+    ).catch(async (error: unknown) => {
+      await rm(dir, { recursive: true, force: true })
       if (options.signal.aborted) throw options.signal.reason
       throw error instanceof InfraError ? error : new InfraError((error as Error).message)
     })
@@ -101,7 +103,6 @@ export async function createVmContainerSandbox(
         ? `created ${info.id} (${info.name}, ${info.size}) from snapshot ${base.snapshot} in ${lease.start.ms}ms; slot ${lease.slot}`
         : `${lease.reused ? 'reused' : 'shared'} ${info.id} (${info.name}, ${info.size}); slot ${lease.slot}${lease.reused ? `, its attempt ${lease.reused + 1}` : ''}`,
     )
-    const dir = await mkdtemp(join(tmpdir(), `reeval-${o.sandbox}-ssh-`))
     const engine: RemoteEngine = {
       kind: 'ssh',
       target: {
@@ -136,13 +137,19 @@ export async function createVmContainerSandbox(
     }
     let sandbox: NetworkSandbox
     try {
-      // The machine is the attempt's to use, so its container may use all of it.
+      // The machine's slots share it evenly.
       const capacity = await dockerCapacity(engine)
+      const slots = descriptor.attemptsPerMachine ?? 1
       sandbox = await containerSandbox(options, {
         image: base.image,
         engine,
         fn: o.fn,
-        limits: capacity ? { memory: capacity.memoryBytes, cpus: capacity.cpus } : {},
+        limits: capacity
+          ? {
+              memory: Math.floor(capacity.memoryBytes / slots),
+              cpus: Math.round((capacity.cpus / slots) * 100) / 100,
+            }
+          : {},
         machine: {
           sandbox: o.sandbox,
           size: descriptor.type ?? o.size,

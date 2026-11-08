@@ -38,7 +38,7 @@ export default defineConfig({
 | Option | What it sets |
 | :--- | :--- |
 | `type` | The machine size: `'small'` (2 vCPUs, 4 GB, the default), `'default'`, `'large'`, or `'xlarge'` |
-| `id` | The last segment of the cell key, `boat` or `boat:<type>` by default |
+| `id` | The last segment of the cell key, `boat` or `boat:<type>` by default, plus `:<image>` and an install hash with an image recipe |
 | `maxConcurrent` | The most VMs reeval runs at once across the run |
 
 `boat()` refuses the `docker()` options a VM doesn't have, and names what to use instead: `type` for `memory`, `cpus`, and `swap`. It takes `image`, `from`, `dockerfile`, and `install` as `docker()` does: preflight builds the image once into a Boat saved snapshot, which later runs reuse, and each attempt runs in a container of it on a VM started from the snapshot. The agent runs as the unprivileged `reeval` user, and `root` isn't available yet.
