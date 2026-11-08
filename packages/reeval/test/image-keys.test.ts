@@ -565,17 +565,20 @@ describe('imageRecipeKey: the key prepareImage builds, named from the recipe alo
     writeFileSync(file, 'ARG BASE=node:22\nFROM ${BASE}\n')
     assert.deepEqual(
       await imageRecipeKey({ dockerfile: file }, harness, { resolve: resolve(digests) }),
-      { unresolved: { ref: file, reason: 'a FROM names a build argument' } },
+      {
+        unresolved: { ref: file, reason: 'a FROM, COPY --from or --mount names a build argument' },
+      },
     )
     assert.deepEqual(await imageRecipeKey({ from: 'ghost:1' }, harness, { resolve: resolve({}) }), {
       unresolved: { ref: 'ghost:1', reason: "ghost:1 isn't in the test registry" },
     })
-    // Canary: an image used as is keys on what its registry names.
-    const asIs = await imageRecipeKey({ image: 'node:22' }, harness, { resolve: resolve(digests) })
-    assert.deepEqual(asIs, {
-      key: `node:22@${node}`,
-      layers: [{ ref: 'node:22', key: `node:22@${node}` }],
-    })
+    assert.deepEqual(
+      await imageRecipeKey({ image: 'node:22', install: ['true'] }, harness, {
+        resolve: resolve(digests),
+      }),
+      { unresolved: { ref: 'node:22', reason: 'used as is: keyed on its local image id' } },
+      'Docker keys an image used as is on its local id, which no registry names',
+    )
   })
 })
 

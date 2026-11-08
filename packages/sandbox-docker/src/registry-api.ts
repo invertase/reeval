@@ -24,6 +24,8 @@ export type RegistryDigestOptions = {
 }
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/
+const LABEL = '[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?'
+const HOST = new RegExp(`^(?:${LABEL}(?:\\.${LABEL})*|\\[[0-9a-fA-F:]+\\])(?::\\d+)?$`)
 
 /**
  * The manifest types asked for, an index first: the digest is then the top-level manifest's, as
@@ -50,6 +52,7 @@ export function parseImageRef(ref: string): ImageRef | null {
   const first = slash === -1 ? '' : name.slice(0, slash)
   let host = 'docker.io'
   if (first && (first.includes('.') || first.includes(':') || first === 'localhost')) {
+    if (!HOST.test(first)) return null
     host = first
     name = name.slice(slash + 1)
   }
@@ -71,9 +74,10 @@ export function parseImageRef(ref: string): ImageRef | null {
   return { host, repository: name, reference: digest ?? tag ?? 'latest' }
 }
 
+const loopback = (host: string) => /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(host)
+
 /** A loopback registry speaks plain HTTP, as Docker allows without an insecure-registries entry. */
-const scheme = (host: string) =>
-  /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(host) ? 'http' : 'https'
+const scheme = (host: string) => (loopback(host) ? 'http' : 'https')
 
 /** The parameters of a `WWW-Authenticate` challenge: its scheme, lowercase, and its fields. */
 function challenge(header: string | null): { scheme: string; params: Record<string, string> } {
@@ -138,6 +142,8 @@ export async function registryDigest(
       // A registry that leaves the header off a HEAD: the digest is the manifest's own hash.
       const body = await ask('GET', authorization)
       if (body.ok) {
+        const header = body.headers.get('docker-content-digest')
+        if (header && DIGEST.test(header)) return { digest: header }
         const bytes = Buffer.from(await body.arrayBuffer())
         return { digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}` }
       }
@@ -170,10 +176,12 @@ async function bearerToken(
   signal: AbortSignal,
 ): Promise<{ token: string } | { error: string }> {
   const url = new URL(params.realm as string)
+  // A login goes only to a realm the transport protects.
+  const protectedRealm = url.protocol === 'https:' || loopback(url.host)
   if (params.service) url.searchParams.set('service', params.service)
   url.searchParams.set('scope', params.scope ?? `repository:${repository}:pull`)
   const response = await fetchFn(url, {
-    headers: login && 'username' in login ? { authorization: basic(login) } : {},
+    headers: login && 'username' in login && protectedRealm ? { authorization: basic(login) } : {},
     signal,
   })
   if (!response.ok) return { error: `${response.status}` }

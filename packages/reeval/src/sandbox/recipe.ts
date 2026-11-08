@@ -33,8 +33,8 @@ export type ResolveDigest = (
 /**
  * An image recipe's content key: `key` is its last layer's, and `layers` the chain from the image
  * the harness runs in up, each as `prepareImage` names and keys it. `unresolved` when it can't be
- * named from this host alone: a base the registry doesn't answer for, or a Dockerfile whose `FROM`
- * names a build argument.
+ * named from this host alone: an `image` used as is (keyed on its local id), a base the registry
+ * doesn't answer for, or a Dockerfile that names a base through a build argument.
  */
 export type RecipeKey =
   | { key: string; layers: Layer[] }
@@ -92,8 +92,10 @@ export const registryResolver =
 /**
  * The content key of the image an attempt on `harness` starts from, from the recipe alone and
  * what its bases name in their registries now, with no container engine: the key `prepareImage`
- * gives the same recipe's last layer when its bases resolve to the same digests. `image` as is
- * keys on its registry digest, where Docker keys on the local image's id. `plugins` are the
+ * gives the same recipe's last layer on the Docker engine when its bases resolve to the same
+ * digests (Podman's fallback keys a `from` on its platform manifest instead). Whether a Dockerfile
+ * gets the harness baked on is read from its last `FROM`, where Docker reads the built image's
+ * harness label: a base that carries reeval's labels itself is baked here only. `plugins` are the
  * recipe's plugin builds' specs, fetched on the host.
  */
 export async function imageRecipeKey(
@@ -109,10 +111,9 @@ export async function imageRecipeKey(
   const digest = async (ref: string) => resolve(ref, options.signal)
   const layers: Layer[] = []
   if (recipe.image) {
-    const now = await digest(recipe.image)
-    if ('error' in now) return { unresolved: { ref: recipe.image, reason: now.error } }
-    layers.push({ ref: recipe.image, key: fromImageKey(recipe.image, now.digest) })
-  } else if (recipe.from) {
+    return { unresolved: { ref: recipe.image, reason: 'used as is: keyed on its local image id' } }
+  }
+  if (recipe.from) {
     const now = await digest(recipe.from)
     if ('error' in now) return { unresolved: { ref: recipe.from, reason: now.error } }
     layers.push({
@@ -124,11 +125,13 @@ export async function imageRecipeKey(
     if (usesReevalBase(path)) layers.push({ ref: imageFor(harness), key: reevalImageKey(harness) })
     const { bases, opaque } = dockerfileBases(path)
     if (opaque) {
-      return { unresolved: { ref: path, reason: 'a FROM names a build argument' } }
+      return {
+        unresolved: { ref: path, reason: 'a FROM, COPY --from or --mount names a build argument' },
+      }
     }
+    const answers = await Promise.all(bases.map(async (ref) => ({ ref, now: await digest(ref) })))
     const named: { ref: string; digest: string }[] = []
-    for (const ref of bases) {
-      const now = await digest(ref)
+    for (const { ref, now } of answers) {
       if ('error' in now) return { unresolved: { ref, reason: now.error } }
       named.push({ ref, digest: now.digest })
     }

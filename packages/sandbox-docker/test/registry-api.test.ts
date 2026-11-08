@@ -104,6 +104,34 @@ describe('registryDigest', () => {
     assert.match(anonymous.error, /refused a token for private\/tool/)
   })
 
+  test('sends the login to a token realm only over HTTPS or loopback', async () => {
+    const asked: Record<string, string> = {}
+    const fetch = (async (input: string | URL, init?: RequestInit) => {
+      const url = String(input)
+      const auth = (init?.headers as Record<string, string>)?.authorization ?? ''
+      if (url.includes('/token')) {
+        asked[new URL(url).origin] = auth
+        return new Response(JSON.stringify({ token: 't' }), { status: 200 })
+      }
+      if (auth !== 'Bearer t') {
+        const realm = url.includes('plain') ? 'http://auth.test/token' : 'https://auth.test/token'
+        return new Response(null, {
+          status: 401,
+          headers: { 'www-authenticate': `Bearer realm="${realm}",service="s"` },
+        })
+      }
+      return new Response(null, { status: 200, headers: { 'docker-content-digest': DIGEST } })
+    }) as typeof globalThis.fetch
+    const credential = () => LOGIN
+    assert.deepEqual(await registryDigest('reg.test/plain/tool', { fetch, credential }), {
+      digest: DIGEST,
+    })
+    assert.equal(asked['http://auth.test'], '', 'no login over plain HTTP')
+    // Canary: an HTTPS realm gets it.
+    await registryDigest('reg.test/tls/tool', { fetch, credential })
+    assert.equal(asked['https://auth.test'], basic)
+  })
+
   test('answers a Basic challenge with the login, and refuses without one', async () => {
     assert.deepEqual(await registryDigest(`${host}/basic/tool`, { credential: () => LOGIN }), {
       digest: DIGEST,
@@ -181,7 +209,17 @@ describe('parseImageRef', () => {
     ] as const) {
       assert.deepEqual(parseImageRef(ref), parsed, ref)
     }
-    for (const ref of ['Node:22', 'node:22@sha256:short', 'node:-bad', '', 'a//b', 'node:22 ']) {
+    for (const ref of [
+      'Node:22',
+      'node:22@sha256:short',
+      'node:-bad',
+      '',
+      'a//b',
+      'node:22 ',
+      'exa.mple?x/tool:1',
+      'a.b#c/tool',
+      'host-.test/tool',
+    ]) {
       assert.equal(parseImageRef(ref), null, ref)
     }
   })
