@@ -692,25 +692,23 @@ DaytonaSandboxDescriptorApiKey = TypedDict(
 
 
 # A Daytona sandbox per attempt, made by `daytona()` from `reeval/sandbox/daytona`.
-class DaytonaSandboxDescriptor(TypedDict):
-    # The host variable with the Daytona API key, read on the host only.
-    apiKey: DaytonaSandboxDescriptorApiKey
-    # The attempts one machine runs at once, each as a user of its own, as `boat({
-    # attemptsPerMachine })` does. Default 1.
-    attemptsPerMachine: NotRequired[int]
-    # Cell id; defaults to `daytona`, or `daytona:<size>` with a `size`.
-    id: NotRequired[str]
-    kind: Literal["daytona"]
-    # The most attempts on Daytona at once, across the run: machines times `attemptsPerMachine`.
-    maxConcurrent: NotRequired[float]
-    # The start of every sandbox name reeval gives Daytona, so a run's cleanup finds only its
-    # own: lowercase letters, digits and dashes.
-    prefix: str
-    # A machine takes another of the run's attempts once one ends, instead of being deleted, as
-    # `boat({ reuse })` does. Default false, one attempt per slot.
-    reuse: NotRequired[bool]
-    # The sandbox size. Default `medium`.
-    size: NotRequired[Literal["small", "medium", "large"]]
+DaytonaSandboxDescriptor = TypedDict(
+    "DaytonaSandboxDescriptor",
+    {
+        "apiKey": "DaytonaSandboxDescriptorApiKey",
+        "attemptsPerMachine": "NotRequired[int]",
+        "dockerfile": "NotRequired[str]",
+        "from": "NotRequired[str]",
+        "id": "NotRequired[str]",
+        "image": "NotRequired[str]",
+        "install": "NotRequired[list[InstallStep]]",
+        "kind": "Literal[\"daytona\"]",
+        "maxConcurrent": "NotRequired[float]",
+        "prefix": "str",
+        "reuse": "NotRequired[bool]",
+        "size": "NotRequired[Literal[\"small\", \"medium\", \"large\"]]",
+    },
+)
 
 
 # An eval file's top-level groups, evals and todos, in declaration order.

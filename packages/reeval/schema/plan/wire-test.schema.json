@@ -598,7 +598,7 @@
           "pattern": "\\S"
         },
         "install": {
-          "description": "Baked into the snapshot in order, on `from` or reeval's sandbox image: no secrets, no workspace.",
+          "description": "Baked into the image in order, on `from` or reeval's sandbox image: no secrets, no workspace.",
           "minItems": 1,
           "type": "array",
           "items": {

@@ -2099,7 +2099,7 @@
           "type": "string"
         },
         "install": {
-          "description": "Baked into the snapshot in order, on `from` or reeval's sandbox image: no secrets, no workspace.",
+          "description": "Baked into the image in order, on `from` or reeval's sandbox image: no secrets, no workspace.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
