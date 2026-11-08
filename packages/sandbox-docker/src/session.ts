@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
 import { Readable } from 'node:stream'
@@ -15,7 +14,7 @@ import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
 import { containerTransport } from './egress/transport.ts'
-import { type Engine, engineEnv, engineSpec } from './engine.ts'
+import { type Engine, engineSpec } from './engine.ts'
 import {
   BRIDGE_PORT,
   LABEL,
@@ -25,6 +24,7 @@ import {
   SANDBOX_USER,
 } from './image.ts'
 import { shellQuote as q } from './process.ts'
+import { engineLabel, spawnEngine } from './remote-engine.ts'
 import { traceDocker } from './trace.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
@@ -626,16 +626,12 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   /** Runs the engine's CLI with its output streamed; `stop` ends what it started. */
   const streamed = (args: string[], stop: () => Promise<void>): Spawned => {
     const startedAt = Date.now()
-    const child = spawn(spec.bin, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
-      env: { ...process.env, ...engineEnv(engine) },
-    })
+    const child = spawnEngine(engine, args)
     child.stderr.resume()
     const exited = new Promise<{ exitCode: number }>((resolve) => {
       child.once('error', () => resolve({ exitCode: 127 }))
       child.once('close', (code) => {
-        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
+        traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, engineLabel(engine))
         resolve({ exitCode: code ?? 1 })
       })
     })
@@ -822,14 +818,15 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const marker = nextMarker()
       const args = execArgs(o.command, marker, o.workingDirectory, env)
       const startedAt = Date.now()
-      const child = spawn(spec.bin, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        detached: true,
-        env: { ...process.env, ...engineEnv(engine), ...env },
-      })
+      const child = spawnEngine(engine, args, env)
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => {
-          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
+          traceDocker(
+            args,
+            startedAt,
+            { exitCode: code, stdout: '<streamed>' },
+            engineLabel(engine),
+          )
           resolve({ exitCode: code ?? 1 })
         }),
       )

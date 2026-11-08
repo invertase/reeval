@@ -119,7 +119,10 @@ export {
   type Engine,
   type EngineSpec,
   engineSpec,
+  isRemoteEngine,
+  type LocalEngine,
   normalizeImageId,
+  type RemoteEngine,
 } from './engine.ts'
 export {
   adapterVersion,
@@ -158,6 +161,13 @@ export {
   registryDigest,
 } from './registry-api.ts'
 export {
+  type EngineCommand,
+  hostCommand,
+  isSshFailure,
+  remoteBuild,
+  spawnEngine,
+} from './remote-engine.ts'
+export {
   createDockerSession,
   DEFAULT_LIMITS,
   type DockerSession,
@@ -175,6 +185,14 @@ export {
 } from './session.ts'
 export { darwinShell } from './shells.ts'
 export { connectSsh, resetSlot, type SshMachine, type SshSessionOptions } from './ssh-session.ts'
+export {
+  extractTar,
+  readTar,
+  readTree,
+  safeTarPath,
+  type TarEntry,
+  writeTar,
+} from './tarball.ts'
 export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand, traceDocker } from './trace.ts'
 export {
   type HostCommand,

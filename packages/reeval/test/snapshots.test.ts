@@ -9,12 +9,6 @@ import { readlink } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { describe, test } from 'node:test'
 import { gunzipSync } from 'node:zlib'
-import { streamPreview } from '../../sandbox-docker/src/trace.ts'
-import { archiveWorkspace, cleanArchive, takeSnapshot } from '../src/attempt/snapshot.ts'
-import type { Attempt } from '../src/attempt/state.ts'
-import { optionsHash } from '../src/eval-source.ts'
-import type { AttemptRecord } from '../src/history/types.ts'
-import type { Sandbox } from '../src/sandbox/index.ts'
 import {
   extractTar,
   readTar,
@@ -22,7 +16,13 @@ import {
   safeTarPath,
   type TarEntry,
   writeTar,
-} from '../src/tarball.ts'
+} from '@reeval/sandbox-docker'
+import { streamPreview } from '../../sandbox-docker/src/trace.ts'
+import { archiveWorkspace, cleanArchive, takeSnapshot } from '../src/attempt/snapshot.ts'
+import type { Attempt } from '../src/attempt/state.ts'
+import { optionsHash } from '../src/eval-source.ts'
+import type { AttemptRecord } from '../src/history/types.ts'
+import type { Sandbox } from '../src/sandbox/index.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const SECRET = `ghp_${'a1B2'.repeat(9)}`

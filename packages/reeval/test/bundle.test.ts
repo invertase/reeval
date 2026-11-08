@@ -13,9 +13,9 @@ import {
 import { dirname, join } from 'node:path'
 import { before, describe, test } from 'node:test'
 import { gunzipSync, gzipSync } from 'node:zlib'
+import { readTar, type TarEntry, writeTar } from '@reeval/sandbox-docker'
 import type { BundleManifest } from '../src/bundle/types.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { readTar, type TarEntry, writeTar } from '../src/tarball.ts'
 import { baseEnv, pkgRoot, project, readRun, runCli, spawnTool, tempDir } from './helpers.ts'
 
 const fixture = join(pkgRoot, 'test/fixtures/bundle')

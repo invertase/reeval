@@ -1,6 +1,14 @@
 import { spawn } from 'node:child_process'
-import { type Engine, engineEnv, engineSpec, normalizeImageId } from './engine.ts'
-import { type RunResult, run } from './process.ts'
+import { sshArgv } from './egress/transport.ts'
+import { type Engine, engineEnv, engineSpec, isRemoteEngine, normalizeImageId } from './engine.ts'
+import { shellQuote as q, type RunResult, run } from './process.ts'
+import {
+  engineLabel,
+  hostCommand,
+  isSshFailure,
+  remoteBuild,
+  retriesSafely,
+} from './remote-engine.ts'
 import { traceDocker } from './trace.ts'
 
 export type DockerResult = RunResult<Buffer>
@@ -40,36 +48,64 @@ const sleep = (ms: number, signal?: AbortSignal) =>
  */
 export async function retryConnection<R extends { exitCode: number | null; stderr: string }>(
   attempt: () => Promise<R>,
-  options: { delays?: number[]; signal?: AbortSignal; wait?: typeof sleep } = {},
+  options: {
+    delays?: number[]
+    signal?: AbortSignal
+    wait?: typeof sleep
+    failed?: (r: R) => boolean
+  } = {},
 ): Promise<R> {
-  const { delays = CONNECTION_RETRY_MS, signal, wait = sleep } = options
+  const {
+    delays = CONNECTION_RETRY_MS,
+    signal,
+    wait = sleep,
+    failed = isConnectionFailure,
+  } = options
   let r = await attempt()
   for (const ms of delays) {
-    if (!isConnectionFailure(r) || signal?.aborted) break
+    if (!failed(r) || signal?.aborted) break
     await wait(ms, signal)
     r = await attempt()
   }
   return r
 }
 
-/** Runs the docker (or podman) CLI. `env` values are passed via the CLI's environment, never argv. */
+/**
+ * Runs the docker (or podman) CLI, here or on a remote engine's machine. `env` values are passed
+ * via the CLI's environment, never argv.
+ */
 export async function docker(args: string[], options: DockerOptions = {}): Promise<DockerResult> {
-  const { engine, ...rest } = options
-  const { bin } = engineSpec(engine)
-  const stdin = options.input?.length ?? 0
-  const env = { ...engineEnv(engine), ...rest.env }
+  const { engine, signal } = options
+  const remote = isRemoteEngine(engine)
+  const call = remote ? remoteBuild(args, options.input) : { args, input: options.input }
+  const command = hostCommand(engine, call.args, options.env)
+  const input = command.preamble
+    ? Buffer.concat([command.preamble, Buffer.from(call.input ?? '')])
+    : call.input
+  const bin = engineLabel(engine)
+  const stdin = call.input?.length ?? 0
   const once = async () => {
     const startedAt = Date.now()
     try {
-      const r = await run(bin, args, { ...rest, env, binary: true })
-      traceDocker(args, startedAt, { ...r, stdin }, bin)
+      const r = await run(command.bin, command.args, {
+        env: command.env,
+        binary: true,
+        ...(input !== undefined ? { input } : {}),
+        ...(signal ? { signal } : {}),
+      })
+      traceDocker(call.args, startedAt, { ...r, stdin }, bin)
       return r
     } catch (error) {
-      traceDocker(args, startedAt, { error }, bin)
+      traceDocker(call.args, startedAt, { error }, bin)
       throw error
     }
   }
-  return engine === 'podman' ? retryConnection(once, { signal: options.signal }) : once()
+  if (remote) {
+    if (!retriesSafely(call.args)) return once()
+    const { target } = engine
+    return retryConnection(once, { signal, failed: (r) => isSshFailure(r, target) })
+  }
+  return engine === 'podman' ? retryConnection(once, { signal }) : once()
 }
 
 export async function dockerOk(args: string[], opts?: DockerOptions) {
@@ -96,10 +132,12 @@ export async function removeContainerDetached(
   engine?: Engine,
   options: { delays?: number[]; wait?: (ms: number) => Promise<void> } = {},
 ): Promise<void> {
-  const { bin, rmForce } = engineSpec(engine)
+  const { rmForce } = engineSpec(engine)
   const { delays = REMOVAL_RETRY_MS, wait = sleep } = options
   const args = [...rmForce, id]
-  const env = { ...process.env, ...engineEnv(engine) }
+  const command = hostCommand(engine, args)
+  const bin = command.bin
+  const env = { ...process.env, ...command.env }
   const once = () =>
     new Promise<{ exitCode: number | null; stderr: string }>((resolve) => {
       // A detached child doesn't keep the event loop alive on its own.
@@ -111,10 +149,10 @@ export async function removeContainerDetached(
         if (settled) return
         settled = true
         clearInterval(keepAlive)
-        traceDocker(args, startedAt, { exitCode, stderr }, bin)
+        traceDocker(args, startedAt, { exitCode, stderr }, engineLabel(engine))
         resolve({ exitCode, stderr })
       }
-      const child = spawn(bin, args, {
+      const child = spawn(bin, command.args, {
         detached: true,
         stdio: ['ignore', 'ignore', 'pipe'],
         windowsHide: true,
@@ -145,6 +183,15 @@ export async function removeContainerDetached(
  */
 export function sweepLabelDetached(label: string, seconds = 15, engine?: Engine): void {
   const { bin, rmForce } = engineSpec(engine)
+  if (isRemoteEngine(engine)) {
+    const filter = q(`label=${label}`)
+    const loop = `for i in $(seq ${Math.max(1, Math.floor(seconds))}); do ids=$(docker ps -aq --filter ${filter}); [ -z "$ids" ] || docker ${rmForce.join(' ')} $ids >/dev/null 2>&1; sleep 1; done`
+    const [ssh = 'ssh', ...rest] = sshArgv(engine.target, `sh -c ${q(loop)}`)
+    const child = spawn(ssh, rest, { detached: true, stdio: 'ignore', windowsHide: true })
+    child.on('error', () => {})
+    child.unref()
+    return
+  }
   // A Node script rather than a shell loop, so it runs where there's no sh (Windows).
   const script = `const { execFileSync } = require('node:child_process')
 const [filter, seconds, bin, ...rm] = process.argv.slice(1)

@@ -8,6 +8,7 @@ import {
   engineSpec,
   ImageBuildError,
   isTransient,
+  type LocalEngine,
 } from '@reeval/sandbox-docker'
 import type { ParsedTartHost } from '../contract/tart.ts'
 import { pluginBuildId } from '../environment/plugins.ts'
@@ -182,7 +183,7 @@ export type RegistryOptions = { registry?: string | null; push?: boolean }
 
 /** Docker or Podman: one image per key, each sub-image built once per provider (so once per run). */
 export function dockerProvider(
-  options: { refresh?: Refresh; engine?: Engine } & RegistryOptions = {},
+  options: { refresh?: Refresh; engine?: LocalEngine } & RegistryOptions = {},
 ): SandboxProvider<DockerSandboxDescriptor> {
   const engine = options.engine ?? 'docker'
   let builds: import('./prepare.ts').Builds | undefined

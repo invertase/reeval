@@ -3,12 +3,32 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { SshTarget } from './egress/transport.ts'
 
 /**
- * The container CLI a sandbox runs on. Podman takes Docker's commands, so one core drives both;
+ * A container CLI on this machine. Podman takes Docker's commands, so one core drives both;
  * {@link ENGINES} holds where they differ.
  */
-export type Engine = 'docker' | 'podman'
+export type LocalEngine = 'docker' | 'podman'
+
+/**
+ * Docker on another machine, whose CLI runs over its SSH as the login user (who must be able to
+ * reach the daemon). A command's input and environment go on its stdin, and a build context on
+ * this machine goes as a tar there too, so nothing but the command's arguments is in argv.
+ * Ending a command here ends its ssh, which doesn't stop a CLI already running on the machine.
+ */
+export type RemoteEngine = {
+  kind: 'ssh'
+  target: SshTarget
+  /** How messages name the machine: `boat sandbox bx_… (small)`. */
+  description: string
+}
+
+/** The container CLI a sandbox's images and containers are made with. */
+export type Engine = LocalEngine | RemoteEngine
+
+export const isRemoteEngine = (engine: Engine | undefined): engine is RemoteEngine =>
+  typeof engine === 'object'
 
 export type EngineSpec = {
   /** The CLI on PATH. */
@@ -57,7 +77,7 @@ export function dockerSeccompFile(): string {
   return path
 }
 
-export const ENGINES: Record<Engine, EngineSpec> = {
+export const ENGINES: Record<LocalEngine, EngineSpec> = {
   docker: {
     bin: 'docker',
     name: 'Docker',
@@ -86,7 +106,9 @@ export const ENGINES: Record<Engine, EngineSpec> = {
   },
 }
 
-export const engineSpec = (engine: Engine = 'docker'): EngineSpec => ENGINES[engine]
+/** A remote engine is Docker's CLI, as on this machine. */
+export const engineSpec = (engine: Engine = 'docker'): EngineSpec =>
+  ENGINES[isRemoteEngine(engine) ? 'docker' : engine]
 
 type MachineInspect = {
   Name?: string

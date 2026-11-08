@@ -37,6 +37,7 @@ import {
   DEFAULT_IMAGE,
   imageFor,
   LABEL,
+  readTar,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
@@ -45,7 +46,6 @@ import { runLabels, runPrefix } from '../src/sandbox/boat.ts'
 import { vmPrefix } from '../src/sandbox/tart.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
-import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
