@@ -133,6 +133,7 @@ for (const installer of installers) {
 }
 
 const BOAT_SDK = '@boatdev/sdk'
+const DAYTONA_SDK = '@daytona/sdk'
 /** The lowest version the package's peer range takes. */
 const boatPeer = (manifest: { peerDependencies: Record<string, string> }) =>
   (manifest.peerDependencies[BOAT_SDK] ?? '').replace(/^\^/, '')
@@ -395,9 +396,13 @@ test('the packed package installs into a clean project and runs reeval', {
   assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@reeval/')))
-  // The Boat SDK is the one optional peer: boat() loads it, and nothing else ever does.
-  assert.deepEqual(Object.keys(manifest.peerDependencies), [BOAT_SDK])
-  assert.deepEqual(manifest.peerDependenciesMeta, { [BOAT_SDK]: { optional: true } })
+  // The Boat and Daytona SDKs are the optional peers: boat() and daytona() load them, and nothing
+  // else ever does.
+  assert.deepEqual(Object.keys(manifest.peerDependencies), [BOAT_SDK, DAYTONA_SDK])
+  assert.deepEqual(manifest.peerDependenciesMeta, {
+    [BOAT_SDK]: { optional: true },
+    [DAYTONA_SDK]: { optional: true },
+  })
 
   // THIRD_PARTY_NOTICES.md: the third-party code inlined into the tarball, each package with
   // its license text, and none of the dependencies npm installs.
@@ -509,6 +514,7 @@ test('the packed package installs into a clean project and runs reeval', {
   for (const file of code) {
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
     assert.doesNotMatch(source(file), /\bfrom\s*['"]@boatdev\//, `${file} imports the Boat SDK`)
+    assert.doesNotMatch(source(file), /\bfrom\s*['"]@daytona\//, `${file} imports Daytona's SDK`)
   }
   const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
     (m) => m[1] as string,
