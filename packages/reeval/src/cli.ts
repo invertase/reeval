@@ -43,11 +43,12 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
+import type { RunTarget } from './hosted-run.ts'
 import { cwdIn, fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
-import type { RunPlan } from './plan.ts'
+import type { PlanDocument, RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret, stripCredentials } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
@@ -120,7 +121,7 @@ const EXPECTED_ERRORS = [
   'NewerSchemaError',
 ]
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
-const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError']
+const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError', 'HostedError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
@@ -289,7 +290,7 @@ async function run(argv: string[]): Promise<number> {
  */
 async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   const planning = (
-    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors'] as const
+    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors', 'hosted'] as const
   )
     .filter((f) => flags[f] !== undefined)
     .map((f) => `--${f}`)
@@ -310,6 +311,7 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
     {
       ...flags,
       bundle: undefined,
+      local: true,
       ...(args.profile ? { profile: args.profile } : {}),
       tag: args.tags,
       trait: args.traits,
@@ -626,10 +628,17 @@ async function attachCommand(
     root = dirname(requireConfig(configPath))
     source = (await resolveAttach(root, target)).file
   }
+  return attachHere(flags, { source, ...(root === undefined ? {} : { root }) })
+}
+
+/** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
+async function attachHere(
+  flags: Flags,
+  options: Pick<import('./attach.ts').AttachOptions, 'source' | 'root' | 'follow'>,
+): Promise<number> {
   const { attach } = await import('./attach.ts')
   return attach({
-    source,
-    ...(root === undefined ? {} : { root }),
+    ...options,
     out: process.stdout,
     columns: process.stdout.columns,
     colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
@@ -649,6 +658,61 @@ async function attachCommand(
         stdinTTY: !!process.stdin.isTTY,
       }),
   })
+}
+
+/**
+ * Where a run that asked for the hosted platform goes, from the bundle made for it: there, or
+ * here with why. A real run there is created, uploaded, started and followed, and its exit code is
+ * `exit`. Undefined when the run didn't ask for hosted.
+ */
+async function hostedTarget(
+  flags: Flags,
+  setup: Awaited<ReturnType<typeof prepareRun>>,
+  filters: string[],
+  configPath: string | undefined,
+): Promise<{ exit: number } | { target: RunTarget; detail: string } | undefined> {
+  const hosted = await import('./hosted-run.ts')
+  if (!hosted.wantsHosted(flags, setup.config, setup.profile)) return undefined
+  hosted.refuseLocalFlags(flags)
+  const base = setup.dryRun ? null : hosted.hostedUrl()
+  const env = base ? await hosted.hostedPlanEnv(base) : {}
+  const { makeBundle } = await import('./bundle/index.ts')
+  let made: Awaited<ReturnType<typeof makeBundle>> | undefined
+  let why: string | undefined
+  try {
+    // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
+    // bundle's arguments, so the platform's machine plans with the same one.
+    const picked = setup.profile ? { profile: setup.profile.name } : {}
+    made = await makeBundle({ ...flags, ...picked }, filters, configPath, process.argv.slice(2), {
+      env,
+      prices: true,
+    })
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error
+    why = (error.message.split('\n')[0] ?? '').replace(/:$/, '')
+  }
+  if (made && 'code' in made) return { exit: made.code }
+  if (made?.plan.notHosted?.length) why = made.plan.notHosted.join('; ')
+  if (why !== undefined || !made) {
+    const reason = why ?? 'the bundle could not be made'
+    if (!setup.dryRun) console.log(dim(`Running here, not on hosted: ${reason}`))
+    return { target: { kind: 'local', why: reason }, detail: `target  here, not hosted: ${reason}` }
+  }
+  if (!base) {
+    const unset = process.env[hosted.HOSTED_URL_VAR]?.trim()
+      ? ''
+      : ` · ${hosted.HOSTED_URL_VAR} isn't set, so a run would exit 2`
+    const line = await hosted.hostedLine(made.plan, 'target  hosted')
+    return { target: { kind: 'hosted' }, detail: `${line}${unset}` }
+  }
+  console.log(await hosted.hostedLine(made.plan))
+  const exit = await hosted.runHosted({
+    base,
+    bundle: made,
+    log: (line) => console.log(dim(line)),
+    follow: (options) => attachHere(flags, options),
+  })
+  return { exit }
 }
 
 /** `reeval run`: check, plan, run the engine, then write the run and pick the exit code. */
@@ -701,6 +765,8 @@ async function runCommand(
     noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
     ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
+  const hosted = bundled ? undefined : await hostedTarget(runFlags, setup, filters, configPath)
+  if (hosted && 'exit' in hosted) return hosted.exit
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
   const ctx = await startRun(setup, bundled)
   const startedWith: RunInvocation | undefined = resumed
@@ -768,6 +834,7 @@ async function runCommand(
       notes: resumed?.notes ?? [],
       narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length || !!flags.trait?.length),
       ...(savedEvents ? { events: savedEvents } : {}),
+      ...(hosted ? { target: hosted.target, targetDetail: hosted.detail } : {}),
     })
   } catch (error) {
     renderer.close()
@@ -1345,6 +1412,9 @@ async function executeRun(
     narrowed: boolean
     /** The event stream file, as live.json names it. */
     events?: string
+    /** Where a run that asked for the hosted platform goes, and the dry run's line for it. */
+    target?: RunTarget
+    targetDetail?: string
   },
 ) {
   const { events } = started
@@ -1573,7 +1643,13 @@ async function executeRun(
         judges: running.flatMap((p) => (p.attempt.judge ? [p.attempt.judge] : [])),
       })
       for (const { names } of needed) for (const name of names) secrets.add(name)
-      const doc = planDocument(plan, skipped, excluded, images, inputs, [...secrets].sort())
+      const { notHosted } = await import('./hosted-run.ts')
+      const blocked = notHosted(skipped)
+      const doc: PlanDocument = {
+        ...planDocument(plan, skipped, excluded, images, inputs, [...secrets].sort()),
+        ...(blocked.length ? { notHosted: blocked } : {}),
+        ...(started.target ? { target: started.target } : {}),
+      }
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }
@@ -1597,6 +1673,7 @@ async function executeRun(
       const { costLine } = await import('./cost.ts')
       const cost = plan.cost && costLine(plan.cost)
       if (cost) lines.push(cost)
+      if (started.targetDetail) lines.push(started.targetDetail)
     }
     renderer.onEvent({
       type: 'plan',

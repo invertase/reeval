@@ -99,10 +99,30 @@ const INSTALLS: Array<{ lockfile: string; command: (dir: string) => [string, ...
 ]
 
 type PlanInput = { path: string; kind: string; evals?: string[]; symlinkTo?: string }
-type PlanDoc = Record<string, unknown> & {
+export type PlanDoc = Record<string, unknown> & {
   profile?: { name: string } | null
   inputs?: PlanInput[]
   secrets?: string[]
+  totals?: { attempts: number; fewest: number }
+  cost?: import('../cost.ts').PlanCost
+  notHosted?: string[]
+}
+
+export type BundleOptions = {
+  /** Set for the bundle's dry run, over this process's environment. */
+  env?: Record<string, string>
+  /** Prices the plan's cost, which the dry run otherwise leaves to tokens. */
+  prices?: boolean
+}
+
+/** A bundle made in memory: the archive, its manifest, the plan its dry run printed, and its sizes. */
+export type MadeBundle = {
+  project: string
+  archive: Buffer
+  manifest: BundleManifest
+  plan: PlanDoc
+  links: number
+  bytes: number
 }
 
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex')
@@ -130,17 +150,20 @@ async function dryRun(
   cwd: string,
   args: string[],
   config: string,
+  options: BundleOptions = {},
 ): Promise<{ plan: PlanDoc } | { code: number }> {
   const [cmd, ...rest] = reevalCommand(join(DIST_DIR, 'cli.js'), [
     ...args,
     '--dry-run',
     '--json',
+    '--local',
     '--config',
     config,
   ])
+  const prices = options.prices ? {} : { REEVAL_PRICES: process.env.REEVAL_PRICES ?? 'none' }
   const child = spawn(cmd, rest, {
     cwd,
-    env: { ...process.env, REEVAL_PRICES: process.env.REEVAL_PRICES ?? 'none' },
+    env: { ...process.env, ...prices, ...options.env },
     stdio: ['ignore', 'pipe', 'inherit'],
     windowsHide: true,
   })
@@ -335,6 +358,35 @@ export async function bundleCommand(
   argv: string[],
   out: (line: string) => void,
 ): Promise<number> {
+  const made = await makeBundle(flags, filters, configPath, argv)
+  if ('code' in made) return made.code
+  const { project, archive, manifest, plan, links, bytes } = made
+  const target = resolve(flags.out ?? `${basename(project) || 'reeval'}.bundle.tar.gz`)
+  await writeFile(target, archive)
+  out(
+    `Bundled ${plural(manifest.files.length, 'file')}${links ? ` and ${plural(links, 'link')}` : ''} (${bytes} bytes) for ${plural(Number(plan.totals?.attempts ?? 0), 'attempt')} into ${relative(process.cwd(), target) || target}`,
+  )
+  if (manifest.secrets.length) out(`  needs: ${manifest.secrets.join(', ')}`)
+  for (const env of manifest.envFiles) {
+    out(
+      `  left out ${env.path}${env.variables.length ? ` (${env.variables.join(', ')})` : ''}: set ${env.variables.length === 1 ? 'it' : 'them'} where the bundle runs`,
+    )
+  }
+  if (manifest.git?.dirty) out('  the project has uncommitted changes; the bundle carries them')
+  return 0
+}
+
+/**
+ * The bundle `reeval bundle` writes, in memory, or the exit code its dry run refused with. Throws
+ * a `UsageError` naming what a bundle can't carry.
+ */
+export async function makeBundle(
+  flags: Flags,
+  filters: string[],
+  configPath: string | undefined,
+  argv: string[],
+  options: BundleOptions = {},
+): Promise<MadeBundle | { code: number }> {
   const config = await realpath(requireConfig(configPath))
   const project = dirname(config)
   const given = {
@@ -344,8 +396,8 @@ export async function bundleCommand(
     traits: flags.trait ?? [],
     ...(flags.runs ? { runs: flags.runs } : {}),
   }
-  const planned = await dryRun(project, runArgs(given), config)
-  if ('code' in planned) return planned.code
+  const planned = await dryRun(project, runArgs(given), config, options)
+  if ('code' in planned) return planned
   const { plan } = planned
   const inputs = (plan.inputs ?? []).map((i) => ({
     ...i,
@@ -474,21 +526,14 @@ export async function bundleCommand(
       `The bundle would carry secrets, so nothing was written:\n${found.map((l) => `  ${l}`).join('\n')}\nMove each out of the files the run reads, or read it from a variable.`,
     )
   }
-  const target = resolve(flags.out ?? `${basename(project) || 'reeval'}.bundle.tar.gz`)
-  const archive = gzipSync(writeTar([manifestEntry, ...entries, ...linkEntries]))
-  await writeFile(target, archive)
-  const bytes = files.reduce((n, f) => n + f.size, 0)
-  out(
-    `Bundled ${plural(files.length, 'file')}${bundleLinks.length ? ` and ${plural(bundleLinks.length, 'link')}` : ''} (${bytes} bytes) for ${plural(Number((plan.totals as { attempts?: number } | undefined)?.attempts ?? 0), 'attempt')} into ${relative(process.cwd(), target) || target}`,
-  )
-  if (secrets.length) out(`  needs: ${secrets.join(', ')}`)
-  for (const env of manifest.envFiles) {
-    out(
-      `  left out ${env.path}${env.variables.length ? ` (${env.variables.join(', ')})` : ''}: set ${env.variables.length === 1 ? 'it' : 'them'} where the bundle runs`,
-    )
+  return {
+    project,
+    archive: gzipSync(writeTar([manifestEntry, ...entries, ...linkEntries])),
+    manifest,
+    plan,
+    links: bundleLinks.length,
+    bytes: files.reduce((n, f) => n + f.size, 0),
   }
-  if (git?.dirty) out('  the project has uncommitted changes; the bundle carries them')
-  return 0
 }
 
 /** Each difference between two plan documents, by JSON path, at most `limit`. */

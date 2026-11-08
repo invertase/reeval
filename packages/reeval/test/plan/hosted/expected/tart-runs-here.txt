@@ -1,0 +1,5 @@
+no profile · 1 evals · 1 cells · 1 attempts
+evals/mac.eval.ts › builds the app  fake/mac/tart:macos-sequoia-base:15.6  control  gated  ×1  egress "allow-all"
+excluded: —
+not hosted: tart() runs its VMs on a Mac (evals/mac.eval.ts › builds the app)
+target here: tart() runs its VMs on a Mac (evals/mac.eval.ts › builds the app)

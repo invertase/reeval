@@ -105,5 +105,6 @@ export function kindOf<D extends MachineDescriptor>(machine: MachineProvider<D>)
     ...(machine.planWarnings && { planWarnings: machine.planWarnings }),
     ...(machine.attemptCap && { attemptCap: machine.attemptCap }),
     ...(machine.slotsPerMachine && { slotsPerMachine: machine.slotsPerMachine }),
+    ...(machine.notHosted && { notHosted: machine.notHosted }),
   }
 }

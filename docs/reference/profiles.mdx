@@ -5,7 +5,7 @@ description: "A profile is a named set of defaults, limits, judge, and budget th
 
 ## `profiles`
 
-`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, `gateway`, and `history`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
+`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, `gateway`, `history`, and `hosted`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -143,6 +143,14 @@ reeval exits with code 2 for any other `record` value.
 `--record` copies the run when `reeval run` ends. An interrupted run is not copied. A run that stops with status `budget` is copied.
 
 For more information about copying a run later, see [reeval record](/reference/cli#reeval-record).
+
+## `hosted`
+
+`hosted` replaces the config [`hosted`](/reference/options#hosted). `--hosted` and `--local` take precedence.
+
+<Property name="hosted" type="boolean" optional>
+  Same values as [`hosted`](/reference/options#hosted).
+</Property>
 
 ## `tags`
 

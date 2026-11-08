@@ -2302,6 +2302,10 @@
           "description": "The history this profile records to and every history command reads with `--profile`, merged over the config's `history` key by key.",
           "$ref": "#/$defs/HistoryConfigData"
         },
+        "hosted": {
+          "description": "Replaces the config's `hosted` for this profile's runs.",
+          "type": "boolean"
+        },
         "judge": {
           "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
           "$ref": "#/$defs/ConfigJudgeData"
@@ -2629,6 +2633,10 @@
         "history": {
           "description": "Where recorded runs are kept, and which attempts keep their artifacts there.",
           "$ref": "#/$defs/HistoryConfigData"
+        },
+        "hosted": {
+          "description": "`reeval run` runs on the hosted platform at `REEVAL_HOSTED_URL` instead of this machine. `--hosted` and `--local` override it, and a profile's `hosted` replaces it. Default `false`.",
+          "type": "boolean"
         },
         "include": {
           "description": "Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`.",
