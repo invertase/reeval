@@ -13,6 +13,8 @@ import {
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
+import { openArchive, writeArchive } from '../archive/index.ts'
+import type { ArchiveManifest } from '../archive/types.ts'
 import { debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
@@ -503,6 +505,8 @@ export type RecordOptions = {
   committed?: boolean
   /** Upload the attempts' debug data too, staged in `staging` (a remote store's `history.debug`). */
   debug?: { level: RunDebug['level']; staging: string }
+  /** Write the run's `<runId>.zip` beside its record too (`history.archive`). */
+  archive?: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -514,6 +518,55 @@ export type RecordResult = WrittenRun & {
   ignored: IgnoredRecorded[]
   /** The debug data the record names, staged to upload with it. */
   debug?: RunDebug
+  /** With `archive`, the run's zip, and whether this recording wrote it. */
+  archive?: { path: string; written: boolean }
+}
+
+/** `<dir>/<runId>.zip`: a recorded run, its record and every file recorded with it, as one zip. */
+export const archiveFile = (dir: string, runId: string) => join(dir, `${runId}.zip`)
+
+/**
+ * Writes the run's archive under its claim, unless the one there already lists exactly these
+ * files. A missing one is written at revision 1; one that lists other files (the record was
+ * replaced, or a file changed since) is written again a revision on. One a newer reeval wrote is
+ * left as it is.
+ */
+async function archiveRun(
+  dir: string,
+  runId: string,
+  record: Uint8Array,
+  files: Map<string, Uint8Array>,
+): Promise<{ path: string; written: boolean }> {
+  const path = archiveFile(dir, runId)
+  const inputs = [
+    { path: `${runId}.json`, data: record },
+    ...[...files].map(([file, data]) => ({ path: `${runId}/${file}`, data })),
+  ]
+  const wanted = new Map(inputs.map((i) => [i.path, sha256(i.data)]))
+  const release = await claimRun(dir, runId)
+  try {
+    let was: ArchiveManifest | null = null
+    try {
+      const archive = await openArchive(path)
+      was = archive.manifest
+      await archive.close()
+    } catch (error) {
+      if (error instanceof NewerSchemaError) return { path, written: false }
+      // A missing or unreadable zip is written again.
+    }
+    const same =
+      was?.files.length === wanted.size && was.files.every((f) => wanted.get(f.path) === f.sha256)
+    if (was && same) return { path, written: false }
+    await writeArchive(path, {
+      contents: 'run',
+      runId,
+      files: inputs,
+      revision: was ? was.revision + 1 : 1,
+    })
+    return { path, written: true }
+  } finally {
+    await release()
+  }
 }
 
 /** Every file under `dir`, by posix path, with its bytes. */
@@ -690,6 +743,9 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     await ensureHistoryGitattributes(options.historyDir)
   }
   const written = await writeRun(options.historyDir, record, files)
+  const archive = options.archive
+    ? { archive: await archiveRun(options.historyDir, runId, encodeRecord(record), files) }
+    : {}
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!committed) {
     return {
@@ -699,6 +755,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       droppedPatch,
       ignored: [],
       ...(debug ? { debug } : {}),
+      ...archive,
     }
   }
   const folderFiles = [
@@ -707,7 +764,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   ]
   if (!written.created) {
     const ignored = await ignoredRecordedFiles(options.root, folderFiles)
-    return { ...written, files: files.size, bytes, droppedPatch, ignored }
+    return { ...written, files: files.size, bytes, droppedPatch, ignored, ...archive }
   }
   const writtenPaths = [
     written.recordPath,
@@ -717,5 +774,5 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     ),
   ]
   const ignored = await ignoredRecordedFiles(options.root, writtenPaths)
-  return { ...written, files: files.size, bytes, droppedPatch, ignored }
+  return { ...written, files: files.size, bytes, droppedPatch, ignored, ...archive }
 }

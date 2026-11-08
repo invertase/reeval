@@ -174,6 +174,7 @@ export async function record(
       allowIncomplete: flags['allow-incomplete'],
       skipSecretScan: flags['skip-secret-scan'],
       committed: !remote,
+      archive: config.history.archive,
       ...(remote && remote.debug !== 'none'
         ? { debug: { level: remote.debug, staging: debugStaging(remote, runId) } }
         : {}),
@@ -191,12 +192,13 @@ export async function record(
           `warning: git ignores ${result.ignored.length} recorded file(s); they won't be committed:`,
           ...result.ignored.map((i) => `  ${i.path}  ignored by ${i.rule} (${i.source})`),
         ]
-  if (!result.created) return [...ignored, `${where} is already recorded`].join('\n')
+  const archived = result.archive?.written ? `; archived it in ${rel(result.archive.path)}` : ''
+  if (!result.created) return [...ignored, `${where} is already recorded${archived}`].join('\n')
   const kb = (result.bytes / 1024).toFixed(1)
   const extra = result.artifactDir
     ? ` + ${result.files} artifact files in ${rel(result.artifactDir)}/`
     : ''
-  const recorded = `recorded ${where}${extra} (${kb} KB). Commit it with git.`
+  const recorded = `recorded ${where}${extra} (${kb} KB)${archived}. Commit it with git.`
   if (result.droppedPatch.length === 0) {
     return ignored.length === 0 ? recorded : `${ignored.join('\n')}\n${recorded}`
   }

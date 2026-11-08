@@ -2071,6 +2071,22 @@ export const CASES: Record<string, Case[]> = {
     ['history.store a string', config({ history: { store: 's3://runs' } })],
     ['history.debug on local()', config({ history: { debug: 'requests' } })],
     [
+      'history.archive on s3()',
+      config({ history: { store: { kind: 's3', bucket: 'runs' }, archive: true } }),
+    ],
+    [
+      'yaml: history.archive on s3()',
+      yaml('history:\n  store: { kind: s3, bucket: runs }\n  archive: true\n'),
+    ],
+    [
+      'history.archive kept by a profile on s3()',
+      config({
+        history: { archive: true },
+        profiles: { ci: { history: { store: { kind: 's3', bucket: 'runs' } } } },
+      }),
+    ],
+    ['yaml: history.archive not true or false', yaml('history:\n  archive: yes please\n')],
+    [
       'yaml: history.debug unknown',
       yaml('history:\n  store: { kind: s3, bucket: runs }\n  debug: some\n'),
     ],

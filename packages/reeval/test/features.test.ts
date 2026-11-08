@@ -21,7 +21,7 @@ import {
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, dirname, join, relative } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -39,6 +39,7 @@ import {
   LABEL,
   readTar,
 } from '@reeval/sandbox-docker'
+import { openArchive } from '../src/archive/index.ts'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import { fakeBrokering } from '../src/harness/agents.ts'
 import type { RunRecord } from '../src/history/types.ts'
@@ -2479,6 +2480,41 @@ export const features: Feature[] = [
         ],
         'each failed attempt keeps its files, whatever its eval did',
       )
+    },
+  },
+  {
+    dir: 'history/archive',
+    tiers: ['fake'],
+    env: 'archived',
+    canary: /has the marker: expected file missing\.txt to exist/,
+    record: async ({ project }) => {
+      const history = readRun(project, { history: 'evals/.history' })
+      const { runId } = history.run
+      const folder = dirname(history.dir)
+      const loose = [
+        `${runId}.json`,
+        ...readdirSync(history.dir, { recursive: true, withFileTypes: true })
+          .filter((e) => e.isFile())
+          .map((e) => `${runId}/${relative(history.dir, join(e.parentPath, e.name))}`),
+      ].sort()
+      assert.ok(
+        loose.some((p) => p.endsWith('/transcript.jsonl')),
+        "the canary's failed attempt kept its files",
+      )
+      const archive = await openArchive(join(folder, `${runId}.zip`))
+      try {
+        await archive.verify()
+        assert.deepEqual(
+          archive.manifest.files.map((f) => f.path),
+          loose,
+          'the zip holds the record and every file recorded beside it',
+        )
+        for (const path of loose) {
+          assert.deepEqual(await archive.read(path), readFileSync(join(folder, path)), path)
+        }
+      } finally {
+        await archive.close()
+      }
     },
   },
   {

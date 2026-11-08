@@ -2797,6 +2797,10 @@
     "ResolvedHistory": {
       "type": "object",
       "properties": {
+        "archive": {
+          "description": "Write each recorded run's `<runId>.zip` too (`history.archive`).",
+          "type": "boolean"
+        },
         "artifacts": {
           "$ref": "#/$defs/ArtifactLevel"
         },
@@ -2845,7 +2849,7 @@
           ]
         }
       },
-      "required": ["artifacts", "debug", "dir", "store"]
+      "required": ["archive", "artifacts", "debug", "dir", "store"]
     },
     "ResolvedProfile": {
       "description": "A profile as the run uses it, with why it was chosen.",

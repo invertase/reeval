@@ -1592,6 +1592,10 @@
       "description": "`HistoryConfig` as data: the store is `local` or `s3`.",
       "type": "object",
       "properties": {
+        "archive": {
+          "description": "Also write each recorded run as one zip, `<runId>.zip` beside its record, holding the record and every file recorded with it. Off by default; `local()` only.",
+          "type": "boolean"
+        },
         "artifacts": {
           "description": "Artifacts recorded next to each run: every attempt's, failed attempts' only (the default), or none. The setup log and each `c.exec` log are an attempt's artifacts too.",
           "type": "string",

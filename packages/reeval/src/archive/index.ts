@@ -5,7 +5,7 @@
 // each file it reads to its hash.
 import { randomBytes } from 'node:crypto'
 import { type FileHandle, open, rename, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { PACKAGE_VERSION } from '../root.ts'
@@ -104,7 +104,8 @@ export async function writeArchive(
   if (contents === 'run' && inputs[0]?.path !== recordPath(runId)) {
     throw new ArchiveError(`a run archive of ${runId} needs its record, ${recordPath(runId)}`)
   }
-  const tmp = `${file}.tmp-${randomBytes(6).toString('hex')}`
+  // Beside the zip and named like the history folder's other writes in progress, which git ignores.
+  const tmp = join(dirname(file), `.tmp-${randomBytes(6).toString('hex')}-${basename(file)}`)
   const handle = await open(tmp, 'wx')
   let landed = false
   try {

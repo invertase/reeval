@@ -19,12 +19,14 @@ export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log dro
 `
 
 /**
- * Marks recorded runs generated, so GitHub collapses them in a pull request's diff. Matches run
- * ids (`RUN_ID`) only: `history.dir` may be a folder that holds other files too.
+ * Marks recorded runs generated, so GitHub collapses them in a pull request's diff, and their
+ * archives binary, so git never diffs or merges one as text. Matches run ids (`RUN_ID`) only:
+ * `history.dir` may be a folder that holds other files too.
  */
 export const HISTORY_GITATTRIBUTES = `# Recorded runs: GitHub collapses them in a pull request's diff.
 /[0-9]*T[0-9]*Z_*.json linguist-generated=true
 /[0-9]*T[0-9]*Z_*/** linguist-generated=true
+/[0-9]*T[0-9]*Z_*.zip binary linguist-generated=true
 `
 
 export const historyGitignorePath = (historyDir: string) => join(historyDir, '.gitignore')
@@ -47,8 +49,8 @@ export const ensureHistoryGitignore = (historyDir: string): Promise<string> =>
   ensureFile(historyDir, historyGitignorePath(historyDir), HISTORY_GITIGNORE)
 
 /**
- * Writes the history-folder `.gitattributes`, or appends `HISTORY_GITATTRIBUTES` to one that
- * lacks any of its rules, keeping what's there.
+ * Writes the history-folder `.gitattributes`, or adds the rules of `HISTORY_GITATTRIBUTES` an
+ * existing one lacks, keeping what's there: the whole block when it has none of them.
  */
 export async function ensureHistoryGitattributes(historyDir: string): Promise<string> {
   const path = historyGitattributesPath(historyDir)
@@ -61,9 +63,11 @@ export async function ensureHistoryGitattributes(historyDir: string): Promise<st
   }
   const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
   const rules = HISTORY_GITATTRIBUTES.split('\n').filter((l) => l && !l.startsWith('#'))
-  if (rules.every((r) => lines.has(r))) return path
+  const missing = rules.filter((r) => !lines.has(r))
+  if (missing.length === 0) return path
   const gap = existing === '' || existing.endsWith('\n') ? '' : '\n'
-  await writeFile(path, `${existing}${gap}${HISTORY_GITATTRIBUTES}`)
+  const added = missing.length === rules.length ? HISTORY_GITATTRIBUTES : `${missing.join('\n')}\n`
+  await writeFile(path, `${existing}${gap}${added}`)
   return path
 }
 

@@ -15,7 +15,7 @@ import type {
 } from '../types.ts'
 
 const ARTIFACTS = ['all', 'failures', 'none'] as const
-const HISTORY_KEYS = ['store', 'artifacts', 'debug']
+const HISTORY_KEYS = ['store', 'artifacts', 'debug', 'archive']
 const DEBUG = ['none', 'requests', 'all'] as const
 const LOCAL_KEYS = ['kind', 'dir']
 const S3_KEYS = ['kind', 'bucket', 'endpoint', 'region', 'prefix', 'env']
@@ -200,7 +200,24 @@ export function resolveHistory(
       `${where}.debug in ${file} uploads debug data to a remote store, and history.store is local(): .reeval/debug already holds it. Drop debug, or set it where history.store is s3().`,
     )
   }
-  return { ...resolved, debug }
+  const own = (value as HistoryConfig | undefined)?.archive
+  const archive = own ?? base?.archive ?? false
+  if (typeof archive !== 'boolean') {
+    throw new UsageError(
+      `${where}.archive in ${file} is true or false (got ${JSON.stringify(archive)})`,
+    )
+  }
+  if (archive && resolved.store.kind !== 'local' && own === undefined) {
+    throw new UsageError(
+      `history.archive in ${file} writes each run's zip into a local() history, and ${where}.store keeps runs in ${resolved.store.name}. Set archive: false in ${where}, or drop it from history.`,
+    )
+  }
+  if (archive && resolved.store.kind !== 'local') {
+    throw new UsageError(
+      `${where}.archive in ${file} writes each run's zip into a local() history, and history.store is ${resolved.store.name}. Drop archive, or set it where history.store is local().`,
+    )
+  }
+  return { ...resolved, debug, archive }
 }
 
 function resolveStore(
@@ -210,7 +227,7 @@ function resolveStore(
   root: string,
   defaultDir: string,
   base?: ResolvedHistory,
-): Omit<ResolvedHistory, 'debug'> {
+): Omit<ResolvedHistory, 'debug' | 'archive'> {
   if (value !== undefined && !isObjectLike(value)) {
     throw new UsageError(
       `${where} in ${file} must be an object like { store: local(), artifacts: 'failures' } (got ${JSON.stringify(value)})`,
@@ -263,7 +280,7 @@ function localHistory(
   root: string,
   defaultDir: string,
   artifacts: ArtifactLevel,
-): Omit<ResolvedHistory, 'debug'> {
+): Omit<ResolvedHistory, 'debug' | 'archive'> {
   return {
     dir: resolve(root, store.dir ?? defaultDir),
     artifacts,
