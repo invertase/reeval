@@ -57,6 +57,7 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `before-retry-errors` | The corpus project's fake-harness runs from before `evals[].attempts[].retries` (the infra errors an attempt ended with before `reeval run --retry-errors` or `--resume` ran it again) |
 | `before-vm-image` | The fake harness in `tart()` on the fake `tart`, from before `evals[].attempts[].vmImage` (the image an attempt's VM was cloned from, with its digest), when a run pulled the image itself |
 | `with-vm-image` | The same run with `evals[].attempts[].vmImage`, its digest also the cell's `fingerprintParts.image` |
+| `with-vm-id` | The fake harness on `boat()` and `daytona()` on their fake APIs, with `evals[].attempts[].resources.machine.id` and `name` (the VM each attempt ran on) |
 | `before-debug-upload` | The corpus project's fake-harness runs from before `debug` (each attempt's debug data uploaded with the run to a remote store, `history.debug`) |
 | `before-heartbeats` | The corpus project's fake-harness runs and their event stream (`events/<run>.ndjson`, as `reeval run --events` wrote it), from before the stream's `heartbeat` lines |
 | `before-resources` | The fake harness in Docker (`docker({ memory: '512m', cpus: 1 })`), recorded by reeval at `3a175eb4`: an attempt that burned a CPU and held 256 MiB beside an idle one, from before `evals[].attempts[].resources` |

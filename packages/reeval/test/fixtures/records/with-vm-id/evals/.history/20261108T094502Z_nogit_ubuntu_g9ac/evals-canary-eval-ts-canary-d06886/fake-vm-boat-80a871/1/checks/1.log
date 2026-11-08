@@ -1,0 +1,5 @@
+$ node -e 'const t = Date.now(); while (Date.now() - t < 3000); console.log(require("os").cpus().length)'
+exit 0
+--- stdout
+4
+--- stderr

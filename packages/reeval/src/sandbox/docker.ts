@@ -235,7 +235,7 @@ export async function sessionSandbox(
     /** What its resources are read from: a container's cgroup, or the whole machine. */
     resources: {
       mode: SampleMode
-      machine: { sandbox: string; size?: string }
+      machine: { sandbox: string; size?: string; id?: string; name?: string }
       /** Other attempts run on the machine at the same time. */
       shared?: boolean
     }

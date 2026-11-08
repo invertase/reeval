@@ -792,9 +792,17 @@
           "description": "What the attempt ran on.",
           "type": "object",
           "properties": {
+            "id": {
+              "description": "The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, or the name of `tart()`'s VM on its host.",
+              "type": "string"
+            },
             "memoryBytes": {
               "description": "Memory the attempt could use, in bytes: the container's limit, else the VM's total (a macOS VM's `sysctl hw.memsize`).",
               "type": "number"
+            },
+            "name": {
+              "description": "The name reeval gave the VM, where the provider keeps one apart from its id.",
+              "type": "string"
             },
             "sandbox": {
               "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`.",

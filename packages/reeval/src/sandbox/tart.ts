@@ -446,6 +446,7 @@ async function bootTart(
   }
   let caBundle: string | undefined
   return {
+    vm: { id: vm },
     root: rootTransport(guest),
     stateDir,
     destroy,

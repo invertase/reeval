@@ -11,6 +11,7 @@ import { redactSecrets, registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
+import { sandboxLabels } from './labels.ts'
 import type { OpenPool } from './machine-service.ts'
 import { optionalPeer } from './optional-peer.ts'
 import type { PoolProvider } from './pool.ts'
@@ -55,6 +56,7 @@ export type BoatClient = {
       noEnv: boolean
       snapshots: boolean
       monitoring: boolean
+      labels: Record<string, string>
     }
   }): Promise<{ sandbox: BoatSandboxInfo }>
   get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
@@ -165,6 +167,12 @@ export const runTag = (runId: string) =>
 /** `<prefix>-<run>-`: what every sandbox of the run is named with first. */
 export const runPrefix = (sandbox: Pick<BoatSandboxDescriptor, 'prefix'>, runId: string) =>
   `${sandbox.prefix}-${runTag(runId)}-`
+
+/** The labels every sandbox of the run carries, beside those {@link sandboxLabels} adds. */
+export const runLabels = (sandbox: { prefix: string }, runId: string) => ({
+  'reeval-prefix': sandbox.prefix,
+  'reeval-run': runTag(runId),
+})
 
 /** How long a created sandbox may take to be ready. */
 const READY_TIMEOUT_MS = 120_000
@@ -439,6 +447,7 @@ export function boatPoolProvider(
   runId: string,
 ): PoolProvider<PooledSshMachine> {
   const type = descriptor.type ?? 'small'
+  const labels = { ...sandboxLabels(), ...runLabels(descriptor, runId) }
   const dirs = new Map<string, string>()
   return {
     helper: 'boat()',
@@ -470,6 +479,7 @@ export function boatPoolProvider(
               noEnv: true,
               snapshots: false,
               monitoring: false,
+              labels,
             },
           })
           .catch(async (error: unknown) => {
@@ -619,6 +629,11 @@ export async function checkBoat(sandbox: BoatSandboxDescriptor, projectRoot: str
       usage,
       message,
     })
+  try {
+    sandboxLabels()
+  } catch (error) {
+    throw refuse((error as Error).message, true)
+  }
   const tool = await missingSshTool()
   if (tool) {
     throw refuse(
