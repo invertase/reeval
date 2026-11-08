@@ -3,7 +3,8 @@
 // key, Docker or network: each recipe is a Dockerfile whose base is a build argument, so its key
 // looks up no registry.
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import {
@@ -42,6 +43,9 @@ describe('which snapshots clean deletes', () => {
         snap('reeval-img-used'),
         snap('reeval-img-old'),
         snap('reeval-img-fresh', { createdAt: now - 2 * DAY }),
+        snap('reeval-img-elsewhere', { provider: 'daytona', lastUsedAt: now - 60_000 }),
+        snap('reeval-img-snapshotting', { provider: 'daytona', status: 'snapshotting' }),
+        snap('reeval-img-unknown', { status: 'unknown' }),
       ],
       {
         cache: new Map([
@@ -64,11 +68,14 @@ describe('which snapshots clean deletes', () => {
     assert.deepEqual(
       choices.map((c) => [c.snapshot.name, c.keep]),
       [
-        ['reeval-img-recent', 'used on this machine in the last hour'],
+        ['reeval-img-recent', 'used in the last hour'],
         ['reeval-img-saving', 'still saving'],
         ['reeval-img-used', 'used by boat · fake'],
         ['reeval-img-old', null],
         ['reeval-img-fresh', 'used more recently'],
+        ['reeval-img-elsewhere', 'used in the last hour'],
+        ['reeval-img-snapshotting', 'still snapshotting'],
+        ['reeval-img-unknown', 'still unknown'],
       ],
     )
   })
@@ -108,6 +115,9 @@ const idle = async (): Promise<SshVm> => ({
   remove: async () => {},
 })
 
+/** A host cache of its own, so this machine's record of each snapshot's use starts empty. */
+const hostCache = () => mkdtempSync(join(tmpdir(), 'reeval-vm-cache-'))
+
 const files = (sandbox: string, imports: string) => ({
   'reeval.config.ts': `
 import { defineConfig } from 'reeval'
@@ -143,7 +153,8 @@ describe('reeval image on daytona()', () => {
         "import { daytona } from 'reeval/sandbox/daytona'",
       ),
     )
-    const env = { DAYTONA_API_URL: api.url, DAYTONA_API_KEY: api.key }
+    const cacheHome = hostCache()
+    const env = { DAYTONA_API_URL: api.url, DAYTONA_API_KEY: api.key, XDG_CACHE_HOME: cacheHome }
     const cli = (args: string[]) => runCli(p.dir, args, { env, timeoutMs: 90_000 })
     const names = () =>
       api
@@ -171,13 +182,30 @@ describe('reeval image on daytona()', () => {
       size: 1.5,
       createdAt: new Date(Date.now() - 30 * DAY).toISOString(),
     })
+    api.seedSnapshot('reeval-img-111111111111', {
+      state: 'active',
+      createdAt: new Date(Date.now() - 2 * DAY).toISOString(),
+    })
+    api.seedSnapshot('reeval-img-222222222222', {
+      state: 'snapshotting',
+      createdAt: new Date(Date.now() - 30 * DAY).toISOString(),
+    })
+    api.seedSnapshot('reeval-img-mine', { state: 'active' })
     api.seedSnapshot('someone-else', { state: 'active' })
     const list = await cli(['image', 'list', '--json'])
     assert.equal(list.code, 0, list.stdout + list.stderr)
     const listed = JSON.parse(list.stdout) as {
       snapshots: Array<{ name: string; usedBy: string[]; sizeBytes: number | null }>
     }
-    assert.deepEqual(listed.snapshots.map((s) => s.name).sort(), ['reeval-img-000000000000', name])
+    assert.deepEqual(
+      listed.snapshots.map((s) => s.name).sort(),
+      [
+        'reeval-img-000000000000',
+        'reeval-img-111111111111',
+        'reeval-img-222222222222',
+        name,
+      ].sort(),
+    )
     assert.equal(listed.snapshots.find((s) => s.name === name)?.usedBy.length, 1)
     assert.equal(
       listed.snapshots.find((s) => s.name === 'reeval-img-000000000000')?.sizeBytes,
@@ -187,15 +215,29 @@ describe('reeval image on daytona()', () => {
     const dry = await cli(['image', 'clean', '--dry-run'])
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(dry.stdout, /would delete daytona reeval-img-000000000000 \(1\.6 GB\)/)
-    assert.match(dry.stdout, new RegExp(`kept daytona ${name}: used on this machine`))
-    assert.equal(names().length, 3, 'a dry run deletes nothing')
+    assert.match(dry.stdout, new RegExp(`kept daytona ${name}: used in the last hour`))
+    assert.match(dry.stdout, /kept daytona reeval-img-111111111111: used more recently/)
+    assert.match(dry.stdout, /kept daytona reeval-img-222222222222: still snapshotting/)
+    assert.equal(names().length, 6, 'a dry run deletes nothing')
 
     const cleaned = await cli(['image', 'clean'])
     assert.equal(cleaned.code, 0, cleaned.stdout + cleaned.stderr)
     assert.match(cleaned.stdout, /✓ deleted daytona reeval-img-000000000000/)
-    assert.deepEqual(names(), [name, 'someone-else'])
+    assert.deepEqual(
+      names(),
+      [
+        'reeval-img-111111111111',
+        'reeval-img-222222222222',
+        name,
+        'reeval-img-mine',
+        'someone-else',
+      ].sort(),
+    )
+    const younger = await cli(['image', 'clean', '--older-than', '1d'])
+    assert.equal(younger.code, 0, younger.stdout + younger.stderr)
+    assert.match(younger.stdout, /✓ deleted daytona reeval-img-111111111111/)
 
-    const cache = join(p.dir, '.reeval/cache/vm-images.json')
+    const cache = join(cacheHome, 'reeval', 'vm-images.json')
     const doc = JSON.parse(readFileSync(cache, 'utf8')) as { images: { lastUsedAt: number }[] }
     for (const e of doc.images) e.lastUsedAt = Date.now() - 2 * RECENT_MS
     writeFileSync(cache, JSON.stringify(doc))
@@ -203,7 +245,7 @@ describe('reeval image on daytona()', () => {
     assert.match(inUse.stdout, new RegExp(`kept daytona ${name}: used by daytona`))
     const all = await cli(['image', 'clean', '--all', '--provider', 'daytona'])
     assert.equal(all.code, 0, all.stdout + all.stderr)
-    assert.deepEqual(names(), ['someone-else'])
+    assert.deepEqual(names(), ['reeval-img-222222222222', 'reeval-img-mine', 'someone-else'])
   })
 })
 
@@ -222,7 +264,7 @@ describe('reeval image on boat()', () => {
         "import { boat } from 'reeval/sandbox/boat'",
       ),
     )
-    const env = { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key }
+    const env = { BOAT_BASE_URL: api.url, BOAT_API_KEY: api.key, XDG_CACHE_HOME: hostCache() }
     const cli = (args: string[]) => runCli(p.dir, args, { env, timeoutMs: 90_000 })
 
     const plan = await cli(['image', 'build', '--dry-run'])
@@ -247,6 +289,27 @@ describe('reeval image on boat()', () => {
       list.stdout,
       new RegExp(`boat +${name} +ready +300 MB +saved .* used just now +boat`),
     )
+
+    api.snapshots.set('reeval-img-000000000000', {
+      name: 'reeval-img-000000000000',
+      status: 'ready',
+      sourceSandboxId: 'bx_other',
+      sizeBytes: 100_000_000,
+      createdAt: new Date(Date.now() - 30 * DAY).toISOString(),
+      polls: 0,
+    })
+    const cleaned = await cli(['image', 'clean'])
+    assert.equal(cleaned.code, 0, cleaned.stdout + cleaned.stderr)
+    assert.match(cleaned.stdout, /✓ deleted boat reeval-img-000000000000 \(100 MB\)/)
+    assert.match(cleaned.stdout, new RegExp(`kept boat ${name}: used in the last hour`))
+    assert.deepEqual([...api.snapshots.keys()], [name])
+
+    const noKey = await runCli(p.dir, ['image', 'list'], {
+      env: { BOAT_BASE_URL: api.url, XDG_CACHE_HOME: hostCache() },
+      timeoutMs: 90_000,
+    })
+    assert.equal(noKey.code, 2, noKey.stdout + noKey.stderr)
+    assert.match(noKey.stdout + noKey.stderr, /BOAT_API_KEY/)
 
     const bad = await cli(['image', 'clean', '--provider', 'tart'])
     assert.equal(bad.code, 2)

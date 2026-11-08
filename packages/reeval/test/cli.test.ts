@@ -64,9 +64,10 @@ describe('cli', () => {
     assert.match(build, /^Options: --config <path>/m)
     assert.doesNotMatch(build, /^ {2}reeval image (list|clean)/m)
     const image = commandHelpText('V', ['image'])
-    for (const sub of ['build', 'list', 'clean']) {
+    for (const sub of ['build', 'list']) {
       assert.match(image, new RegExp(`^ {2}reeval image ${sub} \\[filter\\.\\.\\.\\]$`, 'm'))
     }
+    assert.match(image, /^ {2}reeval image clean$/m)
     assert.match(commandHelpText('V', ['image', 'clean']), /--older-than <duration>/)
     const studio = commandHelpText('V', ['studio'])
     assert.match(studio, /reeval studio build/)
@@ -150,9 +151,9 @@ describe('cli', () => {
       values: { profile: 'nightly', 'dry-run': true },
     })
     assert.deepEqual(
-      parseCli(['image', 'clean', 'x', '--provider', 'boat', '--older-than', '14d', '--all']),
+      parseCli(['image', 'clean', '--provider', 'boat', '--older-than', '14d', '--all']),
       {
-        positionals: ['image', 'clean', 'x'],
+        positionals: ['image', 'clean'],
         values: { provider: 'boat', 'older-than': '14d', all: true },
       },
     )

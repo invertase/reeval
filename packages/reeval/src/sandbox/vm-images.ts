@@ -1,12 +1,13 @@
 // The images `boat()` and `daytona()` keep as the provider's snapshots, named
-// `<prefix>-img-<first 12 hex of the key>`: what this machine last used (in
-// `.reeval/cache/vm-images.json`, since Boat records no last use), what an account holds under a
+// `<prefix>-img-<first 12 hex of the key>`: what this machine last used (in `vm-images.json` in
+// reeval's host cache, since Boat records no last use), what an account holds under a
 // prefix, and which of the project's environments each one is for. `reeval image list` and
 // `clean` read them; preflight notes each one it uses.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { UsageError } from '../errors.ts'
 import { sandboxId } from '../options.ts'
+import { cacheDir } from '../root.ts'
 import type { BoatSandboxDescriptor, DaytonaSandboxDescriptor, PluginSource } from '../types.ts'
 import { harnessBake } from './harness-install.ts'
 import type { ImageUse } from './images.ts'
@@ -51,6 +52,10 @@ const isVm = (kind: string): kind is VmImageProvider => kind === 'boat' || kind 
 
 /** Where each prefix's images start, so nothing else in the account is listed or deleted. */
 export const imagePrefix = (prefix: string) => `${prefix}-img-`
+
+const isImageName = (prefix: string, name: string) =>
+  name.startsWith(imagePrefix(prefix)) &&
+  /^[0-9a-f]{12}$/.test(name.slice(imagePrefix(prefix).length))
 
 /** The distinct accounts and prefixes the planned VM sandboxes use, recipe or not. */
 export function vmAccounts(uses: ImageUse[]): VmAccount[] {
@@ -113,22 +118,22 @@ type CacheEntry = {
   builtAt?: number
 }
 
-const cacheFile = (root: string) => join(root, '.reeval', 'cache', 'vm-images.json')
+const cacheFile = () => join(cacheDir(), 'vm-images.json')
 const entryKey = (e: Pick<CacheEntry, 'provider' | 'account' | 'name'>) =>
   `${e.provider}\0${e.account}\0${e.name}`
 
 /** What this machine used, by provider, account and snapshot. */
-export function readVmImageCache(root: string): Map<string, CacheEntry> {
+export function readVmImageCache(): Map<string, CacheEntry> {
   try {
-    const doc = JSON.parse(readFileSync(cacheFile(root), 'utf8')) as { images?: CacheEntry[] }
+    const doc = JSON.parse(readFileSync(cacheFile(), 'utf8')) as { images?: CacheEntry[] }
     return new Map((doc.images ?? []).map((e) => [entryKey(e), e]))
   } catch {
     return new Map()
   }
 }
 
-function writeCache(root: string, entries: Map<string, CacheEntry>): void {
-  const file = cacheFile(root)
+function writeCache(entries: Map<string, CacheEntry>): void {
+  const file = cacheFile()
   mkdirSync(dirname(file), { recursive: true })
   const temp = `${file}.${process.pid}.tmp`
   writeFileSync(temp, `${JSON.stringify({ images: [...entries.values()] }, null, 2)}\n`)
@@ -136,11 +141,14 @@ function writeCache(root: string, entries: Map<string, CacheEntry>): void {
 }
 
 /** Notes that this machine used (or built) a snapshot now. */
-export function noteVmImage(
-  root: string,
-  image: { provider: VmImageProvider; account: string; name: string; key: string; built: boolean },
-): void {
-  const entries = readVmImageCache(root)
+export function noteVmImage(image: {
+  provider: VmImageProvider
+  account: string
+  name: string
+  key: string
+  built: boolean
+}): void {
+  const entries = readVmImageCache()
   const now = Date.now()
   const before = entries.get(entryKey(image))
   const builtAt = image.built ? now : before?.builtAt
@@ -153,17 +161,17 @@ export function noteVmImage(
     ...(builtAt !== undefined && { builtAt }),
   })
   try {
-    writeCache(root, entries)
+    writeCache(entries)
   } catch {
     // A cache that can't be written costs `clean` its last-used dates, not the run.
   }
 }
 
-function forget(root: string, gone: VmSnapshot[]): void {
-  const entries = readVmImageCache(root)
+function forget(gone: VmSnapshot[]): void {
+  const entries = readVmImageCache()
   for (const s of gone) entries.delete(entryKey(s))
   try {
-    writeCache(root, entries)
+    writeCache(entries)
   } catch {}
 }
 
@@ -190,7 +198,6 @@ type BoatListing = {
 /** The snapshots under `account`'s image prefix. */
 export async function listVmSnapshots(account: VmAccount, root: string): Promise<VmSnapshot[]> {
   const { sandbox } = account
-  const start = imagePrefix(sandbox.prefix)
   const base = { provider: account.provider, account: sandbox.apiKey.from, prefix: sandbox.prefix }
   if (account.provider === 'boat') {
     const boat = await import('./boat.ts')
@@ -199,7 +206,7 @@ export async function listVmSnapshots(account: VmAccount, root: string): Promise
       throw new InfraError(`Boat didn't list its saved snapshots: ${await boat.boatError(error)}`)
     })
     return snapshots
-      .filter((s) => s.name.startsWith(start))
+      .filter((s) => isImageName(sandbox.prefix, s.name))
       .map((s) => ({
         ...base,
         name: s.name,
@@ -217,7 +224,7 @@ export async function listVmSnapshots(account: VmAccount, root: string): Promise
       throw new InfraError(`Daytona didn't list its snapshots: ${(error as Error).message}`)
     })
     for (const s of listed.items) {
-      if (!s.name.startsWith(start)) continue
+      if (!isImageName(sandbox.prefix, s.name)) continue
       found.push({
         ...base,
         name: s.name,
@@ -261,17 +268,26 @@ export async function deleteVmSnapshot(
       }
     }
   }
-  forget(root, [snapshot])
+  forget([snapshot])
 }
 
-/** How recently this machine's use keeps a snapshot from `reeval image clean`, whatever its flags. */
+/** How recently a use keeps a snapshot from `reeval image clean`, whatever its flags. */
 export const RECENT_MS = 60 * 60_000
+
+/** How long `reeval image clean` keeps an unused snapshot without `--older-than` or `--all`. */
+export const DEFAULT_OLDER_THAN_MS = 14 * 86_400_000
+
+/**
+ * The states a snapshot rests in, Boat's and Daytona's: `clean` keeps one in any other, which may
+ * be one being saved, built or removed now.
+ */
+const SETTLED = new Set(['ready', 'failed', 'active', 'inactive', 'error', 'build_failed'])
 
 export type CleanChoice = { snapshot: VmSnapshot; keep: string | null }
 
 /**
  * Which snapshots `reeval image clean` deletes, and why it keeps each other one: one an
- * environment of the project uses (unless `all`), one this machine used in the last hour, one
+ * environment of the project uses (unless `all`), one used in the last hour (by this machine or, as Daytona reports, any), one
  * still being saved or built, and one used more recently than `olderThanMs`.
  */
 export function cleanChoices(
@@ -286,16 +302,14 @@ export function cleanChoices(
 ): CleanChoice[] {
   return snapshots.map((snapshot) => {
     const used = lastUsed(snapshot, o.cache)
-    const here = o.cache.get(entryKey(snapshot))?.lastUsedAt ?? null
     const by = o.usedBy.get(snapshot.name) ?? []
+    const since = used ?? snapshot.createdAt
     let keep: string | null = null
-    if (here !== null && o.now - here < RECENT_MS) keep = 'used on this machine in the last hour'
-    else if (/^(saving|pending|building|pulling|removing)$/.test(snapshot.status)) {
-      keep = `still ${snapshot.status}`
-    } else if (by.length && !o.all) keep = `used by ${by.join(', ')}`
-    else if (o.olderThanMs !== undefined) {
-      const since = used ?? snapshot.createdAt
-      if (since !== null && o.now - since < o.olderThanMs) keep = 'used more recently'
+    if (used !== null && o.now - used < RECENT_MS) keep = 'used in the last hour'
+    else if (!SETTLED.has(snapshot.status)) keep = `still ${snapshot.status}`
+    else if (by.length && !o.all) keep = `used by ${by.join(', ')}`
+    else if (o.olderThanMs !== undefined && (since === null || o.now - since < o.olderThanMs)) {
+      keep = 'used more recently'
     }
     return { snapshot, keep }
   })
@@ -352,6 +366,9 @@ export async function listAccounts(
   const lists = await Promise.all(
     accounts.map((account) =>
       listVmSnapshots(account, root).catch((error: Error) => {
+        if ((error as { failure?: { usage?: boolean } }).failure?.usage) {
+          throw new UsageError(error.message)
+        }
         failed.push({ account, error })
         return []
       }),
@@ -396,6 +413,8 @@ export async function vmPlanLines(targets: VmImageTarget[], root: string): Promi
       lines.push(`  ? ${t.id}${uses}  ${name}  (unchecked: ${down.error.message.split('\n')[0]})`)
     else if (saved?.status === 'ready' || saved?.status === 'active') {
       lines.push(`  ✓ ${t.id}${uses}  ${name}  (saved)`)
+    } else if (saved?.status === 'inactive') {
+      lines.push(`  ✓ ${t.id}${uses}  ${name}  (saved, inactive: reactivated on use)`)
     } else
       lines.push(`  + ${t.id}${uses}  ${name}  (to build${saved ? `: it's ${saved.status}` : ''})`)
   }

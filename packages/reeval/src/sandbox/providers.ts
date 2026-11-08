@@ -649,7 +649,7 @@ export const boatProvider = (
       const made = await image
       if (shared) ctx.image?.({ name: made.snapshot, cached: true })
       const { noteVmImage } = await import('./vm-images.ts')
-      noteVmImage(ctx.root, {
+      noteVmImage({
         provider: 'boat',
         account: sandbox.apiKey.from,
         name: made.snapshot,
@@ -722,7 +722,7 @@ export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => 
     const start = daytonaStart(handle)
     if (start?.snapshot) {
       const { noteVmImage } = await import('./vm-images.ts')
-      noteVmImage(ctx.root, {
+      noteVmImage({
         provider: 'daytona',
         account: sandbox.apiKey.from,
         name: start.snapshot,

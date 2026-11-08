@@ -53,8 +53,8 @@ export type PrepareContext = {
    */
   retry: <T>(step: () => Promise<T>) => Promise<T>
   /**
-   * How a machine image the environment starts from stands: found saved, or being built now (or
-   * waited on while another run builds it). Called once per image, before a build starts.
+   * How a machine image the environment starts from stands: found saved (or saved by another run
+   * while this one waited), or being built now. Called before a build starts.
    */
   image?: (image: { name: string; cached: boolean }) => void
 }

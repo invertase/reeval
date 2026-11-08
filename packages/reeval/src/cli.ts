@@ -227,7 +227,7 @@ async function run(argv: string[]): Promise<number> {
   const configPath = configPathFor(values.config)
   if (command === 'image') {
     if (filters[0] === 'list') return imageListCommand(values, configPath, filters.slice(1))
-    if (filters[0] === 'clean') return imageCleanCommand(values, configPath, filters.slice(1))
+    if (filters[0] === 'clean') return imageCleanCommand(values, configPath)
     if (filters[0] !== 'build') {
       throw new UsageError(
         `Unknown command "image ${filters[0] ?? ''}". Did you mean reeval image build, list or clean?`,
@@ -666,7 +666,7 @@ async function imageListCommand(
     vm.listAccounts(accounts, root),
     vm.usedSnapshots(vm.vmImageTargets(uses), root),
   ])
-  const cache = vm.readVmImageCache(root)
+  const cache = vm.readVmImageCache()
   const rows = snapshots.map((s) => ({
     ...s,
     lastUsedAt: vm.lastUsed(s, cache),
@@ -721,14 +721,10 @@ async function imageListCommand(
 
 /**
  * `reeval image clean`: deletes the image snapshots no environment of the evals starts from, under
- * each `boat()` and `daytona()` account and prefix they use, never one this machine used in the
+ * each `boat()` and `daytona()` account and prefix they use, never one used in the
  * last hour or one still being saved.
  */
-async function imageCleanCommand(
-  flags: Flags,
-  configPath: string | undefined,
-  filters: string[],
-): Promise<number> {
+async function imageCleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const vm = await import('./sandbox/vm-images.ts')
   const { formatSize } = await import('./sandbox/tart-images.ts')
   const provider = flags.provider
@@ -736,8 +732,12 @@ async function imageCleanCommand(
     throw new UsageError(`--provider is boat or daytona (got "${provider}")`)
   }
   const olderThanMs =
-    flags['older-than'] === undefined ? undefined : vm.parseAge(flags['older-than'])
-  const { root, uses } = await imageUses(flags, configPath, filters)
+    flags['older-than'] !== undefined
+      ? vm.parseAge(flags['older-than'])
+      : flags.all
+        ? undefined
+        : vm.DEFAULT_OLDER_THAN_MS
+  const { root, uses } = await imageUses(flags, configPath, [])
   const accounts = vm.vmAccounts(uses).filter((a) => !provider || a.provider === provider)
   if (!accounts.length) {
     console.log(
@@ -747,8 +747,13 @@ async function imageCleanCommand(
   }
   const [{ snapshots, failed }, { usedBy, unknown }] = await Promise.all([
     vm.listAccounts(accounts, root),
-    vm.usedSnapshots(vm.vmImageTargets(uses), root),
+    vm.usedSnapshots(
+      vm.vmImageTargets(uses).filter((t) => !provider || t.provider === provider),
+      root,
+    ),
   ])
+  const refused = unknown.find((u) => (u.error as { failure?: { usage?: boolean } }).failure?.usage)
+  if (refused) throw new UsageError(refused.error.message)
   if (unknown.length && !flags.all) {
     for (const u of unknown) {
       console.log(
@@ -761,7 +766,7 @@ async function imageCleanCommand(
     return EXIT.infra
   }
   const choices = vm.cleanChoices(snapshots, {
-    cache: vm.readVmImageCache(root),
+    cache: vm.readVmImageCache(),
     usedBy,
     now: Date.now(),
     ...(olderThanMs !== undefined && { olderThanMs }),

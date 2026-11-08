@@ -482,19 +482,21 @@ export const COMMANDS: Record<string, CommandSpec> = {
       },
       clean: {
         flags: ['profile', 'provider', 'older-than', 'all', 'dry-run'],
-        positionals: Number.POSITIVE_INFINITY,
+        positionals: 0,
         help: `
-  reeval image clean [filter...]
+  reeval image clean
                                 Delete the image snapshots reeval saved in each boat() and daytona()
                                 account and prefix the evals use that none of their environments
-                                starts from. Only names under <prefix>-img- are touched, and never
-                                one this machine used in the last hour or one still being saved
+                                starts from and none used in the last 14 days. Only names reeval
+                                gives its images (<prefix>-img-<12 hex>) are touched, and never one
+                                used in the last hour or one still being saved
     --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does
                                 (also REEVAL_PROFILE)
     --provider <name>           Only boat or daytona snapshots
     --older-than <duration>     Only snapshots last used (or else saved) longer ago than this,
-                                e.g. 14d or 12h
-    --all                       Also delete the snapshots the evals' environments start from
+                                e.g. 14d (the default) or 12h
+    --all                       Also delete the snapshots the evals' environments start from, and
+                                without --older-than any age (never one used in the last hour)
     --dry-run                   List what would be deleted, and why each other snapshot is kept`,
       },
     },
