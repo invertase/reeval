@@ -62,6 +62,11 @@ export type FakeBoat = {
   /** The next `count` saves fail with `error`, as a save Boat couldn't capture. */
   failSaves(count: number, error?: string): void
   /**
+   * The next `count` saves find the name taken by a ready snapshot another run saved first, and
+   * are answered 409, as Boat refuses a name that's in use.
+   */
+  loseSaves(count: number): void
+  /**
    * Answer the next `count` creates of a name starting `namePrefix` with 429 and
    * `Retry-After: retryAfterSeconds`, as Boat does past a start limit.
    */
@@ -93,6 +98,7 @@ export async function fakeBoat(
   const snapshots = new Map<string, FakeSnapshot>()
   const snapshotsOn = new Set<string>()
   let saveFailures = { count: 0, error: 'capture failed' }
+  let lostSaves = 0
   const snapshotView = (s: FakeSnapshot) => ({
     name: s.name,
     status: s.status,
@@ -143,6 +149,21 @@ export async function fakeBoat(
         if (!snapshotsOn.has(source.id)) {
           return json(409, {
             error: { code: 'snapshots_disabled', message: 'this sandbox has snapshots off' },
+          })
+        }
+        if (lostSaves > 0) {
+          lostSaves--
+          snapshots.set(request.name, {
+            name: request.name,
+            status: 'ready',
+            sourceSandboxId: 'bx_other_run',
+            sizeBytes: 300_000_000,
+            polls: 0,
+          })
+        }
+        if (snapshots.has(request.name)) {
+          return json(409, {
+            error: { code: 'snapshot_exists', message: `a snapshot named ${request.name} exists` },
           })
         }
         const failing = saveFailures.count > 0
@@ -293,6 +314,9 @@ export async function fakeBoat(
     snapshots,
     failSaves(count, error = 'capture failed') {
       saveFailures = { count, error }
+    },
+    loseSaves(count) {
+      lostSaves = count
     },
     refuseStarts(count, o = {}) {
       refusals = {

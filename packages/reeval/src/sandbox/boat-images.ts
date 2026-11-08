@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { docker, type RemoteEngine } from '@reeval/sandbox-docker'
+import { docker, dockerfileTag, isTransient, type RemoteEngine } from '@reeval/sandbox-docker'
 import { pluginBuildId } from '../environment/plugins.ts'
 import type {
   BoatSandboxDescriptor,
@@ -95,7 +95,8 @@ const refusal = (message: string, ref: string | null, usage = true) =>
  * The content key of `recipe` on `harness` with `plugins`, as a VM image: {@link imageRecipeKey}'s
  * when every base resolves. An `image` is keyed on what its registry names now, since the build VM
  * pulls it by name. A base that doesn't resolve, or one behind a build argument, is keyed on the
- * recipe as written, so a moved tag isn't rebuilt until the recipe changes.
+ * recipe as written and a Dockerfile's build context, so a moved tag isn't rebuilt until one of
+ * those changes.
  */
 export async function vmImageKey(
   recipe: ImageRecipe,
@@ -118,6 +119,16 @@ export async function vmImageKey(
   else if (recipe.image) {
     const now = await resolve(recipe.image, o.signal)
     if ('error' in now) {
+      if (now.error.startsWith("couldn't reach ") || isTransient(now.error)) {
+        throw new PrepareError({
+          class: 'transient',
+          stage: 'boat-image',
+          ref: recipe.image,
+          cause: null,
+          log: null,
+          message: `boat() couldn't look up image ${recipe.image} in its registry: ${now.error}`,
+        })
+      }
       throw refusal(
         `boat() pulls image ${recipe.image} from its registry, which doesn't answer for it: ${now.error}. Push it to a registry the build VM can pull from, or use dockerfile to build it.`,
         recipe.image,
@@ -137,6 +148,7 @@ export async function vmImageKey(
       harness: baked,
       plugins: plugins.map(pluginBuildId),
       unresolved: r.unresolved.ref,
+      ...(recipe.dockerfile && { context: dockerfileTag(recipe.dockerfile, baked).sha256 }),
     })
   }
   const key = createHash('sha256')
@@ -196,11 +208,16 @@ async function vmDocker(
 ): Promise<string> {
   const r = await docker(args, { engine, signal, ...(input !== undefined && { input }) })
   if (r.exitCode === 0) return r.stdout.toString('utf8').trim()
+  const cause = /no space left on device/i.test(r.stderr) ? 'enospc' : null
   throw new PrepareError({
-    class: r.exitCode === 255 ? 'transient' : 'config',
+    class: cause
+      ? 'resource'
+      : r.exitCode === 255 || isTransient(r.stderr)
+        ? 'transient'
+        : 'config',
     stage: 'boat-image',
     ref: null,
-    cause: /no space left on device/i.test(r.stderr) ? 'enospc' : null,
+    cause,
     log: r.stderr,
     message: `${doing} on ${engine.description} failed: ${r.stderr.trim().split('\n').at(-1) ?? `exit ${r.exitCode}`}`,
   })
@@ -243,7 +260,7 @@ export async function boatImage(
     pollMs,
   })
   const imageRef = vmImageRef(key)
-  if (found?.status === 'ready') {
+  const saved = (snapshot: Saved): BoatImage => {
     ctx.log(`Using Boat snapshot ${name}`)
     return {
       snapshot: name,
@@ -252,15 +269,16 @@ export async function boatImage(
       imageRef,
       imageId: null,
       agentCli: null,
-      sizeBytes: found.sizeBytes ?? null,
+      sizeBytes: snapshot.sizeBytes ?? null,
       built: false,
     }
   }
+  if (found?.status === 'ready') return saved(found)
   if (found) {
     ctx.log(
       `Building Boat snapshot ${name} again: it failed to save${found.error ? ` (${found.error})` : ''}`,
     )
-    await api.deleteSavedSnapshot({ name }).catch(() => {})
+    await deleteSnapshot(api, name)
   }
   const type = sandbox.type ?? 'small'
   const vm = await startVm(service, api, {
@@ -347,10 +365,12 @@ export async function boatImage(
       signal,
     )
     await vmDocker(engine, ['image', 'prune', '--force'], 'pruning unused images', signal)
-    const saved = await save(api, vm.id, name, signal, {
+    const result = await save(api, vm.id, name, signal, {
       pollMs,
       timeoutMs: o.timings?.saveTimeoutMs ?? SAVE_TIMEOUT_MS,
     })
+    // Another run saved the same recipe first: its snapshot holds the same image.
+    if ('taken' in result) return saved(result.taken)
     ctx.log(`Saved Boat snapshot ${name} in ${Math.round((Date.now() - started) / 1000)}s`)
     return {
       snapshot: name,
@@ -359,12 +379,17 @@ export async function boatImage(
       imageRef,
       imageId,
       agentCli: prepared.agentCli,
-      sizeBytes: saved.sizeBytes ?? null,
+      sizeBytes: result.saved.sizeBytes ?? null,
       built: true,
     }
   } finally {
-    if (!(await deleteUntilGone(api, vm.id, { signal }).catch(() => false))) {
-      await deleteSandbox(api, vm.id).catch(() => {})
+    if (
+      !(await deleteSandbox(api, vm.id).then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      await deleteUntilGone(api, vm.id, { signal }).catch(() => {})
     }
     await rm(vm.dir, { recursive: true, force: true })
   }
@@ -376,29 +401,52 @@ const KEY_LABEL = 'reeval.vm-image.key'
 /** The container that keeps a snapshot's image, which Boat saves only while a container uses it. */
 const keepContainer = (key: string) => `reeval-keep-${key.slice(0, 12)}`
 
-/** Saves the build VM as `name` and waits until it's ready; a failed save is deleted. */
+/** Deletes the saved snapshot `name`; one that's already gone is fine. */
+async function deleteSnapshot(api: BoatSnapshotClient, name: string): Promise<void> {
+  try {
+    await api.deleteSavedSnapshot({ name })
+  } catch (error) {
+    if (status(error) === 404) return
+    throw new InfraError(`Boat didn't delete snapshot ${name}: ${await boatError(error)}`)
+  }
+}
+
+/**
+ * Saves the build VM as `name` and waits until it's ready; a failed save is deleted. `taken` when
+ * another run's snapshot already has the name and is ready.
+ */
 async function save(
   api: BoatSnapshotClient,
   sandboxId: string,
   name: string,
   signal: AbortSignal,
   o: { pollMs: number; timeoutMs: number },
-): Promise<Saved> {
+): Promise<{ saved: Saved } | { taken: Saved }> {
   try {
     await api.saveSavedSnapshot({ savedSnapshotSaveRequest: { sandboxId, name } })
   } catch (error) {
     const why = await boatError(error)
+    if (status(error) === 409) {
+      const other = await settled(api, name, signal, o)
+      if (other?.status === 'ready') return { taken: other }
+      if (other) {
+        await deleteSnapshot(api, name)
+        throw new InfraError(
+          `Boat snapshot ${name}, which another run was saving, failed${other.error ? `: ${other.error}` : ''}`,
+        )
+      }
+    }
     if (status(error) === 403 || status(error) === 409) {
       throw refusal(`Boat won't save snapshot ${name}: ${why}`, name, false)
     }
     throw new InfraError(`Boat didn't save snapshot ${name}: ${why}`)
   }
   const saved = await settled(api, name, signal, o).catch(async (error: unknown) => {
-    await api.deleteSavedSnapshot({ name }).catch(() => {})
+    await deleteSnapshot(api, name).catch(() => {})
     throw error
   })
-  if (saved?.status === 'ready') return saved
-  await api.deleteSavedSnapshot({ name }).catch(() => {})
+  if (saved?.status === 'ready') return { saved }
+  await deleteSnapshot(api, name).catch(() => {})
   throw new InfraError(
     `Boat snapshot ${name} ${saved ? `failed to save${saved.error ? `: ${saved.error}` : ''}` : 'disappeared while saving'}`,
   )

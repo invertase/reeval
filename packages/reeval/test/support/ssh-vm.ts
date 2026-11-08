@@ -36,7 +36,8 @@ RUN useradd --create-home --shell /bin/bash user \\
 
 /**
  * The Node an image has where reeval looks for it: each provider's VMs have their own.
- * `boat-docker` is Boat's with the Docker CLI on the host's daemon, as Boat's VMs have Docker.
+ * `boat-docker` is Boat's with the Docker CLI on the host's daemon, as Boat's VMs have Docker;
+ * its prunes do nothing, since the daemon is the host's.
  */
 export type SshVmLayout = 'boat' | 'daytona' | 'boat-docker'
 
@@ -57,8 +58,12 @@ const DOCKER_CLI_IMAGE = 'docker:29-cli'
 const SSH_VM_DOCKERFILES: Record<SshVmLayout, string> = {
   boat: `${BOAT_VM}CMD ["/usr/sbin/sshd", "-D", "-e"]
 `,
-  'boat-docker': `${BOAT_VM}COPY --from=${DOCKER_CLI_IMAGE} /usr/local/bin/docker /usr/local/bin/docker
+  'boat-docker': `${BOAT_VM}COPY --from=${DOCKER_CLI_IMAGE} /usr/local/bin/docker /usr/local/libexec/docker/docker
 COPY --from=${DOCKER_CLI_IMAGE} /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+RUN printf '%s\\n' '#!/bin/sh' \\
+  'case "$1 $2" in "builder prune"|"image prune"|"system prune") exit 0;; esac' \\
+  'exec /usr/local/libexec/docker/docker "$@"' > /usr/local/bin/docker \\
+ && chmod +x /usr/local/bin/docker
 CMD ["/usr/sbin/sshd", "-D", "-e"]
 `,
   daytona: `${SSH_VM_BASE}RUN v=/usr/local/share/nvm/versions/node/v0 && mkdir -p $v/bin $v/lib \\

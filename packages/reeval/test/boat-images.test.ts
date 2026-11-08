@@ -4,6 +4,8 @@
 // Docker CLI is the host daemon's, so a build runs over SSH from end to end.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { DEFAULT_IMAGE } from '@reeval/sandbox-docker'
 import { snapshotName, vmImageKey, vmImageRef } from '../src/sandbox/boat-images.ts'
@@ -19,7 +21,11 @@ import { buildSshVmImage, sshVmContainer, startBoatDockerVm } from './support/ss
 const harness: HarnessDescriptor = { kind: 'fake' }
 const DIGEST = `sha256:${'a'.repeat(64)}`
 const resolve: ResolveDigest = async (ref) =>
-  ref.startsWith('missing') ? { error: `${ref}: not found` } : { digest: DIGEST }
+  ref.startsWith('missing')
+    ? { error: `${ref}: not found` }
+    : ref.startsWith('down')
+      ? { error: "couldn't reach down.example: fetch failed" }
+      : { digest: DIGEST }
 const timings = { pollMs: 10, saveTimeoutMs: 5_000, settleTimeoutMs: 5_000 }
 const root = tempDir('boat-images')
 
@@ -107,6 +113,29 @@ describe('the key a VM image is saved under', () => {
     )
     const pinned = await vmImageKey({ image: 'ghcr.io/acme/tools:1' }, harness, { root, resolve })
     assert.equal(pinned.pinned, true)
+  })
+
+  test("retries an image whose registry can't be reached", async () => {
+    await assert.rejects(
+      vmImageKey({ image: 'down.example/tools:1' }, harness, { root, resolve }),
+      (e: Error & { failure?: { class: string; usage?: boolean } }) =>
+        /couldn't look up image down\.example\/tools:1/.test(e.message) &&
+        e.failure?.class === 'transient' &&
+        !e.failure.usage,
+    )
+  })
+
+  test("follows a Dockerfile's build context when its base is a build argument", async () => {
+    const dir = join(root, 'opaque')
+    mkdirSync(dir, { recursive: true })
+    const dockerfile = join(dir, 'Dockerfile')
+    writeFileSync(dockerfile, 'ARG BASE=debian:12\nFROM $BASE\nCOPY tool.sh /tool.sh\n')
+    writeFileSync(join(dir, 'tool.sh'), 'echo one\n')
+    const a = await vmImageKey({ dockerfile }, harness, { root, resolve })
+    assert.equal(a.pinned, false)
+    writeFileSync(join(dir, 'tool.sh'), 'echo two\n')
+    const b = await vmImageKey({ dockerfile }, harness, { root, resolve })
+    assert.notEqual(b.key, a.key, 'an edited build context is a new image')
   })
 })
 
@@ -285,6 +314,20 @@ describe('building a snapshot on a VM with Docker', {
     )) as Record<string, unknown>
     assert.equal(again.built, false)
     assert.equal(builds(api).length, 1)
+  })
+
+  test('a save another run beat uses its snapshot', { timeout: 300_000 }, async () => {
+    const recipe = { install: [`echo lost-save-${process.pid}`] }
+    const { key } = await vmImageKey(recipe, harness, { root, resolve })
+    made.push(`reeval-keep-${key.slice(0, 12)}`, vmImageRef(key))
+    api.loseSaves(1)
+    const handle = (await pointedAt(api, () =>
+      boatProvider({ resolve, timings }).prepare({ ...boat(), ...recipe }, harness, ctx()),
+    )) as Record<string, unknown>
+    assert.equal(handle.built, false)
+    assert.equal(handle.sizeBytes, 300_000_000)
+    assert.equal(api.snapshots.get(snapshotName('reeval', key))?.sourceSandboxId, 'bx_other_run')
+    assert.deepEqual(api.live(), [])
   })
 
   test('a save Boat fails is deleted, and so is the build VM', { timeout: 300_000 }, async () => {
