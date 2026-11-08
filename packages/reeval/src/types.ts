@@ -3252,13 +3252,13 @@ export type AttemptResources = {
     /** The name reeval gave the VM, where the provider keeps one apart from its id. */
     name?: string
     /**
-     * CPUs the attempt could use: the container's CPU quota, else the CPUs the VM has (a macOS
-     * VM's `sysctl hw.ncpu`).
+     * CPUs the attempt could use: the container's CPU quota (a `daytona()` sandbox's too), else the
+     * CPUs the VM has (a macOS VM's `sysctl hw.ncpu`).
      */
     vcpus?: number
     /**
-     * Memory the attempt could use, in bytes: the container's limit, else the VM's total (a
-     * macOS VM's `sysctl hw.memsize`).
+     * Memory the attempt could use, in bytes: the container's limit (a `daytona()` sandbox's too),
+     * else the VM's total (a macOS VM's `sysctl hw.memsize`).
      */
     memoryBytes?: number
   }
@@ -3288,19 +3288,19 @@ export type AttemptResources = {
     /**
      * cgroup v2's `memory.peak`, in bytes: the highest `memory.current` the kernel saw since the
      * container started, page cache included, so no spike is missed but it reads higher than
-     * `peakMemoryBytes`. `container` scope on Linux 5.19 or later only.
+     * `peakMemoryBytes`. `container` scope and `daytona()` on Linux 5.19 or later only.
      */
     cgroupPeakMemoryBytes?: number
     /**
      * How often the container's CPU quota held it back over `durationMs`, from cgroup v2's
      * `cpu.stat`: `periods` is `nr_periods` (quota periods it ran in), `throttledPeriods`
      * `nr_throttled` (those it used up its quota in and waited out) and `throttledSeconds`
-     * `throttled_usec`. `container` scope only.
+     * `throttled_usec`. `container` scope and `daytona()` only.
      */
     throttling?: { periods: number; throttledPeriods: number; throttledSeconds: number }
-    /** Bytes the VM's disks read over `durationMs`; `machine` scope only. */
+    /** Bytes the VM's disks read over `durationMs`; `machine` scope only, not `daytona()`. */
     diskReadBytes?: number
-    /** Bytes the VM's disks wrote over `durationMs`; `machine` scope only. */
+    /** Bytes the VM's disks wrote over `durationMs`; `machine` scope only, not `daytona()`. */
     diskWriteBytes?: number
     /**
      * The sandbox went before the last reading (a timeout or cancel): the values stop at the last

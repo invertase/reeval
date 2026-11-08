@@ -126,6 +126,15 @@ async function sshUp(port: number, deadline = Date.now() + 30_000): Promise<void
   }
 }
 
+/** The CPUs and memory each Daytona-layout fake VM has. */
+export const DAYTONA_VM_SIZE = { vcpus: 2, memoryBytes: 2 * 1024 ** 3 }
+const DAYTONA_VM_LIMITS = [
+  '--cpus',
+  String(DAYTONA_VM_SIZE.vcpus),
+  '--memory',
+  String(DAYTONA_VM_SIZE.memoryBytes),
+]
+
 /** A fake VM of `layout`'s image named `name` by its label, its sshd on a port of 127.0.0.1. */
 export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Promise<SshVm> {
   const id = await docker([
@@ -142,6 +151,8 @@ export async function startSshVm(name: string, layout: SshVmLayout = 'boat'): Pr
     'SYS_ADMIN',
     '--security-opt',
     'apparmor=unconfined',
+    // A Daytona sandbox is a container with limits of its own, which it reads its sizes from.
+    ...(layout === 'daytona' ? DAYTONA_VM_LIMITS : []),
     '-p',
     '127.0.0.1::22',
     imageOf(layout),

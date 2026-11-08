@@ -70,7 +70,7 @@ import {
 import { type EvalExpectation, expectRun, type RunExpectation } from './support/oracle.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
-import { buildSshVmImage, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
+import { buildSshVmImage, DAYTONA_VM_SIZE, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
 import { type FakeVmProxy, fakeVmProxy, VM_RUN_LABEL } from './support/vm-proxy.ts'
 
 /**
@@ -1439,10 +1439,13 @@ export const features: Feature[] = [
         daytonaApi.requests.some((q) => q.call === `DELETE /sandbox/${r?.machine.id}`),
         'the recorded id is the sandbox reeval deleted',
       )
-      assert.ok((r?.machine.vcpus ?? 0) >= 1, JSON.stringify(r))
-      assert.ok((r?.machine.memoryBytes ?? 0) > 0, JSON.stringify(r))
+      // The sandbox's own limits, not the host's /proc.
+      assert.equal(r?.machine.vcpus, DAYTONA_VM_SIZE.vcpus, JSON.stringify(r))
+      assert.equal(r?.machine.memoryBytes, DAYTONA_VM_SIZE.memoryBytes, JSON.stringify(r))
       assert.ok((r?.usage?.cpuSeconds ?? 0) >= 1.5, JSON.stringify(r))
+      assert.ok((r?.usage?.cpuSeconds ?? 99) < 30, JSON.stringify(r))
       assert.ok((r?.usage?.peakMemoryBytes ?? 0) > 0, JSON.stringify(r))
+      assert.ok(r?.usage?.throttling, JSON.stringify(r))
     },
   },
   {
