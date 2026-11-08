@@ -876,6 +876,25 @@ export function dockerfileBases(dockerfile: string): { bases: string[]; opaque: 
 }
 
 /**
+ * The image a Dockerfile's last stage starts from, through the stages it names, as its `FROM`
+ * writes it: `${REEVAL_BASE}` for one built on the harness's image. The built image inherits its
+ * labels, so this says whether it already has a harness's CLI. Null with no `FROM`.
+ */
+export function dockerfileFinalBase(dockerfile: string): string | null {
+  const stages = new Map<string, string>()
+  let last: string | null = null
+  const text = readFileSync(dockerfile, 'utf8').replace(/\\[ \t]*\r?\n/g, ' ')
+  for (const line of text.split('\n')) {
+    if (/^\s*#/.test(line)) continue
+    const from = /^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?/i.exec(line)
+    if (!from?.[1]) continue
+    last = stages.get(from[1].toLowerCase()) ?? from[1]
+    if (from[2]) stages.set(from[2].toLowerCase(), last)
+  }
+  return last
+}
+
+/**
  * A Dockerfile image's content key: its tag, plus the digest each of its {@link dockerfileBases}
  * named when it was built, so a base that moved upstream is another image. One whose bases can't all
  * be named this way is keyed on its local image id instead ({@link localKey}).

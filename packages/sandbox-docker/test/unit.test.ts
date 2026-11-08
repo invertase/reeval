@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import {
   bakeKey,
   dockerfileBases,
+  dockerfileFinalBase,
   dockerfileKey,
   dockerfileTag,
   harnessImageFor,
@@ -1362,6 +1363,21 @@ describe('image recipes', () => {
       dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:1' }]),
       dockerfileKey(tag, [{ ref: 'node:22', digest: 'sha256:2' }]),
     )
+  })
+
+  test("a Dockerfile's final base is its last stage's, through the stages it names", () => {
+    const file = join(tmp(), 'Dockerfile')
+    for (const [text, base] of [
+      ['FROM node:22\n', 'node:22'],
+      ['ARG REEVAL_BASE\nFROM ${REEVAL_BASE}\nRUN true\n', '${REEVAL_BASE}'],
+      ['FROM ${REEVAL_BASE} AS tools\nFROM debian:12\nCOPY --from=tools /a /b\n', 'debian:12'],
+      ['FROM $REEVAL_BASE AS one\nFROM one AS two\nfrom TWO\n', '$REEVAL_BASE'],
+      ['FROM \\\n  --platform=linux/amd64 \\\n  alpine:3\n', 'alpine:3'],
+      ['# FROM node:22\nRUN true\n', null],
+    ] as const) {
+      writeFileSync(file, text)
+      assert.equal(dockerfileFinalBase(file), base, text)
+    }
   })
 
   test('the Dockerfile tag hashes the Dockerfile and its build context, less .dockerignore', () => {

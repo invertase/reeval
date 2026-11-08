@@ -12,22 +12,18 @@ import {
   dockerfileTag,
   type Engine,
   engineSpec,
-  fromImageKey,
   harnessImageFor,
   harnessLabel,
   type ImageInfo,
-  type InstallStep,
   imageFor,
   imageInfo,
   imageKey,
-  installLayerTag,
   isLocalKey,
   LABEL,
   type Layer,
   localKey,
   type PluginBuildSpec,
   pluginBuildDir,
-  pluginLayerTag,
   pullLayer,
   pushLayer,
   reevalImageKey,
@@ -35,7 +31,6 @@ import {
   sourceTreeHash,
   usesReevalBase,
 } from '@reeval/sandbox-docker'
-import { parseDuration } from '../config.ts'
 import '../debug/docker.ts'
 import { buildSteps, pluginBuildId, pluginCall } from '../environment/plugins.ts'
 import { stepCommand } from '../environment.ts'
@@ -47,21 +42,11 @@ import type {
   PluginSource,
 } from '../types.ts'
 import { PrepareError } from './provider.ts'
+import { bakedKey, installLayer, installSteps, pluginLayer } from './recipe.ts'
 
 /** Whose CLI a harness's image carries. The fake harness runs in its `layout`'s, else Cursor's. */
 export const imageHarness = (harness: HarnessDescriptor): BakedHarness =>
   harness.kind === 'fake' ? (harness.layout ?? 'cursor') : harness.kind
-
-/** The sandbox's `install` commands, with their timeouts in ms. */
-export const installSteps = (sandbox: DockerSandboxDescriptor): InstallStep[] =>
-  (sandbox.install ?? []).map((step) =>
-    typeof step === 'string'
-      ? { run: step }
-      : {
-          run: step.run,
-          ...(step.timeout !== undefined ? { timeoutMs: parseDuration(step.timeout) } : {}),
-        },
-  )
 
 export { usesReevalBase }
 
@@ -227,7 +212,7 @@ async function harnessBase(
       if (b.registry && b.refresh !== 'force') {
         now ??= key ? null : await resolveFrom(from, signal, engine)
         const pin =
-          key ?? (now && 'digest' in now && !now.local ? fromImageKey(ref, now.digest) : null)
+          key ?? (now && 'digest' in now && !now.local ? bakedKey(harness, from, now.digest) : null)
         const fetched = pin ? await pulled({ ref, key: pin }, b, signal) : null
         if (fetched) return fetched
       }
@@ -242,7 +227,7 @@ async function harnessBase(
     const own =
       info.labels[LABEL.key] === ''
         ? localKey(ref, info.id)
-        : fromImageKey(ref, info.labels[LABEL.fromDigest] ?? info.id)
+        : bakedKey(harness, from, info.labels[LABEL.fromDigest] ?? info.id)
     return { ref, info, key: key ?? own }
   }
 
@@ -318,7 +303,7 @@ async function harnessBase(
     if (info.labels[LABEL.harness] === harnessLabel(harness)) {
       return { ref: tag, key, info, dockerfile, layers }
     }
-    const baked = await bake(tag, fromImageKey(harnessImageFor(harness, tag), key))
+    const baked = await bake(tag, bakedKey(harness, tag, key))
     return { ...baked, dockerfile, layers: [...layers, baked] }
   }
   const base = { ref: imageFor(harness), key: reevalImageKey(harness) }
@@ -379,14 +364,15 @@ export async function prepareImage(
   let parent = { ref: base.ref, key: base.key, id: base.info.id }
   const layers = [...base.layers]
   if (steps.length) {
-    const ref = installLayerTag(parent, steps)
+    const layer = installLayer(parent, steps, local)
+    const { ref } = layer
     const on = parent
     const info = await b.once(ref, async () => {
       // Its tag is its parent's key, which a forced rebuild of the parent keeps.
       const force = b.refresh === 'force'
       const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
-      const fetched = await pulled({ ref, key: ref, local }, b, signal)
+      const fetched = await pulled(layer, b, signal)
       if (fetched) return fetched
       b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
       const output = buildLogger(root, ref)
@@ -395,19 +381,20 @@ export async function prepareImage(
       return built(ref, b.engine)
     })
     parent = { ref, key: ref, id: info.id }
-    layers.push({ ref, key: ref, local })
+    layers.push(layer)
   }
   const builtPlugins: BuiltPlugin[] = []
   for (const source of plugins) {
     const spec = await b.retry(() => pluginBuildSpec(root, source))
-    const ref = pluginLayerTag(parent, spec)
+    const layer = pluginLayer(parent, spec, local)
+    const { ref } = layer
     const on = parent
     const name = `the build of ${pluginCall(source, root)}`
     const info = await b.once(ref, async () => {
       const force = b.refresh === 'force'
       const cached = force ? null : await imageInfo(ref, b.engine)
       if (cached) return cached
-      const fetched = await pulled({ ref, key: ref, local }, b, signal)
+      const fetched = await pulled(layer, b, signal)
       if (fetched) return fetched
       b.log(`Building ${name} onto ${on.ref} as ${ref}`)
       const output = buildLogger(root, ref)
@@ -422,7 +409,7 @@ export async function prepareImage(
       commit: spec.commit,
     })
     parent = { ref, key: ref, id: info.id }
-    layers.push({ ref, key: ref, local })
+    layers.push(layer)
   }
   if (b.push) for (const layer of layers) await b.pushOnce(layer, signal)
   return {

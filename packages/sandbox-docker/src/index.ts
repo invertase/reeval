@@ -26,6 +26,7 @@ export {
   contextHash,
   DOCKER_CONTEXT,
   dockerfileBases,
+  dockerfileFinalBase,
   dockerfileKey,
   dockerfileTag,
   fromImageKey,
@@ -149,6 +150,13 @@ export {
   registryProblem,
   registryRef,
 } from './registry.ts'
+export {
+  type ImageRef,
+  parseImageRef,
+  type RegistryCredential,
+  type RegistryDigestOptions,
+  registryDigest,
+} from './registry-api.ts'
 export {
   createDockerSession,
   DEFAULT_LIMITS,
