@@ -52,7 +52,7 @@ export function safeZipPath(path: string): string | null {
   return parts.join('/')
 }
 
-/** CRC-32 of any length: zlib's `crc32` takes the length as 32 bits, so a larger buffer goes in pieces. */
+/** CRC-32 of any length: zlib's `crc32` takes a 32-bit length, so more goes in pieces. */
 export function crc32Of(data: Uint8Array, piece = 2 ** 30): number {
   let crc = 0
   for (let at = 0; at < data.length; at += piece) crc = crc32(data.subarray(at, at + piece), crc)
@@ -344,7 +344,7 @@ export async function readZip(source: ZipSource): Promise<ZipReader> {
   )
   const entries: ZipEntry[] = []
   const byPath = new Map<string, ZipEntry>()
-  const names = new Map<ZipEntry, { name: string; code: number }>()
+  const locals = new Map<ZipEntry, LocalExpected>()
   let at = 0
   for (let i = 0; i < count; i++) {
     if (at + CENTRAL_SIZE > directory.length || directory.readUInt32LE(at) !== CENTRAL) {
@@ -357,7 +357,8 @@ export async function readZip(source: ZipSource): Promise<ZipReader> {
     const commentLength = directory.readUInt16LE(at + 32)
     const next = at + CENTRAL_SIZE + nameLength + extraLength + commentLength
     if (next > directory.length) throw new ZipError(`central directory entry ${i + 1} is cut short`)
-    const raw = directory.toString('utf8', at + CENTRAL_SIZE, at + CENTRAL_SIZE + nameLength)
+    const nameBytes = directory.subarray(at + CENTRAL_SIZE, at + CENTRAL_SIZE + nameLength)
+    const raw = nameBytes.toString('utf8')
     const extra = directory.subarray(
       at + CENTRAL_SIZE + nameLength,
       at + CENTRAL_SIZE + nameLength + extraLength,
@@ -388,7 +389,7 @@ export async function readZip(source: ZipSource): Promise<ZipReader> {
     const entry = { path, method, crc32: crc, compressedSize, size, offset } as const
     entries.push(entry)
     byPath.set(path, entry)
-    names.set(entry, { name: raw, code })
+    locals.set(entry, { name: Buffer.from(nameBytes), code })
   }
   // Each entry's bytes must end before the next entry's local header (or the central directory)
   // starts; `readEntry` holds the local header's own length to the same bound.
@@ -396,7 +397,7 @@ export async function readZip(source: ZipSource): Promise<ZipReader> {
   const byOffset = [...entries].sort((a, b) => a.offset - b.offset)
   for (const [i, e] of byOffset.entries()) {
     const limit = byOffset[i + 1]?.offset ?? directoryStart
-    const least = e.offset + LOCAL_SIZE + Buffer.byteLength(e.path) + e.compressedSize
+    const least = e.offset + LOCAL_SIZE + (locals.get(e)?.name.length ?? 0) + e.compressedSize
     if (least > limit) {
       throw new ZipError(`${e.path} overlaps the next entry or the central directory`)
     }
@@ -407,12 +408,15 @@ export async function readZip(source: ZipSource): Promise<ZipReader> {
     get: (path) => byPath.get(path),
     read: async (entry) => {
       const limit = bounds.get(entry)
-      const local = names.get(entry)
+      const local = locals.get(entry)
       if (limit === undefined || !local) throw new ZipError(`${entry.path} isn't this zip's entry`)
       return readEntry(source, entry, local, limit)
     },
   }
 }
+
+/** What an entry's local header repeats from its central directory entry, which isn't encrypted. */
+type LocalExpected = { name: Buffer; code: number }
 
 function zip64Values(extra: Buffer, path: string): number[] {
   for (let at = 0; at + 4 <= extra.length; ) {
@@ -434,7 +438,7 @@ function zip64Values(extra: Buffer, path: string): number[] {
 async function readEntry(
   source: ZipSource,
   entry: ZipEntry,
-  central: { name: string; code: number },
+  central: LocalExpected,
   limit: number,
 ): Promise<Buffer> {
   const header = await readExactly(source, entry.offset, LOCAL_SIZE, `${entry.path}'s header`)
@@ -443,12 +447,21 @@ async function readEntry(
   }
   const nameLength = header.readUInt16LE(26)
   const name = await readExactly(source, entry.offset + LOCAL_SIZE, nameLength, entry.path)
-  if (name.toString('utf8') !== central.name || header.readUInt16LE(8) !== central.code) {
+  if (
+    !name.equals(central.name) ||
+    header.readUInt16LE(8) !== central.code ||
+    header.readUInt16LE(6) & ENCRYPTED
+  ) {
     throw new ZipError(`${entry.path}'s local header doesn't match its central directory entry`)
   }
   const dataAt = entry.offset + LOCAL_SIZE + nameLength + header.readUInt16LE(28)
   if (dataAt + entry.compressedSize > limit) {
     throw new ZipError(`${entry.path} overlaps the next entry or the central directory`)
+  }
+  if (entry.method === 'store' && entry.compressedSize !== entry.size) {
+    throw new ZipError(
+      `${entry.path} is stored as ${entry.compressedSize} bytes, not the ${entry.size} its entry says`,
+    )
   }
   const body = await readExactly(source, dataAt, entry.compressedSize, entry.path)
   let data: Buffer

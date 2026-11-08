@@ -1,7 +1,8 @@
 // History archives: one recorded run, or its debug data, as one zip (`zip.ts`) whose manifest
 // (`types.ts`) hashes every other entry. `writeArchive` lands the zip whole or not at all, with
-// its entries sorted by path and timestamped with the run's start, so the same files, creation time
-// and reeval give the same zip. `openArchive` holds the manifest to the zip's entries, and each file it reads to its hash.
+// its entries sorted by path and timestamped with the run's start, so the same files, creation
+// time and reeval give the same zip. `openArchive` holds the manifest to the zip's entries, and
+// each file it reads to its hash.
 import { randomBytes } from 'node:crypto'
 import { type FileHandle, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -150,7 +151,7 @@ async function syncDir(dir: string) {
   await handle
     ?.sync()
     .catch(() => {})
-    .finally(() => handle.close())
+    .finally(() => handle.close().catch(() => {}))
 }
 
 /**
@@ -219,8 +220,9 @@ async function readManifest(zip: ZipReader, name: string): Promise<ArchiveManife
   if (!entry) {
     throw new ArchiveError(`${name} has no ${MANIFEST_FILE}, so it isn't a reeval archive`)
   }
-  if (entry.size > MAX_MANIFEST_BYTES) {
-    throw new ArchiveError(`${name}'s ${MANIFEST_FILE} is ${entry.size} bytes, too large to read`)
+  if (Math.max(entry.size, entry.compressedSize) > MAX_MANIFEST_BYTES) {
+    const bytes = Math.max(entry.size, entry.compressedSize)
+    throw new ArchiveError(`${name}'s ${MANIFEST_FILE} is ${bytes} bytes, too large to read`)
   }
   let value: unknown
   try {

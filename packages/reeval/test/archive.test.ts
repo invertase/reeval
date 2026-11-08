@@ -285,6 +285,66 @@ describe('zip writer and reader', () => {
       patched.read(patched.get('b.txt') as never),
       /local header doesn't match its central directory entry/,
     )
+
+    const renamed = Buffer.from(two)
+    renamed.write('c', (reader.get('b.txt')?.offset ?? 0) + 30)
+    const misnamed = await readZip(bufferSource(renamed))
+    await assert.rejects(
+      misnamed.read(misnamed.get('b.txt') as never),
+      /local header doesn't match/,
+    )
+
+    await assert.rejects(
+      readZip(bufferSource(patchCentral(two, 'b.txt', 20, 200, 4))),
+      /overlaps the next entry or the central directory/,
+    )
+
+    const stored = await zip([
+      { path: 's.txt', data: Buffer.from('s'.repeat(50)), method: 'store' },
+    ])
+    const resized = await readZip(bufferSource(patchCentral(stored, 's.txt', 24, 10, 4)))
+    await assert.rejects(
+      resized.read(resized.get('s.txt') as never),
+      /stored as 50 bytes, not the 10/,
+    )
+  })
+
+  test("reads a name that isn't UTF-8 by its bytes, an empty file right before the next", async () => {
+    const bytes = await zip([
+      { path: 'ab.txt', data: Buffer.alloc(0) },
+      { path: 'next.txt', data: Buffer.from('n') },
+    ])
+    const patched = Buffer.from(bytes)
+    for (let i = patched.indexOf('ab.txt'); i >= 0; i = patched.indexOf('ab.txt', i + 1)) {
+      patched[i] = 0xe9
+      patched[i + 1] = 0xe9
+    }
+    const reader = await readZip(bufferSource(patched))
+    assert.deepEqual(
+      reader.entries.map((e) => e.path),
+      ['\ufffd\ufffd.txt', 'next.txt'],
+    )
+    assert.equal((await reader.read(reader.entries[0] as never)).length, 0)
+    assert.equal((await reader.read(reader.entries[1] as never)).toString(), 'n')
+  })
+
+  test('reads a zip streamed with data descriptors', {
+    skip: !hasPython && 'python3 is not installed',
+  }, async () => {
+    const out = spawnSync(
+      'python3',
+      [
+        '-c',
+        'import sys,zipfile\nclass W:\n  def __init__(s): s.b=bytearray()\n  def write(s,d): s.b+=d; return len(d)\n  def flush(s): pass\nw=W()\nwith zipfile.ZipFile(w,"w",zipfile.ZIP_DEFLATED) as z:\n  for n in ("a.txt","b/c.txt"):\n    with z.open(n,"w") as f: f.write((n*50).encode())\nsys.stdout.buffer.write(w.b)',
+      ],
+      { maxBuffer: 2 ** 20 },
+    )
+    assert.equal(out.status, 0, out.stderr?.toString())
+    assert.ok(out.stdout.includes(Buffer.from([0x50, 0x4b, 0x07, 0x08])), 'has data descriptors')
+    assert.deepEqual(await unzipped(out.stdout), {
+      'a.txt': 'a.txt'.repeat(50),
+      'b/c.txt': 'b/c.txt'.repeat(50),
+    })
   })
 })
 
@@ -519,6 +579,19 @@ describe('run archives', () => {
             data: Buffer.from(JSON.stringify(manifestOf([recordEntry])) + ' '.repeat(65 * 2 ** 20)),
           },
         ]),
+        /too large to read/,
+      ],
+      [
+        patchCentral(
+          await zip([
+            recordEntry,
+            { path: MANIFEST_FILE, data: Buffer.alloc(65 * 2 ** 20, 0x20), method: 'store' },
+          ]),
+          MANIFEST_FILE,
+          24,
+          10,
+          4,
+        ),
         /too large to read/,
       ],
     ]

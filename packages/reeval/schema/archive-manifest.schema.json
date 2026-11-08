@@ -36,7 +36,7 @@
           "type": "string"
         },
         "debugLevel": {
-          "description": "Of a `debug` archive: which of each attempt's debug files it holds, as `history.debug` names them.",
+          "description": "Of a `debug` archive: which of each attempt's debug files it holds, as `history.debug` names them. A level a newer reeval added reads back as written.",
           "enum": ["all", "requests"]
         },
         "files": {
