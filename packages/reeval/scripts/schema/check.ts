@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { type Archive, ArchiveError, openArchive } from '../../src/archive/index.ts'
 import { readableEventLine } from '../../src/view/events.ts'
 import {
   MIGRATIONS,
@@ -141,7 +142,7 @@ export function explain(reports: ShapeReport[]): string {
  * Every file in the record corpus, read the way reeval reads it, checked against the shapes the code
  * describes now: a missing read default (or one dropped later) shows up here as a missing field.
  */
-export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
+export async function checkCorpus(current: Map<string, ShapeSchema>): Promise<string[]> {
   const problems: string[] = []
   const missing = new Set<string>()
   const at = (file: string) => relative(PACKAGE_DIR, file)
@@ -158,7 +159,7 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses, remarks, capturePages, eventStreams } = corpus()
+  const { records, transcripts, analyses, remarks, capturePages, eventStreams, archives } = corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -192,6 +193,19 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
       p.file,
       validate(shape('capture-page'), readableCapturePage(structuredClone(p.value) as never)),
     )
+  }
+  for (const file of archives) {
+    let archive: Archive | null = null
+    try {
+      archive = await openArchive(file, 'The archive')
+      await archive.verify()
+      report(file, validate(shape('archive-manifest'), archive.manifest))
+    } catch (error) {
+      if (!(error instanceof ArchiveError)) throw error
+      report(file, [error.message])
+    } finally {
+      await archive?.close()
+    }
   }
   if (!problems.length) return []
   return [
@@ -229,14 +243,14 @@ export function staleProtocolShapes(current: Map<string, ShapeSchema>) {
   })
 }
 
-function main(argv: string[]): number {
+async function main(argv: string[]): Promise<number> {
   const update = argv.includes('--update')
   const current = generate([...SHAPES, ...PLAN_SHAPES])
   const reports = SHAPES.map((s) =>
     checkShape(s, current.get(s.name) as ShapeSchema, readSnapshot(s)),
   )
   const broken = reports.filter((r) => r.breaking.length)
-  const misfits = checkCorpus(current)
+  const misfits = await checkCorpus(current)
   if (broken.length || misfits.length) {
     process.stderr.write(`${explain(reports)}${misfits.join('\n')}`)
     process.stderr.write(
@@ -285,4 +299,4 @@ function main(argv: string[]): number {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url))
-  process.exitCode = main(process.argv.slice(2))
+  process.exitCode = await main(process.argv.slice(2))
