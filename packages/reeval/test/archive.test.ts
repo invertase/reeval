@@ -286,6 +286,11 @@ describe('zip writer and reader', () => {
       /local header doesn't match its central directory entry/,
     )
 
+    const encrypted = Buffer.from(two)
+    encrypted.writeUInt16LE(0x0801, (reader.get('b.txt')?.offset ?? 0) + 6)
+    const locked = await readZip(bufferSource(encrypted))
+    await assert.rejects(locked.read(locked.get('b.txt') as never), /local header doesn't match/)
+
     const renamed = Buffer.from(two)
     renamed.write('c', (reader.get('b.txt')?.offset ?? 0) + 30)
     const misnamed = await readZip(bufferSource(renamed))
