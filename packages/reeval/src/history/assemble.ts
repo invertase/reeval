@@ -1238,8 +1238,8 @@ function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
   const git = input.git
   if (!git?.dirty) return git
   const patch = input.worktreePatch
-  const state = { ...git, diffHash: patch ? sha256(patch) : null }
-  if (!patch) state.worktreePatchNote = 'git could not produce a patch'
+  const state = { ...git, diffHash: patch ? sha256(patch) : git.diffHash }
+  if (!patch) state.worktreePatchNote = git.worktreePatchNote ?? 'git could not produce a patch'
   else if (patch.length > WORKTREE_PATCH_LIMIT) {
     state.worktreePatchNote = `too large to keep (${patch.length} bytes)`
   } else {

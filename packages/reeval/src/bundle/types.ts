@@ -43,6 +43,21 @@ export type BundleEnvFile = {
   variables: string[]
 }
 
+/** The project's git state when it was bundled, as the run record's `git` keeps it. */
+export type BundleGit = {
+  /** HEAD's commit. */
+  commit: string
+  /** Uncommitted changes outside `.reeval/`; the bundle carries the changed files. */
+  dirty: boolean
+  branch?: string | null
+  /** sha256 of the uncommitted changes as a binary patch, when dirty. */
+  diffHash?: string | null
+  commitTime?: string
+  shallow?: boolean
+  /** The `origin` URL with any credentials removed. */
+  remote?: string | null
+}
+
 export type BundleManifest = {
   schemaVersion: 1
   /** The reeval that wrote it. */
@@ -57,8 +72,13 @@ export type BundleManifest = {
   project: string
   /** The config file, relative to the bundle root. */
   config: string
-  /** The commit the project was at, and whether it had uncommitted changes; null outside git. */
-  git: { commit: string; dirty: boolean } | null
+  /**
+   * The project's git state when it was bundled, which a run from the bundle records as its own
+   * (the extracted copy has no history); null outside git.
+   */
+  git: BundleGit | null
+  /** Who the run belongs to, as the bundling machine named it: its git user, or `ci` in CI. */
+  author?: string
   /**
    * The `reeval run --dry-run --json` document the bundle was made from. Its shape is the reeval
    * version's that wrote it, so it's kept as data: `reeval run --bundle` compares it with its own

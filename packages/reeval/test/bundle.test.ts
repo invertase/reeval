@@ -144,6 +144,7 @@ describe('reeval bundle', () => {
     const [attempt] = outcomes(readRun(extracted).run)[0]?.attempts ?? []
     assert.equal(attempt?.outcome, 'pass')
     assert.equal(attempt?.assertions.length, 2)
+    assert.equal(readRun(extracted).run.git, null, 'a bundle made outside git records no commit')
   })
 
   test('refuses a file that differs from its manifest, before any attempt', async () => {
@@ -231,6 +232,99 @@ describe('reeval bundle', () => {
     assert.equal(r.code, 0, r.stderr + r.stdout)
     assert.match(r.stdout, /installing from package-lock\.json: npm ci/)
     assert.match(r.stdout, /1 passed/)
+  })
+
+  test("a run from it records the bundled project's commit, branch, changes and author", async () => {
+    const { dir: repo } = await fixtureProject()
+    writeFileSync(join(repo, '.gitignore'), 'node_modules\n.reeval\nsandboxes\n.env\n')
+    const git = (...args: string[]) =>
+      spawnTool('git', args, { cwd: repo, env: baseEnv, encoding: 'utf8' }).stdout.trim()
+    git('init', '-q', '-b', 'feature/bundled')
+    git('config', 'user.name', 'Bundle Author')
+    git('config', 'user.email', 'bundle@example.com')
+    git('remote', 'add', 'origin', 'https://token@example.com/acme/evals.git')
+    git('add', '.')
+    git('commit', '-qm', 'init')
+    const sha = git('rev-parse', 'HEAD')
+    writeFileSync(
+      join(repo, 'lib/task.ts'),
+      `${readFileSync(join(repo, 'lib/task.ts'))}// edited\n`,
+    )
+    const out = join(tempDir('bundle-out'), 'git.tar.gz')
+    const made = await runCli(repo, ['bundle', '--out', out])
+    assert.equal(made.code, 0, made.stderr)
+    const manifest = manifestOf(entriesOf(out))
+    assert.equal(manifest.author, 'bundle-author')
+    assert.deepEqual(
+      { ...manifest.git, diffHash: undefined, commitTime: undefined },
+      {
+        commit: sha,
+        dirty: true,
+        branch: 'feature/bundled',
+        diffHash: undefined,
+        commitTime: undefined,
+        shallow: false,
+        remote: 'https://example.com/acme/evals.git',
+      },
+    )
+    assert.match(manifest.git?.diffHash ?? '', /^[0-9a-f]{64}$/)
+
+    const r = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', out], {
+      env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    const extracted = /running .* in (\S+), where its \.reeval\/ stays/.exec(r.stdout)?.[1]
+    assert.ok(extracted)
+    const { run } = readRun(extracted)
+    assert.match(run.runId, new RegExp(`^\\d{8}T\\d{6}Z_${sha.slice(0, 7)}_bundle-author_`))
+    assert.equal(run.git?.sha, sha)
+    assert.equal(run.git?.branch, 'feature/bundled')
+    assert.equal(run.git?.dirty, true)
+    assert.equal(run.git?.diffHash, manifest.git?.diffHash)
+    assert.equal(run.git?.commitTime, manifest.git?.commitTime)
+    assert.equal(run.git?.remote, 'https://example.com/acme/evals.git')
+    assert.equal(run.git?.worktreePatch, null)
+    assert.match(run.git?.worktreePatchNote ?? '', /run from a bundle/)
+  })
+
+  test('a run recorded into the history folder leaves the bundled project clean', async () => {
+    const { dir: repo } = await fixtureProject()
+    writeFileSync(join(repo, '.gitignore'), 'node_modules\n.reeval\nsandboxes\n.env\n')
+    const git = (...args: string[]) =>
+      spawnTool('git', args, { cwd: repo, env: baseEnv, encoding: 'utf8' }).stdout.trim()
+    git('init', '-q')
+    git('add', '.')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init')
+    const recorded = await runCli(repo, ['run', '--record'])
+    assert.equal(recorded.code, 0, recorded.stderr)
+    assert.notEqual(git('status', '--porcelain'), '', 'the record is in the working tree')
+    const out = join(tempDir('bundle-out'), 'clean.tar.gz')
+    const made = await runCli(repo, ['bundle', '--out', out])
+    assert.equal(made.code, 0, made.stderr)
+    const manifest = manifestOf(entriesOf(out))
+    assert.equal(manifest.git?.dirty, false)
+    assert.equal(manifest.git?.diffHash, null)
+    assert.doesNotMatch(made.stdout, /uncommitted changes/)
+  })
+
+  test("refuses a manifest whose commit isn't hex or whose author isn't a slug", async () => {
+    const commit = 'a'.repeat(40)
+    for (const [edit, refusal] of [
+      [{ git: { commit: '../../x', dirty: false } }, /git\.commit: must be a git commit in hex/],
+      [{ git: { commit, dirty: false }, author: '../Elsewhere' }, /author: must be lower-case/],
+    ] as const) {
+      const bad = rewrite(entries, join(tempDir('bundle-bad'), 'identity.tar.gz'), (m) => ({
+        ...m,
+        ...edit,
+      }))
+      const r = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', bad], {
+        env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN },
+      })
+      assert.equal(r.code, 2)
+      assert.match(r.stderr, /isn't a bundle manifest/)
+      assert.match(r.stderr, refusal)
+      assert.doesNotMatch(r.stdout, /Run:/)
+    }
   })
 
   test('refuses a bundle entry that is not a listed regular file, or a manifest path outside it', async () => {
