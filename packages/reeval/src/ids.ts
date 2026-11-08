@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
-import { basename, dirname, join, relative, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 
 export const relativeFile = (root: string, file: string) =>
   relative(root, file).split(sep).join('/')
@@ -11,15 +11,22 @@ export const relativeFile = (root: string, file: string) =>
  * that exists.
  */
 export function fromCwd(path: string): string {
-  const real = (p: string): string => {
-    try {
-      return realpathSync(p)
-    } catch {
-      const parent = dirname(p)
-      return parent === p ? p : join(real(parent), basename(p))
-    }
+  return relativeFile(process.cwd(), physical(path))
+}
+
+/** The current directory from `root`, as a `/` path; undefined when they share no path (Windows drives). */
+export function cwdIn(root: string): string | undefined {
+  const path = relativeFile(physical(root), process.cwd())
+  return isAbsolute(path) ? undefined : path
+}
+
+const physical = (p: string): string => {
+  try {
+    return realpathSync(p)
+  } catch {
+    const parent = dirname(p)
+    return parent === p ? p : join(physical(parent), basename(p))
   }
-  return relativeFile(process.cwd(), real(path))
 }
 
 /** Stable id: the file, the enclosing group names and the eval name. */

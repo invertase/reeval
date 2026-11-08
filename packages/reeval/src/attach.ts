@@ -6,6 +6,7 @@
 // its pid can be reached for. A run that writes heartbeats (its header says so) and then goes quiet
 // is shown as stalled, and after longer as lost, which ends attach.
 import { hostname } from 'node:os'
+import { isAbsolute, join, posix, win32 } from 'node:path'
 import {
   displayUrl,
   EventStreamError,
@@ -14,9 +15,10 @@ import {
   LOST_MS,
   STALL_MS,
 } from './events.ts'
+import { fromCwd } from './ids.ts'
 import { CANCEL_SIGNAL, cancelable, processAlive } from './resume.ts'
 import { formatDuration } from './text.ts'
-import type { OutputStream, Renderer } from './ui/events.ts'
+import type { OutputStream, PrepareTargetView, ReevalEvent, Renderer } from './ui/events.ts'
 import { createRenderer, type OutputOptions } from './ui/index.ts'
 import type { RunEventLine, RunEventsHeader } from './view/events.ts'
 
@@ -42,6 +44,66 @@ export type AttachOptions = {
 const SILENT = Symbol('silent')
 
 /**
+ * A path the run printed, as this viewer reads it. The run prints paths from its own current
+ * directory, which mean nothing where the viewer is, so with the header's `cwd` each becomes the
+ * project's: from this viewer's directory when attach knows its project root, else from the root.
+ * A stream without `cwd` keeps its paths, and so does an absolute path.
+ */
+export function viewerPath(header: RunEventsHeader, root: string | undefined) {
+  const { cwd } = header
+  return (path: string): string => {
+    if (cwd === undefined || isAbsolute(path) || win32.isAbsolute(path)) return path
+    const inProject = posix.join(cwd, path)
+    return root === undefined ? inProject : fromCwd(join(root, inProject)) || '.'
+  }
+}
+
+/** The event with the paths the renderers print made the viewer's, by `shown`. */
+export function viewerEvent(
+  event: ReevalEvent,
+  shown: (path: string) => string,
+  /** The run's config as its plan named it, which a prepare event's `setBy` repeats. */
+  config: string | undefined,
+): ReevalEvent {
+  if (event.type === 'run-end') return { ...event, summaryPath: shown(event.summaryPath) }
+  if (event.type === 'plan') {
+    const { config: named, record, ...rest } = event.header
+    const viewed = named === undefined ? undefined : shown(named)
+    // As `reeval run` does, the plan names the config only when it isn't in the current directory.
+    const elsewhere = viewed !== undefined && posix.dirname(viewed) !== '.' ? viewed : undefined
+    return {
+      ...event,
+      line:
+        named === undefined
+          ? event.line
+          : event.line
+              .split(' · ')
+              .flatMap((part) =>
+                part !== `config ${named}` ? [part] : elsewhere ? [`config ${elsewhere}`] : [],
+              )
+              .join(' · '),
+      header: {
+        ...rest,
+        ...(elsewhere === undefined ? {} : { config: elsewhere }),
+        ...(record === undefined ? {} : { record: shown(record) }),
+      },
+    }
+  }
+  if (event.type === 'prepare' && config !== undefined) {
+    const target = (t: PrepareTargetView): PrepareTargetView => ({
+      ...t,
+      setBy: t.setBy.map((by) => (by === config ? shown(by) : by)),
+    })
+    if (event.state === 'start') return { ...event, targets: event.targets.map(target) }
+    return {
+      ...event,
+      outcome: { ...event.outcome, target: target(event.outcome.target) },
+    }
+  }
+  return event
+}
+
+/**
  * Draws the stream until the run's last exit line, and returns its exit code; 0 when the viewer
  * detached first.
  */
@@ -61,6 +123,9 @@ export async function attach(options: AttachOptions): Promise<number> {
   /** The last segment's renderer once its exit line came, while its list may still be up. */
   let ended: Renderer | undefined
   let header: RunEventsHeader | undefined
+  let shown: (path: string) => string = (path) => path
+  /** The config as this segment's plan named it, before `shown`. */
+  let config: string | undefined
   let code: number | undefined
   /** This segment's run writes heartbeats, so its silence means something from its header on. */
   let beating = false
@@ -154,6 +219,8 @@ export async function attach(options: AttachOptions): Promise<number> {
         beating = line.heartbeatMs !== undefined
         stalled = false
         header = line
+        shown = viewerPath(line, root)
+        config = undefined
         renderer = rendererFor(line)
         continue
       }
@@ -164,7 +231,8 @@ export async function attach(options: AttachOptions): Promise<number> {
         code = line.code
         continue
       }
-      renderer?.onEvent(line)
+      if (line.type === 'plan') config = line.header.config
+      renderer?.onEvent(viewerEvent(line, shown, config))
     }
   } catch (error) {
     if (!detached.signal.aborted) {

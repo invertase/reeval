@@ -19,10 +19,10 @@ import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
-import { attach } from '../src/attach.ts'
+import { attach, viewerEvent, viewerPath } from '../src/attach.ts'
 import { EventStreamError, openEventStream } from '../src/events.ts'
 import { stripAnsi } from '../src/ui/colors.ts'
-import type { ReevalEvent } from '../src/ui/events.ts'
+import type { ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import type { OutputOptions } from '../src/ui/mode.ts'
 import type { RunEventLine, RunEventsHeader } from '../src/view/events.ts'
 import { NewerSchemaError } from '../src/view/record.ts'
@@ -419,6 +419,130 @@ describe('attach', () => {
       (error: Error) =>
         error instanceof NewerSchemaError && /Upgrade reeval to read it/.test(error.message),
     )
+  })
+
+  test("the paths a run printed from its own directory read as the project's, or from the viewer's", async () => {
+    const runHeader = (config: string, record: string): RunHeader => ({
+      version: '0.1.0',
+      runId: 'run-1',
+      dryRun: false,
+      config,
+      record,
+      harnesses: ['fake'],
+      sandboxes: ['fake'],
+      judges: [],
+      files: 1,
+      evals: 1,
+      skipped: 0,
+      cells: 1,
+      attempts: 1,
+      fewest: 1,
+      budget: {},
+      estimateMs: 0,
+      concurrency: 1,
+    })
+    /** A run's plan, failed prepare and end, its paths printed from `up` (where its root is). */
+    const printed = (up: string, history = `${up}/.reeval/runs`) => {
+      const config = `${up}/reeval.config.ts`
+      const target = {
+        kind: 'image',
+        key: 'k',
+        label: 'reeval-sandbox:fake',
+        setBy: [config, 'evals/a.eval.ts'],
+        runWide: true,
+      } as const
+      return {
+        config,
+        events: [
+          {
+            type: 'plan',
+            at: 1,
+            line: `plan  run run-1 · config ${config} · 1 eval`,
+            header: runHeader(config, `${history}/run-1.json`),
+            details: [],
+            warnings: [],
+            hints: [],
+          },
+          {
+            type: 'prepare',
+            at: 1,
+            state: 'failed',
+            outcome: { target, ok: false, failure: { message: 'no image', log: null }, ms: 1 },
+          },
+          { type: 'run-end', at: 1, summaryPath: `${history}/run-1/summary.md` },
+        ] as ReevalEvent[],
+      }
+    }
+    const shown = (
+      run: ReturnType<typeof printed>,
+      cwd: string | undefined,
+      root?: string,
+    ): Record<string, unknown> => {
+      const path = viewerPath(
+        {
+          type: 'header',
+          schemaVersion: 1,
+          pid: 1,
+          host: 'runner',
+          ...header(),
+          ...(cwd === undefined ? {} : { cwd }),
+        },
+        root,
+      )
+      const [p, f, e] = run.events.map((event) => viewerEvent(event, path, run.config))
+      return {
+        line: p?.type === 'plan' && p.line,
+        config: p?.type === 'plan' && p.header.config,
+        record: p?.type === 'plan' && p.header.record,
+        setBy: f?.type === 'prepare' && f.state !== 'start' && f.outcome.target.setBy,
+        summary: e?.type === 'run-end' && e.summaryPath,
+      }
+    }
+    // A run in evals/: without a project of its own, the viewer reads its paths from the project
+    // root, where the config is, so the plan doesn't name it, as a run there wouldn't.
+    const inEvals = printed('..')
+    assert.deepEqual(shown(inEvals, 'evals'), {
+      line: 'plan  run run-1 · 1 eval',
+      config: undefined,
+      record: '.reeval/runs/run-1.json',
+      setBy: ['reeval.config.ts', 'evals/a.eval.ts'],
+      summary: '.reeval/runs/run-1/summary.md',
+    })
+    // In the project, from a directory below its root, they're from there, as reeval run's would be.
+    const mine = tempDir('viewer')
+    mkdirSync(join(mine, 'sub'))
+    const cwd = process.cwd()
+    process.chdir(join(mine, 'sub'))
+    try {
+      assert.deepEqual(shown(inEvals, 'evals', mine), {
+        line: 'plan  run run-1 · config ../reeval.config.ts · 1 eval',
+        config: '../reeval.config.ts',
+        record: '../.reeval/runs/run-1.json',
+        setBy: ['../reeval.config.ts', 'evals/a.eval.ts'],
+        summary: '../.reeval/runs/run-1/summary.md',
+      })
+    } finally {
+      process.chdir(cwd)
+    }
+    // A history folder inside the directory the run ran in is under that directory.
+    const inSub = printed('..', '.history')
+    assert.equal(shown(inSub, 'sub').record, 'sub/.history/run-1.json')
+    assert.equal(shown(inSub, 'sub').summary, 'sub/.history/run-1/summary.md')
+    // A run in its root prints them as the project's already.
+    const inRoot = printed('.')
+    assert.equal(shown(inRoot, '').summary, '.reeval/runs/run-1/summary.md')
+    assert.equal(shown(inRoot, '').line, 'plan  run run-1 · 1 eval')
+    // From outside the project they climb out of it and back in through its own folder.
+    const outside = printed('../proj')
+    assert.equal(shown(outside, '../away').summary, '../proj/.reeval/runs/run-1/summary.md')
+    // An older reeval's stream says nothing of its directory, so its paths stay as it printed them.
+    assert.deepEqual(shown(inEvals, undefined), {
+      line: 'plan  run run-1 · config ../reeval.config.ts · 1 eval',
+      config: '../reeval.config.ts',
+      record: '../.reeval/runs/run-1.json',
+      setBy: ['../reeval.config.ts', 'evals/a.eval.ts'],
+      summary: '../.reeval/runs/run-1/summary.md',
+    })
   })
 
   test("a line that isn't JSON is refused", async () => {
@@ -977,6 +1101,42 @@ describe('reeval run --events and reeval attach', () => {
     const again = await runCli(p.dir, ['attach', id.slice(0, 20)])
     assert.equal(again.code, 0, again.stderr)
     assert.equal(again.stdout, ran)
+  })
+
+  test("a run's paths from a folder in its project print as they did, and attach reads them as the project's", async () => {
+    const p = await project('events-paths', {
+      'reeval.config.ts': config,
+      'evals/passes.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('passes', async (c) => {
+  expect(c.attempt.n).toBe(1)
+})
+`,
+    })
+    const away = tempDir('events-away')
+    const stream = join(away, 'run.ndjson')
+    const ran = await runCli(join(p.dir, 'evals'), ['run', '--events-file', stream])
+    assert.equal(ran.code, 0, ran.stderr)
+    assert.match(ran.stdout, /Config: +\.\.\/reeval\.config\.ts/)
+    assert.match(ran.stdout, /Record: +\.\.\/\.reeval\/runs\//)
+    assert.match(ran.stdout, /summary \.\.\/\.reeval\/runs\/\S+\/summary\.md/)
+    assert.equal((readLines(stream)[0] as RunEventsHeader).cwd, 'evals')
+    // Outside any project, the paths are the project's, as a run in its root prints them.
+    const viewed = await runCli(away, ['attach', stream])
+    assert.equal(viewed.code, 0, viewed.stderr)
+    assert.match(viewed.stdout, /Record: +\.reeval\/runs\//)
+    assert.match(viewed.stdout, /summary \.reeval\/runs\/\S+\/summary\.md/)
+    assert.doesNotMatch(viewed.stdout, /Config:|\.\.\//)
+    // In the project, from a directory below its root, they're from there.
+    mkdirSync(join(p.dir, 'evals', 'deeper'))
+    const below = await runCli(join(p.dir, 'evals', 'deeper'), [
+      'attach',
+      stream,
+      '--config',
+      '../../reeval.config.ts',
+    ])
+    assert.equal(below.code, 0, below.stderr)
+    assert.match(below.stdout, /Config: +\.\.\/\.\.\/reeval\.config\.ts/)
+    assert.match(below.stdout, /summary \.\.\/\.\.\/\.reeval\/runs\/\S+\/summary\.md/)
   })
 
   test('a quiet run writes heartbeats to its stream, which attach replays as the run printed', async () => {
