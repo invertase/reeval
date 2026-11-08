@@ -1,0 +1,15 @@
+{
+  "name": "with-dart-example",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "reeval": "reeval",
+    "eval": "reeval run"
+  },
+  "dependencies": {
+    "@boatdev/sdk": "1.13.0",
+    "@daytona/sdk": "0.231.0",
+    "reeval": "workspace:*"
+  }
+}

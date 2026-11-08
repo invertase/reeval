@@ -74,6 +74,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | [`with-docker-install`](./with-docker-install) | A tool baked onto reeval's image |
 | [`with-dockerfile`](./with-dockerfile) | A sandbox from your own Dockerfile |
 | [`with-python-image`](./with-python-image) | An official toolchain image as the sandbox |
+| [`with-dart`](./with-dart) | An official toolchain image on Boat's and Daytona's cloud VMs |
 | [`with-podman`](./with-podman) | The same sandbox on Podman |
 | [`with-resource-limits`](./with-resource-limits) | Memory, CPU and process limits |
 

@@ -148,6 +148,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-dart:
+    dependencies:
+      '@boatdev/sdk':
+        specifier: 1.13.0
+        version: 1.13.0
+      '@daytona/sdk':
+        specifier: 0.231.0
+        version: 0.231.0
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-dependency-upgrade:
     dependencies:
       reeval:

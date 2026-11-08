@@ -161,8 +161,8 @@ defineEnvironment('vm', { sandbox: boat({ type: 'large' }), egress: 'allow-all' 
 ```
 
 `boat()` needs `npm i @boatdev/sdk`, `BOAT_API_KEY` (or `createBoat({ apiKey, prefix })` for
-another account) and an OpenSSH client, and plans only under `egress: 'allow-all'`; reeval
-refuses the other policies at plan time. With `image`, `from`, `dockerfile` or `install`, as
+another account) and an OpenSSH client, and without an image plans only under
+`egress: 'allow-all'`; reeval refuses the other policies at plan time. With `image`, `from`, `dockerfile` or `install`, as
 `docker()` takes them, preflight saves the image in a Boat snapshot and each attempt runs in a
 container of it, under any egress policy.
 

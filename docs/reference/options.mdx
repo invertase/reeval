@@ -582,6 +582,22 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
   The VM's machine size. Defaults to `'small'`, with 2 vCPUs and 4 GB of memory.
 </Property>
 
+<Property name="boat.image" type="string" optional>
+  As `docker.image`, in a registry Boat's VMs can pull. Preflight saves it into a Boat snapshot before the run, and each attempt runs in a container of it.
+</Property>
+
+<Property name="boat.from" type="string" optional>
+  As `docker.from`, in a registry Boat's VMs can pull, built into a Boat snapshot before the run.
+</Property>
+
+<Property name="boat.dockerfile" type="string | URL" optional>
+  As `docker.dockerfile`, built into a Boat snapshot before the run.
+</Property>
+
+<Property name="boat.install" type="(string | { run: string; timeout?: Duration })[]" optional>
+  As `docker.install`, baked into the snapshot.
+</Property>
+
 <Property name="boat.id" type="string" optional>
   The last segment of the cell key. Defaults to `boat`, or `boat:<type>` for another `type`, plus `:<image>` and an install hash with an image recipe.
 </Property>

@@ -267,7 +267,8 @@ compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug
 studio build` builds the history. Both need `REEVAL_TEST_REAL=1` (which `pnpm test:contract` sets) and
 each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
 so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. `REEVAL_CONTRACT_SANDBOX=boat` (with `BOAT_API_KEY`) runs the rows
-in `boat()`, less the deny-all checks; no workflow runs it yet. The `*-gateway` rows (the harnesses on Vercel AI Gateway, with
+in `boat()`, less the deny-all checks, and `boat-image` in `boat()` with an image recipe, with them;
+no workflow runs either yet. The `*-gateway` rows (the harnesses on Vercel AI Gateway, with
 `AI_GATEWAY_API_KEY`) and the `*-openrouter` rows (on OpenRouter, with `OPENROUTER_API_KEY`) are out of
 `contract.yml`'s default list, so they run when it's dispatched with them; naming an `*-openrouter` row also runs
 `test/openrouter-real.test.ts` (the judge and analysis model through `openrouter()`, one fake-harness attempt). Their
