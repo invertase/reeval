@@ -26,7 +26,10 @@ export type SshSessionOptions = {
    * can't read it, so `prepare` puts one where it can.
    */
   path?: readonly string[]
-  /** Root shell commands that run once, after the sandbox user and its directories exist. */
+  /**
+   * Root shell commands that run once, after the sandbox user and its directories exist. `$1` is
+   * the login user's `PATH`, which `sudo` replaces with its own.
+   */
   prepare?: string
   /** How long the VM may take to accept SSH after it reports ready. */
   connectTimeoutMs?: number
@@ -220,8 +223,8 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
     ...(options.prepare ? [options.prepare] : []),
   ].join(' && ')
   const asRoot = options.layout
-    ? `sudo -n -- flock ${SETUP_LOCK} /bin/sh -c ${q(setup)}`
-    : `sudo -n -- /bin/sh -c ${q(setup)}`
+    ? `sudo -n -- flock ${SETUP_LOCK} /bin/sh -c ${q(setup)} sh "$PATH"`
+    : `sudo -n -- /bin/sh -c ${q(setup)} sh "$PATH"`
   // A VM that just reported ready may not take SSH connections for a few seconds more.
   const deadline = Date.now() + (options.connectTimeoutMs ?? 60_000)
   for (let wait = 500; ; wait = Math.min(wait * 2, 5_000)) {

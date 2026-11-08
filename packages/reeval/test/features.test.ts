@@ -70,7 +70,7 @@ import {
 import { type EvalExpectation, expectRun, type RunExpectation } from './support/oracle.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
-import { buildSshVmImage, startSshVm } from './support/ssh-vm.ts'
+import { buildSshVmImage, startDaytonaVm, startSshVm } from './support/ssh-vm.ts'
 
 /**
  * `podman` is `podman()` where `docker` is `docker()`; `real` is Docker with real Cursor
@@ -282,7 +282,7 @@ const boatCreates = (run: RunRecord, sandbox = boat()) => {
 /** The fake Daytona API the `daytona-*` fixtures run on, its sandboxes sshd containers. */
 let daytonaApi: FakeDaytona
 before(async () => {
-  daytonaApi = await fakeDaytona(startSshVm)
+  daytonaApi = await fakeDaytona(startDaytonaVm)
 })
 after(() => daytonaApi.close())
 /** A `daytona-*` fixture's host: reeval pointed at the fake API, the VM image built. */
