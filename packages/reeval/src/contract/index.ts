@@ -61,6 +61,7 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
+import { hostedSandboxSchema } from './hosted.ts'
 import { configJudgeDataSchema, fakeJudgeDataSchema } from './judge.ts'
 import {
   egressPolicySchema,
@@ -98,6 +99,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   TartSandboxDescriptor: tartSandboxSchema,
   BoatSandboxDescriptor: boatSandboxSchema,
   DaytonaSandboxDescriptor: daytonaSandboxSchema,
+  HostedSandboxDescriptor: hostedSandboxSchema,
   InstallStep: installStepSchema,
   HarnessDescriptor: harnessDescriptorSchema,
   FakeHarnessDescriptor: fakeHarnessSchema,

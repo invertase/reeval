@@ -1422,12 +1422,38 @@ export type DaytonaSandboxDescriptor = {
    */
   attemptsPerMachine?: number
 }
+/** A hosted VM's size: `small` is 2 vCPUs and 4 GB. */
+export type HostedMachineSize = 'small' | 'medium' | 'large' | 'xlarge'
+/**
+ * A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It
+ * runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.
+ */
+export type HostedSandboxDescriptor = {
+  kind: 'hosted'
+  /** Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`. */
+  id?: string
+  /** The machine size. Default `small`. */
+  size?: HostedMachineSize
+  /** The most attempts on hosted VMs at once, across the run: machines times `attemptsPerMachine`. */
+  maxConcurrent?: number
+  /**
+   * A machine takes another of the run's attempts once one ends, instead of being deleted, as
+   * `boat({ reuse })` does. Default false, one attempt per slot.
+   */
+  reuse?: boolean
+  /**
+   * The attempts one machine runs at once, each as a user of its own, as
+   * `boat({ attemptsPerMachine })` does. Default 1.
+   */
+  attemptsPerMachine?: number
+}
 export type SandboxDescriptor =
   | FakeSandboxDescriptor
   | DockerSandboxDescriptor
   | TartSandboxDescriptor
   | BoatSandboxDescriptor
   | DaytonaSandboxDescriptor
+  | HostedSandboxDescriptor
 
 /**
  * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by
@@ -3201,7 +3227,8 @@ export type VmImage = {
 export type AttemptResources = {
   /**
    * `container`: the container's own cgroup, so only the attempt's processes count (Docker,
-   * Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).
+   * Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `hosted()`,
+   * `tart()`).
    */
   scope: 'container' | 'machine'
   /**
@@ -3211,13 +3238,15 @@ export type AttemptResources = {
   shared?: true
   /** What the attempt ran on. */
   machine: {
-    /** The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`. */
+    /** The sandbox's provider: `docker`, `podman`, `boat`, `daytona`, `hosted` or
+     * `tart`. */
     sandbox: string
-    /** The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`. */
+    /** The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`,
+     * `hosted({ size })`. */
     size?: string
     /**
-     * The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, or the name
-     * of `tart()`'s VM on its host.
+     * The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, a hosted
+     * VM's id, or the name of `tart()`'s VM on its host.
      */
     id?: string
     /** The name reeval gave the VM, where the provider keeps one apart from its id. */

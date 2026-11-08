@@ -86,7 +86,7 @@ type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
   /**
-   * The area: runtime, config, docker, image, ssh, boat, daytona, key, judge, analysis, gateway, vertex,
+   * The area: runtime, config, docker, image, ssh, boat, daytona, hosted, key, judge, analysis, gateway, vertex,
    * egress, gitignore or env-files.
    */
   id: string

@@ -130,6 +130,17 @@ describe('machine pool', () => {
     await p.close()
   })
 
+  test("the run's start budget is spent once, never refilled, and a refused start keeps its share", async () => {
+    const provider = fakeProvider((n) => (n === 0 ? new RateLimitError(10) : 'ok'))
+    const p = pool(provider, { limits: { machines: 10, starts: 2 } })
+    const results = await Promise.allSettled([p.acquire(), p.acquire(), p.acquire()])
+    assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'fulfilled', 'rejected'])
+    const failed = results.find((r) => r.status === 'rejected') as PromiseRejectedResult
+    assert.match(String(failed.reason), /fake\(\) has used every machine start the run has \(2\)/)
+    assert.equal(provider.started.length, 2)
+    await p.close()
+  })
+
   test('a 429 with Retry-After holds every start that long, then the start goes through', async () => {
     const provider = fakeProvider((n) => (n === 0 ? new RateLimitError(200) : 'ok'))
     const p = pool(provider)

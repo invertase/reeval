@@ -6,6 +6,7 @@ import type { ListenerSource } from '../attempt/serve.ts'
 import type {
   BoatSandboxDescriptor,
   DaytonaSandboxDescriptor,
+  HostedSandboxDescriptor,
   TartSandboxDescriptor,
 } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
@@ -18,6 +19,7 @@ export type MachineDescriptor =
   | TartSandboxDescriptor
   | BoatSandboxDescriptor
   | DaytonaSandboxDescriptor
+  | HostedSandboxDescriptor
 
 export interface MachineProvider<D extends MachineDescriptor> extends SandboxHooks<D> {
   kind: D['kind']

@@ -1089,6 +1089,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'hosted.sandbox',
+    area: 'Sandbox',
+    name: "`hosted({ size, reuse, attemptsPerMachine, maxConcurrent })`: a VM per attempt on the reeval platform's VM service, inside a hosted run only (`REEVAL_VM_URL`, `REEVAL_VM_TOKEN`), on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `hosted` with no message, record field or log naming the provider",
+    fixtures: ['sandbox/hosted-session', 'sandbox/hosted-shared-machine'],
+    plan: ['environments/hosted'],
+    unit: [
+      'reeval/test/hosted.test.ts',
+      'reeval/test/sandbox-kinds.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'sandbox.vm-identity',
     area: 'Sandbox',
     name: "A VM attempt's record names its VM (`resources.machine.id` and `name`: Boat's or Daytona's sandbox, Tart's VM), and `REEVAL_SANDBOX_LABELS` adds labels to reeval's own on every VM `boat()` and `daytona()` create, refused before any starts when a provider would refuse them",

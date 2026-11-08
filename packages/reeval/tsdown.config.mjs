@@ -160,6 +160,7 @@ export default defineConfig({
     sandbox: 'src/sandbox.ts',
     'sandbox/boat': 'src/sandbox-boat.ts',
     'sandbox/daytona': 'src/sandbox-daytona.ts',
+    'sandbox/hosted': 'src/sandbox-hosted.ts',
     'store/local': 'src/store-local.ts',
     'store/s3': 'src/store-s3.ts',
     judge: 'src/judge.ts',

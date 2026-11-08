@@ -19,6 +19,7 @@ import type {
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
+  HostedSandboxDescriptor,
   PluginSource,
   TartSandboxDescriptor,
   VmImage,
@@ -632,6 +633,29 @@ export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => 
   },
 })
 
+/** A hosted run's VMs have nothing to build either: `prepare` checks the service, per size. */
+export const hostedProvider = (): SandboxProvider<HostedSandboxDescriptor> => ({
+  kind: 'hosted',
+  check: async () => {},
+  key: (sandbox) => JSON.stringify({ size: sandbox.size ?? 'small' }),
+  async prepare(sandbox, _harness, ctx) {
+    const { checkHosted } = await import('./hosted.ts')
+    await checkHosted(sandbox, ctx.root)
+    return null
+  },
+  classify: (error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      class: isTransient(message) ? 'transient' : 'config',
+      stage: 'hosted',
+      ref: null,
+      cause: null,
+      log: null,
+      message,
+    }
+  },
+})
+
 /**
  * A fresh set of providers, one per run: each keeps the run's builds. `pull` lets Tart pull the
  * images it doesn't have, which only `reeval image build` does; with `force` too, it pulls each
@@ -655,4 +679,5 @@ const machineProviders = (options: {
   tart: tartProvider(options),
   boat: boatProvider(),
   daytona: daytonaProvider(),
+  hosted: hostedProvider(),
 })

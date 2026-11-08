@@ -1017,7 +1017,7 @@
           "type": "object",
           "properties": {
             "id": {
-              "description": "The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, or the name of `tart()`'s VM on its host.",
+              "description": "The VM's id at its provider, for a VM sandbox: Boat's or Daytona's sandbox id, a hosted VM's id, or the name of `tart()`'s VM on its host.",
               "type": "string"
             },
             "memoryBytes": {
@@ -1029,11 +1029,11 @@
               "type": "string"
             },
             "sandbox": {
-              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona` or `tart`.",
+              "description": "The sandbox's provider: `docker`, `podman`, `boat`, `daytona`, `hosted` or `tart`.",
               "type": "string"
             },
             "size": {
-              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`.",
+              "description": "The provider's machine size, where it has sizes: `boat({ type })`, `daytona({ size })`, `hosted({ size })`.",
               "type": "string"
             },
             "vcpus": {
@@ -1044,7 +1044,7 @@
           "required": ["sandbox"]
         },
         "scope": {
-          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `tart()`).",
+          "description": "`container`: the container's own cgroup, so only the attempt's processes count (Docker, Podman). `machine`: the whole VM, its system processes included (`boat()`, `daytona()`, `hosted()`, `tart()`).",
           "enum": ["container", "machine"]
         },
         "shared": {
@@ -4159,6 +4159,36 @@
         }
       ]
     },
+    "HostedSandboxDescriptor": {
+      "description": "A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.",
+      "type": "object",
+      "properties": {
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
+          "type": "number"
+        },
+        "id": {
+          "description": "Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`.",
+          "type": "string"
+        },
+        "kind": {
+          "const": "hosted"
+        },
+        "maxConcurrent": {
+          "description": "The most attempts on hosted VMs at once, across the run: machines times `attemptsPerMachine`.",
+          "type": "number"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "The machine size. Default `small`.",
+          "enum": ["large", "medium", "small", "xlarge"]
+        }
+      },
+      "required": ["kind"]
+    },
     "InstallStep": {
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
@@ -7083,6 +7113,9 @@
         },
         {
           "$ref": "#/$defs/FakeSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/HostedSandboxDescriptor"
         },
         {
           "$ref": "#/$defs/TartSandboxDescriptor"

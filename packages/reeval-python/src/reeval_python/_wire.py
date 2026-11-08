@@ -968,7 +968,7 @@ class EvalOptionsDataCompare(TypedDict):
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | HostedSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1044,7 +1044,7 @@ class EvalOptionsData2(TypedDict):
     runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | TartSandboxDescriptor]
+    sandbox: NotRequired[BoatSandboxDescriptor | DaytonaSandboxDescriptor | DockerSandboxDescriptor | FakeSandboxDescriptor | HostedSandboxDescriptor | TartSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
     snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
@@ -1347,6 +1347,25 @@ class HostFile(TypedDict):
     kind: Literal["file"]
     # Its path on the host, absolute or relative to the directory of the file it's written in.
     path: str
+
+
+# A VM per attempt on the reeval platform, made by `hosted()` from `reeval/sandbox/hosted`. It
+# runs only inside a hosted run, which sets `REEVAL_VM_URL` and `REEVAL_VM_TOKEN`.
+class HostedSandboxDescriptor(TypedDict):
+    # The attempts one machine runs at once, each as a user of its own, as `boat({
+    # attemptsPerMachine })` does. Default 1.
+    attemptsPerMachine: NotRequired[int]
+    # Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`.
+    id: NotRequired[str]
+    kind: Literal["hosted"]
+    # The most attempts on hosted VMs at once, across the run: machines times
+    # `attemptsPerMachine`.
+    maxConcurrent: NotRequired[float]
+    # A machine takes another of the run's attempts once one ends, instead of being deleted, as
+    # `boat({ reuse })` does. Default false, one attempt per slot.
+    reuse: NotRequired[bool]
+    # The machine size. Default `small`.
+    size: NotRequired[Literal["small", "medium", "large", "xlarge"]]
 
 
 class InstallStepRun(TypedDict):
@@ -1773,7 +1792,7 @@ class QuestionOptions(TypedDict):
     model: NotRequired[str]
 
 
-SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor | BoatSandboxDescriptor | DaytonaSandboxDescriptor"
+SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor | TartSandboxDescriptor | BoatSandboxDescriptor | DaytonaSandboxDescriptor | HostedSandboxDescriptor"
 
 
 # A host environment variable, redacted everywhere reeval writes and recorded by name only. Made
