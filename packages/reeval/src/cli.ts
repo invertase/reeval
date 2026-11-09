@@ -96,6 +96,7 @@ import type {
   SandboxDescriptor,
 } from './types.ts'
 import { colors } from './ui/colors.ts'
+import type { RecordedPaths } from './ui/events.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
 
@@ -1195,26 +1196,6 @@ async function runCommand(
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
-  renderer.onEvent({
-    type: 'run-end',
-    at: Date.now(),
-    record,
-    summaryPath: fromCwd(summary),
-    results: engineRun.evals,
-    remarks: run.remarks,
-    ...(notRun > 0 && !stopped ? { notRun } : {}),
-  })
-  renderer.close()
-  if (retried.size) {
-    const { retryCounts, retryLine } = await import('./retry.ts')
-    const line = retryLine(retryCounts(record, retried, ctx.previous))
-    if (setup.json) console.error(line)
-    else console.log(line)
-  }
-  const stepSummary = process.env.GITHUB_STEP_SUMMARY
-  if (stepSummary && run.artifactDir) {
-    await appendFile(stepSummary, await readFile(summary)).catch(() => {})
-  }
 
   const { config } = ctx
   const mode = setup.record
@@ -1228,24 +1209,67 @@ async function runCommand(
   const autoRecord = flags.record || mode === 'always' || (mode === 'ci' && inCI()) || rerecord
   // A run budget.duration stopped is recorded too, as status `budget`: it's what the budget
   // allowed, and compare never takes an incomplete run as its base. An interrupted one isn't.
-  if (autoRecord && record.status !== 'interrupted') {
+  const recording = autoRecord && record.status !== 'interrupted'
+  // Recorded before `run-end`, which names where the run landed; its line and any error still
+  // follow the run's summary.
+  let recordLine: string | undefined
+  let recordError: unknown
+  let recorded: RecordedPaths | undefined
+  if (recording) {
     const { record: recordCmd } = await import('./commands.ts')
     const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
-    // A re-record keeps the level the run was recorded at, which `reeval record --artifacts` may
-    // have set.
-    const level = rerecord
-      ? { artifacts: (await readRecord(recordFile(config.history.dir, record.runId))).artifacts }
-      : {}
-    const line = await recordCmd(config, record.runId, { ...flags, ...allow, ...level }).catch(
-      (error: Error) => {
+    try {
+      // A re-record keeps the level the run was recorded at, which `reeval record --artifacts`
+      // may have set.
+      const level = rerecord
+        ? { artifacts: (await readRecord(recordFile(config.history.dir, record.runId))).artifacts }
+        : {}
+      recordLine = await recordCmd(
+        config,
+        record.runId,
+        { ...flags, ...allow, ...level },
+        (landed) => {
+          recorded = {
+            record: fromCwd(landed.recordPath),
+            files: landed.artifactDir ? fromCwd(landed.artifactDir) : null,
+            ...(landed.archive ? { archive: fromCwd(landed.archive.path) } : {}),
+          }
+        },
+      ).catch((error: Error) => {
         if (error.name !== 'StoreError') throw error
         if (code !== EXIT.interrupted && code !== EXIT.terminated) code = EXIT.infra
         invocation.machineState = true
         return red(`reeval: ${redactSecrets(error.message)}`)
-      },
-    )
+      })
+    } catch (error) {
+      recordError = error
+    }
+  }
+  renderer.onEvent({
+    type: 'run-end',
+    at: Date.now(),
+    record,
+    summaryPath: fromCwd(summary),
+    results: engineRun.evals,
+    remarks: run.remarks,
+    ...(notRun > 0 && !stopped ? { notRun } : {}),
+    ...(recorded ? { recorded } : {}),
+  })
+  renderer.close()
+  if (retried.size) {
+    const { retryCounts, retryLine } = await import('./retry.ts')
+    const line = retryLine(retryCounts(record, retried, ctx.previous))
     if (setup.json) console.error(line)
     else console.log(line)
+  }
+  const stepSummary = process.env.GITHUB_STEP_SUMMARY
+  if (stepSummary && run.artifactDir) {
+    await appendFile(stepSummary, await readFile(summary)).catch(() => {})
+  }
+  if (recordError !== undefined) throw recordError
+  if (recordLine !== undefined) {
+    if (setup.json) console.error(recordLine)
+    else console.log(recordLine)
   } else if (autoRecord && notRun > 0 && !stopped) {
     const line = `Not recorded: run ${record.runId} is incomplete. reeval run --resume ${record.runId}${flags.record ? ' --record' : ''} runs the rest and records it.`
     if (setup.json) console.error(line)

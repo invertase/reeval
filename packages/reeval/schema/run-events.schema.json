@@ -5746,6 +5746,32 @@
       },
       "required": []
     },
+    "RecordedPaths": {
+      "description": "A recorded run's files, as the `run-end` event names them.",
+      "type": "object",
+      "properties": {
+        "archive": {
+          "description": "With `history.archive`, the run's zip beside the record.",
+          "type": "string"
+        },
+        "files": {
+          "description": "The folder of files recorded with it, `<runId>/` beside the record; null when it kept none.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "record": {
+          "description": "The record, `<runId>.json` in the history folder.",
+          "type": "string"
+        }
+      },
+      "required": ["files", "record"]
+    },
     "Remark": {
       "description": "A remark about the eval's quality, not about the agent.",
       "type": "object",
@@ -6247,6 +6273,10 @@
             },
             "record": {
               "$ref": "#/$defs/RunRecord"
+            },
+            "recorded": {
+              "description": "Where the run was recorded, when it was (`--record`, `record: 'always'` or `'ci'`), as paths from the run's current directory: `.reeval/runs` keeps only the unrecorded run. Under a remote store they're its local copy, which the run uploaded or left to `reeval sync`.",
+              "$ref": "#/$defs/RecordedPaths"
             },
             "remarks": {
               "description": "The run's remarks, or null when it raised none.",

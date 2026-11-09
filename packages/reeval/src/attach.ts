@@ -67,7 +67,22 @@ export function viewerEvent(
   /** The run's config as its plan named it, which a prepare event's `setBy` repeats. */
   config: string | undefined,
 ): ReevalEvent {
-  if (event.type === 'run-end') return { ...event, summaryPath: shown(event.summaryPath) }
+  if (event.type === 'run-end') {
+    const { recorded } = event
+    return {
+      ...event,
+      summaryPath: shown(event.summaryPath),
+      ...(recorded
+        ? {
+            recorded: {
+              record: shown(recorded.record),
+              files: recorded.files === null ? null : shown(recorded.files),
+              ...(recorded.archive === undefined ? {} : { archive: shown(recorded.archive) }),
+            },
+          }
+        : {}),
+    }
+  }
   if (event.type === 'plan') {
     const { config: named, record, ...rest } = event.header
     const viewed = named === undefined ? undefined : shown(named)

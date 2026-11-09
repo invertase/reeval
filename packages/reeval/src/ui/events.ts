@@ -207,7 +207,24 @@ export type ReevalEvent =
       remarks?: RunRemarks | null
       /** Attempts the run planned that this resume's filters left out and that aren't done. */
       notRun?: number
+      /**
+       * Where the run was recorded, when it was (`--record`, `record: 'always'` or `'ci'`), as
+       * paths from the run's current directory: `.reeval/runs` keeps only the unrecorded run.
+       * Under a remote store they're its local copy, which the run uploaded or left to
+       * `reeval sync`.
+       */
+      recorded?: RecordedPaths
     }
+
+/** A recorded run's files, as the `run-end` event names them. */
+export type RecordedPaths = {
+  /** The record, `<runId>.json` in the history folder. */
+  record: string
+  /** The folder of files recorded with it, `<runId>/` beside the record; null when it kept none. */
+  files: string | null
+  /** With `history.archive`, the run's zip beside the record. */
+  archive?: string
+}
 
 export interface Renderer {
   onEvent(event: ReevalEvent): void
