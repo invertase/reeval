@@ -315,8 +315,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval cloud provider <provider> set
                                 Set the org's key for an AI SDK provider (openai, anthropic, google,
                                 xai, mistral, groq, deepseek, cohere, perplexity, fireworks,
-                                togetherai, cerebras or deepinfra), which the cloud platform's model
-                                calls use; the key comes from stdin or a hidden prompt
+                                togetherai, cerebras, deepinfra or typesafe-ai), which the cloud
+                                platform's model calls use; the key comes from stdin or a hidden
+                                prompt
     --project                   Set or delete the cloud project's own key, which overrides the org's
   reeval cloud provider <provider> delete
                                 Delete the provider's key (--project: the project's override)
