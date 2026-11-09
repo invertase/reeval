@@ -469,7 +469,16 @@ describe('attach', () => {
             state: 'failed',
             outcome: { target, ok: false, failure: { message: 'no image', log: null }, ms: 1 },
           },
-          { type: 'run-end', at: 1, summaryPath: `${history}/run-1/summary.md` },
+          {
+            type: 'run-end',
+            at: 1,
+            summaryPath: `${history}/run-1/summary.md`,
+            recorded: {
+              record: `${up}/evals/.history/run-1.json`,
+              files: `${up}/evals/.history/run-1`,
+              archive: `${up}/evals/.history/run-1.zip`,
+            },
+          },
         ] as ReevalEvent[],
       }
     }
@@ -498,9 +507,22 @@ describe('attach', () => {
         summary: e?.type === 'run-end' && e.summaryPath,
       }
     }
+    const recorded = (run: ReturnType<typeof printed>, cwd: string) => {
+      const path = viewerPath(
+        { type: 'header', schemaVersion: 1, pid: 1, host: 'h', ...header(), cwd },
+        undefined,
+      )
+      const end = viewerEvent(run.events[2] as ReevalEvent, path, run.config)
+      return end.type === 'run-end' ? end.recorded : undefined
+    }
     // A run in evals/: without a project of its own, the viewer reads its paths from the project
     // root, where the config is, so the plan doesn't name it, as a run there wouldn't.
     const inEvals = printed('..')
+    assert.deepEqual(recorded(inEvals, 'evals'), {
+      record: 'evals/.history/run-1.json',
+      files: 'evals/.history/run-1',
+      archive: 'evals/.history/run-1.zip',
+    })
     assert.deepEqual(shown(inEvals, 'evals'), {
       line: 'plan  run run-1 · 1 eval',
       config: undefined,
@@ -1137,6 +1159,45 @@ evaluate('passes', async (c) => {
     assert.equal(below.code, 0, below.stderr)
     assert.match(below.stdout, /Config: +\.\.\/\.\.\/reeval\.config\.ts/)
     assert.match(below.stdout, /summary \.\.\/\.\.\/\.reeval\/runs\/\S+\/summary\.md/)
+  })
+
+  test("run-end names the record, files and archive --record wrote; an unrecorded run's names none", async () => {
+    const p = await project('events-recorded', {
+      'reeval.config.ts': config.replace(
+        'sandbox: fakeSandbox() }',
+        'sandbox: fakeSandbox(), history: { archive: true } }',
+      ),
+      'evals/passes.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('passes', async (c) => {
+  expect(c.attempt.n).toBe(1)
+})
+`,
+    })
+    const evals = join(p.dir, 'evals')
+    const stream = join(p.dir, 'recorded.ndjson')
+    const ran = await runCli(evals, ['run', '--record', '--events-file', stream])
+    assert.equal(ran.code, 0, ran.stderr)
+    const lines = readLines(stream)
+    const id = (lines[0] as RunEventsHeader).runId
+    const end = lines.find((l) => l.type === 'run-end')
+    assert.ok(end?.type === 'run-end')
+    assert.deepEqual(end.recorded, {
+      record: `.history/${id}.json`,
+      files: `.history/${id}`,
+      archive: `.history/${id}.zip`,
+    })
+    assert.ok(existsSync(join(evals, end.recorded.record)))
+    assert.ok(existsSync(join(evals, end.recorded.files as string, 'summary.md')))
+    assert.ok(existsSync(join(evals, end.recorded.archive as string)))
+    // The record line still follows the run's summary.
+    const summary = ran.stdout.search(/summary \.\.\/\.reeval\/runs\//)
+    assert.ok(summary >= 0 && summary < ran.stdout.search(/recorded \.history\//), ran.stdout)
+
+    const unrecorded = join(p.dir, 'unrecorded.ndjson')
+    assert.equal((await runCli(evals, ['run', '--events-file', unrecorded])).code, 0)
+    const plain = readLines(unrecorded).find((l) => l.type === 'run-end')
+    assert.ok(plain?.type === 'run-end')
+    assert.equal(plain.recorded, undefined)
   })
 
   test('a quiet run writes heartbeats to its stream, which attach replays as the run printed', async () => {

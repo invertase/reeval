@@ -18,6 +18,7 @@ import type { RunRecord } from '../src/history/types.ts'
 import { resolveHistory } from '../src/store/resolve.ts'
 import { s3Settings, s3Store } from '../src/store/s3.ts'
 import { transient } from '../src/store/sync.ts'
+import type { RunEventLine } from '../src/view/events.ts'
 import { fakeConfig, noSignals, project, runCli, tempDir } from './helpers.ts'
 import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
 
@@ -194,9 +195,29 @@ describe('recording to s3()', () => {
   const remoteRecords = () =>
     [...s3.objects.keys()].filter((k) => /^ci\/runs\/\d{4}-\d{2}\/[^/]+\.json$/.test(k))
 
+  /** The `recorded` paths the run's `run-end` event named, from `stream` in `dir`. */
+  const recordedIn = (stream: string) => {
+    const end = readFileSync(join(dir, stream), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as RunEventLine)
+      .find((l) => l.type === 'run-end')
+    return end?.type === 'run-end' ? end.recorded : undefined
+  }
+
   test('a recorded run uploads to the bucket, and nothing lands in the history folder', async () => {
-    const r = await runCli(dir, ['run', '--profile', 'ci', '--record'], { env: env() })
+    const r = await runCli(
+      dir,
+      ['run', '--profile', 'ci', '--record', '--events-file', 'uploaded.ndjson'],
+      { env: env() },
+    )
     assert.equal(r.code, 0, r.stdout + r.stderr)
+    const named = recordedIn('uploaded.ndjson')
+    assert.match(named?.record ?? '', /^\.reeval\/store\/[0-9a-f]{12}\/history\/[^/]+\.json$/)
+    assert.ok(existsSync(join(dir, named?.record ?? '')), 'run-end names the store copy')
+    assert.equal(named?.files, named?.record.slice(0, -5))
+    assert.ok(existsSync(join(dir, named?.files ?? '', 'summary.md')))
+    assert.equal(named?.archive, undefined)
     assert.match(r.stdout, /^recorded \S+ in s3:\/\/reeval-runs\/ci \(\d+ files, [\d.]+ KB\)$/m)
     assert.equal(remoteRecords().length, 1)
     assert.equal(existsSync(join(dir, 'evals/.history')), false)
@@ -244,11 +265,17 @@ describe('recording to s3()', () => {
   test('a store that keeps failing exits 3 and keeps the run for reeval sync', async () => {
     const before = remoteRecords().length
     s3.failNext(100)
-    const r = await runCli(dir, ['run', '--profile', 'ci', '--record'], {
-      env: { ...env(), GITHUB_ACTIONS: 'true' },
-    })
+    const r = await runCli(
+      dir,
+      ['run', '--profile', 'ci', '--record', '--events-file', 'pending.ndjson'],
+      { env: { ...env(), GITHUB_ACTIONS: 'true' } },
+    )
     s3.failNext(0)
     assert.equal(r.code, 3, r.stdout + r.stderr)
+    const named = recordedIn('pending.ndjson')?.record ?? ''
+    assert.ok(existsSync(join(dir, named)), 'run-end names the copy the upload left pending')
+    const summary = r.stdout.search(/summary \.reeval\/runs\//)
+    assert.ok(summary >= 0 && summary < r.stdout.search(/couldn't upload/), 'the summary first')
     assert.match(
       r.stdout,
       /reeval: couldn't upload \S+ to s3:\/\/reeval-runs\/ci: .*\(503 ServiceUnavailable\)\. The run is kept in \.reeval\/store\/[0-9a-f]{12}\/pending; reeval sync uploads it\./,
