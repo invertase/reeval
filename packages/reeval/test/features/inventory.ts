@@ -442,6 +442,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'cloud.login',
+    area: 'Config and selection',
+    name: "`reeval login`, `logout` and `whoami` against the cloud platform at `REEVAL_CLOUD_URL`: login prints a page and a code to approve, waits for the approval and keeps the token in the OS keychain (macOS, or `secret-tool` on Linux, never on a command line), else in `credentials.json` in reeval's config directory (mode 0600); cloud runs and `reeval attach` send it as a bearer token, with `REEVAL_TOKEN` over it; logout revokes it on the platform and removes it; whoami asks the platform who it is (exit 2 when signed out or refused, 3 when the platform doesn't answer)",
+    unit: [
+      'reeval/test/login.test.ts',
+      'reeval/test/cloud-run.test.ts',
+      'reeval/test/schema.test.ts',
+      'reeval/test/cli.test.ts',
+    ],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",

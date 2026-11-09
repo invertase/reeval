@@ -264,6 +264,7 @@ describe('read defaults', () => {
       'capture-page': [],
       'bundle-manifest': [],
       'archive-manifest': [],
+      credentials: [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {

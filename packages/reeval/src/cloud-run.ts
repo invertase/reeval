@@ -10,16 +10,15 @@ import { type FlagName, type Flags, RUN_FLAGS } from './cli-spec.ts'
 import type { PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { displayUrl, EventStreamError, type FollowOptions } from './events.ts'
+import { CLOUD_TOKEN_VAR, type CloudToken, cloudToken } from './login/credentials.ts'
 import type { PlanDocument } from './plan.ts'
 import { stripCredentials } from './redact.ts'
 import { sandboxKind } from './sandbox/kinds.ts'
 import { plural } from './text.ts'
 import type { ResolvedConfig, ResolvedProfile } from './types.ts'
 
-/** The platform's URL, as the cloud run reads it. */
+/** The platform's URL, as the cloud run and `reeval login` read it. */
 export const CLOUD_URL_VAR = 'REEVAL_CLOUD_URL'
-/** A bearer token the cloud run sends the platform, when it's set. */
-export const CLOUD_TOKEN_VAR = 'REEVAL_TOKEN'
 
 /** The exit code of a run this terminal detached from, as of one it interrupted. */
 const INTERRUPTED = 130
@@ -106,21 +105,23 @@ export function notCloud(planned: readonly PlannedItem[]): string[] {
   })
 }
 
-/** The platform's URL from `REEVAL_CLOUD_URL`: exit 2 when it's unset or not an http(s) URL. */
-export function cloudUrl(env: NodeJS.ProcessEnv = process.env): URL {
+/**
+ * The platform's URL from `REEVAL_CLOUD_URL`, with a trailing `/`: exit 2 when it's unset or not
+ * an http(s) URL. `unset` is the refusal when it's unset.
+ */
+export function cloudUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  unset = `A cloud run needs ${CLOUD_URL_VAR}, the cloud platform's URL. Set it, or pass --local to run here.`,
+): URL {
   const raw = env[CLOUD_URL_VAR]?.trim()
-  if (!raw) {
-    throw new UsageError(
-      `A cloud run needs ${CLOUD_URL_VAR}, the cloud platform's URL. Set it, or pass --local to run here.`,
-    )
-  }
+  if (!raw) throw new UsageError(unset)
   const url = URL.parse(raw)
   if (!url || !/^https?:$/.test(url.protocol)) {
     throw new UsageError(`${CLOUD_URL_VAR} is an http or https URL (got ${stripCredentials(raw)})`)
   }
   if (url.username || url.password) {
     throw new UsageError(
-      `${CLOUD_URL_VAR} can't carry a user name or password (got ${stripCredentials(raw)}): set ${CLOUD_TOKEN_VAR} instead`,
+      `${CLOUD_URL_VAR} can't carry a user name or password (got ${stripCredentials(raw)}): sign in with reeval login, or set ${CLOUD_TOKEN_VAR}`,
     )
   }
   if (!url.pathname.endsWith('/')) url.pathname += '/'
@@ -149,35 +150,52 @@ export async function cloudLine(
   return `${lead} (${attempts}${est}), --local to run here`
 }
 
-/** The headers every platform request carries: the bearer token, when one is set. */
-function authHeaders(env: NodeJS.ProcessEnv): Record<string, string> {
-  const token = env[CLOUD_TOKEN_VAR]?.trim()
-  if (!token) return {}
-  const bad = [...token].findIndex((c) => /[\s\p{Cc}]/u.test(c))
-  if (bad >= 0) {
-    const code = token.codePointAt(bad)?.toString(16).padStart(4, '0')
-    throw new UsageError(
-      `${CLOUD_TOKEN_VAR} has whitespace or a control character (U+${code}) at position ${bad + 1}: set it to the token alone.`,
-    )
+/** What every platform request carries, and what to do when the platform refuses it. */
+export type CloudAuth = {
+  /** The bearer token, when there is one. */
+  headers: Record<string, string>
+  /** The fix for a 401 or 403, which depends on where the token came from. */
+  refused: string
+}
+
+/** What to do when the platform refuses `token`, or no token at all. */
+export function refusedHint(token: CloudToken | null): string {
+  if (token?.from === 'env') return `check ${CLOUD_TOKEN_VAR}`
+  if (token) return 'reeval login signs in again'
+  return `reeval login signs in, or set ${CLOUD_TOKEN_VAR}`
+}
+
+/** The platform's bearer token: `REEVAL_TOKEN` when it's set, else the one `reeval login` stored. */
+export async function cloudAuth(
+  base: URL,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CloudAuth> {
+  const token = await cloudToken(base, env)
+  return {
+    headers: token ? { authorization: `Bearer ${token.token}` } : {},
+    refused: refusedHint(token),
   }
-  return { authorization: `Bearer ${token}` }
 }
 
 /**
  * How `reeval attach` follows `source`: with the bearer token when it's the cloud platform's,
  * else as any other stream.
  */
-export function cloudFollow(
+export async function cloudFollow(
   source: string,
   env: NodeJS.ProcessEnv = process.env,
-): FollowOptions | undefined {
-  const raw = env[CLOUD_URL_VAR]?.trim()
-  const platform = raw ? URL.parse(raw) : null
+): Promise<FollowOptions | undefined> {
+  let platform: URL
+  try {
+    platform = cloudUrl(env)
+  } catch {
+    return undefined
+  }
   const url = URL.parse(source)
-  if (!platform || !url) return undefined
+  if (!url) return undefined
   const origin = (u: URL) => `${u.protocol.replace(/^ws/, 'http')}//${u.host}`
   if (origin(platform) !== origin(url)) return undefined
-  const headers = authHeaders(env)
+  const { headers } = await cloudAuth(platform, env)
   if (!headers.authorization) return undefined
   return { connect: (u) => new WebSocket(u, { headers } as unknown as string[]) }
 }
@@ -189,12 +207,14 @@ type PlatformRun = {
   exitCode?: number | null
 }
 
-/** One request to the platform, JSON in and out; a refusal (4xx) exits 2, any other failure 3. */
-async function call<T>(
+export type CallInit = RequestInit & { what: string; timeoutMs?: number }
+
+/** One request to the platform, JSON in and out, whatever its status; exit 3 when it doesn't answer. */
+export async function request(
   url: URL,
-  init: RequestInit & { what: string; timeoutMs?: number },
+  init: CallInit,
   headers: Record<string, string>,
-): Promise<T> {
+): Promise<{ status: number; ok: boolean; body: unknown }> {
   const { what, timeoutMs = 30_000, ...rest } = init
   let res: Response
   try {
@@ -212,12 +232,33 @@ async function call<T>(
   try {
     body = text ? JSON.parse(text) : null
   } catch {}
-  if (!res.ok) {
-    const said = (body as { error?: { message?: unknown } } | null)?.error?.message
-    const auth = res.status === 401 || res.status === 403 ? ` (check ${CLOUD_TOKEN_VAR})` : ''
-    const why = `${typeof said === 'string' ? said : `HTTP ${res.status}`}${auth}`
+  return { status: res.status, ok: res.ok, body }
+}
+
+/** The platform's own words for a refusal, in any of the shapes its routes answer with. */
+export function platformMessage(body: unknown): string | undefined {
+  const b = body as {
+    error?: unknown
+    error_description?: unknown
+    message?: unknown
+  } | null
+  const nested = (b?.error as { message?: unknown } | null | undefined)?.message
+  for (const said of [nested, b?.error_description, b?.message, b?.error]) {
+    if (typeof said === 'string' && said) return said
+  }
+  return undefined
+}
+
+/** One request to the platform, JSON in and out; a refusal (4xx) exits 2, any other failure 3. */
+export async function call<T>(url: URL, init: CallInit, auth: CloudAuth): Promise<T> {
+  const { what } = init
+  const { status, ok, body } = await request(url, init, auth.headers)
+  if (!ok) {
+    const said = platformMessage(body)
+    const hint = status === 401 || status === 403 ? ` (${auth.refused})` : ''
+    const why = `${said ?? `HTTP ${status}`}${hint}`
     const message = `the cloud platform refused to ${what}: ${why}`
-    throw res.status >= 400 && res.status < 500
+    throw status >= 400 && status < 500
       ? new UsageError(message)
       : new CloudError(`couldn't ${what}: ${why}`)
   }
@@ -235,7 +276,7 @@ export async function cloudPlanEnv(
   const config = await call<{ gatewayBaseUrl?: string | null }>(
     new URL('api/config', base),
     { method: 'GET', what: "read the cloud platform's config" },
-    authHeaders(env),
+    await cloudAuth(base, env),
   )
   return config?.gatewayBaseUrl ? { AI_GATEWAY_BASE_URL: config.gatewayBaseUrl } : {}
 }
@@ -253,7 +294,8 @@ export type CloudRunOptions = {
 export async function runCloud(options: CloudRunOptions): Promise<number> {
   const { base, bundle, log } = options
   const env = options.env ?? process.env
-  const headers = authHeaders(env)
+  const auth = await cloudAuth(base, env)
+  const { headers } = auth
   const { archive } = bundle
   const sha256 = createHash('sha256').update(archive).digest('hex')
   const created = await call<{ runId?: unknown; upload?: { url?: unknown; method?: unknown } }>(
@@ -264,7 +306,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ bundleSha256: sha256, bundleBytes: archive.length }),
     },
-    headers,
+    auth,
   )
   const runId = created?.runId
   const uploadUrl = typeof created?.upload?.url === 'string' ? URL.parse(created.upload.url) : null
@@ -273,7 +315,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   }
   const runUrl = (path = '') => new URL(`api/runs/${encodeURIComponent(runId)}${path}`, base)
   // An upload URL on another origin carries its own authorization.
-  const uploadHeaders = uploadUrl.origin === base.origin ? headers : {}
+  const uploadAuth = uploadUrl.origin === base.origin ? auth : { ...auth, headers: {} }
   await call(
     uploadUrl,
     {
@@ -283,9 +325,9 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
       body: new Blob([new Uint8Array(archive)]),
       timeoutMs: 10 * 60_000,
     },
-    uploadHeaders,
+    uploadAuth,
   )
-  await call(runUrl('/start'), { method: 'POST', what: `start run ${runId}` }, headers)
+  await call(runUrl('/start'), { method: 'POST', what: `start run ${runId}` }, auth)
   const events = runUrl('/events')
   const reattach = `reeval attach ${displayUrl(events.href)}`
   log(`Started cloud run ${runId}; ${reattach} follows it`)
@@ -313,7 +355,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     const run = await call<PlatformRun>(
       runUrl(),
       { method: 'GET', what: `read run ${runId}` },
-      headers,
+      auth,
     ).catch(() => null)
     const why = run?.error?.message ?? run?.error?.code
     if (typeof run?.exitCode === 'number') {

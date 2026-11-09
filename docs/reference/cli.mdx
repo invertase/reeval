@@ -206,6 +206,45 @@ reeval attach [run|file|url]  Follow a reeval run's --events stream and print it
 ```
 
 [//]: # (/generated:cli-help:attach)
+
+## `reeval login`
+
+[//]: # (generated:cli-help:login)
+
+```text
+reeval login                  Sign in to the cloud platform at REEVAL_CLOUD_URL: open the page it
+                              prints, check the code and approve it. Keeps the token in the OS
+                              keychain (macOS, or secret-tool on Linux), else in
+                              ~/.config/reeval/credentials.json (mode 0600), for cloud runs and
+                              reeval attach; REEVAL_TOKEN takes precedence over it
+```
+
+[//]: # (/generated:cli-help:login)
+
+## `reeval logout`
+
+[//]: # (generated:cli-help:logout)
+
+```text
+reeval logout                 Revoke the sign-in to the cloud platform at REEVAL_CLOUD_URL and
+                              remove its token from this machine
+```
+
+[//]: # (/generated:cli-help:logout)
+
+## `reeval whoami`
+
+[//]: # (generated:cli-help:whoami)
+
+```text
+reeval whoami                 Who the cloud platform at REEVAL_CLOUD_URL says you are, and whether
+                              the token is REEVAL_TOKEN or reeval login's; exit 2 when signed out
+                              or the platform refuses it
+  --json                      As JSON: url, user and token
+```
+
+[//]: # (/generated:cli-help:whoami)
+
 ## `reeval bundle`
 
 [//]: # (generated:cli-help:bundle)

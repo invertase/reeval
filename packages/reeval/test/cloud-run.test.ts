@@ -193,6 +193,69 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
+  test("sends reeval login's token, and REEVAL_TOKEN over it", async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const config = tempDir('cloud-login')
+      mkdirSync(join(config, 'reeval'))
+      writeFileSync(
+        join(config, 'reeval/credentials.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          logins: {
+            [`${p.base}/`]: {
+              store: 'file',
+              token: 'stored-login-token',
+              user: { email: 'ada@example.com' },
+              signedInAt: new Date().toISOString(),
+            },
+          },
+        }),
+      )
+      const env = { REEVAL_CLOUD_URL: p.base, XDG_CONFIG_HOME: config, REEVAL_NO_KEYCHAIN: '1' }
+      const r = await runCli(dir, ['run', '--cloud'], { env })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const calls = p.seen.filter((s) => s.path !== '/ingest')
+      assert.ok(calls.some((s) => s.method === 'WS'))
+      for (const s of calls) {
+        assert.equal(s.auth, 'Bearer stored-login-token', `${s.method} ${s.path}`)
+      }
+      const attach = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], { env })
+      assert.equal(attach.code, 0, attach.stdout + attach.stderr)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer stored-login-token')
+      const over = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
+        env: { ...env, REEVAL_TOKEN: 'ci-token' },
+      })
+      assert.equal(over.code, 0, over.stdout + over.stderr)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer ci-token')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a refused token says to sign in with reeval login', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ error: { code: 'unauthorized', message: 'Sign in first.' } }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: base, XDG_CONFIG_HOME: tempDir('cloud-login') },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /refused to read the cloud platform's config: Sign in first\. \(reeval login signs in, or set REEVAL_TOKEN\)/,
+      )
+    } finally {
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
+
   test("exits with the run's exit code when it fails, from the config's cloud: true", async () => {
     const p = await platform()
     try {

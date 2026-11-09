@@ -224,6 +224,20 @@ async function run(argv: string[]): Promise<number> {
       confirm: process.stdin.isTTY && process.stdout.isTTY ? confirm : undefined,
     })
   }
+  if (command === 'login' || command === 'logout' || command === 'whoami') {
+    const login = await import('./login/command.ts')
+    // The platform's URL may be in the project's .env, as it is for a cloud run.
+    loadEnvFiles(configPathFor(values.config))
+    const { defaultIssueDeps } = await import('./report/issue.ts')
+    const io = {
+      out: (s: string) => console.log(s),
+      err: (s: string) => console.error(dim(s)),
+      ...(process.stdout.isTTY && !inCI() && { open: defaultIssueDeps().open }),
+    }
+    if (command === 'login') return login.loginCommand(io)
+    if (command === 'logout') return login.logoutCommand(io)
+    return login.whoamiCommand(values, io)
+  }
   const configPath = configPathFor(values.config)
   if (command === 'image') {
     if (filters[0] === 'list') return imageListCommand(values, configPath, filters.slice(1))
@@ -842,7 +856,7 @@ async function attachCommand(
     source = (await resolveAttach(root, target)).file
   }
   const { cloudFollow } = await import('./cloud-run.ts')
-  const follow = isAttachUrl(source) ? cloudFollow(source) : undefined
+  const follow = isAttachUrl(source) ? await cloudFollow(source) : undefined
   return attachHere(flags, {
     source,
     ...(root === undefined ? {} : { root }),
