@@ -294,6 +294,7 @@ describe('reeval cloud secrets', () => {
         [['set', 'sk-live-0123', '--host', 'a.example'], /the secret's name isn't one/],
         [['set', 'NEW'], /NEW is a new secret: give --host <host> for a brokered one/],
         [['get', 'A'], /reeval cloud secrets needs set, delete or list \(got get\)/],
+        [['set', 'A', `-${VALUE}`], /reeval cloud secrets has no such option/],
       ]
       for (const [args, message] of cases) {
         const r = await runCli(dir, ['cloud', 'secrets', ...args], { env, input: VALUE })
@@ -476,6 +477,7 @@ describe('reeval cloud provider', () => {
         [['openai', 'set'], 'sk x', /whitespace or a control character at position 3/],
         [['openai', 'rotate'], 'k', /needs set or delete \(got rotate\)/],
         [['openai', 'sk-proj-Abc123'], 'k', /needs set or delete$/m],
+        [['openai', 'set', '--sk-proj-Abc123'], 'k', /reeval cloud provider has no such option/],
       ]
       for (const [args, input, message] of cases) {
         const r = await runCli(dir, ['cloud', 'provider', ...args], { env, input })

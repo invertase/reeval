@@ -43,6 +43,8 @@ const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,
 const MAX_HOSTS = 20
 const MAX_SECRET_BYTES = 16 * 1024
 const MAX_KEY_BYTES = 4 * 1024
+// biome-ignore lint/suspicious/noControlCharactersInRegex: terminal escape sequences
+const ESCAPE_SEQUENCE = /\u001b(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/gsu
 
 /** The project in `.reeval/project.json`, else the platform's default one. */
 export const DEFAULT_PROJECT = { orgId: 'org_default', projectId: 'proj_default' }
@@ -425,7 +427,9 @@ export async function readSecretValue(what: string): Promise<string> {
         reject(new UsageError('stdin closed before the value was entered; nothing was set.'))
       }
       const onData = (data: string) => {
-        for (const ch of data) {
+        // An arrow, function key or paste bracket arrives as an escape sequence: none of it is
+        // the value, but what follows it in the same chunk is.
+        for (const ch of data.replace(ESCAPE_SEQUENCE, '')) {
           if (ch === '\r' || ch === '\n' || ch === '\u0004') {
             stop()
             resolveValue(typed.join(''))
@@ -436,8 +440,6 @@ export async function readSecretValue(what: string): Promise<string> {
             reject(new UsageError('Canceled; nothing was set.'))
             return
           }
-          // An arrow or function key arrives as one escape sequence: none of it is the value.
-          if (ch === '\u001b') return
           if (ch === '\u007f' || ch === '\b') typed.pop()
           else if (!/\p{Cc}/u.test(ch)) typed.push(ch)
         }
