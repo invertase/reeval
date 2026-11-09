@@ -115,6 +115,8 @@ async function send<T>(
     {
       method: init.method,
       what: init.what,
+      // A redirect would resend the value, and the token, to wherever it points.
+      redirect: 'error',
       ...(init.body !== undefined && {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(init.body),

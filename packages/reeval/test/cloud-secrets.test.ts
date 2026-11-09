@@ -432,6 +432,32 @@ describe('reeval cloud provider', () => {
     }
   })
 
+  test("doesn't follow a redirect with the value", async () => {
+    const p = await platform()
+    const hops: string[] = []
+    const relay = createServer((req, res) => {
+      hops.push(req.method ?? '')
+      res.writeHead(307, { location: `${p.base}${req.url}` })
+      res.end()
+    })
+    await new Promise<void>((resolve) => relay.listen(0, '127.0.0.1', resolve))
+    try {
+      const { dir, env } = linked(`http://127.0.0.1:${(relay.address() as AddressInfo).port}`)
+      const out = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--mode', 'sandbox'], {
+        env,
+        input: VALUE,
+      })
+      assert.equal(out.code, 3, out.stdout + out.stderr)
+      never(out.stdout + out.stderr)
+      assert.deepEqual(hops, ['PUT'])
+      assert.equal(p.seen.length, 0, 'the redirect target never hears from reeval')
+    } finally {
+      relay.closeAllConnections()
+      await new Promise((resolve) => relay.close(resolve))
+      await p.close()
+    }
+  })
+
   test('refuses an unknown provider, a key on the command line and a key with whitespace', async () => {
     const p = await platform()
     try {
