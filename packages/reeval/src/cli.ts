@@ -899,7 +899,7 @@ async function attachCommand(
   if (download && detached) {
     console.log(
       dim(
-        `Not downloading the files of cloud run ${download.runId} after detaching: reeval attach --download ${displayUrl(source)} downloads them once it has ended`,
+        `Not downloading the files of cloud run ${download.runId} after detaching: reeval attach --download${flags.profile === undefined ? '' : ` --profile ${flags.profile}`} ${displayUrl(source)} downloads them once it has ended`,
       ),
     )
   } else if (download) {
@@ -913,7 +913,9 @@ async function attachCommand(
 
 /**
  * `reeval attach --download`: what downloads the files of the cloud run whose event stream is
- * `source` into this project's `.reeval/`; exit 2 for any other stream, or with no project.
+ * `source` into this project, as a run here leaves them, a recorded run's into the history folder
+ * of the profile `profile`, `REEVAL_PROFILE` or `defaultProfile` picks; exit 2 for any other
+ * stream, or with no project.
  */
 async function cloudDownload(
   source: string,
@@ -1059,7 +1061,11 @@ async function cloudTarget(
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
     ...(flags.download && {
-      download: { root: setup.config.root, history: setup.config.history },
+      download: {
+        root: setup.config.root,
+        history: setup.config.history,
+        ...(flags.profile === undefined ? {} : { profile: flags.profile }),
+      },
     }),
   })
   return { exit }

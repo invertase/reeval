@@ -13,7 +13,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_PROFILE`
 
-`REEVAL_PROFILE` names the profile (`--profile` on `reeval run` and `reeval image build`). With both unset, `defaultProfile.ci` applies when `CI` is set to a value other than `false`, and `defaultProfile.local` applies when `CI` is unset or `false`. Omitting the applicable default selects no profile. An empty or unknown profile name in `defaultProfile` stops config loading; an unknown `--profile` or `REEVAL_PROFILE` name stops the command.
+`REEVAL_PROFILE` names the profile (`--profile` on `reeval run`, `reeval image build` and `reeval attach --download`). With both unset, `defaultProfile.ci` applies when `CI` is set to a value other than `false`, and `defaultProfile.local` applies when `CI` is unset or `false`. Omitting the applicable default selects no profile. An empty or unknown profile name in `defaultProfile` stops config loading; an unknown `--profile` or `REEVAL_PROFILE` name stops the command.
 
 ## `REEVAL_CONCURRENCY`
 

@@ -43,7 +43,13 @@ type File = {
   path: string
   data: Buffer
   record: boolean
-  /** A link's target; a link only comes in a snapshot. */
+  /**
+   * Whether it may be a link: inside an attempt's workspace snapshot in `.reeval/runs`, which keeps
+   * the workspace's own links, or inside the run's folder in the history, which keeps a recorded
+   * snapshot's.
+   */
+  linkable: boolean
+  /** A link's target. */
   link?: string
 }
 
@@ -91,7 +97,8 @@ export async function downloadAfter(
 /**
  * Where an archive path lands: `outside` when it's outside `.reeval/runs`, `.reeval/debug` and the
  * history folder (`history`, its path from the project root, or null when it's outside it),
- * `other` for something in them that isn't a run's.
+ * `other` for something in them that isn't a run's. A history folder at the project root holds
+ * only runs, so anything else there is outside.
  */
 function placed(
   path: string,
@@ -111,8 +118,13 @@ function placed(
   if (!name) return 'outside'
   const ext = inner.length ? undefined : WHOLE[area].find((e) => name.endsWith(e))
   const runId = ext ? name.slice(0, -ext.length) : name
-  if (!RUN_ID.test(runId) || (!inner.length && !ext)) return 'other'
-  return { area, runId, path, record: ext === '.json' }
+  if (!RUN_ID.test(runId) || (!inner.length && !ext)) {
+    return area === 'history' && !history?.length ? 'outside' : 'other'
+  }
+  const at = inner.indexOf('snapshots', 1)
+  const linkable =
+    area === 'history' ? inner.length > 0 : area === 'runs' && at > 0 && inner.length > at + 2
+  return { area, runId, path, record: ext === '.json', linkable }
 }
 
 async function fetchArchive(url: URL, what: string, auth: CloudAuth): Promise<Buffer | null> {
@@ -177,13 +189,6 @@ async function stateOf(
   return (await readFile(file)).equals(f.data) ? 'same' : 'other'
 }
 
-/** A link in an attempt's workspace snapshot, which keeps the workspace's own links. */
-const inSnapshot = (f: Omit<File, 'data' | 'link'>) => {
-  const parts = f.path.split('/')
-  const at = parts.indexOf('snapshots', 4)
-  return f.area === 'runs' && at > 0 && parts.length > at + 2
-}
-
 /** A path as this filesystem tells it apart: macOS's and Windows' fold case and normalize. */
 const key =
   process.platform === 'darwin' || process.platform === 'win32'
@@ -212,7 +217,9 @@ export async function downloadCloudFiles(options: {
     isAbsolute(historyAt) || historyAt === '..' || historyAt.startsWith('../')
       ? null
       : historyAt.split('/').filter(Boolean)
-  const areas = `.reeval/runs, .reeval/debug${history ? ` and ${historyAt || '.'}` : ''}`
+  const areas = history
+    ? `.reeval/runs, .reeval/debug and ${historyAt || '.'}`
+    : `.reeval/runs and .reeval/debug (this project's history folder, ${options.history.dir}, is outside it)`
   const what = `the files of cloud run ${cloudRunId}`
   const archive = await fetchArchive(url, what, auth)
   if (!archive) return [`The cloud platform has no files of run ${cloudRunId} to download`]
@@ -241,12 +248,12 @@ export async function downloadCloudFiles(options: {
     if (at === 'outside') unsafe.push(e.path)
     else if (at === 'other') others++
     else if (e.type === 'file') files.push({ ...at, data: e.data })
-    else if (inSnapshot(at)) files.push({ ...at, data: Buffer.alloc(0), link: e.target })
+    else if (at.linkable) files.push({ ...at, data: Buffer.alloc(0), link: e.target })
     else unsafe.push(e.path)
   }
   if (unsafe.length) {
     throw new CloudError(
-      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside ${areas}, or a link outside a snapshot (${listed(unsafe)}): not downloading them`,
+      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside ${areas}, or a link outside a snapshot or a recorded run's folder (${listed(unsafe)}): not downloading them`,
     )
   }
   const paths = new Set<string>()
@@ -356,8 +363,9 @@ export async function downloadCloudFiles(options: {
       continue
     }
     const bytes = wrote.reduce((n, f) => n + f.data.length, 0)
-    const into = scratch ? ` into ${scratch}` : ''
-    const copy = record ? `, recorded in ${shown(record.path)}` : ''
+    const into = scratch && wrote.some((f) => f.area === 'runs') ? ` into ${scratch}` : ''
+    const copy =
+      record && wrote.some((f) => f.area === 'history') ? `, recorded in ${shown(record.path)}` : ''
     const debug = mine.some((f) => f.area === 'debug')
       ? `, its debug data in ${shown('.reeval', 'debug', runId)}`
       : ', without debug data'

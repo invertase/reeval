@@ -294,8 +294,11 @@ export type CloudRunOptions = {
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
   follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
-  /** `--download`: once the run ends, its files go into this project's `.reeval/`. */
-  download?: { root: string; history: ResolvedHistory }
+  /**
+   * `--download`: once the run ends, its files go into this project as a run here leaves them,
+   * a recorded run's into `history`; `profile` is the `--profile` that picked it.
+   */
+  download?: { root: string; history: ResolvedHistory; profile?: string }
   env?: NodeJS.ProcessEnv
 }
 
@@ -373,7 +376,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   }
   if (detached) {
     const again = options.download
-      ? `reeval attach --download ${displayUrl(events.href)} follows it again and downloads its files once it ends`
+      ? `reeval attach --download${options.download.profile === undefined ? '' : ` --profile ${options.download.profile}`} ${displayUrl(events.href)} follows it again and downloads its files once it ends`
       : `${reattach} follows it again`
     log(`Cloud run ${runId} goes on: ${again}`)
     return INTERRUPTED
