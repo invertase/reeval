@@ -1,6 +1,6 @@
 // The terminal output's view of a run. The engine emits these events; nothing in ui/ imports the
 // engine or `@vitest/*`.
-import type { RunRecord } from '../history/types.ts'
+import type { RunRecord, SecretWarning } from '../history/types.ts'
 import type { PrepareTarget } from '../sandbox/preflight.ts'
 import type { PrepareFailure } from '../sandbox/provider.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
@@ -76,6 +76,8 @@ export type ProgressUpdate =
   | { kind: 'cleanup' }
   /** Something the attempt did that reeval stopped or changed, e.g. a refused brokered request. */
   | { kind: 'warning'; text: string }
+  /** A brokered secret's placeholder sent where it isn't swapped in; the CLI sends it on as a `secret-warning`. */
+  | ({ kind: 'secret-warning' } & SecretWarning)
   | {
       kind: 'browser-download'
       name: string
@@ -193,6 +195,11 @@ export type ReevalEvent =
   | { type: 'eval-end'; at: number; result: EvalResult }
   /** Preflight preparing the sandboxes: the list, then each one ready or failed. */
   | ({ type: 'prepare'; at: number } & PrepareView)
+  /**
+   * A brokered secret's placeholder an attempt sent where its value isn't swapped in, once per
+   * attempt, secret, host and reason. `attemptId` is the attempt's `key`.
+   */
+  | ({ type: 'secret-warning'; at: number; attemptId: string } & SecretWarning)
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {

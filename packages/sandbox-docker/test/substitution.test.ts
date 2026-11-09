@@ -6,6 +6,7 @@ import {
   ReplaceStream,
   type Substitution,
   scrubHeaders,
+  strayPlaceholders,
   substituteRequest,
   substitutes,
   unsubstituted,
@@ -142,6 +143,29 @@ describe('unsubstituted', () => {
     )
     const elsewhere = { ...request(`/v1?key=${HOLDER}`), host: 'other.example.com' }
     assert.deepEqual(unsubstituted([sub()], elsewhere), [])
+  })
+})
+
+describe('strayPlaceholders', () => {
+  test('names a placeholder sent off its hosts or over plain HTTP, once per secret', () => {
+    const subs = [sub({ hosts: ['*.example.com'] }), sub({ name: 'KEY', in: ['query'] })]
+    const request = (host: string) => ({
+      host,
+      path: `/x?k=${HOLDER}`,
+      headers: { authorization: `Bearer ${HOLDER}` },
+    })
+    assert.deepEqual(strayPlaceholders(subs, request('evil.test'), true), [
+      { name: 'KEY', reason: 'host_not_allowed' },
+    ])
+    assert.deepEqual(strayPlaceholders(subs, request('api.example.com'), false), [
+      { name: 'KEY', reason: 'plain_http' },
+    ])
+    // Twin: on its host over HTTPS, or with no placeholder, nothing.
+    assert.deepEqual(strayPlaceholders(subs, request('api.example.com'), true), [])
+    assert.deepEqual(
+      strayPlaceholders(subs, { host: 'evil.test', path: '/', headers: {} }, false),
+      [],
+    )
   })
 })
 

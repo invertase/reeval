@@ -178,6 +178,14 @@ const formsOf = (value: string) => {
   return forms
 }
 
+/**
+ * A brokered secret's placeholder, which a held secret's variable is set to: no secret, and its
+ * windows would mask every other placeholder's prefix.
+ */
+const PLACEHOLDER = /^reeval_secret_[0-9A-Za-z]{32}$/
+
+export const isPlaceholder = (value: string | undefined) => !!value && PLACEHOLDER.test(value)
+
 /** A stretch of a secret at least this long is masked on its own, like the key's last 12 characters. */
 export const MIN_FRAGMENT = 8
 
@@ -229,7 +237,13 @@ let cached: { key: string; secrets: Secrets } | undefined
 function envSecrets(env: NodeJS.ProcessEnv, also: readonly string[] = []): Secrets {
   const rules = new Map<string, string>()
   for (const [name, value] of Object.entries(env)) {
-    if (SECRET_NAME.test(name) && value && value.length >= 8 && !rules.has(value)) {
+    if (
+      SECRET_NAME.test(name) &&
+      value &&
+      value.length >= 8 &&
+      !isPlaceholder(value) &&
+      !rules.has(value)
+    ) {
       rules.set(value, valueRule(name))
     }
   }

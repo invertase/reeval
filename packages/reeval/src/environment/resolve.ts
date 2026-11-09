@@ -25,6 +25,7 @@ import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
 import { badCharacterAt, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { heldSecret } from '../secrets-file.ts'
 import { withoutBom } from '../text.ts'
 import type {
   EgressPolicy,
@@ -132,10 +133,16 @@ export type ResolveOptions = {
   harness?: HarnessDescriptor
   allowed?: readonly string[] | null
   setupEgress?: EgressPolicy
+  /** Whether the sandbox can broker a secret: `false` refuses one `REEVAL_SECRETS_FILE` brokers. */
+  brokers?: boolean
 }
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
-export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
+export type BrokeredSecret = Substitution & {
+  phase: 'agent' | 'checks'
+  /** The host variable its value came from, when `name` is another. */
+  secret?: string
+}
 
 const policyDigest = (policy: EgressPolicy) =>
   typeof policy === 'string' ? policy : [...policy.allow].sort()
@@ -150,6 +157,44 @@ type Secrets = {
   brokered: BrokeredSecret[]
   /** Names some value went into the sandbox as itself, so the record can't call them brokered. */
   real: string[]
+  /** Whether the sandbox has an egress gateway to swap a brokered value in. */
+  brokers: boolean
+}
+
+/**
+ * The value `REEVAL_SECRETS_FILE` holds for host variable `from`, with the hosts it's brokered to:
+ * the file's, narrowed to the ones `hosts` names when the environment names some. A sandbox one
+ * keeps `hosts`.
+ */
+function held(
+  from: string,
+  where: string,
+  secrets: Secrets,
+  hosts: readonly string[] | undefined,
+): { value: string; hosts: readonly string[] | undefined } | undefined {
+  const secret = heldSecret(from)
+  if (!secret) return undefined
+  if (secret.mode === 'sandbox') return { value: secret.value, hosts }
+  const kept = hosts
+    ? [
+        ...new Set([
+          ...hosts.filter((h) => hostAllowed(secret.hosts, h)),
+          ...secret.hosts.filter((h) => hostAllowed(hosts, h)),
+        ]),
+      ]
+    : secret.hosts
+  const to = secret.hosts.join(', ')
+  if (!kept.length) {
+    throw new InfraError(
+      `${from} for ${where} is brokered to ${to}, and ${where} sends it to ${hosts?.join(', ')}, which it isn't brokered to.`,
+    )
+  }
+  if (!secrets.brokers) {
+    throw new InfraError(
+      `${from} for ${where} is brokered to ${to}, and this sandbox has no egress gateway to swap it in. Run it in docker() or another sandbox with a gateway, or give it the sandbox mode.`,
+    )
+  }
+  return { value: secret.value, hosts: kept }
 }
 
 function broker(
@@ -159,6 +204,7 @@ function broker(
   hosts: readonly string[],
   where: readonly Substitution['in'][number][] = ['header'],
   phase: BrokeredSecret['phase'] = 'agent',
+  from = name,
 ): string {
   const at = badCharacterAt(value)
   if (at && where.includes('header')) {
@@ -166,7 +212,15 @@ function broker(
       `${name} has whitespace or a line break in it (character ${at}), so it can't go in a request header. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
     )
   }
-  const sub = { name, placeholder: placeholder(), value, hosts: [...hosts], in: [...where], phase }
+  const sub: BrokeredSecret = {
+    name,
+    placeholder: placeholder(),
+    value,
+    hosts: [...hosts],
+    in: [...where],
+    phase,
+    ...(from === name ? {} : { secret: from }),
+  }
   secrets.brokered.push(sub)
   return sub.placeholder
 }
@@ -184,7 +238,9 @@ function hostValue(
   as = name,
 ) {
   const from = secret.from ?? name
-  const value = process.env[from]
+  const file = held(from, where, secrets, hosts)
+  const value = file?.value ?? process.env[from]
+  if (file) hosts = file.hosts
   if (!value) {
     if (secret.optional) {
       secrets.unset.push(as)
@@ -202,7 +258,15 @@ function hostValue(
     secrets.real.push(as)
     return value
   }
-  return broker(secrets, as, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
+  return broker(
+    secrets,
+    as,
+    value,
+    hosts,
+    secret.in,
+    secret.to === 'checks' ? 'checks' : 'agent',
+    from,
+  )
 }
 
 /**
@@ -217,18 +281,20 @@ function template(
 ): string {
   const placeholders = new Map<string, string>()
   return value.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
-    const v = process.env[name]
+    const file = held(name, where, secrets, hosts)
+    const v = file?.value ?? process.env[name]
     if (!v)
       throw new InfraError(
         `secret.template for ${where} needs ${name}, which isn't set. Set it in the environment or .env.local.`,
       )
     registerSecret(v)
     secrets.names.push(name)
-    if (!hosts) {
+    const to = file ? file.hosts : hosts
+    if (!to) {
       secrets.real.push(name)
       return v
     }
-    const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
+    const p = placeholders.get(name) ?? broker(secrets, name, v, to)
     placeholders.set(name, p)
     return p
   })
@@ -787,7 +853,14 @@ export async function resolveEnvironment(
     })
   }
 
-  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [], real: [] }
+  const secrets: Secrets = {
+    names: [],
+    checks: [],
+    unset: [],
+    brokered: [],
+    real: [],
+    brokers: options.brokers ?? true,
+  }
   const vars: Record<string, string> = {}
   const checkVars: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {

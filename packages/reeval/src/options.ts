@@ -44,6 +44,7 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import { isPlaceholder } from './redact.ts'
 import { idPart } from './sandbox/id-part.ts'
 import {
   capabilitiesOf,
@@ -1227,8 +1228,13 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
   return [...out.values()]
 }
 
-/** An optional secret whose host variable isn't set never reaches the sandbox, so it gets no warning. */
-const reachesSandbox = (s: UnbrokeredSecret) => !s.optional || Boolean(process.env[s.from])
+/**
+ * An optional secret whose host variable isn't set never reaches the sandbox, so it gets no
+ * warning; nor does one `REEVAL_SECRETS_FILE` holds, whose variable is a placeholder and whose
+ * mode says who gets the value.
+ */
+const reachesSandbox = (s: UnbrokeredSecret) =>
+  (!s.optional || Boolean(process.env[s.from])) && !isPlaceholder(process.env[s.from])
 
 /** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret with `hosts`. */
 const withHosts = (env: EnvVars, attempt: PlannedAttempt): string[] => [

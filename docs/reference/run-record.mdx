@@ -110,6 +110,10 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 
 <Property name="evals" type="EvalEntry[]"></Property>
 
+<Property name="secretWarnings" type="Array<SecretWarning &amp; {attemptId: string}>" optional>
+  Every attempt's `secretWarnings`, each with the attempt's `key` as `attemptId`; absent when there's none.
+</Property>
+
 <Property name="families" type="FamilyRecord[]" optional>
   In records from before an eval with `cases` was one entry, each eval with `cases` that ran. Never written now; reading such a record folds it into its eval.
 </Property>
@@ -730,6 +734,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="egress" type="EgressRecord | null">
   The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran.
+</Property>
+
+<Property name="secretWarnings" type="SecretWarning[]" optional>
+  Each brokered secret whose placeholder the attempt sent where its value isn't swapped in, once per host and reason; absent when there's none. The egress gateway reads a request's headers, path and query for it, on a connection it decrypts or plain HTTP.
 </Property>
 
 <Property name="servedModels" type="string[] | null">

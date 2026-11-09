@@ -3,8 +3,9 @@ import { allowedHosts } from '../egress.ts'
 import { builtPlugins, pluginBuildId } from '../environment/plugins.ts'
 import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
-import { sandboxKind } from '../sandbox/kinds.ts'
+import { capabilitiesOf, sandboxKind } from '../sandbox/kinds.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { fetchHeldSecrets } from '../secrets-file.ts'
 import { preparedWorkspace } from '../workspace.ts'
 import { traceEnvironment } from './debug.ts'
 import type { Attempt } from './state.ts'
@@ -22,6 +23,7 @@ export async function prepareEnvironment(
   signal: AbortSignal,
 ): Promise<void> {
   const { spec, record } = a
+  await fetchHeldSecrets()
   const env = await resolveEnvironment(
     spec.environment,
     spec.env,
@@ -33,6 +35,7 @@ export async function prepareEnvironment(
     {
       harness: spec.harness,
       allowed: allowedHosts(spec.egress),
+      brokers: capabilitiesOf(spec.sandbox).brokers,
       ...(spec.egress.setup ? { setupEgress: spec.egress.setup.policy } : {}),
     },
   )

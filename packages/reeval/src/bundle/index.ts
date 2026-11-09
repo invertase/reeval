@@ -36,7 +36,14 @@ import { savedFilters } from '../resume.ts'
 import { DIST_DIR, PACKAGE_VERSION, reevalCommand } from '../root.ts'
 import { withoutBom } from '../text.ts'
 import { NewerSchemaError, readableBundleManifest } from '../view/record.ts'
-import type { BundleArgs, BundleEnvFile, BundleFile, BundleLink, BundleManifest } from './types.ts'
+import {
+  BUNDLE_FEATURES,
+  type BundleArgs,
+  type BundleEnvFile,
+  type BundleFile,
+  type BundleLink,
+  type BundleManifest,
+} from './types.ts'
 
 const MANIFEST = 'manifest.json'
 
@@ -484,6 +491,7 @@ export async function makeBundle(
   const manifest: BundleManifest = {
     schemaVersion: 1,
     reeval: PACKAGE_VERSION,
+    features: [...BUNDLE_FEATURES],
     createdAt: new Date().toISOString(),
     args: {
       argv,
@@ -632,6 +640,7 @@ const manifestSchema = z.object({
     .optional(),
   envFiles: z.array(z.object({ path: z.string(), variables: z.array(z.string()) })),
   secrets: z.array(z.string()),
+  features: z.array(z.string()).optional(),
 }) satisfies z.ZodType<BundleManifest>
 
 /** `value` as a manifest, or a refusal naming the first few fields that aren't one. */

@@ -1,4 +1,10 @@
-import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
+import type {
+  ArtifactLevel,
+  FileRef,
+  JudgeRetry,
+  RecordMode,
+  SecretWarning,
+} from './history/types.ts'
 
 /** More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds. */
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
@@ -3541,6 +3547,8 @@ export type EvalRecord = {
   upstreams?: Array<{ provider: string; calls: number }>
   /** See `AttemptRecord.reportedCostUsd`. */
   reportedCostUsd?: number
+  /** See `AttemptRecord.secretWarnings`. */
+  secretWarnings?: SecretWarning[]
   /** See `AttemptRecord.timeSplit`. */
   timeSplit?: TimeSplit
   /**

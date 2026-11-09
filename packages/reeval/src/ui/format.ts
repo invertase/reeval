@@ -85,6 +85,8 @@ export function progressLine(c: Colors, p: Progress): string {
       return c.dim('cleaning up')
     case 'warning':
       return c.yellow(`warning: ${p.text}`)
+    case 'secret-warning':
+      return c.yellow(`warning: ${p.secret}'s placeholder was sent to ${p.host} (${p.reason})`)
     case 'browser-download': {
       const total = p.bytes == null ? '?' : formatBytes(p.bytes)
       return `downloading ${p.name} ${p.version} ${formatBytes(p.received)} / ${total} → ${p.cache}`
@@ -138,6 +140,7 @@ export function phaseOf(p: Progress | undefined): string {
       return 'browser download'
     // A warning comes between phases; the renderers keep the phase before it.
     case 'warning':
+    case 'secret-warning':
       return 'running'
   }
 }

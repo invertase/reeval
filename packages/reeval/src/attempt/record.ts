@@ -196,6 +196,8 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   if (upstreams.length) a.record.upstreams = upstreams
   const cost = sandbox?.reportedCostUsd?.()
   if (cost !== undefined) a.record.reportedCostUsd = cost
+  const strays = sandbox?.secretWarnings?.() ?? []
+  if (strays.length) a.record.secretWarnings = strays
 }
 
 /**

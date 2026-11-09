@@ -35,6 +35,10 @@ For more information about config keys, see [Options](/reference/options). For m
 
 `REEVAL_NO_KEYCHAIN` set to any value keeps the token `reeval login` stores in `credentials.json`, mode `0600`, instead of the OS keychain.
 
+## `REEVAL_SECRETS_FILE`
+
+`REEVAL_SECRETS_FILE` names a JSON file of secrets, each with its mode: `brokered`, `sandbox` or `readable`. reeval reads it as it starts and deletes it.
+
 ## `REEVAL_CAPTURE_BROWSER`
 
 `REEVAL_CAPTURE_BROWSER` of `0` refuses the host browser for `c.capture()`. Any other value allows it. `capture.browser` of `false` refuses it too.

@@ -1,5 +1,6 @@
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
+import type { SecretWarning } from '../history/types.ts'
 import type { ModelCall } from '../model-calls.ts'
 import type { ExecResult } from '../types.ts'
 import type { ResourceMeter } from './resources.ts'
@@ -60,6 +61,8 @@ export interface Sandbox {
   modelCalls?(): ModelCall[]
   /** With credential brokering: the HTTP status of each brokered request so far, in order. */
   brokeredStatuses?(): number[]
+  /** With brokered secrets: each one's placeholder sent where it isn't swapped in, so far. */
+  secretWarnings?(): SecretWarning[]
   /**
    * When the sandbox has a memory limit: how many processes the kernel killed at it so far, and
    * the limit and the swap on top as the eval set them (`swap` is `null` without any). `null`

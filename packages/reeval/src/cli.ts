@@ -84,6 +84,7 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { capabilitiesOf, cleanupRun, sandboxCapacity, sandboxKind } from './sandbox/kinds.ts'
+import { heldSecrets, readSecretsFile, SECRETS_SERVICE } from './secrets-file.ts'
 import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip, formatDuration } from './text.ts'
@@ -183,6 +184,7 @@ async function sweep(root: string, keep?: string): Promise<void> {
 }
 
 async function run(argv: string[]): Promise<number> {
+  readSecretsFile()
   const { values, positionals } = parseCli(argv)
   invocation.flags = values
   if (values.version) {
@@ -2191,7 +2193,9 @@ async function executeRun(
         call: (owner, service, body) =>
           service === MACHINES
             ? machines.call(owner, body)
-            : Promise.reject(new Error(`This run has no ${service} service`)),
+            : service === SECRETS_SERVICE
+              ? Promise.resolve(heldSecrets())
+              : Promise.reject(new Error(`This run has no ${service} service`)),
         released: (owner) => machines.released(owner),
       },
       onRunStart: (files) => {
@@ -2231,6 +2235,10 @@ async function executeRun(
         }
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
+        if (e.type === 'eval-progress' && e.progress.kind === 'secret-warning') {
+          const { kind: _, at, ...warning } = e.progress
+          return renderer.onEvent({ type: 'secret-warning', at, attemptId: e.key, ...warning })
+        }
         renderer.onEvent(e)
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
