@@ -83,6 +83,7 @@ export const FLAGS = {
   mode: { type: 'string' },
   'from-env': { type: 'boolean' },
   project: { type: 'boolean' },
+  download: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -135,6 +136,7 @@ export const RUN_FLAGS: FlagName[] = [
   'bundle',
   'cloud',
   'local',
+  'download',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -228,10 +230,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 the run and follow it as reeval attach does, exiting with its exit
                                 code. A plan the platform can't run (tart(), files a bundle can't
                                 carry) runs here, with a note
+    --download                  With a cloud run, once it ends download its files into
+                                .reeval/runs and .reeval/debug, as reeval attach --download does
     --local                     Run here, whatever the config's or profile's cloud sets`,
   },
   attach: {
-    flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],
+    flags: ['ui', 'log-order', 'log-prefix', 'output-logs', 'download'],
     positionals: 1,
     help: `
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
@@ -243,6 +247,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 on; x pressed twice cancels a run on this host. A run that stops
                                 sending heartbeats shows as stalled after 20s and ends attach as
                                 lost after 2m (exit 3)
+    --download                  For a cloud run's URL: once the run ends, download its files into
+                                this project's .reeval/runs and .reeval/debug, so reeval show,
+                                compare, query and studio read it. A download that fails sets the
+                                exit code: 2 when a file is already there with other content, 3
+                                when the platform fails. A run with no files says so
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run`,
   },
