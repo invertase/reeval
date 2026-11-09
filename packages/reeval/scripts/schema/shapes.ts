@@ -104,6 +104,13 @@ export const SHAPES: PersistedShape[] = [
     where: "reeval-archive.json, the last entry of a history archive: a run's <runId>.zip",
     versionField: 'schemaVersion',
   },
+  {
+    name: 'credentials',
+    file: 'src/login/types.ts',
+    type: 'CredentialsFile',
+    where: "credentials.json in reeval's config directory, each platform's reeval login sign-in",
+    versionField: 'schemaVersion',
+  },
 ]
 
 /** Where the plan shapes' snapshots live: `schema/plan/<name>.schema.json`. */

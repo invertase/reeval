@@ -8,6 +8,7 @@ import type { BundleManifest } from '../bundle/types.ts'
 import { foldCases } from '../history/cases.ts'
 import type { RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
+import type { CredentialsFile } from '../login/types.ts'
 import type { CliInvocation } from '../report/types.ts'
 import type { CapturePageFile } from '../types.ts'
 import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
@@ -29,6 +30,7 @@ export type ShapeName =
   | 'run-events'
   | 'bundle-manifest'
   | 'archive-manifest'
+  | 'credentials'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -62,6 +64,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'run-events': [],
   'bundle-manifest': [],
   'archive-manifest': [],
+  credentials: [],
 }
 
 /**
@@ -80,6 +83,7 @@ export const SCHEMA_VERSIONS = {
   'run-events': 1,
   'bundle-manifest': 1,
   'archive-manifest': 1,
+  credentials: 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -220,3 +224,9 @@ export const readableArchiveManifest = (
   manifest: ArchiveManifest,
   what = 'This archive',
 ): ArchiveManifest => fillDefaults('archive-manifest', upgrade('archive-manifest', manifest, what))
+
+/** `reeval login`'s `credentials.json` as reeval reads it; one from a newer reeval throws. */
+export const readableCredentials = (
+  doc: CredentialsFile,
+  what = 'The credentials file',
+): CredentialsFile => fillDefaults('credentials', upgrade('credentials', doc, what))

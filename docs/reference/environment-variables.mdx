@@ -25,11 +25,15 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_CLOUD_URL`
 
-`REEVAL_CLOUD_URL` is the cloud platform's http or https URL, which a run with [`cloud`](/reference/options#cloud) or `--cloud` uses. Unset, such a run exits with code 2. A URL with a user name or password stops the command.
+`REEVAL_CLOUD_URL` is the cloud platform's http or https URL, which a run with [`cloud`](/reference/options#cloud) or `--cloud`, `reeval login`, `reeval logout` and `reeval whoami` use. Unset, each of them exits with code 2. A URL with a user name or password stops the command.
 
 ## `REEVAL_TOKEN`
 
-`REEVAL_TOKEN` is sent as a bearer token on every request a cloud run makes to the platform.
+`REEVAL_TOKEN` is sent as a bearer token on every request a cloud run makes to the platform, in place of the token `reeval login` stored.
+
+## `REEVAL_NO_KEYCHAIN`
+
+`REEVAL_NO_KEYCHAIN` set to any value keeps the token `reeval login` stores in `credentials.json`, mode `0600`, instead of the OS keychain.
 
 ## `REEVAL_CAPTURE_BROWSER`
 
