@@ -2,7 +2,16 @@
 // `.reeval/debug`, where `reeval show`, `compare`, `query` and the studio read a run of this
 // machine's. The platform serves them as one gzip tar of its machine's `.reeval/runs` and
 // `.reeval/debug`, which may be missing or leave the snapshots or the debug data out.
-import { lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import {
+  link,
+  lstat,
+  mkdir,
+  readFile,
+  readlink,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { gunzip } from 'node:zlib'
 import { readTar } from '@reeval/sandbox-docker'
@@ -20,7 +29,15 @@ const MAX_BYTES = 2 * 1024 ** 3
 const AREAS = ['runs', 'debug'] as const
 type Area = (typeof AREAS)[number]
 
-type File = { area: Area; runId: string; path: string; data: Buffer; record: boolean }
+type File = {
+  area: Area
+  runId: string
+  path: string
+  data: Buffer
+  record: boolean
+  /** A link's target; a link only comes in a snapshot. */
+  link?: string
+}
 
 /** The platform's URL for the files of the run whose event stream is at `events`, if it's one. */
 export function cloudRunOf(events: string, base: URL): { runId: string; files: URL } | null {
@@ -32,7 +49,12 @@ export function cloudRunOf(events: string, base: URL): { runId: string; files: U
   if (!url.pathname.startsWith(at)) return null
   const id = /^([^/]+)\/events$/.exec(url.pathname.slice(at.length))?.[1]
   if (!id) return null
-  const runId = decodeURIComponent(id)
+  let runId: string
+  try {
+    runId = decodeURIComponent(id)
+  } catch {
+    return null
+  }
   return {
     runId,
     files: new URL(`api/runs/${encodeURIComponent(runId)}/artifacts/files.tar.gz`, base),
@@ -40,10 +62,29 @@ export function cloudRunOf(events: string, base: URL): { runId: string; files: U
 }
 
 /**
+ * `download` once a cloud run has ended with `code`. Its failure decides the exit code, so its
+ * message also gives the run's own.
+ */
+export async function downloadAfter(
+  code: number,
+  cloudRunId: string,
+  download: () => Promise<string[]>,
+): Promise<string[]> {
+  try {
+    return await download()
+  } catch (error) {
+    if (error instanceof Error) {
+      error.message += ` (cloud run ${cloudRunId} itself exited with code ${code})`
+    }
+    throw error
+  }
+}
+
+/**
  * Where an archive path lands, from `.reeval/`: `outside` when it's outside `runs/` and `debug/`,
  * `other` for something in them that isn't a run's.
  */
-function placed(path: string): Omit<File, 'data'> | 'outside' | 'other' {
+function placed(path: string): Omit<File, 'data' | 'link'> | 'outside' | 'other' {
   const parts = path.replace(/^\.reeval\//, '').split('/')
   const [area, name, ...rest] = parts
   if (!AREAS.includes(area as Area) || !name) return 'outside'
@@ -82,8 +123,13 @@ async function fetchArchive(url: URL, what: string, auth: CloudAuth): Promise<Bu
     const hint =
       (res.status === 401 || res.status === 403) && auth.refused ? ` (${auth.refused})` : ''
     const why = `${platformMessage(body) ?? `HTTP ${res.status}`}${hint}`
-    if (res.status < 500) throw new UsageError(`the cloud platform refused to send ${what}: ${why}`)
-    throw new CloudError(`couldn't download ${what}: ${why}`)
+    if (res.status >= 500 || [408, 425, 429].includes(res.status)) {
+      throw new CloudError(`couldn't download ${what}: ${why}`)
+    }
+    throw new UsageError(`the cloud platform refused to send ${what}: ${why}`)
+  }
+  if (Number(res.headers.get('content-length')) > MAX_BYTES) {
+    throw new CloudError(`${what} are more than 2 GB: not downloading them`)
   }
   try {
     return Buffer.from(await res.arrayBuffer())
@@ -92,21 +138,38 @@ async function fetchArchive(url: URL, what: string, auth: CloudAuth): Promise<Bu
   }
 }
 
-/** Whether `path` is free to write `data` at, holds it already, or holds something else. */
-async function stateOf(root: string, path: string, data: Buffer) {
-  const parts = path.split('/')
-  let at = root
-  for (const part of parts.slice(0, -1)) {
-    at = join(at, part)
-    const info = await lstat(at).catch(() => null)
+/**
+ * Whether `f` is free to write, there already, there with other content, or behind a parent that
+ * isn't a directory (a link or a file), which nothing is written through.
+ */
+async function stateOf(
+  root: string,
+  f: File,
+): Promise<'free' | 'same' | 'other' | { blocked: string }> {
+  const parts = f.path.split('/')
+  for (let i = 1; i < parts.length; i++) {
+    const info = await lstat(join(root, ...parts.slice(0, i))).catch(() => null)
     if (!info) return 'free'
-    if (!info.isDirectory()) return 'other'
+    if (!info.isDirectory()) return { blocked: parts.slice(0, i).join('/') }
   }
-  const info = await lstat(join(root, ...parts)).catch(() => null)
+  const file = join(root, ...parts)
+  const info = await lstat(file).catch(() => null)
   if (!info) return 'free'
+  if (f.link !== undefined) {
+    return info.isSymbolicLink() && (await readlink(file)) === f.link ? 'same' : 'other'
+  }
   if (!info.isFile()) return 'other'
-  return (await readFile(join(root, ...parts))).equals(data) ? 'same' : 'other'
+  return (await readFile(file)).equals(f.data) ? 'same' : 'other'
 }
+
+/** A link in an attempt's workspace snapshot, which keeps the workspace's own links. */
+const inSnapshot = (path: string) => {
+  const parts = path.split('/')
+  const at = parts.indexOf('snapshots', 3)
+  return parts[0] === 'runs' && at > 0 && parts.length > at + 2
+}
+
+const listed = (paths: string[]) => paths.slice(0, 3).join(', ') + (paths.length > 3 ? ', …' : '')
 
 /**
  * Downloads cloud run `cloudRunId`'s files into `root`'s `.reeval/runs` and `.reeval/debug` and
@@ -146,14 +209,32 @@ export async function downloadCloudFiles(options: {
   for (const e of entries) {
     if (e.type === 'dir') continue
     const at = placed(e.path)
-    if (at === 'outside' || e.type !== 'file') unsafe.push(e.path)
+    if (at === 'outside') unsafe.push(e.path)
     else if (at === 'other') others++
-    else files.push({ ...at, data: e.data })
+    else if (e.type === 'file') files.push({ ...at, data: e.data })
+    else if (inSnapshot(at.path)) files.push({ ...at, data: Buffer.alloc(0), link: e.target })
+    else unsafe.push(e.path)
   }
   if (unsafe.length) {
-    const shown = unsafe.slice(0, 3).join(', ') + (unsafe.length > 3 ? ', …' : '')
     throw new CloudError(
-      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside .reeval/runs and .reeval/debug, or a link (${shown}): not downloading them`,
+      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside .reeval/runs and .reeval/debug, or a link outside a snapshot (${listed(unsafe)}): not downloading them`,
+    )
+  }
+  const paths = new Set<string>()
+  const overlaps: string[] = []
+  for (const f of files) {
+    if (paths.has(f.path)) overlaps.push(f.path)
+    paths.add(f.path)
+  }
+  for (const f of files) {
+    const parts = f.path.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      if (paths.has(parts.slice(0, i).join('/'))) overlaps.push(f.path)
+    }
+  }
+  if (overlaps.length) {
+    throw new CloudError(
+      `${what} hold a path twice, or a file where another's directory is (${listed(overlaps)}): not downloading them`,
     )
   }
   const recorded = new Set(files.filter((f) => f.record).map((f) => f.runId))
@@ -182,26 +263,45 @@ export async function downloadCloudFiles(options: {
   const kept = files.filter((f) => recorded.has(f.runId))
   if (!recorded.size) return [...lines, `The files of cloud run ${cloudRunId} hold no run record`]
   const dir = join(root, '.reeval')
-  const states = await Promise.all(kept.map((f) => stateOf(dir, f.path, f.data)))
+  const states = await Promise.all(kept.map((f) => stateOf(dir, f)))
+  const blocked = [
+    ...new Set(states.flatMap((s) => (typeof s === 'object' ? [`.reeval/${s.blocked}`] : []))),
+  ]
+  if (blocked.length) {
+    const one = blocked.length === 1
+    throw new UsageError(
+      `Not downloading ${what}: ${listed(blocked)} ${one ? 'is a link or a file' : 'are links or files'} here, not a directory, and nothing is written through one. Move ${one ? 'it' : 'them'} aside to download them`,
+    )
+  }
   const clashes = kept.filter((_, i) => states[i] === 'other').map((f) => `.reeval/${f.path}`)
   if (clashes.length) {
-    const shown = clashes.slice(0, 3).join(', ') + (clashes.length > 3 ? ', …' : '')
+    const one = clashes.length === 1
     throw new UsageError(
-      `Not downloading ${what}: ${shown} ${clashes.length === 1 ? 'is' : 'are'} already here with other content. Move ${clashes.length === 1 ? 'it' : 'them'} aside to download them`,
+      `Not downloading ${what}: ${listed(clashes)} ${one ? 'is' : 'are'} already here with other content. Move ${one ? 'it' : 'them'} aside to download them`,
     )
   }
   const fresh = kept.filter((_, i) => states[i] === 'free')
-  // Records last, each through a temporary file, so a record is only ever there whole.
+  // Records last, each linked into place whole from a temporary file, never over another.
   for (const f of [...fresh.filter((f) => !f.record), ...fresh.filter((f) => f.record)]) {
     const file = join(dir, ...f.path.split('/'))
-    await mkdir(dirname(file), { recursive: true })
-    if (!f.record) {
-      await writeFile(file, f.data, { flag: 'wx' })
-      continue
+    try {
+      await mkdir(dirname(file), { recursive: true })
+      if (f.link !== undefined) await symlink(f.link, file)
+      else if (!f.record) await writeFile(file, f.data, { flag: 'wx' })
+      else {
+        const tmp = join(dirname(file), `.${f.runId}.json.${process.pid}.tmp`)
+        await writeFile(tmp, f.data)
+        try {
+          await link(tmp, file)
+        } finally {
+          await unlink(tmp).catch(() => {})
+        }
+      }
+    } catch (error) {
+      throw new CloudError(
+        `couldn't write .reeval/${f.path} (${(error as Error).message}): the run's record isn't written, so reeval reads none of its files yet`,
+      )
     }
-    const tmp = join(dirname(file), `.${f.runId}.json.${process.pid}.tmp`)
-    await writeFile(tmp, f.data)
-    await rename(tmp, file)
   }
   for (const runId of recorded) {
     const mine = kept.filter((f) => f.runId === runId)

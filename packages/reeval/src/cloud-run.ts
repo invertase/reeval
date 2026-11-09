@@ -372,17 +372,18 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     code = run.exitCode
   }
   if (detached) {
-    log(`Cloud run ${runId} goes on: ${reattach} follows it again`)
+    const again = options.download
+      ? `reeval attach --download ${displayUrl(events.href)} follows it again and downloads its files once it ends`
+      : `${reattach} follows it again`
+    log(`Cloud run ${runId} goes on: ${again}`)
     return INTERRUPTED
   }
   if (options.download) {
-    const { downloadCloudFiles } = await import('./cloud-files.ts')
-    const lines = await downloadCloudFiles({
-      cloudRunId: runId,
-      url: runUrl('/artifacts/files.tar.gz'),
-      auth,
-      root: options.download.root,
-    })
+    const { downloadAfter, downloadCloudFiles } = await import('./cloud-files.ts')
+    const { root } = options.download
+    const lines = await downloadAfter(code, runId, () =>
+      downloadCloudFiles({ cloudRunId: runId, url: runUrl('/artifacts/files.tar.gz'), auth, root }),
+    )
     for (const line of lines) log(line)
   }
   return code

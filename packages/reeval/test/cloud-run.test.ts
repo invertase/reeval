@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -77,7 +78,9 @@ function readTreeSync(dir: string, prefix: string): TarEntry[] {
     const path = join(dir, e.name)
     const at = `${prefix}/${e.name}`
     if (e.isDirectory()) out.push(...readTreeSync(path, at))
-    else out.push({ type: 'file', path: at, mode: 0o644, mtime: 0, data: readFileSync(path) })
+    else if (e.isSymbolicLink()) {
+      out.push({ type: 'symlink', path: at, mode: 0o777, mtime: 0, target: readlinkSync(path) })
+    } else out.push({ type: 'file', path: at, mode: 0o644, mtime: 0, data: readFileSync(path) })
   }
   return out
 }
@@ -515,7 +518,7 @@ describe("a cloud run's files, downloaded with --download", () => {
       assert.match(
         clash.stderr,
         new RegExp(
-          `Not downloading the files of cloud run run_1: \\.reeval/runs/${runId}\\.json is already here with other content\\. Move it aside to download them`,
+          `Not downloading the files of cloud run run_1: \\.reeval/runs/${runId}\\.json is already here with other content\\. Move it aside to download them \\(cloud run run_1 itself exited with code 0\\)`,
         ),
       )
       assert.equal(readFileSync(file, 'utf8'), changed, 'the record is untouched')
@@ -578,8 +581,14 @@ describe("a cloud run's files, downloaded with --download", () => {
         [evil('.reeval/runs/../../escape.txt'), '.reeval/runs/../../escape.txt'],
         [evil('.reeval/config.json'), '.reeval/config.json'],
         [
-          { type: 'symlink', path: '.reeval/runs/link', mode: 0o777, mtime: 0, target: '/etc' },
-          '.reeval/runs/link',
+          {
+            type: 'symlink',
+            path: '.reeval/debug/20261109T000000Z_x_y_abcd/link',
+            mode: 0o777,
+            mtime: 0,
+            target: '/etc',
+          },
+          '.reeval/debug/20261109T000000Z_x_y_abcd/link',
         ],
       ] as const) {
         p.serve((machine) => [...machine, extra])
@@ -587,7 +596,7 @@ describe("a cloud run's files, downloaded with --download", () => {
         assert.equal(got.code, 3, `${shown}: ${got.stdout}${got.stderr}`)
         assert.match(
           got.stderr,
-          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs and \.reeval\/debug, or a link/,
+          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs and \.reeval\/debug, or a link outside a snapshot/,
         )
         assert.ok(got.stderr.includes(shown), got.stderr)
         assert.ok(!existsSync(join(dir, '.reeval/runs')), `${shown}: nothing written`)
@@ -604,6 +613,82 @@ describe("a cloud run's files, downloaded with --download", () => {
       assert.match(got.stdout, /Left out 1 file of cloud run run_1 that belongs to no run/)
       assert.match(got.stdout, /Downloaded run \S+ of cloud run run_1/)
       assert.ok(!existsSync(join(dir, '.reeval/runs/.tmp-1234')))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("keep a snapshot's links, and refuse paths that overlap or a directory that is a link", async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const r = await runCli(dir, ['run', '--cloud'], { env: env(p) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const events = `${p.base}/api/runs/run_1/events`
+      const attempt = (machine: TarEntry[]) => {
+        const at = machine
+          .map((e) => /^(\.reeval\/runs\/[^/]+\/[^/]+\/[^/]+\/\d+)\//.exec(e.path)?.[1])
+          .find(Boolean)
+        assert.ok(at, 'an attempt directory')
+        return at
+      }
+      const file = (path: string, data = 'x'): TarEntry => ({
+        type: 'file',
+        path,
+        mode: 0o644,
+        mtime: 0,
+        data: Buffer.from(data),
+      })
+      p.serve((machine) => [
+        ...machine,
+        file(`${attempt(machine)}/twice.txt`, 'a'),
+        file(`${attempt(machine)}/twice.txt`, 'b'),
+      ])
+      const twice = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.equal(twice.code, 3, twice.stdout + twice.stderr)
+      assert.match(
+        twice.stderr,
+        /hold a path twice, or a file where another's directory is \(.*twice\.txt\)/,
+      )
+      p.serve((machine) => [
+        ...machine,
+        {
+          type: 'symlink',
+          path: `${attempt(machine)}/snapshots/after/x`,
+          mode: 0o777,
+          mtime: 0,
+          target: '/tmp',
+        },
+        file(`${attempt(machine)}/snapshots/after/x/through.txt`),
+      ])
+      const through = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.equal(through.code, 3, through.stdout + through.stderr)
+      assert.match(through.stderr, /hold a path twice, or a file where another's directory is/)
+      assert.ok(!existsSync(join(dir, '.reeval/runs')), 'nothing written')
+      let link = ''
+      p.serve((machine) => {
+        link = `${attempt(machine)}/snapshots/after/AGENTS.md`
+        return [
+          ...machine,
+          { type: 'symlink', path: link, mode: 0o777, mtime: 0, target: 'CLAUDE.md' },
+        ]
+      })
+      const linked = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.equal(linked.code, 0, linked.stdout + linked.stderr)
+      assert.equal(readlinkSync(join(dir, link)), 'CLAUDE.md')
+      const elsewhere = tempDir('cloud-elsewhere')
+      const { renameSync } = await import('node:fs')
+      renameSync(join(dir, '.reeval/runs'), join(elsewhere, 'runs'))
+      symlinkSync(join(elsewhere, 'runs'), join(dir, '.reeval/runs'), 'dir')
+      const { rmSync } = await import('node:fs')
+      rmSync(join(dir, '.reeval/debug'), { recursive: true })
+      const behind = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.equal(behind.code, 2, behind.stdout + behind.stderr)
+      assert.match(
+        behind.stderr,
+        /Not downloading the files of cloud run run_1: \.reeval\/runs is a link or a file here, not a directory, and nothing is written through one/,
+      )
+      assert.ok(!existsSync(join(dir, '.reeval/debug')), 'nothing written')
     } finally {
       await p.close()
     }

@@ -205,8 +205,9 @@ reeval attach [run|file|url]  Follow a reeval run's --events stream and print it
                               lost after 2m (exit 3)
   --download                  For a cloud run's URL: once the run ends, download its files into
                               this project's .reeval/runs and .reeval/debug, so reeval show,
-                              compare, query and studio read it. Exit 2 when a file is already
-                              there with other content; a run with no files says so
+                              compare, query and studio read it. A download that fails sets the
+                              exit code: 2 when a file is already there with other content, 3
+                              when the platform fails. A run with no files says so
   --ui --log-order --log-prefix --output-logs
                               As for reeval run
 ```

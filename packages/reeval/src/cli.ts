@@ -888,8 +888,17 @@ async function attachCommand(
       detached = true
     },
   })
-  if (download && !detached) {
-    for (const line of await download()) console.log(dim(line))
+  if (download && detached) {
+    console.log(
+      dim(
+        `Not downloading the files of cloud run ${download.runId}, which hadn't ended: reeval attach --download ${displayUrl(source)} downloads them once it has`,
+      ),
+    )
+  } else if (download) {
+    const { downloadAfter } = await import('./cloud-files.ts')
+    for (const line of await downloadAfter(code, download.runId, download.run)) {
+      console.log(dim(line))
+    }
   }
   return code
 }
@@ -913,7 +922,10 @@ async function cloudDownload(source: string, configPath: string | undefined) {
   }
   const root = dirname(requireConfig(configPath))
   const auth = await cloud.cloudAuth(base)
-  return () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root })
+  return {
+    runId: run.runId,
+    run: () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root }),
+  }
 }
 
 /** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
