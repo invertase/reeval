@@ -1,7 +1,8 @@
-// A cloud run's files, downloaded from the platform into this project's `.reeval/runs` and
-// `.reeval/debug`, where `reeval show`, `compare`, `query` and the studio read a run of this
-// machine's. The platform serves them as one gzip tar of its machine's `.reeval/runs` and
-// `.reeval/debug`, which may be missing or leave the snapshots or the debug data out.
+// A cloud run's files, downloaded from the platform into this project as a run here would have
+// left them: `.reeval/runs`, `.reeval/debug` and, for a recorded run, the history folder, where
+// `reeval show`, `compare`, `query` and the studio read a run of this machine's. The platform
+// serves them as one gzip tar of paths from the project root, which may leave the snapshots, the
+// debug data or the recorded copy out.
 import {
   link,
   lstat,
@@ -12,22 +13,29 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { gunzip } from 'node:zlib'
 import { readTar } from '@reeval/sandbox-docker'
 import { type CloudAuth, CloudError, platformMessage } from './cloud-run.ts'
 import { UsageError } from './errors.ts'
 import { displayUrl } from './events.ts'
 import { NewerRecordError, parseRecord } from './history/files.ts'
-import { fromCwd, RUN_ID } from './ids.ts'
+import { fromCwd, RUN_ID, relativeFile } from './ids.ts'
 import { plural } from './text.ts'
+import type { ResolvedHistory } from './types.ts'
 import { formatBytes } from './view/debug.ts'
 
 /** The most a run's files may unpack to. */
 const MAX_BYTES = 2 * 1024 ** 3
 
-const AREAS = ['runs', 'debug'] as const
-type Area = (typeof AREAS)[number]
+type Area = 'runs' | 'debug' | 'history'
+
+/** What each area holds whole beside a run's folder: a record (`.json`) or a zip. */
+const WHOLE: Record<Area, string[]> = {
+  runs: ['.json'],
+  debug: ['.zip'],
+  history: ['.json', '.zip'],
+}
 
 type File = {
   area: Area
@@ -81,23 +89,30 @@ export async function downloadAfter(
 }
 
 /**
- * Where an archive path lands, from `.reeval/`: `outside` when it's outside `runs/` and `debug/`,
+ * Where an archive path lands: `outside` when it's outside `.reeval/runs`, `.reeval/debug` and the
+ * history folder (`history`, its path from the project root, or null when it's outside it),
  * `other` for something in them that isn't a run's.
  */
-function placed(path: string): Omit<File, 'data' | 'link'> | 'outside' | 'other' {
-  const parts = path.replace(/^\.reeval\//, '').split('/')
-  const [area, name, ...rest] = parts
-  if (!AREAS.includes(area as Area) || !name) return 'outside'
-  const ext = area === 'runs' ? '.json' : '.zip'
-  const whole = !rest.length && name.endsWith(ext)
-  const runId = whole ? name.slice(0, -ext.length) : name
-  if (!RUN_ID.test(runId) || (!rest.length && !whole)) return 'other'
-  return {
-    area: area as Area,
-    runId,
-    path: [area, name, ...rest].join('/'),
-    record: whole && area === 'runs',
-  }
+function placed(
+  path: string,
+  history: string[] | null,
+): Omit<File, 'data' | 'link'> | 'outside' | 'other' {
+  const parts = path.split('/')
+  let area: Area
+  let rest: string[]
+  if (parts[0] === '.reeval' && (parts[1] === 'runs' || parts[1] === 'debug')) {
+    area = parts[1]
+    rest = parts.slice(2)
+  } else if (history && history.every((p, i) => parts[i] === p)) {
+    area = 'history'
+    rest = parts.slice(history.length)
+  } else return 'outside'
+  const [name, ...inner] = rest
+  if (!name) return 'outside'
+  const ext = inner.length ? undefined : WHOLE[area].find((e) => name.endsWith(e))
+  const runId = ext ? name.slice(0, -ext.length) : name
+  if (!RUN_ID.test(runId) || (!inner.length && !ext)) return 'other'
+  return { area, runId, path, record: ext === '.json' }
 }
 
 async function fetchArchive(url: URL, what: string, auth: CloudAuth): Promise<Buffer | null> {
@@ -163,10 +178,10 @@ async function stateOf(
 }
 
 /** A link in an attempt's workspace snapshot, which keeps the workspace's own links. */
-const inSnapshot = (path: string) => {
-  const parts = path.split('/')
-  const at = parts.indexOf('snapshots', 3)
-  return parts[0] === 'runs' && at > 0 && parts.length > at + 2
+const inSnapshot = (f: Omit<File, 'data' | 'link'>) => {
+  const parts = f.path.split('/')
+  const at = parts.indexOf('snapshots', 4)
+  return f.area === 'runs' && at > 0 && parts.length > at + 2
 }
 
 /** A path as this filesystem tells it apart: macOS's and Windows' fold case and normalize. */
@@ -178,9 +193,10 @@ const key =
 const listed = (paths: string[]) => paths.slice(0, 3).join(', ') + (paths.length > 3 ? ', …' : '')
 
 /**
- * Downloads cloud run `cloudRunId`'s files into `root`'s `.reeval/runs` and `.reeval/debug` and
- * returns what to print. Nothing is written when a file is already there with other content, or
- * the archive holds anything but runs' files; each run's record lands last, so a download cut
+ * Downloads cloud run `cloudRunId`'s files into project `root`'s `.reeval/runs`, `.reeval/debug`
+ * and `history` folder, and returns what to print. The history folder is the project's own, never
+ * one the archive names. Nothing is written when a file is already there with other content, or
+ * the archive holds anything but runs' files; each run's records land last, so a download cut
  * short leaves no record of a run without its files.
  */
 export async function downloadCloudFiles(options: {
@@ -188,8 +204,15 @@ export async function downloadCloudFiles(options: {
   url: URL
   auth: CloudAuth
   root: string
+  history: ResolvedHistory
 }): Promise<string[]> {
   const { cloudRunId, url, auth, root } = options
+  const historyAt = relativeFile(root, options.history.dir)
+  const history =
+    isAbsolute(historyAt) || historyAt === '..' || historyAt.startsWith('../')
+      ? null
+      : historyAt.split('/').filter(Boolean)
+  const areas = `.reeval/runs, .reeval/debug${history ? ` and ${historyAt || '.'}` : ''}`
   const what = `the files of cloud run ${cloudRunId}`
   const archive = await fetchArchive(url, what, auth)
   if (!archive) return [`The cloud platform has no files of run ${cloudRunId} to download`]
@@ -214,16 +237,16 @@ export async function downloadCloudFiles(options: {
   let others = 0
   for (const e of entries) {
     if (e.type === 'dir') continue
-    const at = placed(e.path)
+    const at = placed(e.path, history)
     if (at === 'outside') unsafe.push(e.path)
     else if (at === 'other') others++
     else if (e.type === 'file') files.push({ ...at, data: e.data })
-    else if (inSnapshot(at.path)) files.push({ ...at, data: Buffer.alloc(0), link: e.target })
+    else if (inSnapshot(at)) files.push({ ...at, data: Buffer.alloc(0), link: e.target })
     else unsafe.push(e.path)
   }
   if (unsafe.length) {
     throw new CloudError(
-      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside .reeval/runs and .reeval/debug, or a link outside a snapshot (${listed(unsafe)}): not downloading them`,
+      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside ${areas}, or a link outside a snapshot (${listed(unsafe)}): not downloading them`,
     )
   }
   const paths = new Set<string>()
@@ -268,18 +291,15 @@ export async function downloadCloudFiles(options: {
   }
   const kept = files.filter((f) => recorded.has(f.runId))
   if (!recorded.size) return [...lines, `The files of cloud run ${cloudRunId} hold no run record`]
-  const dir = join(root, '.reeval')
-  const states = await Promise.all(kept.map((f) => stateOf(dir, f)))
-  const blocked = [
-    ...new Set(states.flatMap((s) => (typeof s === 'object' ? [`.reeval/${s.blocked}`] : []))),
-  ]
+  const states = await Promise.all(kept.map((f) => stateOf(root, f)))
+  const blocked = [...new Set(states.flatMap((s) => (typeof s === 'object' ? [s.blocked] : [])))]
   if (blocked.length) {
     const one = blocked.length === 1
     throw new UsageError(
       `Not downloading ${what}: ${listed(blocked)} ${one ? 'is a link or a file' : 'are links or files'} here, not a directory, and nothing is written through one. Move ${one ? 'it' : 'them'} aside to download them`,
     )
   }
-  const clashes = kept.filter((_, i) => states[i] === 'other').map((f) => `.reeval/${f.path}`)
+  const clashes = kept.filter((_, i) => states[i] === 'other').map((f) => f.path)
   if (clashes.length) {
     const one = clashes.length === 1
     throw new UsageError(
@@ -295,17 +315,16 @@ export async function downloadCloudFiles(options: {
   // Links after every file, and each file's parents checked again as it's written, so nothing is
   // written through a link, even one a case-folding filesystem takes for another name. Records
   // last, each linked into place whole from a temporary file, never over another.
-  await mkdir(dir, { recursive: true })
   for (const f of order) {
-    const file = join(dir, ...f.path.split('/'))
+    const file = join(root, ...f.path.split('/'))
     try {
       const parts = f.path.split('/')
       for (let i = 1; i < parts.length; i++) {
-        const at = join(dir, ...parts.slice(0, i))
+        const at = join(root, ...parts.slice(0, i))
         const info = await lstat(at).catch(() => null)
         if (!info) await mkdir(at)
         else if (!info.isDirectory())
-          throw new Error(`.reeval/${parts.slice(0, i).join('/')} isn't a directory`)
+          throw new Error(`${parts.slice(0, i).join('/')} isn't a directory`)
       }
       if (f.link !== undefined) await symlink(f.link, file)
       else if (!f.record) await writeFile(file, f.data, { flag: 'wx' })
@@ -322,25 +341,28 @@ export async function downloadCloudFiles(options: {
       const unread = fresh.some((g) => g.record && g.runId === f.runId)
         ? ": the run's record isn't written, so reeval reads none of its files yet"
         : ''
-      throw new CloudError(
-        `couldn't write .reeval/${f.path} (${(error as Error).message})${unread}`,
-      )
+      throw new CloudError(`couldn't write ${f.path} (${(error as Error).message})${unread}`)
     }
   }
   for (const runId of recorded) {
     const mine = kept.filter((f) => f.runId === runId)
     const wrote = fresh.filter((f) => f.runId === runId)
-    const where = fromCwd(join(dir, 'runs', runId))
+    const shown = (...parts: string[]) => fromCwd(join(root, ...parts))
+    const scratch = mine.some((f) => f.area === 'runs') && shown('.reeval', 'runs', runId)
+    const record = mine.find((f) => f.area === 'history' && f.record)
+    const where = scratch || (record && shown(record.path))
     if (!wrote.length) {
       lines.push(`Run ${runId} of cloud run ${cloudRunId} is already in ${where}`)
       continue
     }
     const bytes = wrote.reduce((n, f) => n + f.data.length, 0)
+    const into = scratch ? ` into ${scratch}` : ''
+    const copy = record ? `, recorded in ${shown(record.path)}` : ''
     const debug = mine.some((f) => f.area === 'debug')
-      ? `, its debug data in ${fromCwd(join(dir, 'debug', runId))}`
+      ? `, its debug data in ${shown('.reeval', 'debug', runId)}`
       : ', without debug data'
     lines.push(
-      `Downloaded run ${runId} of cloud run ${cloudRunId} into ${where} (${plural(wrote.length, 'file')}, ${formatBytes(bytes)})${debug}; reeval show ${runId} reads it`,
+      `Downloaded run ${runId} of cloud run ${cloudRunId}${into} (${plural(wrote.length, 'file')}, ${formatBytes(bytes)})${copy}${debug}; reeval show ${runId} reads it`,
     )
   }
   return lines

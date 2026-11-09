@@ -461,7 +461,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.download',
     area: 'Config and selection',
-    name: "`reeval attach --download <url>` and `reeval run --cloud --download`: once a cloud run ends, its files (records, attempt files and debug data) are downloaded with the bearer token and unpacked into the project's `.reeval/runs` and `.reeval/debug`, where `reeval show`, `compare`, `query` and the studio read them; a file already there with other content stops it with exit 2 before anything is written, an entry outside those directories or a link with exit 3, a run with no files or no debug data says so; any other stream, or a run on this machine, is exit 2",
+    name: "`reeval attach --download <url>` and `reeval run --cloud --download`: once a cloud run ends, its files (records, attempt files and debug data) are downloaded with the bearer token and unpacked as a run here leaves them, from the project root: `.reeval/runs`, `.reeval/debug` and, for a recorded run, the project's own history folder (from its config and the profile, `--profile` on attach), where `reeval show`, `history`, `compare`, `query` and the studio read them; a file already there with other content stops it with exit 2 before anything is written, an entry anywhere else (another history folder included) or a link outside a snapshot with exit 3, a run with no files or no debug data says so; any other stream, a run on this machine, or `--profile` without `--download` is exit 2",
     unit: ['reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
   },
   {

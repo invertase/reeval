@@ -10,12 +10,13 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { type TarEntry, writeTar } from '@reeval/sandbox-docker'
@@ -50,8 +51,11 @@ const bodyOf = (req: IncomingMessage) =>
 
 type Seen = { method: string; path: string; auth: string | undefined }
 
-/** The platform machine's `.reeval/runs` and `.reeval/debug`, under where it extracted bundles. */
-function machineFiles(tmp: string): TarEntry[] {
+/**
+ * The platform machine's files of the run, from the project root it extracted the bundle into:
+ * its `.reeval/runs` and `.reeval/debug`, and the paths the run-end event's `recorded` names.
+ */
+function machineFiles(tmp: string, lines: string[]): TarEntry[] {
   const find = (dir: string, depth: number): string | null => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (!e.isDirectory() || e.name === 'node_modules') continue
@@ -64,11 +68,22 @@ function machineFiles(tmp: string): TarEntry[] {
   }
   const reeval = find(tmp, 4)
   assert.ok(reeval, `no .reeval under ${tmp}`)
+  const root = dirname(reeval)
+  const end = lines
+    .map((l) => JSON.parse(l) as { type: string; recorded?: Record<string, string | null> })
+    .find((e) => e.type === 'run-end')
+  const recorded = Object.values(end?.recorded ?? {}).filter((p): p is string => !!p)
   return [
     ...(existsSync(join(reeval, 'runs')) ? readTreeSync(join(reeval, 'runs'), '.reeval/runs') : []),
     ...(existsSync(join(reeval, 'debug'))
       ? readTreeSync(join(reeval, 'debug'), '.reeval/debug')
       : []),
+    ...recorded.flatMap((path) => {
+      const file = join(root, path)
+      return statSync(file).isDirectory()
+        ? readTreeSync(file, path)
+        : [{ type: 'file' as const, path, mode: 0o644, mtime: 0, data: readFileSync(file) }]
+    }),
   ]
 }
 
@@ -157,7 +172,7 @@ async function platform(options: { fails?: string; exitCode?: number } = {}) {
     if (req.method === 'GET' && url.pathname === '/api/runs/run_1') return json(res, 200, run())
     if (req.method === 'GET' && url.pathname === '/api/runs/run_1/artifacts/files.tar.gz') {
       await vm
-      const served = vm ? files(machineFiles(tmp)) : null
+      const served = vm ? files(machineFiles(tmp, lines)) : null
       if (!served) return json(res, 404, { error: { code: 'not_found', message: 'no files' } })
       res.writeHead(200, { 'content-type': 'application/gzip' })
       return res.end(gzipSync(writeTar(served)))
@@ -562,7 +577,79 @@ describe("a cloud run's files, downloaded with --download", () => {
     }
   })
 
-  test('refuse an archive with entries outside the runs and debug data, writing nothing', async () => {
+  test('a recorded run lands in the history folder too, byte for byte as on the machine', async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace(
+          'defineConfig({',
+          `defineConfig({
+  record: 'always',
+  history: { archive: true },
+  profiles: { elsewhere: { history: { store: { kind: 'local', dir: './other-history' } } } },`,
+        ),
+      )
+      let served: TarEntry[] = []
+      p.serve((machine) => {
+        served = machine
+        return machine
+      })
+      const r = await runCli(dir, ['run', '--cloud', '--download'], { env: env(p) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const { runId } = recordOf(dir)
+      const history = served.find((e) => e.path.endsWith(`/.history/${runId}.json`))?.path
+      assert.ok(history, `the machine recorded the run: ${served.map((e) => e.path).join(', ')}`)
+      const folder = history.slice(0, -`/${runId}.json`.length)
+      assert.match(
+        r.stdout,
+        new RegExp(
+          `Downloaded run ${runId} of cloud run run_1 into \\.reeval/runs/${runId} \\(\\d+ files, [\\d.]+ KB\\), recorded in ${folder.replaceAll('.', '\\.')}/${runId}\\.json, its debug data in \\.reeval/debug/${runId}; reeval show ${runId} reads it`,
+        ),
+      )
+      assert.ok(served.some((e) => e.type === 'file' && e.path.startsWith('.reeval/debug/')))
+      for (const e of served) {
+        const here = join(dir, e.path)
+        if (e.type === 'file') assert.ok(readFileSync(here).equals(e.data), e.path)
+        if (e.type === 'symlink') assert.equal(readlinkSync(here), e.target, e.path)
+      }
+      assert.ok(existsSync(join(dir, folder, `${runId}.zip`)))
+      assert.ok(existsSync(join(dir, folder, runId, 'summary.md')))
+      const listed = await runCli(dir, ['history'])
+      assert.equal(listed.code, 0, listed.stdout + listed.stderr)
+      assert.match(listed.stdout, new RegExp(runId.slice(0, 15)))
+      const events = `${p.base}/api/runs/run_1/events`
+      const again = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.equal(again.code, 0, again.stdout + again.stderr)
+      assert.match(again.stdout, new RegExp(`Run ${runId} of cloud run run_1 is already in`))
+      const { rmSync } = await import('node:fs')
+      rmSync(join(dir, '.reeval'), { recursive: true })
+      rmSync(join(dir, folder), { recursive: true })
+      const other = await runCli(dir, ['attach', '--download', '--profile', 'elsewhere', events], {
+        env: env(p),
+      })
+      assert.equal(other.code, 3, other.stdout + other.stderr)
+      assert.match(
+        other.stderr,
+        /hold \d+ entries outside \.reeval\/runs, \.reeval\/debug and other-history, or a link outside a snapshot/,
+      )
+      assert.ok(!existsSync(join(dir, '.reeval/runs')), 'nothing written')
+      const unknown = await runCli(dir, ['attach', '--download', '--profile', 'nope', events], {
+        env: env(p),
+      })
+      assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
+      assert.match(unknown.stderr, /Unknown profile "nope"/)
+      const alone = await runCli(dir, ['attach', '--profile', 'elsewhere', events], { env: env(p) })
+      assert.equal(alone.code, 2, alone.stdout + alone.stderr)
+      assert.match(alone.stderr, /--profile picks the history folder --download puts/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('refuse an archive with entries outside the runs, debug data and history, writing nothing', async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject()
@@ -581,6 +668,11 @@ describe("a cloud run's files, downloaded with --download", () => {
         [evil('.reeval/runs/../../escape.txt'), '.reeval/runs/../../escape.txt'],
         [evil('.reeval/config.json'), '.reeval/config.json'],
         [
+          evil('.reeval/store/0123abcd/history/20261109T000000Z_x_y_abcd.json'),
+          '.reeval/store/0123abcd/history/20261109T000000Z_x_y_abcd.json',
+        ],
+        [evil('runs/20261109T000000Z_x_y_abcd.json'), 'runs/20261109T000000Z_x_y_abcd.json'],
+        [
           {
             type: 'symlink',
             path: '.reeval/debug/20261109T000000Z_x_y_abcd/link',
@@ -596,23 +688,25 @@ describe("a cloud run's files, downloaded with --download", () => {
         assert.equal(got.code, 3, `${shown}: ${got.stdout}${got.stderr}`)
         assert.match(
           got.stderr,
-          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs and \.reeval\/debug, or a link outside a snapshot/,
+          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs, \.reeval\/debug and evals\/\.history, or a link outside a snapshot/,
         )
         assert.ok(got.stderr.includes(shown), got.stderr)
         assert.ok(!existsSync(join(dir, '.reeval/runs')), `${shown}: nothing written`)
       }
       assert.ok(!existsSync(join(dir, '..', 'outside.txt')))
-      // Laid out from .reeval/ itself, with a stray file beside the runs: that one is left out.
+      // A stray file beside the runs, and one in the history folder: those are left out.
       p.serve((machine) => [
         { type: 'dir', path: '.', mode: 0o755, mtime: 0 },
-        ...machine.map((e) => ({ ...e, path: e.path.replace(/^\.reeval\//, '') })),
-        evil('runs/.tmp-1234'),
+        ...machine,
+        evil('.reeval/runs/.tmp-1234'),
+        evil('evals/.history/.gitignore'),
       ])
       const got = await runCli(dir, ['attach', '--download', events], { env: env(p) })
       assert.equal(got.code, 0, got.stdout + got.stderr)
-      assert.match(got.stdout, /Left out 1 file of cloud run run_1 that belongs to no run/)
+      assert.match(got.stdout, /Left out 2 files of cloud run run_1 that belong to no run/)
       assert.match(got.stdout, /Downloaded run \S+ of cloud run run_1/)
       assert.ok(!existsSync(join(dir, '.reeval/runs/.tmp-1234')))
+      assert.ok(!existsSync(join(dir, 'evals/.history')))
     } finally {
       await p.close()
     }

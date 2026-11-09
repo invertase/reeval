@@ -878,7 +878,14 @@ async function attachCommand(
     source = (await resolveAttach(root, target)).file
   }
   const cloud = await import('./cloud-run.ts')
-  const download = flags.download ? await cloudDownload(source, configPath) : undefined
+  if (flags.profile !== undefined && !flags.download) {
+    throw new UsageError(
+      '--profile picks the history folder --download puts a recorded cloud run in: pass it with --download',
+    )
+  }
+  const download = flags.download
+    ? await cloudDownload(source, configPath, flags.profile)
+    : undefined
   const follow = isAttachUrl(source) ? await cloud.cloudFollow(source) : undefined
   let detached = false
   const code = await attachHere(flags, {
@@ -908,7 +915,11 @@ async function attachCommand(
  * `reeval attach --download`: what downloads the files of the cloud run whose event stream is
  * `source` into this project's `.reeval/`; exit 2 for any other stream, or with no project.
  */
-async function cloudDownload(source: string, configPath: string | undefined) {
+async function cloudDownload(
+  source: string,
+  configPath: string | undefined,
+  profile: string | undefined,
+) {
   const cloud = await import('./cloud-run.ts')
   const { cloudRunOf, downloadCloudFiles } = await import('./cloud-files.ts')
   const base = cloud.cloudUrl(
@@ -921,11 +932,15 @@ async function cloudDownload(source: string, configPath: string | undefined) {
       `--download takes a cloud run's event stream URL (${base.href}api/runs/<run>/events), not ${displayUrl(source)}: a run on this machine has its files in .reeval/ already`,
     )
   }
-  const root = dirname(requireConfig(configPath))
+  const path = requireConfig(configPath)
+  loadEnvFiles(path)
+  const named = profile ?? (process.env.REEVAL_PROFILE || undefined)
+  const loaded = await loadConfig(path, 'run', named)
+  const { root, history } = withProfileHistory(loaded, selectProfile(loaded, profile))
   const auth = await cloud.cloudAuth(base)
   return {
     runId: run.runId,
-    run: () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root }),
+    run: () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root, history }),
   }
 }
 
@@ -1043,7 +1058,9 @@ async function cloudTarget(
     bundle: made,
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
-    ...(flags.download && { download: { root: setup.config.root } }),
+    ...(flags.download && {
+      download: { root: setup.config.root, history: setup.config.history },
+    }),
   })
   return { exit }
 }

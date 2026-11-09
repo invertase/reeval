@@ -230,12 +230,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 the run and follow it as reeval attach does, exiting with its exit
                                 code. A plan the platform can't run (tart(), files a bundle can't
                                 carry) runs here, with a note
-    --download                  With a cloud run, once it ends download its files into
-                                .reeval/runs and .reeval/debug, as reeval attach --download does
+    --download                  With a cloud run, once it ends download its files as a run here
+                                leaves them, as reeval attach --download does
     --local                     Run here, whatever the config's or profile's cloud sets`,
   },
   attach: {
-    flags: ['ui', 'log-order', 'log-prefix', 'output-logs', 'download'],
+    flags: ['ui', 'log-order', 'log-prefix', 'output-logs', 'download', 'profile'],
     positionals: 1,
     help: `
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
@@ -248,10 +248,14 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 sending heartbeats shows as stalled after 20s and ends attach as
                                 lost after 2m (exit 3)
     --download                  For a cloud run's URL: once the run ends, download its files into
-                                this project's .reeval/runs and .reeval/debug, so reeval show,
+                                this project as a run here leaves them: .reeval/runs, .reeval/debug
+                                and, recorded, this project's history folder, so reeval show,
                                 compare, query and studio read it. A download that fails sets the
                                 exit code: 2 when a file is already there with other content, 3
-                                when the platform fails. A run with no files says so
+                                when the platform fails or sends a file anywhere else. A run with
+                                no files says so
+    --profile <name>            With --download, the profile whose history folder takes a recorded
+                                run (also REEVAL_PROFILE): the one the cloud run picked
     --ui --log-order --log-prefix --output-logs
                                 As for reeval run`,
   },
