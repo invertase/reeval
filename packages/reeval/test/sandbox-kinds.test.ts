@@ -42,10 +42,10 @@ describe('sandbox kinds', () => {
   test('every kind is in the table, and nothing else is a kind', () => {
     assert.deepEqual(Object.keys(SANDBOX_KINDS).sort(), [
       'boat',
+      'cloud',
       'daytona',
       'docker',
       'fake',
-      'hosted',
       'tart',
     ])
     assert.ok(isSandboxKind('docker'))
@@ -57,10 +57,10 @@ describe('sandbox kinds', () => {
 
   test('each kind names its helpers, and messages list every one but the internal kinds', () => {
     assert.equal(sandboxHelpers(), 'docker(), podman(), fakeSandbox(), tart(), boat() or daytona()')
-    assert.equal(SANDBOX_KINDS.hosted.internal, true)
+    assert.equal(SANDBOX_KINDS.cloud.internal, true)
     assert.doesNotMatch(
       suggestedSandbox(() => true),
-      /hosted/,
+      /cloud/,
     )
     assert.equal(
       suggestedSandbox((c) => c.pluginBuilds),

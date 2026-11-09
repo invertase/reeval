@@ -1,7 +1,7 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 
-// Docker tier only: hosted() on the fake VM service through REEVAL_VM_URL, whose machines are
+// Docker tier only: cloud() on the fake VM service through REEVAL_VM_URL, whose machines are
 // sshd containers laid out like a VM. As the agent: who and where the shell runs, which node it
 // finds, and its proxy.
 export default defineConfig({

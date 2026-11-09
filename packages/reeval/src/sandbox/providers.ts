@@ -16,11 +16,11 @@ import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
   BoatSandboxDescriptor,
+  CloudSandboxDescriptor,
   DaytonaSandboxDescriptor,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
-  HostedSandboxDescriptor,
   PluginSource,
   SandboxBase,
   TartSandboxDescriptor,
@@ -745,21 +745,21 @@ export const daytonaProvider = (): SandboxProvider<DaytonaSandboxDescriptor> => 
   },
 })
 
-/** hosted()'s VMs have nothing to build either: `prepare` checks the service, per size. */
-export const hostedProvider = (): SandboxProvider<HostedSandboxDescriptor> => ({
-  kind: 'hosted',
+/** cloud()'s VMs have nothing to build either: `prepare` checks the service, per size. */
+export const cloudProvider = (): SandboxProvider<CloudSandboxDescriptor> => ({
+  kind: 'cloud',
   check: async () => {},
   key: (sandbox) => JSON.stringify({ size: sandbox.size ?? 'small' }),
   async prepare(sandbox, _harness, ctx) {
-    const { checkHosted } = await import('./hosted.ts')
-    await checkHosted(sandbox, ctx.root)
+    const { checkCloud } = await import('./cloud.ts')
+    await checkCloud(sandbox, ctx.root)
     return null
   },
   classify: (error) => {
     const message = error instanceof Error ? error.message : String(error)
     return {
       class: isTransient(message) ? 'transient' : 'config',
-      stage: 'hosted',
+      stage: 'cloud',
       ref: null,
       cause: null,
       log: null,
@@ -791,5 +791,5 @@ const machineProviders = (options: {
   tart: tartProvider(options),
   boat: boatProvider(),
   daytona: daytonaProvider(),
-  hosted: hostedProvider(),
+  cloud: cloudProvider(),
 })

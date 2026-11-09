@@ -1,5 +1,5 @@
-// A fake VM service for hosted()'s tests, in front of the fake Boat API: a bearer token, the calls
-// hosted() makes, a strict create body, limits each test picks, a label of its own on every VM
+// A fake VM service for cloud()'s tests, in front of the fake Boat API: a bearer token, the calls
+// cloud() makes, a strict create body, limits each test picks, a label of its own on every VM
 // and any other sandbox a 404, with the upstream's name left out of every error.
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'

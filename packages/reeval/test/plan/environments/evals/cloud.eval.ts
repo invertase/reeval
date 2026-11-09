@@ -1,26 +1,26 @@
 import { defineEnvironment, evaluate } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
-import { hosted } from 'reeval/internal/vm'
+import { cloud } from 'reeval/internal/vm'
 
-const small = defineEnvironment('small', { sandbox: hosted(), egress: 'allow-all' })
+const small = defineEnvironment('small', { sandbox: cloud(), egress: 'allow-all' })
 const medium = defineEnvironment('medium', {
-  sandbox: hosted({ size: 'medium' }),
+  sandbox: cloud({ size: 'medium' }),
   egress: 'allow-all',
 })
 const shared = defineEnvironment('shared', {
-  sandbox: hosted({ size: 'large', reuse: true, attemptsPerMachine: 2, maxConcurrent: 4 }),
+  sandbox: cloud({ size: 'large', reuse: true, attemptsPerMachine: 2, maxConcurrent: 4 }),
   egress: 'allow-all',
 })
 
-evaluate('hosted', { environments: small }, async () => {})
-evaluate('hosted medium', { environments: medium }, async () => {})
+evaluate('cloud', { environments: small }, async () => {})
+evaluate('cloud medium', { environments: medium }, async () => {})
 evaluate(
-  'hosted shared',
+  'cloud shared',
   { environments: shared, harnesses: fakeHarness(), runs: 2 },
   async () => {},
 )
 evaluate(
-  'hosted on a real harness',
+  'cloud on a real harness',
   { environments: small, harnesses: cursor({ model: 'composer-2.5' }) },
   async () => {},
 )

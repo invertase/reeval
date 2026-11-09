@@ -473,6 +473,42 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "CloudSandboxDescriptor": {
+      "description": "A VM per attempt from reeval's own VM service, made by `cloud()` from `reeval/internal/vm`.",
+      "type": "object",
+      "properties": {
+        "attemptsPerMachine": {
+          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "id": {
+          "description": "Cell id; defaults to `cloud`, or `cloud:<size>` with a `size`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "cloud"
+        },
+        "maxConcurrent": {
+          "description": "The most attempts on cloud VMs at once, across the run: machines times `attemptsPerMachine`.",
+          "type": "number"
+        },
+        "reuse": {
+          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "The machine size. Default `small`.",
+          "type": "string",
+          "enum": ["small", "medium", "large", "xlarge"]
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
     "CodexHarnessDescriptor": {
       "description": "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
       "type": "object",
@@ -1521,42 +1557,6 @@
         }
       ]
     },
-    "HostedSandboxDescriptor": {
-      "description": "A VM per attempt from reeval's own VM service, made by `hosted()` from `reeval/internal/vm`.",
-      "type": "object",
-      "properties": {
-        "attemptsPerMachine": {
-          "description": "The attempts one machine runs at once, each as a user of its own, as `boat({ attemptsPerMachine })` does. Default 1.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 8
-        },
-        "id": {
-          "description": "Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`.",
-          "type": "string",
-          "pattern": "\\S"
-        },
-        "kind": {
-          "type": "string",
-          "const": "hosted"
-        },
-        "maxConcurrent": {
-          "description": "The most attempts on hosted VMs at once, across the run: machines times `attemptsPerMachine`.",
-          "type": "number"
-        },
-        "reuse": {
-          "description": "A machine takes another of the run's attempts once one ends, instead of being deleted, as `boat({ reuse })` does. Default false, one attempt per slot.",
-          "type": "boolean"
-        },
-        "size": {
-          "description": "The machine size. Default `small`.",
-          "type": "string",
-          "enum": ["small", "medium", "large", "xlarge"]
-        }
-      },
-      "required": ["kind"],
-      "additionalProperties": false
-    },
     "InstallStep": {
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
@@ -2318,7 +2318,7 @@
           "$ref": "#/$defs/DaytonaSandboxDescriptor"
         },
         {
-          "$ref": "#/$defs/HostedSandboxDescriptor"
+          "$ref": "#/$defs/CloudSandboxDescriptor"
         }
       ]
     },

@@ -31,7 +31,7 @@ export const BOAT_BASE_URL = 'BOAT_BASE_URL'
 
 /**
  * Whose API the VMs come from, as messages and the record name it: Boat's own for `boat()`, or
- * `hosted()`'s, on the same client under another name.
+ * `cloud()`'s, on the same client under another name.
  */
 export type VmService = {
   /** How messages name the sandbox: `boat()`. */

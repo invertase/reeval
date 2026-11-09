@@ -1142,13 +1142,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/daytona-image.test.ts', 'reeval/test/refusals.test.ts'],
   },
   {
-    id: 'hosted.sandbox',
+    id: 'cloud.sandbox',
     area: 'Sandbox',
-    name: "`hosted({ size, reuse, attemptsPerMachine, maxConcurrent })` (internal, `reeval/internal/vm`): a VM per attempt from the VM service at `REEVAL_VM_URL`, on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `hosted` with no message, record field or log naming the upstream",
-    fixtures: ['sandbox/hosted-session', 'sandbox/hosted-shared-machine'],
-    plan: ['environments/hosted'],
+    name: "`cloud({ size, reuse, attemptsPerMachine, maxConcurrent })` (internal, `reeval/internal/vm`): a VM per attempt from the VM service at `REEVAL_VM_URL`, on `boat()`'s pool, over SSH, under `allow-all`, labeled, deleted when it ends, and recorded as `cloud` with no message, record field or log naming the upstream",
+    fixtures: ['sandbox/cloud-session', 'sandbox/cloud-shared-machine'],
+    plan: ['environments/cloud'],
     unit: [
-      'reeval/test/hosted.test.ts',
+      'reeval/test/cloud.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
     ],

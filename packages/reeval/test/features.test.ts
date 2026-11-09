@@ -255,7 +255,7 @@ after(() => gitHttp.close())
 
 /** The fake Boat API the `boat-*` fixtures run on, its sandboxes sshd containers. */
 let boatApi: FakeBoat
-/** The fake VM service the `hosted-*` fixtures run through, in front of the fake API. */
+/** The fake VM service the `cloud-*` fixtures run through, in front of the fake API. */
 let vmService: FakeVmService
 before(async () => {
   boatApi = await fakeBoat(startSshVm, { saved: startBoatDockerVm })
@@ -295,11 +295,11 @@ const boatCreates = (run: RunRecord, sandbox: { prefix: string } = boat()) => {
   ).length
 }
 
-/** What every hosted VM's name starts with. */
-const HOSTED_VM = { prefix: 'reeval' }
-/** A `hosted-*` fixture's host: REEVAL_VM_URL and REEVAL_VM_TOKEN, pointed at the fake service. */
-const onFakeHosted: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
-  sandbox: 'hosted',
+/** What every cloud VM's name starts with. */
+const CLOUD_VM = { prefix: 'reeval' }
+/** A `cloud-*` fixture's host: REEVAL_VM_URL and REEVAL_VM_TOKEN, pointed at the fake service. */
+const onFakeCloud: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
+  sandbox: 'cloud',
   hostEnv: () => ({
     REEVAL_VM_URL: vmService.url,
     REEVAL_VM_TOKEN: vmService.token,
@@ -311,8 +311,8 @@ const onFakeHosted: Pick<Feature, 'sandbox' | 'hostEnv' | 'prepare'> = {
  * Every VM of the run was made labeled and deleted, and neither the record nor the attempts'
  * debug logs name the provider.
  */
-const hostedCleanedUp = (run: RunRecord, project: string) => {
-  boatCleanedUp(run, HOSTED_VM)
+const cloudCleanedUp = (run: RunRecord, project: string) => {
+  boatCleanedUp(run, CLOUD_VM)
   assert.deepEqual(
     vmService.requests.filter(
       (q) => q.status >= 400 && !(q.status === 404 && q.call.startsWith('GET ')),
@@ -323,12 +323,12 @@ const hostedCleanedUp = (run: RunRecord, project: string) => {
   for (const q of boatApi.requests) {
     if (
       q.call !== 'POST /sandboxes' ||
-      !String(q.body?.name).startsWith(runPrefix(HOSTED_VM, run.runId))
+      !String(q.body?.name).startsWith(runPrefix(CLOUD_VM, run.runId))
     )
       continue
     assert.deepEqual(q.body?.labels, {
       'sweep-job': '42',
-      ...runLabels(HOSTED_VM, run.runId),
+      ...runLabels(CLOUD_VM, run.runId),
       [VM_RUN_LABEL]: vmService.runId,
     })
   }
@@ -1428,35 +1428,35 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'sandbox/hosted-session',
+    dir: 'sandbox/cloud-session',
     tiers: ['docker'],
     env: 'vm',
-    ...onFakeHosted,
+    ...onFakeCloud,
     canary: /expected 'reeval' to be 'user'/,
     record: ({ run, project }) => {
-      hostedCleanedUp(run, project)
+      cloudCleanedUp(run, project)
       const r = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources
       assert.equal(r?.scope, 'machine', JSON.stringify(r))
-      assert.equal(r?.machine.sandbox, 'hosted')
+      assert.equal(r?.machine.sandbox, 'cloud')
       assert.equal(r?.machine.size, 'small')
       assert.match(r?.machine.id ?? '', /^bx_[0-9a-f]{8}$/, JSON.stringify(r))
-      assert.ok(r?.machine.name?.startsWith(runPrefix(HOSTED_VM, run.runId)), JSON.stringify(r))
+      assert.ok(r?.machine.name?.startsWith(runPrefix(CLOUD_VM, run.runId)), JSON.stringify(r))
     },
   },
   {
-    dir: 'sandbox/hosted-shared-machine',
+    dir: 'sandbox/cloud-shared-machine',
     tiers: ['docker'],
     env: 'vm',
-    ...onFakeHosted,
+    ...onFakeCloud,
     canary: /expected 'reeval(-s1)?' to be 'user'/,
     record: ({ run, project }) => {
-      assert.equal(boatCreates(run, HOSTED_VM), 1, 'both attempts ran at once on one machine')
-      hostedCleanedUp(run, project)
+      assert.equal(boatCreates(run, CLOUD_VM), 1, 'both attempts ran at once on one machine')
+      cloudCleanedUp(run, project)
       const resources = run.evals.flatMap((e) => e.attempts.map((a) => a.resources))
       assert.ok(resources.length >= 2, JSON.stringify(resources))
       for (const r of resources) {
         assert.equal(r?.shared, true, JSON.stringify(r))
-        assert.equal(r?.machine.sandbox, 'hosted')
+        assert.equal(r?.machine.sandbox, 'cloud')
         assert.equal(r?.usage, undefined, "another attempt's use would count in the VM's")
       }
     },

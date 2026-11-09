@@ -5,8 +5,8 @@ import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import type { ListenerSource } from '../attempt/serve.ts'
 import type {
   BoatSandboxDescriptor,
+  CloudSandboxDescriptor,
   DaytonaSandboxDescriptor,
-  HostedSandboxDescriptor,
   TartSandboxDescriptor,
 } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
@@ -19,7 +19,7 @@ export type MachineDescriptor =
   | TartSandboxDescriptor
   | BoatSandboxDescriptor
   | DaytonaSandboxDescriptor
-  | HostedSandboxDescriptor
+  | CloudSandboxDescriptor
 
 export interface MachineProvider<D extends MachineDescriptor> extends SandboxHooks<D> {
   kind: D['kind']

@@ -1,5 +1,5 @@
 // A sandbox on a pooled Linux VM a provider starts in the run's main process (machine-service.ts)
-// and an attempt reaches over SSH: `boat()`, `daytona()` and `hosted()`. The provider's pool hands out slots;
+// and an attempt reaches over SSH: `boat()`, `daytona()` and `cloud()`. The provider's pool hands out slots;
 // this sets up the attempt's slot over SSH and starts it through the shared sequence (start.ts).
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,8 +11,8 @@ import { egressLabel } from '../egress.ts'
 import { registerSecret } from '../redact.ts'
 import type {
   BoatSandboxDescriptor,
+  CloudSandboxDescriptor,
   DaytonaSandboxDescriptor,
-  HostedSandboxDescriptor,
 } from '../types.ts'
 import { harnessBake } from './harness-install.ts'
 import type { SandboxOptions } from './index.ts'
@@ -124,7 +124,7 @@ export type PooledSshOptions = {
  * starts it. A reused slot that fails to set up is dropped and another leased, up to 3 times.
  */
 export async function createPooledSshSandbox(
-  descriptor: BoatSandboxDescriptor | DaytonaSandboxDescriptor | HostedSandboxDescriptor,
+  descriptor: BoatSandboxDescriptor | DaytonaSandboxDescriptor | CloudSandboxDescriptor,
   options: SandboxOptions,
   o: PooledSshOptions,
 ): Promise<NetworkSandbox> {
