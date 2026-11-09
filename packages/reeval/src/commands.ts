@@ -161,7 +161,7 @@ export async function record(
   config: ResolvedConfig,
   runId: string,
   flags: HistoryFlags,
-  /** Told where the run landed, before a remote store's upload, which can still fail. */
+  /** Told where the run landed, and awaited, before a remote store's upload, which can still fail. */
   onRecorded?: (result: RecordResult) => void | Promise<void>,
 ): Promise<string> {
   const remote = isRemote(config.history) ? config.history : null

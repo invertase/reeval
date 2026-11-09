@@ -210,9 +210,8 @@ export type ReevalEvent =
       /**
        * Where the run was recorded, when it was (`--record`, `record: 'always'` or `'ci'`), as
        * paths from the run's current directory: `.reeval/runs` keeps the run as it was before
-       * recording.
-       * Under a remote store they're its local copy, which the run uploaded or left to
-       * `reeval sync`.
+       * recording. Under a remote store they're its local copy, which the run uploaded or left
+       * to `reeval sync`.
        */
       recorded?: RecordedPaths
     }
