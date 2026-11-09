@@ -402,6 +402,26 @@ describe('reeval cloud provider', () => {
     }
   })
 
+  test("sets and deletes the key for Typesafe's typesafe-ai judges", async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const set = await runCli(dir, ['cloud', 'provider', 'typesafe-ai', 'set'], {
+        env,
+        input: 'ts-key-e5f6\n',
+      })
+      assert.equal(set.code, 0, set.stderr)
+      assert.match(set.stdout, /Added the typesafe-ai key for org_a \(…e5f6\), version 1\./)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/typesafe-ai')
+      assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'ts-key-e5f6' })
+      const del = await runCli(dir, ['cloud', 'provider', 'typesafe-ai', 'delete'], { env })
+      assert.equal(del.code, 0, del.stderr)
+      assert.match(del.stdout, /Deleted the typesafe-ai key for org_a\./)
+    } finally {
+      await p.close()
+    }
+  })
+
   test('refuses before reading the value when signed out, and a brokered value with a line break', async () => {
     const p = await platform()
     try {
@@ -467,7 +487,7 @@ describe('reeval cloud provider', () => {
         [
           ['acme', 'set'],
           'k',
-          /needs a provider the cloud platform keeps keys for \(got acme\): openai, anthropic/,
+          /needs a provider the cloud platform keeps keys for \(got acme\): openai, anthropic, .*, deepinfra, typesafe-ai$/m,
         ],
         [
           ['openai', 'set', 'sk-x'],
