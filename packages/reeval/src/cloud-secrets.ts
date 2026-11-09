@@ -15,6 +15,7 @@ import {
   request,
 } from './cloud-run.ts'
 import { UsageError } from './errors.ts'
+import { badCharacterAt } from './redact.ts'
 import { plural } from './text.ts'
 
 export const SECRET_MODES = ['brokered', 'sandbox', 'readable'] as const
@@ -66,7 +67,6 @@ type ProviderKey = {
 
 export type SecretsIo = {
   out: (line: string) => void
-  err: (line: string) => void
   /** The value, read from stdin or a hidden prompt; `what` names it in the prompt. */
   readValue: (what: string) => Promise<string>
   env?: NodeJS.ProcessEnv
@@ -138,6 +138,17 @@ function refuseArgv(command: string, given: string | undefined): void {
   )
 }
 
+/** Refuses before the value is read when there's no token to send it with. */
+function signedIn(t: Target, command: string): void {
+  if (!t.auth.headers.authorization) {
+    throw new UsageError(`reeval ${command} needs you signed in: ${t.auth.refused}`)
+  }
+}
+
+/** ` (got <word>)` for a refused word, unless it could be the value given in the wrong place. */
+const got = (word: string | undefined) =>
+  word && /^[a-z][a-z0-9-]{0,31}$/.test(word) ? ` (got ${word})` : ''
+
 function checkValue(value: string, what: string, max: number): void {
   if (!value) throw new UsageError(`${what} is empty`)
   if (Buffer.byteLength(value) > max) {
@@ -149,7 +160,7 @@ function checkName(name: string | undefined, command: string): string {
   if (!name) throw new UsageError(`reeval ${command} needs the secret's name`)
   if (!NAME.test(name)) {
     throw new UsageError(
-      `${name} isn't a secret name: letters, digits and _, not starting with a digit, at most 128`,
+      `the secret's name isn't one: letters, digits and _, not starting with a digit, at most 128. reeval doesn't repeat it, in case it's the value`,
     )
   }
   return name
@@ -246,9 +257,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
     return 0
   }
   if (action !== 'set') {
-    throw new UsageError(
-      `reeval cloud secrets needs set, delete or list${action ? ` (got ${action})` : ''}`,
-    )
+    throw new UsageError(`reeval cloud secrets needs set, delete or list${got(action)}`)
   }
   const secret = checkName(name, 'cloud secrets set')
   refuseArgv('cloud secrets set', value)
@@ -265,6 +274,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
       )
     }
   }
+  signedIn(t, 'cloud secrets set')
   let read: string
   if (flags['from-env']) {
     const local = env[secret]
@@ -274,6 +284,12 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
     read = await io.readValue(secret)
   }
   checkValue(read, `${secret}'s value`, MAX_SECRET_BYTES)
+  const bad = badCharacterAt(read)
+  if (bad && mode.mode === 'brokered') {
+    throw new UsageError(
+      `${secret}'s value has whitespace or a control character at position ${bad}, and a brokered value goes in a request header: give the value alone`,
+    )
+  }
   const { status, body } = await send<{ secret?: Secret }>(t, secretsPath(t, secret), {
     method: 'PUT',
     what: `set ${secret}`,
@@ -335,13 +351,11 @@ export async function providerCommand(
   }
   if (!(PROVIDERS as readonly string[]).includes(provider)) {
     throw new UsageError(
-      `${provider} isn't a provider the cloud platform keeps keys for (${PROVIDERS.join(', ')})`,
+      `reeval cloud provider needs a provider the cloud platform keeps keys for${got(provider)}: ${PROVIDERS.join(', ')}`,
     )
   }
   if (action !== 'set' && action !== 'delete') {
-    throw new UsageError(
-      `reeval cloud provider ${provider} needs set or delete${action ? ` (got ${action})` : ''}`,
-    )
+    throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
   }
   const command = `cloud provider ${provider} ${action}`
   const t = await target(command, io)
@@ -358,12 +372,13 @@ export async function providerCommand(
     return 0
   }
   refuseArgv(command, key)
+  signedIn(t, command)
   const read = await io.readValue(`the ${provider} key`)
   checkValue(read, `The ${provider} key`, MAX_KEY_BYTES)
-  const bad = [...read].findIndex((c) => /[\s\p{Cc}]/u.test(c))
-  if (bad >= 0) {
+  const bad = badCharacterAt(read)
+  if (bad) {
     throw new UsageError(
-      `The ${provider} key has whitespace or a control character at position ${bad + 1}: give the key alone`,
+      `The ${provider} key has whitespace or a control character at position ${bad}: give the key alone`,
     )
   }
   const { status, body } = await send<{ provider?: ProviderKey }>(t, providerPath(t, provider), {
@@ -398,24 +413,35 @@ export async function readSecretValue(what: string): Promise<string> {
   stdin.setEncoding('utf8')
   try {
     return await new Promise<string>((resolveValue, reject) => {
-      let typed = ''
+      const typed: string[] = []
+      const stop = () => {
+        stdin.off('data', onData)
+        stdin.off('end', onEnd)
+      }
+      const onEnd = () => {
+        stop()
+        reject(new UsageError('stdin closed before the value was entered; nothing was set.'))
+      }
       const onData = (data: string) => {
         for (const ch of data) {
           if (ch === '\r' || ch === '\n' || ch === '\u0004') {
-            stdin.off('data', onData)
-            resolveValue(typed)
+            stop()
+            resolveValue(typed.join(''))
             return
           }
           if (ch === '\u0003') {
-            stdin.off('data', onData)
+            stop()
             reject(new UsageError('Canceled; nothing was set.'))
             return
           }
-          if (ch === '\u007f' || ch === '\b') typed = typed.slice(0, -1)
-          else typed += ch
+          // An arrow or function key arrives as one escape sequence: none of it is the value.
+          if (ch === '\u001b') return
+          if (ch === '\u007f' || ch === '\b') typed.pop()
+          else if (!/\p{Cc}/u.test(ch)) typed.push(ch)
         }
       }
       stdin.on('data', onData)
+      stdin.once('end', onEnd)
     })
   } finally {
     stdin.setRawMode(false)

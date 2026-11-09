@@ -106,6 +106,8 @@ export type CommandSpec = {
   positionals: number
   /** Its lines in `reeval --help`, the first naming the command; empty when it has none. */
   help: string
+  /** Its arguments may hold a secret, so a refusal counts them instead of repeating them. */
+  secretArgs?: true
   sub?: Record<string, Omit<CommandSpec, 'sub'>>
 }
 
@@ -277,6 +279,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       secrets: {
         flags: ['mode', 'host', 'from-env', 'json'],
         positionals: 3,
+        secretArgs: true,
         help: `
   reeval cloud secrets set <name>
                                 Set an eval secret in the cloud project (.reeval/project.json, else the
@@ -297,6 +300,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       provider: {
         flags: ['project', 'json'],
         positionals: 3,
+        secretArgs: true,
         help: `
   reeval cloud provider <provider> set
                                 Set the org's key for an AI SDK provider (openai, anthropic, google,

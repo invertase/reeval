@@ -289,7 +289,9 @@ describe('reeval cloud secrets', () => {
           ['set', 'A', '--host', 'https://a.example/x'],
           /--host https:\/\/a\.example\/x isn't a host name/,
         ],
-        [['set', '1A', '--host', 'a.example'], /1A isn't a secret name/],
+        [['set', '1A', '--host', 'a.example'], /the secret's name isn't one/],
+        [['set', 'A', '--host', 'a.example', VALUE, 'x'], /takes at most 3 arguments \(got 4\)$/m],
+        [['set', 'sk-live-0123', '--host', 'a.example'], /the secret's name isn't one/],
         [['set', 'NEW'], /NEW is a new secret: give --host <host> for a brokered one/],
         [['get', 'A'], /reeval cloud secrets needs set, delete or list \(got get\)/],
       ]
@@ -399,6 +401,37 @@ describe('reeval cloud provider', () => {
     }
   })
 
+  test('refuses before reading the value when signed out, and a brokered value with a line break', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const out = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--host', 'a.example'], {
+        env: { ...env, REEVAL_TOKEN: '' },
+        input: VALUE,
+      })
+      assert.equal(out.code, 2, out.stdout + out.stderr)
+      assert.match(
+        out.stderr,
+        /reeval cloud secrets set needs you signed in: reeval login signs in/,
+      )
+      const wrapped = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--host', 'a.example'], {
+        env,
+        input: `${VALUE.slice(0, 10)}\n${VALUE.slice(10)}`,
+      })
+      assert.equal(wrapped.code, 2, wrapped.stdout + wrapped.stderr)
+      assert.match(wrapped.stderr, /A's value has whitespace or a control character at position 11/)
+      assert.equal(p.seen.filter((s) => s.method === 'PUT').length, 0)
+      // Twin: a sandbox value may hold one.
+      const sandbox = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--mode', 'sandbox'], {
+        env,
+        input: `${VALUE.slice(0, 10)}\n${VALUE.slice(10)}`,
+      })
+      assert.equal(sandbox.code, 0, sandbox.stdout + sandbox.stderr)
+    } finally {
+      await p.close()
+    }
+  })
+
   test('refuses an unknown provider, a key on the command line and a key with whitespace', async () => {
     const p = await platform()
     try {
@@ -407,7 +440,7 @@ describe('reeval cloud provider', () => {
         [
           ['acme', 'set'],
           'k',
-          /acme isn't a provider the cloud platform keeps keys for \(openai, anthropic/,
+          /needs a provider the cloud platform keeps keys for \(got acme\): openai, anthropic/,
         ],
         [
           ['openai', 'set', 'sk-x'],
@@ -416,6 +449,7 @@ describe('reeval cloud provider', () => {
         ],
         [['openai', 'set'], 'sk x', /whitespace or a control character at position 3/],
         [['openai', 'rotate'], 'k', /needs set or delete \(got rotate\)/],
+        [['openai', 'sk-proj-Abc123'], 'k', /needs set or delete$/m],
       ]
       for (const [args, input, message] of cases) {
         const r = await runCli(dir, ['cloud', 'provider', ...args], { env, input })

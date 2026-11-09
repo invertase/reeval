@@ -250,7 +250,6 @@ async function run(argv: string[]): Promise<number> {
     const cloud = await import('./cloud-secrets.ts')
     const io = {
       out: (s: string) => console.log(s),
-      err: (s: string) => console.error(dim(s)),
       readValue: cloud.readSecretValue,
       projectDir: cloud.projectDirFor(configPath),
     }

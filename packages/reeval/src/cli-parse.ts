@@ -45,7 +45,7 @@ export function parseCli(argv: string[]): ParsedCli {
     command.argument('[args...]').action(() => {
       // `reeval image` has no action of its own: the dispatcher names its subcommand.
       const max = spec.sub && !spec.help ? Number.POSITIVE_INFINITY : spec.positionals
-      parsed = done(program, command, [name], spec.flags, max)
+      parsed = done(program, command, [name], spec.flags, max, spec.secretArgs)
     })
     for (const [subName, sub] of Object.entries(spec.sub ?? {})) {
       const subcommand = configure(command.command(subName), `reeval ${name} ${subName}`, sub.flags)
@@ -59,7 +59,14 @@ export function parseCli(argv: string[]): ParsedCli {
             `--${stray} isn't an option of reeval ${name} ${subName}. Run reeval --help.`,
           )
         }
-        const result = done(program, subcommand, [name, subName], sub.flags, sub.positionals)
+        const result = done(
+          program,
+          subcommand,
+          [name, subName],
+          sub.flags,
+          sub.positionals,
+          sub.secretArgs,
+        )
         parsed = { ...result, values: { ...own, ...result.values } }
       })
     }
@@ -108,15 +115,17 @@ function done(
   path: string[],
   flags: FlagName[],
   max: number,
+  secretArgs?: true,
 ): ParsedCli {
   const values = { ...valuesOf(program, GLOBAL), ...valuesOf(command, flags) }
   const args = command.args
   if (!values.help && !values.version && args.length > max) {
     const name = `reeval ${path.join(' ')}`
+    const got = secretArgs ? `got ${args.length}` : `got ${args.join(' ')}`
     throw new UsageError(
       max === 0
-        ? `${name} takes no arguments (got ${args.join(' ')})`
-        : `${name} takes at most ${max} argument${max === 1 ? '' : 's'} (got ${args.join(' ')})`,
+        ? `${name} takes no arguments (${got})`
+        : `${name} takes at most ${max} argument${max === 1 ? '' : 's'} (${got})`,
     )
   }
   return { positionals: [...path, ...args], values }
