@@ -1210,11 +1210,36 @@ async function runCommand(
   // A run budget.duration stopped is recorded too, as status `budget`: it's what the budget
   // allowed, and compare never takes an incomplete run as its base. An interrupted one isn't.
   const recording = autoRecord && record.status !== 'interrupted'
-  // Recorded before `run-end`, which names where the run landed; its line and any error still
-  // follow the run's summary.
+  // `run-end` names where the run was recorded, so it waits for the record to land, but not for
+  // a remote store's upload: the summary comes first, then the upload's line or error.
+  let ended = false
+  const endRun = async (recorded?: RecordedPaths) => {
+    if (ended) return
+    ended = true
+    renderer.onEvent({
+      type: 'run-end',
+      at: Date.now(),
+      record,
+      summaryPath: fromCwd(summary),
+      results: engineRun.evals,
+      remarks: run.remarks,
+      ...(notRun > 0 && !stopped ? { notRun } : {}),
+      ...(recorded ? { recorded } : {}),
+    })
+    renderer.close()
+    if (retried.size) {
+      const { retryCounts, retryLine } = await import('./retry.ts')
+      const line = retryLine(retryCounts(record, retried, ctx.previous))
+      if (setup.json) console.error(line)
+      else console.log(line)
+    }
+    const stepSummary = process.env.GITHUB_STEP_SUMMARY
+    if (stepSummary && run.artifactDir) {
+      await appendFile(stepSummary, await readFile(summary)).catch(() => {})
+    }
+  }
   let recordLine: string | undefined
   let recordError: unknown
-  let recorded: RecordedPaths | undefined
   if (recording) {
     const { record: recordCmd } = await import('./commands.ts')
     const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
@@ -1228,13 +1253,12 @@ async function runCommand(
         config,
         record.runId,
         { ...flags, ...allow, ...level },
-        (landed) => {
-          recorded = {
+        (landed) =>
+          endRun({
             record: fromCwd(landed.recordPath),
             files: landed.artifactDir ? fromCwd(landed.artifactDir) : null,
             ...(landed.archive ? { archive: fromCwd(landed.archive.path) } : {}),
-          }
-        },
+          }),
       ).catch((error: Error) => {
         if (error.name !== 'StoreError') throw error
         if (code !== EXIT.interrupted && code !== EXIT.terminated) code = EXIT.infra
@@ -1245,27 +1269,7 @@ async function runCommand(
       recordError = error
     }
   }
-  renderer.onEvent({
-    type: 'run-end',
-    at: Date.now(),
-    record,
-    summaryPath: fromCwd(summary),
-    results: engineRun.evals,
-    remarks: run.remarks,
-    ...(notRun > 0 && !stopped ? { notRun } : {}),
-    ...(recorded ? { recorded } : {}),
-  })
-  renderer.close()
-  if (retried.size) {
-    const { retryCounts, retryLine } = await import('./retry.ts')
-    const line = retryLine(retryCounts(record, retried, ctx.previous))
-    if (setup.json) console.error(line)
-    else console.log(line)
-  }
-  const stepSummary = process.env.GITHUB_STEP_SUMMARY
-  if (stepSummary && run.artifactDir) {
-    await appendFile(stepSummary, await readFile(summary)).catch(() => {})
-  }
+  await endRun()
   if (recordError !== undefined) throw recordError
   if (recordLine !== undefined) {
     if (setup.json) console.error(recordLine)

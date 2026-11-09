@@ -65,7 +65,7 @@ Usage:
                                 finished run. Exit 2 when the plan or eval source changed since
     --events                    Also write the run's output events as NDJSON for reeval attach, to
                                 .reeval/events/<run>.ndjson; a resume appends to it. A recorded
-                                run's run-end event names its record, files and archive (recorded)
+                                run's run-end event names its record, files and archive in recorded
     --events-file <file>        The same, to file; refuses a file that isn't a run's event stream
     --events-url <url>          Also POST them to url, in batches of NDJSON lines
     --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new

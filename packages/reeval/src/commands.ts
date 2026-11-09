@@ -162,7 +162,7 @@ export async function record(
   runId: string,
   flags: HistoryFlags,
   /** Told where the run landed, before a remote store's upload, which can still fail. */
-  onRecorded?: (result: RecordResult) => void,
+  onRecorded?: (result: RecordResult) => void | Promise<void>,
 ): Promise<string> {
   const remote = isRemote(config.history) ? config.history : null
   const marked = remote ? await markPending(remote, runId) : true
@@ -186,7 +186,7 @@ export async function record(
     if (remote && !marked) await unmarkPending(remote, runId)
     throw error
   }
-  onRecorded?.(result)
+  await onRecorded?.(result)
   if (remote) return recordRemote(remote, runId, result)
   const where = rel(result.recordPath)
   const ignored =

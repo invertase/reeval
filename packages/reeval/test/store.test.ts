@@ -215,6 +215,9 @@ describe('recording to s3()', () => {
     const named = recordedIn('uploaded.ndjson')
     assert.match(named?.record ?? '', /^\.reeval\/store\/[0-9a-f]{12}\/history\/[^/]+\.json$/)
     assert.ok(existsSync(join(dir, named?.record ?? '')), 'run-end names the store copy')
+    assert.equal(named?.files, named?.record.slice(0, -5))
+    assert.ok(existsSync(join(dir, named?.files ?? '', 'summary.md')))
+    assert.equal(named?.archive, undefined)
     assert.match(r.stdout, /^recorded \S+ in s3:\/\/reeval-runs\/ci \(\d+ files, [\d.]+ KB\)$/m)
     assert.equal(remoteRecords().length, 1)
     assert.equal(existsSync(join(dir, 'evals/.history')), false)
@@ -271,6 +274,8 @@ describe('recording to s3()', () => {
     assert.equal(r.code, 3, r.stdout + r.stderr)
     const named = recordedIn('pending.ndjson')?.record ?? ''
     assert.ok(existsSync(join(dir, named)), 'run-end names the copy the upload left pending')
+    const summary = r.stdout.search(/summary \.reeval\/runs\//)
+    assert.ok(summary >= 0 && summary < r.stdout.search(/couldn't upload/), 'the summary first')
     assert.match(
       r.stdout,
       /reeval: couldn't upload \S+ to s3:\/\/reeval-runs\/ci: .*\(503 ServiceUnavailable\)\. The run is kept in \.reeval\/store\/[0-9a-f]{12}\/pending; reeval sync uploads it\./,
