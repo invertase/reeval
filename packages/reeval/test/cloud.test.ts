@@ -1,20 +1,20 @@
-// hosted() without Docker, against a fake VM service (support/vm-service.ts) in front of the fake
+// cloud() without Docker, against a fake VM service (support/vm-service.ts) in front of the fake
 // VM API (support/boat.ts), through REEVAL_VM_URL and REEVAL_VM_TOKEN: preflight, the pool's
 // limits, refused starts, a run's cleanup and an attempt's lifecycle, and nothing it says names
 // the upstream.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { hosted } from '../src/internal-vm.ts'
+import { cloud } from '../src/internal-vm.ts'
 import { runPrefix } from '../src/sandbox/boat.ts'
 import {
-  checkHosted,
-  HOSTED_PREFIX,
-  hostedCapacity,
-  openHostedPool,
+  CLOUD_PREFIX,
+  checkCloud,
+  cloudCapacity,
+  openCloudPool,
   removeRunVms,
   VM_TOKEN,
   VM_URL,
-} from '../src/sandbox/hosted.ts'
+} from '../src/sandbox/cloud.ts'
 import { project, readRun, runCli } from './helpers.ts'
 import { type FakeBoat, fakeBoat, unreachableMachines } from './support/boat.ts'
 import {
@@ -76,20 +76,20 @@ const create = (p: FakeVmService, name = `other-${others++}`, type = 'small') =>
 describe("preflight's check of the run's VM service", () => {
   test('passes with both variables set', async () => {
     const p = await service()
-    await inRun(on(p), () => checkHosted(hosted(), process.cwd()))
+    await inRun(on(p), () => checkCloud(cloud(), process.cwd()))
   })
 
   test('names the variables that are unset', async () => {
     const p = await service()
     await assert.rejects(
-      inRun({}, () => checkHosted(hosted(), process.cwd())),
+      inRun({}, () => checkCloud(cloud(), process.cwd())),
       {
         message:
-          /^hosted\(\) needs REEVAL_VM_URL and REEVAL_VM_TOKEN, and REEVAL_VM_URL and REEVAL_VM_TOKEN aren't set here/,
+          /^cloud\(\) needs REEVAL_VM_URL and REEVAL_VM_TOKEN, and REEVAL_VM_URL and REEVAL_VM_TOKEN aren't set here/,
       },
     )
     await assert.rejects(
-      inRun({ url: p.url }, () => checkHosted(hosted(), process.cwd())),
+      inRun({ url: p.url }, () => checkCloud(cloud(), process.cwd())),
       { message: /, and REEVAL_VM_TOKEN isn't set here/ },
     )
   })
@@ -98,7 +98,7 @@ describe("preflight's check of the run's VM service", () => {
     const p = await service()
     const wrong = 'not_the_token'
     const refused = await inRun({ url: p.url, token: wrong }, () =>
-      checkHosted(hosted(), process.cwd()),
+      checkCloud(cloud(), process.cwd()),
     ).catch((e) => e)
     assert.match(
       String(refused.message),
@@ -107,7 +107,7 @@ describe("preflight's check of the run's VM service", () => {
     assert.doesNotMatch(String(refused.message), new RegExp(`${wrong}|boat`, 'i'))
     p.end()
     await assert.rejects(
-      inRun(on(p), () => checkHosted(hosted(), process.cwd())),
+      inRun(on(p), () => checkCloud(cloud(), process.cwd())),
       {
         message: /^reeval refused the token in REEVAL_VM_TOKEN: 401 unauthorized/,
       },
@@ -117,21 +117,21 @@ describe("preflight's check of the run's VM service", () => {
   test('refuses a size the service refuses, in its words', async () => {
     const p = await service()
     await assert.rejects(
-      inRun(on(p), () => checkHosted(hosted({ size: 'medium' }), process.cwd())),
+      inRun(on(p), () => checkCloud(cloud({ size: 'medium' }), process.cwd())),
       {
         message:
           /^reeval won't start a medium machine on this run: A run's VMs may be at most small\./,
       },
     )
     const roomier = await service({ maxType: 'default' })
-    await inRun(on(roomier), () => checkHosted(hosted({ size: 'medium' }), process.cwd()))
+    await inRun(on(roomier), () => checkCloud(cloud({ size: 'medium' }), process.cwd()))
   })
 
   test('refuses a run the service says can start nothing more', async () => {
     const p = await service({ maxStarts: 1 })
     assert.equal((await create(p)).status, 201)
     await assert.rejects(
-      inRun(on(p), () => checkHosted(hosted(), process.cwd())),
+      inRun(on(p), () => checkCloud(cloud(), process.cwd())),
       {
         message: /^reeval won't start sandboxes on this run: The run used its 1 VM starts\./,
       },
@@ -142,7 +142,7 @@ describe("preflight's check of the run's VM service", () => {
     const p = await service()
     await assert.rejects(
       inRun({ ...on(p), labels: 'team=x,reeval.platform.x=mine' }, () =>
-        checkHosted(hosted(), process.cwd()),
+        checkCloud(cloud(), process.cwd()),
       ),
       {
         message:
@@ -151,7 +151,7 @@ describe("preflight's check of the run's VM service", () => {
     )
     await assert.rejects(
       inRun({ ...on(p), labels: 'Reeval.Platform.Run=mine' }, () =>
-        checkHosted(hosted(), process.cwd()),
+        checkCloud(cloud(), process.cwd()),
       ),
       { message: /^REEVAL_SANDBOX_LABELS sets Reeval\.Platform\.Run, and keys starting/ },
     )
@@ -160,12 +160,12 @@ describe("preflight's check of the run's VM service", () => {
   test('refuses more labels than the service takes, naming REEVAL_SANDBOX_LABELS', async () => {
     const p = await service()
     const labels = (n: number) => Array.from({ length: n }, (_, i) => `team-${i}=x`).join(',')
-    await inRun({ ...on(p), labels: labels(14) }, () => checkHosted(hosted(), process.cwd()))
+    await inRun({ ...on(p), labels: labels(14) }, () => checkCloud(cloud(), process.cwd()))
     await assert.rejects(
-      inRun({ ...on(p), labels: labels(15) }, () => checkHosted(hosted(), process.cwd())),
+      inRun({ ...on(p), labels: labels(15) }, () => checkCloud(cloud(), process.cwd())),
       {
         message:
-          /^REEVAL_SANDBOX_LABELS sets more than the 14 labels hosted\(\) takes beside reeval's own/,
+          /^REEVAL_SANDBOX_LABELS sets more than the 14 labels cloud\(\) takes beside reeval's own/,
       },
     )
   })
@@ -176,7 +176,7 @@ describe("the run's pool", () => {
     const p = await service({ maxStarts: 5, maxLive: 3 })
     assert.equal((await create(p)).status, 201)
     const { options } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId: 'run-pool', root: process.cwd() }),
+      openCloudPool(cloud(), { runId: 'run-pool', root: process.cwd() }),
     )
     assert.deepEqual(options.limits, {
       machines: 2,
@@ -190,7 +190,7 @@ describe("the run's pool", () => {
     const p = await service({ maxLive: 1 })
     assert.equal((await create(p)).status, 201)
     const { provider } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId: 'run-busy', root: process.cwd() }),
+      openCloudPool(cloud(), { runId: 'run-busy', root: process.cwd() }),
     )
     const error = await inRun(on(p), () => provider.start(new AbortController().signal, 600)).catch(
       (e: Error) => e,
@@ -205,7 +205,7 @@ describe("the run's pool", () => {
   test('a 403 fails the start in plain words, not as a rate limit', async () => {
     const p = await service({ maxStarts: 1 })
     const { provider } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId: 'run-spent', root: process.cwd() }),
+      openCloudPool(cloud(), { runId: 'run-spent', root: process.cwd() }),
     )
     assert.equal((await create(p)).status, 201)
     const error = (await inRun(on(p), () =>
@@ -224,7 +224,7 @@ describe('a token refused mid-run', () => {
   test('fails the start as infra, not as a rate limit', async () => {
     const p = await service()
     const { provider } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId: 'run-expired', root: process.cwd() }),
+      openCloudPool(cloud(), { runId: 'run-expired', root: process.cwd() }),
     )
     p.end()
     const error = (await inRun(on(p), () =>
@@ -243,7 +243,7 @@ describe('a token refused mid-run', () => {
 describe('a VM granted less time than the attempt needs', () => {
   const start = async (p: FakeVmService, runId: string, timeoutS: number) => {
     const { provider } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId, root: process.cwd() }),
+      openCloudPool(cloud(), { runId, root: process.cwd() }),
     )
     return (await inRun(on(p), () =>
       provider.start(new AbortController().signal, timeoutS + 600),
@@ -276,7 +276,7 @@ describe('a VM granted less time than the attempt needs', () => {
     const p = await service()
     const made = (await (await create(p)).json()) as { sandbox: { id: string } }
     const { provider } = await inRun(on(p), () =>
-      openHostedPool(hosted(), { runId: 'run-kept', root: process.cwd() }),
+      openCloudPool(cloud(), { runId: 'run-kept', root: process.cwd() }),
     )
     await inRun(on(p), () => provider.keepAlive?.(made.sandbox.id, 1200 + 600))
     await assert.rejects(
@@ -289,8 +289,8 @@ describe('a VM granted less time than the attempt needs', () => {
 describe("a run's cleanup", () => {
   test("deletes the run's VMs, and nobody else's", async () => {
     const p = await service()
-    const mine = runPrefix({ prefix: HOSTED_PREFIX }, 'run-a')
-    const theirs = runPrefix({ prefix: HOSTED_PREFIX }, 'run-b')
+    const mine = runPrefix({ prefix: CLOUD_PREFIX }, 'run-a')
+    const theirs = runPrefix({ prefix: CLOUD_PREFIX }, 'run-b')
     for (const name of [`${mine}aaaaaa`, `${theirs}bbbbbb`]) {
       assert.equal((await create(p, name)).status, 201)
     }
@@ -306,7 +306,7 @@ describe("a run's cleanup", () => {
 describe("the service's capacity", () => {
   test('is the free machines times attemptsPerMachine, capped by maxConcurrent', async () => {
     const p = await service({ maxLive: 3 })
-    const at = (o: Parameters<typeof hosted>[0]) => inRun(on(p), () => hostedCapacity(hosted(o)))
+    const at = (o: Parameters<typeof cloud>[0]) => inRun(on(p), () => cloudCapacity(cloud(o)))
     assert.deepEqual(await at({}), { machines: 3, attempts: 3 })
     assert.deepEqual(await at({ attemptsPerMachine: 2, maxConcurrent: 5 }), {
       machines: 3,
@@ -320,10 +320,10 @@ describe('an attempt on a VM it cannot reach', () => {
     'reeval.config.ts': `
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { hosted } from 'reeval/internal/vm'
+import { cloud } from 'reeval/internal/vm'
 export default defineConfig({
   harnesses: fakeHarness({ script: [[{ exec: 'true' }]] }),
-  sandbox: hosted(${size}),
+  sandbox: cloud(${size}),
   egress: 'allow-all',
 })
 `,
@@ -337,7 +337,7 @@ evaluate('reaches', async (c) => {
 
   test('fails as infra, labeled and deleted, and the output never names the upstream', async () => {
     const p = await service({ maxType: 'default' })
-    const dir = (await project('hosted-unreachable', files("{ size: 'medium' }"))).dir
+    const dir = (await project('cloud-unreachable', files("{ size: 'medium' }"))).dir
     const env = { [VM_URL]: p.url, [VM_TOKEN]: p.token }
     const r = await runCli(dir, ['run'], {
       env: { ...env, REEVAL_SANDBOX_LABELS: 'reeval-job=42' },
@@ -380,7 +380,7 @@ evaluate('reaches', async (c) => {
 
   test('stops the run with exit 2 without REEVAL_VM_URL and REEVAL_VM_TOKEN, naming both', async () => {
     const p = await service()
-    const dir = (await project('hosted-not-hosted', files(''))).dir
+    const dir = (await project('cloud-not-cloud', files(''))).dir
     const r = await runCli(dir, ['run'], { env: { [VM_URL]: '', [VM_TOKEN]: '' } })
     const out = r.stdout + r.stderr
     assert.equal(r.code, 2, out)

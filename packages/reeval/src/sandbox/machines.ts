@@ -1,4 +1,4 @@
-// The machine providers reeval has: Tart's macOS VMs, and Boat's, Daytona's and hosted()'s Linux
+// The machine providers reeval has: Tart's macOS VMs, and Boat's, Daytona's and cloud()'s Linux
 // VMs. Each loads its own
 // modules only when asked, so the kinds table stays cheap to import. kinds.ts builds its entries
 // from these as it loads, so nothing this module imports may import kinds.ts in turn.
@@ -6,8 +6,8 @@ import { DOCKER_EGRESS, type EgressCapabilities } from '@reeval/sandbox-docker'
 import { tartVmLimit } from '../contract/tart.ts'
 import type {
   BoatSandboxDescriptor,
+  CloudSandboxDescriptor,
   DaytonaSandboxDescriptor,
-  HostedSandboxDescriptor,
   TartSandboxDescriptor,
 } from '../types.ts'
 import { idPart, recipeId } from './id-part.ts'
@@ -193,23 +193,23 @@ export const DAYTONA_MACHINE: MachineProvider<DaytonaSandboxDescriptor> = {
 }
 
 /** Enforces nothing, as on Boat, whose client it runs on. */
-const HOSTED_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
+const CLOUD_EGRESS: EgressCapabilities = { enforce: 'none', record: true, switches: false }
 
-export const HOSTED_MACHINE: MachineProvider<HostedSandboxDescriptor> = {
-  kind: 'hosted',
-  helpers: ['hosted'],
+export const CLOUD_MACHINE: MachineProvider<CloudSandboxDescriptor> = {
+  kind: 'cloud',
+  helpers: ['cloud'],
   internal: true,
   os: 'linux',
-  capabilities: { egress: HOSTED_EGRESS, processTable: true, listeners: 'proc' },
-  id: (s) => (s.size ? `hosted:${s.size}` : 'hosted'),
+  capabilities: { egress: CLOUD_EGRESS, processTable: true, listeners: 'proc' },
+  id: (s) => (s.size ? `cloud:${s.size}` : 'cloud'),
   hostPaths: {},
   async create(sandbox, options) {
-    const { createHostedSandbox } = await import('./hosted.ts')
-    return createHostedSandbox(sandbox, options)
+    const { createCloudSandbox } = await import('./cloud.ts')
+    return createCloudSandbox(sandbox, options)
   },
   async capacity(sandbox) {
-    const { hostedCapacity } = await import('./hosted.ts')
-    return hostedCapacity(sandbox)
+    const { cloudCapacity } = await import('./cloud.ts')
+    return cloudCapacity(sandbox)
   },
   pool: {
     key: (s) =>
@@ -219,26 +219,26 @@ export const HOSTED_MACHINE: MachineProvider<HostedSandboxDescriptor> = {
         s.attemptsPerMachine ?? 1,
         s.maxConcurrent ?? null,
       ]),
-    // Every hosted VM of the run is on one service.
+    // Every cloud VM of the run is on one service.
     account: () => '',
     async open(sandbox, o) {
-      const { openHostedPool } = await import('./hosted.ts')
-      return openHostedPool(sandbox, o)
+      const { openCloudPool } = await import('./cloud.ts')
+      return openCloudPool(sandbox, o)
     },
   },
   // The run's VMs are under one name prefix on one service, so no descriptor is needed.
   async cleanupRun(runId) {
-    const { removeRunVms } = await import('./hosted.ts')
+    const { removeRunVms } = await import('./cloud.ts')
     await removeRunVms(runId)
   },
   credentials: () => [
-    { names: ['REEVAL_VM_URL'], line: 'REEVAL_VM_URL (for hosted())' },
-    { names: ['REEVAL_VM_TOKEN'], line: 'REEVAL_VM_TOKEN (for hosted())' },
+    { names: ['REEVAL_VM_URL'], line: 'REEVAL_VM_URL (for cloud())' },
+    { names: ['REEVAL_VM_TOKEN'], line: 'REEVAL_VM_TOKEN (for cloud())' },
   ],
   slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
   async doctor(sandboxes, ctx) {
-    const { hostedDoctor } = await import('./hosted.ts')
-    return hostedDoctor(sandboxes, ctx)
+    const { cloudDoctor } = await import('./cloud.ts')
+    return cloudDoctor(sandboxes, ctx)
   },
 }
 
@@ -247,5 +247,5 @@ export const MACHINE_PROVIDERS = [
   TART_MACHINE,
   BOAT_MACHINE,
   DAYTONA_MACHINE,
-  HOSTED_MACHINE,
+  CLOUD_MACHINE,
 ] as const

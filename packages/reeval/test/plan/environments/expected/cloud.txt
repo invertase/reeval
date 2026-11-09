@@ -1,0 +1,7 @@
+no profile · 4 evals · 4 cells · 5 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/cloud.eval.ts › cloud                    fake/small/cloud                 control  gated  ×1  egress "allow-all"
+evals/cloud.eval.ts › cloud medium             fake/medium/cloud:medium         control  gated  ×1  egress "allow-all"
+evals/cloud.eval.ts › cloud shared             fake/shared/cloud:large          control  gated  ×2  egress "allow-all"
+evals/cloud.eval.ts › cloud on a real harness  cursor:composer-2.5/small/cloud  control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · egress "allow-all"
+excluded: —

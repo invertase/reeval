@@ -43,7 +43,7 @@ import {
   opencode,
   pi,
 } from '../../src/harness.ts'
-import { hosted } from '../../src/internal-vm.ts'
+import { cloud } from '../../src/internal-vm.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
 import { PrepareError } from '../../src/sandbox/provider.ts'
@@ -858,20 +858,20 @@ export const CASES: Record<string, Case[]> = {
       ),
     ],
     [
-      'cursor on hosted()',
+      'cursor on cloud()',
       planned(
         {},
-        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: hosted(), egress: 'allow-all' },
+        { harnesses: cursor({ model: 'composer-2.5' }), sandbox: cloud(), egress: 'allow-all' },
       ),
     ],
     [
-      "hosted() under egress 'proxy'",
-      planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: hosted() }),
+      "cloud() under egress 'proxy'",
+      planned({}, { harnesses: cursor({ model: 'composer-2.5' }), sandbox: cloud() }),
     ],
-    ['hosted() size unknown', any(hosted, { size: 'huge' })],
-    ['hosted() type, a boat() option', any(hosted, { type: 'large' })],
-    ['hosted() apiKey', any(hosted, { apiKey: 'k' })],
-    ['hosted() attemptsPerMachine over 8', any(hosted, { attemptsPerMachine: 9 })],
+    ['cloud() size unknown', any(cloud, { size: 'huge' })],
+    ['cloud() type, a boat() option', any(cloud, { type: 'large' })],
+    ['cloud() apiKey', any(cloud, { apiKey: 'k' })],
+    ['cloud() attemptsPerMachine over 8', any(cloud, { attemptsPerMachine: 9 })],
     [
       'opencode mcp: {file:} in an arg',
       mcpOn(OPENCODE, ({ mcp }) => ({

@@ -1460,20 +1460,20 @@ export type DaytonaSandboxDescriptor = {
    */
   attemptsPerMachine?: number
 }
-/** A hosted VM's size: `small` is 2 vCPUs and 4 GB. @internal */
-export type HostedMachineSize = 'small' | 'medium' | 'large' | 'xlarge'
+/** A cloud VM's size: `small` is 2 vCPUs and 4 GB. @internal */
+export type CloudMachineSize = 'small' | 'medium' | 'large' | 'xlarge'
 /**
- * A VM per attempt from reeval's own VM service, made by `hosted()` from `reeval/internal/vm`.
+ * A VM per attempt from reeval's own VM service, made by `cloud()` from `reeval/internal/vm`.
  *
  * @internal Not part of reeval's public API.
  */
-export type HostedSandboxDescriptor = {
-  kind: 'hosted'
-  /** Cell id; defaults to `hosted`, or `hosted:<size>` with a `size`. */
+export type CloudSandboxDescriptor = {
+  kind: 'cloud'
+  /** Cell id; defaults to `cloud`, or `cloud:<size>` with a `size`. */
   id?: string
   /** The machine size. Default `small`. */
-  size?: HostedMachineSize
-  /** The most attempts on hosted VMs at once, across the run: machines times `attemptsPerMachine`. */
+  size?: CloudMachineSize
+  /** The most attempts on cloud VMs at once, across the run: machines times `attemptsPerMachine`. */
   maxConcurrent?: number
   /**
    * A machine takes another of the run's attempts once one ends, instead of being deleted, as
@@ -1492,7 +1492,7 @@ export type SandboxDescriptor =
   | TartSandboxDescriptor
   | BoatSandboxDescriptor
   | DaytonaSandboxDescriptor
-  | HostedSandboxDescriptor
+  | CloudSandboxDescriptor
 
 /**
  * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by

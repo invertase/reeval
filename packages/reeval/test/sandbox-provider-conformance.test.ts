@@ -11,9 +11,9 @@ import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { parseProbe, probeScript } from '../src/attempt/serve.ts'
-import { hosted } from '../src/internal-vm.ts'
+import { cloud } from '../src/internal-vm.ts'
 import { runLabels, runPrefix } from '../src/sandbox/boat.ts'
-import { HOSTED_PREFIX, VM_TOKEN, VM_URL } from '../src/sandbox/hosted.ts'
+import { CLOUD_PREFIX, VM_TOKEN, VM_URL } from '../src/sandbox/cloud.ts'
 import type { SandboxOptions } from '../src/sandbox/index.ts'
 import { SANDBOX_KINDS } from '../src/sandbox/kinds.ts'
 import type { MachineDescriptor, MachineProvider } from '../src/sandbox/machine.ts'
@@ -67,9 +67,9 @@ let releaseLoopback = () => {}
 const savedTartEnv: Record<string, string | undefined> = {}
 let boatApi: FakeBoat | undefined
 const savedBoatEnv = { url: process.env.BOAT_BASE_URL, key: process.env.BOAT_API_KEY }
-let hostedApi: FakeBoat | undefined
+let cloudApi: FakeBoat | undefined
 let vmService: FakeVmService | undefined
-const savedHostedEnv = { url: process.env[VM_URL], token: process.env[VM_TOKEN] }
+const savedCloudEnv = { url: process.env[VM_URL], token: process.env[VM_TOKEN] }
 let daytonaApi: FakeDaytona | undefined
 const savedDaytonaEnv = { url: process.env.DAYTONA_API_URL, key: process.env.DAYTONA_API_KEY }
 const sshVmSkip =
@@ -145,32 +145,32 @@ const BACKENDS: Record<MachineKind, Backend> = {
     slowBoot: () => () => {},
     inMachine: inSshVm,
   },
-  hosted: {
+  cloud: {
     skip: sshVmSkip,
     async start() {
       buildSshVmImage()
-      hostedApi = await fakeBoat(startSshVm)
-      vmService = await fakeVmService(hostedApi, { maxLive: 10, maxStarts: 100 })
+      cloudApi = await fakeBoat(startSshVm)
+      vmService = await fakeVmService(cloudApi, { maxLive: 10, maxStarts: 100 })
       process.env[VM_URL] = vmService.url
       process.env[VM_TOKEN] = vmService.token
     },
     async stop() {
       await vmService?.close()
-      await hostedApi?.close()
+      await cloudApi?.close()
       for (const [name, value] of [
-        [VM_URL, savedHostedEnv.url],
-        [VM_TOKEN, savedHostedEnv.token],
+        [VM_URL, savedCloudEnv.url],
+        [VM_TOKEN, savedCloudEnv.token],
       ] as const) {
         if (value === undefined) delete process.env[name]
         else process.env[name] = value
       }
     },
-    descriptor: () => hosted(),
+    descriptor: () => cloud(),
     machines: (runId) =>
-      (hostedApi?.live() ?? []).filter((name) =>
-        name.startsWith(runPrefix({ prefix: HOSTED_PREFIX }, runId)),
+      (cloudApi?.live() ?? []).filter((name) =>
+        name.startsWith(runPrefix({ prefix: CLOUD_PREFIX }, runId)),
       ),
-    asked: (runId) => BACKENDS.hosted.machines(runId).length > 0,
+    asked: (runId) => BACKENDS.cloud.machines(runId).length > 0,
     slowBoot: () => () => {},
     inMachine: inSshVm,
   },

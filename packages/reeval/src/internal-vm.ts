@@ -1,13 +1,13 @@
 // `reeval/internal/vm`: reeval's own VM sandbox, not part of its public API. This module only
 // describes the VMs; the run's main process starts them.
-import { checkHostedOptions, type HostedOptions } from './contract/hosted.ts'
+import { type CloudOptions, checkCloudOptions } from './contract/cloud.ts'
 import { UsageError } from './errors.ts'
-import type { HostedSandboxDescriptor } from './types.ts'
+import type { CloudSandboxDescriptor } from './types.ts'
 
 /** @internal */
-export type { HostedOptions } from './contract/hosted.ts'
+export type { CloudOptions } from './contract/cloud.ts'
 /** @internal */
-export type { HostedMachineSize, HostedSandboxDescriptor } from './types.ts'
+export type { CloudMachineSize, CloudSandboxDescriptor } from './types.ts'
 
 /**
  * One VM per attempt from the VM service at `REEVAL_VM_URL`, with the token in
@@ -17,10 +17,10 @@ export type { HostedMachineSize, HostedSandboxDescriptor } from './types.ts'
  *
  * @internal Not part of reeval's public API; it may change or go away in any release.
  */
-export function hosted(options: HostedOptions = {}): HostedSandboxDescriptor {
+export function cloud(options: CloudOptions = {}): CloudSandboxDescriptor {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-    throw new UsageError(`hosted() takes an options object (got ${JSON.stringify(options)})`)
+    throw new UsageError(`cloud() takes an options object (got ${JSON.stringify(options)})`)
   }
-  checkHostedOptions(options)
-  return { kind: 'hosted', ...structuredClone(options) }
+  checkCloudOptions(options)
+  return { kind: 'cloud', ...structuredClone(options) }
 }

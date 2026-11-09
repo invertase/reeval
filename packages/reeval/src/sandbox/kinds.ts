@@ -15,7 +15,7 @@ import { createFakeSandbox, FAKE_EGRESS } from './fake.ts'
 import { recipeId } from './id-part.ts'
 import type { SandboxOptions } from './index.ts'
 import { kindOf } from './machine.ts'
-import { BOAT_MACHINE, DAYTONA_MACHINE, HOSTED_MACHINE, TART_MACHINE } from './machines.ts'
+import { BOAT_MACHINE, CLOUD_MACHINE, DAYTONA_MACHINE, TART_MACHINE } from './machines.ts'
 import type { Sandbox } from './types.ts'
 
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
@@ -194,7 +194,7 @@ export const SANDBOX_KINDS: Kinds = {
   tart: kindOf(TART_MACHINE),
   boat: kindOf(BOAT_MACHINE),
   daytona: kindOf(DAYTONA_MACHINE),
-  hosted: kindOf(HOSTED_MACHINE),
+  cloud: kindOf(CLOUD_MACHINE),
 }
 
 export type SandboxKindName = keyof Kinds
