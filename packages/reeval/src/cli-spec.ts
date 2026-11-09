@@ -246,9 +246,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   reeval login                  Sign in to the cloud platform at REEVAL_CLOUD_URL: open the page it
                                 prints, check the code and approve it. Keeps the token in the OS
-                                keychain (macOS, or secret-tool on Linux), else in
-                                ~/.config/reeval/credentials.json (mode 0600), for cloud runs and
-                                reeval attach; REEVAL_TOKEN takes precedence over it`,
+                                keychain (macOS, or secret-tool on Linux), else in credentials.json
+                                in reeval's config directory (~/.config/reeval, mode 0600), for
+                                cloud runs and reeval attach; REEVAL_TOKEN takes precedence over it`,
   },
   logout: {
     flags: [],
@@ -264,7 +264,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval whoami                 Who the cloud platform at REEVAL_CLOUD_URL says you are, and whether
                                 the token is REEVAL_TOKEN or reeval login's; exit 2 when signed out
                                 or the platform refuses it
-    --json                      As JSON: url, user and token`,
+    --json                      As JSON: url, user and tokenFrom`,
   },
   bundle: {
     flags: ['profile', 'runs', 'tag', 'trait', 'out'],

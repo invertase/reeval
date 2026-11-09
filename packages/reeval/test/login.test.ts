@@ -18,7 +18,12 @@ type Seen = { method: string; path: string; auth?: string; origin?: string; body
  * then `outcome`: the token, `access_denied`, `expired_token` or a 403 refusal.
  */
 async function platform(
-  options: { pending?: number; outcome?: 'token' | 'denied' | 'expired' | 'refused' } = {},
+  options: {
+    pending?: number
+    outcome?: 'token' | 'denied' | 'expired' | 'refused'
+    /** The approval page it sends, instead of its own. */
+    page?: string
+  } = {},
 ) {
   const seen: Seen[] = []
   const live = new Set<string>()
@@ -55,7 +60,7 @@ async function platform(
         device_code: 'device-code-1',
         user_code: 'ABCD-EFGH',
         verification_uri: `${base}/device`,
-        verification_uri_complete: `${base}/device?user_code=ABCD-EFGH`,
+        verification_uri_complete: options.page ?? `${base}/device?user_code=ABCD-EFGH`,
         expires_in: 60,
         interval: 0,
       })
@@ -75,8 +80,8 @@ async function platform(
           return json(res, 400, { error: 'expired_token', error_description: 'expired' })
         case 'refused':
           return json(res, 403, {
-            code: 'SIGN_IN_DOMAIN',
-            message: 'Sign in with a verified Google account.',
+            code: 'ACCOUNT_NOT_ALLOWED',
+            message: "This account can't sign in.",
           })
       }
       const token = issued++ ? `${TOKEN}-${issued}` : TOKEN
@@ -166,7 +171,7 @@ describe('reeval login, whoami and logout', () => {
       const doc = JSON.parse(asJson.stdout)
       assert.equal(doc.url, `${p.base}/`)
       assert.deepEqual(doc.user, USER)
-      assert.equal(doc.token, m.file)
+      assert.equal(doc.tokenFrom, m.file)
 
       const out = await runCli(dir, ['logout'], { env: m.env })
       assert.equal(out.code, 0, out.stdout + out.stderr)
@@ -256,6 +261,20 @@ esac
       assert.ok(!argv.includes(TOKEN), 'the token never reaches a command line')
       const lookup = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(lookup.code, 2)
+
+      // Signed in through the keychain, then in a shell that can't reach it.
+      assert.equal((await runCli(dir, ['login'], { env: m.env })).code, 0)
+      const away = { ...m.env, DBUS_SESSION_BUS_ADDRESS: '' }
+      const lost = await runCli(dir, ['whoami'], { env: away })
+      assert.equal(lost.code, 2)
+      assert.match(
+        lost.stderr,
+        /but the keychain didn't return its token: reeval login signs in again/,
+      )
+      const half = await runCli(dir, ['logout'], { env: away })
+      assert.equal(half.code, 0)
+      assert.match(half.stderr, /wasn't revoked on the platform and the keychain may still hold it/)
+      assert.match(half.stdout, /Removed the sign-in to .* from this machine's credentials/)
     } finally {
       await p.close()
     }
@@ -284,7 +303,7 @@ esac
   for (const [outcome, message] of [
     ['denied', /The sign-in was denied on the approval page/],
     ['expired', /The code expired before it was approved: run reeval login again/],
-    ['refused', /the cloud platform refused the sign-in: Sign in with a verified Google account/],
+    ['refused', /the cloud platform refused the sign-in: This account can't sign in/],
   ] as const) {
     test(`exits 2 when the sign-in is ${outcome}, storing nothing`, async () => {
       const p = await platform({ outcome })
@@ -299,6 +318,18 @@ esac
       }
     })
   }
+
+  test("refuses an approval page that isn't the platform's own", async () => {
+    const p = await platform({ page: 'file:///etc/passwd' })
+    try {
+      const r = await runCli(tempDir('login-cwd'), ['login'], { env: machine(p.base).env })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(r.stderr, /sign-in page or code isn't one reeval opens/)
+      assert.ok(!r.stdout.includes('/etc/passwd'))
+    } finally {
+      await p.close()
+    }
+  })
 
   test('REEVAL_TOKEN takes precedence over the stored sign-in', async () => {
     const p = await platform({ pending: 0 })

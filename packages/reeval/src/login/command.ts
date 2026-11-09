@@ -30,6 +30,8 @@ export const CLIENT_ID = 'reeval-cli'
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 /** How many failed polls in a row (no answer, or a 5xx) end the wait. */
 const POLL_FAILURES = 3
+/** The shortest wait between polls, whatever interval the platform asks for. */
+const MIN_INTERVAL_MS = 1000
 
 export type LoginIo = {
   out: (line: string) => void
@@ -121,7 +123,7 @@ async function awaitApproval(
   })
   const seconds = (v: unknown, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback
-  let interval = seconds(code.interval, 5) * 1000
+  let interval = Math.max(seconds(code.interval, 5) * 1000, MIN_INTERVAL_MS)
   const deadline = Date.now() + seconds(code.expires_in, 30 * 60) * 1000
   const expired = new UsageError('The code expired before it was approved: run reeval login again.')
   let failures = 0
@@ -151,6 +153,10 @@ async function awaitApproval(
       continue
     }
     failures = 0
+    if (res.status === 429) {
+      interval += 5000
+      continue
+    }
     switch (answer?.error) {
       case 'authorization_pending':
         continue
@@ -171,6 +177,8 @@ async function awaitApproval(
 export async function loginCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
   const base = platformOf('login', env)
+  // Read first, so a credentials file reeval can't write to refuses before a session is made.
+  const previous = await storedLogin(base, env)
   const code = await call<DeviceCode | null>(
     new URL('api/auth/device/code', base),
     {
@@ -179,19 +187,25 @@ export async function loginCommand(io: LoginIo): Promise<number> {
       headers: JSON_BODY,
       body: JSON.stringify({ client_id: CLIENT_ID }),
     },
-    { headers: {}, refused: refusedHint(null) },
+    { headers: {}, refused: '' },
   )
-  const page =
+  const raw =
     typeof code?.verification_uri_complete === 'string'
       ? code.verification_uri_complete
       : code?.verification_uri
   if (
     typeof code?.device_code !== 'string' ||
     typeof code.user_code !== 'string' ||
-    typeof page !== 'string'
+    typeof raw !== 'string'
   ) {
     throw new CloudError('the cloud platform started a sign-in without a code and a page for it')
   }
+  // Only a page of the platform's own is printed or opened, and only a plain code is printed.
+  const parsed = URL.parse(raw, base)
+  if (!parsed || parsed.origin !== base.origin || !/^[\w-]{1,64}$/.test(code.user_code)) {
+    throw new CloudError("the cloud platform's sign-in page or code isn't one reeval opens")
+  }
+  const page = parsed.href
   io.out(`Open ${page} and check it shows the code ${code.user_code}, then approve it.`)
   io.open?.(page)
   io.out('Waiting for the approval (Ctrl-C to stop)…')
@@ -206,7 +220,6 @@ export async function loginCommand(io: LoginIo): Promise<number> {
       'the cloud platform refused the token it gave for this sign-in: run reeval login again',
     )
   }
-  const previous = await storedLogin(base, env).catch(() => null)
   const where = await saveLogin(base, token, user, env)
   if (previous?.token && previous.token !== token) {
     await signOut(base, previous.token).catch(() => {})
@@ -226,7 +239,11 @@ export async function logoutCommand(io: LoginIo): Promise<number> {
   if (!stored) {
     io.out(`Not signed in to ${shown(base)} with reeval login.`)
   } else {
-    if (stored.token) {
+    if (!stored.token) {
+      io.err(
+        `reeval: the keychain didn't return the token, so the sign-in wasn't revoked on the platform and the keychain may still hold it.`,
+      )
+    } else {
       try {
         await signOut(base, stored.token)
       } catch (error) {
@@ -236,7 +253,11 @@ export async function logoutCommand(io: LoginIo): Promise<number> {
       }
     }
     await removeLogin(base, env)
-    io.out(`Signed out of ${shown(base)} (${who(stored.login.user)}).`)
+    io.out(
+      stored.token
+        ? `Signed out of ${shown(base)} (${who(stored.login.user)}).`
+        : `Removed the sign-in to ${shown(base)} (${who(stored.login.user)}) from this machine's credentials.`,
+    )
   }
   if (env[CLOUD_TOKEN_VAR]?.trim()) {
     io.err(`${CLOUD_TOKEN_VAR} is still set: reeval logout doesn't change it.`)
@@ -256,7 +277,14 @@ export async function whoamiCommand(flags: Flags, io: LoginIo): Promise<number> 
   const env = io.env ?? process.env
   const base = platformOf('whoami', env)
   const token = await cloudToken(base, env)
-  if (!token) throw new UsageError(`Not signed in to ${shown(base)}: ${refusedHint(null)}.`)
+  if (!token) {
+    const stored = await storedLogin(base, env)
+    throw new UsageError(
+      stored
+        ? `The sign-in to ${shown(base)} is in ${credentialsPath(env)}, but the keychain didn't return its token: reeval login signs in again.`
+        : `Not signed in to ${shown(base)}: ${refusedHint(null)}.`,
+    )
+  }
   const user = await signedInUser(base, token.token)
   if (!user) {
     throw new UsageError(
@@ -267,7 +295,7 @@ export async function whoamiCommand(flags: Flags, io: LoginIo): Promise<number> 
   }
   const from = tokenSource(token, env)
   if (flags.json) {
-    io.out(JSON.stringify({ url: base.href, user, token: from }, null, 2))
+    io.out(JSON.stringify({ url: base.href, user, tokenFrom: from }, null, 2))
   } else {
     io.out(`Signed in to ${shown(base)} as ${who(user)} (token from ${from})`)
   }

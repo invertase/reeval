@@ -154,7 +154,7 @@ export async function cloudLine(
 export type CloudAuth = {
   /** The bearer token, when there is one. */
   headers: Record<string, string>
-  /** The fix for a 401 or 403, which depends on where the token came from. */
+  /** The fix for a 401 or 403, which depends on where the token came from; empty for none. */
   refused: string
 }
 
@@ -255,7 +255,7 @@ export async function call<T>(url: URL, init: CallInit, auth: CloudAuth): Promis
   const { status, ok, body } = await request(url, init, auth.headers)
   if (!ok) {
     const said = platformMessage(body)
-    const hint = status === 401 || status === 403 ? ` (${auth.refused})` : ''
+    const hint = (status === 401 || status === 403) && auth.refused ? ` (${auth.refused})` : ''
     const why = `${said ?? `HTTP ${status}`}${hint}`
     const message = `the cloud platform refused to ${what}: ${why}`
     throw status >= 400 && status < 500

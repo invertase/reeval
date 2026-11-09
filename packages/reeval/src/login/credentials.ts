@@ -58,6 +58,7 @@ async function writeCredentials(doc: CredentialsFile, env: NodeJS.ProcessEnv): P
   const file = credentialsPath(env)
   await mkdir(dirname(file), { recursive: true, mode: 0o700 })
   const partial = `${file}.${process.pid}.tmp`
+  await rm(partial, { force: true })
   await writeFile(partial, `${JSON.stringify(doc, null, 2)}\n`, { mode: 0o600 })
   await chmod(partial, 0o600)
   await rename(partial, file)
@@ -91,6 +92,7 @@ export async function saveLogin(
   const key = keyOf(base)
   const chain = keychain(env)
   const kept = chain && (await chain.set(key, token)) && (await chain.get(key)) === token
+  if (chain && !kept) await chain.delete(key)
   doc.logins[key] = {
     store: kept ? 'keychain' : 'file',
     ...(kept ? {} : { token }),
