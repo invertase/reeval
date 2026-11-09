@@ -65,6 +65,7 @@ const CLOUD_FLAGS = new Set<FlagName>([
   'json',
   'cloud',
   'local',
+  'download',
   'ui',
   'log-order',
   'log-prefix',
@@ -293,6 +294,8 @@ export type CloudRunOptions = {
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
   follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
+  /** `--download`: once the run ends, its files go into this project's `.reeval/`. */
+  download?: { root: string }
   env?: NodeJS.ProcessEnv
 }
 
@@ -338,24 +341,19 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   const reattach = `reeval attach ${displayUrl(events.href)}`
   log(`Started cloud run ${runId}; ${reattach} follows it`)
   let detached = false
+  let code: number
   try {
-    return await options
-      .follow({
-        source: events.href,
-        ...(headers.authorization && {
-          follow: {
-            connect: (url) => new WebSocket(url, { headers } as unknown as string[]),
-          },
-        }),
-        onDetach: () => {
-          detached = true
+    code = await options.follow({
+      source: events.href,
+      ...(headers.authorization && {
+        follow: {
+          connect: (url) => new WebSocket(url, { headers } as unknown as string[]),
         },
-      })
-      .then((code) => {
-        if (!detached) return code
-        log(`Cloud run ${runId} goes on: ${reattach} follows it again`)
-        return INTERRUPTED
-      })
+      }),
+      onDetach: () => {
+        detached = true
+      },
+    })
   } catch (error) {
     if (!(error instanceof EventStreamError)) throw error
     const run = await call<PlatformRun>(
@@ -364,13 +362,28 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
       auth,
     ).catch(() => null)
     const why = run?.error?.message ?? run?.error?.code
-    if (typeof run?.exitCode === 'number') {
-      if (why) log(`cloud run ${runId} ended: ${why}`)
-      return run.exitCode
+    if (typeof run?.exitCode !== 'number') {
+      if (run?.status === 'failed') {
+        throw new CloudError(`cloud run ${runId} failed${why ? `: ${why}` : ''}`)
+      }
+      throw error
     }
-    if (run?.status === 'failed') {
-      throw new CloudError(`cloud run ${runId} failed${why ? `: ${why}` : ''}`)
-    }
-    throw error
+    if (why) log(`cloud run ${runId} ended: ${why}`)
+    code = run.exitCode
   }
+  if (detached) {
+    log(`Cloud run ${runId} goes on: ${reattach} follows it again`)
+    return INTERRUPTED
+  }
+  if (options.download) {
+    const { downloadCloudFiles } = await import('./cloud-files.ts')
+    const lines = await downloadCloudFiles({
+      cloudRunId: runId,
+      url: runUrl('/artifacts/files.tar.gz'),
+      auth,
+      root: options.download.root,
+    })
+    for (const line of lines) log(line)
+  }
+  return code
 }

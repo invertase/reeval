@@ -131,6 +131,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               the run and follow it as reeval attach does, exiting with its exit
                               code. A plan the platform can't run (tart(), files a bundle can't
                               carry) runs here, with a note
+  --download                  With a cloud run, once it ends download its files into
+                              .reeval/runs and .reeval/debug, as reeval attach --download does
   --local                     Run here, whatever the config's or profile's cloud sets
 ```
 
@@ -201,6 +203,10 @@ reeval attach [run|file|url]  Follow a reeval run's --events stream and print it
                               on; x pressed twice cancels a run on this host. A run that stops
                               sending heartbeats shows as stalled after 20s and ends attach as
                               lost after 2m (exit 3)
+  --download                  For a cloud run's URL: once the run ends, download its files into
+                              this project's .reeval/runs and .reeval/debug, so reeval show,
+                              compare, query and studio read it. Exit 2 when a file is already
+                              there with other content; a run with no files says so
   --ui --log-order --log-prefix --output-logs
                               As for reeval run
 ```

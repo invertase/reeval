@@ -32,6 +32,7 @@ import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import {
+  displayUrl,
   type EventStream,
   isAttachUrl,
   isEventsUrl,
@@ -875,13 +876,44 @@ async function attachCommand(
     root = dirname(requireConfig(configPath))
     source = (await resolveAttach(root, target)).file
   }
-  const { cloudFollow } = await import('./cloud-run.ts')
-  const follow = isAttachUrl(source) ? await cloudFollow(source) : undefined
-  return attachHere(flags, {
+  const cloud = await import('./cloud-run.ts')
+  const download = flags.download ? await cloudDownload(source, configPath) : undefined
+  const follow = isAttachUrl(source) ? await cloud.cloudFollow(source) : undefined
+  let detached = false
+  const code = await attachHere(flags, {
     source,
     ...(root === undefined ? {} : { root }),
     ...(follow ? { follow } : {}),
+    onDetach: () => {
+      detached = true
+    },
   })
+  if (download && !detached) {
+    for (const line of await download()) console.log(dim(line))
+  }
+  return code
+}
+
+/**
+ * `reeval attach --download`: what downloads the files of the cloud run whose event stream is
+ * `source` into this project's `.reeval/`; exit 2 for any other stream, or with no project.
+ */
+async function cloudDownload(source: string, configPath: string | undefined) {
+  const cloud = await import('./cloud-run.ts')
+  const { cloudRunOf, downloadCloudFiles } = await import('./cloud-files.ts')
+  const base = cloud.cloudUrl(
+    process.env,
+    `--download needs ${cloud.CLOUD_URL_VAR}, the cloud platform's URL, to download a cloud run's files`,
+  )
+  const run = isAttachUrl(source) ? cloudRunOf(source, base) : null
+  if (!run) {
+    throw new UsageError(
+      `--download takes a cloud run's event stream URL (${base.href}api/runs/<run>/events), not ${displayUrl(source)}: a run on this machine has its files in .reeval/ already`,
+    )
+  }
+  const root = dirname(requireConfig(configPath))
+  const auth = await cloud.cloudAuth(base)
+  return () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root })
 }
 
 /** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
@@ -925,7 +957,14 @@ async function cloudTarget(
   configPath: string | undefined,
 ): Promise<{ exit: number } | { target: RunTarget; detail: string } | undefined> {
   const cloud = await import('./cloud-run.ts')
-  if (!cloud.wantsCloud(flags, setup.config, setup.profile)) return undefined
+  if (!cloud.wantsCloud(flags, setup.config, setup.profile)) {
+    if (flags.download) {
+      throw new UsageError(
+        "--download downloads a cloud run's files, and this run is on this machine: its files are in .reeval/ already. Leave it out, or pass --cloud",
+      )
+    }
+    return undefined
+  }
   const { makeBundle } = await import('./bundle/index.ts')
   // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
   // bundle's arguments, so the platform's machine plans with the same one.
@@ -991,6 +1030,7 @@ async function cloudTarget(
     bundle: made,
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
+    ...(flags.download && { download: { root: setup.config.root } }),
   })
   return { exit }
 }

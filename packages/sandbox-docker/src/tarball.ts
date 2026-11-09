@@ -61,8 +61,12 @@ function paxRecords(data: Buffer): Record<string, string> {
   return out
 }
 
-/** The entries of an uncompressed tar, hard links resolved to copies of what they link to. */
-export function readTar(tar: Buffer): TarEntry[] {
+/**
+ * The entries of an uncompressed tar, hard links resolved to copies of what they link to. Each
+ * path it leaves out for being absolute or climbing out (not the archive's own `./`) goes in
+ * `unsafe`, as the tar names it.
+ */
+export function readTar(tar: Buffer, unsafe?: string[]): TarEntry[] {
   const out: TarEntry[] = []
   const files = new Map<string, Buffer>()
   let longName: string | undefined
@@ -98,7 +102,10 @@ export function readTar(tar: Buffer): TarEntry[] {
     longName = longLink = undefined
     pax = {}
     const path = safeTarPath(raw)
-    if (!path) continue
+    if (!path) {
+      if (raw.split('/').some((p) => p !== '' && p !== '.')) unsafe?.push(raw)
+      continue
+    }
     const mode = octal(h, 100, 8) & 0o7777
     if (type === '0' || type === '\0' || type === '7') {
       const copy = Buffer.from(data)

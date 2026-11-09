@@ -459,6 +459,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/cloud-secrets.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.download',
+    area: 'Config and selection',
+    name: "`reeval attach --download <url>` and `reeval run --cloud --download`: once a cloud run ends, its files (records, attempt files and debug data) are downloaded with the bearer token and unpacked into the project's `.reeval/runs` and `.reeval/debug`, where `reeval show`, `compare`, `query` and the studio read them; a file already there with other content stops it with exit 2 before anything is written, an entry outside those directories or a link with exit 3, a run with no files or no debug data says so; any other stream, or a run on this machine, is exit 2",
+    unit: ['reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",
