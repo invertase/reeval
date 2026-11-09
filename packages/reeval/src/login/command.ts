@@ -177,7 +177,7 @@ async function awaitApproval(
 export async function loginCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
   const base = platformOf('login', env)
-  // Read first, so a credentials file reeval can't write to refuses before a session is made.
+  // Read first, so a credentials file reeval can't read refuses before a session is made.
   const previous = await storedLogin(base, env)
   const code = await call<DeviceCode | null>(
     new URL('api/auth/device/code', base),
