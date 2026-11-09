@@ -43,7 +43,7 @@ describe('cli', () => {
   test('every command prints its own help with --help and -h, exit 0', async () => {
     const p = await project('cli-help', { 'reeval.config.ts': fakeConfig() })
     const golden = readFileSync(GOLDEN, 'utf8').replace('reeval VERSION', `reeval ${version}`)
-    const lines = [[], ...PATHS.map((c) => c.path), ['image']]
+    const lines = [[], ...PATHS.map((c) => c.path), ['image'], ['cloud']]
     await Promise.all(
       lines.flatMap((path) =>
         ['--help', '-h'].map(async (flag) => {
@@ -161,6 +161,18 @@ describe('cli', () => {
       positionals: ['image', 'list'],
       values: { json: true },
     })
+    assert.deepEqual(
+      parseCli(['cloud', 'secrets', 'set', 'K', '--host', 'a.example', '--host=b.example']),
+      {
+        positionals: ['cloud', 'secrets', 'set', 'K'],
+        values: { host: ['a.example', 'b.example'] },
+      },
+    )
+    assert.deepEqual(parseCli(['cloud', 'provider', 'openai', 'set', '--project']), {
+      positionals: ['cloud', 'provider', 'openai', 'set'],
+      values: { project: true },
+    })
+    usage(['cloud', 'provider', 'openai', 'set', '--host', 'x'], /--host/)
     assert.deepEqual(parseCli(['studio', '--no-token', '--no-scratch']).values, {
       'no-token': true,
       'no-scratch': true,

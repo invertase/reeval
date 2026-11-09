@@ -8,7 +8,7 @@ import { redactSecrets, registerSecret } from '../redact.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { serverFactory } from './server.ts'
 
-export type McpFlags = { http?: boolean; port?: string; host?: string; token?: string }
+export type McpFlags = { http?: boolean; port?: string; host?: string[]; token?: string }
 
 type Args = { config: ResolvedConfig; flags: McpFlags; version: string }
 
@@ -62,7 +62,7 @@ async function serveHttp(
   if (!(Number.isInteger(port) && port > 0 && port < 65536)) {
     throw new UsageError(`--port must be a port number (got ${flags.port})`)
   }
-  const host = flags.host ?? '127.0.0.1'
+  const host = flags.host?.at(-1) ?? '127.0.0.1'
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
     console.error(`warning: reeval mcp is listening on ${host}, reachable beyond this machine`)
   }

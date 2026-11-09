@@ -6,7 +6,7 @@ import { buildStudio, embeddedApp, openBrowser, startStudio } from './index.ts'
 
 export type StudioFlags = {
   port?: string
-  host?: string
+  host?: string[]
   open?: boolean
   out?: string
   scratch?: boolean
@@ -46,7 +46,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
   if (!(Number.isInteger(port) && port > 0 && port < 65536)) {
     throw new UsageError(`--port must be a port number (got ${flags.port})`)
   }
-  const host = flags.host ?? '127.0.0.1'
+  const host = flags.host?.at(-1) ?? '127.0.0.1'
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
     console.error(`warning: studio is listening on ${host}, reachable beyond this machine`)
   }

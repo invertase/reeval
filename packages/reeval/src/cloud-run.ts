@@ -249,20 +249,26 @@ export function platformMessage(body: unknown): string | undefined {
   return undefined
 }
 
+/** The error for a platform answer that isn't ok: a refusal (4xx) exits 2, any other failure 3. */
+export function platformError(
+  answer: { status: number; body: unknown },
+  what: string,
+  auth: Pick<CloudAuth, 'refused'>,
+): Error {
+  const { status, body } = answer
+  const said = platformMessage(body)
+  const hint = (status === 401 || status === 403) && auth.refused ? ` (${auth.refused})` : ''
+  const why = `${said ?? `HTTP ${status}`}${hint}`
+  return status >= 400 && status < 500
+    ? new UsageError(`the cloud platform refused to ${what}: ${why}`)
+    : new CloudError(`couldn't ${what}: ${why}`)
+}
+
 /** One request to the platform, JSON in and out; a refusal (4xx) exits 2, any other failure 3. */
 export async function call<T>(url: URL, init: CallInit, auth: CloudAuth): Promise<T> {
-  const { what } = init
-  const { status, ok, body } = await request(url, init, auth.headers)
-  if (!ok) {
-    const said = platformMessage(body)
-    const hint = (status === 401 || status === 403) && auth.refused ? ` (${auth.refused})` : ''
-    const why = `${said ?? `HTTP ${status}`}${hint}`
-    const message = `the cloud platform refused to ${what}: ${why}`
-    throw status >= 400 && status < 500
-      ? new UsageError(message)
-      : new CloudError(`couldn't ${what}: ${why}`)
-  }
-  return body as T
+  const answer = await request(url, init, auth.headers)
+  if (!answer.ok) throw platformError(answer, init.what, auth)
+  return answer.body as T
 }
 
 /**

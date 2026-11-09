@@ -160,6 +160,8 @@ export type CliOptions = {
   signal?: AbortSignal
   /** How long a stopped CLI has to cancel its run and remove its sandboxes before SIGKILL (20s). */
   graceMs?: number
+  /** Written to the CLI's stdin, which is then closed. */
+  input?: string
 }
 
 /**
@@ -224,6 +226,7 @@ export function runCli(
     }
     if (opts.signal?.aborted) onAbort()
     else opts.signal?.addEventListener('abort', onAbort, { once: true })
+    if (opts.input !== undefined) child.stdin.end(opts.input)
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (d) => {

@@ -99,6 +99,31 @@ Usage:
                                 the token is REEVAL_TOKEN or reeval login's; exit 2 when signed out
                                 or the platform refuses it
     --json                      As JSON: url, user and tokenFrom
+  reeval cloud secrets set <name>
+                                Set an eval secret in the cloud project (.reeval/project.json, else the
+                                default one), as an admin of it; the value comes from stdin or a
+                                hidden prompt, never the command line. Without --mode or --host an
+                                existing secret keeps its mode and hosts
+    --mode <mode>               brokered (the default): the agent and the eval code get a placeholder,
+                                swapped for the value only on HTTPS requests to its hosts; sandbox:
+                                only the agent's sandbox gets the value; readable: both get it
+    --host <host>               A host a brokered secret may be sent to (api.example.com or
+                                *.example.com); required for brokered, repeat it for more
+    --from-env                  Take the value from this machine's environment variable of that name
+  reeval cloud secrets delete <name>
+                                Delete an eval secret from the cloud project
+  reeval cloud secrets list     The cloud project's secrets: name, mode, hosts, version, who updated
+                                it and when; never a value. --json as JSON
+  reeval cloud provider <provider> set
+                                Set the org's key for an AI SDK provider (openai, anthropic, google,
+                                xai, mistral, groq, deepseek, cohere, perplexity, fireworks,
+                                togetherai, cerebras or deepinfra), which the cloud platform's model
+                                calls use; the key comes from stdin or a hidden prompt
+    --project                   Set or delete the cloud project's own key, which overrides the org's
+  reeval cloud provider <provider> delete
+                                Delete the provider's key (--project: the project's override)
+  reeval cloud provider list    The org's provider keys and each project's override: last 4
+                                characters, version, who updated it and when. --json as JSON
   reeval bundle [filter...]     Write the run's plan and every host file it reads as one .tar.gz that
                                 reeval run --bundle runs elsewhere; never node_modules or a .env
                                 file (it names their variables and the secrets the run needs), and

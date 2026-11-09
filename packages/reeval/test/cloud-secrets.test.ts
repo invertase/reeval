@@ -1,0 +1,430 @@
+// `reeval cloud secrets` and `reeval cloud provider` against a fake platform that keeps eval
+// secrets and provider keys as the platform's routes do, and refuses as they do.
+import assert from 'node:assert/strict'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { join } from 'node:path'
+import { describe, test } from 'node:test'
+import { runCli, tempDir } from './helpers.ts'
+
+const TOKEN = 'cli-session-token'
+const ADMIN = { id: 'usr_1', email: 'ada@example.com' }
+const VALUE = 'sk_live_canary_value_0123456789'
+
+type Seen = { method: string; path: string; auth?: string; body: string }
+type Secret = { name: string; mode: string; hosts: string[] | null; version: number }
+
+async function platform(options: { admin?: boolean } = {}) {
+  const seen: Seen[] = []
+  const secrets = new Map<string, Secret & { value: string }>()
+  const keys = new Map<
+    string,
+    { provider: string; projectId: string | null; key: string; version: number }
+  >()
+  const json = (res: ServerResponse, status: number, body?: unknown) => {
+    res.writeHead(status, body === undefined ? {} : { 'content-type': 'application/json' })
+    res.end(body === undefined ? undefined : JSON.stringify(body))
+  }
+  const fail = (res: ServerResponse, status: number, code: string, message: string) =>
+    json(res, status, { error: { code, message, retryable: false } })
+  const read = (req: IncomingMessage) =>
+    new Promise<string>((resolve) => {
+      let body = ''
+      req.on('data', (c) => {
+        body += c
+      })
+      req.on('end', () => resolve(body))
+    })
+  const shown = ({ value: _, ...s }: Secret & { value: string }) => ({
+    ...s,
+    createdAt: '2026-11-09T20:00:00.000Z',
+    updatedAt: '2026-11-09T21:00:00.000Z',
+    updatedBy: ADMIN,
+  })
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://platform')
+    const body = await read(req)
+    seen.push({
+      method: req.method ?? '',
+      path: url.pathname + url.search,
+      ...(req.headers.authorization && { auth: req.headers.authorization }),
+      body,
+    })
+    if (req.headers.authorization !== `Bearer ${TOKEN}`) {
+      return fail(res, 401, 'unauthorized', 'Sign in first.')
+    }
+    const write = req.method === 'PUT' || req.method === 'DELETE'
+    if (write && options.admin === false) {
+      return fail(res, 403, 'forbidden', 'Only an admin of the project can change its secrets.')
+    }
+    const s = /^\/api\/orgs\/([^/]+)\/projects\/([^/]+)\/secrets(?:\/([^/]+))?$/.exec(url.pathname)
+    if (s) {
+      const [, org, project, name] = s
+      if (org !== 'org_a' || project !== 'proj_a') return fail(res, 404, 'not_found', 'Not found.')
+      if (req.method === 'GET' && !name) {
+        return json(res, 200, { secrets: [...secrets.values()].map(shown) })
+      }
+      if (req.method === 'DELETE' && name) {
+        if (!secrets.delete(name)) return fail(res, 404, 'not_found', 'No such secret.')
+        return json(res, 204)
+      }
+      if (req.method === 'PUT' && name) {
+        const sent = JSON.parse(body)
+        const had = secrets.get(name)
+        const mode = sent.mode ?? had?.mode ?? 'brokered'
+        const hosts = sent.hosts ?? (sent.mode ? null : had?.hosts) ?? null
+        if (mode === 'brokered' && !hosts?.length) {
+          return fail(res, 400, 'invalid_request', 'A brokered secret needs hosts.')
+        }
+        const next = { name, mode, hosts, version: (had?.version ?? 0) + 1, value: sent.value }
+        secrets.set(name, next)
+        return json(res, had ? 200 : 201, { secret: shown(next) })
+      }
+    }
+    const p = /^\/api\/orgs\/([^/]+)\/providers(?:\/([^/]+))?$/.exec(url.pathname)
+    if (p) {
+      const [, org, provider] = p
+      if (org !== 'org_a') return fail(res, 404, 'not_found', 'Not found.')
+      if (req.method === 'GET' && !provider) {
+        return json(res, 200, {
+          providers: [...keys.values()].map(({ key, ...k }) => ({
+            ...k,
+            last4: key.slice(-4),
+            updatedBy: ADMIN,
+          })),
+        })
+      }
+      if (req.method === 'PUT' && provider) {
+        const sent = JSON.parse(body)
+        const id = `${provider}/${sent.projectId ?? ''}`
+        const had = keys.get(id)
+        const next = {
+          provider,
+          projectId: sent.projectId ?? null,
+          key: sent.key,
+          version: (had?.version ?? 0) + 1,
+        }
+        keys.set(id, next)
+        return json(res, had ? 200 : 201, {
+          provider: {
+            provider,
+            projectId: next.projectId,
+            last4: sent.key.slice(-4),
+            version: next.version,
+          },
+        })
+      }
+      if (req.method === 'DELETE' && provider) {
+        const id = `${provider}/${url.searchParams.get('projectId') ?? ''}`
+        if (!keys.delete(id)) return fail(res, 404, 'not_found', 'No such key.')
+        return json(res, 204)
+      }
+    }
+    fail(res, 404, 'not_found', `no route ${url.pathname}`)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  return {
+    base,
+    seen,
+    secrets,
+    keys,
+    close: async () => {
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
+    },
+  }
+}
+
+/** A project linked to `org_a`/`proj_a`, signed in with `REEVAL_TOKEN`. */
+function linked(base: string) {
+  const dir = tempDir('cloud-secrets')
+  mkdirSync(join(dir, '.reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, '.reeval/project.json'),
+    JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+  )
+  const env = {
+    REEVAL_CLOUD_URL: base,
+    REEVAL_TOKEN: TOKEN,
+    XDG_CONFIG_HOME: tempDir('cloud-secrets-config'),
+    REEVAL_NO_KEYCHAIN: '1',
+  } as NodeJS.ProcessEnv
+  return { dir, env }
+}
+
+const never = (text: string) =>
+  assert.ok(!text.includes(VALUE), `the value is never printed: ${text}`)
+
+describe('reeval cloud secrets', () => {
+  test('sets a brokered secret from stdin, replaces its value keeping its mode, lists and deletes it', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const set = await runCli(
+        dir,
+        [
+          'cloud',
+          'secrets',
+          'set',
+          'STRIPE_KEY',
+          '--host',
+          'API.stripe.com',
+          '--host',
+          '*.stripe.net',
+        ],
+        { env, input: `${VALUE}\n` },
+      )
+      assert.equal(set.code, 0, set.stdout + set.stderr)
+      assert.match(
+        set.stdout,
+        /Added STRIPE_KEY in proj_a: brokered to api\.stripe\.com, \*\.stripe\.net, version 1\./,
+      )
+      const put = p.seen.find((s) => s.method === 'PUT')
+      assert.equal(put?.path, '/api/orgs/org_a/projects/proj_a/secrets/STRIPE_KEY')
+      assert.equal(put?.auth, `Bearer ${TOKEN}`)
+      assert.deepEqual(JSON.parse(put?.body ?? ''), {
+        value: VALUE,
+        mode: 'brokered',
+        hosts: ['api.stripe.com', '*.stripe.net'],
+      })
+
+      const again = await runCli(dir, ['cloud', 'secrets', 'set', 'STRIPE_KEY'], {
+        env,
+        input: 'rotated',
+      })
+      assert.equal(again.code, 0, again.stderr)
+      assert.match(
+        again.stdout,
+        /Replaced STRIPE_KEY in proj_a: brokered to api\.stripe\.com, \*\.stripe\.net, version 2\./,
+      )
+      assert.deepEqual(JSON.parse(p.seen.filter((s) => s.method === 'PUT')[1]?.body ?? ''), {
+        value: 'rotated',
+      })
+
+      const db = await runCli(
+        dir,
+        ['cloud', 'secrets', 'set', 'DATABASE_URL', '--mode', 'sandbox'],
+        {
+          env,
+          input: 'postgres://u:p@db/x',
+        },
+      )
+      assert.equal(db.code, 0, db.stderr)
+      assert.match(db.stdout, /Added DATABASE_URL in proj_a: sandbox, version 1\./)
+
+      const list = await runCli(dir, ['cloud', 'secrets', 'list'], { env })
+      assert.equal(list.code, 0, list.stderr)
+      assert.match(list.stdout, /2 secrets in proj_a:/)
+      assert.match(list.stdout, /NAME\s+MODE\s+HOSTS\s+VERSION\s+UPDATED/)
+      assert.match(
+        list.stdout,
+        /STRIPE_KEY\s+brokered\s+api\.stripe\.com, \*\.stripe\.net\s+2\s+2026-11-09 21:00 by ada@example\.com/,
+      )
+      assert.match(list.stdout, /DATABASE_URL\s+sandbox\s+-\s+1/)
+      const asJson = JSON.parse(
+        (await runCli(dir, ['cloud', 'secrets', 'list', '--json'], { env })).stdout,
+      )
+      assert.equal(asJson.projectId, 'proj_a')
+      assert.equal(asJson.secrets.length, 2)
+
+      const del = await runCli(dir, ['cloud', 'secrets', 'delete', 'STRIPE_KEY'], { env })
+      assert.equal(del.code, 0, del.stderr)
+      assert.match(del.stdout, /Deleted STRIPE_KEY from proj_a\./)
+      const gone = await runCli(dir, ['cloud', 'secrets', 'delete', 'STRIPE_KEY'], { env })
+      assert.equal(gone.code, 2)
+      assert.match(gone.stderr, /No secret named STRIPE_KEY in proj_a/)
+      for (const r of [set, again, db, list, del, gone]) never(r.stdout + r.stderr)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('takes the value from the local environment with --from-env', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const r = await runCli(
+        dir,
+        ['cloud', 'secrets', 'set', 'FIXTURE_TOKEN', '--mode', 'readable', '--from-env'],
+        {
+          env: { ...env, FIXTURE_TOKEN: VALUE },
+        },
+      )
+      assert.equal(r.code, 0, r.stderr)
+      assert.equal(p.secrets.get('FIXTURE_TOKEN')?.value, VALUE)
+      never(r.stdout + r.stderr)
+      const missing = await runCli(
+        dir,
+        ['cloud', 'secrets', 'set', 'NOPE', '--mode', 'readable', '--from-env'],
+        { env },
+      )
+      assert.equal(missing.code, 2)
+      assert.match(missing.stderr, /--from-env: NOPE isn't set here/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('refuses a value on the command line, a brokered secret with no host and hosts on another mode', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const cases: [string[], RegExp][] = [
+        [
+          ['set', 'A', VALUE, '--host', 'a.example'],
+          /not as an argument, which would land in your shell history/,
+        ],
+        [['set', 'A', '--mode', 'brokered'], /A brokered secret needs --host/],
+        [
+          ['set', 'A', '--mode', 'sandbox', '--host', 'a.example'],
+          /--host is for a brokered secret/,
+        ],
+        [
+          ['set', 'A', '--mode', 'hidden'],
+          /--mode is brokered, sandbox or readable \(got "hidden"\)/,
+        ],
+        [
+          ['set', 'A', '--host', 'https://a.example/x'],
+          /--host https:\/\/a\.example\/x isn't a host name/,
+        ],
+        [['set', '1A', '--host', 'a.example'], /1A isn't a secret name/],
+        [['set', 'NEW'], /NEW is a new secret: give --host <host> for a brokered one/],
+        [['get', 'A'], /reeval cloud secrets needs set, delete or list \(got get\)/],
+      ]
+      for (const [args, message] of cases) {
+        const r = await runCli(dir, ['cloud', 'secrets', ...args], { env, input: VALUE })
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, message, args.join(' '))
+        never(r.stdout + r.stderr)
+      }
+      assert.equal(p.seen.filter((s) => s.method === 'PUT').length, 0, 'nothing was sent')
+      const empty = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--host', 'a.example'], {
+        env,
+        input: '\n',
+      })
+      assert.equal(empty.code, 2)
+      assert.match(empty.stderr, /A's value is empty/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("relays the platform's refusals: a member who isn't an admin, a signed-out machine, a missing URL", async () => {
+    const p = await platform({ admin: false })
+    try {
+      const { dir, env } = linked(p.base)
+      const r = await runCli(dir, ['cloud', 'secrets', 'set', 'A', '--host', 'a.example'], {
+        env,
+        input: VALUE,
+      })
+      assert.equal(r.code, 2)
+      assert.match(
+        r.stderr,
+        /the cloud platform refused to set A: Only an admin of the project can change its secrets\. \(check REEVAL_TOKEN\)/,
+      )
+      never(r.stdout + r.stderr)
+      const out = await runCli(dir, ['cloud', 'secrets', 'list'], {
+        env: { ...env, REEVAL_TOKEN: '' },
+      })
+      assert.equal(out.code, 2)
+      assert.match(out.stderr, /Sign in first\. \(reeval login signs in, or set REEVAL_TOKEN\)/)
+      const noUrl = await runCli(dir, ['cloud', 'secrets', 'list'], {
+        env: { ...env, REEVAL_CLOUD_URL: '' },
+      })
+      assert.equal(noUrl.code, 2)
+      assert.match(noUrl.stderr, /reeval cloud secrets list needs REEVAL_CLOUD_URL/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('without .reeval/project.json, uses the default project', async () => {
+    const p = await platform()
+    try {
+      const { env } = linked(p.base)
+      const r = await runCli(tempDir('cloud-unlinked'), ['cloud', 'secrets', 'list'], { env })
+      assert.equal(r.code, 2)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_default/projects/proj_default/secrets')
+    } finally {
+      await p.close()
+    }
+  })
+})
+
+describe('reeval cloud provider', () => {
+  test("sets, lists and deletes the org's key and a project's override", async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const org = await runCli(dir, ['cloud', 'provider', 'openai', 'set'], {
+        env,
+        input: 'sk-org-a1b2\n',
+      })
+      assert.equal(org.code, 0, org.stderr)
+      assert.match(org.stdout, /Added the openai key for org_a \(…a1b2\), version 1\./)
+      assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'sk-org-a1b2' })
+      const project = await runCli(dir, ['cloud', 'provider', 'openai', 'set', '--project'], {
+        env,
+        input: 'sk-proj-c3d4',
+      })
+      assert.equal(project.code, 0, project.stderr)
+      assert.match(project.stdout, /Added the openai key for proj_a \(…c3d4\), version 1\./)
+      assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), {
+        key: 'sk-proj-c3d4',
+        projectId: 'proj_a',
+      })
+
+      const list = await runCli(dir, ['cloud', 'provider', 'list'], { env })
+      assert.equal(list.code, 0, list.stderr)
+      assert.match(list.stdout, /2 provider keys in org_a:/)
+      assert.match(list.stdout, /openai\s+the org\s+…a1b2\s+1/)
+      assert.match(list.stdout, /openai\s+proj_a\s+…c3d4\s+1/)
+
+      const del = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project'], { env })
+      assert.equal(del.code, 0, del.stderr)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openai?projectId=proj_a')
+      assert.match(del.stdout, /Deleted the openai key for proj_a\./)
+      const gone = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project'], {
+        env,
+      })
+      assert.equal(gone.code, 2)
+      assert.match(gone.stderr, /No openai key for proj_a/)
+      for (const r of [org, project, list, del]) {
+        assert.ok(!/sk-org|sk-proj/.test(r.stdout + r.stderr), 'no key is printed')
+      }
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('refuses an unknown provider, a key on the command line and a key with whitespace', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const cases: [string[], string, RegExp][] = [
+        [
+          ['acme', 'set'],
+          'k',
+          /acme isn't a provider the cloud platform keeps keys for \(openai, anthropic/,
+        ],
+        [
+          ['openai', 'set', 'sk-x'],
+          'k',
+          /not as an argument, which would land in your shell history/,
+        ],
+        [['openai', 'set'], 'sk x', /whitespace or a control character at position 3/],
+        [['openai', 'rotate'], 'k', /needs set or delete \(got rotate\)/],
+      ]
+      for (const [args, input, message] of cases) {
+        const r = await runCli(dir, ['cloud', 'provider', ...args], { env, input })
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, message, args.join(' '))
+      }
+      assert.equal(p.seen.filter((s) => s.method === 'PUT').length, 0)
+    } finally {
+      await p.close()
+    }
+  })
+})
