@@ -105,7 +105,7 @@ export type PlanDoc = Record<string, unknown> & {
   secrets?: string[]
   totals?: { attempts: number; fewest: number }
   cost?: import('../cost.ts').PlanCost
-  notHosted?: string[]
+  notCloud?: string[]
 }
 
 export type BundleOptions = {

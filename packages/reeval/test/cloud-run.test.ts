@@ -1,6 +1,6 @@
-// `reeval run` on the hosted platform: a fake platform takes the bundle, runs it with
+// `reeval run` on the cloud platform: a fake platform takes the bundle, runs it with
 // `reeval run --bundle` as the platform's machine would, and serves its event stream, which the
-// hosted run follows to the run's exit code.
+// cloud run follows to the run's exit code.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -12,10 +12,10 @@ import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
 import { pkgRoot, project, runCli, tempDir } from './helpers.ts'
 
-const TOKEN = 'hosted-check-token-value'
+const TOKEN = 'cloud-check-token-value'
 
 async function fixtureProject(answer = '42') {
-  const p = await project('hosted', {})
+  const p = await project('cloud', {})
   cpSync(join(pkgRoot, 'test/fixtures/bundle'), p.dir, { recursive: true })
   writeFileSync(join(p.dir, '.env'), `CHECK_TOKEN=${TOKEN}\n`)
   writeFileSync(join(p.dir, 'data/answer.txt'), `${answer}\n`)
@@ -24,7 +24,7 @@ async function fixtureProject(answer = '42') {
 
 /** Where the platform's machine extracts a bundle, with `reeval` resolving to this package. */
 function extractRoot(): string {
-  const dir = tempDir('hosted-tmp')
+  const dir = tempDir('cloud-tmp')
   mkdirSync(join(dir, 'node_modules'))
   symlinkSync(pkgRoot, join(dir, 'node_modules/reeval'), 'dir')
   return dir
@@ -40,7 +40,7 @@ const bodyOf = (req: IncomingMessage) =>
 type Seen = { method: string; path: string; auth: string | undefined }
 
 /**
- * The platform's API as the hosted run uses it: create, upload, start, the run's status and its
+ * The platform's API as the cloud run uses it: create, upload, start, the run's status and its
  * event socket. Starting runs the bundle with `reeval run --bundle --events-url`, posting to this
  * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `fails`,
  * starting runs nothing: the socket closes with no exit line and the run reads as failed, with
@@ -93,10 +93,10 @@ async function platform(options: { fails?: string; exitCode?: number } = {}) {
       if (options.fails) {
         over = true
       } else {
-        const file = join(tempDir('hosted-bundle'), 'bundle.tar.gz')
+        const file = join(tempDir('cloud-bundle'), 'bundle.tar.gz')
         writeFileSync(file, uploaded)
         vm = runCli(
-          tempDir('hosted-vm'),
+          tempDir('cloud-vm'),
           ['run', '--bundle', file, '--events-url', `${base}/ingest`],
           { env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN } },
         )
@@ -151,17 +151,17 @@ async function platform(options: { fails?: string; exitCode?: number } = {}) {
   }
 }
 
-describe('reeval run on the hosted platform', () => {
+describe('reeval run on the cloud platform', () => {
   test('bundles, creates, uploads, starts and follows the run, with its exit code', async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject()
-      const r = await runCli(dir, ['run', '--hosted'], {
-        env: { REEVAL_HOSTED_URL: p.base, REEVAL_TOKEN: 'hosted-test-token' },
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
       assert.equal(r.code, 0, r.stdout + r.stderr)
-      assert.match(r.stdout, /Running on hosted \(1 attempt\), --local to run here/)
-      assert.match(r.stdout, /Started hosted run run_1/)
+      assert.match(r.stdout, /Running in the cloud \(1 attempt\), --local to run here/)
+      assert.match(r.stdout, /Started cloud run run_1/)
       assert.match(r.stdout, /1 passed/)
       assert.deepEqual(
         p.seen.filter((s) => s.path !== '/ingest').map((s) => `${s.method} ${s.path}`),
@@ -174,7 +174,7 @@ describe('reeval run on the hosted platform', () => {
         ],
       )
       for (const s of p.seen.filter((s) => s.path !== '/ingest')) {
-        assert.equal(s.auth, 'Bearer hosted-test-token', `${s.method} ${s.path}`)
+        assert.equal(s.auth, 'Bearer cloud-test-token', `${s.method} ${s.path}`)
       }
       const archive = p.uploaded
       assert.ok(archive)
@@ -184,16 +184,16 @@ describe('reeval run on the hosted platform', () => {
       })
       assert.ok(!archive.includes(TOKEN), 'no secret value in the bundle')
       const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
-        env: { REEVAL_HOSTED_URL: p.base, REEVAL_TOKEN: 'hosted-test-token' },
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
       assert.equal(again.code, 0, again.stdout + again.stderr)
-      assert.equal(p.seen.at(-1)?.auth, 'Bearer hosted-test-token', 'reeval attach sends it too')
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer cloud-test-token', 'reeval attach sends it too')
     } finally {
       await p.close()
     }
   })
 
-  test("exits with the run's exit code when it fails, from the config's hosted: true", async () => {
+  test("exits with the run's exit code when it fails, from the config's cloud: true", async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject('41')
@@ -201,11 +201,11 @@ describe('reeval run on the hosted platform', () => {
       const { readFileSync } = await import('node:fs')
       writeFileSync(
         config,
-        readFileSync(config, 'utf8').replace('defineConfig({', 'defineConfig({\n  hosted: true,'),
+        readFileSync(config, 'utf8').replace('defineConfig({', 'defineConfig({\n  cloud: true,'),
       )
-      const r = await runCli(dir, ['run'], { env: { REEVAL_HOSTED_URL: p.base } })
+      const r = await runCli(dir, ['run'], { env: { REEVAL_CLOUD_URL: p.base } })
       assert.equal(r.code, 1, r.stdout + r.stderr)
-      assert.match(r.stdout, /Running on hosted/)
+      assert.match(r.stdout, /Running in the cloud/)
       assert.ok(
         p.seen.every((s) => s.auth === undefined),
         'no token, no authorization header',
@@ -218,11 +218,11 @@ describe('reeval run on the hosted platform', () => {
   test("a run that fails on the platform before its exit line exits 3 with the platform's reason", async () => {
     const p = await platform({ fails: 'the run could not start' })
     try {
-      const r = await runCli(await fixtureProject(), ['run', '--hosted'], {
-        env: { REEVAL_HOSTED_URL: p.base },
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base },
       })
       assert.equal(r.code, 3, r.stdout + r.stderr)
-      assert.match(r.stderr, /hosted run run_1 failed: the run could not start/)
+      assert.match(r.stderr, /cloud run run_1 failed: the run could not start/)
     } finally {
       await p.close()
     }
@@ -231,39 +231,39 @@ describe('reeval run on the hosted platform', () => {
   test("a run that ends on the platform before its exit line exits with the platform's code", async () => {
     const p = await platform({ fails: 'the plan differs from the bundle', exitCode: 2 })
     try {
-      const r = await runCli(await fixtureProject(), ['run', '--hosted'], {
-        env: { REEVAL_HOSTED_URL: p.base },
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base },
       })
       assert.equal(r.code, 2, r.stdout + r.stderr)
-      assert.match(r.stdout, /hosted run run_1 ended: the plan differs from the bundle/)
+      assert.match(r.stdout, /cloud run run_1 ended: the plan differs from the bundle/)
     } finally {
       await p.close()
     }
   })
 
-  test('exit 2 without REEVAL_HOSTED_URL, and for flags a hosted run cannot take', async () => {
+  test('exit 2 without REEVAL_CLOUD_URL, and for flags a cloud run cannot take', async () => {
     const dir = await fixtureProject()
-    const unset = await runCli(dir, ['run', '--hosted'], { env: { REEVAL_HOSTED_URL: '' } })
+    const unset = await runCli(dir, ['run', '--cloud'], { env: { REEVAL_CLOUD_URL: '' } })
     assert.equal(unset.code, 2)
-    assert.match(unset.stderr, /A hosted run needs REEVAL_HOSTED_URL.*pass --local to run here/)
-    const both = await runCli(dir, ['run', '--hosted', '--local'])
+    assert.match(unset.stderr, /A cloud run needs REEVAL_CLOUD_URL.*pass --local to run here/)
+    const both = await runCli(dir, ['run', '--cloud', '--local'])
     assert.equal(both.code, 2)
-    assert.match(both.stderr, /--hosted and --local pick where the run goes/)
-    const local = await runCli(dir, ['run', '--hosted', '--concurrency', '2'], {
-      env: { REEVAL_HOSTED_URL: 'http://127.0.0.1:9' },
+    assert.match(both.stderr, /--cloud and --local pick where the run goes/)
+    const local = await runCli(dir, ['run', '--cloud', '--concurrency', '2'], {
+      env: { REEVAL_CLOUD_URL: 'http://127.0.0.1:9' },
     })
     assert.equal(local.code, 2)
     assert.match(local.stderr, /--concurrency applies to a run on this machine/)
-    const creds = await runCli(dir, ['run', '--hosted'], {
-      env: { REEVAL_HOSTED_URL: 'https://u:secret@platform.test' },
+    const creds = await runCli(dir, ['run', '--cloud'], {
+      env: { REEVAL_CLOUD_URL: 'https://u:secret@platform.test' },
     })
     assert.equal(creds.code, 2)
     assert.match(creds.stderr, /can't carry a user name or password/)
     assert.ok(!creds.stderr.includes('secret@'))
     const p = await platform()
     try {
-      const token = await runCli(dir, ['run', '--hosted'], {
-        env: { REEVAL_HOSTED_URL: p.base, REEVAL_TOKEN: 'abc\ndef' },
+      const token = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'abc\ndef' },
       })
       assert.equal(token.code, 2, token.stdout + token.stderr)
       assert.match(token.stderr, /REEVAL_TOKEN has whitespace or a control character \(U\+000a\)/)
@@ -276,11 +276,11 @@ describe('reeval run on the hosted platform', () => {
     const p = await platform()
     const base = p.base
     await p.close()
-    const r = await runCli(await fixtureProject(), ['run', '--hosted'], {
-      env: { REEVAL_HOSTED_URL: base },
+    const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+      env: { REEVAL_CLOUD_URL: base },
     })
     assert.equal(r.code, 3, r.stdout + r.stderr)
-    assert.match(r.stderr, /couldn't read the hosted platform's config/)
+    assert.match(r.stderr, /couldn't read the cloud platform's config/)
   })
 
   test('a plan the platform cannot run runs here, with a note', async () => {
@@ -299,11 +299,11 @@ const mac = defineEnvironment('mac', {
 evaluate('on a mac', { environments: mac }, async () => {})
 `,
       )
-      const r = await runCli(dir, ['run', '--hosted', '--dry-run'], {
-        env: { REEVAL_HOSTED_URL: p.base },
+      const r = await runCli(dir, ['run', '--cloud', '--dry-run'], {
+        env: { REEVAL_CLOUD_URL: p.base },
       })
       assert.equal(r.code, 0, r.stdout + r.stderr)
-      assert.match(r.stdout, /target {2}here, not hosted: tart\(\) runs its VMs on a Mac/)
+      assert.match(r.stdout, /target {2}here, not in the cloud: tart\(\) runs its VMs on a Mac/)
       assert.deepEqual(p.seen, [], 'a dry run never calls the platform')
     } finally {
       await p.close()
@@ -323,12 +323,12 @@ evaluate('on a mac', { environments: mac }, async () => {})
           "({ skill, secret, file }) => ({\n    files: { 'notes.txt': file('./notes.txt') },",
         ),
       )
-      const host = tempDir('hosted-host')
+      const host = tempDir('cloud-host')
       writeFileSync(join(host, 'notes.txt'), 'notes\n')
       symlinkSync(join(host, 'notes.txt'), join(dir, 'notes.txt'))
-      const r = await runCli(dir, ['run', '--hosted'], { env: { REEVAL_HOSTED_URL: p.base } })
+      const r = await runCli(dir, ['run', '--cloud'], { env: { REEVAL_CLOUD_URL: p.base } })
       assert.equal(r.code, 0, r.stdout + r.stderr)
-      assert.match(r.stdout, /Running here, not on hosted: .*outside the bundle root/)
+      assert.match(r.stdout, /Running here, not in the cloud: .*outside the bundle root/)
       assert.match(r.stdout, /1 passed/)
       assert.deepEqual(p.seen, [], 'a run that stays here never calls the platform')
     } finally {

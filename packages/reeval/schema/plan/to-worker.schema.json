@@ -2484,6 +2484,9 @@
         "capture": {
           "$ref": "#/$defs/CaptureOptions"
         },
+        "cloud": {
+          "type": "boolean"
+        },
         "concurrency": {
           "description": "The config's own `concurrency`; see `resolveConcurrency` for the run's.",
           "type": "number"
@@ -2585,9 +2588,6 @@
         "history": {
           "$ref": "#/$defs/ResolvedHistory"
         },
-        "hosted": {
-          "type": "boolean"
-        },
         "include": {
           "type": "array",
           "items": {
@@ -2680,6 +2680,10 @@
                 "description": "Merged over the config's `budget`.",
                 "$ref": "#/$defs/Budget"
               },
+              "cloud": {
+                "description": "Replaces the config's `cloud` for this profile's runs.",
+                "type": "boolean"
+              },
               "defaults": {
                 "description": "What evals get when they don't say otherwise: under groups and evals.",
                 "$ref": "#/$defs/ProfileDefaults"
@@ -2690,10 +2694,6 @@
                 "items": {
                   "$ref": "#/$defs/GatewayDescriptor"
                 }
-              },
-              "hosted": {
-                "description": "Replaces the config's `hosted` for this profile's runs.",
-                "type": "boolean"
               },
               "judge": {
                 "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
@@ -2768,6 +2768,7 @@
         "analysis",
         "budget",
         "capture",
+        "cloud",
         "concurrency",
         "debug",
         "defaultProfile",
@@ -2779,7 +2780,6 @@
         "gatewaySet",
         "harness",
         "history",
-        "hosted",
         "include",
         "judge",
         "profileHistory",
@@ -2862,6 +2862,10 @@
         "budget": {
           "$ref": "#/$defs/Budget"
         },
+        "cloud": {
+          "description": "The profile's own `cloud`, which replaces the config's.",
+          "type": "boolean"
+        },
         "defaults": {
           "$ref": "#/$defs/ProfileDefaults"
         },
@@ -2875,10 +2879,6 @@
         "history": {
           "description": "The profile's `history` merged over the config's, when it sets one.",
           "$ref": "#/$defs/ResolvedHistory"
-        },
-        "hosted": {
-          "description": "The profile's own `hosted`, which replaces the config's.",
-          "type": "boolean"
         },
         "judge": {
           "$ref": "#/$defs/ConfigJudgeOptions"

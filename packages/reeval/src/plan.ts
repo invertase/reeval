@@ -798,10 +798,10 @@ export type PlanDocument = {
    * the config's, profile's and attempts' secrets read.
    */
   secrets: string[]
-  /** Why the hosted platform can't run the plan, with the evals each reason holds back. */
-  notHosted?: string[]
-  /** Set when the run asked for the hosted platform: where it goes, and why when that's here. */
-  target?: { kind: 'hosted' } | { kind: 'local'; why: string }
+  /** Why the cloud platform can't run the plan, with the evals each reason holds back. */
+  notCloud?: string[]
+  /** Set when the run asked for the cloud platform: where it goes, and why when that's here. */
+  target?: { kind: 'cloud' } | { kind: 'local'; why: string }
 }
 
 /** One entry in the plan's `inputs`. */

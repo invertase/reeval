@@ -2595,8 +2595,8 @@ export type Profile = {
   tags?: string[]
   /** Replaces the config's `gateway` list for this profile's runs. */
   gateway?: GatewayDescriptor[]
-  /** Replaces the config's `hosted` for this profile's runs. */
-  hosted?: boolean
+  /** Replaces the config's `cloud` for this profile's runs. */
+  cloud?: boolean
 }
 
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
@@ -2751,10 +2751,10 @@ export type ReevalConfig = {
    */
   gateway?: GatewayDescriptor[]
   /**
-   * `reeval run` runs on the hosted platform at `REEVAL_HOSTED_URL` instead of this machine.
-   * `--hosted` and `--local` override it, and a profile's `hosted` replaces it. Default `false`.
+   * `reeval run` runs in the cloud at `REEVAL_CLOUD_URL` instead of this machine.
+   * `--cloud` and `--local` override it, and a profile's `cloud` replaces it. Default `false`.
    */
-  hosted?: boolean
+  cloud?: boolean
 }
 
 /** `fakeJudge()` as data: the score every call gets. */
@@ -2868,8 +2868,8 @@ export type ResolvedProfile = {
   record?: RecordMode
   /** The profile's own `gateway` list, which replaces the config's. */
   gateway?: GatewayDescriptor[]
-  /** The profile's own `hosted`, which replaces the config's. */
-  hosted?: boolean
+  /** The profile's own `cloud`, which replaces the config's. */
+  cloud?: boolean
   /** The profile's `history` merged over the config's, when it sets one. */
   history?: ResolvedHistory
 }
@@ -2952,7 +2952,7 @@ export type ResolvedConfig = {
   gateway: GatewayDescriptor[]
   /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
   gatewaySet: boolean
-  hosted: boolean
+  cloud: boolean
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'

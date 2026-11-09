@@ -74,8 +74,8 @@ export type SandboxHooks<D extends SandboxDescriptor> = {
   doctor?(sandboxes: readonly D[], ctx: DoctorContext): Promise<Check[]>
   /** The plan's warnings about `sandbox`. */
   planWarnings?(sandbox: D): string[]
-  /** Why `reeval run` can't run `sandbox` on the hosted platform, when it can't. */
-  notHosted?(sandbox: D): string
+  /** Why `reeval run` can't run `sandbox` on the cloud platform, when it can't. */
+  notCloud?(sandbox: D): string
   /** How many attempts share one of `sandbox`'s machines, when more than one may. */
   slotsPerMachine?(sandbox: D): number
   /** Whether each attempt on a shared machine has a network of its own, so no port collides. */

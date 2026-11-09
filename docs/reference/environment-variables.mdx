@@ -23,13 +23,13 @@ For more information about config keys, see [Options](/reference/options). For m
 
 `REEVAL_PRICES` names a JSON file of custom model prices for the `reeval run --dry-run` cost estimate and a recorded run's estimated costs. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops a dry run, and a recorded run warns and records no estimates.
 
-## `REEVAL_HOSTED_URL`
+## `REEVAL_CLOUD_URL`
 
-`REEVAL_HOSTED_URL` is the hosted platform's http or https URL, which a run with [`hosted`](/reference/options#hosted) or `--hosted` uses. Unset, such a run exits with code 2. A URL with a user name or password stops the command.
+`REEVAL_CLOUD_URL` is the cloud platform's http or https URL, which a run with [`cloud`](/reference/options#cloud) or `--cloud` uses. Unset, such a run exits with code 2. A URL with a user name or password stops the command.
 
 ## `REEVAL_TOKEN`
 
-`REEVAL_TOKEN` is sent as a bearer token on every request a hosted run makes to the platform.
+`REEVAL_TOKEN` is sent as a bearer token on every request a cloud run makes to the platform.
 
 ## `REEVAL_CAPTURE_BROWSER`
 

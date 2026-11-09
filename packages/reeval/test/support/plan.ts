@@ -164,9 +164,9 @@ export function renderPlan(
     ...plan.hints.map((h) => `hint: ${h}`),
     ...table(rows),
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
-    ...(plan.notHosted ?? []).map((why) => `not hosted: ${why}`),
+    ...(plan.notCloud ?? []).map((why) => `not in the cloud: ${why}`),
     ...(plan.target
-      ? [`target ${plan.target.kind === 'hosted' ? 'hosted' : `here: ${plan.target.why}`}`]
+      ? [`target ${plan.target.kind === 'cloud' ? 'cloud' : `here: ${plan.target.why}`}`]
       : []),
     ...images,
     ...(options.cost ? costLines(plan) : []),

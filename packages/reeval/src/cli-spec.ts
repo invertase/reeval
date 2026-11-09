@@ -78,7 +78,7 @@ export const FLAGS = {
   'events-file': { type: 'string' },
   'events-url': { type: 'string' },
   bundle: { type: 'string' },
-  hosted: { type: 'boolean' },
+  cloud: { type: 'boolean' },
   local: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
@@ -128,7 +128,7 @@ export const RUN_FLAGS: FlagName[] = [
   'events-file',
   'events-url',
   'bundle',
-  'hosted',
+  'cloud',
   'local',
 ]
 
@@ -217,12 +217,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 temporary directory, check its files, install from its lockfile and
                                 exit 2 before any attempt when its plan or files differ; .reeval/ is
                                 in the extracted project
-    --hosted                    Run on the hosted platform at REEVAL_HOSTED_URL (exit 2 when it's
-                                unset), as the config's hosted: true does: bundle the project, upload
-                                it, start the run and follow it as reeval attach does, exiting with
-                                its exit code. A plan the platform can't run (tart(), files a bundle
-                                can't carry) runs here, with a note
-    --local                     Run here, whatever hosted the config or profile sets`,
+    --cloud                     Run in the cloud at REEVAL_CLOUD_URL (exit 2 when it's unset), as
+                                the config's cloud: true does: bundle the project, upload it, start
+                                the run and follow it as reeval attach does, exiting with its exit
+                                code. A plan the platform can't run (tart(), files a bundle can't
+                                carry) runs here, with a note
+    --local                     Run here, whatever cloud the config or profile sets`,
   },
   attach: {
     flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],

@@ -5,5 +5,5 @@ import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harnesses: fakeHarness(),
   sandbox: fakeSandbox(),
-  profiles: { there: { hosted: true } },
+  profiles: { there: { cloud: true } },
 })
