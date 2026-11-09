@@ -891,7 +891,7 @@ async function attachCommand(
   if (download && detached) {
     console.log(
       dim(
-        `Not downloading the files of cloud run ${download.runId}, which hadn't ended: reeval attach --download ${displayUrl(source)} downloads them once it has`,
+        `Not downloading the files of cloud run ${download.runId} after detaching: reeval attach --download ${displayUrl(source)} downloads them once it has ended`,
       ),
     )
   } else if (download) {

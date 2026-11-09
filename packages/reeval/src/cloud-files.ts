@@ -169,6 +169,12 @@ const inSnapshot = (path: string) => {
   return parts[0] === 'runs' && at > 0 && parts.length > at + 2
 }
 
+/** A path as this filesystem tells it apart: macOS's and Windows' fold case and normalize. */
+const key =
+  process.platform === 'darwin' || process.platform === 'win32'
+    ? (path: string) => path.normalize('NFC').toLowerCase()
+    : (path: string) => path
+
 const listed = (paths: string[]) => paths.slice(0, 3).join(', ') + (paths.length > 3 ? ', …' : '')
 
 /**
@@ -223,13 +229,13 @@ export async function downloadCloudFiles(options: {
   const paths = new Set<string>()
   const overlaps: string[] = []
   for (const f of files) {
-    if (paths.has(f.path)) overlaps.push(f.path)
-    paths.add(f.path)
+    if (paths.has(key(f.path))) overlaps.push(f.path)
+    paths.add(key(f.path))
   }
   for (const f of files) {
     const parts = f.path.split('/')
     for (let i = 1; i < parts.length; i++) {
-      if (paths.has(parts.slice(0, i).join('/'))) overlaps.push(f.path)
+      if (paths.has(key(parts.slice(0, i).join('/')))) overlaps.push(f.path)
     }
   }
   if (overlaps.length) {
@@ -281,11 +287,26 @@ export async function downloadCloudFiles(options: {
     )
   }
   const fresh = kept.filter((_, i) => states[i] === 'free')
-  // Records last, each linked into place whole from a temporary file, never over another.
-  for (const f of [...fresh.filter((f) => !f.record), ...fresh.filter((f) => f.record)]) {
+  const order = [
+    ...fresh.filter((f) => !f.record && f.link === undefined),
+    ...fresh.filter((f) => f.link !== undefined),
+    ...fresh.filter((f) => f.record),
+  ]
+  // Links after every file, and each file's parents checked again as it's written, so nothing is
+  // written through a link, even one a case-folding filesystem takes for another name. Records
+  // last, each linked into place whole from a temporary file, never over another.
+  await mkdir(dir, { recursive: true })
+  for (const f of order) {
     const file = join(dir, ...f.path.split('/'))
     try {
-      await mkdir(dirname(file), { recursive: true })
+      const parts = f.path.split('/')
+      for (let i = 1; i < parts.length; i++) {
+        const at = join(dir, ...parts.slice(0, i))
+        const info = await lstat(at).catch(() => null)
+        if (!info) await mkdir(at)
+        else if (!info.isDirectory())
+          throw new Error(`.reeval/${parts.slice(0, i).join('/')} isn't a directory`)
+      }
       if (f.link !== undefined) await symlink(f.link, file)
       else if (!f.record) await writeFile(file, f.data, { flag: 'wx' })
       else {
@@ -298,8 +319,11 @@ export async function downloadCloudFiles(options: {
         }
       }
     } catch (error) {
+      const unread = fresh.some((g) => g.record && g.runId === f.runId)
+        ? ": the run's record isn't written, so reeval reads none of its files yet"
+        : ''
       throw new CloudError(
-        `couldn't write .reeval/${f.path} (${(error as Error).message}): the run's record isn't written, so reeval reads none of its files yet`,
+        `couldn't write .reeval/${f.path} (${(error as Error).message})${unread}`,
       )
     }
   }

@@ -676,6 +676,25 @@ describe("a cloud run's files, downloaded with --download", () => {
       const linked = await runCli(dir, ['attach', '--download', events], { env: env(p) })
       assert.equal(linked.code, 0, linked.stdout + linked.stderr)
       assert.equal(readlinkSync(join(dir, link)), 'CLAUDE.md')
+      const outside = tempDir('cloud-outside')
+      p.serve((machine) => [
+        ...machine,
+        {
+          type: 'symlink',
+          path: `${attempt(machine)}/snapshots/after/Dir`,
+          mode: 0o777,
+          mtime: 0,
+          target: outside,
+        },
+        file(`${attempt(machine)}/snapshots/after/dir/f.txt`),
+      ])
+      const folded = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+      assert.ok(!existsSync(join(outside, 'f.txt')), 'nothing written through the link')
+      if (process.platform === 'darwin' || process.platform === 'win32') {
+        assert.equal(folded.code, 3, folded.stdout + folded.stderr)
+      } else {
+        assert.equal(folded.code, 0, folded.stdout + folded.stderr)
+      }
       const elsewhere = tempDir('cloud-elsewhere')
       const { renameSync } = await import('node:fs')
       renameSync(join(dir, '.reeval/runs'), join(elsewhere, 'runs'))
