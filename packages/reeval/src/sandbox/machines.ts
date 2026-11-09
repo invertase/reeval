@@ -29,7 +29,7 @@ export const TART_MACHINE: MachineProvider<TartSandboxDescriptor> = {
   id: (s) => `tart:${idPart(s.image)}`,
   hostPaths: { 'ssh.key': 'file' },
   hostLimit: tartVmLimit,
-  notHosted: () => 'tart() runs its VMs on a Mac',
+  notCloud: () => 'tart() runs its VMs on a Mac',
   async create(sandbox, options) {
     const { createTartSandbox } = await import('./tart.ts')
     return createTartSandbox(sandbox, options)

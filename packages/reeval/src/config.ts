@@ -90,7 +90,7 @@ const CONFIG_KEYS = [
   'secrets',
   'debug',
   'analysis',
-  'hosted',
+  'cloud',
 ]
 const PROFILE_KEYS = [
   'defaults',
@@ -101,7 +101,7 @@ const PROFILE_KEYS = [
   'tags',
   'gateway',
   'history',
-  'hosted',
+  'cloud',
 ]
 const DEFAULTS_KEYS = [
   'harnesses',
@@ -493,9 +493,9 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
       `${where}.record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(p.record)})`,
     )
   }
-  if (p.hosted !== undefined && typeof p.hosted !== 'boolean') {
+  if (p.cloud !== undefined && typeof p.cloud !== 'boolean') {
     throw new UsageError(
-      `${where}.hosted in ${file} is true or false (got ${JSON.stringify(p.hosted)})`,
+      `${where}.cloud in ${file} is true or false (got ${JSON.stringify(p.cloud)})`,
     )
   }
   if (p.judge !== undefined) resolveJudge(p.judge, file, `${where}.judge`)
@@ -620,7 +620,7 @@ export function selectProfile(
     budget: { ...config.budget, ...profile.budget },
     ...(profile.record ? { record: profile.record } : {}),
     ...(profile.gateway ? { gateway: profile.gateway } : {}),
-    ...(profile.hosted !== undefined ? { hosted: profile.hosted } : {}),
+    ...(profile.cloud !== undefined ? { cloud: profile.cloud } : {}),
     ...(config.profileHistory[name] ? { history: config.profileHistory[name] } : {}),
   }
 }
@@ -664,8 +664,8 @@ export function resolveConfig(
   if (!RECORD.includes(record)) {
     throw new UsageError(`record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(record)})`)
   }
-  if (user.hosted !== undefined && typeof user.hosted !== 'boolean') {
-    throw new UsageError(`hosted in ${file} is true or false (got ${JSON.stringify(user.hosted)})`)
+  if (user.cloud !== undefined && typeof user.cloud !== 'boolean') {
+    throw new UsageError(`cloud in ${file} is true or false (got ${JSON.stringify(user.cloud)})`)
   }
   const historyDefault = join(evalRoot(include), '.history')
   const history = resolveHistory(user.history, 'history', file, root, historyDefault)
@@ -737,7 +737,7 @@ export function resolveConfig(
     gateway:
       user.gateway === undefined ? DEFAULT_GATEWAYS : checkGateways(user.gateway, 'gateway', file),
     gatewaySet: user.gateway !== undefined,
-    hosted: user.hosted ?? false,
+    cloud: user.cloud ?? false,
   }
 }
 

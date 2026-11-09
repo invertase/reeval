@@ -32,7 +32,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 | [`secrets`](#secrets) | ✓ |  |  |  |
 | [`debug`](#debug) | ✓ |  |  |  |
 | [`analysis`](#analysis) | ✓ |  |  |  |
-| [`hosted`](#hosted) | ✓ |  |  |  |
+| [`cloud`](#cloud) | ✓ |  |  |  |
 | [`compare`](#compare) |  |  | ✓ | ✓ |
 | [`questions`](#questions) |  |  | ✓ |  |
 | [`tags`](#tags) |  |  | ✓ |  |
@@ -816,12 +816,12 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
   `'manual'` copies on `reeval record`, `'ci'` (the default) when `CI` is set and is not `false`, and `'always'` every run except an interrupted one; a duration-budget-stopped run is recorded. A profile may [replace it](/reference/profiles#record).
 </Property>
 
-## `hosted`
+## `cloud`
 
-`hosted` runs `reeval run` on the hosted platform at [`REEVAL_HOSTED_URL`](/reference/environment-variables#reevalhostedurl).
+`cloud` runs `reeval run` in the cloud at [`REEVAL_CLOUD_URL`](/reference/environment-variables#reevalcloudurl).
 
-<Property name="hosted" type="boolean" optional>
-  Default `false`. `--hosted` and `--local` take precedence, and a profile may [replace it](/reference/profiles#hosted). A plan the platform can't run, such as one with `tart()` or files a bundle can't carry, runs on this machine.
+<Property name="cloud" type="boolean" optional>
+  Default `false`. `--cloud` and `--local` take precedence, and a profile may [replace it](/reference/profiles#cloud). A plan the platform can't run, such as one with `tart()` or files a bundle can't carry, runs on this machine.
 </Property>
 
 ## `history`

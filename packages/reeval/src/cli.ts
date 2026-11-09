@@ -5,6 +5,7 @@ import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseCli } from './cli-parse.ts'
 import { commandHelpText, type Flags, helpText } from './cli-spec.ts'
+import { type RunTarget, wantsCloud } from './cloud-run.ts'
 import type { EvalQuestions, questionRunner } from './compare/questions.ts'
 import {
   configLabel,
@@ -43,7 +44,6 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
-import { type RunTarget, wantsHosted } from './hosted-run.ts'
 import { cwdIn, fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -121,7 +121,7 @@ const EXPECTED_ERRORS = [
   'NewerSchemaError',
 ]
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
-const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError', 'HostedError']
+const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError', 'CloudError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
@@ -292,7 +292,7 @@ async function run(argv: string[]): Promise<number> {
  */
 async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   const planning = (
-    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors', 'hosted'] as const
+    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors', 'cloud'] as const
   )
     .filter((f) => flags[f] !== undefined)
     .map((f) => `--${f}`)
@@ -841,8 +841,8 @@ async function attachCommand(
     root = dirname(requireConfig(configPath))
     source = (await resolveAttach(root, target)).file
   }
-  const { hostedFollow } = await import('./hosted-run.ts')
-  const follow = isAttachUrl(source) ? hostedFollow(source) : undefined
+  const { cloudFollow } = await import('./cloud-run.ts')
+  const follow = isAttachUrl(source) ? cloudFollow(source) : undefined
   return attachHere(flags, {
     source,
     ...(root === undefined ? {} : { root }),
@@ -880,18 +880,18 @@ async function attachHere(
 }
 
 /**
- * Where a run that asked for the hosted platform goes, from the bundle made for it: there, or
+ * Where a run that asked for the cloud platform goes, from the bundle made for it: there, or
  * here with why. A real run there is created, uploaded, started and followed, and its exit code is
- * `exit`. Undefined when the run didn't ask for hosted.
+ * `exit`. Undefined when the run didn't ask to run in the cloud.
  */
-async function hostedTarget(
+async function cloudTarget(
   flags: Flags,
   setup: Awaited<ReturnType<typeof prepareRun>>,
   filters: string[],
   configPath: string | undefined,
 ): Promise<{ exit: number } | { target: RunTarget; detail: string } | undefined> {
-  const hosted = await import('./hosted-run.ts')
-  if (!hosted.wantsHosted(flags, setup.config, setup.profile)) return undefined
+  const cloud = await import('./cloud-run.ts')
+  if (!cloud.wantsCloud(flags, setup.config, setup.profile)) return undefined
   const { makeBundle } = await import('./bundle/index.ts')
   // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
   // bundle's arguments, so the platform's machine plans with the same one.
@@ -910,7 +910,7 @@ async function hostedTarget(
         { env, prices: true },
       )
       if ('code' in made) return made
-      const blocked = made.plan.notHosted ?? []
+      const blocked = made.plan.notCloud ?? []
       return blocked.length ? { why: blocked.join('; ') } : { made }
     } catch (error) {
       if (!(error instanceof UsageError)) throw error
@@ -920,10 +920,10 @@ async function hostedTarget(
   let result = await bundle({})
   let base: URL | null = null
   if ('made' in result) {
-    hosted.refuseLocalFlags(flags)
+    cloud.refuseLocalFlags(flags)
     if (!setup.dryRun) {
-      base = hosted.hostedUrl()
-      const env = await hosted.hostedPlanEnv(base)
+      base = cloud.cloudUrl()
+      const env = await cloud.cloudPlanEnv(base)
       const differs = Object.entries(env).some(([k, v]) => process.env[k] !== v)
       if (differs) result = await bundle(env)
     }
@@ -932,27 +932,27 @@ async function hostedTarget(
   if ('why' in result) {
     const why = result.why.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
     if (!setup.dryRun) {
-      console.log(dim(`Running here, not on hosted: ${why}`))
+      console.log(dim(`Running here, not in the cloud: ${why}`))
       if (setup.recording) storeCredentials(setup.config.history)
     }
     return {
       target: { kind: 'local', why },
-      detail: `target  here, not hosted: ${why.split('\n')[0]}`,
+      detail: `target  here, not in the cloud: ${why.split('\n')[0]}`,
     }
   }
   const { made } = result
   if (!base) {
-    const unset = process.env[hosted.HOSTED_URL_VAR]?.trim()
+    const unset = process.env[cloud.CLOUD_URL_VAR]?.trim()
       ? ''
-      : ` · ${hosted.HOSTED_URL_VAR} isn't set, so a run would exit 2`
-    const line = await hosted.hostedLine(made.plan, 'target  hosted')
-    return { target: { kind: 'hosted' }, detail: `${line}${unset}` }
+      : ` · ${cloud.CLOUD_URL_VAR} isn't set, so a run would exit 2`
+    const line = await cloud.cloudLine(made.plan, 'target  cloud')
+    return { target: { kind: 'cloud' }, detail: `${line}${unset}` }
   }
-  console.log(await hosted.hostedLine(made.plan))
+  console.log(await cloud.cloudLine(made.plan))
   if (setup.recording) {
-    console.log(dim("record: a hosted run isn't recorded into this machine's history"))
+    console.log(dim("record: a cloud run isn't recorded into this machine's history"))
   }
-  const exit = await hosted.runHosted({
+  const exit = await cloud.runCloud({
     base,
     bundle: made,
     log: (line) => console.log(dim(line)),
@@ -1011,8 +1011,8 @@ async function runCommand(
     noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
     ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
-  const hosted = bundled ? undefined : await hostedTarget(runFlags, setup, filters, configPath)
-  if (hosted && 'exit' in hosted) return hosted.exit
+  const cloud = bundled ? undefined : await cloudTarget(runFlags, setup, filters, configPath)
+  if (cloud && 'exit' in cloud) return cloud.exit
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
   const ctx = await startRun(setup, bundled)
   const startedWith: RunInvocation | undefined = resumed
@@ -1080,7 +1080,7 @@ async function runCommand(
       notes: resumed?.notes ?? [],
       narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length || !!flags.trait?.length),
       ...(savedEvents ? { events: savedEvents } : {}),
-      ...(hosted ? { target: hosted.target, targetDetail: hosted.detail } : {}),
+      ...(cloud ? { target: cloud.target, targetDetail: cloud.detail } : {}),
     })
   } catch (error) {
     renderer.close()
@@ -1347,8 +1347,8 @@ async function prepareRun(
     flags.record ||
     (profile?.record ?? config.record) === 'always' ||
     ((profile?.record ?? config.record) === 'ci' && inCI())
-  // A hosted run's credentials are checked once it's known to run here.
-  if (recording && !flags['dry-run'] && !wantsHosted(flags, config, profile)) {
+  // A cloud run's credentials are checked once it's known to run here.
+  if (recording && !flags['dry-run'] && !wantsCloud(flags, config, profile)) {
     storeCredentials(config.history)
   }
   let runs: number | undefined
@@ -1663,7 +1663,7 @@ async function executeRun(
     narrowed: boolean
     /** The event stream file, as live.json names it. */
     events?: string
-    /** Where a run that asked for the hosted platform goes, and the dry run's line for it. */
+    /** Where a run that asked for the cloud platform goes, and the dry run's line for it. */
     target?: RunTarget
     targetDetail?: string
   },
@@ -1894,11 +1894,11 @@ async function executeRun(
         judges: running.flatMap((p) => (p.attempt.judge ? [p.attempt.judge] : [])),
       })
       for (const { names } of needed) for (const name of names) secrets.add(name)
-      const { notHosted } = await import('./hosted-run.ts')
-      const blocked = notHosted(skipped)
+      const { notCloud } = await import('./cloud-run.ts')
+      const blocked = notCloud(skipped)
       const doc: PlanDocument = {
         ...planDocument(plan, skipped, excluded, images, inputs, [...secrets].sort()),
-        ...(blocked.length ? { notHosted: blocked } : {}),
+        ...(blocked.length ? { notCloud: blocked } : {}),
         ...(started.target ? { target: started.target } : {}),
       }
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
