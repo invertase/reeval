@@ -338,6 +338,7 @@ async function startProxy(
     | 'endpoints'
     | 'onRefused'
     | 'onUnsubstituted'
+    | 'onStrayPlaceholder'
     | 'derivedTokens'
     | 'onEvent'
     | 'modelResponses'
@@ -2040,6 +2041,51 @@ describe('brokered secrets through the proxy', () => {
       assert.deepEqual(reported, [])
     } finally {
       gw.close()
+    }
+  })
+
+  test("a placeholder sent where it isn't swapped in is reported: another host, or plain HTTP", async () => {
+    const reported: unknown[] = []
+    const gw = await startProxy(undefined, { onStrayPlaceholder: (e) => reported.push(e) })
+    const plain = http.createServer((_, res) => res.end('ok'))
+    await new Promise<void>((resolve) => plain.listen(0, '127.0.0.1', resolve))
+    const plainPort = (plain.address() as net.AddressInfo).port
+    try {
+      const otherHolder = `reeval_secret_${'R'.repeat(32)}`
+      gw.proxy.setSubstitutions([
+        sub(),
+        sub({ name: 'OTHER_KEY', placeholder: otherHolder, hosts: [OTHER] }),
+      ])
+      // Decrypted for OTHER_KEY, so the gateway reads it and finds GEMINI_API_KEY's placeholder.
+      await viaProxy(gw, OTHER, other.port, { path: `/echo?k=${HOLDER}` })
+      await absolute(gw, `http://${HOST}:${plainPort}/x`, { headers: { authorization: HOLDER } })
+      assert.deepEqual(reported, [
+        {
+          name: 'GEMINI_API_KEY',
+          reason: 'host_not_allowed',
+          host: OTHER,
+          method: 'GET',
+          url: `https://${OTHER}/echo`,
+        },
+        {
+          name: 'GEMINI_API_KEY',
+          reason: 'plain_http',
+          host: HOST,
+          method: 'GET',
+          url: `http://${HOST}:${plainPort}/x`,
+        },
+      ])
+      // Twin: each placeholder on its own host over HTTPS has nothing to report.
+      reported.length = 0
+      await viaProxy(gw, HOST, h1.port, { path: '/echo', headers: { authorization: HOLDER } })
+      await viaProxy(gw, OTHER, other.port, {
+        path: '/echo',
+        headers: { authorization: otherHolder },
+      })
+      assert.deepEqual(reported, [])
+    } finally {
+      gw.close()
+      plain.close()
     }
   })
 

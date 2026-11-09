@@ -185,6 +185,16 @@ function entryOf(stdout: string, name: string): string {
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
 const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
+
+/** Where a fixture's `REEVAL_SECRETS_FILE` is, in its project. */
+const SECRETS_JSON = 'secrets.json'
+
+/** Writes the fixture's `REEVAL_SECRETS_FILE` with `secrets`, and the variable naming it. */
+function secretsFile(dir: string, secrets: Record<string, unknown>) {
+  const file = join(dir, SECRETS_JSON)
+  writeFileSync(file, JSON.stringify({ version: 1, secrets }))
+  return { REEVAL_SECRETS_FILE: file }
+}
 /** A made-up OpenAI key: the gateway refuses the request before any key goes upstream. */
 const BROKERED_KEY = 'sk-reeval-fixture-0b7e52c91d4a6f38'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
@@ -1191,6 +1201,72 @@ export const features: Feature[] = [
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected '\[REDACTED\]' to be ''/,
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
+  },
+  {
+    dir: 'secrets/file-sandbox-agent-sees-value',
+    tiers: ['fake', 'docker'],
+    env: 'keys',
+    hostEnv: (dir) => ({
+      ...secretsFile(dir, { API_KEY: { mode: 'sandbox', value: TOKEN } }),
+      REEVAL_FIXTURE_TOKEN: TOKEN,
+    }),
+    canary: /expected '\[REDACTED\]' to match/,
+    record: ({ project, runDir }) => {
+      assert.equal(existsSync(join(project, SECRETS_JSON)), false, 'reeval deleted the file')
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'secrets/file-sandbox-hidden-from-eval',
+    tiers: ['fake'],
+    env: 'keys',
+    hostEnv: (dir) => secretsFile(dir, { API_KEY: { mode: 'sandbox', value: TOKEN } }),
+    canary: /expected true to be false/,
+    record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
+  },
+  {
+    dir: 'secrets/file-brokered-warning',
+    tiers: ['docker'],
+    env: 'keys',
+    args: ['--events-file', 'events.ndjson'],
+    hostEnv: (dir) => ({
+      ...egressEnv(),
+      ...secretsFile(dir, {
+        API_KEY: { mode: 'brokered', hosts: [egressTarget.host], value: TOKEN },
+        OTHER_KEY: { mode: 'brokered', hosts: ['api.example.com'], value: AGENT_VALUE },
+      }),
+    }),
+    canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    record: ({ run, project }) => {
+      const key = landed(run)?.key ?? ''
+      const expected = [
+        { secret: 'API_KEY', host: egressTarget.host, reason: 'plain_http' },
+        { secret: 'OTHER_KEY', host: egressTarget.host, reason: 'host_not_allowed' },
+      ]
+      assert.deepEqual(landed(run)?.secretWarnings, expected)
+      assert.deepEqual(
+        run.secretWarnings?.filter((w) => w.attemptId === key),
+        expected.map((w) => ({ ...w, attemptId: key })),
+      )
+      const events = readFileSync(join(project, 'events.ndjson'), 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as { type?: string; attemptId?: string })
+        .filter((e) => e.type === 'secret-warning' && e.attemptId === key)
+        .map(({ type, secret, host, reason }: Record<string, unknown>) => ({
+          type,
+          secret,
+          host,
+          reason,
+        }))
+      assert.deepEqual(
+        events,
+        expected.map((w) => ({ type: 'secret-warning', ...w })),
+      )
+      const state = join(project, '.reeval')
+      assert.equal(filesContaining(state, TOKEN), '')
+      assert.equal(filesContaining(state, AGENT_VALUE), '')
+    },
   },
   {
     dir: 'secrets/judge-sees-redacted',

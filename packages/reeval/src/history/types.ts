@@ -173,6 +173,18 @@ export type ContextFile = { path: string; sha256: string }
 /** An upstream provider behind a gateway, and how many of the attempt's calls it served. */
 export type UpstreamCount = { provider: string; calls: number }
 
+/**
+ * A brokered secret's placeholder sent where its value isn't swapped in: to a host the secret
+ * isn't brokered to (`host_not_allowed`), or to one of its hosts over plain HTTP (`plain_http`).
+ * The request went on with the placeholder, never the value.
+ */
+export type SecretWarning = {
+  /** The host variable the secret's value came from. */
+  secret: string
+  host: string
+  reason: 'host_not_allowed' | 'plain_http'
+}
+
 /** An infra error an attempt ended with before it ran again, and when that try started. */
 export type AttemptRetry = { error: AttemptError; at: string | null }
 
@@ -225,6 +237,12 @@ export type AttemptRecord = {
   context: ContextFile[]
   /** The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran. */
   egress: EgressRecord | null
+  /**
+   * Each brokered secret whose placeholder the attempt sent where its value isn't swapped in, once
+   * per host and reason; absent when there's none. The egress gateway reads a request's headers,
+   * path and query for it, on a connection it decrypts or plain HTTP.
+   */
+  secretWarnings?: SecretWarning[]
   /**
    * The models served by the harness's API calls, as observed by the egress gateway. Values may
    * come from requests or responses and include reported effort; null when no model was named or
@@ -932,6 +950,11 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
+  /**
+   * Every attempt's `secretWarnings`, each with the attempt's `key` as `attemptId`; absent when
+   * there's none.
+   */
+  secretWarnings?: Array<SecretWarning & { attemptId: string }>
   /**
    * In records from before an eval with `cases` was one entry, each eval with `cases` that ran.
    * Never written now; reading such a record folds it into its eval.

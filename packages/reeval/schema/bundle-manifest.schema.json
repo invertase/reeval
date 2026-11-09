@@ -175,6 +175,13 @@
             "$ref": "#/$defs/BundleEnvFile"
           }
         },
+        "features": {
+          "description": "What the reeval that wrote it supports that a runner must know of before it starts the run: `secrets-file`, reading `REEVAL_SECRETS_FILE` and keeping its brokered and sandbox values from the eval code. Another reeval may list others.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "files": {
           "description": "Every file in the archive but `manifest.json`, sorted by path.",
           "type": "array",

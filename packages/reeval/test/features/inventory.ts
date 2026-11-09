@@ -853,6 +853,22 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/secrets.test.ts', 'sandbox-docker/test/docker.test.ts'],
   },
   {
+    id: 'secret.file',
+    area: 'Environments',
+    name: '`REEVAL_SECRETS_FILE` modes (brokered, sandbox, readable) and `secretWarnings`',
+    fixtures: [
+      'secrets/file-sandbox-agent-sees-value',
+      'secrets/file-sandbox-hidden-from-eval',
+      'secrets/file-brokered-warning',
+    ],
+    unit: [
+      'reeval/test/secrets-file.test.ts',
+      'reeval/test/bundle.test.ts',
+      'sandbox-docker/test/proxy.test.ts',
+      'sandbox-docker/test/substitution.test.ts',
+    ],
+  },
+  {
     id: 'secret.unbrokered',
     area: 'Environments',
     name: '`secrets: { unbrokered }` and the unbrokered warning',

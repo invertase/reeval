@@ -569,6 +569,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     substitutions: env.substitutions,
     egress: spec.egress,
     onWarning: (text) => a.report({ kind: 'warning', text }),
+    onSecretWarning: (warning) => a.report({ kind: 'secret-warning', ...warning }),
   })
   a.sandbox = box
   a.meter = box.meter?.()

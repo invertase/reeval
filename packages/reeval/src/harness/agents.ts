@@ -11,11 +11,12 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
 import { type PiProvider, piProvider } from '@reeval/harness-pi/providers'
-import type {
-  BakedHarness,
-  DerivedTokens,
-  EndpointMatch,
-  LocalResponse,
+import {
+  type BakedHarness,
+  type DerivedTokens,
+  type EndpointMatch,
+  hostAllowed,
+  type LocalResponse,
 } from '@reeval/sandbox-docker'
 import {
   PART_PATHS,
@@ -46,6 +47,7 @@ import {
 } from '../gateway/vertex.ts'
 import { modelLimits } from '../prices.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
+import { heldSecret, hostEnv } from '../secrets-file.ts'
 import { withoutBom } from '../text.ts'
 import type {
   AgentHarnessDescriptor,
@@ -1988,10 +1990,21 @@ export const keyRejected = (credential: string) =>
  * The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. Empty for
  * a brokered token, which the adapter never sees.
  */
-export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
+export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = hostEnv()) {
   if (agent.token) return {}
   const name = credentialIn(agent, env)
   const value = env[name]
+  const held = heldSecret(name)
+  if (held?.mode === 'brokered') {
+    const off = [...new Set(agent.endpoints.map((e) => e.host))].filter(
+      (host) => !hostAllowed(held.hosts, host),
+    )
+    if (off.length) {
+      throw new InfraError(
+        `${name} is brokered to ${held.hosts.join(', ')}, and the ${agent.name} harness sends it to ${off.join(', ')}, which it isn't brokered to.`,
+      )
+    }
+  }
   if (!value) {
     const names = credentialsOf(agent)
     const unset = names.length === 1 ? `${name} isn't set` : `Neither ${names.join(' nor ')} is set`

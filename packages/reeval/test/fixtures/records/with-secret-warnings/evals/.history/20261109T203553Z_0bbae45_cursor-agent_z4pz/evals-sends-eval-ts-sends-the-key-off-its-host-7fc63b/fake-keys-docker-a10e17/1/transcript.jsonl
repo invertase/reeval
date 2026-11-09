@@ -1,0 +1,5 @@
+{"ts":"2026-11-09T20:35:56.295Z","atMs":0,"turn":0,"type":"prompt","text":"call example.com with the key"}
+{"turn":0,"ts":"2026-11-09T20:35:56.295Z","atMs":0,"type":"text","text":"Working on: call example.com with the key","durationMs":0}
+{"turn":0,"ts":"2026-11-09T20:35:56.295Z","atMs":0,"type":"tool","toolCallId":"call_1","tool":"shell","input":{"command":"curl -sS -m 10 -o /dev/null -w \"%{http_code}\" \"http://example.com/?k=$API_KEY\""},"output":"200","outputView":"model","ok":true,"durationMs":121}
+{"turn":0,"ts":"2026-11-09T20:35:56.416Z","atMs":121,"type":"text","text":"Done.","durationMs":0}
+{"ts":"2026-11-09T20:35:56.416Z","atMs":121,"turn":0,"type":"turn-end","status":"completed","durationMs":121}

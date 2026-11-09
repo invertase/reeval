@@ -2679,6 +2679,28 @@
             "at": {
               "type": "number"
             },
+            "host": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "secret-warning"
+            },
+            "reason": {
+              "enum": ["host_not_allowed", "plain_http"]
+            },
+            "secret": {
+              "description": "The host variable the secret's value came from.",
+              "type": "string"
+            }
+          },
+          "required": ["at", "host", "kind", "reason", "secret"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
             "kind": {
               "const": "cleanup"
             }

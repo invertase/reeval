@@ -26,12 +26,14 @@ import {
 } from './rules.ts'
 import {
   bodySubstituter,
+  type StrayReason,
   type SubstituteIn,
   type Substitution,
   scrubbedInBodies,
   scrubber,
   scrubHeaders,
   scrubValue,
+  strayPlaceholders,
   substituteRequest,
   substitutes,
   substitutionsFor,
@@ -70,6 +72,18 @@ export type EgressProxyOptions = {
     name: string
     where: SubstituteIn
     in: readonly SubstituteIn[]
+    method: string
+    url: string
+  }) => void
+  /**
+   * Called when a request the gateway reads carries a brokered secret's placeholder where its
+   * value isn't swapped in (see `strayPlaceholders`): to another host, or over plain HTTP. A
+   * tunneled connection, to a host with nothing to swap in, isn't read.
+   */
+  onStrayPlaceholder?: (event: {
+    name: string
+    reason: StrayReason
+    host: string
     method: string
     url: string
   }) => void
@@ -448,6 +462,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   /** Substitutions for derived tokens, added as their exchanges answer; kept by setSubstitutions. */
   let tokens: Substitution[] = []
   const allSubs = () => (tokens.length ? [...subs, ...tokens] : subs)
+  const stray = (
+    request: { host: string; path: string; headers: IncomingHttpHeaders },
+    secure: boolean,
+    method: string,
+    url: string,
+  ) => {
+    if (!options.onStrayPlaceholder) return
+    for (const s of strayPlaceholders(subs, request, secure)) {
+      try {
+        options.onStrayPlaceholder({ ...s, host: request.host, method, url })
+      } catch {}
+    }
+  }
   const derived = options.derivedTokens ?? []
   const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
   const locals = options.localResponses ?? []
@@ -858,6 +885,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   ) {
     const url = `http://${target.host}:${target.port}${pathOnly(path)}`
     log(`reeval:egress ${req.method} ${url}`)
+    stray({ host: target.host, path, headers: req.headers }, false, req.method ?? 'GET', url)
     const upstream = http.request({
       ...reachAt(target),
       port: target.port,
@@ -1019,6 +1047,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       return reply(socket, 421, refused)
     }
     log(`reeval:egress ${method} http://${authority}${pathOnly(path)} (upgrade)`)
+    stray(
+      { host: target.host, path, headers: req.headers },
+      false,
+      method,
+      `http://${authority}${pathOnly(path)}`,
+    )
     const upstream = http.request({
       ...reachAt(target),
       port: target.port,
@@ -1165,6 +1199,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const substituted = substituteRequest(own, request)
     const kept = unsubstituted(own, request)
     for (const k of kept) options.onUnsubstituted?.({ ...k, method, url })
+    stray(request, true, method, url)
     const exchange = derived.find((d) =>
       onEndpoint([d.endpoint], { host: target.host, method, path, headers: {} }),
     )

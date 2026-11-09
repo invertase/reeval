@@ -10,6 +10,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { run } from '@reeval/sandbox-docker/process'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
+import { hostEnv } from '../secrets-file.ts'
 import type { DaytonaSandboxDescriptor, DaytonaSize, HarnessDescriptor } from '../types.ts'
 import { retryAfterMs, runLabels } from './boat.ts'
 import { daytonaImage } from './daytona-image.ts'
@@ -119,7 +120,7 @@ export function daytonaKeyProblem(
   sandbox: Pick<DaytonaSandboxDescriptor, 'apiKey'>,
 ): string | null {
   const name = sandbox.apiKey.from
-  const value = process.env[name]
+  const value = hostEnv()[name]
   if (!value) return `daytona() needs a Daytona API key in ${name}, which isn't set`
   if (/\s/.test(value)) {
     return `${name} has whitespace or a line break in it (a key pasted from a wrapped line?); set it to the key alone`
@@ -146,7 +147,7 @@ export async function daytonaClient(
   const problem = daytonaKeyProblem(sandbox)
   if (problem) throw usage(`${problem}. Set it in the environment or the project's .env.local.`)
   const { Daytona } = await loadDaytonaSdk(projectRoot)
-  const apiKey = process.env[sandbox.apiKey.from]
+  const apiKey = hostEnv()[sandbox.apiKey.from]
   registerSecret(apiKey)
   const apiUrl = process.env[DAYTONA_API_URL]
   // Polling, not the SDK's event socket, which would hold the run's main process open.

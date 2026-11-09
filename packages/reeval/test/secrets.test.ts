@@ -81,6 +81,7 @@ describe('resolving brokered secrets', () => {
         hosts: ['generativelanguage.googleapis.com'],
         in: ['header'],
         phase: 'agent',
+        secret: 'REEVAL_UNIT_BROKERED',
       },
     ])
   })
@@ -835,6 +836,15 @@ describe('MCP headers written as plain strings', () => {
     }))
     const text = '{"tokens":4096,"ok":"true"}'
     assert.equal(redactSecrets(text, {}), text)
+  })
+
+  test("a placeholder in a secret-named variable isn't masked, nor another placeholder's prefix", () => {
+    const held = `reeval_secret_${'A1'.repeat(16)}`
+    const other = `reeval_secret_${'B2'.repeat(16)}`
+    const text = `held ${held} sent ${other}`
+    assert.equal(redactSecrets(text, { API_KEY: held }), text)
+    // Twin: a value of another shape in the same variable is masked.
+    assert.equal(redactSecrets(`held ${held}x`, { API_KEY: `${held}x` }), 'held [REDACTED]')
   })
 })
 

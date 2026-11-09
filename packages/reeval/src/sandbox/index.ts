@@ -1,5 +1,6 @@
 import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
+import type { SecretWarning } from '../history/types.ts'
 import type { HarnessDescriptor, PlannedEgress, SandboxBase, SandboxDescriptor } from '../types.ts'
 import { sandboxKind } from './kinds.ts'
 import type { PreparedHost } from './tart-hosts.ts'
@@ -34,6 +35,8 @@ export type SandboxOptions = {
    * a few per attempt at most.
    */
   onWarning?: (text: string) => void
+  /** Each new entry of the sandbox's `secretWarnings`, as the gateway finds it. */
+  onSecretWarning?: (warning: SecretWarning) => void
 }
 
 export async function createSandbox(

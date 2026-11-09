@@ -948,6 +948,7 @@ async function addAttempt(
     ...(record?.askedModels?.length ? { askedModels: record.askedModels } : {}),
     ...(record?.upstreams?.length ? { upstreams: record.upstreams } : {}),
     ...(record?.reportedCostUsd !== undefined ? { reportedCostUsd: record.reportedCostUsd } : {}),
+    ...(record?.secretWarnings?.length ? { secretWarnings: record.secretWarnings } : {}),
     effort: e.attempt ? (harnessEffort(e.attempt.harness) ?? null) : null,
     servedEffort:
       servedEffortOf([
@@ -969,6 +970,17 @@ async function addAttempt(
 
 /** A snapshot's file or directory name: `final`, or `final.tar.gz` compressed. */
 const fileOf = (s: Snapshot) => (s.form === 'tar.gz' ? `${s.name}.tar.gz` : s.name)
+
+/**
+ * The run's secret warnings: its attempts', each with its attempt's key; nothing when there's
+ * none.
+ */
+function secretWarningsOf(attempts: readonly AttemptRecord[]): Pick<RunRecord, 'secretWarnings'> {
+  const all = attempts.flatMap((a) =>
+    (a.secretWarnings ?? []).map((w) => ({ ...w, attemptId: a.key })),
+  )
+  return all.length ? { secretWarnings: all } : {}
+}
 
 /**
  * The attempt's snapshots with their paths in the run's directory, each moved there from where
@@ -1549,6 +1561,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
     ...(families.length ? { families } : {}),
+    ...secretWarningsOf(attempts),
     ...(engine.unhandledErrors.length
       ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
       : {}),

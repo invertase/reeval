@@ -93,4 +93,13 @@ export type BundleManifest = {
   envFiles: BundleEnvFile[]
   /** The host variables the run reads secrets from, as the dry run's `secrets`; never values. */
   secrets: string[]
+  /**
+   * What the reeval that wrote it supports that a runner must know of before it starts the run:
+   * `secrets-file`, reading `REEVAL_SECRETS_FILE` and keeping its brokered and sandbox values from
+   * the eval code. Another reeval may list others.
+   */
+  features?: string[]
 }
+
+/** The features this reeval writes in every bundle's manifest. */
+export const BUNDLE_FEATURES = ['secrets-file']

@@ -26,6 +26,7 @@ import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
+import type { SecretWarning } from '../history/types.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
@@ -49,6 +50,9 @@ export async function removeRunContainers(
     if (ids.length) await docker([...ENGINES[engine].rmForce, ...ids], { engine }).catch(() => {})
   }
 }
+
+/** Distinct `secretWarnings` an attempt records at most. */
+const SECRET_WARNINGS = 50
 
 /** Distinct gateway warnings an attempt prints before one line says there are more. */
 const GATEWAY_WARNINGS = 5
@@ -163,10 +167,26 @@ export function gatewayGlue(options: SandboxOptions) {
     if (options.onWarning) options.onWarning(shown)
     else console.warn(`warning: ${shown}`)
   }
+  const secretOf = new Map(substitutions.map((s) => [s.name, s.secret ?? s.name]))
+  const strays = new Map<string, SecretWarning>()
+  const onStrayPlaceholder = ({ name, reason, host, method, url }: StrayEvent) => {
+    const secret = secretOf.get(name) ?? name
+    const key = `${secret} ${host} ${reason}`
+    if (strays.has(key) || strays.size >= SECRET_WARNINGS) return
+    const warning: SecretWarning = { secret, host: host.slice(0, 253), reason }
+    strays.set(key, warning)
+    options.onSecretWarning?.(warning)
+    warn(
+      reason === 'plain_http'
+        ? `the egress gateway sent ${method} ${url} with ${secret}'s placeholder over plain HTTP, where it isn't swapped in: use https`
+        : `the egress gateway sent ${method} ${url} with ${secret}'s placeholder, not its value: ${secret} isn't brokered to ${host}`,
+    )
+  }
   const egress = {
     policy,
     log: process.env.REEVAL_DEBUG ? (line: string) => console.error(line) : undefined,
     onEvent,
+    ...(substitutions.length ? { onStrayPlaceholder } : {}),
     onUnsubstituted: ({ name, where, in: places, method, url }: UnsubstitutedEvent) =>
       warn(
         `the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
@@ -196,6 +216,7 @@ export function gatewayGlue(options: SandboxOptions) {
       reportedCostUsd: () => cost,
     }),
     ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
+    ...(substitutions.length && { secretWarnings: () => [...strays.values()] }),
     ...(brokering?.modelCalls && { modelCalls: () => [...calls] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
@@ -222,6 +243,7 @@ export function gatewayGlue(options: SandboxOptions) {
 }
 
 type UnsubstitutedEvent = Parameters<NonNullable<EgressOptions['onUnsubstituted']>>[0]
+type StrayEvent = Parameters<NonNullable<EgressOptions['onStrayPlaceholder']>>[0]
 
 /**
  * A sandbox on a harness session: the workspace under the session's default working directory

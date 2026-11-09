@@ -107,6 +107,29 @@ export function unsubstituted(
   return out
 }
 
+/** Why a request carries a placeholder the gateway won't swap in on it. */
+export type StrayReason = 'host_not_allowed' | 'plain_http'
+
+/**
+ * The secrets whose placeholder a request carries, in its headers, path or query, where the
+ * gateway won't swap their value in: to a host they aren't brokered to, or to one of their hosts
+ * over plain HTTP (`secure` false). The gateway reads no body for this.
+ */
+export function strayPlaceholders(
+  subs: readonly Substitution[],
+  request: { host: string; path: string; headers: Headers },
+  secure: boolean,
+): Array<{ name: string; reason: StrayReason }> {
+  const text = [request.path, ...Object.values(request.headers).flat()].filter(Boolean).join('\n')
+  const out = new Map<string, StrayReason>()
+  for (const s of subs) {
+    if (out.has(s.name) || !text.includes(s.placeholder)) continue
+    if (!hostAllowed(s.hosts, request.host)) out.set(s.name, 'host_not_allowed')
+    else if (!secure) out.set(s.name, 'plain_http')
+  }
+  return [...out].map(([name, reason]) => ({ name, reason }))
+}
+
 /** A response header value with every real value on the host put back as its placeholder. */
 export const scrubValue = (subs: readonly Substitution[], value: string) =>
   subs.reduce((out, s) => replaceIn(out, s.value, s.placeholder), value)

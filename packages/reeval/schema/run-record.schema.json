@@ -556,6 +556,13 @@
           "description": "The saved image a `boat()` attempt with an image recipe ran in: the snapshot its VM started from and the image its container ran. Absent in other sandboxes, and in attempts that didn't reach their sandbox.",
           "$ref": "#/$defs/SandboxBase"
         },
+        "secretWarnings": {
+          "description": "Each brokered secret whose placeholder the attempt sent where its value isn't swapped in, once per host and reason; absent when there's none. The egress gateway reads a request's headers, path and query for it, on a connection it decrypts or plain HTTP.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SecretWarning"
+          }
+        },
         "seq": {
           "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
@@ -3715,6 +3722,29 @@
         "schemaVersion": {
           "const": 1
         },
+        "secretWarnings": {
+          "description": "Every attempt's `secretWarnings`, each with the attempt's `key` as `attemptId`; absent when there's none.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attemptId": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "reason": {
+                "enum": ["host_not_allowed", "plain_http"]
+              },
+              "secret": {
+                "description": "The host variable the secret's value came from.",
+                "type": "string"
+              }
+            },
+            "required": ["attemptId", "host", "reason", "secret"]
+          }
+        },
         "stack": {
           "$ref": "#/$defs/Stack"
         },
@@ -3854,6 +3884,23 @@
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "SecretWarning": {
+      "description": "A brokered secret's placeholder sent where its value isn't swapped in: to a host the secret isn't brokered to (`host_not_allowed`), or to one of its hosts over plain HTTP (`plain_http`). The request went on with the placeholder, never the value.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": ["host_not_allowed", "plain_http"]
+        },
+        "secret": {
+          "description": "The host variable the secret's value came from.",
+          "type": "string"
+        }
+      },
+      "required": ["host", "reason", "secret"]
     },
     "ServeRecord": {
       "description": "One `c.serve` call that listened.",

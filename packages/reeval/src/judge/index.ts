@@ -8,7 +8,8 @@ import {
 } from '../gateway/vercel.ts'
 import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
-import { badCharacterAt, redactSecrets } from '../redact.ts'
+import { badCharacterAt, isPlaceholder, redactSecrets } from '../redact.ts'
+import { heldSecret } from '../secrets-file.ts'
 import type {
   FakeJudgeModel,
   GatewayName,
@@ -164,6 +165,12 @@ export function judgeRoute(
   if (key === undefined) {
     throw new Error(
       `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model, gateway)}, in the environment or .env.local.${unusedGatewayKey(env, gateway)}`,
+    )
+  }
+  const held = heldSecret(key)
+  if (held && isPlaceholder(env[key])) {
+    throw new Error(
+      `${key} for ${what} "${model}" is a ${held.mode} secret, and the ${what} calls its provider from reeval's own process, which only gets its placeholder: give ${key} the readable mode.`,
     )
   }
   if (key === VERCEL_OIDC) {
