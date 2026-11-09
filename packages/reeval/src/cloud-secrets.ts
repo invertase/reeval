@@ -44,7 +44,7 @@ const MAX_HOSTS = 20
 const MAX_SECRET_BYTES = 16 * 1024
 const MAX_KEY_BYTES = 4 * 1024
 // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal escape sequences
-const ESCAPE_SEQUENCE = /\u001b(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/gsu
+const ESCAPE_SEQUENCE = /\u001b(?:\[[0-?]*[ -/]*[@-~]|O.|[^\r\n\u0003\u0004])?/gu
 
 /** The project in `.reeval/project.json`, else the platform's default one. */
 export const DEFAULT_PROJECT = { orgId: 'org_default', projectId: 'proj_default' }
