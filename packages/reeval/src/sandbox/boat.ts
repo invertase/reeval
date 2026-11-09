@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
+import { hostEnv } from '../secrets-file.ts'
 import type { BoatSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
@@ -180,7 +181,7 @@ export const loadBoatSdk = optionalPeer<BoatSdk>(BOAT_SDK, {
 /** Why `sandbox`'s key can't be read from this process's environment, or null. */
 export function boatKeyProblem(sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): string | null {
   const name = sandbox.apiKey.from
-  const value = process.env[name]
+  const value = hostEnv()[name]
   if (!value) return `boat() needs a Boat API key in ${name}, which isn't set`
   if (/\s/.test(value)) {
     return `${name} has whitespace or a line break in it (a key pasted from a wrapped line?); set it to the key alone`
@@ -207,7 +208,7 @@ export async function boatClient(
   }
   const { BoatApi, Configuration } = await loadBoatSdk(projectRoot)
   const basePath = process.env[BOAT_BASE_URL]
-  const accessToken = process.env[sandbox.apiKey.from]
+  const accessToken = hostEnv()[sandbox.apiKey.from]
   // A variable whose name doesn't look secret (`BOAT_PROD`) isn't masked by name.
   registerSecret(accessToken)
   return new BoatApi(

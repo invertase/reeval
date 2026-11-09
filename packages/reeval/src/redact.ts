@@ -102,7 +102,7 @@ export const hasTokenShape = (value: string) =>
 const declaredSecrets = new Set<string>()
 
 export function registerSecret(value: string | undefined): void {
-  if (value && value.length >= 4) declaredSecrets.add(value)
+  if (value && value.length >= 4 && !isPlaceholder(value)) declaredSecrets.add(value)
 }
 
 /** Variables reeval set in the sandbox itself (`c.exec`'s `env`), masked as host variables are. */

@@ -4,7 +4,15 @@ import assert from 'node:assert/strict'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { placeholder } from '@reeval/sandbox-docker'
+import { resolveEnvironment } from '../src/environment/resolve.ts'
+import { applied, defineEnvironment } from '../src/environment.ts'
+import { agentAuth, agentFor } from '../src/harness/agents.ts'
+import { judgeRoute } from '../src/judge/index.ts'
+import { redactSecrets, registerSecret } from '../src/redact.ts'
+import { hostEnv, readSecretsFile } from '../src/secrets-file.ts'
+import type { AgentHarnessDescriptor, EnvironmentInput } from '../src/types.ts'
+import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const evalFile = (env: string, body = '') => `
 import { evaluate, expect, defineEnvironment } from 'reeval'
@@ -83,11 +91,102 @@ describe('REEVAL_SECRETS_FILE', () => {
         JSON.stringify({ version: 1, secrets: { K: { mode: 'open', value: 'v' } } }),
         'gives K the mode "open"',
       ],
+      [
+        JSON.stringify({
+          version: 1,
+          secrets: { K: { mode: 'brokered', hosts: ['https://api.example.com'], value: 'v' } },
+        }),
+        'gives K the host "https://api.example.com", which isn\'t a host name',
+      ],
     ] as const) {
       const r = await withFile('{}', content)
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.ok(r.stderr.includes(why), r.stderr)
       assert.equal(existsSync(r.file), false)
     }
+  })
+})
+
+/** Reads `secrets` as the file this process was started with. */
+function hold(secrets: Record<string, unknown>) {
+  const file = join(tempDir('secrets-file-unit'), 'secrets.json')
+  writeFileSync(file, JSON.stringify({ version: 1, secrets }))
+  process.env.REEVAL_SECRETS_FILE = file
+  readSecretsFile()
+  assert.equal(existsSync(file), false)
+}
+
+const resolve = (input: EnvironmentInput) =>
+  resolveEnvironment(applied(defineEnvironment('e', input)), {}, '/p', 'e', 'AGENTS.md')
+
+describe('held secrets in this process', () => {
+  test("a brokered one goes to the hosts the file and the config share, a sandbox one ignores the config's", async () => {
+    hold({
+      WILD_KEY: { mode: 'brokered', hosts: ['*.Example.com'], value: 'wild-value-123456' },
+      BOX_KEY: { mode: 'sandbox', value: 'box-value-1234567' },
+    })
+    for (const [hosts, kept] of [
+      [undefined, ['*.example.com']],
+      [['api.example.com'], ['api.example.com']],
+      [['*.a.example.com'], ['*.a.example.com']],
+    ] as const) {
+      const r = await resolve(({ secret }) => ({
+        env: { K: secret.fromEnv('WILD_KEY', hosts ? { hosts: [...hosts] } : {}) },
+      }))
+      assert.deepEqual(r.substitutions[0]?.hosts, kept, String(hosts))
+      assert.equal(r.substitutions[0]?.value, 'wild-value-123456')
+    }
+    await assert.rejects(
+      resolve(({ secret }) => ({
+        env: { K: secret.fromEnv('WILD_KEY', { hosts: ['example.com'] }) },
+      })),
+      /is brokered to \*\.example\.com, and .* sends it to example\.com, which it isn't brokered to/,
+    )
+    const box = await resolve(({ secret }) => ({
+      env: { B: secret.fromEnv('BOX_KEY', { hosts: ['api.example.com'] }) },
+    }))
+    assert.equal(box.vars.B, 'box-value-1234567')
+    assert.deepEqual(box.substitutions, [])
+  })
+
+  test("reeval's own calls get the value: the agent's key on its endpoints, and the judge refuses one", () => {
+    hold({
+      ANTHROPIC_API_KEY: {
+        mode: 'brokered',
+        hosts: ['api.anthropic.com'],
+        value: 'sk-ant-held-123456',
+      },
+    })
+    assert.match(process.env.ANTHROPIC_API_KEY ?? '', /^reeval_secret_/)
+    assert.equal(hostEnv().ANTHROPIC_API_KEY, 'sk-ant-held-123456')
+    const claude = agentFor({
+      kind: 'claude-code',
+      model: 'claude-sonnet-5-5',
+    } as AgentHarnessDescriptor)
+    assert.deepEqual(agentAuth(claude), { ANTHROPIC_API_KEY: 'sk-ant-held-123456' })
+    hold({ GOOGLE_GENERATIVE_AI_API_KEY: { mode: 'sandbox', value: 'g-held-1234567890' } })
+    assert.throws(
+      () => judgeRoute('google/gemini-3.8-flash'),
+      /GOOGLE_GENERATIVE_AI_API_KEY for judge model "google\/gemini-3\.8-flash" is a sandbox secret.*give GOOGLE_GENERATIVE_AI_API_KEY the readable mode/,
+    )
+    // Twin: brokered to hosts the agent doesn't call, the key isn't handed over.
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['other.test'], value: 'sk-ant-held-123456' },
+    })
+    assert.throws(
+      () => agentAuth(claude),
+      /ANTHROPIC_API_KEY is brokered to other\.test, and the .* harness sends it to api\.anthropic\.com, which it isn't brokered to/,
+    )
+  })
+
+  test('a placeholder is never masked, even registered as a secret, and one with no held value fails', async () => {
+    const holder = placeholder()
+    registerSecret(holder)
+    assert.equal(redactSecrets(`sent ${holder}`, {}), `sent ${holder}`)
+    process.env.LOST_KEY = holder
+    await assert.rejects(
+      resolve(({ secret }) => ({ env: { K: secret.fromEnv('LOST_KEY') } })),
+      /LOST_KEY for .* is held from REEVAL_SECRETS_FILE, and this attempt couldn't get its value/,
+    )
   })
 })

@@ -7,13 +7,12 @@
 // reaches only the egress gateway, which swaps it in on its hosts, a sandbox one only the agent's
 // sandbox. The eval code runs in the worker that holds them, so this keeps values out of its reach
 // by accident, not against code that reads reeval's own state.
-import { readFileSync, rmSync } from 'node:fs'
 import { placeholder } from '@reeval/sandbox-docker'
 import { UsageError } from './errors.ts'
-import { registerSecret } from './redact.ts'
+import { isPlaceholder, registerSecret } from './redact.ts'
 import { callService } from './scheduler/services.ts'
+import { claimSecretsFile, SECRETS_FILE_VAR } from './secrets-file-take.ts'
 
-export const SECRETS_FILE_VAR = 'REEVAL_SECRETS_FILE'
 /** The run service a worker fetches the held values from. */
 export const SECRETS_SERVICE = 'secrets'
 
@@ -23,6 +22,7 @@ export type HeldSecret =
   | { mode: 'sandbox'; value: string }
 
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
+const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/
 
 const held = new Map<string, HeldSecret>()
 let fetched: Promise<void> | undefined
@@ -61,7 +61,14 @@ function parse(
       ) {
         throw bad(`has no hosts for ${name}, which is brokered`)
       }
-      out[name] = { mode: 'brokered', hosts: [...hosts], value: s.value }
+      const named = hosts.map((h) => h.toLowerCase())
+      const off = named.find((h) => !HOST.test(h))
+      if (off !== undefined) {
+        throw bad(
+          `gives ${name} the host ${JSON.stringify(off)}, which isn't a host name: give the name alone, with no scheme, port or path`,
+        )
+      }
+      out[name] = { mode: 'brokered', hosts: [...new Set(named)], value: s.value }
     } else if (s.mode === 'sandbox' || s.mode === 'readable') {
       out[name] = { mode: s.mode, value: s.value }
     } else {
@@ -78,20 +85,15 @@ function parse(
  * worker sees it. A name in the file wins over the same name in the environment.
  */
 export function readSecretsFile(env: NodeJS.ProcessEnv = process.env): void {
-  const file = env[SECRETS_FILE_VAR]
-  if (file === undefined) return
-  delete env[SECRETS_FILE_VAR]
-  if (!file) return
-  let text: string
-  try {
-    text = readFileSync(file, 'utf8')
-  } catch (error) {
+  const taken = claimSecretsFile(env)
+  if (!taken) return
+  const { file } = taken
+  if ('error' in taken) {
     throw new UsageError(
-      `${SECRETS_FILE_VAR} names ${file}, which reeval can't read: ${(error as Error).message}`,
+      `${SECRETS_FILE_VAR} names ${file}, which reeval can't read: ${taken.error}`,
     )
-  } finally {
-    rmSync(file, { force: true })
   }
+  const { text } = taken
   for (const [name, secret] of Object.entries(parse(text, file))) {
     registerSecret(secret.value)
     if (secret.mode === 'readable') {
@@ -131,3 +133,17 @@ export function fetchHeldSecrets(): Promise<void> {
 
 /** The held secret named `name`, which a `secret()` reading that host variable gets. */
 export const heldSecret = (name: string): HeldSecret | undefined => held.get(name)
+
+/**
+ * `env` with each held secret's value where `env` has its placeholder: what reeval's own calls on
+ * the host authenticate with (the agent's key, the judge's, a sandbox provider's, a workspace's
+ * token), none of which the eval code reads.
+ */
+export function hostEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  if (!held.size) return env
+  const out = { ...env }
+  for (const [name, secret] of held) {
+    if (isPlaceholder(env[name])) out[name] = secret.value
+  }
+  return out
+}

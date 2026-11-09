@@ -23,9 +23,10 @@ import {
 } from '../environment.ts'
 import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
-import { badCharacterAt, registerSecret } from '../redact.ts'
+import { badCharacterAt, isPlaceholder, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { heldSecret } from '../secrets-file.ts'
+import { SECRETS_FILE_VAR } from '../secrets-file-take.ts'
 import { withoutBom } from '../text.ts'
 import type {
   EgressPolicy,
@@ -173,8 +174,14 @@ function held(
   hosts: readonly string[] | undefined,
 ): { value: string; hosts: readonly string[] | undefined } | undefined {
   const secret = heldSecret(from)
-  if (!secret) return undefined
-  if (secret.mode === 'sandbox') return { value: secret.value, hosts }
+  if (!secret) {
+    if (!isPlaceholder(process.env[from])) return undefined
+    throw new InfraError(
+      `${from} for ${where} is held from ${SECRETS_FILE_VAR}, and this attempt couldn't get its value from reeval's main process.`,
+    )
+  }
+  // The mode the file gives wins over the config's hosts: a sandbox secret is never brokered.
+  if (secret.mode === 'sandbox') return { value: secret.value, hosts: undefined }
   const kept = hosts
     ? [
         ...new Set([

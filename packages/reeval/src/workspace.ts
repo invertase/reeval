@@ -11,6 +11,7 @@ import { git } from './git.ts'
 import { sha256 } from './ids.ts'
 import { registerSecret } from './redact.ts'
 import { PrepareError, type PrepareFailure } from './sandbox/provider.ts'
+import { hostEnv } from './secrets-file.ts'
 import type { Cell, GitWorkspace } from './types.ts'
 
 /** What an attempt copies in: the commit the ref resolved to, its tree, and the tarball of it. */
@@ -330,7 +331,7 @@ export async function prepareWorkspaces(
         try {
           let env: NodeJS.ProcessEnv = {}
           if (workspace.token) {
-            const value = process.env[workspace.token]
+            const value = hostEnv()[workspace.token]
             if (!value) {
               throw new WorkspaceError(
                 `${what}: its token variable ${workspace.token} isn't set. Set it in the environment or .env.local.`,

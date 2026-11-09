@@ -6,6 +6,7 @@ import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { redactSecrets } from '../redact.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
+import { hostEnv } from '../secrets-file.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import {
   AGENTS,
@@ -250,7 +251,7 @@ async function brokerKey(
   sandbox: Sandbox,
 ): Promise<Record<string, string>> {
   const { credential, endpoints } = fakeBrokering(descriptor.layout)
-  const key = process.env[credential]
+  const key = hostEnv()[credential]
   if (!key) {
     throw new InfraError(
       `${credential} isn't set, so the fake agent has no key to broker. Set it in the environment or .env.local.`,
