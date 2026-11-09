@@ -222,7 +222,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 the run and follow it as reeval attach does, exiting with its exit
                                 code. A plan the platform can't run (tart(), files a bundle can't
                                 carry) runs here, with a note
-    --local                     Run here, whatever cloud the config or profile sets`,
+    --local                     Run here, whatever the config's or profile's cloud sets`,
   },
   attach: {
     flags: ['ui', 'log-order', 'log-prefix', 'output-logs'],

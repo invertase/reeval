@@ -76,7 +76,7 @@ Usage:
                                 the run and follow it as reeval attach does, exiting with its exit
                                 code. A plan the platform can't run (tart(), files a bundle can't
                                 carry) runs here, with a note
-    --local                     Run here, whatever cloud the config or profile sets
+    --local                     Run here, whatever the config's or profile's cloud sets
   reeval attach [run|file|url]  Follow a reeval run's --events stream and print it as reeval run
                                 does, from its start; exit with the run's exit code (default: the
                                 run in progress). A ws(s) or http(s) URL is followed over a
