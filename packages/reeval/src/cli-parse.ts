@@ -40,15 +40,20 @@ export function parseCli(argv: string[]): ParsedCli {
     parsed = { positionals: program.args, values: valuesOf(program, GLOBAL) }
   })
   for (const [name, spec] of Object.entries(COMMANDS)) {
-    const command = configure(program.command(name), `reeval ${name}`, spec.flags)
+    const command = configure(program.command(name), `reeval ${name}`, spec.flags, spec.secretArgs)
     if (name === 'query') takeStatements(command)
     command.argument('[args...]').action(() => {
       // `reeval image` has no action of its own: the dispatcher names its subcommand.
       const max = spec.sub && !spec.help ? Number.POSITIVE_INFINITY : spec.positionals
-      parsed = done(program, command, [name], spec.flags, max)
+      parsed = done(program, command, [name], spec.flags, max, spec.secretArgs)
     })
     for (const [subName, sub] of Object.entries(spec.sub ?? {})) {
-      const subcommand = configure(command.command(subName), `reeval ${name} ${subName}`, sub.flags)
+      const subcommand = configure(
+        command.command(subName),
+        `reeval ${name} ${subName}`,
+        sub.flags,
+        sub.secretArgs,
+      )
       subcommand.argument('[args...]').action(() => {
         // commander hands the parent its own flags wherever they are, as it does `--config`.
         // A flag both take (`studio build --profile`) is the subcommand's.
@@ -59,7 +64,14 @@ export function parseCli(argv: string[]): ParsedCli {
             `--${stray} isn't an option of reeval ${name} ${subName}. Run reeval --help.`,
           )
         }
-        const result = done(program, subcommand, [name, subName], sub.flags, sub.positionals)
+        const result = done(
+          program,
+          subcommand,
+          [name, subName],
+          sub.flags,
+          sub.positionals,
+          sub.secretArgs,
+        )
         parsed = { ...result, values: { ...own, ...result.values } }
       })
     }
@@ -69,14 +81,14 @@ export function parseCli(argv: string[]): ParsedCli {
   return parsed
 }
 
-function configure(command: Command, name: string, flags: FlagName[]): Command {
+function configure(command: Command, name: string, flags: FlagName[], secretArgs?: true): Command {
   command
     .helpOption(false)
     .helpCommand(false)
     .allowExcessArguments()
     .configureOutput({ writeOut: () => {}, writeErr: () => {}, outputError: () => {} })
     .exitOverride((error) => {
-      throw usageError(error, name)
+      throw usageError(error, name, secretArgs)
     })
   for (const flag of flags) command.addOption(OPTIONS[flag]())
   return command
@@ -108,15 +120,17 @@ function done(
   path: string[],
   flags: FlagName[],
   max: number,
+  secretArgs?: true,
 ): ParsedCli {
   const values = { ...valuesOf(program, GLOBAL), ...valuesOf(command, flags) }
   const args = command.args
   if (!values.help && !values.version && args.length > max) {
     const name = `reeval ${path.join(' ')}`
+    const got = secretArgs ? `got ${args.length}` : `got ${args.join(' ')}`
     throw new UsageError(
       max === 0
-        ? `${name} takes no arguments (got ${args.join(' ')})`
-        : `${name} takes at most ${max} argument${max === 1 ? '' : 's'} (got ${args.join(' ')})`,
+        ? `${name} takes no arguments (${got})`
+        : `${name} takes at most ${max} argument${max === 1 ? '' : 's'} (${got})`,
     )
   }
   return { positionals: [...path, ...args], values }
@@ -141,7 +155,7 @@ function valuesOf(command: Command, flags: FlagName[]): Flags {
 }
 
 /** Commander's error, in reeval's words, naming the command whose flag it is. */
-function usageError(error: CommanderError, command: string): UsageError {
+function usageError(error: CommanderError, command: string, secretArgs?: true): UsageError {
   const text = error.message.replace(/^error: /, '')
   const [first = ''] = text.split('\n')
   if (error.code === 'commander.unknownOption') {
@@ -162,6 +176,9 @@ function usageError(error: CommanderError, command: string): UsageError {
       return new UsageError(
         `--${long} isn't an option of ${command}. ${instead ? `${instead}.` : 'Run reeval --help.'}`,
       )
+    }
+    if (secretArgs) {
+      return new UsageError(`${command} has no such option. Run reeval --help.`)
     }
     const shown = arg.replace(/\r/g, '\\r').replace(/\n/g, '\\n')
     return new UsageError(

@@ -239,6 +239,24 @@ async function run(argv: string[]): Promise<number> {
     return login.whoamiCommand(values, io)
   }
   const configPath = configPathFor(values.config)
+  if (command === 'cloud') {
+    const [area, ...args] = filters
+    if (area !== 'secrets' && area !== 'provider') {
+      throw new UsageError(
+        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets or reeval cloud provider?`,
+      )
+    }
+    loadEnvFiles(configPath)
+    const cloud = await import('./cloud-secrets.ts')
+    const io = {
+      out: (s: string) => console.log(s),
+      readValue: cloud.readSecretValue,
+      projectDir: cloud.projectDirFor(configPath),
+    }
+    return area === 'secrets'
+      ? cloud.secretsCommand(values, args, io)
+      : cloud.providerCommand(values, args, io)
+  }
   if (command === 'image') {
     if (filters[0] === 'list') return imageListCommand(values, configPath, filters.slice(1))
     if (filters[0] === 'clean') return imageCleanCommand(values, configPath)

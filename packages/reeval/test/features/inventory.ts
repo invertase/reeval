@@ -453,6 +453,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'cloud.secrets',
+    area: 'Config and selection',
+    name: "`reeval cloud secrets set|delete|list` and `reeval cloud provider <provider> set|delete` and `list` against the cloud platform with the stored sign-in: a secret's `--mode` (`brokered`, which needs `--host`, `sandbox` or `readable`), a provider key for the org or, with `--project`, the project in `.reeval/project.json`; the value comes from stdin, a hidden prompt or `--from-env`, never the command line, and is never printed",
+    unit: ['reeval/test/cloud-secrets.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",

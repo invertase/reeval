@@ -47,7 +47,7 @@ export const FLAGS = {
   trait: { type: 'string', multiple: true },
   http: { type: 'boolean' },
   port: { type: 'string' },
-  host: { type: 'string' },
+  host: { type: 'string', multiple: true },
   open: { type: 'boolean' },
   out: { type: 'string' },
   scratch: { type: 'boolean' },
@@ -80,6 +80,9 @@ export const FLAGS = {
   bundle: { type: 'string' },
   cloud: { type: 'boolean' },
   local: { type: 'boolean' },
+  mode: { type: 'string' },
+  'from-env': { type: 'boolean' },
+  project: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -103,6 +106,8 @@ export type CommandSpec = {
   positionals: number
   /** Its lines in `reeval --help`, the first naming the command; empty when it has none. */
   help: string
+  /** Its arguments may hold a secret, so a refusal counts them instead of repeating them. */
+  secretArgs?: true
   sub?: Record<string, Omit<CommandSpec, 'sub'>>
 }
 
@@ -265,6 +270,50 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 the token is REEVAL_TOKEN or reeval login's; exit 2 when signed out
                                 or the platform refuses it
     --json                      As JSON: url, user and tokenFrom`,
+  },
+  cloud: {
+    flags: [],
+    positionals: 0,
+    help: '',
+    sub: {
+      secrets: {
+        flags: ['mode', 'host', 'from-env', 'json'],
+        positionals: 3,
+        secretArgs: true,
+        help: `
+  reeval cloud secrets set <name>
+                                Set an eval secret in the cloud project (.reeval/project.json, else the
+                                default one), as an admin of it; the value comes from stdin or a
+                                hidden prompt, never the command line. Without --mode or --host an
+                                existing secret keeps its mode and hosts
+    --mode <mode>               brokered (the default): the agent and the eval code get a placeholder,
+                                swapped for the value only on HTTPS requests to its hosts; sandbox:
+                                only the agent's sandbox gets the value; readable: both get it
+    --host <host>               A host a brokered secret may be sent to (api.example.com or
+                                *.example.com); required for brokered, repeat it for more
+    --from-env                  Take the value from this machine's environment variable of that name
+  reeval cloud secrets delete <name>
+                                Delete an eval secret from the cloud project
+  reeval cloud secrets list     The cloud project's secrets: name, mode, hosts, version, who updated
+                                it and when; never a value. --json as JSON`,
+      },
+      provider: {
+        flags: ['project', 'json'],
+        positionals: 3,
+        secretArgs: true,
+        help: `
+  reeval cloud provider <provider> set
+                                Set the org's key for an AI SDK provider (openai, anthropic, google,
+                                xai, mistral, groq, deepseek, cohere, perplexity, fireworks,
+                                togetherai, cerebras or deepinfra), which the cloud platform's model
+                                calls use; the key comes from stdin or a hidden prompt
+    --project                   Set or delete the cloud project's own key, which overrides the org's
+  reeval cloud provider <provider> delete
+                                Delete the provider's key (--project: the project's override)
+  reeval cloud provider list    The org's provider keys and each project's override: last 4
+                                characters, version, who updated it and when. --json as JSON`,
+      },
+    },
   },
   bundle: {
     flags: ['profile', 'runs', 'tag', 'trait', 'out'],
@@ -715,6 +764,8 @@ function checkOne(
       args = args.slice(1)
     } else if (command === 'image')
       return 'reeval image needs a subcommand: reeval image build, list or clean'
+    else if (command === 'cloud')
+      return 'reeval cloud needs a subcommand: reeval cloud secrets or provider'
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []
@@ -771,7 +822,7 @@ export function commandSummary(): string[] {
   const line = (name: string, spec: Omit<CommandSpec, 'sub'>) =>
     `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ('optional' in FLAGS[f] && FLAGS[f].optional ? ' [v]' : ' <v>') : ''}`).join(' ')}` : ''}`
   return Object.entries(COMMANDS).flatMap(([name, spec]) => [
-    ...(name === 'image' ? [] : [line(name, spec)]),
+    ...(name === 'image' || name === 'cloud' ? [] : [line(name, spec)]),
     ...Object.entries(spec.sub ?? {}).map(([sub, s]) => line(`${name} ${sub}`, s)),
   ])
 }
