@@ -15,7 +15,7 @@ import type { PlanDocument } from './plan.ts'
 import { stripCredentials } from './redact.ts'
 import { sandboxKind } from './sandbox/kinds.ts'
 import { plural } from './text.ts'
-import type { ResolvedConfig, ResolvedProfile } from './types.ts'
+import type { ResolvedConfig, ResolvedHistory, ResolvedProfile } from './types.ts'
 
 /** The platform's URL, as the cloud run and `reeval login` read it. */
 export const CLOUD_URL_VAR = 'REEVAL_CLOUD_URL'
@@ -294,8 +294,11 @@ export type CloudRunOptions = {
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
   follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
-  /** `--download`: once the run ends, its files go into this project's `.reeval/`. */
-  download?: { root: string }
+  /**
+   * `--download`: once the run ends, its files go into this project as a run here leaves them,
+   * a recorded run's into `history`; `profile` is the profile that picked it.
+   */
+  download?: { root: string; history: ResolvedHistory; profile?: string }
   env?: NodeJS.ProcessEnv
 }
 
@@ -373,16 +376,22 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   }
   if (detached) {
     const again = options.download
-      ? `reeval attach --download ${displayUrl(events.href)} follows it again and downloads its files once it ends`
+      ? `reeval attach --download${options.download.profile === undefined ? '' : ` --profile ${options.download.profile}`} ${displayUrl(events.href)} follows it again and downloads its files once it ends`
       : `${reattach} follows it again`
     log(`Cloud run ${runId} goes on: ${again}`)
     return INTERRUPTED
   }
   if (options.download) {
     const { downloadAfter, downloadCloudFiles } = await import('./cloud-files.ts')
-    const { root } = options.download
+    const { root, history } = options.download
     const lines = await downloadAfter(code, runId, () =>
-      downloadCloudFiles({ cloudRunId: runId, url: runUrl('/artifacts/files.tar.gz'), auth, root }),
+      downloadCloudFiles({
+        cloudRunId: runId,
+        url: runUrl('/artifacts/files.tar.gz'),
+        auth,
+        root,
+        history,
+      }),
     )
     for (const line of lines) log(line)
   }
