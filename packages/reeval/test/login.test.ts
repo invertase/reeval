@@ -284,8 +284,10 @@ esac
     const p = await platform({ pending: 0 })
     try {
       const bin = tempDir('login-bin')
-      writeFileSync(join(bin, 'secret-tool'), '#!/bin/sh\nexit 1\n')
-      chmodSync(join(bin, 'secret-tool'), 0o755)
+      for (const tool of ['secret-tool', 'security']) {
+        writeFileSync(join(bin, tool), '#!/bin/sh\nexit 1\n')
+        chmodSync(join(bin, tool), 0o755)
+      }
       const m = machine(p.base, {
         REEVAL_NO_KEYCHAIN: '',
         DBUS_SESSION_BUS_ADDRESS: 'unix:path=/fake',
