@@ -369,14 +369,28 @@ esac
     }
   })
 
-  test("reads REEVAL_CLOUD_URL from the project's .env, and exits 2 without it", async () => {
+  test("an unset REEVAL_CLOUD_URL is https://cloud.reeval.ai, and the project's .env overrides it", async () => {
     const p = await platform({ pending: 0 })
     try {
       const m = machine(p.base)
       delete m.env.REEVAL_CLOUD_URL
-      const none = await runCli(tempDir('login-cwd'), ['login'], { env: m.env })
-      assert.equal(none.code, 2)
-      assert.match(none.stderr, /reeval login needs REEVAL_CLOUD_URL, the cloud platform's URL/)
+      const none = await runCli(tempDir('login-cwd'), ['logout'], { env: m.env })
+      assert.equal(none.code, 0, none.stdout + none.stderr)
+      assert.match(none.stdout, /Not signed in to https:\/\/cloud\.reeval\.ai with reeval login/)
+      const bad = await runCli(tempDir('login-cwd'), ['login'], {
+        env: { ...m.env, REEVAL_CLOUD_URL: 'ftp://platform.test' },
+      })
+      assert.equal(bad.code, 2)
+      assert.match(
+        bad.stderr,
+        /REEVAL_CLOUD_URL is an http or https URL \(got ftp:\/\/platform\.test\)/,
+      )
+      const creds = await runCli(tempDir('login-cwd'), ['whoami'], {
+        env: { ...m.env, REEVAL_CLOUD_URL: 'https://u:secret@platform.test' },
+      })
+      assert.equal(creds.code, 2)
+      assert.match(creds.stderr, /can't carry a user name or password/)
+      assert.ok(!creds.stderr.includes('secret@'))
       const dir = tempDir('login-project')
       writeFileSync(join(dir, '.env'), `REEVAL_CLOUD_URL=${p.base}\n`)
       const fromEnv = await runCli(dir, ['login'], { env: m.env })

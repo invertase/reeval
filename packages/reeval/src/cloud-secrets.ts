@@ -6,7 +6,6 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Flags } from './cli-spec.ts'
 import {
-  CLOUD_URL_VAR,
   type CloudAuth,
   CloudError,
   cloudAuth,
@@ -79,12 +78,9 @@ export type SecretsIo = {
 
 type Target = { base: URL; auth: CloudAuth; orgId: string; projectId: string }
 
-async function target(command: string, io: SecretsIo): Promise<Target> {
+async function target(io: SecretsIo): Promise<Target> {
   const env = io.env ?? process.env
-  const base = cloudUrl(
-    env,
-    `reeval ${command} needs ${CLOUD_URL_VAR}, the cloud platform's URL: set it, then reeval login signs in.`,
-  )
+  const base = cloudUrl(env)
   const file = join(io.projectDir ?? resolve('.'), '.reeval', 'project.json')
   let linked: { orgId?: unknown; projectId?: unknown } | null = null
   try {
@@ -220,7 +216,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   const env = io.env ?? process.env
   if (action === 'list') {
     if (name !== undefined) throw new UsageError('reeval cloud secrets list takes no arguments')
-    const t = await target('cloud secrets list', io)
+    const t = await target(io)
     const { body } = await send<{ secrets?: Secret[] }>(t, secretsPath(t), {
       method: 'GET',
       what: 'list the secrets',
@@ -252,7 +248,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   if (action === 'delete') {
     const secret = checkName(name, 'cloud secrets delete')
     if (value !== undefined) throw new UsageError('reeval cloud secrets delete takes one name')
-    const t = await target('cloud secrets delete', io)
+    const t = await target(io)
     await send(t, secretsPath(t, secret), {
       method: 'DELETE',
       what: `delete ${secret}`,
@@ -267,7 +263,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   const secret = checkName(name, 'cloud secrets set')
   refuseArgv('cloud secrets set', value)
   const mode = modeOf(flags)
-  const t = await target('cloud secrets set', io)
+  const t = await target(io)
   if (!mode.mode) {
     const { body } = await send<{ secrets?: Secret[] }>(t, secretsPath(t), {
       method: 'GET',
@@ -320,7 +316,7 @@ export async function providerCommand(
   const [provider, action, key] = args
   if (provider === 'list') {
     if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
-    const t = await target('cloud provider list', io)
+    const t = await target(io)
     const { body } = await send<{ providers?: ProviderKey[] }>(t, providerPath(t), {
       method: 'GET',
       what: 'list the provider keys',
@@ -363,7 +359,7 @@ export async function providerCommand(
     throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
   }
   const command = `cloud provider ${provider} ${action}`
-  const t = await target(command, io)
+  const t = await target(io)
   const scope = flags.project ? t.projectId : t.orgId
   if (action === 'delete') {
     if (key !== undefined) throw new UsageError(`reeval ${command} takes no value`)

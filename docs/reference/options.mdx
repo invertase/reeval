@@ -818,7 +818,7 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 
 ## `cloud`
 
-`cloud` runs `reeval run` in the cloud at [`REEVAL_CLOUD_URL`](/reference/environment-variables#reevalcloudurl).
+`cloud` runs `reeval run` in the cloud at [`REEVAL_CLOUD_URL`](/reference/environment-variables#reevalcloudurl), `https://cloud.reeval.ai` when that variable is unset.
 
 <Property name="cloud" type="boolean" optional>
   Default `false`. `--cloud` and `--local` take precedence, and a profile may [replace it](/reference/profiles#cloud). A plan the platform can't run, such as one with `tart()` or files a bundle can't carry, runs on this machine.
