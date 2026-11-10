@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.24.0](https://github.com/reeval-ai/reeval/compare/v0.23.0...v0.24.0) (2026-11-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** download a cloud run's files as a run here leaves them ([#915](https://github.com/reeval-ai/reeval/issues/915))
+* **cli:** rename the hosted run option to cloud ([#908](https://github.com/reeval-ai/reeval/issues/908))
+
+### Features
+
+* **cli:** add reeval cloud secrets and reeval cloud provider ([#911](https://github.com/reeval-ai/reeval/issues/911)) ([f5717d3](https://github.com/reeval-ai/reeval/commit/f5717d35510610340beefb75a2b009156d2b80b3))
+* **cli:** add reeval login, logout and whoami for the cloud platform ([#910](https://github.com/reeval-ai/reeval/issues/910)) ([392bd05](https://github.com/reeval-ai/reeval/commit/392bd0551c792276751797f5b3b549a9378c32e8))
+* **cli:** default an unset REEVAL_CLOUD_URL ([#925](https://github.com/reeval-ai/reeval/issues/925)) ([475affc](https://github.com/reeval-ai/reeval/commit/475affcc1c297d5a89c0ce23949261a1381e8e21))
+* **cli:** download a cloud run's files as a run here leaves them ([#915](https://github.com/reeval-ai/reeval/issues/915)) ([5e5b1ed](https://github.com/reeval-ai/reeval/commit/5e5b1edc22cdc0a2aefefa0defdb539faeff97fe))
+* **cli:** download a cloud run's files with --download ([#913](https://github.com/reeval-ai/reeval/issues/913)) ([fd8fcc7](https://github.com/reeval-ai/reeval/commit/fd8fcc70de9e4c6625741d3878e09796de6e4763))
+* **cli:** name where a recorded run landed in the run-end event ([#914](https://github.com/reeval-ai/reeval/issues/914)) ([c0298d1](https://github.com/reeval-ai/reeval/commit/c0298d13c57bf0003dfa49adfbae2414fa747af1))
+* **cli:** rename the hosted run option to cloud ([#908](https://github.com/reeval-ai/reeval/issues/908)) ([fdda569](https://github.com/reeval-ai/reeval/commit/fdda569c5fed5fd0f8643f0f49c0a73e0dd1059b))
+* **history:** add history.archive, which records each run as a zip beside its record ([#905](https://github.com/reeval-ai/reeval/issues/905)) ([007f7a5](https://github.com/reeval-ai/reeval/commit/007f7a51abd45245a8de479eed9bae93ddf7ac52))
+* **history:** add history.debugArchive, which zips a run's local debug data beside it ([#906](https://github.com/reeval-ai/reeval/issues/906)) ([49a0435](https://github.com/reeval-ai/reeval/commit/49a04356e6aade4cc8467c055e66826dc0df1ce5))
+* **secrets:** honor REEVAL_SECRETS_FILE modes and record secretWarnings ([#912](https://github.com/reeval-ai/reeval/issues/912)) ([7f59fdd](https://github.com/reeval-ai/reeval/commit/7f59fdda1f2651c147de1e19a047a926c68003f3))
+
+
+### Bug Fixes
+
+* **cli:** accept typesafe-ai in reeval cloud provider ([#916](https://github.com/reeval-ai/reeval/issues/916)) ([67d334c](https://github.com/reeval-ai/reeval/commit/67d334c41444c0cde4ad0a20102ab4074b6a2b75))
+
 ## [0.23.0](https://github.com/invertase/reeval/compare/v0.22.0...v0.23.0) (2026-11-08)
 
 
