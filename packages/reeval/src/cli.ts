@@ -243,6 +243,20 @@ async function run(argv: string[]): Promise<number> {
     return login.whoamiCommand(values, io)
   }
   const configPath = configPathFor(values.config)
+  if (command === 'link') {
+    loadEnvFiles(configPath)
+    const [{ linkCommand }, { projectDirFor }] = await Promise.all([
+      import('./link.ts'),
+      import('./cloud-project.ts'),
+    ])
+    return linkCommand(values, {
+      out: (s) => console.log(s),
+      input: process.stdin,
+      output: process.stdout,
+      interactive: !!process.stdin.isTTY && !!process.stdout.isTTY,
+      projectDir: projectDirFor(configPath),
+    })
+  }
   if (command === 'cloud') {
     const [area, ...args] = filters
     if (area !== 'secrets' && area !== 'provider') {
@@ -252,10 +266,11 @@ async function run(argv: string[]): Promise<number> {
     }
     loadEnvFiles(configPath)
     const cloud = await import('./cloud-secrets.ts')
+    const { projectDirFor } = await import('./cloud-project.ts')
     const io = {
       out: (s: string) => console.log(s),
       readValue: cloud.readSecretValue,
-      projectDir: cloud.projectDirFor(configPath),
+      projectDir: projectDirFor(configPath),
     }
     return area === 'secrets'
       ? cloud.secretsCommand(values, args, io)
@@ -1055,9 +1070,11 @@ async function cloudTarget(
   if (setup.recording) {
     console.log(dim("record: a cloud run isn't recorded into this machine's history"))
   }
+  const { linkedProject, projectDirFor } = await import('./cloud-project.ts')
   const exit = await cloud.runCloud({
     base,
     bundle: made,
+    project: await linkedProject(projectDirFor(configPath)),
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
     ...(flags.download && {

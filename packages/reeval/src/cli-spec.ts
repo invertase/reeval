@@ -82,7 +82,8 @@ export const FLAGS = {
   local: { type: 'boolean' },
   mode: { type: 'string' },
   'from-env': { type: 'boolean' },
-  project: { type: 'boolean' },
+  project: { type: 'string', optional: true },
+  org: { type: 'string' },
   download: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
@@ -227,7 +228,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 in the extracted project
     --cloud                     Run in the cloud at REEVAL_CLOUD_URL (https://cloud.reeval.ai when
                                 unset), as the config's cloud: true does: bundle the project,
-                                upload it, start the run and follow it as reeval attach does,
+                                upload it to the project reeval link linked (else the default
+                                one), start the run and follow it as reeval attach does,
                                 exiting with its exit code. A value that isn't an http or https
                                 URL, or one with a user name or password, exits 2. A plan the
                                 platform can't run (tart(), files a bundle can't carry) runs here,
@@ -287,6 +289,20 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 the token is REEVAL_TOKEN or reeval login's; exit 2 when signed out
                                 or the platform refuses it
     --json                      As JSON: url, user and tokenFrom`,
+  },
+  link: {
+    flags: ['org', 'project', 'yes'],
+    positionals: 0,
+    help: `
+  reeval link                   Link this project to a project on the cloud platform at
+                                REEVAL_CLOUD_URL, as reeval login signed in (or REEVAL_TOKEN): asks
+                                which org, when you're in more than one, and which project, then
+                                writes .reeval/project.json beside the config, where cloud runs and
+                                reeval cloud secrets and provider find it. Asks before replacing a
+                                link; without a terminal, the flags answer
+    --org <slug>                The org, by slug or id
+    --project <slug>            The project in it, by slug or id
+    -y, --yes                   Replace a link there is without asking`,
   },
   cloud: {
     flags: [],

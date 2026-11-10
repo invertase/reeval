@@ -209,7 +209,10 @@ async function platform(
     if (req.method === 'GET' && url.pathname === '/api/config') {
       return json(res, 200, { gatewayBaseUrl: null })
     }
-    if (req.method === 'POST' && url.pathname === '/api/runs') {
+    if (
+      req.method === 'POST' &&
+      (url.pathname === '/api/runs' || url.pathname === '/api/orgs/org_a/projects/proj_a/runs')
+    ) {
       declared = JSON.parse(body.toString())
       return json(res, 201, {
         runId: 'run_1',
@@ -332,6 +335,28 @@ describe('reeval run on the cloud platform', () => {
       })
       assert.equal(again.code, 0, again.stdout + again.stderr)
       assert.equal(p.seen.at(-1)?.auth, 'Bearer cloud-test-token', 'reeval attach sends it too')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('creates the run in the project reeval link linked', async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      mkdirSync(join(dir, '.reeval'), { recursive: true })
+      writeFileSync(
+        join(dir, '.reeval/project.json'),
+        JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+      )
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(
+        p.seen.filter((s) => s.method === 'POST' && s.path.endsWith('/runs')).map((s) => s.path),
+        ['/api/orgs/org_a/projects/proj_a/runs'],
+      )
     } finally {
       await p.close()
     }

@@ -459,6 +459,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/cloud-secrets.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.link',
+    area: 'Config and selection',
+    name: "`reeval link` with the stored sign-in (or `REEVAL_TOKEN`): picks the org (asked only when there's more than one) and a project in it, on a terminal or with `--org` and `--project` by slug or id, asks before replacing a link (`--yes` without a terminal), and writes their ids to `.reeval/project.json` beside the config, where `reeval run --cloud` creates its runs and `reeval cloud secrets` and `provider` read it; signed out, it says to run `reeval login` first",
+    unit: ['reeval/test/link.test.ts', 'reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'cloud.download',
     area: 'Config and selection',
     name: "`reeval attach --download <url>` and `reeval run --cloud --download`: once a cloud run ends, its files (records, attempt files and debug data) are downloaded with the bearer token and unpacked as a run here leaves them, from the project root: `.reeval/runs`, `.reeval/debug` and, for a recorded run, the project's own history folder (from its config and the profile, `--profile` on attach), where `reeval show`, `history`, `compare`, `query` and the studio read them; a file already there with other content stops it with exit 2 before anything is written, an entry anywhere else (another history folder included) or a link outside a snapshot with exit 3, a run with no files or no debug data says so; any other stream, a run on this machine, or `--profile` without `--download` is exit 2",

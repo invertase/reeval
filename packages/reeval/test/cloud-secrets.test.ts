@@ -394,7 +394,14 @@ describe('reeval cloud provider', () => {
       })
       assert.equal(gone.code, 2)
       assert.match(gone.stderr, /No openai key for proj_a/)
-      for (const r of [org, project, list, del]) {
+      const valued = await runCli(
+        dir,
+        ['cloud', 'provider', 'openai', 'set', '--project', 'sk-proj-given'],
+        { env, input: 'sk-proj-c3d4\n' },
+      )
+      assert.equal(valued.code, 2)
+      assert.match(valued.stderr, /--project takes no value in reeval cloud provider/)
+      for (const r of [org, project, list, del, valued]) {
         assert.ok(!/sk-org|sk-proj/.test(r.stdout + r.stderr), 'no key is printed')
       }
     } finally {

@@ -2,9 +2,9 @@
 // provider keys, set, deleted and listed with the stored sign-in. A value goes in and never comes
 // back out: it's read from stdin or a hidden prompt (or the local environment), never from the
 // command line, and no message quotes it.
-import { readFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import type { Flags } from './cli-spec.ts'
+import { linkedProject } from './cloud-project.ts'
 import {
   type CloudAuth,
   CloudError,
@@ -81,24 +81,8 @@ type Target = { base: URL; auth: CloudAuth; orgId: string; projectId: string }
 async function target(io: SecretsIo): Promise<Target> {
   const env = io.env ?? process.env
   const base = cloudUrl(env)
-  const file = join(io.projectDir ?? resolve('.'), '.reeval', 'project.json')
-  let linked: { orgId?: unknown; projectId?: unknown } | null = null
-  try {
-    linked = JSON.parse(await readFile(file, 'utf8'))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw new UsageError(`${file} isn't JSON with an orgId and a projectId`)
-    }
-  }
-  if (linked && (typeof linked.orgId !== 'string' || typeof linked.projectId !== 'string')) {
-    throw new UsageError(`${file} isn't JSON with an orgId and a projectId`)
-  }
-  return {
-    base,
-    auth: await cloudAuth(base, env),
-    orgId: (linked?.orgId as string | undefined) ?? DEFAULT_PROJECT.orgId,
-    projectId: (linked?.projectId as string | undefined) ?? DEFAULT_PROJECT.projectId,
-  }
+  const linked = await linkedProject(io.projectDir ?? resolve('.'))
+  return { base, auth: await cloudAuth(base, env), ...(linked ?? DEFAULT_PROJECT) }
 }
 
 const seg = encodeURIComponent
@@ -314,6 +298,11 @@ export async function providerCommand(
   io: SecretsIo,
 ): Promise<number> {
   const [provider, action, key] = args
+  // `--project` takes a value for reeval link, so here what follows it may be the key: the refusal
+  // doesn't repeat it.
+  if (flags.project) {
+    throw new UsageError('--project takes no value in reeval cloud provider: give it on its own')
+  }
   if (provider === 'list') {
     if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
     const t = await target(io)
@@ -359,11 +348,12 @@ export async function providerCommand(
     throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
   }
   const command = `cloud provider ${provider} ${action}`
+  const forProject = flags.project !== undefined
   const t = await target(io)
-  const scope = flags.project ? t.projectId : t.orgId
+  const scope = forProject ? t.projectId : t.orgId
   if (action === 'delete') {
     if (key !== undefined) throw new UsageError(`reeval ${command} takes no value`)
-    const path = `${providerPath(t, provider)}${flags.project ? `?projectId=${seg(t.projectId)}` : ''}`
+    const path = `${providerPath(t, provider)}${forProject ? `?projectId=${seg(t.projectId)}` : ''}`
     await send(t, path, {
       method: 'DELETE',
       what: `delete the ${provider} key`,
@@ -385,7 +375,7 @@ export async function providerCommand(
   const { status, body } = await send<{ provider?: ProviderKey }>(t, providerPath(t, provider), {
     method: 'PUT',
     what: `set the ${provider} key`,
-    body: { key: read, ...(flags.project && { projectId: t.projectId }) },
+    body: { key: read, ...(forProject && { projectId: t.projectId }) },
   })
   const saved = body?.provider
   if (!saved) throw new CloudError(`the cloud platform set the ${provider} key but didn't say how`)
@@ -450,7 +440,3 @@ export async function readSecretValue(what: string): Promise<string> {
     process.stderr.write('\n')
   }
 }
-
-/** Where `.reeval/project.json` is looked for: beside the config, else here. */
-export const projectDirFor = (configPath: string | undefined) =>
-  configPath ? dirname(configPath) : resolve('.')
