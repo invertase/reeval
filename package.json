@@ -39,7 +39,7 @@
     "reeval": "workspace:*",
     "rollup-plugin-license": "3.7.1",
     "spdx-expression-validate": "2.0.0",
-    "spdx-satisfies": "6.0.0",
+    "spdx-satisfies": "6.0.1",
     "typescript": "7.0.2"
   }
 }
