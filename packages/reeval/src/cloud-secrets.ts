@@ -4,7 +4,7 @@
 // command line, and no message quotes it.
 import { resolve } from 'node:path'
 import type { Flags } from './cli-spec.ts'
-import { linkedProject } from './cloud-project.ts'
+import { cloudScope, linkedProject } from './cloud-project.ts'
 import {
   type CloudAuth,
   CloudError,
@@ -46,9 +46,6 @@ const MAX_KEY_BYTES = 4 * 1024
 // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal escape sequences
 const ESCAPE_SEQUENCE = /\u001b(?:\[[0-?]*[ -/]*[@-~]|O.|[^\r\n\u0003\u0004])?/gu
 
-/** The project in `.reeval/project.json`, else the platform's default one. */
-export const DEFAULT_PROJECT = { orgId: 'org_default', projectId: 'proj_default' }
-
 type Who = { id?: string; email?: string } | null
 type Secret = {
   name: string
@@ -76,13 +73,29 @@ export type SecretsIo = {
   projectDir?: string
 }
 
-type Target = { base: URL; auth: CloudAuth; orgId: string; projectId: string }
+type Target = { base: URL; auth: CloudAuth; orgId: string; projectId?: string }
 
-async function target(io: SecretsIo): Promise<Target> {
+/**
+ * The org, and the project when `project` is `'required'` or `--project` names one: `--org` and
+ * `--project`, else the link in `.reeval/project.json`.
+ */
+async function target(
+  io: SecretsIo,
+  flags: Flags,
+  command: string,
+  project: 'required' | 'optional',
+): Promise<Target> {
   const env = io.env ?? process.env
   const base = cloudUrl(env)
+  const auth = await cloudAuth(base, env)
   const linked = await linkedProject(io.projectDir ?? resolve('.'))
-  return { base, auth: await cloudAuth(base, env), ...(linked ?? DEFAULT_PROJECT) }
+  const get = async (path: string, what: string) => {
+    const answer = await request(new URL(path, base), { method: 'GET', what }, auth.headers)
+    if (!answer.ok) throw platformError(answer, what, auth)
+    return answer.body
+  }
+  const scope = await cloudScope({ flags, linked, get, command, project })
+  return { base, auth, ...scope }
 }
 
 const seg = encodeURIComponent
@@ -113,7 +126,7 @@ async function send<T>(
 }
 
 const secretsPath = (t: Target, name?: string) =>
-  `api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId)}/secrets${name ? `/${seg(name)}` : ''}`
+  `api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId ?? '')}/secrets${name ? `/${seg(name)}` : ''}`
 
 /** A value given on the command line lands in shell history and other processes can see it. */
 function refuseArgv(command: string, given: string | undefined): void {
@@ -200,7 +213,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   const env = io.env ?? process.env
   if (action === 'list') {
     if (name !== undefined) throw new UsageError('reeval cloud secrets list takes no arguments')
-    const t = await target(io)
+    const t = await target(io, flags, 'cloud secrets list', 'required')
     const { body } = await send<{ secrets?: Secret[] }>(t, secretsPath(t), {
       method: 'GET',
       what: 'list the secrets',
@@ -232,7 +245,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   if (action === 'delete') {
     const secret = checkName(name, 'cloud secrets delete')
     if (value !== undefined) throw new UsageError('reeval cloud secrets delete takes one name')
-    const t = await target(io)
+    const t = await target(io, flags, 'cloud secrets delete', 'required')
     await send(t, secretsPath(t, secret), {
       method: 'DELETE',
       what: `delete ${secret}`,
@@ -247,7 +260,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   const secret = checkName(name, 'cloud secrets set')
   refuseArgv('cloud secrets set', value)
   const mode = modeOf(flags)
-  const t = await target(io)
+  const t = await target(io, flags, 'cloud secrets set', 'required')
   if (!mode.mode) {
     const { body } = await send<{ secrets?: Secret[] }>(t, secretsPath(t), {
       method: 'GET',
@@ -298,16 +311,9 @@ export async function providerCommand(
   io: SecretsIo,
 ): Promise<number> {
   const [provider, action, key] = args
-  // `--project` takes a value for reeval link, so here what follows it may be the key: the refusal
-  // doesn't repeat it.
-  if (flags.project) {
-    throw new UsageError(
-      'reeval cloud provider takes --project with no value, after set or delete: reeval cloud provider <provider> set --project',
-    )
-  }
   if (provider === 'list') {
     if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
-    const t = await target(io)
+    const t = await target(io, flags, 'cloud provider list', 'optional')
     const { body } = await send<{ providers?: ProviderKey[] }>(t, providerPath(t), {
       method: 'GET',
       what: 'list the provider keys',
@@ -350,12 +356,12 @@ export async function providerCommand(
     throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
   }
   const command = `cloud provider ${provider} ${action}`
-  const forProject = flags.project !== undefined
-  const t = await target(io)
-  const scope = forProject ? t.projectId : t.orgId
+  const t = await target(io, flags, command, 'optional')
+  const forProject = t.projectId !== undefined
+  const scope = t.projectId ?? t.orgId
   if (action === 'delete') {
     if (key !== undefined) throw new UsageError(`reeval ${command} takes no value`)
-    const path = `${providerPath(t, provider)}${forProject ? `?projectId=${seg(t.projectId)}` : ''}`
+    const path = `${providerPath(t, provider)}${forProject ? `?projectId=${seg(t.projectId ?? '')}` : ''}`
     await send(t, path, {
       method: 'DELETE',
       what: `delete the ${provider} key`,

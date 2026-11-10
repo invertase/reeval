@@ -82,7 +82,7 @@ export const FLAGS = {
   local: { type: 'boolean' },
   mode: { type: 'string' },
   'from-env': { type: 'boolean' },
-  project: { type: 'string', optional: true },
+  project: { type: 'string' },
   org: { type: 'string' },
   download: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
@@ -310,40 +310,45 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: '',
     sub: {
       secrets: {
-        flags: ['mode', 'host', 'from-env', 'json'],
+        flags: ['mode', 'host', 'from-env', 'org', 'project', 'json'],
         positionals: 3,
         secretArgs: true,
         help: `
   reeval cloud secrets set <name>
-                                Set an eval secret in the cloud project (.reeval/project.json, else the
-                                default one), as an admin of it; the value comes from stdin or a
-                                hidden prompt, never the command line. Without --mode or --host an
-                                existing secret keeps its mode and hosts
+                                Set an eval secret in the cloud project reeval link linked, as an
+                                admin of it; the value comes from stdin or a hidden prompt, never
+                                the command line. Without --mode or --host an existing secret keeps
+                                its mode and hosts
     --mode <mode>               brokered (the default): the agent and the eval code get a placeholder,
                                 swapped for the value only on HTTPS requests to its hosts; sandbox:
                                 only the agent's sandbox gets the value; readable: both get it
     --host <host>               A host a brokered secret may be sent to (api.example.com or
                                 *.example.com); required for brokered, repeat it for more
     --from-env                  Take the value from this machine's environment variable of that name
+    --org <slug>                The org, by slug or id, instead of the linked one
+    --project <slug>            The project, by slug or id, instead of the linked one; required
+                                when nothing is linked
   reeval cloud secrets delete <name>
                                 Delete an eval secret from the cloud project
   reeval cloud secrets list     The cloud project's secrets: name, mode, hosts, version, who updated
                                 it and when; never a value. --json as JSON`,
       },
       provider: {
-        flags: ['project', 'json'],
+        flags: ['org', 'project', 'json'],
         positionals: 3,
         secretArgs: true,
         help: `
   reeval cloud provider <provider> set
-                                Set the org's key for an AI SDK provider (openai, anthropic, google,
-                                xai, mistral, groq, deepseek, cohere, perplexity, fireworks,
-                                togetherai, cerebras, deepinfra or typesafe-ai), which the cloud
-                                platform's model calls use; the key comes from stdin or a hidden
-                                prompt
-    --project                   Set or delete the cloud project's own key, which overrides the org's
+                                Set the linked org's key for an AI SDK provider (openai, anthropic,
+                                google, xai, mistral, groq, deepseek, cohere, perplexity,
+                                fireworks, togetherai, cerebras, deepinfra or typesafe-ai), which
+                                the cloud platform's model calls use; the key comes from stdin or a
+                                hidden prompt
+    --org <slug>                The org, by slug or id, instead of the linked one; required when
+                                nothing is linked
+    --project <slug>            Set or delete this project's own key, which overrides the org's
   reeval cloud provider <provider> delete
-                                Delete the provider's key (--project: the project's override)
+                                Delete the provider's key (--project: that project's override)
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON`,
       },

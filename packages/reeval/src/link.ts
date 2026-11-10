@@ -8,17 +8,21 @@ import { createInterface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
 import type { Flags } from './cli-spec.ts'
 import {
+  byName,
   type LinkedProject,
+  label,
   linkedProject,
+  listOrgs,
+  listProjects,
+  named,
+  type Org,
+  type Project,
   projectFile,
   writeLinkedProject,
 } from './cloud-project.ts'
-import { CloudError, cloudUrl, platformError, refusedHint, request } from './cloud-run.ts'
+import { cloudUrl, platformError, refusedHint, request } from './cloud-run.ts'
 import { UsageError } from './errors.ts'
 import { CLOUD_TOKEN_VAR, cloudToken } from './login/credentials.ts'
-
-type Org = { id: string; slug: string; name: string }
-type Project = { id: string; slug: string; name: string }
 
 export type LinkIo = {
   out: (line: string) => void
@@ -34,48 +38,11 @@ export type LinkIo = {
 }
 
 const shown = (base: URL) => base.href.replace(/\/$/, '')
-const label = (x: { name: string; slug: string }) =>
-  x.name && x.name !== x.slug ? `${x.name} (${x.slug})` : x.slug
 
 /** An answer by number, id or slug; the empty answer takes the first. */
 function pick<T extends Org | Project>(items: T[], answer: string): T | undefined {
   if (!answer) return items[0]
   return (/^\d+$/.test(answer) && items[Number(answer) - 1]) || byName(items, answer)
-}
-
-/** The one with this id, else this slug (in any case). */
-const byName = <T extends Org | Project>(items: T[], value: string) =>
-  items.find((x) => x.id === value) ??
-  items.find((x) => x.slug.toLowerCase() === value.toLowerCase())
-
-/** The platform's list, keeping the entries with an id; a slug or name it lacks is the id. */
-function listOf<T extends Org | Project>(
-  body: unknown,
-  key: 'orgs' | 'projects',
-  what: string,
-): T[] {
-  const list = (body as Record<string, unknown> | null)?.[key]
-  if (!Array.isArray(list)) throw new CloudError(`the cloud platform didn't list ${what}`)
-  return list.flatMap((x: { id?: unknown; slug?: unknown; name?: unknown }) =>
-    typeof x?.id === 'string' && x.id
-      ? [
-          {
-            id: x.id,
-            slug: typeof x.slug === 'string' && x.slug ? x.slug : x.id,
-            name: typeof x.name === 'string' ? x.name : '',
-          } as T,
-        ]
-      : [],
-  )
-}
-
-/** The one `named` by id or slug, else exit 2 listing them. */
-function named<T extends Org | Project>(items: T[], flag: string, value: string, where: string): T {
-  const found = byName(items, value)
-  if (found) return found
-  throw new UsageError(
-    `${where} has no ${flag} ${value}: pass --${flag} with one of ${items.map((x) => x.slug).join(', ')}`,
-  )
 }
 
 /** `reeval link`: picks an org and a project on the platform and writes `.reeval/project.json`. */
@@ -139,7 +106,7 @@ export async function linkCommand(flags: Flags, io: LinkIo): Promise<number> {
   }
 
   try {
-    const orgs = listOf<Org>(await get('api/orgs', 'list your orgs'), 'orgs', 'your orgs')
+    const orgs = await listOrgs(get)
     if (!orgs.length) {
       throw new UsageError(
         `You aren't in any org on ${shown(base)}: ask an admin of one to add you.`,
@@ -149,10 +116,7 @@ export async function linkCommand(flags: Flags, io: LinkIo): Promise<number> {
     const projectsOf = (org: Org) => {
       let projects = listed.get(org.id)
       if (!projects) {
-        const what = `the projects in ${org.slug}`
-        projects = get(`api/orgs/${encodeURIComponent(org.id)}/projects`, `list ${what}`).then(
-          (body) => listOf<Project>(body, 'projects', what),
-        )
+        projects = listProjects(get, org)
         listed.set(org.id, projects)
       }
       return projects

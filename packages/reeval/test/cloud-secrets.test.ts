@@ -58,6 +58,17 @@ async function platform(options: { admin?: boolean } = {}) {
     if (write && options.admin === false) {
       return fail(res, 403, 'forbidden', 'Only an admin of the project can change its secrets.')
     }
+    if (req.method === 'GET' && url.pathname === '/api/orgs') {
+      return json(res, 200, { orgs: [{ id: 'org_a', slug: 'acme', name: 'ACME', role: 'admin' }] })
+    }
+    if (req.method === 'GET' && url.pathname === '/api/orgs/org_a/projects') {
+      return json(res, 200, {
+        projects: [
+          { id: 'proj_a', orgId: 'org_a', slug: 'app', name: 'App' },
+          { id: 'proj_b', orgId: 'org_a', slug: 'beta', name: 'Beta' },
+        ],
+      })
+    }
     const s = /^\/api\/orgs\/([^/]+)\/projects\/([^/]+)\/secrets(?:\/([^/]+))?$/.exec(url.pathname)
     if (s) {
       const [, org, project, name] = s
@@ -343,13 +354,56 @@ describe('reeval cloud secrets', () => {
     }
   })
 
-  test('without .reeval/project.json, uses the default project', async () => {
+  test('without .reeval/project.json, takes --org and --project, by slug or id, anywhere', async () => {
     const p = await platform()
     try {
       const { env } = linked(p.base)
-      const r = await runCli(tempDir('cloud-unlinked'), ['cloud', 'secrets', 'list'], { env })
+      const dir = tempDir('cloud-unlinked')
+      const bare = await runCli(dir, ['cloud', 'secrets', 'list'], { env })
+      assert.equal(bare.code, 2)
+      assert.match(
+        bare.stderr,
+        /nothing is linked here: run reeval link, or pass --org and --project/,
+      )
+      const noOrg = await runCli(dir, ['cloud', 'secrets', 'list', '--project', 'app'], { env })
+      assert.equal(noOrg.code, 2)
+      assert.match(noOrg.stderr, /--project needs --org in reeval cloud secrets list/)
+      const noProject = await runCli(dir, ['cloud', 'secrets', 'list', '--org', 'acme'], { env })
+      assert.equal(noProject.code, 2)
+      assert.match(noProject.stderr, /--org needs --project in reeval cloud secrets list/)
+      const unknown = await runCli(
+        dir,
+        ['cloud', 'secrets', 'list', '--org', 'acme', '--project', 'nope'],
+        { env },
+      )
+      assert.equal(unknown.code, 2)
+      assert.match(
+        unknown.stderr,
+        /ACME \(acme\) has no project nope: pass --project with one of app, beta/,
+      )
+      for (const args of [
+        ['cloud', 'secrets', 'list', '--org', 'acme', '--project', 'app'],
+        ['cloud', 'secrets', '--org=org_a', 'list', '--project', 'APP'],
+        ['cloud', 'secrets', '--project', 'proj_a', 'list', '--org', 'ACME'],
+      ]) {
+        const r = await runCli(dir, args, { env })
+        assert.equal(r.code, 0, `${args.join(' ')}: ${r.stderr}`)
+        assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/projects/proj_a/secrets')
+      }
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--project names another project in the linked org', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const r = await runCli(dir, ['cloud', 'secrets', 'delete', 'TOKEN', '--project', 'beta'], {
+        env,
+      })
       assert.equal(r.code, 2)
-      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_default/projects/proj_default/secrets')
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/projects/proj_b/secrets/TOKEN')
     } finally {
       await p.close()
     }
@@ -368,10 +422,11 @@ describe('reeval cloud provider', () => {
       assert.equal(org.code, 0, org.stderr)
       assert.match(org.stdout, /Added the openai key for org_a \(…a1b2\), version 1\./)
       assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'sk-org-a1b2' })
-      const project = await runCli(dir, ['cloud', 'provider', 'openai', 'set', '--project'], {
-        env,
-        input: 'sk-proj-c3d4',
-      })
+      const project = await runCli(
+        dir,
+        ['cloud', 'provider', 'openai', 'set', '--project', 'app'],
+        { env, input: 'sk-proj-c3d4' },
+      )
       assert.equal(project.code, 0, project.stderr)
       assert.match(project.stdout, /Added the openai key for proj_a \(…c3d4\), version 1\./)
       assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), {
@@ -385,25 +440,40 @@ describe('reeval cloud provider', () => {
       assert.match(list.stdout, /openai\s+the org\s+…a1b2\s+1/)
       assert.match(list.stdout, /openai\s+proj_a\s+…c3d4\s+1/)
 
-      const del = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project'], { env })
+      const del = await runCli(dir, ['cloud', 'provider', '--project', 'app', 'openai', 'delete'], {
+        env,
+      })
       assert.equal(del.code, 0, del.stderr)
       assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openai?projectId=proj_a')
       assert.match(del.stdout, /Deleted the openai key for proj_a\./)
-      const gone = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project'], {
+      const gone = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project=APP'], {
         env,
       })
       assert.equal(gone.code, 2)
       assert.match(gone.stderr, /No openai key for proj_a/)
-      const valued = await runCli(
-        dir,
-        ['cloud', 'provider', 'openai', 'set', '--project', 'sk-proj-given'],
-        { env, input: 'sk-proj-c3d4\n' },
-      )
-      assert.equal(valued.code, 2)
-      assert.match(valued.stderr, /takes --project with no value, after set or delete/)
-      for (const r of [org, project, list, del, valued]) {
+      for (const r of [org, project, list, del]) {
         assert.ok(!/sk-org|sk-proj/.test(r.stdout + r.stderr), 'no key is printed')
       }
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('without .reeval/project.json, takes the org from --org', async () => {
+    const p = await platform()
+    try {
+      const { env } = linked(p.base)
+      const dir = tempDir('cloud-unlinked')
+      const bare = await runCli(dir, ['cloud', 'provider', 'list'], { env })
+      assert.equal(bare.code, 2)
+      assert.match(bare.stderr, /nothing is linked here: run reeval link, or pass --org$/m)
+      const r = await runCli(dir, ['cloud', 'provider', 'openai', 'set', '--org', 'acme'], {
+        env,
+        input: 'sk-org-a1b2\n',
+      })
+      assert.equal(r.code, 0, r.stderr)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openai')
+      assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'sk-org-a1b2' })
     } finally {
       await p.close()
     }
