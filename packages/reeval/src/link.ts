@@ -45,7 +45,8 @@ function pick<T extends Org | Project>(items: T[], answer: string): T | undefine
 
 /** The one with this id, else this slug (in any case). */
 const byName = <T extends Org | Project>(items: T[], value: string) =>
-  items.find((x) => x.id === value) ?? items.find((x) => x.slug === value.toLowerCase())
+  items.find((x) => x.id === value) ??
+  items.find((x) => x.slug.toLowerCase() === value.toLowerCase())
 
 /** The platform's list, keeping the entries with an id; a slug or name it lacks is the id. */
 function listOf<T extends Org | Project>(

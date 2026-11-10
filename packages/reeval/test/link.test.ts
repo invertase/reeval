@@ -209,6 +209,22 @@ describe('reeval link without a terminal', () => {
     }
   })
 
+  test('a slug matches in any case, as the platform has it or as typed', async () => {
+    const MIXED = { id: 'org_mixed', slug: 'Mixed', name: 'Mixed', role: 'owner' }
+    const p = await platform({
+      orgs: [ACME, MIXED],
+      projects: { org_mixed: [project('org_mixed', 'evals', 'Evals')] },
+    })
+    try {
+      const dir = tempDir('link')
+      const r = await link(p.base, dir, { org: 'mixed', project: 'EVALS' })
+      assert.equal(r.code, 0, r.error?.message)
+      assert.deepEqual(linked(dir), { orgId: 'org_mixed', projectId: 'proj_evals' })
+    } finally {
+      await p.close()
+    }
+  })
+
   test('refuses to replace another link without --yes, and replaces it with it', async () => {
     const p = await platform()
     try {
