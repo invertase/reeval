@@ -993,6 +993,7 @@ describe("a cloud run's files, downloaded with --download", () => {
       } else {
         assert.equal(folded.code, 0, folded.stdout + folded.stderr)
       }
+      p.serve((machine) => machine)
       const elsewhere = tempDir('cloud-elsewhere')
       const { renameSync } = await import('node:fs')
       renameSync(join(dir, '.reeval/runs'), join(elsewhere, 'runs'))
