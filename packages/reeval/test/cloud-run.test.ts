@@ -54,7 +54,8 @@ type Seen = { method: string; path: string; auth: string | undefined }
 
 /**
  * The platform machine's files of the run, from the project root it extracted the bundle into:
- * its `.reeval/runs` and `.reeval/debug`, and the paths the run-end event's `recorded` names.
+ * its `.reeval/runs` and `.reeval/debug` with their directory entries, and the paths the run-end
+ * event's `recorded` names, each path once.
  */
 function machineFiles(tmp: string, lines: string[]): TarEntry[] {
   const find = (dir: string, depth: number): string | null => {
@@ -73,7 +74,9 @@ function machineFiles(tmp: string, lines: string[]): TarEntry[] {
   const end = lines
     .map((l) => JSON.parse(l) as { type: string; recorded?: Record<string, string | null> })
     .find((e) => e.type === 'run-end')
-  const recorded = Object.values(end?.recorded ?? {}).filter((p): p is string => !!p)
+  const recorded = Object.values(end?.recorded ?? {}).filter(
+    (p): p is string => !!p && p !== '.reeval' && !/^\.reeval\/(runs|debug)(\/|$)/.test(p),
+  )
   return [
     ...(existsSync(join(reeval, 'runs')) ? readTreeSync(join(reeval, 'runs'), '.reeval/runs') : []),
     ...(existsSync(join(reeval, 'debug'))
@@ -613,6 +616,12 @@ describe("a cloud run's files, downloaded with --download", () => {
         ),
       )
       assert.ok(served.some((e) => e.type === 'file' && e.path.startsWith('.reeval/debug/')))
+      for (const d of ['.reeval/runs', `.reeval/runs/${runId}`, `${folder}/${runId}`]) {
+        assert.ok(
+          served.some((e) => e.type === 'dir' && e.path === d),
+          `a directory entry ${d}`,
+        )
+      }
       for (const e of served) {
         const here = join(dir, e.path)
         if (e.type === 'file') assert.ok(readFileSync(here).equals(e.data), e.path)
@@ -728,6 +737,41 @@ describe("a cloud run's files, downloaded with --download", () => {
         assert.equal(got.code, 3, `${path}: ${got.stdout}${got.stderr}`)
         assert.match(got.stderr, /outside \.reeval\/runs, \.reeval\/debug and \., or a link/)
         assert.ok(!existsSync(join(dir, path)), path)
+      }
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a history folder inside .reeval/runs takes its run from there, each path once', async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace(
+          'defineConfig({',
+          `defineConfig({\n  record: 'always',\n  history: { store: { kind: 'local', dir: './.reeval/runs/recorded' } },`,
+        ),
+      )
+      let served: TarEntry[] = []
+      p.serve((machine) => {
+        served = machine
+        return machine
+      })
+      const r = await runCli(dir, ['run', '--cloud', '--download'], { env: env(p) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const paths = served.filter((e) => e.type !== 'dir').map((e) => e.path)
+      assert.equal(new Set(paths).size, paths.length, 'each path once')
+      const record = paths.find((e) => /^\.reeval\/runs\/recorded\/[^/]+\.json$/.test(e))
+      assert.ok(record, paths.join(', '))
+      assert.match(r.stdout, /recorded in \.reeval\/runs\/recorded\//)
+      // The history folder's own .gitignore and .gitattributes belong to no run.
+      assert.match(r.stdout, /Left out 2 files of cloud run run_1 that belong to no run/)
+      for (const e of served) {
+        if (e.type !== 'file' || /^\.reeval\/runs\/recorded\/\.git/.test(e.path)) continue
+        assert.ok(readFileSync(join(dir, e.path)).equals(e.data), e.path)
       }
     } finally {
       await p.close()

@@ -97,7 +97,9 @@ export async function downloadAfter(
 /**
  * Where an archive path lands: `outside` when it's outside `.reeval/runs`, `.reeval/debug` and the
  * history folder (`history`, its path from the project root, or null when it's outside it),
- * `other` for something in them that isn't a run's. A history folder at the project root holds
+ * `other` for something in them that isn't a run's. The longer of the two prefixes wins, so a
+ * history folder inside `.reeval/runs` holds its runs, and one at the project root or `.reeval`
+ * leaves `.reeval/runs` and `.reeval/debug` theirs. A history folder at the project root holds
  * only runs, so anything else there is outside.
  */
 function placed(
@@ -107,10 +109,14 @@ function placed(
   const parts = path.split('/')
   let area: Area
   let rest: string[]
-  if (parts[0] === '.reeval' && (parts[1] === 'runs' || parts[1] === 'debug')) {
+  const inHistory = history?.every((p, i) => parts[i] === p)
+  if (history && inHistory && history.length >= 2) {
+    area = 'history'
+    rest = parts.slice(history.length)
+  } else if (parts[0] === '.reeval' && (parts[1] === 'runs' || parts[1] === 'debug')) {
     area = parts[1]
     rest = parts.slice(2)
-  } else if (history && history.every((p, i) => parts[i] === p)) {
+  } else if (history && inHistory) {
     area = 'history'
     rest = parts.slice(history.length)
   } else return 'outside'
