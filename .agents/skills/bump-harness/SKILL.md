@@ -47,7 +47,7 @@ then names one cause.
    hash from a release page you didn't check). For an `@reeval/harness-*` package, bump its
    `package.json`, `src/version.ts`, the `workspace:` entry in `packages/reeval/package.json` and
    `HARNESS_PACKAGES` in `packages/sandbox-docker/src/image.ts` together, so the image tag changes
-   (OpenCode 2.2.5, [#779](https://github.com/invertase/reeval/pull/779), is a complete example). Refresh plan snapshots that
+   (OpenCode 2.2.5, [#779](https://github.com/reeval-ai/reeval/pull/779), is a complete example). Refresh plan snapshots that
    print the tag: `REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan`.
 3. **Claude Code's patch.** Bumping `@ai-sdk/harness-claude-code` fails `pnpm install`
    (`ERR_PNPM_UNUSED_PATCH`) until the patch moves. `claude-code-patch.mjs` says which case:

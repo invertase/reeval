@@ -14,7 +14,7 @@ description: >
 Your job is the user's first good run: a few small evals that pass `--dry-run`, the keys and
 Docker sorted, and a short explanation of what the evals show. Small and readable beats complete.
 For the authoring API in depth, the reeval skill (`skills/reeval/SKILL.md` in
-github.com/invertase/reeval) has it; this file has everything a first setup needs.
+github.com/reeval-ai/reeval) has it; this file has everything a first setup needs.
 
 Rules that hold throughout:
 

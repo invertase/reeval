@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 // One directory of a public repository, pinned to a full commit SHA so every run starts from the
 // same code. init: true gives the workspace a .git with one commit of that tree.
 const math = defineEnvironment('reeval-math', ({ git }) => ({
-  workspace: git('github:invertase/reeval', {
+  workspace: git('github:reeval-ai/reeval', {
     ref: 'f60f255edb8a110d42d2ae4e483bd8555168b854',
     path: 'examples/with-checks/project',
     init: true,

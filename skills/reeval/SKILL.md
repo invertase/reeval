@@ -11,13 +11,13 @@ description: >
 # reeval
 
 This skill is for writing evals with reeval, not for changing reeval itself: to contribute to
-the invertase/reeval repository, follow its root `AGENTS.md` instead.
+the reeval-ai/reeval repository, follow its root `AGENTS.md` instead.
 
 reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi,
 Codex, fx or Grok Build) on a task in a fresh Docker sandbox, then checks the result with
 deterministic assertions and an LLM judge. You write evals in TypeScript; `reeval run` runs them.
 
-The package and CLI are `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
+The package and CLI are `reeval`. Full docs: the `docs/` folder of github.com/reeval-ai/reeval (a docs.page
 site; its Reference tab has every option, flag and error).
 
 This file covers the common work: set up a project, write an eval with checks and a judge,

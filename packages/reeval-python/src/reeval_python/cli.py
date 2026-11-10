@@ -29,7 +29,7 @@ from importlib.metadata import version as dist_version
 from pathlib import Path
 from typing import Any
 
-REPO = "invertase/reeval"
+REPO = "reeval-ai/reeval"
 TIMEOUT = 60
 WINDOWS = sys.platform == "win32"
 

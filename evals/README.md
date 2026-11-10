@@ -65,10 +65,10 @@ variant has both.
 
 | Task | Merged as | Also checks for |
 |---|---|---|
-| `reeval analyze --vs none` | [#287](https://github.com/invertase/reeval/pull/287) | `--vs none` in `cli-spec.ts` |
-| Reasoning effort in `reeval query` | [#316](https://github.com/invertase/reeval/pull/316) | |
-| A `toHaveChanged` matcher | [#314](https://github.com/invertase/reeval/pull/314) | A feature fixture with a canary, listed in the inventory |
-| `question.model` as a cascading default | [#366](https://github.com/invertase/reeval/pull/366) | Refusal rows and a plan case |
+| `reeval analyze --vs none` | [#287](https://github.com/reeval-ai/reeval/pull/287) | `--vs none` in `cli-spec.ts` |
+| Reasoning effort in `reeval query` | [#316](https://github.com/reeval-ai/reeval/pull/316) | |
+| A `toHaveChanged` matcher | [#314](https://github.com/reeval-ai/reeval/pull/314) | A feature fixture with a canary, listed in the inventory |
+| `question.model` as a cascading default | [#366](https://github.com/reeval-ai/reeval/pull/366) | Refusal rows and a plan case |
 
 Every attempt must leave tests and docs changed, then pass `pnpm build`, `pnpm lint`, typecheck
 and `pnpm docs:check`. Last, the merged pull request's own tests are copied in, so the agent never
@@ -184,7 +184,7 @@ On the five single-run tasks the server changes little: the failure is in `summa
 every agent reads it. The history tasks are where it pays off, once its answers are short and
 right. Before is published reeval 0.9.0; after has the `failures` tool, the `history` fallback,
 the `check` cause in `flaky_cells` and trimmed `history` and `compare`
-([#371](https://github.com/invertase/reeval/pull/371)):
+([#371](https://github.com/reeval-ai/reeval/pull/371)):
 
 | Harness | reeval mcp | Pass, CLI only | Pass, with MCP | Tokens | Tool calls | Agent time |
 |---|---|---|---|---|---|---|

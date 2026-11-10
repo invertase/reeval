@@ -33,7 +33,7 @@ host, before any attempt, and names the commit every attempt starts from:
 …
   ➜  Record:    .reeval/runs/20261101T222141Z_….json
 
-  ℹ  workspace github:invertase/reeval#f60f255edb8a110d42d2ae4e483bd8555168b854:examples/with-checks/project at f60f255edb8a
+  ℹ  workspace github:reeval-ai/reeval#f60f255edb8a110d42d2ae4e483bd8555168b854:examples/with-checks/project at f60f255edb8a
   ◆  Running...
 
 with-git-workspace.eval.ts

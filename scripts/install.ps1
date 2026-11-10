@@ -1,7 +1,7 @@
 # Installs the reeval binary for Windows from a GitHub release, checked against the release's
 # SHA256SUMS, and adds its folder to your user PATH.
 #
-#   irm https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/reeval-ai/reeval/main/scripts/install.ps1 | iex
 #
 # REEVAL_VERSION     a version (0.13.0) instead of the newest release
 # REEVAL_INSTALL_DIR where to put reeval.exe (default %LOCALAPPDATA%\reeval\bin)
@@ -16,7 +16,7 @@
   $protocol = [Net.ServicePointManager]::SecurityProtocol
   [Net.ServicePointManager]::SecurityProtocol = $protocol -bor [Net.SecurityProtocolType]::Tls12
 
-  $repo = 'invertase/reeval'
+  $repo = 'reeval-ai/reeval'
   # Throws rather than exits: under `irm | iex`, exit would close the terminal.
   function Fail($message) { throw "reeval install: $message" }
   # REEVAL_DOWNLOAD may be a file:// directory, which Invoke-WebRequest doesn't read.

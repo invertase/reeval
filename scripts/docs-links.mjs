@@ -125,7 +125,7 @@ const FIXTURES = /(?:^|\/)(?:fixtures|replay|schema|test\/fixtures)\//
  * `reeval.ai/docs` one. Captures the path.
  */
 const DOC_URL =
-  /\bhttps?:\/\/(?:docs\.page\/invertase\/reeval(?:~[^/\s)"'`>]+)?|docs\.reeval\.ai(?:\/~[^/\s)"'`>]+)?|(?:www\.)?reeval\.ai\/docs)((?:\/[A-Za-z0-9_.\-%]+)*)\/?(?=[#?\s)"'`>\]]|$)/g
+  /\bhttps?:\/\/(?:docs\.page\/reeval-ai\/reeval(?:~[^/\s)"'`>]+)?|docs\.reeval\.ai(?:\/~[^/\s)"'`>]+)?|(?:www\.)?reeval\.ai\/docs)((?:\/[A-Za-z0-9_.\-%]+)*)\/?(?=[#?\s)"'`>\]]|$)/g
 
 /**
  * A problem for each of: a sidebar page whose path isn't its title's; a redirect that points at a path the sidebar doesn't own, or that

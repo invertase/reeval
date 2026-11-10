@@ -2,7 +2,7 @@
 // the file at the release's tag on GitHub. The tarball ships the README without the docs it
 // links to, and npm resolves a relative link against the package's directory, not the repo root.
 
-const REPO = 'https://github.com/invertase/reeval'
+const REPO = 'https://github.com/reeval-ai/reeval'
 
 /** `README.md`'s text as the tarball ships it for `version`. */
 export function packageReadme(text, version) {

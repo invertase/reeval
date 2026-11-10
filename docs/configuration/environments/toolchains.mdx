@@ -20,12 +20,12 @@ export const python = defineEnvironment('python', {
 
 The image needs `apt-get` and glibc. The `id` names the cell in results. Without it, the cell is `docker:python:3.12-slim`. For an image that already contains the harness, pass `image`, and reeval uses that image unchanged. For more information about every `docker()` option, see [Docker sandbox](/configuration/sandboxes/docker).
 
-For a runnable project, see [`with-python-image`](https://github.com/invertase/reeval/tree/main/examples/with-python-image).
+For a runnable project, see [`with-python-image`](https://github.com/reeval-ai/reeval/tree/main/examples/with-python-image).
 
 ## Choose another setup
 
-- To copy files into the image, build it from a Dockerfile that starts `FROM ${REEVAL_BASE}` with [`dockerfile`](/reference/options#docker). For a runnable project, see [`with-dockerfile`](https://github.com/invertase/reeval/tree/main/examples/with-dockerfile).
-- To add packages to the image, list shell commands in [`install`](/reference/options#docker), which combines with `from`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
+- To copy files into the image, build it from a Dockerfile that starts `FROM ${REEVAL_BASE}` with [`dockerfile`](/reference/options#docker). For a runnable project, see [`with-dockerfile`](https://github.com/reeval-ai/reeval/tree/main/examples/with-dockerfile).
+- To add packages to the image, list shell commands in [`install`](/reference/options#docker), which combines with `from`. For a runnable project, see [`with-docker-install`](https://github.com/reeval-ai/reeval/tree/main/examples/with-docker-install).
 
 ## Prebuild images
 

@@ -115,11 +115,11 @@ GET http://169.254.169.254:80/ → 403 · blocked: 169.254.169.254 is a loopback
 
 ## Choose another policy
 
-Pass `{ allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }` when the agent installs packages and needs a few more hosts, or `{ setup: 'allow-all', agent: 'deny-all' }` when only setup steps install them. Pass `'allow-all'` on the evaluations that need raw TCP or UDP, such as SSH, not in the `reeval.config.ts` file. For runnable projects, see [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist) and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all). For each policy's rules, see [`egress`](/reference/options#egress).
+Pass `{ allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }` when the agent installs packages and needs a few more hosts, or `{ setup: 'allow-all', agent: 'deny-all' }` when only setup steps install them. Pass `'allow-all'` on the evaluations that need raw TCP or UDP, such as SSH, not in the `reeval.config.ts` file. For runnable projects, see [`with-egress-allowlist`](https://github.com/reeval-ai/reeval/tree/main/examples/with-egress-allowlist) and [`with-egress-allow-all`](https://github.com/reeval-ai/reeval/tree/main/examples/with-egress-allow-all). For each policy's rules, see [`egress`](/reference/options#egress).
 
 ## Reference
 
 For the `egress` option's shape and where it is accepted, see [Options](/reference/options#egress). For the record's fields, see [Run record](/reference/run-record). For the allow-list constant, see [`DEFAULT_EGRESS_ALLOW`](/reference/authoring-api#defaultegressallow).
 
-For egress enforcement, see [Sandbox](/reference/glossary#sandbox). For a runnable project, see [`with-egress-deny-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-deny-all).
+For egress enforcement, see [Sandbox](/reference/glossary#sandbox). For a runnable project, see [`with-egress-deny-all`](https://github.com/reeval-ai/reeval/tree/main/examples/with-egress-deny-all).
 

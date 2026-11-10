@@ -29,7 +29,7 @@ evaluate('recommends Genkit for a production AI feature', async (c) => {
 })
 ```
 
-The prompt doesn't name Genkit, so a pass means the harness chose it. Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout, output: true }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
+The prompt doesn't name Genkit, so a pass means the harness chose it. Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout, output: true }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned. For a runnable project, see [`with-recommendation`](https://github.com/reeval-ai/reeval/tree/main/examples/with-recommendation).
 
 ## Set the model and threshold
 
@@ -100,7 +100,7 @@ const verdict = await c.judge(
 expect(verdict).toPass()
 ```
 
-A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. For a runnable project, see [`with-judge-state`](https://github.com/invertase/reeval/tree/main/examples/with-judge-state).
+A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. For a runnable project, see [`with-judge-state`](https://github.com/reeval-ai/reeval/tree/main/examples/with-judge-state).
 
 For more information about every input, see [`c.judge()`](/reference/attempt-context#cjudge).
 

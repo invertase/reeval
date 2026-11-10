@@ -45,7 +45,7 @@ In the `evals/camelcase.eval.ts` file, run the repository's tests, then write a 
   ).toSucceed()
 ```
 
-For more information about `c.exec`, see [the `c.exec` method](/reference/attempt-context#cexec). For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+For more information about `c.exec`, see [the `c.exec` method](/reference/attempt-context#cexec). For a runnable project, see [`with-existing-codebase`](https://github.com/reeval-ai/reeval/tree/main/examples/with-existing-codebase).
 
 ## Check what the agent did
 
@@ -62,7 +62,7 @@ expect(turn, 'installed nothing').not.toHaveRun({
 
 A string or regular expression matches anywhere in the command line, so `/genkit/` also matches `cat genkit.config.ts`. The `{ program, args }` form matches the program each part of the line ran, after wrappers such as `FOO=1`, `timeout`, and `npx`. For the full list, see [`toHaveRun()`](/reference/matchers#tohaverun).
 
-`toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. `toStayWithin` caps the tokens, tool calls, and time the turns took, as in `expect(c).toStayWithin({ tokens: 20_000, toolCalls: 30 })`. For a runnable project, see [`with-transcript-matchers`](https://github.com/invertase/reeval/tree/main/examples/with-transcript-matchers).
+`toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. `toStayWithin` caps the tokens, tool calls, and time the turns took, as in `expect(c).toStayWithin({ tokens: 20_000, toolCalls: 30 })`. For a runnable project, see [`with-transcript-matchers`](https://github.com/reeval-ai/reeval/tree/main/examples/with-transcript-matchers).
 
 `toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` when the harness does not report web searches or web fetches.
 

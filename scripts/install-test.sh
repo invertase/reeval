@@ -120,7 +120,7 @@ case \$url in
     [ -n "\${API_STATUS:-}" ] && status=\$API_STATUS
     [ "\$status" = 200 ] && cat "\$RELEASES"
     printf '\n%s' "\$status" ;;
-  https://github.com/invertase/reeval/releases/download/v*)
+  https://github.com/reeval-ai/reeval/releases/download/v*)
     set -- "\$@"; n=\$#; i=0
     for a; do i=\$((i + 1)); [ \$i -lt \$n ] && set -- "\$@" "\$a"; done
     shift "\$n"
