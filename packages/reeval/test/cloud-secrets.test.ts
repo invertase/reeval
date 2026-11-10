@@ -370,7 +370,18 @@ describe('reeval cloud secrets', () => {
       assert.match(noOrg.stderr, /--project needs --org in reeval cloud secrets list/)
       const noProject = await runCli(dir, ['cloud', 'secrets', 'list', '--org', 'acme'], { env })
       assert.equal(noProject.code, 2)
-      assert.match(noProject.stderr, /--org needs --project in reeval cloud secrets list/)
+      assert.match(
+        noProject.stderr,
+        /--org needs --project in reeval cloud secrets list: nothing is linked here/,
+      )
+      const key = await runCli(
+        dir,
+        ['cloud', 'provider', 'openai', 'set', '--org', 'acme', '--project', 'sk-proj-given'],
+        { env, input: 'sk-proj-c3d4\n' },
+      )
+      assert.equal(key.code, 2)
+      assert.match(key.stderr, /has no project by that name: pass --project with one of app, beta/)
+      assert.ok(!/sk-proj/.test(key.stdout + key.stderr), 'no key is printed')
       const unknown = await runCli(
         dir,
         ['cloud', 'secrets', 'list', '--org', 'acme', '--project', 'nope'],
@@ -379,7 +390,7 @@ describe('reeval cloud secrets', () => {
       assert.equal(unknown.code, 2)
       assert.match(
         unknown.stderr,
-        /ACME \(acme\) has no project nope: pass --project with one of app, beta/,
+        /ACME \(acme\) has no project by that name: pass --project with one of app, beta/,
       )
       for (const args of [
         ['cloud', 'secrets', 'list', '--org', 'acme', '--project', 'app'],
@@ -466,7 +477,13 @@ describe('reeval cloud provider', () => {
       const dir = tempDir('cloud-unlinked')
       const bare = await runCli(dir, ['cloud', 'provider', 'list'], { env })
       assert.equal(bare.code, 2)
-      assert.match(bare.stderr, /nothing is linked here: run reeval link, or pass --org$/m)
+      assert.match(
+        bare.stderr,
+        /acts on the linked org, and nothing is linked here: run reeval link, or pass --org$/m,
+      )
+      const listed = await runCli(dir, ['cloud', 'provider', 'list', '--project', 'app'], { env })
+      assert.equal(listed.code, 2)
+      assert.match(listed.stderr, /takes --org, not --project/)
       const r = await runCli(dir, ['cloud', 'provider', 'openai', 'set', '--org', 'acme'], {
         env,
         input: 'sk-org-a1b2\n',

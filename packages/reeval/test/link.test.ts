@@ -254,10 +254,13 @@ describe('reeval link without a terminal', () => {
           { org: 'acme' },
           /which project in Acme \(acme\) to link: pass --project with one of api, web$/,
         ],
-        [{ org: 'nope', project: 'web' }, /has no org nope: pass --org with one of acme, lab$/],
+        [
+          { org: 'nope', project: 'web' },
+          /has no org by that name: pass --org with one of acme, lab$/,
+        ],
         [
           { org: 'acme', project: 'evals' },
-          /^Acme \(acme\) has no project evals: pass --project with one of api, web$/,
+          /^Acme \(acme\) has no project by that name: pass --project with one of api, web$/,
         ],
         [{ org: '' }, /^--org needs a value/],
         [{ project: '' }, /^--project needs a value/],

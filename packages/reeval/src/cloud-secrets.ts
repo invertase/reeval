@@ -90,7 +90,14 @@ async function target(
   const auth = await cloudAuth(base, env)
   const linked = await linkedProject(io.projectDir ?? resolve('.'))
   const get = async (path: string, what: string) => {
-    const answer = await request(new URL(path, base), { method: 'GET', what }, auth.headers)
+    if (!auth.headers.authorization) {
+      throw new UsageError(`reeval ${command} needs you signed in: ${auth.refused}`)
+    }
+    const answer = await request(
+      new URL(path, base),
+      { method: 'GET', what, redirect: 'error' },
+      auth.headers,
+    )
     if (!answer.ok) throw platformError(answer, what, auth)
     return answer.body
   }
@@ -313,6 +320,11 @@ export async function providerCommand(
   const [provider, action, key] = args
   if (provider === 'list') {
     if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
+    if (flags.project !== undefined) {
+      throw new UsageError(
+        "reeval cloud provider list takes --org, not --project: it lists the org's keys and every project's override",
+      )
+    }
     const t = await target(io, flags, 'cloud provider list', 'optional')
     const { body } = await send<{ providers?: ProviderKey[] }>(t, providerPath(t), {
       method: 'GET',
@@ -356,11 +368,13 @@ export async function providerCommand(
     throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
   }
   const command = `cloud provider ${provider} ${action}`
+  if (action === 'delete' && key !== undefined) {
+    throw new UsageError(`reeval ${command} takes no value`)
+  }
   const t = await target(io, flags, command, 'optional')
   const forProject = t.projectId !== undefined
   const scope = t.projectId ?? t.orgId
   if (action === 'delete') {
-    if (key !== undefined) throw new UsageError(`reeval ${command} takes no value`)
     const path = `${providerPath(t, provider)}${forProject ? `?projectId=${seg(t.projectId ?? '')}` : ''}`
     await send(t, path, {
       method: 'DELETE',

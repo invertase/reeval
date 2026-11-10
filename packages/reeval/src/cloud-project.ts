@@ -81,8 +81,10 @@ export function named<T extends Org | Project>(
 ): T {
   const found = byName(items, value)
   if (found) return found
+  if (!items.length) throw new UsageError(`${where} has no ${flag}s`)
+  // The value isn't shown: it may be a key given after the flag.
   throw new UsageError(
-    `${where} has no ${flag} ${value}: pass --${flag} with one of ${items.map((x) => x.slug).join(', ')}`,
+    `${where} has no ${flag} by that name: pass --${flag} with one of ${items.map((x) => x.slug).join(', ')}`,
   )
 }
 
@@ -134,12 +136,17 @@ export async function cloudScope(options: {
   if (flags.org === undefined && flags.project === undefined) {
     if (linked) return required ? linked : { orgId: linked.orgId }
     throw new UsageError(
-      `reeval ${command} acts on the linked project, and nothing is linked here: run reeval link, or pass ${required ? '--org and --project' : '--org'}`,
+      `reeval ${command} acts on the linked ${required ? 'project' : 'org'}, and nothing is linked here: run reeval link, or pass ${required ? '--org and --project' : '--org'}`,
     )
   }
   if (flags.org === undefined && !linked) {
     throw new UsageError(
       `--project needs --org in reeval ${command}: nothing is linked here to take the org from`,
+    )
+  }
+  if (required && flags.project === undefined && !linked) {
+    throw new UsageError(
+      `--org needs --project in reeval ${command}: nothing is linked here to take the project from`,
     )
   }
   const orgs = await listOrgs(get)
