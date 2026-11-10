@@ -883,6 +883,8 @@ async function attachCommand(
       '--profile picks the history folder --download puts a recorded cloud run in: pass it with --download',
     )
   }
+  // The platform URL may be in the project's .env, as it is for the other cloud commands.
+  if (flags.download || isAttachUrl(source)) loadEnvFiles(configPath)
   const download = flags.download
     ? await cloudDownload(source, configPath, flags.profile)
     : undefined
@@ -924,10 +926,9 @@ async function cloudDownload(
 ) {
   const cloud = await import('./cloud-run.ts')
   const { cloudRunOf, downloadCloudFiles } = await import('./cloud-files.ts')
-  const base = cloud.cloudUrl(
-    process.env,
-    `--download needs ${cloud.CLOUD_URL_VAR}, the cloud platform's URL, to download a cloud run's files`,
-  )
+  // The platform URL may be in the project's .env, as it is for the other cloud commands.
+  loadEnvFiles(configPath)
+  const base = cloud.cloudUrl()
   const run = isAttachUrl(source) ? cloudRunOf(source, base) : null
   if (!run) {
     throw new UsageError(
@@ -935,7 +936,6 @@ async function cloudDownload(
     )
   }
   const path = requireConfig(configPath)
-  loadEnvFiles(path)
   const named = profile ?? (process.env.REEVAL_PROFILE || undefined)
   const loaded = await loadConfig(path, 'run', named)
   const picked = selectProfile(loaded, profile)
@@ -1026,8 +1026,9 @@ async function cloudTarget(
   let base: URL | null = null
   if ('made' in result) {
     cloud.refuseLocalFlags(flags)
+    const url = cloud.cloudUrl()
     if (!setup.dryRun) {
-      base = cloud.cloudUrl()
+      base = url
       const env = await cloud.cloudPlanEnv(base)
       const differs = Object.entries(env).some(([k, v]) => process.env[k] !== v)
       if (differs) result = await bundle(env)
@@ -1047,11 +1048,8 @@ async function cloudTarget(
   }
   const { made } = result
   if (!base) {
-    const unset = process.env[cloud.CLOUD_URL_VAR]?.trim()
-      ? ''
-      : ` · ${cloud.CLOUD_URL_VAR} isn't set, so a run would exit 2`
     const line = await cloud.cloudLine(made.plan, 'target  cloud')
-    return { target: { kind: 'cloud' }, detail: `${line}${unset}` }
+    return { target: { kind: 'cloud' }, detail: line }
   }
   console.log(await cloud.cloudLine(made.plan))
   if (setup.recording) {

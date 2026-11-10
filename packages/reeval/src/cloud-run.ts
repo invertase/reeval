@@ -1,8 +1,8 @@
 // `reeval run` on the cloud platform. It bundles the project as `reeval bundle` does, creates the
-// run on the platform at `REEVAL_CLOUD_URL`, uploads the bundle and starts it, then follows the
-// run's event stream as `reeval attach` does and exits with the run's exit code. A plan the
-// platform can't run (a sandbox it has no machine for, files a bundle can't carry) runs on this
-// machine instead, with a one-line note.
+// run at `REEVAL_CLOUD_URL` (https://cloud.reeval.ai when that isn't set), uploads the bundle and
+// starts it, then follows the run's event stream as `reeval attach` does and exits with the run's
+// exit code. A plan the platform can't run (a sandbox it has no machine for, files a bundle can't
+// carry) runs on this machine instead, with a one-line note.
 import { createHash } from 'node:crypto'
 import type { AttachOptions } from './attach.ts'
 import type { MadeBundle } from './bundle/index.ts'
@@ -19,6 +19,9 @@ import type { ResolvedConfig, ResolvedHistory, ResolvedProfile } from './types.t
 
 /** The platform's URL, as the cloud run and `reeval login` read it. */
 export const CLOUD_URL_VAR = 'REEVAL_CLOUD_URL'
+
+/** The platform when `REEVAL_CLOUD_URL` isn't set. An explicit value replaces it. */
+const DEFAULT_CLOUD_URL = 'https://cloud.reeval.ai'
 
 /** The exit code of a run this terminal detached from, as of one it interrupted. */
 const INTERRUPTED = 130
@@ -107,15 +110,12 @@ export function notCloud(planned: readonly PlannedItem[]): string[] {
 }
 
 /**
- * The platform's URL from `REEVAL_CLOUD_URL`, with a trailing `/`: exit 2 when it's unset or not
- * an http(s) URL. `unset` is the refusal when it's unset.
+ * The platform's URL, with a trailing `/`: `REEVAL_CLOUD_URL` when it's set, else
+ * `https://cloud.reeval.ai`. Exit 2 when the value isn't an http(s) URL or carries a user name
+ * or password.
  */
-export function cloudUrl(
-  env: NodeJS.ProcessEnv = process.env,
-  unset = `A cloud run needs ${CLOUD_URL_VAR}, the cloud platform's URL. Set it, or pass --local to run here.`,
-): URL {
-  const raw = env[CLOUD_URL_VAR]?.trim()
-  if (!raw) throw new UsageError(unset)
+export function cloudUrl(env: NodeJS.ProcessEnv = process.env): URL {
+  const raw = env[CLOUD_URL_VAR]?.trim() || DEFAULT_CLOUD_URL
   const url = URL.parse(raw)
   if (!url || !/^https?:$/.test(url.protocol)) {
     throw new UsageError(`${CLOUD_URL_VAR} is an http or https URL (got ${stripCredentials(raw)})`)

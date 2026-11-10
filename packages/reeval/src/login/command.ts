@@ -1,17 +1,9 @@
 // `reeval login`, `reeval logout` and `reeval whoami` against the cloud platform at
-// `REEVAL_CLOUD_URL`. Login is the OAuth device flow (RFC 8628): the platform gives a code, you
-// approve it on its page in a browser, and the CLI, polling, gets a bearer token it keeps for the
-// cloud calls (`credentials.ts`).
+// `REEVAL_CLOUD_URL` (https://cloud.reeval.ai when that isn't set). Login is the OAuth device
+// flow (RFC 8628): the platform gives a code, you approve it on its page in a browser, and the
+// CLI, polling, gets a bearer token it keeps for the cloud calls (`credentials.ts`).
 import type { Flags } from '../cli-spec.ts'
-import {
-  CLOUD_URL_VAR,
-  CloudError,
-  call,
-  cloudUrl,
-  platformMessage,
-  refusedHint,
-  request,
-} from '../cloud-run.ts'
+import { CloudError, call, cloudUrl, platformMessage, refusedHint, request } from '../cloud-run.ts'
 import { UsageError } from '../errors.ts'
 import {
   CLOUD_TOKEN_VAR,
@@ -60,12 +52,6 @@ const shown = (base: URL) => base.href.replace(/\/$/, '')
 
 const who = (user: SignedInUser) =>
   user.name && user.email ? `${user.name} <${user.email}>` : user.email || user.name || user.id
-
-const platformOf = (command: string, env: NodeJS.ProcessEnv) =>
-  cloudUrl(
-    env,
-    `reeval ${command} needs ${CLOUD_URL_VAR}, the cloud platform's URL: set it to the platform to sign in to.`,
-  )
 
 /** Who the token signs in as, or null when the platform refuses it. */
 async function signedInUser(base: URL, token: string): Promise<SignedInUser | null> {
@@ -176,7 +162,7 @@ async function awaitApproval(
 /** `reeval login`: signs in to the platform and keeps its token for the cloud calls. */
 export async function loginCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
-  const base = platformOf('login', env)
+  const base = cloudUrl(env)
   // Read first, so a credentials file reeval can't read refuses before a session is made.
   const previous = await storedLogin(base, env)
   const code = await call<DeviceCode | null>(
@@ -234,7 +220,7 @@ export async function loginCommand(io: LoginIo): Promise<number> {
 /** `reeval logout`: revokes the stored sign-in on the platform and forgets it here. */
 export async function logoutCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
-  const base = platformOf('logout', env)
+  const base = cloudUrl(env)
   const stored = await storedLogin(base, env)
   if (!stored) {
     io.out(`Not signed in to ${shown(base)} with reeval login.`)
@@ -275,7 +261,7 @@ function tokenSource(token: CloudToken, env: NodeJS.ProcessEnv): string {
 /** `reeval whoami`: who the cloud calls sign in as, asking the platform. */
 export async function whoamiCommand(flags: Flags, io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
-  const base = platformOf('whoami', env)
+  const base = cloudUrl(env)
   const token = await cloudToken(base, env)
   if (!token) {
     const stored = await storedLogin(base, env)

@@ -851,6 +851,22 @@ export function maskedMatch(text: string, match: SecretMatch): string {
   return `${match.rule} (${shown})`
 }
 
-/** Drops `user:password@` from a URL so it can be recorded or shown. */
-export const stripCredentials = (url: string) =>
-  url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^@/]*@/i, '$1')
+/**
+ * Drops `user:password@` from a URL so it can be recorded or shown. The password may
+ * contain `@`, or a `/` that keeps the string from parsing; the whole userinfo goes.
+ * A numeric port (`host:443/path`) stays.
+ */
+export function stripCredentials(url: string): string {
+  const parsed = URL.parse(url)
+  if (parsed && (parsed.username || parsed.password)) {
+    const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.exec(url)
+    if (scheme) {
+      const rest = url.slice(scheme[0].length)
+      const cut = rest.search(/[/?#]/)
+      const authority = cut === -1 ? rest : rest.slice(0, cut)
+      const at = authority.toLowerCase().lastIndexOf(`@${parsed.host.toLowerCase()}`)
+      if (at !== -1) return scheme[0] + rest.slice(at + 1)
+    }
+  }
+  return url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*:(?!\d+(?:[/?#]|$))[^?#]*@/i, '$1')
+}

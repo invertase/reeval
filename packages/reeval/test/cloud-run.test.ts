@@ -22,8 +22,70 @@ import { gzipSync } from 'node:zlib'
 import { type TarEntry, writeTar } from '@reeval/sandbox-docker'
 import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
+import { cloudUrl } from '../src/cloud-run.ts'
+import { stripCredentials } from '../src/redact.ts'
 import { pkgRoot, project, runCli, tempDir } from './helpers.ts'
 import { fakeS3 } from './support/fake-s3.ts'
+
+describe('the cloud platform URL', () => {
+  test('an unset REEVAL_CLOUD_URL is https://cloud.reeval.ai, and an explicit one wins', () => {
+    assert.equal(cloudUrl({}).href, 'https://cloud.reeval.ai/')
+    assert.equal(cloudUrl({ REEVAL_CLOUD_URL: '' }).href, 'https://cloud.reeval.ai/')
+    assert.equal(cloudUrl({ REEVAL_CLOUD_URL: '   ' }).href, 'https://cloud.reeval.ai/')
+    assert.equal(cloudUrl({ REEVAL_CLOUD_URL: 'http://127.0.0.1:9' }).href, 'http://127.0.0.1:9/')
+    assert.equal(
+      cloudUrl({ REEVAL_CLOUD_URL: 'https://platform.test/api' }).href,
+      'https://platform.test/api/',
+    )
+  })
+
+  test('a value that is not an http(s) URL, or that carries userinfo, is a usage error', () => {
+    assert.throws(
+      () => cloudUrl({ REEVAL_CLOUD_URL: 'ftp://platform.test' }),
+      /REEVAL_CLOUD_URL is an http or https URL \(got ftp:\/\/platform\.test\)/,
+    )
+    assert.throws(
+      () => cloudUrl({ REEVAL_CLOUD_URL: 'not-a-url' }),
+      /REEVAL_CLOUD_URL is an http or https URL \(got not-a-url\)/,
+    )
+    assert.throws(
+      () => cloudUrl({ REEVAL_CLOUD_URL: 'https://u:secret@platform.test' }),
+      (error: Error) =>
+        /can't carry a user name or password/.test(error.message) &&
+        !error.message.includes('secret@'),
+    )
+    assert.throws(
+      () => cloudUrl({ REEVAL_CLOUD_URL: 'https://u:sec@ret@platform.test' }),
+      (error: Error) =>
+        /got https:\/\/platform\.test\)/.test(error.message) &&
+        !error.message.includes('ret') &&
+        !error.message.includes('sec@'),
+    )
+    assert.throws(
+      () => cloudUrl({ REEVAL_CLOUD_URL: 'https://u:secret/extra@platform.test' }),
+      (error: Error) =>
+        /got https:\/\/platform\.test\)/.test(error.message) &&
+        !error.message.includes('secret') &&
+        !error.message.includes('extra'),
+    )
+  })
+
+  test('stripCredentials drops the whole userinfo, including @ or / inside the password', () => {
+    assert.equal(stripCredentials('https://u:secret@platform.test'), 'https://platform.test')
+    assert.equal(stripCredentials('https://u:sec@ret@platform.test'), 'https://platform.test')
+    assert.equal(stripCredentials('https://u:secret/extra@platform.test'), 'https://platform.test')
+    assert.equal(
+      stripCredentials('https://deploy:secret@github.com/acme/skills.git'),
+      'https://github.com/acme/skills.git',
+    )
+    assert.equal(stripCredentials('https://host/path@foo'), 'https://host/path@foo')
+    assert.equal(
+      stripCredentials('https://example.com:443/path@foo'),
+      'https://example.com:443/path@foo',
+    )
+    assert.equal(stripCredentials('https://u:hunter2@relay.test/e'), 'https://relay.test/e')
+  })
+})
 
 const TOKEN = 'cloud-check-token-value'
 
@@ -385,11 +447,22 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
-  test('exit 2 without REEVAL_CLOUD_URL, and for flags a cloud run cannot take', async () => {
+  test('exit 2 for a REEVAL_CLOUD_URL that is not http(s) or carries userinfo, and for flags a cloud run cannot take', async () => {
     const dir = await fixtureProject()
-    const unset = await runCli(dir, ['run', '--cloud'], { env: { REEVAL_CLOUD_URL: '' } })
-    assert.equal(unset.code, 2)
-    assert.match(unset.stderr, /A cloud run needs REEVAL_CLOUD_URL.*pass --local to run here/)
+    const unset = await runCli(dir, ['run', '--cloud', '--dry-run'], {
+      env: { REEVAL_CLOUD_URL: '' },
+    })
+    assert.equal(unset.code, 0, unset.stdout + unset.stderr)
+    assert.match(unset.stdout, /target {2}cloud/)
+    assert.doesNotMatch(unset.stdout + unset.stderr, /REEVAL_CLOUD_URL isn't set/)
+    const bad = await runCli(dir, ['run', '--cloud'], {
+      env: { REEVAL_CLOUD_URL: 'ftp://platform.test' },
+    })
+    assert.equal(bad.code, 2)
+    assert.match(
+      bad.stderr,
+      /REEVAL_CLOUD_URL is an http or https URL \(got ftp:\/\/platform\.test\)/,
+    )
     const both = await runCli(dir, ['run', '--cloud', '--local'])
     assert.equal(both.code, 2)
     assert.match(both.stderr, /--cloud and --local pick where the run goes/)
@@ -1030,7 +1103,10 @@ describe("a cloud run's files, downloaded with --download", () => {
         env: { REEVAL_CLOUD_URL: '' },
       })
       assert.equal(unset.code, 2)
-      assert.match(unset.stderr, /--download needs REEVAL_CLOUD_URL/)
+      assert.match(
+        unset.stderr,
+        /--download takes a cloud run's event stream URL \(https:\/\/cloud\.reeval\.ai\/api\/runs\/<run>\/events\)/,
+      )
       const local = await runCli(dir, ['run', '--download'])
       assert.equal(local.code, 2, local.stdout + local.stderr)
       assert.match(
@@ -1038,6 +1114,42 @@ describe("a cloud run's files, downloaded with --download", () => {
         /--download downloads a cloud run's files, and this run is on this machine/,
       )
       assert.deepEqual(p.seen, [], 'none of them called the platform')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--download reads REEVAL_CLOUD_URL from .env when the shell has none', async () => {
+    const dir = await fixtureProject()
+    const p = await platform()
+    try {
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nREEVAL_CLOUD_URL=${p.base}\n`)
+      await fetch(`${p.base}/ingest`, {
+        method: 'POST',
+        body: `${JSON.stringify({
+          type: 'header',
+          schemaVersion: 1,
+          reeval: '0.0.0',
+          runId: 'run_1',
+          startedAt: '2026-01-01T00:00:00.000Z',
+          pid: 1,
+          host: 'platform',
+          harness: 'fake',
+          verbosity: 0,
+        })}\n${JSON.stringify({ type: 'exit', at: 1, code: 0 })}\n`,
+      })
+      const fromFile = await runCli(
+        dir,
+        ['attach', '--download', `${p.base}/api/runs/run_1/events`],
+        { env: { REEVAL_TOKEN: 'files-token' } },
+      )
+      assert.equal(fromFile.code, 0, fromFile.stdout + fromFile.stderr)
+      assert.doesNotMatch(fromFile.stdout + fromFile.stderr, /cloud\.reeval\.ai/)
+      assert.match(fromFile.stdout, /no files of run run_1/)
+      const files = p.seen.find((s) => s.path === '/api/runs/run_1/artifacts/files.tar.gz')
+      assert.equal(files?.auth, 'Bearer files-token')
+      const socket = p.seen.find((s) => s.method === 'WS')
+      assert.equal(socket?.auth, 'Bearer files-token', 'a cloud follow uses the URL from .env')
     } finally {
       await p.close()
     }

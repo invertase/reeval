@@ -314,7 +314,7 @@ describe('reeval cloud secrets', () => {
     }
   })
 
-  test("relays the platform's refusals: a member who isn't an admin, a signed-out machine, a missing URL", async () => {
+  test("relays the platform's refusals: a member who isn't an admin, a signed-out machine, a URL that isn't http(s)", async () => {
     const p = await platform({ admin: false })
     try {
       const { dir, env } = linked(p.base)
@@ -334,10 +334,10 @@ describe('reeval cloud secrets', () => {
       assert.equal(out.code, 2)
       assert.match(out.stderr, /Sign in first\. \(reeval login signs in, or set REEVAL_TOKEN\)/)
       const noUrl = await runCli(dir, ['cloud', 'secrets', 'list'], {
-        env: { ...env, REEVAL_CLOUD_URL: '' },
+        env: { ...env, REEVAL_CLOUD_URL: 'not-a-url' },
       })
       assert.equal(noUrl.code, 2)
-      assert.match(noUrl.stderr, /reeval cloud secrets list needs REEVAL_CLOUD_URL/)
+      assert.match(noUrl.stderr, /REEVAL_CLOUD_URL is an http or https URL \(got not-a-url\)/)
     } finally {
       await p.close()
     }
