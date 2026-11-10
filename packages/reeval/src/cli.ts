@@ -883,6 +883,8 @@ async function attachCommand(
       '--profile picks the history folder --download puts a recorded cloud run in: pass it with --download',
     )
   }
+  // The platform URL may be in the project's .env, as it is for the other cloud commands.
+  if (flags.download || isAttachUrl(source)) loadEnvFiles(configPath)
   const download = flags.download
     ? await cloudDownload(source, configPath, flags.profile)
     : undefined
@@ -924,6 +926,8 @@ async function cloudDownload(
 ) {
   const cloud = await import('./cloud-run.ts')
   const { cloudRunOf, downloadCloudFiles } = await import('./cloud-files.ts')
+  // The platform URL may be in the project's .env, as it is for the other cloud commands.
+  loadEnvFiles(configPath)
   const base = cloud.cloudUrl()
   const run = isAttachUrl(source) ? cloudRunOf(source, base) : null
   if (!run) {
@@ -932,7 +936,6 @@ async function cloudDownload(
     )
   }
   const path = requireConfig(configPath)
-  loadEnvFiles(path)
   const named = profile ?? (process.env.REEVAL_PROFILE || undefined)
   const loaded = await loadConfig(path, 'run', named)
   const picked = selectProfile(loaded, profile)
