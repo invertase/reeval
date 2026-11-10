@@ -50,14 +50,6 @@ import type { Attempt } from './state.ts'
 const BG_LOG = '/tmp/reeval-bg'
 const BG_TAG = 'REEVAL_BACKGROUND'
 
-export type CaptureArtifact = {
-  name: string
-  mediaType: 'image/png'
-  sha256: string
-  bytes: number
-  capture: CaptureArtifactMeta
-}
-
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
 const languageModel = (model: unknown) =>
