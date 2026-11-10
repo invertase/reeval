@@ -128,7 +128,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   --bundle <file>             Run a reeval bundle with its filters and profile: extract it to a new
                               temporary directory, check its files, install from its lockfile and
                               exit 2 before any attempt when its plan or files differ; .reeval/ is
-                              in the extracted project
+                              in the extracted project. With --resume <run>, moves that run's
+                              .reeval/ state from the current directory there and continues it
   --cloud                     Run in the cloud at REEVAL_CLOUD_URL (https://cloud.reeval.ai when
                               unset), as the config's cloud: true does: bundle the project,
                               upload it to the project reeval link linked (an unlinked project

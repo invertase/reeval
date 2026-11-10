@@ -418,11 +418,11 @@ async function run(argv: string[]): Promise<number> {
 /**
  * `reeval run --bundle`: the bundle's own filters, profile, tags, traits and runs, from the
  * project it extracts to. Other run flags (`--json`, `--record`, `--concurrency`, …) apply as given.
+ * With `--resume <id>`, the run's state moves from the current directory's `.reeval/` into the
+ * extracted project's, and the run continues there.
  */
 async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
-  const planning = (
-    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors', 'cloud'] as const
-  )
+  const planning = (['profile', 'tag', 'trait', 'runs', 'config', 'retry-errors', 'cloud'] as const)
     .filter((f) => flags[f] !== undefined)
     .map((f) => `--${f}`)
   if (filters.length || planning.length) {
@@ -432,11 +432,21 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   }
   const file = flags.bundle as string
   const log = (s: string) => (flags.json ? console.error(s) : console.log(s))
-  const { bundledGit, openBundle } = await import('./bundle/index.ts')
+  const { bundledGit, checkResumeState, moveResumeState, openBundle } = await import(
+    './bundle/index.ts'
+  )
+  const from = process.cwd()
+  const resume = flags.resume
+  if (resume !== undefined) checkResumeState(from, resume)
   const opened = await openBundle(file, log)
   if (opened.exit !== undefined) return opened.exit
   const { args, author } = opened.manifest
-  log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
+  if (resume !== undefined) {
+    moveResumeState(from, opened.project, resume)
+    log(
+      `reeval: resuming run ${resume} from ${file} in ${opened.project}, where its .reeval/ stays`,
+    )
+  } else log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
   process.chdir(opened.project)
   return runCommand(
     {

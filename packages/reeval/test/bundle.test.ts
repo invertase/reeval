@@ -460,6 +460,70 @@ describe('reeval bundle', () => {
     assert.ok(existsSync(running), "a running bundle's copy stays")
   })
 
+  test('--resume continues the run whose .reeval/ state is in the current directory', async () => {
+    const tmp = extractRoot()
+    const first = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', file], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(first.code, 0, first.stderr + first.stdout)
+    const extracted = /running .* in (\S+), where its \.reeval\/ stays/.exec(first.stdout)?.[1]
+    assert.ok(extracted, first.stdout)
+    const { run } = readRun(extracted)
+    const state = tempDir('bundle-state')
+    const runs = join(state, '.reeval', 'runs')
+    mkdirSync(runs, { recursive: true })
+    cpSync(join(extracted, '.reeval', 'runs', run.runId), join(runs, run.runId), {
+      recursive: true,
+    })
+    writeFileSync(
+      join(runs, `${run.runId}.json`),
+      JSON.stringify({ ...run, status: 'interrupted' }),
+    )
+    const r = await runCli(state, ['run', '--bundle', file, '--resume', run.runId], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    const resumed = /resuming run \S+ from .* in (\S+), where its \.reeval\/ stays/.exec(
+      r.stdout,
+    )?.[1]
+    assert.ok(resumed && resumed !== extracted, r.stdout)
+    assert.ok(!existsSync(join(runs, `${run.runId}.json`)), 'the state moved out')
+    assert.ok(!existsSync(join(runs, run.runId)))
+    const after = readRun(resumed).run
+    assert.equal(after.runId, run.runId)
+    assert.equal(after.status, 'complete')
+    const [kept] = after.evals[0]?.attempts ?? []
+    assert.equal(kept?.outcome, 'pass')
+    assert.equal(kept?.startedAt, run.evals[0]?.attempts[0]?.startedAt, 'the attempt was kept')
+  })
+
+  test('--resume refuses a run with no state here, or no id, before extracting', async () => {
+    const tmp = extractRoot()
+    const none = await runCli(
+      tempDir('bundle-fresh'),
+      ['run', '--bundle', file, '--resume', 'r1'],
+      { env: { TMPDIR: tmp } },
+    )
+    assert.equal(none.code, 2, none.stderr + none.stdout)
+    assert.match(none.stderr, /No state for run r1 in .*\.reeval: --bundle with --resume continues/)
+    const bare = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', file, '--resume'], {
+      env: { TMPDIR: tmp },
+    })
+    assert.equal(bare.code, 2, bare.stderr + bare.stdout)
+    assert.match(bare.stderr, /--bundle with --resume continues one run: pass its id/)
+    const path = await runCli(
+      tempDir('bundle-fresh'),
+      ['run', '--bundle', file, '--resume', '../r1'],
+      { env: { TMPDIR: tmp } },
+    )
+    assert.equal(path.code, 2, path.stderr + path.stdout)
+    assert.match(path.stderr, /--resume \.\.\/r1 isn't a run id/)
+    assert.deepEqual(
+      readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
+      [],
+    )
+  })
+
   test('takes its filters and profile from the bundle', async () => {
     const r = await runCli(tempDir('bundle-fresh'), [
       'run',

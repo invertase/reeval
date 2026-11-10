@@ -4,7 +4,7 @@
 // same list.
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { lstat, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import {
@@ -847,6 +847,55 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   } finally {
     process.off('SIGINT', interrupted)
   }
+}
+
+/** The paths under a `.reeval/` that hold run `runId`'s state, staged or assembled. */
+const runState = (reevalDir: string, runId: string) => [
+  join(reevalDir, 'staging', runId),
+  join(reevalDir, 'runs', `${runId}.json`),
+  join(reevalDir, 'runs', runId),
+]
+
+/**
+ * `reeval run --bundle --resume <id>`: refuses, before the bundle is opened, a run id that isn't
+ * one path segment, or one whose staging and record aren't in `from`'s `.reeval/`.
+ */
+export function checkResumeState(from: string, runId: string): void {
+  if (!runId) {
+    throw new UsageError(
+      '--bundle with --resume continues one run: pass its id, as in reeval run --bundle <file> --resume <run>.',
+    )
+  }
+  if (runId === '.' || runId === '..' || /[/\\]/.test(runId)) {
+    throw new UsageError(`--resume ${runId} isn't a run id.`)
+  }
+  const [staging, record] = runState(join(from, '.reeval'), runId) as [string, string]
+  if (!existsSync(staging) && !existsSync(record)) {
+    throw new UsageError(
+      `No state for run ${runId} in ${join(from, '.reeval')}: --bundle with --resume continues a run from its .reeval/staging/${runId}/ or .reeval/runs/${runId}.json in the current directory.`,
+    )
+  }
+}
+
+/**
+ * Moves run `runId`'s staging and scratch record from `from`'s `.reeval/` into the extracted
+ * project's, where the resume reads them as a local resume does.
+ */
+export function moveResumeState(from: string, project: string, runId: string): void {
+  const source = runState(join(from, '.reeval'), runId)
+  const target = runState(join(project, '.reeval'), runId)
+  source.forEach((path, i) => {
+    const to = target[i] as string
+    if (!existsSync(path)) return
+    mkdirSync(dirname(to), { recursive: true })
+    try {
+      renameSync(path, to)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+      cpSync(path, to, { recursive: true, verbatimSymlinks: true })
+      rmSync(path, { recursive: true, force: true })
+    }
+  })
 }
 
 /**
