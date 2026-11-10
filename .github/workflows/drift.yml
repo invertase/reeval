@@ -151,7 +151,7 @@ jobs:
     name: latest leg
     needs: versions
     if: >-
-      !cancelled() && github.event_name == 'schedule' && github.repository == 'invertase/reeval' &&
+      !cancelled() && github.event_name == 'schedule' && github.repository == 'reeval-ai/reeval' &&
       needs.versions.result != 'skipped'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

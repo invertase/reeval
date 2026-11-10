@@ -24,7 +24,7 @@ A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case,
 
 ## Use another source
 
-Place a skill from a repository with [`skill.git`](/reference/environment-helpers#skillgit), from skills.sh with [`skill.registry`](/reference/environment-helpers#skillregistry), from an npm package with [`skill.npm`](/reference/environment-helpers#skillnpm), or from a name, a description, and its content with [`skill.inline`](/reference/environment-helpers#skillinline). For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources).
+Place a skill from a repository with [`skill.git`](/reference/environment-helpers#skillgit), from skills.sh with [`skill.registry`](/reference/environment-helpers#skillregistry), from an npm package with [`skill.npm`](/reference/environment-helpers#skillnpm), or from a name, a description, and its content with [`skill.inline`](/reference/environment-helpers#skillinline). For a runnable project, see [`with-skill-sources`](https://github.com/reeval-ai/reeval/tree/main/examples/with-skill-sources).
 
 ## Check the agent used the skill
 
@@ -38,6 +38,6 @@ const turn = await c.send('Add a multiply(a, b) function to src/math.js.')
 expect(turn).toHaveCalledSkill('jsdoc')
 ```
 
-For a runnable project, see [`with-skill`](https://github.com/invertase/reeval/tree/main/examples/with-skill).
+For a runnable project, see [`with-skill`](https://github.com/reeval-ai/reeval/tree/main/examples/with-skill).
 
 For more information about this matcher, see [toHaveCalledSkill](/reference/matchers#tohavecalledskill).

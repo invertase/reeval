@@ -37,7 +37,7 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'reeval-ai/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -68,7 +68,7 @@ jobs:
 
   republish-gate:
     name: republish gate
-    if: github.repository == 'invertase/reeval' && github.event_name == 'workflow_dispatch' && (inputs.republish || inputs.dry_run)
+    if: github.repository == 'reeval-ai/reeval' && github.event_name == 'workflow_dispatch' && (inputs.republish || inputs.dry_run)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -262,7 +262,7 @@ jobs:
     if: |
       always() && needs.test.result == 'success' && needs.binaries.outputs.python == 'true' &&
       (needs.upload-binaries.result == 'success' || needs.upload-binaries.result == 'failure') &&
-      !inputs.dry_run && github.repository == 'invertase/reeval' &&
+      !inputs.dry_run && github.repository == 'reeval-ai/reeval' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')

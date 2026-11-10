@@ -111,7 +111,7 @@ try {
   $installed = if (Test-Path $exe) { & $exe --version }
   Check 'installs the newest published release that has SHA256SUMS' ($null -eq $err -and $installed -eq $Version) "$err $installed"
   Check 'sends GITHUB_TOKEN to the GitHub API only' (
-    $requests[0] -eq 'Bearer secret-token https://api.github.com/repos/invertase/reeval/releases?per_page=30' -and
+    $requests[0] -eq 'Bearer secret-token https://api.github.com/repos/reeval-ai/reeval/releases?per_page=30' -and
     -not ($requests | Select-Object -Skip 1 | Where-Object { $_ -match 'secret' })) ($requests -join '; ')
   $env:GITHUB_TOKEN = $script:refused = 'stale-token'
   $err = . Install '' (Join-Path $work 'f') -Latest

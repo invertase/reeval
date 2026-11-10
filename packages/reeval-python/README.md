@@ -1,6 +1,6 @@
 # reeval-python
 
-Python authoring SDK for [reeval](https://github.com/invertase/reeval). Write `*.eval.py` files,
+Python authoring SDK for [reeval](https://github.com/reeval-ai/reeval). Write `*.eval.py` files,
 declare evals with the same options as TypeScript, and run them through reeval's language runner
 (over its stdin and stdout, runner protocol 3). Use the reeval-python version that matches your
 reeval: each says which runner protocol it speaks, and refuses another.

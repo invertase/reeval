@@ -89,7 +89,7 @@ A table below the header lists each evaluation by its file and name. If the eval
 </Step>
 </Steps>
 
-To start the attempts, run the same command without `--dry-run`. For the runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+To start the attempts, run the same command without `--dry-run`. For the runnable project, see [`with-existing-codebase`](https://github.com/reeval-ai/reeval/tree/main/examples/with-existing-codebase).
 
 ## Send the task
 
@@ -125,7 +125,7 @@ evaluate.only(
 )
 ```
 
-`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`. For a runnable project with `skip` and `todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
+`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`. For a runnable project with `skip` and `todo`, see [`with-groups`](https://github.com/reeval-ai/reeval/tree/main/examples/with-groups).
 
 For more information about sharing options across several evaluations, see [Groups](/evaluations/task/groups).
 

@@ -307,7 +307,7 @@ def test_an_http_mirror_works_with_a_warning(
 
 def test_a_redirect_from_https_to_http_is_refused(server: str) -> None:
     class Request:
-        full_url = "https://github.com/invertase/reeval/releases/download/v1/SHA256SUMS"
+        full_url = "https://github.com/reeval-ai/reeval/releases/download/v1/SHA256SUMS"
 
     handler = cli._NoDowngrade()
     with pytest.raises(cli.urllib.error.URLError, match="isn't https"):

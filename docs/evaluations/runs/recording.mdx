@@ -35,7 +35,7 @@ Record the most recent run and commit the history folder:
 
 The copy writes a `.gitignore` file in the history folder that un-ignores recorded `*.json`, `*.jsonl`, `*.md`, `*.patch`, `*.log`, and `*.zip` files, and a `.gitattributes` file that marks recorded runs `linguist-generated` and their archives binary. By default a passing attempt keeps no transcript or logs; to keep them, pass `--artifacts all`. To record an older run, pass its id. For more information about every flag, see [the `reeval record` command](/reference/cli#reeval-record).
 
-By default, reeval also records each run that finishes in CI. To record every run instead, see [the `record` option](/reference/options#record) and [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). To return to the code a recorded run used, see [the `reeval checkout` command](/reference/cli#reeval-checkout).
+By default, reeval also records each run that finishes in CI. To record every run instead, see [the `record` option](/reference/options#record) and [`with-history`](https://github.com/reeval-ai/reeval/tree/main/examples/with-history). To return to the code a recorded run used, see [the `reeval checkout` command](/reference/cli#reeval-checkout).
 
 ## Reference
 

@@ -3,7 +3,7 @@
 main() {
   # Installs the reeval binary from a GitHub release, checked against the release's SHA256SUMS.
   #
-  #   curl -fsSL https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.sh | sh
+  #   curl -fsSL https://raw.githubusercontent.com/reeval-ai/reeval/main/scripts/install.sh | sh
   #
   # REEVAL_VERSION     a version (0.13.0) instead of the newest release
   # REEVAL_INSTALL_DIR where to put `reeval` (default ~/.local/bin)
@@ -15,7 +15,7 @@ main() {
   # prefix).
   set -eu
 
-  REPO=invertase/reeval
+  REPO=reeval-ai/reeval
 
   fail() {
     echo "reeval install: $*" >&2

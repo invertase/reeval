@@ -5,11 +5,11 @@
   "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/invertase/reeval.git"
+    "url": "git+https://github.com/reeval-ai/reeval.git"
   },
-  "homepage": "https://github.com/invertase/reeval#readme",
+  "homepage": "https://github.com/reeval-ai/reeval#readme",
   "bugs": {
-    "url": "https://github.com/invertase/reeval/issues"
+    "url": "https://github.com/reeval-ai/reeval/issues"
   },
   "private": true,
   "type": "module",

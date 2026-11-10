@@ -351,7 +351,7 @@ test('the packed package installs into a clean project and runs reeval', {
     packageReadme(readFileSync(join(pkgRoot, '..', '..', 'README.md'), 'utf8'), manifest.version),
   )
   assert.doesNotMatch(readme, /\]\((?!https?:|mailto:|#)/, 'no relative link')
-  assert.match(readme, /\]\(https:\/\/github\.com\/invertase\/reeval\/blob\/v[^/]+\/docs\//)
+  assert.match(readme, /\]\(https:\/\/github\.com\/reeval-ai\/reeval\/blob\/v[^/]+\/docs\//)
   assert.doesNotMatch(listing, /^package\/docs\//m)
   assert.equal(
     extract(dir, tarball, 'CHANGELOG.md'),

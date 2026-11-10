@@ -37,7 +37,7 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `before-eval-source` | The corpus project's fake-harness runs from before `evals[].source` and `evals[].revision`, when the `sources` fingerprint part hashed the eval file and the local files it imported |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
-| `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |
+| `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/reeval-ai/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |
 | `with-layouts` | The fake harness on `scripts/output/project`: an eval of each result layout (results with not-run checks, a throw, an infra error, skipped and todo; a change with two variants; harnesses; harnesses and a change; families with and without a change), the record the output goldens render |
 | `with-compare` | The fake harness on `scripts/output/compare`: a base run and a head run (`REEVAL_COMPARE_SIDE=head`) with an eval that regressed (a check flipped and one after it never ran), a fixed family case, an eval whose environment changed, a new and a removed eval, and evals that stayed the same, the pair the compare goldens render |
 | `before-insights` | The fake harness on `scripts/output/project`, with its choose family (`recommends Genkit for $task`), from before a run's `insights.json` |
@@ -106,8 +106,8 @@ above.
 The real-harness entries come from a nightly `real.yml` run's pinned artifact, with no keys:
 
 ```bash
-gh run list -R invertase/reeval --workflow real.yml --event schedule --limit 5
-gh run download <run id> -R invertase/reeval -n reeval-real-pinned-<run id> -D /tmp/real
+gh run list -R reeval-ai/reeval --workflow real.yml --event schedule --limit 5
+gh run download <run id> -R reeval-ai/reeval -n reeval-real-pinned-<run id> -D /tmp/real
 ```
 
 Each `e2e-*` and `contract-*` project in it is one harness (its cells' `harnessKind`).

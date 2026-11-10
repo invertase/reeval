@@ -26,9 +26,9 @@ reeval = "reeval_python.cli:main"
 
 [project.urls]
 Homepage = "https://reeval.ai"
-Repository = "https://github.com/invertase/reeval"
-Documentation = "https://github.com/invertase/reeval/tree/main/packages/reeval-python#readme"
-Issues = "https://github.com/invertase/reeval/issues"
+Repository = "https://github.com/reeval-ai/reeval"
+Documentation = "https://github.com/reeval-ai/reeval/tree/main/packages/reeval-python#readme"
+Issues = "https://github.com/reeval-ai/reeval/issues"
 
 [dependency-groups]
 dev = [

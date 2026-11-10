@@ -8,7 +8,7 @@
  Evaluation runner for SDKs, CLIs, MCP servers, and docs.
 
  # Get started using the `/setup` skill:
- npx skills add invertase/reeval --skill setup
+ npx skills add reeval-ai/reeval --skill setup
 
  # Or install manually:
  npm i -D reeval && npx reeval init

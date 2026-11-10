@@ -9,7 +9,7 @@ description: >
 
 # Add a harness to reeval
 
-Use Grok Build ([#373](https://github.com/invertase/reeval/pull/373)) as the worked reference: it's
+Use Grok Build ([#373](https://github.com/reeval-ai/reeval/pull/373)) as the worked reference: it's
 the most recent ACP harness and touches every place below. pi and Codex are the references for a
 CLI with its own NDJSON stream; Antigravity for one that recovers data from disk after the turn.
 
@@ -47,7 +47,7 @@ CLI with its own NDJSON stream; Antigravity for one that recovers data from disk
    in `test:contract`'s default list (`packages/reeval/package.json`) and `contract.yml`'s. See
    `packages/reeval/test/contract/README.md#adding-a-harness`.
 5. **Telemetry declarations**: a row in `packages/reeval/test/contract/telemetry.ts`
-   ([#836](https://github.com/invertase/reeval/pull/836)) for every signal in `SIGNALS`, each
+   ([#836](https://github.com/reeval-ai/reeval/pull/836)) for every signal in `SIGNALS`, each
    `captured`, `partial` (with a `note`), `dropped` (with where the data is) or `not-produced`.
    `AgentKind` keys it, so a missing row fails typecheck. Fill it from a
    [telemetry audit](../telemetry-audit/SKILL.md), not from what the CLI's docs claim. Refresh the
@@ -80,13 +80,13 @@ signal `captured`.
 
 | Trap | Real example | What to do |
 |---|---|---|
-| ACP `inputTokens` may already exclude cache reads | OpenCode recorded `input: 0` on every cached turn: `tokenUsage` subtracted `cachedReadTokens` a second time ([#837](https://github.com/invertase/reeval/pull/837)) | Check `totalTokens = input + output + thoughts + cacheRead + cacheWrite`. If it holds, set the input `total` to the whole prompt and `noCache` to `inputTokens` |
-| Reasoning sits inside output; cache reads inside input | fx on OpenAI Chat Completions folded `cached_tokens` into input and dropped `reasoning_tokens` (6–30× fresh input) ([#839](https://github.com/invertase/reeval/pull/839)) | Know each provider's accounting: OpenAI and Anthropic count reasoning inside output and cache reads inside the prompt. Split them, never add them on top |
-| Side model calls are missing from the CLI's summaries | Grok's web search was 52% of an attempt's cost and in no summary; titles (OpenCode, Grok) and session naming (Goose) too ([#831](https://github.com/invertase/reeval/pull/831)) | Count the gateway's model calls per turn and match them to the CLI's steps. Turn off side features you don't need in the CLI's config; declare the rest `sideCallUsage: dropped` |
-| Usage only in an on-disk ledger | Goose's ACP reports only the last call; exact per-call usage is in `sessions.db` `usage_ledger` ([#838](https://github.com/invertase/reeval/pull/838)) | Look in the CLI's sqlite, logs and session dirs. Read rows after the turn by row id (timestamps are too coarse) through `node -e` in the sandbox |
-| Aborted and timed-out turns lose transcript and usage | Codex, Cursor, OpenCode, Goose, fx and Grok recorded `usage: null`; the four ACP harnesses kept no parts at all ([#840](https://github.com/invertase/reeval/pull/840)) | Implement `stopped()` and `salvage()`, and a catalog `storedUsage` reader that runs before the sandbox is removed |
-| Large tool output saved to files | Cursor and Antigravity recorded `""` for a 319 KB shell or 60 KB MCP result; the output was in `agent-tools/*.txt` or `steps/<n>/output.txt` ([#842](https://github.com/invertase/reeval/pull/842)) | Run a 300 KB command and a 60 KB MCP result. Recover spilled files (1 MiB cap), set `outputView`, and declare `fullToolOutput` honestly |
-| Reasoning needs config flags | Codex sent no `reasoning.summary`; OpenCode on Gemini lost `includeThoughts`; Claude Code's `thinking_tokens` needed the bridge patch ([#841](https://github.com/invertase/reeval/pull/841)); agy streams no thoughts but stores them on disk ([#833](https://github.com/invertase/reeval/pull/833)) | Compare reasoning tokens and text on the wire with the record, at the effort you plan to run. Set the CLI's flags in its config, or recover from disk |
+| ACP `inputTokens` may already exclude cache reads | OpenCode recorded `input: 0` on every cached turn: `tokenUsage` subtracted `cachedReadTokens` a second time ([#837](https://github.com/reeval-ai/reeval/pull/837)) | Check `totalTokens = input + output + thoughts + cacheRead + cacheWrite`. If it holds, set the input `total` to the whole prompt and `noCache` to `inputTokens` |
+| Reasoning sits inside output; cache reads inside input | fx on OpenAI Chat Completions folded `cached_tokens` into input and dropped `reasoning_tokens` (6–30× fresh input) ([#839](https://github.com/reeval-ai/reeval/pull/839)) | Know each provider's accounting: OpenAI and Anthropic count reasoning inside output and cache reads inside the prompt. Split them, never add them on top |
+| Side model calls are missing from the CLI's summaries | Grok's web search was 52% of an attempt's cost and in no summary; titles (OpenCode, Grok) and session naming (Goose) too ([#831](https://github.com/reeval-ai/reeval/pull/831)) | Count the gateway's model calls per turn and match them to the CLI's steps. Turn off side features you don't need in the CLI's config; declare the rest `sideCallUsage: dropped` |
+| Usage only in an on-disk ledger | Goose's ACP reports only the last call; exact per-call usage is in `sessions.db` `usage_ledger` ([#838](https://github.com/reeval-ai/reeval/pull/838)) | Look in the CLI's sqlite, logs and session dirs. Read rows after the turn by row id (timestamps are too coarse) through `node -e` in the sandbox |
+| Aborted and timed-out turns lose transcript and usage | Codex, Cursor, OpenCode, Goose, fx and Grok recorded `usage: null`; the four ACP harnesses kept no parts at all ([#840](https://github.com/reeval-ai/reeval/pull/840)) | Implement `stopped()` and `salvage()`, and a catalog `storedUsage` reader that runs before the sandbox is removed |
+| Large tool output saved to files | Cursor and Antigravity recorded `""` for a 319 KB shell or 60 KB MCP result; the output was in `agent-tools/*.txt` or `steps/<n>/output.txt` ([#842](https://github.com/reeval-ai/reeval/pull/842)) | Run a 300 KB command and a 60 KB MCP result. Recover spilled files (1 MiB cap), set `outputView`, and declare `fullToolOutput` honestly |
+| Reasoning needs config flags | Codex sent no `reasoning.summary`; OpenCode on Gemini lost `includeThoughts`; Claude Code's `thinking_tokens` needed the bridge patch ([#841](https://github.com/reeval-ai/reeval/pull/841)); agy streams no thoughts but stores them on disk ([#833](https://github.com/reeval-ai/reeval/pull/833)) | Compare reasoning tokens and text on the wire with the record, at the effort you plan to run. Set the CLI's flags in its config, or recover from disk |
 | The served model | Claude Code and Cursor report their own turn model, and `servedModels` stayed null where the gateway didn't read the response | Declare `servedModel` (request) or `modelResponses` (response body) in the catalog, and check `servedModels` against the wire's response `model` |
 
 ## Checklist

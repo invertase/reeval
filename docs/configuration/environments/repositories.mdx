@@ -24,7 +24,7 @@ By default the workspace holds the tree with no `.git` directory, so the agent's
 
 Pass `camelcase` as an evaluation's `environment`, as [Environments](/configuration/environments#define-and-use-an-environment) shows.
 
-For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+For a runnable project, see [`with-existing-codebase`](https://github.com/reeval-ai/reeval/tree/main/examples/with-existing-codebase).
 
 ## Pin a ref or a path
 
@@ -34,7 +34,7 @@ To start from one directory of a repository, pass `path`. The directory's conten
 
 ```ts title="with-git-workspace.eval.ts"
 const math = defineEnvironment('reeval-math', ({ git }) => ({
-  workspace: git('github:invertase/reeval', {
+  workspace: git('github:reeval-ai/reeval', {
     ref: 'f60f255edb8a110d42d2ae4e483bd8555168b854',
     path: 'examples/with-checks/project',
     init: true,
@@ -43,7 +43,7 @@ const math = defineEnvironment('reeval-math', ({ git }) => ({
 }))
 ```
 
-A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error. For a runnable project, see [`with-git-workspace`](https://github.com/invertase/reeval/tree/main/examples/with-git-workspace).
+A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error. For a runnable project, see [`with-git-workspace`](https://github.com/reeval-ai/reeval/tree/main/examples/with-git-workspace).
 
 ## Use a private repository
 
