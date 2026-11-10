@@ -899,7 +899,7 @@ async function attachCommand(
   if (download && detached) {
     console.log(
       dim(
-        `Not downloading the files of cloud run ${download.runId} after detaching: reeval attach --download${flags.profile === undefined ? '' : ` --profile ${flags.profile}`} ${displayUrl(source)} downloads them once it has ended`,
+        `Not downloading the files of cloud run ${download.runId} after detaching: reeval attach --download${download.profile === undefined ? '' : ` --profile ${download.profile}`} ${displayUrl(source)} downloads them once it has ended`,
       ),
     )
   } else if (download) {
@@ -938,10 +938,12 @@ async function cloudDownload(
   loadEnvFiles(path)
   const named = profile ?? (process.env.REEVAL_PROFILE || undefined)
   const loaded = await loadConfig(path, 'run', named)
-  const { root, history } = withProfileHistory(loaded, selectProfile(loaded, profile))
+  const picked = selectProfile(loaded, profile)
+  const { root, history } = withProfileHistory(loaded, picked)
   const auth = await cloud.cloudAuth(base)
   return {
     runId: run.runId,
+    ...(picked ? { profile: picked.name } : {}),
     run: () => downloadCloudFiles({ cloudRunId: run.runId, url: run.files, auth, root, history }),
   }
 }

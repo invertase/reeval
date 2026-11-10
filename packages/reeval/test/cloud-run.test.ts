@@ -660,7 +660,7 @@ describe("a cloud run's files, downloaded with --download", () => {
         p.serve((machine) => [...machine, linkTo(at, outside)])
         const refused = await runCli(dir, ['attach', '--download', events], { env: env(p) })
         assert.equal(refused.code, 3, refused.stdout + refused.stderr)
-        assert.match(refused.stderr, /a link outside a snapshot or a recorded run's folder/)
+        assert.match(refused.stderr, /a link outside a snapshot \(/)
         assert.ok(refused.stderr.includes(at), refused.stderr)
         assert.ok(!existsSync(join(dir, at)), `${at}: nothing written`)
       }
@@ -892,7 +892,7 @@ describe("a cloud run's files, downloaded with --download", () => {
         assert.equal(got.code, 3, `${shown}: ${got.stdout}${got.stderr}`)
         assert.match(
           got.stderr,
-          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs, \.reeval\/debug and evals\/\.history, or a link outside a snapshot or a recorded run's folder/,
+          /the files of cloud run run_1 hold 1 entry outside \.reeval\/runs, \.reeval\/debug and evals\/\.history, or a link outside a snapshot/,
         )
         assert.ok(got.stderr.includes(shown), got.stderr)
         assert.ok(!existsSync(join(dir, '.reeval/runs')), `${shown}: nothing written`)

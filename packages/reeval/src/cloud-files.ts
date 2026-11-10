@@ -267,7 +267,7 @@ export async function downloadCloudFiles(options: {
   }
   if (unsafe.length) {
     throw new CloudError(
-      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside ${areas}, or a link outside a snapshot or a recorded run's folder (${listed(unsafe)}): not downloading them`,
+      `${what} hold ${plural(unsafe.length, 'entry', 'entries')} outside ${areas}, or a link outside a snapshot (${listed(unsafe)}): not downloading them`,
     )
   }
   const paths = new Set<string>()
