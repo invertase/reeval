@@ -220,6 +220,88 @@ type PlatformRun = {
   status: string
   error?: { code: string; message: string } | null
   exitCode?: number | null
+  /** Why the platform stopped a `stopped` run. */
+  stopReason?: string | null
+}
+
+/** The exit code of a run the platform stopped before it finished. */
+const STOPPED = 4
+
+/**
+ * `code`, or 4 when the platform says it stopped run `runId` before it finished. A stop ends the
+ * stream as a cancel does, so only an interrupted run is asked about; an answer that doesn't come
+ * keeps the stream's code.
+ */
+export async function stoppedOr(
+  code: number,
+  runId: string,
+  base: URL,
+  auth: CloudAuth,
+  log: (line: string) => void,
+): Promise<number> {
+  if (code !== INTERRUPTED) return code
+  const run = await call<PlatformRun>(
+    new URL(`api/runs/${encodeURIComponent(runId)}`, base),
+    { method: 'GET', what: `read run ${runId}` },
+    auth,
+  ).catch(() => null)
+  if (run?.status !== 'stopped') return code
+  const why = run.error?.message ?? run.stopReason
+  log(`The cloud platform stopped run ${runId} before it finished${why ? `: ${why}` : ''}`)
+  return STOPPED
+}
+
+/** How the interactive list says to cancel cloud run `runId`, which no key there reaches. */
+export const cancelHint = (runId: string) => `reeval cloud run cancel ${runId} cancels it`
+
+/** A cloud run's id, from the id itself or its event stream URL on the platform at `base`. */
+async function cloudRunId(given: string, base: URL): Promise<string> {
+  if (!/^(https?|wss?):\/\//i.test(given)) return given
+  const { cloudRunOf } = await import('./cloud-files.ts')
+  const run = cloudRunOf(given, base)
+  if (!run) {
+    throw new UsageError(
+      `${displayUrl(given)} isn't a cloud run's event stream at ${displayUrl(base.href)}: pass the run's id, or its URL there (${displayUrl(base.href)}api/runs/<run>/events)`,
+    )
+  }
+  return run.runId
+}
+
+/** `reeval cloud run cancel <run>`: asks the platform to cancel the run. */
+export async function cloudRunCommand(
+  args: string[],
+  io: { out: (line: string) => void },
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<number> {
+  const [action, given] = args
+  if (action !== 'cancel') {
+    throw new UsageError(
+      `Unknown command "cloud run ${action ?? ''}". Did you mean reeval cloud run cancel <run>?`,
+    )
+  }
+  if (!given) {
+    throw new UsageError(
+      'reeval cloud run cancel needs the run: the id reeval run --cloud printed, or its event stream URL',
+    )
+  }
+  const base = cloudUrl(env)
+  const runId = await cloudRunId(given, base)
+  const auth = await cloudAuth(base, env)
+  const what = `cancel run ${runId}`
+  const answer = await request(
+    new URL(`api/runs/${encodeURIComponent(runId)}/cancel`, base),
+    { method: 'POST', what },
+    auth.headers,
+  )
+  if (!answer.ok) throw platformError(answer, what, auth)
+  const run = answer.body as PlatformRun | null
+  if (answer.status === 202) {
+    io.out(`Canceling cloud run ${runId}; its followers see it end once it stops`)
+  } else {
+    const status = typeof run?.status === 'string' ? ` (${run.status})` : ''
+    io.out(`Cloud run ${runId} has already ended${status}`)
+  }
+  return 0
 }
 
 export type CallInit = RequestInit & { what: string; timeoutMs?: number }
@@ -315,7 +397,9 @@ export type CloudRunOptions = {
   bundle: MadeBundle
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
-  follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
+  follow: (
+    options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach' | 'cancelHint'>,
+  ) => Promise<number>
   /**
    * `--download`: once the run ends, its files go into this project as a run here leaves them,
    * a recorded run's into `history`; `profile` is the profile that picked it.
@@ -534,6 +618,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
       onDetach: () => {
         detached = true
       },
+      cancelHint: cancelHint(runId),
     })
   } catch (error) {
     if (!(error instanceof EventStreamError)) throw error
@@ -543,22 +628,25 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
       auth,
     ).catch(() => null)
     const why = run?.error?.message ?? run?.error?.code
-    if (typeof run?.exitCode !== 'number') {
+    if (run?.status === 'stopped') code = INTERRUPTED
+    else if (typeof run?.exitCode !== 'number') {
       if (run?.status === 'failed') {
         throw new CloudError(`cloud run ${runId} failed${why ? `: ${why}` : ''}`)
       }
       throw error
+    } else {
+      if (why) log(`cloud run ${runId} ended: ${why}`)
+      code = run.exitCode
     }
-    if (why) log(`cloud run ${runId} ended: ${why}`)
-    code = run.exitCode
   }
   if (detached) {
     const again = options.download
       ? `reeval attach --download${options.download.profile === undefined ? '' : ` --profile ${options.download.profile}`} ${displayUrl(events.href)} follows it again and downloads its files once it ends`
       : `${reattach} follows it again`
-    log(`Cloud run ${runId} goes on: ${again}`)
+    log(`Cloud run ${runId} goes on: ${again}; ${cancelHint(runId)}`)
     return INTERRUPTED
   }
+  code = await stoppedOr(code, runId, base, auth, log)
   if (options.download) {
     const { downloadAfter, downloadCloudFiles } = await import('./cloud-files.ts')
     const { root, history } = options.download

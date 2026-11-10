@@ -147,7 +147,15 @@ const EXPECTED_ERRORS = [
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
 const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError', 'CloudError']
 
-const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
+const EXIT = {
+  ok: 0,
+  failed: 1,
+  usage: 2,
+  infra: 3,
+  stopped: 4,
+  interrupted: 130,
+  terminated: 143,
+} as const
 
 const version = PACKAGE_VERSION
 
@@ -290,9 +298,9 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'cloud') {
     const [area, ...args] = filters
-    if (area !== 'secrets' && area !== 'provider' && area !== 'push') {
+    if (area !== 'secrets' && area !== 'provider' && area !== 'push' && area !== 'run') {
       throw new UsageError(
-        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider or push?`,
+        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider, push or run?`,
       )
     }
     if (area === 'push') {
@@ -309,6 +317,10 @@ async function run(argv: string[]): Promise<number> {
       })
     }
     loadEnvFiles(configPath)
+    if (area === 'run') {
+      const { cloudRunCommand } = await import('./cloud-run.ts')
+      return cloudRunCommand(args, { out: (s) => console.log(s) })
+    }
     const cloud = await import('./cloud-secrets.ts')
     const { projectDirFor } = await import('./cloud-project.ts')
     const io = {
@@ -977,15 +989,22 @@ async function attachCommand(
     ? await cloudDownload(source, configPath, flags.profile)
     : undefined
   const follow = isAttachUrl(source) ? await cloud.cloudFollow(source) : undefined
+  const cloudRun = follow ? await cloudRunAt(source) : null
   let detached = false
-  const code = await attachHere(flags, {
+  let code = await attachHere(flags, {
     source,
     ...(root === undefined ? {} : { root }),
     ...(follow ? { follow } : {}),
+    ...(cloudRun ? { cancelHint: cloud.cancelHint(cloudRun.runId) } : {}),
     onDetach: () => {
       detached = true
     },
   })
+  if (cloudRun && !detached) {
+    code = await cloud.stoppedOr(code, cloudRun.runId, cloudRun.base, cloudRun.auth, (line) =>
+      console.log(dim(line)),
+    )
+  }
   if (download && detached) {
     console.log(
       dim(
@@ -999,6 +1018,15 @@ async function attachCommand(
     }
   }
   return code
+}
+
+/** The cloud run whose event stream is `source`, with what reads it; null for any other stream. */
+async function cloudRunAt(source: string) {
+  const cloud = await import('./cloud-run.ts')
+  const { cloudRunOf } = await import('./cloud-files.ts')
+  const base = cloud.cloudUrl()
+  const run = cloudRunOf(source, base)
+  return run ? { runId: run.runId, base, auth: await cloud.cloudAuth(base) } : null
 }
 
 /**
@@ -1039,7 +1067,10 @@ async function cloudDownload(
 /** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
 async function attachHere(
   flags: Flags,
-  options: Pick<import('./attach.ts').AttachOptions, 'source' | 'root' | 'follow' | 'onDetach'>,
+  options: Pick<
+    import('./attach.ts').AttachOptions,
+    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint'
+  >,
 ): Promise<number> {
   const { attach } = await import('./attach.ts')
   return attach({

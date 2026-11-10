@@ -186,7 +186,9 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * event socket. Starting runs the bundle with `reeval run --bundle --events-url`, posting to this
  * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `fails`,
  * starting runs nothing: the socket closes with no exit line and the run reads as failed, with
- * `exitCode` when given.
+ * `exitCode` when given. With `holds`, starting sends a header and a `held` notice and the run
+ * goes on until it's canceled; with `stops`, it ends interrupted and reads as stopped, for that
+ * reason.
  */
 async function platform(
   options: {
@@ -200,6 +202,8 @@ async function platform(
     secretNames?: string[] | number | 'malformed' | 'drop'
     /** The asked-for names the fake platform reserves. */
     reserved?: string[]
+    holds?: boolean
+    stops?: string
   } = {},
 ) {
   const seen: Seen[] = []
@@ -219,12 +223,45 @@ async function platform(
     res.writeHead(status, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
   }
+  let canceled = false
   const run = () => ({
     id: 'run_1',
-    status: options.fails ? 'failed' : over ? 'succeeded' : 'running',
-    error: options.fails ? { code: 'start_failed', message: options.fails } : null,
+    status: options.fails
+      ? 'failed'
+      : options.stops
+        ? 'stopped'
+        : canceled
+          ? over
+            ? 'cancelled'
+            : 'running'
+          : over
+            ? 'succeeded'
+            : 'running',
+    error: options.fails
+      ? { code: 'start_failed', message: options.fails }
+      : options.stops
+        ? { code: 'units_exhausted', message: options.stops }
+        : null,
     exitCode: options.exitCode ?? null,
+    ...(options.stops ? { stopReason: 'units_exhausted' } : {}),
   })
+  const relay = (line: object) => {
+    const l = JSON.stringify(line)
+    lines.push(l)
+    for (const v of viewers) v.send(`{"seq":${lines.length},"line":${l}}`)
+  }
+  const header = () =>
+    relay({
+      type: 'header',
+      schemaVersion: 1,
+      reeval: '0.0.0',
+      runId: 'r-held',
+      startedAt: new Date().toISOString(),
+      pid: 1,
+      host: 'platform-machine',
+      harness: 'fake',
+      verbosity: 0,
+    })
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://platform')
     seen.push({ method: req.method ?? '', path: url.pathname, auth: req.headers.authorization })
@@ -267,6 +304,13 @@ async function platform(
       if (!uploaded) return json(res, 409, { error: { code: 'no_bundle', message: 'no bundle' } })
       if (options.fails) {
         over = true
+      } else if (options.holds) {
+        header()
+        relay({ type: 'notice', at: Date.now(), level: 'info', text: 'held' })
+      } else if (options.stops) {
+        header()
+        relay({ type: 'exit', at: Date.now(), code: 130 })
+        over = true
       } else {
         const file = join(tempDir('cloud-bundle'), 'bundle.tar.gz')
         writeFileSync(file, uploaded)
@@ -279,6 +323,14 @@ async function platform(
       return json(res, 202, run())
     }
     if (req.method === 'GET' && url.pathname === '/api/runs/run_1') return json(res, 200, run())
+    if (req.method === 'POST' && url.pathname === '/api/runs/run_1/cancel') {
+      if (over) return json(res, 200, run())
+      canceled = true
+      const answer = run()
+      relay({ type: 'exit', at: Date.now(), code: 130 })
+      finish()
+      return json(res, 202, answer)
+    }
     if (req.method === 'GET' && url.pathname === '/api/runs/run_1/artifacts/files.tar.gz') {
       await vm
       const served = vm ? files(machineFiles(tmp, lines)) : null
@@ -722,6 +774,100 @@ describe('reeval run on the cloud platform', () => {
       })
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(r.stdout, /cloud run run_1 ended: the plan differs from the bundle/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('Ctrl-C without a terminal detaches and the run goes on, from reeval run and reeval attach', async () => {
+    const p = await platform({ holds: true })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    const interrupt = (stdout: string, pid: number) => {
+      if (!stdout.includes('held')) return false
+      process.kill(pid, 'SIGINT')
+      return true
+    }
+    try {
+      const dir = await fixtureProject()
+      const r = await runCli(dir, ['run', '--cloud'], { env, onOutput: interrupt })
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+      assert.match(
+        r.stdout,
+        /Cloud run run_1 goes on: reeval attach \S+\/api\/runs\/run_1\/events follows it again; reeval cloud run cancel run_1 cancels it/,
+      )
+      const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
+        env,
+        onOutput: interrupt,
+      })
+      assert.equal(again.code, 0, again.stdout + again.stderr)
+      assert.match(again.stdout, /Detached from run r-held\./)
+      assert.ok(!p.seen.some((s) => s.path.endsWith('/cancel')), 'detaching cancels nothing')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('reeval cloud run cancel cancels the run by its id or event stream URL, and its followers see it end', async () => {
+    const p = await platform({ holds: true })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      let canceling: Promise<Awaited<ReturnType<typeof runCli>>> | undefined
+      const followed = await runCli(dir, ['run', '--cloud'], {
+        env,
+        onOutput: (stdout) => {
+          if (!stdout.includes('held')) return false
+          canceling = runCli(dir, ['cloud', 'run', 'cancel', 'run_1'], { env })
+          return true
+        },
+      })
+      const canceled = await canceling
+      assert.equal(canceled?.code, 0, `${canceled?.stdout}${canceled?.stderr}`)
+      assert.match(canceled?.stdout ?? '', /Canceling cloud run run_1/)
+      assert.equal(followed.code, 130, followed.stdout + followed.stderr)
+      assert.doesNotMatch(followed.stdout, /goes on/)
+      const cancel = p.seen.find((s) => s.path === '/api/runs/run_1/cancel')
+      assert.equal(cancel?.method, 'POST')
+      assert.equal(cancel?.auth, 'Bearer cloud-test-token')
+      const ended = await runCli(
+        dir,
+        ['cloud', 'run', 'cancel', `${p.base.replace(/^http/, 'ws')}/api/runs/run_1/events`],
+        { env },
+      )
+      assert.equal(ended.code, 0, ended.stdout + ended.stderr)
+      const status = /Cloud run run_1 has already ended \((\w+)\)/.exec(ended.stdout)?.[1]
+      assert.equal(status, 'cancelled', ended.stdout)
+      const missing = await runCli(dir, ['cloud', 'run', 'cancel', 'run_2'], { env })
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(missing.stderr, /the cloud platform refused to cancel run run_2/)
+      const none = await runCli(dir, ['cloud', 'run', 'cancel'], { env })
+      assert.equal(none.code, 2)
+      assert.match(none.stderr, /reeval cloud run cancel needs the run/)
+      const elsewhere = await runCli(
+        dir,
+        ['cloud', 'run', 'cancel', 'https://elsewhere.test/api/runs/run_1/events'],
+        { env },
+      )
+      assert.equal(elsewhere.code, 2)
+      assert.match(elsewhere.stderr, /isn't a cloud run's event stream at/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a run the platform stopped exits 4, from reeval run and reeval attach', async () => {
+    const p = await platform({ stops: 'the org is out of units' })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      const r = await runCli(dir, ['run', '--cloud'], { env })
+      assert.equal(r.code, 4, r.stdout + r.stderr)
+      assert.match(
+        r.stdout,
+        /The cloud platform stopped run run_1 before it finished: the org is out of units/,
+      )
+      const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], { env })
+      assert.equal(again.code, 4, again.stdout + again.stderr)
     } finally {
       await p.close()
     }

@@ -3,7 +3,8 @@
 // replays what already happened and then follows. It exits with the run's own exit code. On a
 // terminal that's the interactive list, whose q and Ctrl-C detach this viewer and leave the run
 // alone; x pressed twice cancels the run, which only a run on this host whose live.json vouches for
-// its pid can be reached for. A run that writes heartbeats (its header says so) and then goes quiet
+// its pid can be reached for. Anywhere else a SIGINT detaches the same way, and a second one quits
+// as Node does. A run that writes heartbeats (its header says so) and then goes quiet
 // is shown as stalled, and after longer as lost, which ends attach.
 import { hostname } from 'node:os'
 import { isAbsolute, join, posix, win32 } from 'node:path'
@@ -41,6 +42,8 @@ export type AttachOptions = {
   silence?: { stallMs?: number; lostMs?: number }
   /** Told when the viewer detaches, before `attach` returns 0. */
   onDetach?: () => void
+  /** How to cancel a run this viewer can't reach, which the interactive list shows. */
+  cancelHint?: string
 }
 
 const SILENT = Symbol('silent')
@@ -162,6 +165,7 @@ export async function attach(options: AttachOptions): Promise<number> {
         detach: () => detached.abort(),
         ...(line.host === hostname() ? {} : { host: line.host }),
         ...(root === undefined ? {} : { cancelable: () => reachable(line) }),
+        ...(options.cancelHint === undefined ? {} : { cancelHint: options.cancelHint }),
       },
       cancel: () => {
         if (!reachable(line)) return false
@@ -196,6 +200,8 @@ export async function attach(options: AttachOptions): Promise<number> {
     }
   }
   let pending = lines.next()
+  const interrupted = () => detached.abort()
+  process.once('SIGINT', interrupted)
   try {
     for (;;) {
       const got = await next(pending)
@@ -259,6 +265,7 @@ export async function attach(options: AttachOptions): Promise<number> {
       throw error
     }
   } finally {
+    process.off('SIGINT', interrupted)
     pending.catch(() => {})
     lines.return?.(undefined).catch(() => {})
   }
