@@ -1012,6 +1012,8 @@ async function cloudTarget(
     }
     return undefined
   }
+  const { linkedProject, projectDirFor } = await import('./cloud-project.ts')
+  const project = await linkedProject(projectDirFor(configPath))
   const { makeBundle } = await import('./bundle/index.ts')
   // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
   // bundle's arguments, so the platform's machine plans with the same one.
@@ -1070,11 +1072,10 @@ async function cloudTarget(
   if (setup.recording) {
     console.log(dim("record: a cloud run isn't recorded into this machine's history"))
   }
-  const { linkedProject, projectDirFor } = await import('./cloud-project.ts')
   const exit = await cloud.runCloud({
     base,
     bundle: made,
-    project: await linkedProject(projectDirFor(configPath)),
+    project,
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
     ...(flags.download && {

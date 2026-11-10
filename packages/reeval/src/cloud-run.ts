@@ -314,7 +314,8 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   const { archive } = bundle
   const sha256 = createHash('sha256').update(archive).digest('hex')
   const { project } = options
-  const created = await call<{ runId?: unknown; upload?: { url?: unknown; method?: unknown } }>(
+  const what = 'create the run'
+  const answer = await request(
     new URL(
       project
         ? `api/orgs/${encodeURIComponent(project.orgId)}/projects/${encodeURIComponent(project.projectId)}/runs`
@@ -323,12 +324,22 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     ),
     {
       method: 'POST',
-      what: 'create the run',
+      what,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ bundleSha256: sha256, bundleBytes: archive.length }),
     },
-    auth,
+    headers,
   )
+  if (project && (answer.status === 403 || answer.status === 404)) {
+    throw new UsageError(
+      `the cloud platform refused to create the run in ${project.projectId}, the project reeval link linked: ${platformMessage(answer.body) ?? `HTTP ${answer.status}`} (reeval link links another)`,
+    )
+  }
+  if (!answer.ok) throw platformError(answer, what, auth)
+  const created = answer.body as {
+    runId?: unknown
+    upload?: { url?: unknown; method?: unknown }
+  } | null
   const runId = created?.runId
   const uploadUrl = typeof created?.upload?.url === 'string' ? URL.parse(created.upload.url) : null
   if (typeof runId !== 'string' || !runId || !uploadUrl) {

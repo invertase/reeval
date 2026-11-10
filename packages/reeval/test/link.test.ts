@@ -132,7 +132,7 @@ describe('reeval link on a terminal', () => {
       const r = await link(p.base, dir, {}, ['7', ''])
       assert.equal(r.code, 0, r.error?.message)
       assert.doesNotMatch(r.asked, /Which org/)
-      assert.match(r.asked, /Project \[1\]: Answer 1 to 1, or a project's slug\.\nProject \[1\]: $/)
+      assert.match(r.asked, /Project \[1\]: Answer 1 to 1, or a slug\.\nProject \[1\]: $/)
       assert.deepEqual(linked(dir), { orgId: 'org_lab', projectId: 'proj_evals' })
     } finally {
       await p.close()
@@ -198,7 +198,7 @@ describe('reeval link without a terminal', () => {
       const r = await link(p.base, dir, { org: 'acme', project: 'proj_web' })
       assert.equal(r.code, 0, r.error?.message)
       assert.deepEqual(linked(dir), { orgId: 'org_acme', projectId: 'proj_web' })
-      const again = await link(p.base, dir, { org: 'org_acme', project: 'web' })
+      const again = await link(p.base, dir, { org: 'org_acme', project: 'WEB' })
       assert.equal(again.code, 0, again.error?.message)
       assert.equal(
         again.out,
@@ -270,6 +270,25 @@ describe('reeval link without a terminal', () => {
       assert.match(r.error?.message ?? '', /^You aren't in any org on http/)
     } finally {
       await none.close()
+    }
+  })
+})
+
+describe('reeval link and a platform that does not answer as one', () => {
+  test('a page that is not a list of orgs is the platform failing, not an empty org list', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' })
+      res.end('<html>app</html>')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      const r = await link(base, tempDir('link'), {}, [], env(base))
+      assert.equal(r.error?.name, 'CloudError')
+      assert.match(r.error?.message ?? '', /^the cloud platform didn't list your orgs$/)
+    } finally {
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
     }
   })
 })

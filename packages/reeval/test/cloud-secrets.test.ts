@@ -400,7 +400,7 @@ describe('reeval cloud provider', () => {
         { env, input: 'sk-proj-c3d4\n' },
       )
       assert.equal(valued.code, 2)
-      assert.match(valued.stderr, /--project takes no value in reeval cloud provider/)
+      assert.match(valued.stderr, /takes --project with no value, after set or delete/)
       for (const r of [org, project, list, del, valued]) {
         assert.ok(!/sk-org|sk-proj/.test(r.stdout + r.stderr), 'no key is printed')
       }

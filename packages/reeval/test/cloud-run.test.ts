@@ -357,6 +357,18 @@ describe('reeval run on the cloud platform', () => {
         p.seen.filter((s) => s.method === 'POST' && s.path.endsWith('/runs')).map((s) => s.path),
         ['/api/orgs/org_a/projects/proj_a/runs'],
       )
+      writeFileSync(
+        join(dir, '.reeval/project.json'),
+        JSON.stringify({ orgId: 'org_a', projectId: 'proj_gone' }),
+      )
+      const gone = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(gone.code, 2, gone.stdout + gone.stderr)
+      assert.match(
+        gone.stderr,
+        /refused to create the run in proj_gone, the project reeval link linked: .* \(reeval link links another\)/,
+      )
     } finally {
       await p.close()
     }

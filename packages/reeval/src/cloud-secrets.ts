@@ -301,7 +301,9 @@ export async function providerCommand(
   // `--project` takes a value for reeval link, so here what follows it may be the key: the refusal
   // doesn't repeat it.
   if (flags.project) {
-    throw new UsageError('--project takes no value in reeval cloud provider: give it on its own')
+    throw new UsageError(
+      'reeval cloud provider takes --project with no value, after set or delete: reeval cloud provider <provider> set --project',
+    )
   }
   if (provider === 'list') {
     if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
