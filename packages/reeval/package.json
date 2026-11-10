@@ -172,6 +172,6 @@
     "@types/react": "19.3.0",
     "ink-testing-library": "4.0.0",
     "studio-web": "workspace:*",
-    "tsdown": "0.23.4"
+    "tsdown": "0.23.7"
   }
 }
