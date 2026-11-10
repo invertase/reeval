@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs'
@@ -111,7 +112,7 @@ describe('resolveRetry', () => {
   test('a live run says when to retry it', async () => {
     const p = await project('retry-live', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_live_aaaa'
-    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeLiveStaging(p.dir, live, { pid: process.ppid, heartbeatAt: new Date().toISOString() })
     await assert.rejects(
       () => resolveRetry(p.dir, live),
       (e: unknown) =>
@@ -169,7 +170,7 @@ describe('resolveResume', () => {
   test('a live run and a complete run are refused', async () => {
     const p = await project('resume-refuse', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_live_aaaa'
-    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeLiveStaging(p.dir, live, { pid: process.ppid, heartbeatAt: new Date().toISOString() })
     writeScratch(p.dir, '20260102T000000Z_nogit_done_bbbb', 'complete')
     await assert.rejects(
       () => resolveResume(p.dir, live),
@@ -189,7 +190,7 @@ describe('resolveResume', () => {
     const p = await project('resume-sleep', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_sleep_aaaa'
     writeLiveStaging(p.dir, live, {
-      pid: process.pid,
+      pid: process.ppid,
       heartbeatAt: new Date(Date.now() - 60_000).toISOString(),
     })
     await assert.rejects(
@@ -204,7 +205,7 @@ describe('resolveResume', () => {
   test('omitted ref names a live run instead of no resumable', async () => {
     const p = await project('resume-omitted-live', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_only_aaaa'
-    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeLiveStaging(p.dir, live, { pid: process.ppid, heartbeatAt: new Date().toISOString() })
     await assert.rejects(
       () => resolveResume(p.dir),
       (e: unknown) =>
@@ -284,7 +285,15 @@ describe('noteRetries', () => {
     } as unknown as RunRecord
     const planned = [{ key }, { key: 'kept' }]
     const once = noteRetries(planned, staging, previous, true)
+    const file = join(staging, 'retries.json')
+    const first = statSync(file).ino
     const twice = noteRetries(planned, staging, previous, true)
+    // Replaced by a rename, never rewritten in place, so a copy of the folder sees a whole file.
+    assert.notEqual(statSync(file).ino, first)
+    assert.deepEqual(
+      readdirSync(staging).filter((n) => n.endsWith('.tmp')),
+      [],
+    )
     assert.deepEqual([...twice.errored], [key])
     assert.deepEqual(Object.fromEntries(twice.retries), Object.fromEntries(once.retries))
     assert.deepEqual(
@@ -336,15 +345,34 @@ describe('completedKeysFor and prepareResume', () => {
     })
   })
 
-  test('refuses a second claim while this process holds the id', async () => {
+  test('refuses a claim while another live process holds the id', async () => {
     const p = await project('resume-holder', { 'reeval.config.ts': fakeConfig() })
     const runId = '20260101T000000Z_nogit_hold_aaaa'
-    writeStoppedStaging(p.dir, runId)
+    const staging = writeStoppedStaging(p.dir, runId)
     const target = await resolveResume(p.dir, runId)
-    await prepareResume(target, p.dir)
+    writeFileSync(join(staging, HOLDER_FILE), `${process.ppid}\n${hostname()}\n`)
     await assert.rejects(
       () => prepareResume(target, p.dir),
       (e: unknown) => e instanceof UsageError && /still running/.test((e as Error).message),
+    )
+    await assert.rejects(
+      () => resolveResume(p.dir, runId),
+      (e: unknown) => e instanceof UsageError && /still running/.test((e as Error).message),
+    )
+  })
+
+  test('a copied run folder naming this process resumes: its pid is not another run', async () => {
+    const p = await project('resume-own-pid', { 'reeval.config.ts': fakeConfig() })
+    const runId = '20260101T000000Z_nogit_copy_aaaa'
+    writeLiveStaging(p.dir, runId, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    const staging = join(p.dir, '.reeval', 'staging', runId)
+    writeFileSync(join(staging, HOLDER_FILE), `${process.pid}\n${hostname()}\n`)
+    const target = await resolveResume(p.dir)
+    assert.equal(target.runId, runId)
+    await prepareResume(target, p.dir)
+    assert.equal(
+      readFileSync(join(staging, HOLDER_FILE), 'utf8'),
+      `${process.pid}\n${hostname()}\n`,
     )
   })
 
@@ -373,6 +401,9 @@ describe('completedKeysFor and prepareResume', () => {
       target.previous,
     )
     assert.ok(keys.has(key))
+    const evals = join(p.dir, '.reeval', 'staging', runId, 'evals')
+    assert.deepEqual(readdirSync(evals), [recordFileName(key)])
+    assert.equal(JSON.parse(readFileSync(join(evals, recordFileName(key)), 'utf8')).outcome, 'pass')
   })
 })
 
@@ -558,7 +589,7 @@ evaluate('leftover', async () => {})
     writeStoppedStaging(p.dir, empty)
     writeStoppedStaging(p.dir, assembled)
     writeScratch(p.dir, assembled, 'complete')
-    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeLiveStaging(p.dir, live, { pid: process.ppid, heartbeatAt: new Date().toISOString() })
     writeStoppedStaging(p.dir, fresh)
     mkdirSync(join(p.dir, '.reeval', 'staging', 'stray'))
     for (const name of [stopped, empty, assembled, live, 'stray']) age(p.dir, name)
@@ -626,7 +657,7 @@ evaluate('leftover', async () => {})
     const p = await project('sweep-clean', { 'reeval.config.ts': fakeConfig() })
     const live = '20260104T000000Z_nogit_live_dddd'
     writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
-    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    writeLiveStaging(p.dir, live, { pid: process.ppid, heartbeatAt: new Date().toISOString() })
     assert.deepEqual(await removeStoppedStaging(p.dir), [SEEDED_RUN_ID])
     assert.deepEqual(stagingNames(p.dir), [live])
     writeStoppedStaging(p.dir, SEEDED_RUN_ID, done)
