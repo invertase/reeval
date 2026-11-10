@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto'
 import type { AttachOptions } from './attach.ts'
 import type { MadeBundle } from './bundle/index.ts'
 import { type FlagName, type Flags, RUN_FLAGS } from './cli-spec.ts'
+import type { LinkedProject } from './cloud-project.ts'
 import type { PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { displayUrl, EventStreamError, type FollowOptions } from './events.ts'
@@ -299,6 +300,8 @@ export type CloudRunOptions = {
    * a recorded run's into `history`; `profile` is the profile that picked it.
    */
   download?: { root: string; history: ResolvedHistory; profile?: string }
+  /** The project `reeval link` linked, which the run is created in; else the platform's default. */
+  project?: LinkedProject | null
   env?: NodeJS.ProcessEnv
 }
 
@@ -310,16 +313,33 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   const { headers } = auth
   const { archive } = bundle
   const sha256 = createHash('sha256').update(archive).digest('hex')
-  const created = await call<{ runId?: unknown; upload?: { url?: unknown; method?: unknown } }>(
-    new URL('api/runs', base),
+  const { project } = options
+  const what = 'create the run'
+  const answer = await request(
+    new URL(
+      project
+        ? `api/orgs/${encodeURIComponent(project.orgId)}/projects/${encodeURIComponent(project.projectId)}/runs`
+        : 'api/runs',
+      base,
+    ),
     {
       method: 'POST',
-      what: 'create the run',
+      what,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ bundleSha256: sha256, bundleBytes: archive.length }),
     },
-    auth,
+    headers,
   )
+  if (project && (answer.status === 403 || answer.status === 404)) {
+    throw new UsageError(
+      `the cloud platform refused to create the run in ${project.projectId}, the project reeval link linked: ${platformMessage(answer.body) ?? `HTTP ${answer.status}`} (reeval link links another)`,
+    )
+  }
+  if (!answer.ok) throw platformError(answer, what, auth)
+  const created = answer.body as {
+    runId?: unknown
+    upload?: { url?: unknown; method?: unknown }
+  } | null
   const runId = created?.runId
   const uploadUrl = typeof created?.upload?.url === 'string' ? URL.parse(created.upload.url) : null
   if (typeof runId !== 'string' || !runId || !uploadUrl) {

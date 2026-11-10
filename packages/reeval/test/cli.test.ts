@@ -168,9 +168,18 @@ describe('cli', () => {
         values: { host: ['a.example', 'b.example'] },
       },
     )
-    assert.deepEqual(parseCli(['cloud', 'provider', 'openai', 'set', '--project']), {
+    assert.deepEqual(parseCli(['cloud', 'provider', '--project', 'web', 'openai', 'set']), {
       positionals: ['cloud', 'provider', 'openai', 'set'],
-      values: { project: true },
+      values: { project: 'web' },
+    })
+    assert.deepEqual(parseCli(['cloud', 'secrets', 'list', '--org=acme', '--project', 'web']), {
+      positionals: ['cloud', 'secrets', 'list'],
+      values: { org: 'acme', project: 'web' },
+    })
+    usage(['cloud', 'provider', 'openai', 'set', '--project'], /--project/)
+    assert.deepEqual(parseCli(['link', '--org', 'acme', '--project=web', '-y']), {
+      positionals: ['link'],
+      values: { org: 'acme', project: 'web', yes: true },
     })
     usage(['cloud', 'provider', 'openai', 'set', '--host', 'x'], /--host/)
     assert.deepEqual(parseCli(['studio', '--no-token', '--no-scratch']).values, {

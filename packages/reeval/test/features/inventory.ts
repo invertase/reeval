@@ -455,8 +455,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.secrets',
     area: 'Config and selection',
-    name: "`reeval cloud secrets set|delete|list` and `reeval cloud provider <provider> set|delete` and `list` against the cloud platform with the stored sign-in: a secret's `--mode` (`brokered`, which needs `--host`, `sandbox` or `readable`), a provider key for the org or, with `--project`, the project in `.reeval/project.json`; the value comes from stdin, a hidden prompt or `--from-env`, never the command line, and is never printed",
+    name: "`reeval cloud secrets set|delete|list` and `reeval cloud provider <provider> set|delete` and `list` against the cloud platform with the stored sign-in: a secret's `--mode` (`brokered`, which needs `--host`, `sandbox` or `readable`), on the project and org in `.reeval/project.json`, or `--org` and `--project` by slug or id (required when nothing is linked), a provider key for the org or, with `--project`, that project's override; the value comes from stdin, a hidden prompt or `--from-env`, never the command line, and is never printed",
     unit: ['reeval/test/cloud-secrets.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
+    id: 'cloud.link',
+    area: 'Config and selection',
+    name: "`reeval link` with the stored sign-in (or `REEVAL_TOKEN`): picks the org (asked only when there's more than one) and a project in it, on a terminal or with `--org` and `--project` by slug or id, asks before replacing a link (`--yes` without a terminal), and writes their ids to `.reeval/project.json` beside the config, where `reeval run --cloud` creates its runs and `reeval cloud secrets` and `provider` read it; signed out, it says to run `reeval login` first",
+    unit: ['reeval/test/link.test.ts', 'reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'cloud.download',
