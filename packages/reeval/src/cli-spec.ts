@@ -249,9 +249,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 lost after 2m (exit 3)
     --download                  For a cloud run's URL: once the run ends, download its files into
                                 this project as a run here leaves them: .reeval/runs, .reeval/debug
-                                and, recorded, this project's history folder, so reeval show,
-                                compare, query and studio read it. A download that fails sets the
-                                exit code: 2 when a file is already there with other content, 3
+                                and, for a recorded run, this project's history folder, so reeval
+                                show, compare, query and studio read it. A download that fails sets
+                                the exit code: 2 when a file is already there with other content, 3
                                 when the platform fails or sends a file anywhere else. A run with
                                 no files says so
     --profile <name>            With --download, the profile whose history folder takes a recorded

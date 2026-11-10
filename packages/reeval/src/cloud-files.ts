@@ -20,6 +20,7 @@ import { type CloudAuth, CloudError, platformMessage } from './cloud-run.ts'
 import { UsageError } from './errors.ts'
 import { displayUrl } from './events.ts'
 import { NewerRecordError, parseRecord } from './history/files.ts'
+import { ensureHistoryGitattributes, ensureHistoryGitignore } from './history/ignore.ts'
 import { fromCwd, RUN_ID, relativeFile } from './ids.ts'
 import { plural } from './text.ts'
 import type { ResolvedHistory } from './types.ts'
@@ -44,9 +45,9 @@ type File = {
   data: Buffer
   record: boolean
   /**
-   * Whether it may be a link: inside an attempt's workspace snapshot in `.reeval/runs`, which keeps
-   * the workspace's own links, or inside the run's folder in the history, which keeps a recorded
-   * snapshot's.
+   * Whether it may be a link: inside an attempt's workspace snapshot, which keeps the workspace's
+   * own links, in `.reeval/runs` or in the run's folder in the history. Every other file is one
+   * that reeval reads as written, never through a link.
    */
   linkable: boolean
   /** A link's target. */
@@ -128,8 +129,7 @@ function placed(
     return area === 'history' && !history?.length ? 'outside' : 'other'
   }
   const at = inner.indexOf('snapshots', 1)
-  const linkable =
-    area === 'history' ? inner.length > 0 : area === 'runs' && at > 0 && inner.length > at + 2
+  const linkable = area !== 'debug' && at > 0 && inner.length > at + 2
   return { area, runId, path, record: ext === '.json', linkable }
 }
 
@@ -248,8 +248,16 @@ export async function downloadCloudFiles(options: {
   const entries = readTar(tar, unsafe)
   const files: File[] = []
   let others = 0
+  const within = [['.reeval', 'runs'], ['.reeval', 'debug'], ...(history ? [history] : [])]
   for (const e of entries) {
-    if (e.type === 'dir') continue
+    if (e.type === 'dir') {
+      const parts = e.path.split('/')
+      const parent = within.some(
+        (w) => parts.length <= w.length && parts.every((p, i) => p === w[i]),
+      )
+      if (!parent && placed(`${e.path}/-`, history) === 'outside') unsafe.push(e.path)
+      continue
+    }
     const at = placed(e.path, history)
     if (at === 'outside') unsafe.push(e.path)
     else if (at === 'other') others++
@@ -325,6 +333,16 @@ export async function downloadCloudFiles(options: {
     ...fresh.filter((f) => f.link !== undefined),
     ...fresh.filter((f) => f.record),
   ]
+  if (options.history.store.kind === 'local' && fresh.some((f) => f.area === 'history')) {
+    try {
+      await ensureHistoryGitignore(options.history.dir, options.history.archive)
+      await ensureHistoryGitattributes(options.history.dir)
+    } catch (error) {
+      throw new CloudError(
+        `couldn't write ${historyAt || '.'}'s .gitignore and .gitattributes (${(error as Error).message})`,
+      )
+    }
+  }
   // Links after every file, and each file's parents checked again as it's written, so nothing is
   // written through a link, even one a case-folding filesystem takes for another name. Records
   // last, each linked into place whole from a temporary file, never over another.

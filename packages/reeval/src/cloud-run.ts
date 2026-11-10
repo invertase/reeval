@@ -296,7 +296,7 @@ export type CloudRunOptions = {
   follow: (options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach'>) => Promise<number>
   /**
    * `--download`: once the run ends, its files go into this project as a run here leaves them,
-   * a recorded run's into `history`; `profile` is the `--profile` that picked it.
+   * a recorded run's into `history`; `profile` is the profile that picked it.
    */
   download?: { root: string; history: ResolvedHistory; profile?: string }
   env?: NodeJS.ProcessEnv

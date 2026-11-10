@@ -1064,7 +1064,7 @@ async function cloudTarget(
       download: {
         root: setup.config.root,
         history: setup.config.history,
-        ...(flags.profile === undefined ? {} : { profile: flags.profile }),
+        ...(setup.profile ? { profile: setup.profile.name } : {}),
       },
     }),
   })

@@ -628,6 +628,9 @@ describe("a cloud run's files, downloaded with --download", () => {
         if (e.type === 'symlink') assert.equal(readlinkSync(here), e.target, e.path)
       }
       assert.ok(existsSync(join(dir, folder, `${runId}.zip`)))
+      for (const name of ['.gitignore', '.gitattributes']) {
+        assert.ok(existsSync(join(dir, folder, name)), `the history folder's ${name}, as here`)
+      }
       assert.ok(existsSync(join(dir, folder, runId, 'summary.md')))
       const listed = await runCli(dir, ['history'])
       assert.equal(listed.code, 0, listed.stdout + listed.stderr)
@@ -636,8 +639,9 @@ describe("a cloud run's files, downloaded with --download", () => {
       const again = await runCli(dir, ['attach', '--download', events], { env: env(p) })
       assert.equal(again.code, 0, again.stdout + again.stderr)
       assert.match(again.stdout, new RegExp(`Run ${runId} of cloud run run_1 is already in`))
-      // A link in the recorded run's folder is kept as one; a file through it is refused.
-      const link = `${folder}/${runId}/snapshots/after/AGENTS.md`
+      // A link in a snapshot in the recorded run's folder is kept as one; elsewhere it's refused.
+      const attempt = `${folder}/${runId}/evals-answer/fake-cell/1`
+      const link = `${attempt}/snapshots/after/AGENTS.md`
       const linkTo = (path: string, target: string): TarEntry => ({
         type: 'symlink',
         path,
@@ -652,20 +656,14 @@ describe("a cloud run's files, downloaded with --download", () => {
       assert.doesNotMatch(linked.stdout, / into \.reeval\/runs/, 'nothing new in .reeval/runs')
       assert.equal(readlinkSync(join(dir, link)), 'CLAUDE.md')
       const outside = tempDir('cloud-outside')
-      p.serve((machine) => [
-        ...machine,
-        linkTo(`${folder}/${runId}/out`, outside),
-        {
-          type: 'file',
-          path: `${folder}/${runId}/out/f.txt`,
-          mode: 0o644,
-          mtime: 0,
-          data: Buffer.from('x'),
-        },
-      ])
-      const through = await runCli(dir, ['attach', '--download', events], { env: env(p) })
-      assert.equal(through.code, 3, through.stdout + through.stderr)
-      assert.ok(!existsSync(join(outside, 'f.txt')), 'nothing written through the link')
+      for (const at of [`${folder}/${runId}/out`, `${attempt}/transcript.jsonl.link`]) {
+        p.serve((machine) => [...machine, linkTo(at, outside)])
+        const refused = await runCli(dir, ['attach', '--download', events], { env: env(p) })
+        assert.equal(refused.code, 3, refused.stdout + refused.stderr)
+        assert.match(refused.stderr, /a link outside a snapshot or a recorded run's folder/)
+        assert.ok(refused.stderr.includes(at), refused.stderr)
+        assert.ok(!existsSync(join(dir, at)), `${at}: nothing written`)
+      }
       // The recorded copy changed here: nothing is written over it.
       const copy = join(dir, folder, `${runId}.json`)
       const changed = readFileSync(copy, 'utf8').replace('"kind"', ' "kind"')
@@ -705,6 +703,54 @@ describe("a cloud run's files, downloaded with --download", () => {
       const alone = await runCli(dir, ['attach', '--profile', 'elsewhere', events], { env: env(p) })
       assert.equal(alone.code, 2, alone.stdout + alone.stderr)
       assert.match(alone.stderr, /--profile picks the history folder --download puts/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("a run recorded under a profile lands in that profile's history folder", async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace(
+          'defineConfig({',
+          `defineConfig({
+  record: 'always',
+  profiles: {
+    elsewhere: { history: { store: { kind: 'local', dir: './other-history' } } },
+    away: { history: { store: { kind: 'local', dir: '../shared-history' } } },
+  },`,
+        ),
+      )
+      const r = await runCli(dir, ['run', '--cloud', '--download', '--profile', 'elsewhere'], {
+        env: env(p),
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const { runId } = recordOf(dir)
+      assert.match(r.stdout, new RegExp(`recorded in other-history/${runId}\\.json`))
+      assert.ok(existsSync(join(dir, 'other-history', runId, 'summary.md')))
+      const { rmSync } = await import('node:fs')
+      rmSync(join(dir, '.reeval'), { recursive: true })
+      rmSync(join(dir, 'other-history'), { recursive: true })
+      const events = `${p.base}/api/runs/run_1/events`
+      const attach = await runCli(dir, ['attach', '--download', '--profile', 'elsewhere', events], {
+        env: env(p),
+      })
+      assert.equal(attach.code, 0, attach.stdout + attach.stderr)
+      assert.match(attach.stdout, new RegExp(`recorded in other-history/${runId}\\.json`))
+      rmSync(join(dir, '.reeval'), { recursive: true })
+      const away = await runCli(dir, ['attach', '--download', '--profile', 'away', events], {
+        env: env(p),
+      })
+      assert.equal(away.code, 3, away.stdout + away.stderr)
+      assert.match(
+        away.stderr,
+        /outside \.reeval\/runs and \.reeval\/debug \(this project's history folder, \S+shared-history, is outside it\)/,
+      )
+      assert.ok(!existsSync(join(dir, '.reeval/runs')), 'nothing written')
     } finally {
       await p.close()
     }
@@ -829,6 +875,7 @@ describe("a cloud run's files, downloaded with --download", () => {
           '.reeval/store/0123abcd/history/20261109T000000Z_x_y_abcd.json',
         ],
         [evil('runs/20261109T000000Z_x_y_abcd.json'), 'runs/20261109T000000Z_x_y_abcd.json'],
+        [{ type: 'dir', path: '.git', mode: 0o755, mtime: 0 }, '.git'],
         [
           {
             type: 'symlink',
