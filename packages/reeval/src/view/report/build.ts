@@ -11,7 +11,7 @@ import { effortSample, filesChanged, formatCount, formatSeconds } from '../effor
 import { labeledJudgments } from '../judgments.ts'
 import { attemptAnswerRows, isUngatedMiss } from '../model.ts'
 import type { RunRemarks } from '../remarks.ts'
-import { messageLine } from '../suite.ts'
+import { factSegment, messageLine } from '../suite.ts'
 import { turnErrorKind } from '../turn-error.ts'
 import {
   countFigure,
@@ -1402,9 +1402,16 @@ function buildFailures(
       add('error', messageLine(a.error.message), null, a)
     }
   }
+  // Remark.evalId is the suite fact path (`factSegment(id)`); evalKey is EvalEntry.key when set.
+  // Summary keeps concerns only (CLI `Remarks:` without `-v`); suggestions stay out of Worth knowing.
+  const evalPath = factSegment(e.id)
   const evalRemarks =
     remarks?.remarks
-      .filter((r) => r.evalId === e.id || r.evalId === e.key)
+      .filter(
+        (r) =>
+          r.severity === 'concern' &&
+          (r.evalKey === e.key || r.evalId === e.id || r.evalId === e.key || r.evalId === evalPath),
+      )
       .map((r) => ({ kind: r.kind, severity: r.severity, text: r.text, fix: r.fix })) ?? []
   if (!clusters.size && !evalRemarks.length) return null
   return {
