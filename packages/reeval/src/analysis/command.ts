@@ -6,8 +6,10 @@ import { commandSummary } from '../cli-spec.ts'
 import { allRuns, CommandError, lines, reachability } from '../commands.ts'
 import { UsageError } from '../errors.ts'
 import { openHistoryDb } from '../history/db.ts'
-import { parseRecord, scratchDir } from '../history/files.ts'
+import { parseRecord, readRecord, runDir, scratchDir } from '../history/files.ts'
 import { author } from '../history/provenance.ts'
+import { readReportInputs } from '../history/report-inputs.ts'
+import { renderSummary } from '../history/summary.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
 import { fromCwd, sha256 } from '../ids.ts'
@@ -362,6 +364,19 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   if (flags.save) {
     const saved = await saveAnalysis(config.history.dir, doc, key, renderMarkdown(doc))
     ctx.err(`saved ${saved.map((p) => fromCwd(p)).join(' and ')}. Commit them with git.`)
+    // Re-render the archived summary so analysis claims appear in summary.md.
+    const artifactDir = runDir(config.history.dir, head.runId)
+    const record = await readRecord(join(config.history.dir, `${head.runId}.json`)).catch(
+      () => null,
+    )
+    if (record) {
+      const { writeFile } = await import('node:fs/promises')
+      const inputs = await readReportInputs(artifactDir)
+      await writeFile(
+        join(artifactDir, 'summary.md'),
+        renderSummary(record, { ...inputs, analysis: doc }),
+      )
+    }
   }
   ctx.out(
     flags.json ? JSON.stringify(doc, null, 2) : flags.md ? renderMarkdown(doc) : renderText(doc),

@@ -1,29 +1,13 @@
-import { clip, fenced, formatDuration, plural } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
-import { render, tallyLine } from '../ui/layout.ts'
+import { tallyLine } from '../ui/layout.ts'
 import { formatCost, sumCosts } from '../view/cost.ts'
-import { filesChanged, splitLabel } from '../view/effort.ts'
-import { checkLabels, checkTries, commandLine, labeledJudgments } from '../view/judgments.ts'
-import {
-  evalMarkOutcome,
-  harnessLabel,
-  isNotGatedPass,
-  isUngatedMiss,
-  languageLabel,
-  runtimeLabel,
-} from '../view/model.ts'
+import { harnessLabel, languageLabel, runtimeLabel } from '../view/model.ts'
 import type { RunRemarks } from '../view/remarks.ts'
+import { buildRunReport, type RunReportOptions, runReportMarkdown } from '../view/report/index.ts'
 import { runResourcesLine } from '../view/resources.ts'
 import { suiteResult } from '../view/suite.ts'
-import { warnings } from './state.ts'
 import type { AttemptRecord, RunRecord } from './types.ts'
-
-/** An ungated miss as its heading reads it: `1 check failed`, or why it missed when no check did. */
-function failedChecks(a: AttemptRecord): string {
-  const n = (a.assertions ?? []).filter((x) => x.status !== 'pass').length
-  return n ? `${n} ${n === 1 ? 'check' : 'checks'} failed` : 'missed, ran'
-}
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -32,11 +16,6 @@ export const OUTCOME_MARK: Record<Outcome, string> = {
   skipped: '↓',
 }
 
-/** Enough to read the agent's conclusion; the record and transcript have it whole. */
-const LAST_MESSAGE_LIMIT = 4000
-
-const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
-
 /** `5 fail · 2 pass`, with the run's status when it didn't complete. */
 export const runTally = (run: RunRecord) =>
   `${tallyLine(colors(false), suiteResult(run).tally)}${run.status === 'complete' ? '' : ` · ${run.status === 'budget' ? 'budget reached' : run.status}`}`
@@ -44,8 +23,8 @@ export const runTally = (run: RunRecord) =>
 const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
 
 /**
- * The state a run executed in, as label/value pairs, shared by summary.md and `reeval show`. The
- * commit is where the run executed; the commit that adds its history file comes later.
+ * The state a run executed in, as label/value pairs, shared by `reeval show`.
+ * The commit is where the run executed; the commit that adds its history file comes later.
  */
 export function stateRows(run: RunRecord): Array<[string, string]> {
   const { git, stack: env } = run
@@ -122,155 +101,17 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
   return rows
 }
 
-/** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(run: RunRecord, opts: { remarks?: RunRemarks | null } = {}): string {
-  const lines = [
-    `# reeval run ${run.runId}`,
-    '',
-    `${runTally(run)} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
-    '',
-    `Plan: ${run.profile ? `profile ${run.profile.name} (${run.profile.reason}) · ` : ''}${run.plan.evals} evals · ${run.plan.cells} cells · ${run.plan.attempts} attempts${run.budget ? ` · budget ${[run.budget.attempts !== undefined ? `${run.budget.attempts} attempts` : '', run.budget.duration ?? ''].filter(Boolean).join(', ')}` : ''}`,
-    '',
-    ...run.plan.sandboxWarnings.map((w) => `> **Warning:** ${w.message}\n`),
-    '## Results',
-    '',
-    ...fenced(
-      render(suiteResult(run), opts.remarks ?? null, { color: false, verbose: false }),
-      'text',
-    ),
-    '',
-    '## State',
-    '',
-    '| | |',
-    '|---|---|',
-    ...stateRows(run).map(([k, v]) => `| ${k} | ${cell(v)} |`),
-    '',
-    ...warnings(run).map((w) => `> **Warning:** ${w}\n`),
-    `Record: [${run.runId}.json](../${run.runId}.json) · artifacts: ${run.artifacts}`,
-    '',
-    '## Attempts',
-  ]
-  // Failures first, but passes get the same detail: why something passed matters too. Expected
-  // misses (ungated cells) come after the passes, collapsed: they fail neither the eval nor the run.
-  const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
-  for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
-    if (e.outcome === 'skipped') continue
-    const mark = isNotGatedPass(e) ? '○' : OUTCOME_MARK[evalMarkOutcome(e)]
-    lines.push('', `### ${mark} ${e.id}${isNotGatedPass(e) ? ' · ran' : ''}`, '')
-    const multi = e.attempts.length > 1
-    const inputs = (e.answers ?? []).filter((a) => a.input)
-    for (const a of inputs) {
-      lines.push(
-        `- Question: ${cell(`"${clip(a.question, 80)}"`)} · [what the model saw](${a.input?.path})`,
-      )
-    }
-    if (inputs.length) lines.push('')
-    const attemptRank = (a: AttemptRecord) => (isUngatedMiss(e, a) ? 3 : rank(a.outcome))
-    for (const a of [...e.attempts].sort((x, y) => attemptRank(x) - attemptRank(y))) {
-      if (a.outcome === 'skipped') continue
-      if (isUngatedMiss(e, a)) {
-        if (multi) lines.push(`#### ○ ${a.id} · ${failedChecks(a)}`, '')
-        lines.push('<details><summary>Why it missed</summary>', '')
-        attemptDetail(lines, a)
-        lines.push('', '</details>')
-        continue
-      }
-      if (multi) lines.push(`#### ${OUTCOME_MARK[a.outcome]} ${a.id}`, '')
-      attemptDetail(lines, a)
-    }
-  }
-  lines.push('')
-  return lines.join('\n')
+/**
+ * Markdown for people and agents landing on a run cold. Built from `buildRunReport`
+ * so every surface shares one view-model.
+ */
+export function renderSummary(run: RunRecord, opts: RunReportOptions = {}): string {
+  return runReportMarkdown(buildRunReport(run, { linkBase: './', ...opts }))
 }
 
 /** A failed verdict already says why a judge error failed the attempt; its message repeats it. */
 export const repeatsVerdict = (a: Pick<AttemptRecord, 'error' | 'judgements'>) =>
   a.error?.kind === 'judge' && a.judgements.some((j) => j.verdict === 'fail')
-
-function attemptDetail(lines: string[], a: AttemptRecord): void {
-  if (a.error && !repeatsVerdict(a)) {
-    lines.push(`**${a.error.kind}**`, '', ...fenced(a.error.message.split('\n').slice(0, 20)), '')
-  }
-  for (const turn of a.turns) {
-    lines.push(
-      `- Prompt (${turn.status}, ${formatDuration(turn.durationMs)}): ${clip(cell(turn.prompt), 200)}`,
-    )
-    if (turn.error) lines.push(`  - Error: ${clip(cell(turn.error), 500)}`)
-    if (turn.timeSplit && a.turns.length > 1) lines.push(`  - Spent: ${splitLabel(turn.timeSplit)}`)
-  }
-  const t = a.timings
-  lines.push(
-    `- Time: setup ${formatDuration(t.setupMs)} · agent ${formatDuration(t.agentMs)} · checks ${formatDuration(t.checksMs)} · judge ${formatDuration(t.judgeMs)}`,
-  )
-  if (a.timeSplit) lines.push(`- Agent time: ${splitLabel(a.timeSplit)}`)
-  const cost = costLine(a)
-  if (cost) lines.push(`- Cost: ${cost}`)
-  const act = a.activity
-  const web = (n: number | null, what: string) =>
-    n === null ? `${what} not reported` : `${n} ${what}`
-  lines.push(
-    `- Agent: ${plural(filesChanged(a.changedFiles), 'file')} changed (workspace diff) · ${plural(act.fileEdits, 'edit tool call')} · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${act.reasoningMs === null ? 'reasoning time not reported' : `${formatDuration(act.reasoningMs)} reasoning`}${act.stalledTools ? ` · ${act.stalledTools} stalled tool${act.stalledTools === 1 ? '' : 's'} (≥2m)${act.maxToolMs ? `, longest ${formatDuration(act.maxToolMs)}` : ''}` : ''}`,
-  )
-  for (const { judgment: j, label, labelled: labeled } of labeledJudgments(a)) {
-    const retried = j.retries?.length
-      ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
-      : ''
-    lines.push(
-      `- Judge${labeled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
-    )
-  }
-  for (const q of a.answers ?? []) {
-    const said = q.error
-      ? `failed: ${clip(cell(q.error), 200)}`
-      : `${q.choice !== undefined ? `**${cell(q.choice)}** ` : ''}${clip(cell(q.text), 300)}`
-    lines.push(
-      `- Question ${cell(`"${clip(q.question, 80)}"`)}: ${said}${q.input ? ` ([what the model saw](${q.input.path}))` : ''}`,
-    )
-  }
-  for (const o of a.observations ?? []) {
-    lines.push(`- Observed \`${cell(o.name)}\`: \`${clip(cell(JSON.stringify(o.value)), 300)}\``)
-  }
-  const labels = checkLabels(a)
-  a.checks.forEach((c, i) => {
-    const label = labels[i]
-    const tries = checkTries(c)
-    lines.push(
-      `- Check${label ? ` ${cell(label)}` : ''} exit ${c.exitCode}${tries ? ` (${tries})` : ''}: \`${cell(commandLine(c.command))}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
-    )
-  })
-  if (a.changedFiles.length) {
-    lines.push(
-      `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,
-    )
-  }
-  const last = a.turns.at(-1)?.text
-  if (last) {
-    const shown = last.length > LAST_MESSAGE_LIMIT ? `${last.slice(0, LAST_MESSAGE_LIMIT)}…` : last
-    lines.push(
-      '',
-      'Last message:',
-      '',
-      ...shown
-        .trimEnd()
-        .split('\n')
-        .map((l) => `> ${l}`),
-      '',
-    )
-  }
-  const links = [
-    a.files.setupLog && `[setup log](${a.files.setupLog.path})`,
-    a.files.transcript && `[transcript](${a.files.transcript.path})`,
-    a.files.diff && `[diff](${a.files.diff.path})`,
-    a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,
-  ].filter(Boolean)
-  if (links.length) lines.push(`- Files: ${links.join(' · ')}`)
-  const snapshots = (a.snapshots ?? []).map((s) =>
-    s.path ? `[${s.name}](${s.path})` : `${s.name} not taken: ${cell(s.skipped?.message ?? '')}`,
-  )
-  if (snapshots.length) {
-    lines.push(`- Snapshots (in .reeval/runs, never recorded): ${snapshots.join(' · ')}`)
-  }
-}
 
 /** `agent $0.021 (est.) · judge $0.0004 · from models.dev 2026-11-05, openrouter`; null without one. */
 export function costLine(a: Pick<AttemptRecord, 'cost' | 'judgements'>): string | null {
@@ -285,3 +126,6 @@ export function costLine(a: Pick<AttemptRecord, 'cost' | 'judgements'>): string 
     .filter(Boolean)
     .join(' · ')
 }
+
+// Keep the RunRemarks import visible for callers that type remarks through this module.
+export type { RunRemarks }
