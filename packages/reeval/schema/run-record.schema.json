@@ -5,7 +5,7 @@
   "$ref": "#/$defs/RunRecord",
   "$defs": {
     "ArtifactLevel": {
-      "enum": ["all", "failures", "none"]
+      "enum": ["all", "evidence", "failures", "none"]
     },
     "ArtifactRef": {
       "description": "A generic attempt file from `c.capture()`.",
@@ -18,6 +18,10 @@
           "description": "Set when the file came from `c.capture()`.",
           "type": "object",
           "properties": {
+            "consoleErrors": {
+              "description": "How many console error messages the page logged; absent when none or on older records.",
+              "type": "number"
+            },
             "fullPage": {
               "description": "Saved PNG used `captureBeyondViewport`.",
               "type": "boolean"
@@ -119,16 +123,20 @@
           "type": "string"
         },
         "message": {
-          "description": "Why it failed or couldn't answer, cut at 1 KB.",
+          "description": "Why it failed or couldn't answer, or why `expect.skip` marked it not applicable, cut at 1 KB.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why the check does not apply (`expect.skip`'s second argument).",
           "type": "string"
         },
         "soft": {
-          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail.",
+          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail. True for `expect.skip`.",
           "type": "boolean"
         },
         "status": {
-          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report).",
-          "enum": ["error", "fail", "pass"]
+          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). `not_applicable`: `expect.skip` (or a language runner's equivalent); never fails the attempt and leaves the check's pass/fail denominator.",
+          "enum": ["error", "fail", "not_applicable", "pass"]
         }
       },
       "required": ["label", "labelled", "matcher", "soft", "status"]
@@ -210,6 +218,19 @@
         },
         "resource": {
           "$ref": "#/$defs/ResourceFailureRecord"
+        },
+        "turn": {
+          "description": "Set when an unhandled mid-turn error was reclassified as infra: the turn index and whether it looked like a config refusal or a transport failure.",
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "number"
+            },
+            "kind": {
+              "enum": ["config", "transport"]
+            }
+          },
+          "required": ["index", "kind"]
         }
       },
       "required": ["kind", "message"]
@@ -373,22 +394,10 @@
           "type": "string"
         },
         "changedFiles": {
-          "description": "Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`.",
+          "description": "Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. Optional `added` / `removed` come from the uncapped patch at record time; `lockfile` marks dependency lockfiles excluded from line totals.",
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "count": {
-                "type": "number"
-              },
-              "path": {
-                "type": "string"
-              },
-              "status": {
-                "enum": ["added", "deleted", "modified"]
-              }
-            },
-            "required": ["path", "status"]
+            "$ref": "#/$defs/ChangedFile"
           }
         },
         "checks": {
@@ -668,6 +677,10 @@
                   }
                 ]
               },
+              "errorKind": {
+                "description": "Classified mid-turn error kind when `status === 'error'`; optional on older records.",
+                "enum": ["config", "transport"]
+              },
               "mcpStartup": {
                 "description": "Each stdio MCP server start during the turn; see `McpStartup`.",
                 "type": "array",
@@ -744,6 +757,10 @@
               "usage"
             ]
           }
+        },
+        "turnStatusRead": {
+          "description": "True when the eval body read `turn.status` (so a mid-turn error was intentional). False when a turn errored and the body never inspected status. Absent on older records; the report then applies the same reclassification rule from `turns[].status === 'error'`.",
+          "type": "boolean"
         },
         "upstreams": {
           "description": "The upstream providers a gateway said served the harness's own API calls (OpenRouter's `provider`), each with how many it served, in the order first seen; more than one means the gateway spread or failed the calls over between them. Absent when the gateway names none.",
@@ -1040,6 +1057,10 @@
         "label": {
           "type": "string"
         },
+        "notApplicable": {
+          "description": "Attempts that recorded `not_applicable` for this check; never in the pass/fail denominator.",
+          "type": "number"
+        },
         "notRun": {
           "type": "number"
         },
@@ -1050,7 +1071,7 @@
           "enum": ["both-fail", "both-pass", "discriminates", "mixed"]
         }
       },
-      "required": ["error", "fail", "label", "notRun", "pass"]
+      "required": ["error", "fail", "label", "notApplicable", "notRun", "pass"]
     },
     "CellGate": {
       "description": "A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's, or any cell under `gate: 'observe'`).",
@@ -1296,6 +1317,31 @@
     "CellRole": {
       "enum": ["control", "variant"]
     },
+    "ChangedFile": {
+      "description": "One path the attempt's workspace diff changed. Optional line counts come from `splitPatch` on the uncapped patch at record time; older records omit them.",
+      "type": "object",
+      "properties": {
+        "added": {
+          "type": "number"
+        },
+        "count": {
+          "type": "number"
+        },
+        "lockfile": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "removed": {
+          "type": "number"
+        },
+        "status": {
+          "enum": ["added", "deleted", "modified"]
+        }
+      },
+      "required": ["path", "status"]
+    },
     "CheckTally": {
       "description": "How often one check passed: a counted attempt that never reached it counts it `notRun`.",
       "type": "object",
@@ -1306,6 +1352,10 @@
         "fail": {
           "type": "number"
         },
+        "notApplicable": {
+          "description": "Attempts that recorded `not_applicable` for this check; never in the pass/fail denominator.",
+          "type": "number"
+        },
         "notRun": {
           "type": "number"
         },
@@ -1313,7 +1363,7 @@
           "type": "number"
         }
       },
-      "required": ["error", "fail", "notRun", "pass"]
+      "required": ["error", "fail", "notApplicable", "notRun", "pass"]
     },
     "CompareAnswer": {
       "description": "A pairwise question's answer: every vote, and each side's wins over decided votes per cut.",
@@ -3791,12 +3841,29 @@
         "attempts": {
           "type": "number"
         },
+        "counted": {
+          "description": "Pass plus fail over gated cells: the pass-rate denominator. Optional on older records.",
+          "type": "number"
+        },
         "evals": {
           "type": "number"
         },
         "fail": {
           "description": "Every failed attempt, including `notGated` ones.",
           "type": "number"
+        },
+        "gated": {
+          "description": "Gated-cell pass/fail split; optional on older records.",
+          "type": "object",
+          "properties": {
+            "fail": {
+              "type": "number"
+            },
+            "pass": {
+              "type": "number"
+            }
+          },
+          "required": ["fail", "pass"]
         },
         "infraError": {
           "type": "number"
@@ -3808,8 +3875,25 @@
         "pass": {
           "type": "number"
         },
+        "reclassified": {
+          "description": "Attempts an unhandled turn error moved out of pass or fail; optional on older records.",
+          "type": "number"
+        },
         "skipped": {
           "type": "number"
+        },
+        "ungated": {
+          "description": "Ungated-cell pass/fail split; optional on older records.",
+          "type": "object",
+          "properties": {
+            "fail": {
+              "type": "number"
+            },
+            "pass": {
+              "type": "number"
+            }
+          },
+          "required": ["fail", "pass"]
         }
       },
       "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]

@@ -44,7 +44,7 @@
       "additionalProperties": false
     },
     "ArtifactLevel": {
-      "enum": ["all", "failures", "none"]
+      "enum": ["all", "evidence", "failures", "none"]
     },
     "BoatApiKey": {
       "description": "The host variable holding a Boat API key, made by `secret.fromEnv`.",

@@ -99,7 +99,8 @@ CREATE TABLE case_rates (
 -- Each check (assertion label) per cell of each case, over that case's counted attempts.
 CREATE TABLE case_checks (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, case_key TEXT NOT NULL,
-  label TEXT NOT NULL, pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER
+  label TEXT NOT NULL, pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER,
+  not_applicable INTEGER
 );
 -- Every answer to a question asked of one attempt on its own (one without across): the choice it
 -- picked when the question has choices, its text, or the error when the call failed.
@@ -240,8 +241,9 @@ CREATE TABLE assertions (
 -- Each check (assertion label) per cell over its counted attempts; on a variant, its control's too.
 CREATE TABLE cell_checks (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, label TEXT NOT NULL,
-  pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER, control_pass INTEGER,
-  control_fail INTEGER, control_error INTEGER, control_not_run INTEGER, verdict TEXT
+  pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER, not_applicable INTEGER,
+  control_pass INTEGER, control_fail INTEGER, control_error INTEGER, control_not_run INTEGER,
+  control_not_applicable INTEGER, verdict TEXT
 );
 ${DERIVED_TABLES}
 CREATE INDEX assertions_by_attempt ON assertions (run_id, attempt_key);
@@ -715,7 +717,7 @@ function insertRun(
         )
         for (const check of c.checks ?? []) {
           run(
-            `INSERT INTO case_checks VALUES (${Array(9).fill('?').join(', ')})`,
+            `INSERT INTO case_checks VALUES (${Array(10).fill('?').join(', ')})`,
             record.runId,
             e.key,
             c.key,
@@ -725,6 +727,7 @@ function insertRun(
             check.fail,
             check.error,
             check.notRun,
+            check.notApplicable,
           )
         }
       }
@@ -772,7 +775,7 @@ function insertRun(
       )
       for (const k of c.checks ?? []) {
         run(
-          `INSERT INTO cell_checks VALUES (${Array(13).fill('?').join(', ')})`,
+          `INSERT INTO cell_checks VALUES (${Array(15).fill('?').join(', ')})`,
           record.runId,
           e.key,
           c.key,
@@ -781,10 +784,12 @@ function insertRun(
           k.fail,
           k.error,
           k.notRun,
+          k.notApplicable,
           k.control?.pass ?? null,
           k.control?.fail ?? null,
           k.control?.error ?? null,
           k.control?.notRun ?? null,
+          k.control?.notApplicable ?? null,
           k.verdict ?? null,
         )
       }

@@ -58,14 +58,21 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
     } while (used.has(label))
     seen.set(base, n)
     used.add(label)
+    const reason =
+      r.matcher === 'skip' && typeof r.args[0] === 'string'
+        ? clipped(r.args[0], MESSAGE_LIMIT)
+        : undefined
     return {
       label,
-      labelled: r.label !== undefined,
+      labelled: r.label !== undefined || r.matcher === 'skip',
       matcher: r.matcher,
       status: r.status,
       soft: r.soft,
       ...(r.at ? { at: r.at } : {}),
-      ...(r.status === 'pass' ? {} : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
+      ...(r.status === 'pass' || r.status === 'not_applicable'
+        ? {}
+        : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
+      ...(reason !== undefined ? { reason } : {}),
       ...(r.durationMs === undefined ? {} : { durationMs: r.durationMs }),
     }
   })
@@ -80,7 +87,7 @@ export const CAUGHT_HINT =
  * `CAUGHT_HINT` after its message.
  */
 export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
-  const failed = raw.find((r) => r.status !== 'pass')
+  const failed = raw.find((r) => r.status !== 'pass' && r.status !== 'not_applicable')
   if (!failed) return undefined
   const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
   if (failed.soft) return error

@@ -496,16 +496,23 @@ export function deriveFacts(db: DatabaseSync): void {
     fail: number
     error: number
     not_run: number
+    not_applicable: number | null
   }>(
     db.prepare(
-      'SELECT run_id, eval_key, cell_key, label, pass, fail, error, not_run FROM cell_checks',
+      'SELECT run_id, eval_key, cell_key, label, pass, fail, error, not_run, not_applicable FROM cell_checks',
     ),
   )
   const checksOf = new Map<string, Map<string, CheckTally>>()
   for (const k of checkRows) {
     const id = cellId(k.run_id, k.eval_key, k.cell_key)
     const m = checksOf.get(id) ?? new Map<string, CheckTally>()
-    m.set(k.label, { pass: k.pass, fail: k.fail, error: k.error, notRun: k.not_run })
+    m.set(k.label, {
+      pass: k.pass,
+      fail: k.fail,
+      error: k.error,
+      notRun: k.not_run,
+      notApplicable: k.not_applicable ?? 0,
+    })
     checksOf.set(id, m)
   }
   const evalCells = new Map<string, Cell[]>()

@@ -1635,7 +1635,7 @@
         "artifacts": {
           "description": "Artifacts recorded next to each run: every attempt's, failed attempts' only (the default), or none. The setup log and each `c.exec` log are an attempt's artifacts too.",
           "type": "string",
-          "enum": ["all", "failures", "none"]
+          "enum": ["all", "evidence", "failures", "none"]
         },
         "debug": {
           "description": "Each attempt's debug data uploaded with the run to a remote store: none (the default), its gateway requests (`requests.ndjson`, which holds prompts and responses), or all of it (`debug.log` and `trace.ndjson` too). Rescanned for secrets first; `local()` takes `'none'` only.",

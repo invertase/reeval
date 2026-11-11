@@ -66,11 +66,12 @@ export type Contrast = {
   checks: ContrastCheck[]
 }
 
-const tally = ({ pass, fail, error, notRun }: CheckTally): CheckTally => ({
+const tally = ({ pass, fail, error, notRun, notApplicable = 0 }: CheckTally): CheckTally => ({
   pass,
   fail,
   error,
   notRun,
+  notApplicable,
 })
 
 function pairLift(a: CellRecord, b: CellRecord): Lift | null {
