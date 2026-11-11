@@ -212,7 +212,18 @@ describe('persisted shapes', () => {
     const now = snapshot('run-record')
     assert.match(def(now, 'Cost').description ?? '', /\w/)
     assert.match(def(now, 'RunRecord').properties?.status?.description ?? '', /\w/)
-    const bare = JSON.parse(JSON.stringify(now), (k, v) => (k === 'description' ? undefined : v))
+    // Strip schema annotations only: a property literally named `description` stays.
+    const stripDocs = (node: unknown, inProperties = false): unknown => {
+      if (Array.isArray(node)) return node.map((n) => stripDocs(n, false))
+      if (!node || typeof node !== 'object') return node
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (k === 'description' && !inProperties) continue
+        out[k] = stripDocs(v, k === 'properties')
+      }
+      return out
+    }
+    const bare = stripDocs(now) as ShapeSchema
     const reworded = copy(now)
     def(reworded, 'Cost').description = 'Reworded.'
     for (const [before, after] of [

@@ -65,12 +65,8 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'live-progress': [],
   'cli-invocation': [],
   'capture-page': [],
-  'run-events': [
-    { path: 'record.evals[].cells[].checks[].notApplicable', empty: () => 0 },
-    { path: 'record.evals[].cases[].cells[].checks[].notApplicable', empty: () => 0 },
-    { path: 'record.evals[].cases[].cells[].checks[].control.notApplicable', empty: () => 0 },
-    { path: 'record.evals[].cells[].checks[].control.notApplicable', empty: () => 0 },
-  ],
+  // No corpus files yet; run-record's notApplicable defaults cover the same shape on recorded runs.
+  'run-events': [],
   'bundle-manifest': [],
   'archive-manifest': [],
   credentials: [],

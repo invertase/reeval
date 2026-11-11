@@ -89,6 +89,16 @@ function h(level: number, text: string): string {
   return `${'#'.repeat(level)} ${text}`
 }
 
+/** `source:file#L12` → `file:12`, matching the CLI's Worth knowing line. */
+const remarkLocation = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, ':$1')
+
+function formatRemark(r: { text: string; fix?: { at: string; edit: string } | null }): string {
+  if (!r.fix?.at) return r.text
+  return r.fix.edit
+    ? `${r.text} Fix at ${remarkLocation(r.fix.at)}: ${r.fix.edit}.`
+    : `${r.text} At ${remarkLocation(r.fix.at)}.`
+}
+
 function shapeLabel(shapes: EvalSection['shapes']): string {
   const map = {
     task: 'Task',
@@ -490,7 +500,7 @@ function failuresMarkdown(f: FailureClusters, blockLevel: number): string[] {
   if (f.remarks.length) {
     lines.push(h(blockLevel + 1, 'Worth knowing'), '')
     for (const r of f.remarks) {
-      lines.push(`- (${r.severity}) ${r.text}${r.fix ? ` Fix: ${r.fix}` : ''}`)
+      lines.push(`- (${r.severity}) ${formatRemark(r)}`)
     }
     lines.push('')
   }
