@@ -15,26 +15,8 @@ import { git, repoTop } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
 import { ownVersion } from '../root.ts'
+import { LOCKFILES } from '../view/patch.ts'
 import type { RunRecord } from './types.ts'
-
-const LOCKFILES = [
-  'pnpm-lock.yaml',
-  'package-lock.json',
-  'npm-shrinkwrap.json',
-  'yarn.lock',
-  'bun.lock',
-  'bun.lockb',
-  'pubspec.lock',
-  'Cargo.lock',
-  'go.sum',
-  'poetry.lock',
-  'uv.lock',
-  'Pipfile.lock',
-  'Gemfile.lock',
-  'composer.lock',
-  'Podfile.lock',
-  'gradle.lockfile',
-]
 
 /** Dependency state: lockfiles in the project root and, if different, the repo root. */
 export async function lockfiles(root: string): Promise<Array<{ path: string; sha256: string }>> {

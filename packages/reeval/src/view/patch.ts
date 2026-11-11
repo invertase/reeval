@@ -6,6 +6,32 @@ export type PatchFile = {
   text: string
 }
 
+/** Dependency lockfiles excluded from report line-count totals. */
+export const LOCKFILES = [
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
+  'pubspec.lock',
+  'Cargo.lock',
+  'go.sum',
+  'poetry.lock',
+  'uv.lock',
+  'Pipfile.lock',
+  'Gemfile.lock',
+  'composer.lock',
+  'Podfile.lock',
+  'gradle.lockfile',
+] as const
+
+/** True when `path` is a known dependency lockfile (basename match). */
+export function isLockfile(path: string): boolean {
+  const base = path.split('/').pop() ?? path
+  return (LOCKFILES as readonly string[]).includes(base)
+}
+
 const ESCAPES: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13 }
 
 /** A path as git wrote it in a patch: C-quoted (`"caf\303\251.txt"`) when it has to be. */

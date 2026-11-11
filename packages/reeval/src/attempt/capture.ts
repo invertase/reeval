@@ -332,6 +332,9 @@ export async function capturePage(
     ...(use ? { use: { model: 'model' in use ? use.model : 'fake', moves } } : {}),
     ...(page.status ? { status: page.status } : {}),
     ...(page.errors.length ? { pageErrors: page.errors.length } : {}),
+    ...(page.console.some((l) => l.level === 'error')
+      ? { consoleErrors: page.console.filter((l) => l.level === 'error').length }
+      : {}),
     page: {
       path: `artifacts/${resolved.name}.capture.json`,
       sha256: sha256(pageJson),

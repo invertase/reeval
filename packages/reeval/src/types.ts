@@ -3007,6 +3007,11 @@ export type AttemptError = {
   prepare?: PrepareFailureRecord
   resource?: ResourceFailureRecord
   provider?: ProviderStopRecord
+  /**
+   * Set when an unhandled mid-turn error was reclassified as infra: the turn index and whether
+   * it looked like a config refusal or a transport failure.
+   */
+  turn?: { index: number; kind: 'transport' | 'config' }
 }
 
 export type TurnRecord = Pick<
@@ -3463,17 +3468,23 @@ export type AssertionRecord = {
   labelled: boolean
   /** `toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`. */
   matcher: string
-  /** `error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). */
-  status: 'pass' | 'fail' | 'error'
+  /**
+   * `error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't
+   * report). `not_applicable`: `expect.skip` (or a language runner's equivalent); never fails the
+   * attempt and leaves the check's pass/fail denominator.
+   */
+  status: 'pass' | 'fail' | 'error' | 'not_applicable'
   /**
    * A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check
-   * that threw, such as Python's `assert`, which end the body when they fail.
+   * that threw, such as Python's `assert`, which end the body when they fail. True for `expect.skip`.
    */
   soft: boolean
   /** `path:line` of the call in the eval file, relative to the project root, when reeval saw it. */
   at?: string
-  /** Why it failed or couldn't answer, cut at 1 KB. */
+  /** Why it failed or couldn't answer, or why `expect.skip` marked it not applicable, cut at 1 KB. */
   message?: string
+  /** Why the check does not apply (`expect.skip`'s second argument). */
+  reason?: string
   /** Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`). */
   durationMs?: number
 }
@@ -3493,6 +3504,11 @@ export type EvalRecord = {
   startedAt?: string
   outcome: Exclude<Outcome, 'skipped'>
   error: AttemptError | null
+  /**
+   * True when the eval body read `turn.status` (so a mid-turn error was intentional). False when a
+   * turn errored and the body never inspected status. Absent on older records.
+   */
+  turnStatusRead?: boolean
   turns: TurnRecord[]
   /** Workspace changes over the whole eval. */
   diff: Diff | null
@@ -3631,6 +3647,8 @@ export type CaptureArtifactMeta = {
   status?: number
   /** How many page errors the page had; absent when none. */
   pageErrors?: number
+  /** How many console error messages the page logged; absent when none. */
+  consoleErrors?: number
   /** `artifacts/<name>.capture.json`: the page facts, a `CapturePage`. */
   page?: FileRef
   /** Set on the screenshot taken as one of the capture's instructions ended. */
