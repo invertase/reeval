@@ -1271,6 +1271,16 @@ function rollUp(evals: EvalEntry[]): void {
     entry.fingerprint = sha256(
       JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
     )
+    for (const c of entry.cells) {
+      const seen = new Map<string, { sha256: string; at?: string }>()
+      for (const a of entry.attempts.filter((x) => x.cell === c.key)) {
+        const prompt = a.turns[0]?.prompt
+        if (!prompt) continue
+        const digest = sha256(prompt)
+        if (!seen.has(digest)) seen.set(digest, { sha256: digest })
+      }
+      if (seen.size) c.prompts = [...seen.values()]
+    }
   }
 }
 

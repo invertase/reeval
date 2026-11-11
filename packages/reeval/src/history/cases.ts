@@ -131,10 +131,12 @@ function mergedParts(pairs: ReadonlyArray<readonly [string, CellRecord]>): Finge
 function caseOf(member: EvalEntry, template: string): CaseRecord {
   const family = member.family as NonNullable<EvalEntry['family']>
   const key = caseKeyOf(template, member.name)
+  const named = member.name !== `${template} [${key}]` ? { name: member.name } : {}
   return {
     key,
     index: family.case,
-    ...(member.name !== `${template} [${key}]` ? { name: member.name } : {}),
+    ...named,
+    label: caseName({ name: template }, { key, ...named }),
     ...(member.source?.case !== undefined ? { hash: member.source.case } : {}),
     outcome: member.outcome,
     ...(member.verdict ? { verdict: member.verdict } : {}),
