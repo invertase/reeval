@@ -20,7 +20,10 @@ import {
   unawaitedError,
   withAttemptExpect,
 } from '../src/engine/expect.ts'
+import { evalMatchers } from '../src/matchers.ts'
 import { registerExecEnv } from '../src/redact.ts'
+
+extendExpect(evalMatchers)
 
 const task = (): ExpectTask => ({ type: 'test', name: 't', fullTestName: 'file > t' })
 /** The task's records, as the attempt makes them from the engine's raw entries. */
@@ -858,6 +861,54 @@ describe('unawaited assertions', () => {
     assert.match(error?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
     const empty = await unawaitedError([pendingOf(Promise.reject(undefined))])
     assert.match(empty?.message ?? '', /^failed\n\n/)
+  })
+})
+
+describe('expect.skip and file matcher meta', () => {
+  test('expect.skip records not_applicable and refuses an empty label', () => {
+    const t = task()
+    const own = createExpect(t)
+    own.skip('out of scope')
+    own.skip('wrong harness', 'this harness has no browser')
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.matcher, x.status, x.reason, x.soft]),
+      [
+        ['out of scope', 'skip', 'not_applicable', undefined, true],
+        ['wrong harness', 'skip', 'not_applicable', 'this harness has no browser', true],
+      ],
+    )
+    fails(() => own.skip(''), /expect\.skip\(label, reason\?\): label must be a non-empty string/)
+    fails(() => own.skip('  '), /expect\.skip\(label, reason\?\): label must be a non-empty string/)
+    // Outside a task, skip still bumps the assertion count and records nothing.
+    createExpect().skip('no task')
+  })
+
+  test('toHaveFile records target and preSatisfied when the file was already there', async () => {
+    const t = task()
+    const own = createExpect(t)
+    const subject = {
+      readFile: async (path: string) => (path === 'ready.txt' ? 'ok\n' : null),
+    }
+    await own(subject, 'the server is ready').toHaveFile('ready.txt')
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.matcher, x.status, x.target, x.preSatisfied]),
+      [['the server is ready', 'toHaveFile', 'pass', 'ready.txt', true]],
+    )
+    // A path that appears in the workspace diff is not pre-satisfied.
+    const edited = {
+      readFile: async (path: string) => (path === 'new.txt' ? 'hi\n' : null),
+      diff: {
+        patch: 'diff --git a/new.txt b/new.txt\n',
+        files: [{ path: 'new.txt', status: 'added' as const }],
+      },
+    }
+    await own(edited).toHaveFile('new.txt')
+    assert.deepEqual(
+      records(t)
+        .slice(1)
+        .map((x) => [x.matcher, x.status, x.target, x.preSatisfied]),
+      [['toHaveFile', 'pass', 'new.txt', undefined]],
+    )
   })
 })
 

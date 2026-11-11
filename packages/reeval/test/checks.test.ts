@@ -48,9 +48,9 @@ describe('named check results', () => {
       /^ {5}✗ house style {2}failed on the control 2 of 2 · expected\n {7}expected file styled\.txt to exist · evals\/s\.eval\.ts:12$/m,
     )
     assert.doesNotMatch(r.stdout, /toSucceed/, 'a check that never ran did not fail')
-    // The summary's matrix has the checks that failed or didn't run on some arm; the rest pass on both.
+    // Assertions by arm: house style fails on the control; toSucceed is n/a there (never reached).
     const matrix =
-      /^ {2}check {21}plain {4}styled\n {2}house style {15}0 of 2 {3}2 of 2\n {4}expected file styled\.txt to exist\n {2}toSucceed test -f ok\.txt {2}not run {2}2 of 2\n {2}\+1 more passed$/m
+      /## Assertions by arm[\s\S]*\| house style \| toHaveFile \| 0 of 2 \| 2 of 2 \|[\s\S]*\| toSucceed test -f ok\.txt \| toSucceed \| n\/a \| 2 of 2 \|/
 
     const { run, read } = readRun(p.dir)
     const entry = run.evals[0]
@@ -85,7 +85,7 @@ describe('named check results', () => {
     assert.match(read('summary.md'), matrix)
     assert.doesNotMatch(
       read('summary.md'),
-      /toSucceed test -f ok\.txt +0 of/,
+      /\| toSucceed test -f ok\.txt \| toSucceed \| 0 of/,
       'not run, never 0 of N',
     )
 

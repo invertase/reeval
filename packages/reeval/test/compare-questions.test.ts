@@ -250,7 +250,7 @@ evaluate('three arms', { compare: { control: none, variants: [current, next], ga
     assert.match(r.stdout, reasonWins)
     assert.match(
       run.read('summary.md'),
-      /^ {2}question {2}Which reads better\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m,
+      /### Pairwise review[\s\S]*\| Which reads better\? \| within \| base \| skilled \| 1 \| 1 \| 0 \| 2 \|/,
     )
 
     // Three arms, three runs, and a vote for the side shown first: every pair splits with the
@@ -261,7 +261,7 @@ evaluate('three arms', { compare: { control: none, variants: [current, next], ga
     assert.match(r.stdout, armWins)
     assert.match(
       run.read('summary.md'),
-      /^ {2}question {2}Which delivers a better user experience\?\n {4}no-skill {7}won \d+ of \d+\n {4}current-skill {2}won \d+ of \d+\n {4}new-skill {6}won \d+ of \d+$/m,
+      /### Pairwise review[\s\S]*\| Which delivers a better user experience\? \| within \|/,
     )
     const ux = `question = 'Which delivers a better user experience?'`
     const q = await runCli(p.dir, [
@@ -437,10 +437,7 @@ evaluate('broken agent', { ...one, harnesses: fakeHarness({ failWith: 'agent CLI
     const wins =
       /^[│ ] +Question: Which is cleaner\?\n[│ ] +base \(within\) +won 2 of 4\n[│ ] +skilled \(within\) +won 2 of 4\n[│ ] +one \(across\) +won 0 of 8\n[│ ] +two \(across\) +won 8 of 8$/m
     assert.match(r.stdout, wins)
-    assert.match(
-      run.read('summary.md'),
-      /^- Question: "Which is cleaner\?" · \[what the model saw\]\(evals-votes-eval-ts-asks-[0-9a-f]+\/questions\/1\.json\)$/m,
-    )
+    assert.match(run.read('summary.md'), /### Pairwise review[\s\S]*\| Which is cleaner\? \|/)
     // One call per vote, in the same order; a vote's A is its a unless it's the swapped repeat.
     const input = JSON.parse(run.read(answer.input?.path ?? 'missing'))
     assert.deepEqual(

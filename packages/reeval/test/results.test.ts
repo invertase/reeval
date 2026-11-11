@@ -1077,6 +1077,7 @@ describe('compare question pairs', () => {
       turns: [{ prompt: 'go', text: undefined, transcript: undefined }],
       checks: [],
       id: 'h/sdk/fake#2',
+      key: undefined,
     })
   })
 })

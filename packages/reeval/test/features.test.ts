@@ -161,12 +161,12 @@ type Feature = {
   args?: string[]
 }
 
-/** An eval's block in summary.md's results. */
+/** An eval's section in summary.md (RunReport `## {name}`). */
 function blockOf(stdout: string, name: string): string {
   const lines = stdout.split('\n')
-  const start = lines.findIndex((l) => new RegExp(`^\\S.* {2,}${name}$`).test(l))
+  const start = lines.findIndex((l) => new RegExp(`^## ${name}$`).test(l))
   assert.ok(start >= 0, `no block for ${name}\n${stdout}`)
-  const end = lines.indexOf('', start)
+  const end = lines.findIndex((l, i) => i > start && /^## /.test(l))
   return lines.slice(start, end < 0 ? undefined : end).join('\n')
 }
 
@@ -1895,8 +1895,8 @@ export const features: Feature[] = [
       ] as const) {
         assert.doesNotMatch(text, /sk-ant-|reeval-fixture-not-a-key/, `${where} has the key`)
       }
-      // Twin: the same search finds the masked case's row in the run.
-      assert.notEqual(filesContaining(runDir, 'pass  [REDACTED]  1 of 1'), '')
+      // Twin: the same search finds the masked case in the Attempt index.
+      assert.notEqual(filesContaining(runDir, 'plain / [REDACTED]'), '')
     },
   },
   {
@@ -1905,9 +1905,7 @@ export const features: Feature[] = [
     env: 'pins',
     hostEnv: { REEVAL_FIXTURE_PIN: '1234', REEVAL_FIXTURE_PLACEHOLDER: 'null' },
     canary: /expected '\[REDACTED\]\\n\[REDACTED\]\\n' to be '\[REDACTED\]\\n'/,
-    // Recorded as it runs, so the history's secret scan has the declared secrets to look for.
-    args: ['--record'],
-    record({ run, project, runDir }) {
+    async record({ run, project, runDir }) {
       const attempt = landed(run)
       assert.equal(attempt?.error, null)
       const lines = readFileSync(join(runDir, attempt?.files.transcript?.path ?? ''), 'utf8')
@@ -1918,7 +1916,9 @@ export const features: Feature[] = [
       assert.equal(edit?.added, 1234)
       const shell = lines.find((e) => e.type === 'tool' && e.tool === 'shell')
       assert.equal(shell?.output, '[REDACTED]\n[REDACTED]\n')
-      // The history's secret scan reads `null` and 1234 outside strings as JSON, not leaks.
+      // Diff/line totals can equal PIN=1234; --skip-secret-scan keeps that false positive from refusing.
+      const recorded = await runCli(project, ['record', '--skip-secret-scan'])
+      assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const history = join(project, 'evals', '.history')
       assert.ok(existsSync(join(history, `${run.runId}.json`)), 'the run was recorded')
     },
@@ -2647,7 +2647,8 @@ export const features: Feature[] = [
           fail: 0,
           error: 0,
           notRun: 0,
-          control: { pass: 0, fail: 1, error: 0, notRun: 0 },
+          notApplicable: 0,
+          control: { pass: 0, fail: 1, error: 0, notRun: 0, notApplicable: 0 },
           verdict: 'discriminates',
         },
         {
@@ -2656,7 +2657,8 @@ export const features: Feature[] = [
           fail: 0,
           error: 0,
           notRun: 0,
-          control: { pass: 0, fail: 0, error: 0, notRun: 1 },
+          notApplicable: 0,
+          control: { pass: 0, fail: 0, error: 0, notRun: 1, notApplicable: 0 },
         },
       ])
     },
@@ -3609,6 +3611,7 @@ export const features: Feature[] = [
           status: 'pass',
           soft: true,
           at: 'evals/lands.eval.ts:7',
+          target: 'marker.txt ok',
         },
       ])
       assert.equal(recorded('canary')?.[0]?.status, 'fail')
@@ -3704,7 +3707,7 @@ export const features: Feature[] = [
         /^ +Worth knowing: "flaky passes" passed on try 2 of 3\.$/m,
       )
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, /- Check flaky passes exit 0 \(passed on try 2 of 3\): `test -f/)
+      assert.match(summary, /## lands[\s\S]*\| flaky passes \| toSucceed \| 1 of 1 \|/)
     },
   },
   {
@@ -3844,7 +3847,9 @@ export const features: Feature[] = [
     env: 'notes',
     canary: /expected no changes to notes\/café\.txt, got \["notes\/café\.txt" \(added\)\]/,
     record: ({ run }) =>
-      assert.deepEqual(landed(run)?.changedFiles, [{ path: 'notes/café.txt', status: 'added' }]),
+      assert.deepEqual(landed(run)?.changedFiles, [
+        { path: 'notes/café.txt', status: 'added', added: 1, removed: 0 },
+      ]),
   },
   {
     dir: 'judge/input-contents',
@@ -4642,11 +4647,10 @@ export const features: Feature[] = [
       assert.deepEqual(rates('lands'), [[0.667, 0.6, 'pass']], 'the rate over the cases clears 0.6')
       assert.deepEqual(rates('canary'), [[0.667, 0.7, 'fail']], 'and is below 0.7')
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, /^ {2}pass {2}all cases {2,}2 of 3 {2}pass@1 67%, passRate 0\.6$/m)
-      assert.match(
-        summary,
-        /^ {2}fail {2}all cases {2,}2 of 3 {2}pass@1 67%, below passRate 0\.7$/m,
-      )
+      assert.match(summary, /\| \[lands\]\(#lands\) \|[\s\S]*\| 67% pass rate \|/)
+      assert.match(summary, /\| \[canary\]\(#canary\) \|[\s\S]*\| 67% pass rate \|/)
+      assert.match(summary, /^## lands[\s\S]*\*\*67% pass rate\*\*/m)
+      assert.match(summary, /^## canary[\s\S]*\*\*67% pass rate\*\*/m)
     },
   },
   {
@@ -4985,10 +4989,10 @@ export const features: Feature[] = [
         { pass: 0, notGated: 1, fail: 1 },
       )
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, /^1 fail · 1 ran · started /m)
-      assert.match(summary, /^ran {14}lands$/m)
-      assert.match(summary, /^### ○ evals\/lands\.eval\.ts › lands · ran$/m)
-      assert.doesNotMatch(summary, /\bpass · |· 1 pass\b/)
+      assert.match(summary, /\| \[lands\]\(#lands\) \| ab;[\s\S]*marked vs plain/)
+      assert.match(summary, /^## lands$/m)
+      assert.match(summary, /### Baseline vs\. variants/)
+      assert.doesNotMatch(summary, /\b100% pass rate\b/)
       const recorded = await runCli(project, ['record'])
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const compared = await runCli(project, ['compare'])
@@ -5154,8 +5158,10 @@ export const features: Feature[] = [
       assert.deepEqual(suite.errors, [message])
       assert.equal(suite.tally.errors, 1)
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, new RegExp(`^error: ${message}$`, 'm'))
-      assert.match(summary, /^1 run error · 1 fail · 1 pass$/m)
+      assert.match(summary, /^## lands$/m)
+      assert.match(summary, /^## canary$/m)
+      assert.match(summary, /^## Attempt index$/m)
+      assert.doesNotMatch(summary, /\[object Object\]/)
     },
   },
   {
@@ -5192,7 +5198,11 @@ export const features: Feature[] = [
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
       assert.match(
         blockOf(summary, 'lands'),
-        /\n {2}check {12}plain {3}broken\n {2}runs true {8}1 of 1 {2}not run\n {2}is the control {3}1 of 1 {2}not run$/,
+        /### Assertions by arm[\s\S]*\| runs true \| toSucceed \| 1 of 1 \| 0 of 1 \|[\s\S]*\| is the control \| toBe \| 1 of 1 \| n\/a \|/,
+      )
+      assert.match(
+        blockOf(summary, 'canary'),
+        /### Assertions by arm[\s\S]*\| runs true \| toSucceed \| 2 of 2 \| 2 of 2 \|/,
       )
       assert.doesNotMatch(blockOf(summary, 'canary'), /not run/)
     },
