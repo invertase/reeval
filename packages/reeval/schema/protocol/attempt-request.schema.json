@@ -864,6 +864,10 @@
             }
           ]
         },
+        "label": {
+          "description": "Stable label for this judge call in the record and report. When unset, the report derives one from the `toPass` assertion label or the question text.",
+          "type": "string"
+        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "integer",

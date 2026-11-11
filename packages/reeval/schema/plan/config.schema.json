@@ -370,6 +370,10 @@
             }
           ]
         },
+        "label": {
+          "description": "Stable label for this judge call in the record and report. When unset, the report derives one from the `toPass` assertion label or the question text.",
+          "type": "string"
+        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "integer",
@@ -773,6 +777,10 @@
       "description": "What an eval runs in: the declarative, phased spec of one environment.",
       "type": "object",
       "properties": {
+        "description": {
+          "description": "Short description shown beside the environment in reports; a child's replaces its parent's.",
+          "type": "string"
+        },
         "egress": {
           "description": "Replaces the inherited policy, per phase: a plain policy sets both, `{ setup, agent }` the phases it names. An `extend` child's replaces its parent's the same way.",
           "$ref": "#/$defs/Egress"
@@ -797,6 +805,10 @@
               }
             ]
           }
+        },
+        "label": {
+          "description": "Human-readable label for reports; when unset the environment `name` is used. A child's replaces its parent's.",
+          "type": "string"
         },
         "mcp": {
           "description": "MCP servers the agent gets, by name.",
