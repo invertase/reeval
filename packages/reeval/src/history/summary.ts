@@ -1,13 +1,11 @@
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { tallyLine } from '../ui/layout.ts'
-import { formatCost, sumCosts } from '../view/cost.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../view/model.ts'
-import type { RunRemarks } from '../view/remarks.ts'
 import { buildRunReport, type RunReportOptions, runReportMarkdown } from '../view/report/index.ts'
 import { runResourcesLine } from '../view/resources.ts'
 import { suiteResult } from '../view/suite.ts'
-import type { AttemptRecord, RunRecord } from './types.ts'
+import type { RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -108,24 +106,3 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 export function renderSummary(run: RunRecord, opts: RunReportOptions = {}): string {
   return runReportMarkdown(buildRunReport(run, { linkBase: './', ...opts }))
 }
-
-/** A failed verdict already says why a judge error failed the attempt; its message repeats it. */
-export const repeatsVerdict = (a: Pick<AttemptRecord, 'error' | 'judgements'>) =>
-  a.error?.kind === 'judge' && a.judgements.some((j) => j.verdict === 'fail')
-
-/** `agent $0.021 (est.) · judge $0.0004 · from models.dev 2026-11-05, openrouter`; null without one. */
-export function costLine(a: Pick<AttemptRecord, 'cost' | 'judgements'>): string | null {
-  const judge = sumCosts(a.judgements.map((j) => ({ cost: j.cost, used: !!j.usage })))
-  if (!a.cost && !judge) return null
-  const sources = new Set([a.cost, judge].flatMap((c) => c?.source.split(', ') ?? []))
-  return [
-    a.cost && `agent ${formatCost(a.cost)}`,
-    judge && `judge ${formatCost(judge)}`,
-    `from ${[...sources].join(', ')}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-// Keep the RunRemarks import visible for callers that type remarks through this module.
-export type { RunRemarks }

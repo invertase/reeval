@@ -2,6 +2,7 @@ import {
   ChevronRight,
   CircleAlert,
   CircleCheck,
+  CircleMinus,
   CircleX,
   Eye,
   ListChecks,
@@ -71,8 +72,18 @@ function Check({
 
 type Assertion = NonNullable<AttemptRecord['assertions']>[number]
 
-const STATUS_ICON = { pass: CircleCheck, fail: CircleX, error: CircleAlert } as const
-const STATUS_TONE = { pass: 'text-pass', fail: 'text-fail', error: 'text-infra' } as const
+const STATUS_ICON = {
+  pass: CircleCheck,
+  fail: CircleX,
+  error: CircleAlert,
+  not_applicable: CircleMinus,
+} as const
+const STATUS_TONE = {
+  pass: 'text-pass',
+  fail: 'text-fail',
+  error: 'text-infra',
+  not_applicable: 'text-muted-foreground',
+} as const
 
 /** Each `expect` the eval made, in call order, with its line and why it failed. */
 function Assertions({ assertions }: { assertions: Assertion[] }) {

@@ -64,14 +64,25 @@ class AssertionRecord(TypedDict):
     labelled: bool
     # `toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`.
     matcher: str
-    # Why it failed or couldn't answer, cut at 1 KB.
+    # Why it failed or couldn't answer, or why `expect.skip` marked it not applicable, cut at 1
+    # KB.
     message: NotRequired[str]
+    # A passing `toHaveFile` / `not.toHaveFile` the agent didn't satisfy (path already matched,
+    # or was absent before and after). Optional on older records.
+    preSatisfied: NotRequired[bool]
+    # Why the check does not apply (`expect.skip`'s second argument).
+    reason: NotRequired[str]
     # A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a
-    # check that threw, such as Python's `assert`, which end the body when they fail.
+    # check that threw, such as Python's `assert`, which end the body when they fail. True for
+    # `expect.skip`.
     soft: bool
     # `error`: the matcher couldn't answer (a subject it can't read, an event the harness
-    # doesn't report).
-    status: Literal["pass", "fail", "error"]
+    # doesn't report). `not_applicable`: `expect.skip` (or a language runner's equivalent);
+    # never fails the attempt and leaves the check's pass/fail denominator.
+    status: Literal["pass", "fail", "error", "not_applicable"]
+    # File matcher target: `toHaveFile`'s path, or `path <pattern>` when a pattern was given.
+    # Optional on older records and non-file matchers.
+    target: NotRequired[str]
 
 
 # reeval to the runner: the attempt was aborted, as `c.signal` aborts. Calls in flight reply
@@ -250,6 +261,8 @@ AttemptCall: TypeAlias = "AttemptCallSend | AttemptCallExec | AttemptCallServe |
 class AttemptDone(TypedDict):
     # What the body threw, if it threw. A failed `expect.require` is one.
     error: NotRequired[AttemptError]
+    # True when the body read turn.status. False when a turn errored and status was never read.
+    turnStatusRead: NotRequired[bool]
     type: Literal["done"]
 
 
@@ -646,6 +659,9 @@ class ConfigJudgeOptions(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
     gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | VertexGatewayDescriptor | Literal["direct", "openrouter", "vercel", "vertex"]]
+    # Stable label for this judge call in the record and report. When unset, the report derives
+    # one from the `toPass` assertion label or the question text.
+    label: NotRequired[str]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[float]
     # `'provider/model'`, or a fake judge.
@@ -872,6 +888,9 @@ class EnvironmentLayer(TypedDict):
 
 # What an eval runs in: the declarative, phased spec of one environment.
 class EnvironmentSpec(TypedDict):
+    # Short description shown beside the environment in reports; a child's replaces its
+    # parent's.
+    description: NotRequired[str]
     # Replaces the inherited policy, per phase: a plain policy sets both, `{ setup, agent }` the
     # phases it names. An `extend` child's replaces its parent's the same way.
     egress: NotRequired[Egress]
@@ -879,6 +898,9 @@ class EnvironmentSpec(TypedDict):
     env: NotRequired[EnvVars]
     # Workspace-relative, or `~/` for home.
     files: NotRequired[dict[str, str | HostFile]]
+    # Human-readable label for reports; when unset the environment `name` is used. A child's
+    # replaces its parent's.
+    label: NotRequired[str]
     # MCP servers the agent gets, by name.
     mcp: NotRequired[dict[str, McpServer]]
     # Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its
@@ -1446,6 +1468,9 @@ class JudgeCallData(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
     gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter | JudgeCallDataGatewayVertex]
+    # Stable label for this judge call in the record and report. When unset, the report derives
+    # one from the `toPass` assertion label or the question text.
+    label: NotRequired[str]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
@@ -2249,6 +2274,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "outputTruncated",
         "outputView",
         "passRate",
+        "preSatisfied",
         "providerOptions",
         "readFile",
         "refuseKey",
@@ -2259,6 +2285,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "startedAt",
         "toolCallId",
         "turnMs",
+        "turnStatusRead",
         "withSkill",
     }
 )

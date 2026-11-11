@@ -1867,7 +1867,7 @@ describe('a study: several arms, every cell ungated', () => {
     assert.match(
       summary,
       /^\| build \| toSucceed \| 3 of 3 \| 3 of 3 \| 3 of 3 \| 9 of 9 \|$/m,
-      'the build check is labelled and scored per arm',
+      'the build check is labeled and scored per arm',
     )
     assert.match(
       summary,
