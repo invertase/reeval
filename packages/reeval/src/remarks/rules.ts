@@ -893,5 +893,21 @@ export function deterministicRemarks(
       )
     }
   }
-  return rankRemarks(out)
+  const pathToKey = new Map(
+    suite.files.flatMap((f) =>
+      f.evals.flatMap((e) => {
+        const entry = byId.get(e.id)
+        return entry
+          ? ([
+              [e.path, entry.key],
+              [e.id, entry.key],
+            ] as const)
+          : []
+      }),
+    ),
+  )
+  return rankRemarks(out).map((r) => {
+    const evalKey = pathToKey.get(r.evalId)
+    return evalKey !== undefined ? { ...r, evalKey } : r
+  })
 }

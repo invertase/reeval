@@ -2,11 +2,13 @@
 // checked. Browser-safe, so the studio's Analysis tab renders the same document the CLI prints.
 
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v13'
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v14'
 /** Bumped when the digest's shape or selection rules change. */
 export const DIGEST_VERSION = 15
 
 export type Confidence = 'high' | 'medium' | 'low'
+
+export type AnalysisClaimRole = 'finding' | 'caveat' | 'action'
 
 export type AnalysisClaim = {
   text: string
@@ -17,6 +19,12 @@ export type AnalysisClaim = {
   quotes?: string[]
   /** Numbers in the text that no cited fact or evidence contains. */
   unverifiedNumbers?: string[]
+  /** Eval id this claim is about, when resolved from attempt cites; optional on older docs. */
+  evalId?: string
+  /** Section role; optional on older docs (derived from which body array it sits in). */
+  role?: AnalysisClaimRole
+  /** Attempt cites resolved to ids and paths; optional on older docs. */
+  attempts?: Array<{ attemptId: string; path: string }>
 }
 
 export type AnomalyKind = 'reeval-bug' | 'eval-design' | 'judge' | 'noise' | 'other'
@@ -26,6 +34,9 @@ export type AnalysisAnomaly = {
   cites: string[]
   /** Numbers in the text that no cited fact or evidence contains. */
   unverifiedNumbers?: string[]
+  evalId?: string
+  role?: AnalysisClaimRole
+  attempts?: Array<{ attemptId: string; path: string }>
 }
 
 export type ActionKind = 'skill' | 'docs' | 'eval' | 'judge' | 'reeval' | 'harness'
@@ -44,6 +55,9 @@ export type AnalysisAction = {
   impact: Level
   effort: Level
   cites: string[]
+  evalId?: string
+  role?: AnalysisClaimRole
+  attempts?: Array<{ attemptId: string; path: string }>
 }
 
 export type AnalysisBody = {
