@@ -45,6 +45,8 @@ export type PairAttempt = {
   captures?: Array<{ name: string; data: Uint8Array }>
   /** The attempt's id, e.g. `cursor/-/docker#1`; never shown to the model. */
   id?: string
+  /** `AttemptRecord.key` when known; written onto each vote as `attempts`. */
+  key?: string
 }
 
 export type Pair = {
@@ -202,6 +204,10 @@ export function voteOf(
   reason?: string,
 ): PairVote {
   const why = voteReason(reason)
+  const attempts =
+    pair.a.key !== undefined && pair.b.key !== undefined
+      ? ([pair.a.key, pair.b.key] as [string, string])
+      : undefined
   return {
     question,
     cut: pair.cut,
@@ -212,6 +218,7 @@ export function voteOf(
     winner: winnerOf(pair, swapped, pick),
     swapped,
     ...(why ? { reason: why } : {}),
+    ...(attempts ? { attempts } : {}),
   }
 }
 
