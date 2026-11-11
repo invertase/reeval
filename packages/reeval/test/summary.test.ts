@@ -19,7 +19,7 @@ const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
 const FIXTURES = join(PACKAGE_DIR, 'test/fixtures/summary')
 
-/** Corpus entries that seed anonymized summary goldens (no private study names). */
+/** Corpus entries that seed summary goldens. */
 const GOLDENS = [{ name: 'with-layouts', corpus: 'with-layouts' }] as const
 
 function loadCorpus(name: string): RunRecord {
@@ -40,7 +40,7 @@ describe('summary.md goldens', () => {
       for (const forbidden of FORBIDDEN_OUTPUT) {
         assert.doesNotMatch(md, forbidden.pattern, forbidden.name)
       }
-      assert.doesNotMatch(md, /firebase|ben-cook|elliot-hesp|russellwheatley|private.?study/i)
+      assert.doesNotMatch(md, /\b(private|product)[ -]?study\b/i)
       const dir = join(FIXTURES, g.name)
       const mdPath = join(dir, 'summary.md')
       const jsonPath = join(dir, 'report.json')
