@@ -732,6 +732,10 @@ For more information about the automatic hosts, see [Egress](/configuration/envi
   The minimum passing score, from 0 to 1. The default is 0.8.
 </Property>
 
+<Property name="judge.label" type="string" optional>
+  A stable label for this judge call in the record and report. When unset, the report derives one from the `toPass` assertion label or the question text.
+</Property>
+
 <Property name="judge.providerOptions" type="Record<string, Record<string, JSONValue>>" optional>
   Provider settings, keyed by provider.
 </Property>

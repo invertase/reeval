@@ -18,7 +18,7 @@ Each row is one closed alias. `RecordMode` is the `record` option.
 | `Outcome` | `'pass'`, `'fail'`, `'infra_error'`, `'skipped'` |
 | `ErrorKind` | `'assertion'`, `'timeout'`, `'aborted'`, `'infra'`, `'judge'` |
 | `TurnStatus` | `'completed'`, `'aborted'`, `'error'` |
-| `ArtifactLevel` | `'all'`, `'failures'`, `'none'` |
+| `ArtifactLevel` | `'all'`, `'evidence'`, `'failures'`, `'none'` |
 | `RecordMode` | `'manual'`, `'ci'`, `'always'` |
 | `FamilyVerdict` | `'lift'`, `'drop'`, `'noise'`, `'insufficient'` |
 
@@ -223,6 +223,22 @@ Counts attempts, except `evals`.
 <Property name="infraError" type="number"></Property>
 
 <Property name="skipped" type="number"></Property>
+
+<Property name="counted" type="number" optional>
+  Pass plus fail over gated cells: the pass-rate denominator. Optional on older records.
+</Property>
+
+<Property name="gated" type="{pass: number; fail: number}" optional>
+  Gated-cell pass/fail split; optional on older records.
+</Property>
+
+<Property name="ungated" type="{pass: number; fail: number}" optional>
+  Ungated-cell pass/fail split; optional on older records.
+</Property>
+
+<Property name="reclassified" type="number" optional>
+  Attempts an unhandled turn error moved out of pass or fail; optional on older records.
+</Property>
 
 ### `SandboxWarning`
 
@@ -438,6 +454,10 @@ Also has every field of `Cell`.
 
 <Property name="checks" type="CellCheck[]" optional>
   Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
+</Property>
+
+<Property name="prompts" type="Array<{sha256: string; at?: string}>" optional>
+  Distinct first-turn prompts this cell's attempts sent (`sha256` of the prompt text). Optional on older records; readers compare `turns[0].prompt` when absent.
 </Property>
 
 ### `Lift`
@@ -768,9 +788,13 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="error" type="AttemptError | null"></Property>
 
+<Property name="turnStatusRead" type="boolean" optional>
+  True when the eval body read `turn.status` (so a mid-turn error was intentional). False when a turn errored and the body never inspected status. Absent on older records; the report then applies the same reclassification rule from `turns[].status === 'error'`.
+</Property>
+
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; cost?: CostUsd; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]; reasoningMs?: number | null; timeSplit?: TimeSplit}>">
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; servedModel?: string | null; servedEffort?: string | null; errorKind?: 'transport' | 'config'; cost?: CostUsd; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]; reasoningMs?: number | null; timeSplit?: TimeSplit}>">
   `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's reasoning took, null when the harness can't time it.
 </Property>
 
@@ -826,8 +850,8 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Every `expect` and `expect.require` matcher call that settled, in call order; unset with none.
 </Property>
 
-<Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
-  Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`.
+<Property name="changedFiles" type="ChangedFile[]">
+  Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. Optional `added` / `removed` come from the uncapped patch at record time; `lockfile` marks dependency lockfiles excluded from line totals.
 </Property>
 
 <Property name="files" type="AttemptFiles"></Property>
@@ -870,7 +894,7 @@ Also has every field of `FileRef`.
 
 <Property name="mediaType" type="'image/png'"></Property>
 
-<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}; status?: number; pageErrors?: number; page?: FileRef; step?: CaptureStep}" optional>
+<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}; status?: number; pageErrors?: number; consoleErrors?: number; page?: FileRef; step?: CaptureStep}" optional>
   Set when the file came from `c.capture()`.
 </Property>
 
@@ -938,6 +962,14 @@ One instruction of a capture, as it ended. Its screenshot is `artifacts/<name>.s
 
 <Property name="key" type="string">
   `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a verdict can be followed across runs (and an edited question starts a new series). `<index>` is the call's place among the attempt's `c.judge()` calls, counting calls that failed, whichever finishes first.
+</Property>
+
+<Property name="label" type="string" optional>
+  From `JudgeOptions.label` when set; optional on older records.
+</Property>
+
+<Property name="assertion" type="string" optional>
+  The `toPass` assertion label that consumed this verdict, when the attempt linked them; optional on older records.
 </Property>
 
 <Property name="retries" type="JudgeRetry[]" optional>
@@ -1025,6 +1057,14 @@ A cell of an evaluation combines a harness, an environment (`-` when none is set
 An environment as it was applied, without secret values.
 
 <Property name="name" type="string"></Property>
+
+<Property name="label" type="string" optional>
+  Report label from the environment spec; unset when none was given (reports use `name`).
+</Property>
+
+<Property name="description" type="string" optional>
+  Report description from the environment spec; unset when none was given.
+</Property>
 
 <Property name="parent" type="string | null">
   The previous `extendEnvironment` layer's name, else null.
