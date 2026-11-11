@@ -41,7 +41,7 @@ import type { CellEffort } from '../view/effort.ts'
 /** Stays 1 while reeval is pre-release: the record changes in place. */
 export const SCHEMA_VERSION = 1
 
-export type ArtifactLevel = 'all' | 'failures' | 'none'
+export type ArtifactLevel = 'all' | 'evidence' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'
 
 /** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */

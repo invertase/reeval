@@ -386,7 +386,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
-                                --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+                                --artifacts all|evidence|failures|none --allow-incomplete --skip-secret-scan
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   history: {
