@@ -257,8 +257,14 @@ const has = (value: unknown, segments: string[]): boolean => {
 }
 
 describe('read defaults', () => {
-  const { records, transcripts, analyses } = corpus()
+  const { records, transcripts, analyses, eventStreams } = corpus()
   const lines = transcripts.flatMap((f) =>
+    readFileSync(f, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l)),
+  )
+  const eventLines = eventStreams.flatMap((f) =>
     readFileSync(f, 'utf8')
       .split('\n')
       .filter((l) => l.trim())
@@ -266,20 +272,24 @@ describe('read defaults', () => {
   )
 
   test('each read default runs on a corpus file written before its field existed', () => {
-    const files = {
+    const files: Record<string, unknown[]> = {
       'run-record': records.map((r) => r.value),
       'transcript-line': lines,
       analysis: analyses.map((a) => a.value),
+      'analysis-note': [],
+      remarks: [],
       'debug-request': [],
+      'live-progress': [],
       'cli-invocation': [],
       'capture-page': [],
+      'run-events': eventLines,
       'bundle-manifest': [],
       'archive-manifest': [],
       credentials: [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {
-        const lacking = files[name as keyof typeof files].some((v) => !has(v, d.path.split('.')))
+        const lacking = (files[name] ?? []).some((v) => !has(v, d.path.split('.')))
         assert.ok(
           lacking,
           `READ_DEFAULTS['${name}'] has ${d.path}, but no file in test/fixtures/records/ lacks it, so nothing tests the default. Add a corpus entry recorded before the field existed (see AGENTS.md).`,
