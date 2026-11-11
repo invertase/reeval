@@ -360,7 +360,10 @@ evaluate('waits', async (c) => {
       .find((e) => e.tool === 'read')
     assert.equal(readCall.durationInferred, true)
     assert.equal(typeof readCall.durationMs, 'number')
-    assert.match(read('summary.md'), /- Agent time: tools .* · waiting [\d.]+s · other /)
+    assert.match(
+      read('summary.md'),
+      /^\| <a id="a1"><\/a>A1 \| evals\/w\.eval\.ts › waits \| fake \| fake \| pass \| not reported \| 1s \| 3 \|/m,
+    )
     const effort = await runCli(p.dir, [
       'query',
       'SELECT model_s_median, waiting_s_median FROM effort',

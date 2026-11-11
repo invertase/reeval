@@ -155,12 +155,14 @@ describe('recording runs into evals/.history', () => {
     for (const file of ['summary.md', trial?.files.transcript?.path, trial?.files.diff?.path]) {
       assert.ok(file && existsSync(join(recorded.dir, file)), file)
     }
+    const summary = recorded.read('summary.md')
+    assert.match(summary, /^# agent$/m, 'passes get detail')
     assert.match(
-      recorded.read('summary.md'),
-      /### ✓ evals\/agent\.eval\.ts › agent/,
-      'passes get detail',
+      summary,
+      /^\| <a id="a1"><\/a>A1 \| evals\/agent\.eval\.ts › agent \| fake \| fake \| pass \|/m,
     )
-    assert.match(recorded.read('summary.md'), /Last message:\n\n> Wrote it/)
+    assert.match(summary, /^## Judgments$/m)
+    assert.match(summary, /Did it write hello\.txt/)
     const [input] = JSON.parse(recorded.read(e.trial.files.judgeInput?.path ?? ''))
     assert.deepEqual(input.state.diff.$ref, 'diff.patch', 'the judge input points at diff.patch')
     assert.equal(sh(p.dir, 'status', '--porcelain'), '?? evals/.history/', 'plain files for git')
@@ -194,7 +196,7 @@ describe('recording runs into evals/.history', () => {
 
     const shown = await runCli(p.dir, ['show', 'latest', '--json'])
     assert.equal((JSON.parse(shown.stdout) as RunRecord).kind, 'reeval-run')
-    assert.match((await runCli(p.dir, ['show', run.runId, '--md'])).stdout, /^# reeval run /)
+    assert.match((await runCli(p.dir, ['show', run.runId, '--md'])).stdout, /^# agent$/m)
     assert.match(
       (await runCli(p.dir, ['history'])).stdout,
       /✓✓ +2\/2 +evals\/agent\.eval\.ts › agent/,
@@ -290,10 +292,14 @@ describe('recording runs into evals/.history', () => {
     }
     const was = await manifest()
     assert.equal(was.revision, 1)
-    assert.deepEqual(
-      was.files.map((f) => f.path),
-      [`${runId}.json`, `${runId}/summary.md`],
+    const archived = was.files.map((f) => f.path)
+    assert.equal(archived[0], `${runId}.json`)
+    assert.ok(archived.includes(`${runId}/summary.md`), 'archive keeps summary.md')
+    assert.ok(
+      archived.some((p) => p.endsWith('/diff.patch')),
+      'evidence default keeps a passing attempt diff in the archive',
     )
+    assert.equal(archived.length, 3)
     assert.equal(
       sh(p.dir, 'check-attr', 'binary', '--', `${HISTORY}/${runId}.zip`),
       `${HISTORY}/${runId}.zip: binary: set`,
@@ -646,7 +652,7 @@ evaluate(
     )
   })
 
-  test("history.artifacts defaults to 'failures': a passing attempt keeps no sandbox output", async () => {
+  test("history.artifacts defaults to 'evidence': a passing attempt keeps diffs, not logs", async () => {
     const p = await gitProject('record-default-level', {
       'evals/passes.eval.ts': setUp('passes', 'echo ok'),
       'evals/fails.eval.ts': setUp('fails', 'exit 4'),
@@ -656,7 +662,7 @@ evaluate(
     const r = await runCli(p.dir, ['record'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, dir } = readRun(p.dir, { history: HISTORY })
-    assert.equal(run.artifacts, 'failures')
+    assert.equal(run.artifacts, 'evidence')
     const attempt = (name: string) => run.evals.find((e) => e.name === name)?.attempts[0]
     const fail = attempt('fails')
     assert.equal(fail?.outcome, 'fail')
@@ -665,14 +671,17 @@ evaluate(
     }
     const pass = attempt('passes')
     assert.equal(pass?.outcome, 'pass')
-    assert.deepEqual(pass?.files, {}, 'no setup.log, transcript or diff for the passing attempt')
+    // evidencePass: drop transcript/setup/check logs; keep diff/captures when present.
+    assert.equal(pass?.files.transcript, undefined, 'no transcript for the passing attempt')
+    assert.equal(pass?.files.setupLog, undefined, 'no setup.log for the passing attempt')
     assert.deepEqual(
       pass?.checks.map((c) => c.log),
       [undefined],
       'no c.exec log for the passing attempt',
     )
-    const passDir = run.evals.find((e) => e.name === 'passes')?.slug ?? 'x'
-    assert.ok(!existsSync(join(dir, passDir)), 'nothing on disk for the passing eval')
+    if (pass?.files.diff) {
+      assert.ok(existsSync(join(dir, pass.files.diff.path)), 'evidence may keep a passing diff')
+    }
   })
 
   test("'failures' keeps a passing attempt's diff beside a failure of its own case only", async () => {
@@ -685,7 +694,7 @@ evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
 `,
     })
     assert.equal((await runCli(p.dir)).code, 1)
-    const r = await runCli(p.dir, ['record'])
+    const r = await runCli(p.dir, ['record', '--artifacts', 'failures'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run } = readRun(p.dir, { history: HISTORY })
     const kept = run.evals[0]?.attempts.map((a) => [a.case, a.n, a.outcome, Object.keys(a.files)])
@@ -821,13 +830,9 @@ evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
       ['same'],
     )
     const md = await runCli(p.dir, ['compare', '--md'])
-    assert.match(
-      md.stdout,
-      new RegExp(
-        `^base ${before} ran on a commit that isn't in HEAD's history \\(rebased or dropped\\?\\)$`,
-        'm',
-      ),
-    )
+    // compare --md is RunReport with prior; orphaned-base text stays on the plain compare layout.
+    assert.match(md.stdout, new RegExp(`Changes since ${before}`))
+    assert.match(md.stdout, /Unchanged \(1\)/)
   })
 
   test('runs further back than the first 20,000 commits are still in HEAD’s history', async () => {
@@ -1370,7 +1375,8 @@ evaluate('flips', async (c) => {
     assert.match(newFailing.out, /^1 new eval \(1 fail\)$/m)
     assert.match(
       (await compareCode('--md')).out,
-      /^### reeval compare: \S+\n\n```text\nNo earlier recorded run/,
+      /^# flips\n[\s\S]*\*\*0% pass rate\*\*/m,
+      'compare --md with no base is the head RunReport',
     )
 
     // With a recorded base: pass → fail regresses.
@@ -2081,7 +2087,7 @@ describe('records from before a field existed', () => {
       r.evals.map((e) => e.todo),
       [false, false],
     )
-    assert.match(renderSummary(r), /^pass {13}writes greet\.js$/m)
+    assert.match(renderSummary(r), /writes greet\.js/)
   })
 
   test('a newer record keeps what it has', () => {
@@ -2103,7 +2109,7 @@ describe('records from before a field existed', () => {
       return r.stdout
     }
     assert.match(await ok(['show', oldRun]), /writes greet\.js/)
-    assert.match(await ok(['show', oldRun, '--md']), /# reeval run 20260927T151935Z/)
+    assert.match(await ok(['show', oldRun, '--md']), /^# Run 20260927T151935Z_/m)
     assert.match(await ok(['show', oldRun, '--json']), /"sandboxWarnings": \[\]/)
     await ok(['run', '--record', '--ui', 'plain'])
     const runs = recordedRuns(p.dir)

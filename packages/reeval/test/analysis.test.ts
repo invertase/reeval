@@ -677,7 +677,10 @@ evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }
     assert.match(first.stdout, /^ +skilled +2 of 2 {2}helped\b/m)
     assert.doesNotMatch(first.stdout, /^ {2}effort /m)
     const { read } = readRun(p.dir)
-    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}helped$/m)
+    const summary = read('summary.md')
+    assert.match(summary, /^## Baseline vs\. variants$/m)
+    assert.match(summary, /^\| Arm \| Pass rate \| Lift \| Verdict \|/m)
+    assert.match(summary, /^\| skilled \| 100% \| \+100 pts \| too-few-runs \|/m)
     assert.equal((await runCli(p.dir)).code, 0)
     const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest', '-v'])
     assert.equal(compare.code, 0, compare.stderr)
@@ -1726,14 +1729,20 @@ evaluate('greets', { runs: 1 }, async (c) => {
     )
     const after = tree(history)
     const added = [...after.keys()].filter((k) => !before.has(k))
-    assert.equal(added.length, 2)
+    const analysisAdded = added.filter((f) => f.includes('/analysis/'))
+    assert.equal(analysisAdded.length, 2, added.join(', '))
     assert.ok(
-      added.every((f) =>
+      analysisAdded.every((f) =>
         new RegExp(`^${HEAD}/analysis/\\d{8}T\\d{6}Z_[a-z0-9-]+_[0-9a-f]{8}\\.(json|md)$`).test(f),
       ),
-      added.join(', '),
+      analysisAdded.join(', '),
     )
-    for (const [file, hash] of before) assert.equal(after.get(file), hash, `${file} is untouched`)
+    // --save re-renders summary.md so analysis claims appear; other run files stay byte-identical.
+    for (const [file, hash] of before) {
+      if (file.endsWith('/summary.md') || file === `${HEAD}/summary.md`) continue
+      assert.equal(after.get(file), hash, `${file} is untouched`)
+    }
+    assert.ok(after.has(`${HEAD}/summary.md`), 'summary.md still present after re-render')
     assert.equal(readdirSync(join(p.dir, '.reeval/analysis')).length, 1, 'the cache has it too')
 
     const twice = await runCli(p.dir, ['analyze', '--save'])
@@ -1853,12 +1862,16 @@ describe('a study: several arms, every cell ungated', () => {
     const summary = readRun(p.dir).read('summary.md')
     assert.match(
       summary,
-      /^- Check build exit 0: `node -e " …`/m,
-      'the label, and the script on one line',
+      /^\| Assertion \| Matcher \| no-skill \| current-skill \| new-skill \| Total \|$/m,
     )
     assert.match(
       summary,
-      /^- Judge MFA \*\*fail\*\* 0\.12 \(threshold 0\.8, fake\): Does it implement/m,
+      /^\| build \| toSucceed \| 3 of 3 \| 3 of 3 \| 3 of 3 \| 9 of 9 \|$/m,
+      'the build check is labelled and scored per arm',
+    )
+    assert.match(
+      summary,
+      /^\| MFA \| Does it implement multi-factor sign-in\? \| 0\.8 \| .* \| 0\.12 \| 0 of 9 \|$/m,
     )
     const { digest } = await digestOf(p.dir, ['--vs', 'none'])
     const pass = digest.facts.find((f) => f.kind === 'pass@1') as { cells: Array<{ cell: string }> }
@@ -1992,7 +2005,12 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
       /^ {2}check {14}no-skill {2}current-skill {2}new-skill\n {2}Social OAuth {7}3 of 3 {4}0 of 3 {9}3 of 3$/m
     assert.match(run.stdout, /^ +✗ Social OAuth +failed on current-skill 3 of 3$/m)
     assert.match((await runCli(p.dir, ['show'])).stdout, matrix)
-    assert.match(readRun(p.dir).read('summary.md'), matrix)
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(
+      summary,
+      /^\| Assertion \| Matcher \| no-skill \| current-skill \| new-skill \| Total \|$/m,
+    )
+    assert.match(summary, /^\| Social OAuth \| toPass \| 3 of 3 \| 0 of 3 \| 3 of 3 \| 6 of 9 \|$/m)
     const rows = await query(
       p.dir,
       'SELECT a_environment, b_environment, a_pass, b_pass, pass_verdict, discriminating, checks FROM contrasts',

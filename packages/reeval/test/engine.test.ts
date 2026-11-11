@@ -56,6 +56,10 @@ describe('engine', () => {
       notGated: 0,
       infraError: 0,
       skipped: 0,
+      counted: 1,
+      gated: { pass: 1, fail: 0 },
+      ungated: { pass: 0, fail: 0 },
+      reclassified: 0,
     })
     assert.equal(run.evals[0]?.id, 'evals/math.eval.ts › math')
     assert.ok(!existsSync(join(p.dir, '.reeval/attachments')), 'no copies of the records')
@@ -277,6 +281,10 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
       notGated: 0,
       infraError: 0,
       skipped: 1,
+      counted: 1,
+      gated: { pass: 1, fail: 0 },
+      ungated: { pass: 0, fail: 0 },
+      reclassified: 0,
     })
   })
 
@@ -353,7 +361,8 @@ group('area', () => {
         ['evals/g.eval.ts › area › nested someday', 'skipped', true],
       ],
     )
-    assert.match(read('summary.md'), /^todo {13}someday$/m)
+    assert.match(read('summary.md'), /^## someday$/m)
+    assert.match(read('summary.md'), /^\| \[someday\]\(#someday\) \|/m)
   })
 
   test('.env.local wins over .env, the shell wins over both, and evals see them, past a byte-order mark', async () => {
@@ -841,6 +850,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
         threshold: 0.8,
         question: 'Did it write hello.txt?',
         model: 'fake',
+        assertion: 'toPass Did it write hello.txt?',
         key: `0:${createHash('sha256').update('Did it write hello.txt?').digest('hex').slice(0, 12)}`,
       },
     ])
@@ -1122,9 +1132,10 @@ evaluate('passes', async () => {})
       /^ {2}toPass ok\? {7}failed {2}evals\/agent\.eval\.ts:6\n {4}judge score 0\.30 is below 0\.8/m,
     )
     const summary = readRun(p.dir).read('summary.md')
-    const attempts = summary.slice(summary.indexOf('## Attempts'))
-    assert.match(attempts, /Judge \*\*fail\*\* 0\.30/)
-    assert.doesNotMatch(attempts, /judge score/, 'the verdict is printed once')
+    assert.match(summary, /^## Judgments$/m)
+    assert.match(summary, /^\| ok \| ok\? \| 0\.8 \| .* \| 0\.30 \| 0 of 1 \|$/m)
+    assert.match(summary, /^## Failures and caveats$/m)
+    assert.match(summary, /^\| assertion \| toPass ok\? \|/m)
   })
 
   test('a model judge makes a real provider call: the request carries the question and transcript, the verdict the reply', async () => {
@@ -1358,9 +1369,9 @@ evaluate('canary', async (c) => {
     }
     assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
     const summary = run.read('summary.md')
-    const attempts = summary.slice(summary.indexOf('## Attempts'))
+    assert.match(summary, /^#{2,3} Failures and caveats$/m)
     assert.equal(
-      attempts.match(/tests pass: expected command to succeed/g)?.length,
+      summary.match(/\| assertion \| tests pass \|/g)?.length,
       3,
       'each check failure is shown',
     )
@@ -1642,7 +1653,10 @@ evaluate('agent eval', async (c) => {
     assert.equal(j?.model, 'mock/flaky')
     assert.equal(j?.retries?.length, 1)
     assert.equal(j?.retries?.[0]?.error, 'The model is overloaded due to high demand')
-    assert.match(readRun(p.dir).read('summary.md'), /mock\/flaky, after 1 retry\): ok\?/)
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(summary, /^## Judgments$/m)
+    assert.match(summary, /^\| ok \| ok\? \| 0\.8 \| .* \| 0\.90 \| 1 of 1 \|$/m)
+    assert.match(summary, /\| Judge \| fake \(served flaky\) /)
   })
 
   const providerError = (status: number, message: string) =>
@@ -1913,7 +1927,10 @@ evaluate('huge diff', async () => {
     )
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
-    assert.match(read('summary.md'), new RegExp(`- Error: ${billing}`))
+    assert.match(
+      read('summary.md'),
+      new RegExp(`\\| turn-error \\| ${billing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\|`),
+    )
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
     assert.match(
       agent.stdout,
