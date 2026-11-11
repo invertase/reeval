@@ -23,7 +23,13 @@ import {
 import { inspect } from '@vitest/utils/display'
 import { type Limits, misuseError, type RunMatch } from '../assert.ts'
 import { fromCwd } from '../ids.ts'
-import type { AtLeastOne, MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import {
+  type AtLeastOne,
+  type MATCHERS,
+  type MatcherArgs,
+  type MatcherName,
+  takeFileMeta,
+} from '../matchers.ts'
 import { isThenable } from '../object.ts'
 import { redactStrings } from '../redact.ts'
 import type {
@@ -257,6 +263,10 @@ export type RawAssertion = {
   status: 'pass' | 'fail' | 'error' | 'not_applicable'
   /** What the matcher threw, unless it passed. */
   error?: unknown
+  /** File matcher target (`toHaveFile`). */
+  target?: string
+  /** Passing file check the agent didn't satisfy. */
+  preSatisfied?: boolean
   /** Async matchers only. */
   durationMs?: number
 }
@@ -377,6 +387,9 @@ function settle(entry: Recorded, error: unknown, startedAt?: number) {
   entry.status = error === undefined ? 'pass' : isUnanswerable(error) ? 'error' : 'fail'
   if (error !== undefined) entry.error = error
   if (startedAt !== undefined) entry.durationMs = Math.round(performance.now() - startedAt)
+  const meta = takeFileMeta()
+  if (meta?.target !== undefined) entry.target = meta.target
+  if (meta?.preSatisfied) entry.preSatisfied = true
 }
 
 /** What a matcher failed with when its subject didn't match, not an error raised under it. */

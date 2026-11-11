@@ -160,6 +160,13 @@ export type JudgmentRecord = {
    * whichever finishes first.
    */
   key: string
+  /** From `JudgeOptions.label` when set; optional on older records. */
+  label?: string
+  /**
+   * The `toPass` assertion label that consumed this verdict, when the attempt linked them; optional
+   * on older records.
+   */
+  assertion?: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */
   retries?: JudgeRetry[]
   /** Captures this call sent the judge as file parts, when any. */
@@ -320,6 +327,13 @@ export type AttemptRecord = {
     usage: TokenUsage | null
     /** The model the harness says served the turn; null when it reports none. */
     model: string | null
+    /**
+     * Served model for the turn (harness label, else gateway), optional on older records. Same as
+     * `model` when the harness reported one.
+     */
+    servedModel?: string | null
+    /** Reasoning effort from the served-model label (`[effort=…]`); optional on older records. */
+    servedEffort?: string | null
     /** Classified mid-turn error kind when `status === 'error'`; optional on older records. */
     errorKind?: 'transport' | 'config'
     /**
@@ -565,6 +579,11 @@ export type CaseRecord = {
    * isn't `<eval name> [<key>]` (a name template's, `fixes GH-101` for `fixes $id`).
    */
   name?: string
+  /**
+   * Display label (`caseName`): `adds a check [nextjs]` or a custom case name. Optional on older
+   * records; readers derive it from `name` / `key` when absent.
+   */
+  label?: string
   /** `EvalEntry.source.case`: the hash of the case's data. */
   hash?: string
   /**
@@ -811,6 +830,11 @@ export type CellRecord = Cell & {
    * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
    */
   checks?: CellCheck[]
+  /**
+   * Distinct first-turn prompts this cell's attempts sent (`sha256` of the prompt text). Optional
+   * on older records; readers compare `turns[0].prompt` when absent.
+   */
+  prompts?: Array<{ sha256: string; at?: string }>
 }
 
 /** How often one check passed: a counted attempt that never reached it counts it `notRun`. */

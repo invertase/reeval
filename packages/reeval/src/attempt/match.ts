@@ -7,14 +7,16 @@ import type { AttemptCall } from '../contract/attempt.ts'
 import { isUnanswerable, type RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
 import { relativeFile } from '../ids.ts'
-import { isMatcherName, MATCHERS, type MatcherName, runMatcher } from '../matchers.ts'
+import { isMatcherName, MATCHERS, type MatcherName, runMatcher, takeFileMeta } from '../matchers.ts'
 import type { AssertionRecord, AttemptContext } from '../types.ts'
 import { assertionRecords } from './assertions.ts'
 
 export type ExpectCall = Extract<AttemptCall, { op: 'expect' }>
 export type RecordCall = Extract<AttemptCall, { op: 'record' }>
 
-type Outcome = Pick<RawAssertion, 'status' | 'error'> & { async: boolean }
+type Outcome = Pick<RawAssertion, 'status' | 'error' | 'target' | 'preSatisfied'> & {
+  async: boolean
+}
 
 /** Strings a runner's pattern was tested on without an answer, by its `matchedBy`. */
 type Untested = Map<string, Set<string>>
@@ -154,12 +156,18 @@ async function once(
     async =
       running instanceof Promise || ('exec' in call.subject && call.subject.result === undefined)
     const result = await running
-    if (untested.size > 0) return { status: 'pass', async }
-    if (result.pass !== call.not) return { status: 'pass', async }
+    const meta = {
+      ...(result.target !== undefined ? { target: result.target } : {}),
+      ...(result.preSatisfied ? { preSatisfied: true as const } : {}),
+    }
+    // Clear any Chai-side stash from a concurrent in-process expect.
+    takeFileMeta()
+    if (untested.size > 0) return { status: 'pass', async, ...meta }
+    if (result.pass !== call.not) return { status: 'pass', async, ...meta }
     const message = result.message()
     const error = new Error(call.label ? `${call.label}: ${message}` : message)
     error.name = 'AssertionError'
-    return { status: 'fail', error, async }
+    return { status: 'fail', error, async, ...meta }
   } catch (error) {
     if (!isUnanswerable(error)) throw error
     return { status: 'error', error, async }
@@ -209,6 +217,8 @@ export async function match(
     ...siteOf(call.at),
     status: outcome.status,
     ...(outcome.status === 'pass' ? {} : { error: outcome.error }),
+    ...(outcome.target !== undefined ? { target: outcome.target } : {}),
+    ...(outcome.preSatisfied ? { preSatisfied: true } : {}),
     ...(outcome.async || call.poll
       ? { durationMs: Math.round(performance.now() - startedAt) }
       : {}),

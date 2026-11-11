@@ -62,6 +62,14 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
       r.matcher === 'skip' && typeof r.args[0] === 'string'
         ? clipped(r.args[0], MESSAGE_LIMIT)
         : undefined
+    const fileMatcher = /(^|\.)toHaveFile$/.test(r.matcher)
+    const target =
+      r.target ??
+      (fileMatcher && typeof r.args[0] === 'string'
+        ? r.args[1] === undefined
+          ? r.args[0]
+          : `${r.args[0]} ${r.args[1] instanceof RegExp ? r.args[1].source : shown(r.args[1])}`
+        : undefined)
     return {
       label,
       labelled: r.label !== undefined || r.matcher === 'skip',
@@ -73,9 +81,33 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
         ? {}
         : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
       ...(reason !== undefined ? { reason } : {}),
+      ...(target !== undefined ? { target: clipped(target, LABEL_LIMIT) } : {}),
+      ...(r.preSatisfied ? { preSatisfied: true } : {}),
       ...(r.durationMs === undefined ? {} : { durationMs: r.durationMs }),
     }
   })
+}
+
+const JUDGE_ERROR = /^judge failed for /
+
+/**
+ * Writes each judgment's `assertion` from the matching `toPass` label when counts align, and
+ * copies `JudgeOptions.label` already on the judgment.
+ */
+export function linkJudgmentAssertions(
+  judgments: Array<{ question: string; label?: string; assertion?: string }>,
+  assertions: AssertionRecord[],
+): void {
+  const passes = assertions.filter(
+    (x) => /(^|\.)toPass$/.test(x.matcher) && !JUDGE_ERROR.test(x.message ?? ''),
+  )
+  if (passes.length !== judgments.length) return
+  for (let i = 0; i < judgments.length; i++) {
+    const j = judgments[i]
+    const x = passes[i]
+    if (!j || !x) continue
+    j.assertion = x.label
+  }
 }
 
 export const CAUGHT_HINT =

@@ -23,7 +23,73 @@ import {
 import { isObjectLike, isThenable } from './object.ts'
 import { redactSecrets } from './redact.ts'
 import { plural } from './text.ts'
-import type { CapturePage, ExecResult, JudgeFailure, StatusRange, Verdict } from './types.ts'
+import type {
+  CapturePage,
+  Diff,
+  ExecResult,
+  FileChange,
+  JudgeFailure,
+  StatusRange,
+  Verdict,
+} from './types.ts'
+import { splitPatch } from './view/patch.ts'
+
+/** Last file-matcher extras for the Chai/vitest path to copy onto the raw assertion. */
+let pendingFileMeta: { target?: string; preSatisfied?: boolean } | undefined
+
+/** Takes and clears extras the last `toHaveFile` put on its `Result`. */
+export function takeFileMeta(): { target?: string; preSatisfied?: boolean } | undefined {
+  const meta = pendingFileMeta
+  pendingFileMeta = undefined
+  return meta
+}
+
+function fileTarget(path: string, pattern?: RegExp | string): string {
+  if (pattern === undefined) return path
+  return `${path} ${typeof pattern === 'string' ? pattern : pattern.source}`
+}
+
+function subjectDiff(actual: unknown): Diff | null {
+  if (isObjectLike(actual) && isObjectLike(actual.diff) && typeof actual.diff.patch === 'string') {
+    return actual.diff as Diff
+  }
+  if (isObjectLike(actual) && Array.isArray(actual.turns) && actual.turns.length) {
+    const last = actual.turns[actual.turns.length - 1]
+    if (isObjectLike(last) && isObjectLike(last.diff) && typeof last.diff.patch === 'string') {
+      return last.diff as Diff
+    }
+  }
+  return null
+}
+
+function pathInDiff(files: FileChange[] | undefined, path: string): boolean {
+  return (files ?? []).some((f) => f.path === path)
+}
+
+function preSatisfiedFile(
+  actual: unknown,
+  path: string,
+  pattern: RegExp | string | undefined,
+  not: boolean,
+): true | undefined {
+  const diff = subjectDiff(actual)
+  const inDiff = pathInDiff(diff?.files, path)
+  if (not) return inDiff ? undefined : true
+  if (!inDiff) return true
+  if (pattern === undefined || !diff?.patch) return undefined
+  const section = splitPatch(diff.patch).find((p) => p.path === path)
+  if (!section) return true
+  const added = section.text
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1))
+    .join('\n')
+  const matched =
+    typeof pattern === 'string'
+      ? added.includes(pattern)
+      : new RegExp(pattern.source, pattern.flags).test(added)
+  return matched ? undefined : true
+}
 
 /** At least one of `T`'s keys. */
 export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<T> }[keyof T]
@@ -154,17 +220,35 @@ export const MATCHERS = {
   }),
 
   toHaveFile: matcher(
-    async (actual, [path, pattern]: [path: string, pattern?: RegExp | string]) => {
+    async (actual, [path, pattern]: [path: string, pattern?: RegExp | string], flags) => {
       if (!hasFiles(actual)) throw subjectError('toHaveFile() expects a turn from c.send(), or c')
+      const target = fileTarget(path, pattern)
       const content = await actual.readFile(path)
-      if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
-      if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
-      const pass = typeof pattern === 'string' ? content.includes(pattern) : pattern.test(content)
-      return {
-        pass,
-        message: () =>
-          `expected ${path} ${pass ? 'not ' : ''}to match ${pattern}\n--- ${path} ---\n${tail(content)}`,
+      let pass: boolean
+      let message: () => string
+      if (content === null) {
+        pass = false
+        message = () => `expected file ${path} to exist`
+      } else if (pattern === undefined) {
+        pass = true
+        message = () => `expected no file at ${path}`
+      } else {
+        pass = typeof pattern === 'string' ? content.includes(pattern) : pattern.test(content)
+        message = () =>
+          `expected ${path} ${pass ? 'not ' : ''}to match ${pattern}\n--- ${path} ---\n${tail(content)}`
       }
+      const assertionPassed = flags.not ? !pass : pass
+      const preSatisfied = assertionPassed
+        ? preSatisfiedFile(actual, path, pattern, flags.not)
+        : undefined
+      const result: Result = {
+        pass,
+        message,
+        target,
+        ...(preSatisfied ? { preSatisfied: true } : {}),
+      }
+      pendingFileMeta = { target, ...(preSatisfied ? { preSatisfied: true } : {}) }
+      return result
     },
   ),
 

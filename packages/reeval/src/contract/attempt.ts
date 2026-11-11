@@ -221,6 +221,8 @@ export const assertionRecordSchema = z.strictObject({
   at: z.string().optional(),
   message: z.string().optional(),
   reason: z.string().optional(),
+  target: z.string().optional(),
+  preSatisfied: z.boolean().optional(),
   durationMs: z.number().optional(),
 })
 

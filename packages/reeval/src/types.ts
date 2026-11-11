@@ -519,6 +519,11 @@ export type JudgeOptions = {
   model?: JudgeModel
   /** Minimum score (0–1) for a `pass` verdict. */
   threshold?: number
+  /**
+   * Stable label for this judge call in the record and report. When unset, the report derives one
+   * from the `toPass` assertion label or the question text.
+   */
+  label?: string
   /** AI SDK provider options for the judge's calls, keyed by provider. */
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
@@ -1714,6 +1719,13 @@ export type EnvironmentSpec = {
    * replaces the parent's entirely when it sets one; install is not merged onto the parent image.
    */
   sandbox?: SandboxDescriptor
+  /**
+   * Human-readable label for reports; when unset the environment `name` is used. A child's replaces
+   * its parent's.
+   */
+  label?: string
+  /** Short description shown beside the environment in reports; a child's replaces its parent's. */
+  description?: string
   /** The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's. */
   workspace?: GitWorkspace
   /** Variables and secrets for the sandbox, merged by name over the parent's. */
@@ -2125,6 +2137,10 @@ export type PairVote = {
   reason?: string
   /** The captures each named side showed, by name; set when the question sends `artifacts`. */
   artifacts?: { a: string[]; b: string[] }
+  /**
+   * `AttemptRecord.key` of side `a`, then `b` (stable cite across runs). Optional on older votes.
+   */
+  attempts?: [string, string]
 }
 
 /** A pairwise question's answer: every vote, and each side's wins over decided votes per cut. */
@@ -3133,6 +3149,10 @@ export type PluginRecord = {
 /** An environment as it was applied, without secret values. */
 export type EnvironmentRecord = {
   name: string
+  /** Report label from the environment spec; unset when none was given (reports use `name`). */
+  label?: string
+  /** Report description from the environment spec; unset when none was given. */
+  description?: string
   /** The previous `extendEnvironment` layer's name, else null. */
   parent: string | null
   /** Keys a later layer replaced, for example `env.KEY`, `skills.typescript`, `mcp.docs`, or `rules`. */
@@ -3485,6 +3505,16 @@ export type AssertionRecord = {
   message?: string
   /** Why the check does not apply (`expect.skip`'s second argument). */
   reason?: string
+  /**
+   * File matcher target: `toHaveFile`'s path, or `path <pattern>` when a pattern was given.
+   * Optional on older records and non-file matchers.
+   */
+  target?: string
+  /**
+   * A passing `toHaveFile` / `not.toHaveFile` the agent didn't satisfy (path already matched, or
+   * was absent before and after). Optional on older records.
+   */
+  preSatisfied?: boolean
   /** Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`). */
   durationMs?: number
 }
@@ -3530,7 +3560,17 @@ export type EvalRecord = {
    * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
    * included, which its judgment key is numbered by.
    */
-  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number; usage?: TokenUsage }>
+  judgements: Array<
+    Verdict & {
+      retries?: JudgeRetry[]
+      call?: number
+      usage?: TokenUsage
+      /** From `JudgeOptions.label` when set. */
+      label?: string
+      /** The `toPass` assertion label that consumed this verdict, when linked. */
+      assertion?: string
+    }
+  >
   /** Session starts that didn't become ready in time, or failed on a transient error, and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings

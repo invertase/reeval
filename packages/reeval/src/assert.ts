@@ -17,7 +17,14 @@ import type {
 } from './types.ts'
 import { totalTokens } from './usage.ts'
 
-export type Result = { pass: boolean; message: () => string }
+export type Result = {
+  pass: boolean
+  message: () => string
+  /** File matcher target (`toHaveFile`), as recorded on the assertion. */
+  target?: string
+  /** Passing file check that the agent didn't satisfy (path already matched). */
+  preSatisfied?: boolean
+}
 
 /**
  * A matcher handed a subject it can't read, such as `toHaveEdited(1)`: recorded as `error`, an
