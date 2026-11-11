@@ -12,7 +12,12 @@ import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { evalFile, sourcesPart } from '../eval-source.ts'
-import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
+import {
+  effortFromModelLabel,
+  harnessEffort,
+  resolvedEffortOf,
+  servedEffortOf,
+} from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
@@ -1110,6 +1115,18 @@ async function attemptEvidence(
   return {
     turns: (record?.turns ?? []).map((t) => {
       const error = turnError(t.transcript)
+      // Harness label first; else the gateway's main model-call in this turn's window.
+      const fromGateway = (t.transcript ?? [])
+        .filter(
+          (e) =>
+            e.type === 'model-call' &&
+            e.model &&
+            (e.role === 'main' || e.role === undefined || e.stream),
+        )
+        .map((e) => (e.type === 'model-call' ? e.model : null))
+        .find((m): m is string => !!m)
+      const servedModel = t.model ?? fromGateway ?? null
+      const effort = effortFromModelLabel(servedModel) ?? null
       return {
         prompt: t.prompt,
         status: t.status,
@@ -1117,6 +1134,8 @@ async function attemptEvidence(
         durationMs: t.durationMs,
         usage: t.usage ?? null,
         model: t.model ?? null,
+        servedModel,
+        servedEffort: effort,
         unreported: t.unreported ?? [],
         error,
         ...(t.status === 'error' ? { errorKind: turnErrorKind(error) } : {}),
