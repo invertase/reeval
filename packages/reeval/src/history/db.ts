@@ -23,6 +23,7 @@ import {
   skillDirSkill,
   skillsWritten,
   skillUses,
+  type ToolClass,
 } from './tool-class.ts'
 import { targetText, toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
@@ -581,6 +582,64 @@ function classifyOrWorkspace(
   }
 }
 
+export type ClassifiedCall = ToolCall & {
+  class: ToolClass
+  /** The declared context files the call read. */
+  files: string[]
+  /** The skills the call used; a failed call or one on a skill the attempt wrote counts only placed ones. */
+  skills: ReturnType<typeof skillUses>
+}
+
+/** One attempt's tool calls, classified, and the skills it found that its environment didn't place. */
+export type AttemptCalls = {
+  calls: ClassifiedCall[]
+  found: Map<string, { source: string; path: string | null }>
+}
+
+/**
+ * Classifies one attempt's tool calls from its transcript: what `tool_calls`, `context_reads`,
+ * `skill_uses` and `found_skills` hold, and what the run view's facts count.
+ */
+export function classifyAttempt(
+  a: AttemptRecord,
+  env: { skills: string[]; mcp: string[] },
+  transcript: string | undefined,
+): AttemptCalls {
+  const { skills } = env
+  const calls = transcript ? toolCalls(transcript) : []
+  const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
+  const found = new Map<string, { source: string; path: string | null }>()
+  for (const c of a.context) {
+    const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
+    if (skill && !skills.includes(skill) && !authored.has(skill) && !found.has(skill)) {
+      found.set(skill, { source: 'skill-dir', path: c.path })
+    }
+  }
+  const ctx: ClassContext = {
+    skills,
+    skillDirs: SKILL_DIRS,
+    found: [...found.keys()],
+    files: a.context.map((c) => c.path).filter((p) => declaredContext(p, skills)),
+    mcp: env.mcp,
+    verify: a.checks.map((c) => c.command),
+  }
+  const classified = calls.map((t): ClassifiedCall => {
+    const call = classifyOrWorkspace(t.tool, t.text, ctx)
+    // A failed call names a skill that may not exist; a placed one does.
+    const used = call.skills.filter(
+      ({ skill, source }) => source === 'placed' || (t.ok !== false && !authored.has(skill)),
+    )
+    for (const { skill, source } of used) {
+      const had = found.get(skill)
+      if (source !== 'placed' && had?.source !== 'skill-dir') {
+        found.set(skill, { source, path: had?.path ?? null })
+      }
+    }
+    return { ...t, class: call.class, files: call.files, skills: used }
+  })
+  return { calls: classified, found }
+}
+
 /**
  * What a cell's results can be pooled on across runs: its fingerprint parts, with the context
  * part replaced by the context files that aren't an agent CLI's own runtime state, and without
@@ -898,15 +957,7 @@ function insertRun(
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
-      const transcript = transcripts.get(a.key)
-      const calls = transcript ? toolCalls(transcript) : []
-      const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
-      const found = new Map<string, { source: string; path: string | null }>()
       for (const c of a.context) {
-        const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
-        if (skill && !skills.includes(skill) && !authored.has(skill) && !found.has(skill)) {
-          found.set(skill, { source: 'skill-dir', path: c.path })
-        }
         run(
           'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -946,16 +997,8 @@ function insertRun(
           x.durationMs ?? null,
         )
       }
-      const ctx: ClassContext = {
-        skills,
-        skillDirs: SKILL_DIRS,
-        found: [...found.keys()],
-        files: a.context.map((c) => c.path).filter((p) => declaredContext(p, skills)),
-        mcp: env?.mcp ?? [],
-        verify: a.checks.map((c) => c.command),
-      }
-      for (const t of calls) {
-        const call = classifyOrWorkspace(t.tool, t.text, ctx)
+      const classified = classifyAttempt(a, { skills, mcp: env?.mcp ?? [] }, transcripts.get(a.key))
+      for (const t of classified.calls) {
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -966,14 +1009,12 @@ function insertRun(
           t.target,
           t.ok === null ? null : t.ok ? 1 : 0,
           t.durationMs,
-          call.class,
+          t.class,
         )
-        for (const path of call.files) {
+        for (const path of t.files) {
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
         }
-        for (const { skill, source } of call.skills) {
-          // A failed call names a skill that may not exist; a placed one does.
-          if (source !== 'placed' && (t.ok === false || authored.has(skill))) continue
+        for (const { skill, source } of t.skills) {
           run(
             'INSERT INTO skill_uses VALUES (?, ?, ?, ?, ?)',
             record.runId,
@@ -982,13 +1023,9 @@ function insertRun(
             skill,
             source,
           )
-          const had = found.get(skill)
-          if (source !== 'placed' && had?.source !== 'skill-dir') {
-            found.set(skill, { source, path: had?.path ?? null })
-          }
         }
       }
-      for (const [skill, f] of found) {
+      for (const [skill, f] of classified.found) {
         run(
           'INSERT INTO found_skills VALUES (?, ?, ?, ?, ?)',
           record.runId,

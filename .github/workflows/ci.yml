@@ -53,10 +53,9 @@ jobs:
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
   # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
-  # `checks`, which always runs. Any other change needs `unit` unless it's only in
-  # packages/studio-web. On the light tier, the rest follow their own paths, and a change to CI,
-  # the lockfile or the workspace needs every job; on the full tier, every code change needs every
-  # job.
+  # `checks`, which always runs. Any other change needs `unit`. On the light tier, the rest follow
+  # their own paths, and a change to CI, the lockfile or the workspace needs every job; on the full
+  # tier, every code change needs every job.
   changes:
     name: changes
     runs-on: ubuntu-24.04
@@ -97,7 +96,7 @@ jobs:
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac
-              case $f in packages/studio-web/*) ;; *) unit=true ;; esac
+              unit=true
               if [ "$PR_TIER" != light ]; then every; continue; fi
               case $f in
                 .github/* | \
@@ -165,7 +164,6 @@ jobs:
                   docker=true ;;
               esac
               case $f in
-                packages/studio-web/* | \
                 packages/reeval/src/studio/* | \
                 packages/reeval/src/view/* | \
                 packages/reeval/test/studio*)
@@ -173,7 +171,6 @@ jobs:
               esac
               case $f in
                 packages/*/package.json | \
-                packages/studio-web/* | \
                 packages/reeval/tsdown.config.mjs | \
                 packages/reeval/src/root.ts | \
                 packages/reeval/test/pack* | \
@@ -488,9 +485,6 @@ jobs:
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/studio.test.ts
-      # The browser test skips without Chrome, so check it's there rather than pass silently.
-      - run: google-chrome --version
-      - run: pnpm --filter studio-web test
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: studio }

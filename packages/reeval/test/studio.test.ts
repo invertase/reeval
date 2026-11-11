@@ -1,91 +1,58 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, relative, sep } from 'node:path'
+import { join } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
-import { gunzipSync, gzipSync } from 'node:zlib'
-import { readTar, writeTar } from '@reeval/sandbox-docker'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { appFiles } from '../src/studio/app.ts'
-import { COOKIE, createStudioApp } from '../src/studio/server.ts'
+import { createStudioApi } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
-import type { AnalysisNote } from '../src/view/analysis.ts'
 import {
+  type AttemptTrace,
+  type AttemptView,
   activityLabel,
-  analysisDataPath,
   answerRows,
-  artifactPath,
   attemptAnswerRows,
-  buildIndex,
+  attemptFacts,
+  buildAttemptView,
+  buildRunView,
+  cellEffort,
   cellJudgeRates,
   cellRows,
   cellUsage,
   collapsedJudgeLabel,
   compareView,
-  type DebugView,
-  debugApiPath,
   evalHistory,
   evalTree,
   failedJudgeLabels,
   judgeLabel,
-  manifestPath,
-  parseDataPath,
+  type PairResponse,
+  pageLimit,
+  parseStudioPath,
   parseTranscript,
-  recordPath,
+  RUN_LIST_LIMIT,
+  type RunList,
+  type RunView,
+  runHeader,
   runLead,
   runOutcome,
   runRows,
-  shardPath,
-  snapshotApiPath,
+  STUDIO_API_PREFIX,
+  STUDIO_API_VERSION,
+  STUDIO_ROUTES,
   splitPatch,
-  traceApiPath,
+  studioPaths,
+  TRANSCRIPT_LIMIT,
   transcriptItems,
   uniqueJudgeLabels,
+  VIEW_VERSION,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
 
 const RUN = '20260924T220414Z_f7e1b53_elliot-hesp_k3f9'
-
-describe('studio data paths', () => {
-  test('map the file layout and nothing else', () => {
-    assert.deepEqual(parseDataPath('studio.json'), { kind: 'studio' })
-    assert.deepEqual(parseDataPath(manifestPath), { kind: 'manifest' })
-    assert.deepEqual(parseDataPath(shardPath('2026-09')), { kind: 'shard', id: '2026-09' })
-    assert.deepEqual(parseDataPath(recordPath(RUN)), { kind: 'record', runId: RUN })
-    assert.deepEqual(parseDataPath(artifactPath(RUN, 'my-eval-abc123/fake-x/1/transcript.jsonl')), {
-      kind: 'artifact',
-      runId: RUN,
-      segments: ['my-eval-abc123', 'fake-x', '1', 'transcript.jsonl'],
-    })
-  })
-
-  test('reject traversal, odd segments and unknown areas', () => {
-    for (const path of [
-      `data/runs/${RUN}/../../reeval.config.ts`,
-      `data/runs/${RUN}/./summary.md`,
-      `data/runs/${RUN}//summary.md`,
-      `data/runs/${RUN}/.hidden`,
-      `data/runs/${RUN}/a\\b`,
-      `data/runs/${RUN}/a\0b`,
-      `data/runs/${RUN}/${'a/'.repeat(9)}x`,
-      'data/runs/../secrets.json',
-      'data/runs/not-a-run.json',
-      'data/runs/not-a-run/summary.md',
-      'data/index/latest.json',
-      'data/index/2026-09/x.json',
-      'data/other/x.json',
-      '../data/index/manifest.json',
-      '/etc/passwd',
-      '',
-    ]) {
-      assert.equal(parseDataPath(path), null, path)
-    }
-  })
-})
 
 // A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
 // two runs, with a compare question) and one scratch run.
@@ -102,7 +69,8 @@ group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { control: plain, va
   })
 })
 `
-const agent = "{ files: { 'hello.txt': 'hi\\n' }, text: 'Wrote it' }"
+const agent =
+  "{ files: { 'hello.txt': 'hi\\n' }, text: 'Wrote it', tools: [{ tool: 'read', input: { path: 'README.md' }, output: '' }] }"
 
 let dir = ''
 let source: StudioSource
@@ -267,19 +235,9 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
       runLead(record({ pass: 0, fail: 0, infraError: 3 }, [attempt('infra_error')])),
       'No counted attempts; 3 infra errors.',
     )
-    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
-    assert.match(runPage, /runLead\(record\)/)
-    assert.match(runPage, /pinnedAnalysis/)
   })
 
-  test('the run page leads with a verdict, then the stats', () => {
-    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
-    const lead = runPage.indexOf('runLead(record)')
-    const tally = runPage.indexOf('{pass}</span> passed')
-    assert.ok(lead > 0 && tally > lead, 'the one-line verdict sits above the pass/fail tally')
-  })
-
-  test('tool calls, files changed and edit tool calls are counted apart, on every page', () => {
+  test('tool calls, files changed and edit tool calls are counted apart', () => {
     assert.equal(
       activityLabel({ tools: 21, fileEdits: 2 }, 2),
       '21 tool calls · 2 files changed · 2 edit tool calls',
@@ -288,18 +246,6 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
       activityLabel({ tools: 1, fileEdits: 0 }, 1),
       '1 tool call · 1 file changed · 0 edit tool calls',
     )
-    const pages = ['pages/run.tsx', 'pages/attempt/index.tsx'].map((f) =>
-      readFileSync(join(pkgRoot, '../studio-web/src', f), 'utf8'),
-    )
-    for (const page of pages) {
-      assert.match(page, /activityLabel\((a|attempt)\.activity, filesChanged\(\1\.changedFiles\)\)/)
-      assert.doesNotMatch(page, /'tool call'/, 'no page counts tool calls its own way')
-    }
-    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
-    assert.match(runPage, /formatUsage\(a\.usage\)/)
-    assert.match(runPage, /formatUsage\(row\.usage\)/)
-    assert.match(runPage, /row\.judgeRates/)
-    assert.match(runPage, /collapsedJudges\(a\.judgements\)/)
   })
 })
 
@@ -319,20 +265,6 @@ describe('view-models over a real history', () => {
       evalHeader?.cells.map((c) => [c.key, c.pass, c.runs]),
       [['fake/fake/fake', 1, 1]],
     )
-  })
-
-  test('the index shards by UTC month, newest first, with an eval catalog', () => {
-    const { manifest, shards } = buildIndex(headers, '2026-01-01T00:00:00.000Z')
-    const month = headers[0]?.startedAt.slice(0, 7) as string
-    assert.deepEqual(manifest.shards, [{ id: month, runs: 4 }])
-    assert.equal(manifest.latest, headers[3]?.runId)
-    assert.deepEqual(
-      shards.get(month)?.map((h) => h.runId),
-      headers.map((h) => h.runId).reverse(),
-    )
-    assert.equal(manifest.evals.length, 1)
-    assert.deepEqual(manifest.evals[0]?.path, ['greet', 'writes hello'])
-    assert.equal(manifest.evals[0]?.runs, 4)
   })
 
   test('runs list: newest first, pass counts, drift against the previous complete run', () => {
@@ -886,276 +818,438 @@ describe('view-models over a real history', () => {
 })
 
 const HOST = '127.0.0.1:4984'
-const TOKEN = 'test-token-0123456789'
+const ORIGIN = 'https://studio.example'
+const PAIRING = 'pairing-token-0123456789'
 
-const fakeApp = () =>
-  appFiles({
-    'index.html': '<!doctype html><title>studio</title>',
-    'assets/app.js': 'console.log(1)',
+type Headers = Record<string, string>
+
+/** A data server over `src`, before pairing: `call` sends as is, with only the Host header. */
+function studioApi(src: StudioSource = source, focus: string | null = null) {
+  let pairs = 0
+  const app = createStudioApi({
+    source: src,
+    reeval: 'test',
+    project: 'studio',
+    origin: ORIGIN,
+    pairingToken: PAIRING,
+    hosts: [HOST],
+    focus,
+    onPair: () => pairs++,
   })
-
-describe('studio server', () => {
-  let app: ReturnType<typeof createStudioApp>
-  const get = (path: string, headers: Record<string, string> = {}, method = 'GET') =>
-    app.request(`http://${HOST}${path}`, {
-      method,
-      headers: { host: HOST, cookie: `${COOKIE}=${TOKEN}`, ...headers },
+  const call = (path: string, init: { method?: string; headers?: Headers; body?: string } = {}) =>
+    app.request(`http://${HOST}${path}`, { ...init, headers: { host: HOST, ...init.headers } })
+  const pair = (token: string, headers: Headers = { origin: ORIGIN }) =>
+    call(studioPaths.pair(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ token }),
     })
+  return { call, pair, pairs: () => pairs }
+}
 
-  before(async () => {
-    app = createStudioApp({
-      source,
-      app: fakeApp(),
-      reeval: 'test',
-      project: 'studio',
-      token: TOKEN,
-      hosts: [HOST, 'localhost:4984'],
+/** A data server over `src`, paired as the hosted page pairs: `get` sends its session and origin. */
+async function paired(src: StudioSource = source) {
+  const api = studioApi(src)
+  const res = await api.pair(PAIRING)
+  assert.equal(res.status, 200, await res.clone().text())
+  const body = (await res.json()) as PairResponse
+  const get = (path: string, headers: Headers = {}) =>
+    api.call(path, {
+      headers: { authorization: `Bearer ${body.session}`, origin: ORIGIN, ...headers },
     })
-  })
+  return { ...api, get, body }
+}
 
-  test('a token in the URL becomes an httpOnly cookie and is stripped', async () => {
-    const res = await app.request(`http://${HOST}/?token=${TOKEN}`, { headers: { host: HOST } })
-    assert.equal(res.status, 302)
-    assert.equal(res.headers.get('location'), '/')
-    const cookie = res.headers.get('set-cookie') ?? ''
-    assert.match(cookie, new RegExp(`^${COOKIE}=${TOKEN}`))
-    assert.match(cookie, /HttpOnly/)
-    assert.match(cookie, /SameSite=Strict/)
-  })
+const json = async <T>(res: Response) => {
+  assert.equal(res.status, 200, await res.clone().text())
+  return (await res.json()) as T
+}
 
-  test('every route needs the token', async () => {
-    for (const path of ['/', '/studio.json', `/${manifestPath}`, '/api/events']) {
-      const res = await app.request(`http://${HOST}${path}`, { headers: { host: HOST } })
-      assert.equal(res.status, 401, path)
-    }
-    assert.equal((await get('/studio.json', { cookie: `${COOKIE}=nope` })).status, 401)
-    const badQuery = await app.request(`http://${HOST}/?token=nope`, { headers: { host: HOST } })
-    assert.equal(badQuery.status, 401)
-  })
-
-  test('foreign hosts and origins, and anything but GET, are refused', async () => {
-    assert.equal((await get('/studio.json', { host: 'evil.example:4984' })).status, 403)
-    assert.equal((await get('/studio.json', { origin: 'http://evil.example' })).status, 403)
-    assert.equal((await get('/studio.json', { origin: `http://${HOST}` })).status, 200)
-    for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
-      assert.equal((await get('/studio.json', {}, method)).status, 405, method)
-    }
-    const res = await get('/studio.json')
-    assert.equal(res.headers.get('access-control-allow-origin'), null)
-    assert.equal(res.headers.get('referrer-policy'), 'no-referrer')
-  })
-
-  test('serves the app with a strict CSP, the index, records and artifacts', async () => {
-    const index = await get('/')
-    assert.equal(index.status, 200)
-    assert.match(index.headers.get('content-security-policy') ?? '', /script-src 'self'/)
-    assert.equal(await index.text(), '<!doctype html><title>studio</title>')
-    assert.equal(index.headers.get('cache-control'), 'no-cache')
-    const script = await get('/assets/app.js')
-    assert.equal(script.status, 200)
-    assert.equal(script.headers.get('content-type'), 'text/javascript; charset=utf-8')
-    assert.match(script.headers.get('cache-control') ?? '', /immutable/)
-    const scriptTag = script.headers.get('etag') as string
-    assert.equal((await get('/assets/app.js', { 'if-none-match': scriptTag })).status, 304)
-    assert.equal((await get('/assets/missing.js')).status, 404)
-    const info = await (await get('/studio.json')).json()
-    assert.equal(info.mode, 'live')
-    assert.equal(info.features.scratch, true)
-    const manifest = await (await get(`/${manifestPath}`)).json()
-    assert.equal(manifest.shards[0].runs, 4)
-    const scratch = headers[3]?.runId as string
-    const record = await get(`/${recordPath(scratch)}`)
-    assert.equal(record.status, 200)
-    assert.equal((await record.json()).runId, scratch)
-
-    const run = records.get(headers[0]?.runId as string) as RunRecord
-    const ref = run.evals[0]?.attempts[0]?.files.diff
-    assert.ok(ref)
-    const artifact = await get(`/${artifactPath(run.runId, ref.path)}`)
-    assert.equal(artifact.status, 200)
-    assert.equal(artifact.headers.get('content-type'), 'text/plain; charset=utf-8')
-    assert.equal(artifact.headers.get('content-security-policy'), 'sandbox')
-    assert.equal(artifact.headers.get('x-content-type-options'), 'nosniff')
-    assert.match(await artifact.text(), /hello\.txt/)
-    const etag = artifact.headers.get('etag') as string
-    const again = await get(`/${artifactPath(run.runId, ref.path)}`, { 'if-none-match': etag })
-    assert.equal(again.status, 304)
-  })
-
-  test('traversal, encoded tricks and symlinks out of a run never reach a file', async () => {
-    const runId = headers[0]?.runId as string
-    await symlink(join(dir, 'reeval.config.ts'), join(source.historyDir, runId, 'escape.txt'))
-    await symlink(
-      join(dir, 'reeval.config.ts'),
-      join(source.historyDir, '20990101T000000Z_abc1234_x_a1b2.json'),
-    )
-    for (const path of [
-      `/data/runs/${runId}/escape.txt`,
-      '/data/runs/20990101T000000Z_abc1234_x_a1b2.json',
-      `/data/runs/${runId}/..%2F..%2F..%2Freeval.config.ts`,
-      `/data/runs/${runId}/%2e%2e/%2e%2e/reeval.config.ts`,
-      `/data/runs/${runId}/summary.md%00.txt`,
-      `/data/runs/${runId}/..%5C..%5Creeval.config.ts`,
-      '/data/runs/20260101T000000Z_0000000_nobody_a1b2.json',
-      '/assets/../../reeval.config.ts',
-      '/reeval.config.ts',
-      '/data/unknown',
-    ]) {
-      const res = await get(path)
-      assert.ok(res.status === 404 || res.status === 400, `${path} → ${res.status}`)
-    }
-  })
-
-  test('a run directory that is a symlink serves nothing from its target', async () => {
-    const runId = headers[0]?.runId as string
-    const outside = await mkdtemp(join(tmpdir(), 'reeval-outside-'))
-    writeFileSync(join(outside, 'summary.md'), 'outside the history folder')
-    const [out, sibling] = ['20990102T000000Z_abc1234_x_a1b2', '20990103T000000Z_abc1234_x_a1b2']
-    for (const [id, target] of [
-      [out, outside],
-      [sibling, join(source.historyDir, runId)],
-    ] as const) {
-      writeFileSync(join(source.historyDir, `${id}.json`), '{}')
-      await symlink(target, join(source.historyDir, id), 'dir')
-    }
-    assert.equal((await get(`/${recordPath(out)}`)).status, 200)
-    assert.equal((await get(`/${artifactPath(out, 'summary.md')}`)).status, 404)
-    const ref = records.get(runId)?.evals[0]?.attempts[0]?.files.diff
-    assert.ok(ref)
-    assert.equal((await get(`/${artifactPath(runId, ref.path)}`)).status, 200)
-    assert.equal((await get(`/${artifactPath(sibling, ref.path)}`)).status, 404)
-
-    // Nor are its saved analyses, or notes under a symlinked `.reeval/analysis/<run>`.
-    const saved = 'test/fixtures/records/before-proxy-egress/evals/.history'
-    await cp(
-      join(saved, '20261023T093806Z_66722ad_cursor-agent_e3gk', 'analysis'),
-      join(outside, 'analysis'),
-      { recursive: true },
-    )
-    mkdirSync(join(outside, 'notes'))
-    const note: AnalysisNote = {
-      kind: 'reeval-analysis-note',
-      schemaVersion: 1,
-      runId: out,
-      evalId: 'e',
-      harness: 'fake',
-      model: 'fake',
-      resolvedModel: null,
-      createdAt: '2026-10-21T00:00:00.000Z',
-      attempts: ['fake#1'],
-      text: 'A note.',
-      usage: { inputTokens: null, outputTokens: null },
-    }
-    writeFileSync(join(outside, 'notes', 'e__fake.json'), JSON.stringify(note))
-    mkdirSync(join(source.root, '.reeval/analysis'), { recursive: true })
-    await symlink(outside, join(source.root, '.reeval/analysis', out), 'dir')
-    const analysis = await (await get(`/${analysisDataPath(out)}`)).json()
-    assert.deepEqual([analysis.entries, analysis.notes], [[], undefined])
-  })
-
-  test("serves an attempt's local debug data, and null where there is none", async () => {
-    assert.equal((await (await get('/studio.json')).json()).features.debug, true)
-    // The second run fails its judge, so its attempt kept a trace; the first passed.
-    const [passed, failed] = [headers[0], headers[1]].map((h) => {
-      const run = records.get(h?.runId as string) as RunRecord
-      return { runId: run.runId, key: run.evals[0]?.attempts[0]?.key as string }
-    }) as [{ runId: string; key: string }, { runId: string; key: string }]
-    const view = async (runId: string, key: string) => {
-      const res = await get(`/${debugApiPath(runId, key)}`)
-      assert.equal(res.status, 200)
-      return (await res.json()) as DebugView | null
-    }
-    const pass = (await view(passed.runId, passed.key)) as DebugView
+describe('studio API contract', () => {
+  test('every path builder parses back to its route, attempt keys of any character included', () => {
+    const key = 'evals/hello.eval.ts › greet › writes hello [case 1] # fake/a b#1 100%'
+    assert.deepEqual(parseStudioPath(studioPaths.pair()), { route: 'pair' })
+    assert.deepEqual(parseStudioPath(studioPaths.handshake()), { route: 'handshake' })
+    assert.deepEqual(parseStudioPath(studioPaths.runs()), { route: 'runs' })
+    assert.deepEqual(parseStudioPath(studioPaths.run(RUN)), { route: 'run', runId: RUN })
+    assert.deepEqual(parseStudioPath(studioPaths.attempt(RUN, key)), {
+      route: 'attempt',
+      runId: RUN,
+      attemptKey: key,
+    })
+    assert.deepEqual(parseStudioPath(studioPaths.transcript(RUN, key)), {
+      route: 'transcript',
+      runId: RUN,
+      attemptKey: key,
+    })
     assert.deepEqual(
-      [...new Set(pass.lines.map((l) => l.phase))],
-      ['plan', 'env', 'image', 'container', 'harness', 'check', 'judge', 'teardown'],
+      parseStudioPath(studioPaths.artifact(RUN, 'my-eval/fake-x/1/transcript.jsonl')),
+      {
+        route: 'artifact',
+        runId: RUN,
+        segments: ['my-eval', 'fake-x', '1', 'transcript.jsonl'],
+      },
     )
-    assert.match(pass.lines[0]?.at ?? '', /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/)
-    assert.deepEqual([pass.requests, pass.trace], [[], false])
-    assert.equal((await get(`/${traceApiPath(passed.runId, passed.key)}`)).status, 404)
+    assert.deepEqual(
+      [...new Set(Object.keys(studioPaths))].sort(),
+      [...STUDIO_ROUTES].sort(),
+      'a path builder for every route',
+    )
+  })
 
-    const fail = (await view(failed.runId, failed.key)) as DebugView
-    assert.equal(fail.trace, true)
-    const trace = await get(`/${traceApiPath(failed.runId, failed.key)}`)
-    assert.equal(trace.status, 200)
-    assert.equal(trace.headers.get('content-security-policy'), 'sandbox')
-    assert.match(await trace.text(), /^\{"kind":"trace",/)
-
-    for (const [runId, key] of [
-      [passed.runId, `${passed.key}0`],
-      [passed.runId, 'evals/hello.eval.ts › greet › writes hello'],
-      [passed.runId, '../../../reeval.config.ts # x#1'],
-      ['not-a-run', passed.key],
+  test('traversal, odd segments, bad run ids and unknown routes name nothing', () => {
+    for (const path of [
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/../x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/./x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/a//b`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/%2e%2e/x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/a%2fb`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/${'a/'.repeat(9)}x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/%00`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/%E0%A4%A`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/x/other`,
+      `${STUDIO_API_PREFIX}/runs/not-a-run/view`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/view/x`,
+      `${STUDIO_API_PREFIX}/other`,
+      '/api/v2/runs',
+      '/studio.json',
+      '',
     ]) {
-      assert.equal(await view(runId as string, key as string), null, key)
+      assert.equal(parseStudioPath(path), null, path)
     }
-
-    // A debug folder that is a symlink to another run's isn't read through.
-    const linked = '20990104T000000Z_abc1234_x_a1b2'
-    await symlink(
-      join(dir, '.reeval/debug', failed.runId),
-      join(dir, '.reeval/debug', linked),
-      'dir',
-    )
-    assert.equal(await view(linked, failed.key), null)
-    assert.equal((await get(`/${traceApiPath(linked, failed.key)}`)).status, 404)
   })
 
-  test('serves a snapshot as a tar.gz: a directory packed now, a compressed one as it is', async () => {
-    const run = records.get(headers[0]?.runId as string) as RunRecord
-    const final = run.evals[0]?.attempts[0]?.snapshots?.find((s) => s.name === 'final')
-    assert.ok(final?.path, 'the attempt has its final snapshot')
-    const packed = await get(`/${snapshotApiPath(run.runId, final.path)}`)
-    assert.equal(packed.status, 200)
-    assert.equal(packed.headers.get('content-type'), 'application/gzip')
-    assert.match(
-      packed.headers.get('content-disposition') ?? '',
-      new RegExp(`^attachment; filename="${run.runId}-[\\w.-]+-1-final\\.tar\\.gz"$`),
-    )
-    const entries = readTar(gunzipSync(Buffer.from(await packed.arrayBuffer())))
-    assert.equal(entries.filter((e) => e.type === 'file').length, final.files)
-
-    const runDir = join(dir, '.reeval/runs', run.runId)
-    const tarPath = final.path.replace(/final$/, 'turn-1.tar.gz')
-    writeFileSync(join(runDir, tarPath), gzipSync(writeTar(entries)))
-    const asIs = await get(`/${snapshotApiPath(run.runId, tarPath)}`)
-    assert.equal(asIs.status, 200)
-    assert.deepEqual(Buffer.from(await asIs.arrayBuffer()), readFileSync(join(runDir, tarPath)))
-
-    for (const bad of ['../x/snapshots/final', 'final', `${final.path}/..`, 'a//snapshots/final']) {
-      assert.equal((await get(`/${snapshotApiPath(run.runId, bad)}`)).status, 400, bad)
-    }
-    assert.equal((await get(`/${snapshotApiPath('not-a-run', final.path)}`)).status, 400)
-    assert.equal(
-      (await get(`/${snapshotApiPath(run.runId, final.path.replace(/final$/, 'nope'))}`)).status,
-      404,
-    )
-    const linked = '20990105T000000Z_abc1234_x_a1b2'
-    await symlink(runDir, join(dir, '.reeval/runs', linked), 'dir')
-    assert.equal((await get(`/${snapshotApiPath(linked, final.path)}`)).status, 404)
-  })
-
-  test("without the scratch source, unrecorded runs aren't served", async () => {
-    const recordedOnly = createStudioApp({
-      source: { ...source, scratch: false },
-      app: fakeApp(),
-      reeval: 'test',
-      project: 'studio',
-      token: null,
-      hosts: [],
-    })
-    const url = `http://${HOST}/${recordPath(headers[3]?.runId as string)}`
-    assert.equal((await recordedOnly.request(url)).status, 404)
-    const manifest = await (await recordedOnly.request(`http://${HOST}/${manifestPath}`)).json()
-    assert.equal(manifest.shards[0].runs, 3)
+  test('list limits default when absent or bad and clamp to the maximum', () => {
+    assert.equal(pageLimit(undefined, RUN_LIST_LIMIT), RUN_LIST_LIMIT.default)
+    assert.equal(pageLimit('abc', RUN_LIST_LIMIT), RUN_LIST_LIMIT.default)
+    assert.equal(pageLimit('-3', RUN_LIST_LIMIT), RUN_LIST_LIMIT.default)
+    assert.equal(pageLimit('2', RUN_LIST_LIMIT), 2)
+    assert.equal(pageLimit('100000', TRANSCRIPT_LIMIT), TRANSCRIPT_LIMIT.max)
   })
 })
 
-const filesIn = (root: string): string[] =>
-  readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter((e) => e.isFile())
-    .map((e) => relative(root, join(e.parentPath, e.name)).replaceAll(sep, '/'))
-    .sort()
+describe('buildRunView', () => {
+  test('carries every eval, cell and attempt of the record, with the header the history lists', () => {
+    for (const h of headers) {
+      const record = records.get(h.runId) as RunRecord
+      const view = buildRunView(record, { recorded: h.recorded })
+      assert.equal(view.viewVersion, VIEW_VERSION)
+      assert.deepEqual(view.header, runHeader(record, h.recorded))
+      assert.deepEqual(view.header, h)
+      assert.deepEqual(
+        view.evals.map((e) => [e.key, e.cells.map((c) => c.key), e.attempts.map((a) => a.key)]),
+        record.evals.map((e) => [e.key, e.cells.map((c) => c.key), e.attempts.map((a) => a.key)]),
+      )
+      for (const e of view.evals) {
+        const source = record.evals.find((x) => x.key === e.key) as RunRecord['evals'][number]
+        for (const c of e.cells) assert.deepEqual(c.effortStats, cellEffort(source, c.key))
+        for (const a of e.attempts) {
+          const rec = source.attempts.find((x) => x.key === a.key)
+          assert.equal(a.evalKey, e.key)
+          assert.equal(a.facts, null, 'no facts without transcripts')
+          assert.equal(a.transcript, !!rec?.files.transcript)
+          assert.equal(a.assertions.passed + a.assertions.failed, rec?.assertions?.length ?? 0)
+          assert.equal(a.judgements.passed + a.judgements.failed, rec?.judgements.length)
+        }
+      }
+      const passed = view.evals.flatMap((e) => e.attempts).filter((a) => a.outcome === 'pass')
+      assert.equal(passed.length, record.summary.pass)
+    }
+  })
+
+  test('is pure: the same record gives the same view and is left as it was', () => {
+    const record = records.get(headers[2]?.runId as string) as RunRecord
+    const before = JSON.stringify(record)
+    const facts = new Map([[record.evals[0]?.attempts[0]?.key as string, attemptFacts([])]])
+    const a = buildRunView(record, { recorded: true, facts })
+    const b = buildRunView(structuredClone(record), { recorded: true, facts })
+    assert.deepEqual(a, b)
+    assert.equal(JSON.stringify(record), before)
+    assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'the view is plain JSON')
+    assert.deepEqual(a.evals[0]?.attempts[0]?.facts, attemptFacts([]))
+    assert.equal(a.evals[0]?.attempts[1]?.facts ?? null, null)
+  })
+
+  test('facts count classified calls: classes, skills and context files with their first line', () => {
+    const facts = attemptFacts([
+      {
+        line: 3,
+        class: 'context',
+        files: ['.claude/skills/s/SKILL.md'],
+        skills: [{ skill: 's', source: 'placed' }],
+      },
+      { line: 5, class: 'workspace', files: [], skills: [] },
+      {
+        line: 9,
+        class: 'context',
+        files: ['.claude/skills/s/SKILL.md'],
+        skills: [{ skill: 's', source: 'placed' }],
+      },
+      { line: 11, class: 'verify', files: [], skills: [] },
+    ])
+    assert.deepEqual(facts, {
+      toolCalls: 4,
+      byClass: { context: 2, dependency: 0, web: 0, verify: 1, workspace: 1 },
+      skills: [{ skill: 's', source: 'placed', reads: 2, firstLine: 3 }],
+      contextFiles: [{ path: '.claude/skills/s/SKILL.md', reads: 2, firstLine: 3 }],
+    })
+  })
+
+  test("an attempt's view drops turns and context and lists every file its record names", () => {
+    const record = records.get(headers[0]?.runId as string) as RunRecord
+    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
+    const view = buildAttemptView(record, attempt.key, null)
+    assert.ok(view)
+    assert.equal('context' in view, false)
+    assert.equal(view.turns, attempt.turns.length)
+    assert.equal(view.contextFiles, attempt.context.length)
+    assert.ok(view.fileRefs.some((f) => f.path === attempt.files.transcript?.path))
+    assert.equal(new Set(view.fileRefs.map((f) => f.path)).size, view.fileRefs.length)
+    assert.equal(buildAttemptView(record, 'no such attempt', null), null)
+  })
+})
+
+describe('studio data server', () => {
+  test('the pairing token trades once for a session, and only the right one does', async () => {
+    const api = studioApi()
+    assert.equal((await api.pair('wrong-token')).status, 401)
+    assert.equal(
+      (
+        await api.call(studioPaths.pair(), {
+          method: 'POST',
+          headers: { origin: ORIGIN },
+          body: '{',
+        })
+      ).status,
+      400,
+    )
+    const ok = await api.pair(PAIRING)
+    assert.equal(ok.status, 200)
+    const body = (await ok.json()) as PairResponse
+    assert.match(body.session, /^[\w-]{40,}$/)
+    assert.notEqual(body.session, PAIRING)
+    assert.deepEqual(body.handshake, {
+      api: STUDIO_API_VERSION,
+      viewVersion: VIEW_VERSION,
+      reeval: 'test',
+      project: 'studio',
+      routes: [...STUDIO_ROUTES],
+      focus: headers.at(-1)?.runId,
+    })
+    assert.equal((await api.pair(PAIRING)).status, 409, 'the token is spent')
+    assert.equal(api.pairs(), 1)
+  })
+
+  test('every route but pair needs the session; the pairing token is not one', async () => {
+    const api = await paired()
+    const key = records.get(headers[0]?.runId as string)?.evals[0]?.attempts[0]?.key as string
+    const routes = [
+      studioPaths.handshake(),
+      studioPaths.runs(),
+      studioPaths.run(headers[0]?.runId as string),
+      studioPaths.attempt(headers[0]?.runId as string, key),
+      studioPaths.transcript(headers[0]?.runId as string, key),
+    ]
+    for (const path of routes) {
+      assert.equal((await api.get(path)).status, 200, path)
+      for (const auth of [
+        undefined,
+        'Bearer ',
+        'Bearer wrong',
+        `Bearer ${PAIRING}`,
+        api.body.session,
+      ]) {
+        const headers: Headers = {
+          origin: ORIGIN,
+          ...(auth === undefined ? {} : { authorization: auth }),
+        }
+        const res = await api.call(path, { headers })
+        assert.equal(res.status, 401, `${path} with ${auth}`)
+        assert.equal(
+          res.headers.get('access-control-allow-origin'),
+          ORIGIN,
+          'the page can read why',
+        )
+      }
+    }
+  })
+
+  test('CORS answers only the hosted origin, and a foreign host is refused', async () => {
+    const api = await paired()
+    const preflight = await api.call(studioPaths.runs(), {
+      method: 'OPTIONS',
+      headers: {
+        origin: ORIGIN,
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization',
+        'access-control-request-private-network': 'true',
+      },
+    })
+    assert.equal(preflight.status, 204)
+    assert.equal(preflight.headers.get('access-control-allow-origin'), ORIGIN)
+    assert.match(preflight.headers.get('access-control-allow-headers') ?? '', /Authorization/)
+    assert.equal(preflight.headers.get('access-control-allow-private-network'), 'true')
+    assert.equal(preflight.headers.get('access-control-allow-credentials'), null)
+    const served = await api.get(studioPaths.runs())
+    assert.equal(served.headers.get('access-control-allow-origin'), ORIGIN)
+    assert.equal(served.headers.get('vary'), 'Origin')
+
+    for (const origin of [
+      'https://evil.example',
+      'http://studio.example',
+      `${ORIGIN}.evil`,
+      'null',
+    ]) {
+      const pre = await api.call(studioPaths.runs(), { method: 'OPTIONS', headers: { origin } })
+      assert.equal(pre.status, 403, origin)
+      assert.equal(pre.headers.get('access-control-allow-origin'), null, origin)
+      const res = await api.get(studioPaths.runs(), { origin })
+      assert.equal(res.status, 403, origin)
+      assert.equal(res.headers.get('access-control-allow-origin'), null, origin)
+      assert.equal((await studioApi().pair(PAIRING, { origin })).status, 403, origin)
+    }
+    for (const host of ['evil.example:4984', '127.0.0.1:1', 'localhost']) {
+      assert.equal((await api.get(studioPaths.runs(), { host })).status, 403, host)
+    }
+    assert.equal((await api.call(studioPaths.runs(), { method: 'POST' })).status, 405)
+    assert.equal((await api.call(studioPaths.pair())).status, 405)
+  })
+
+  test('serves runs newest first a page at a time, and each run as buildRunView builds it', async () => {
+    const api = await paired()
+    const all = await json<RunList>(await api.get(studioPaths.runs()))
+    assert.deepEqual(
+      all.items.map((h) => h.runId),
+      headers.map((h) => h.runId).reverse(),
+    )
+    assert.equal(all.next, null)
+    const first = await json<RunList>(await api.get(`${studioPaths.runs()}?limit=3`))
+    assert.equal(first.items.length, 3)
+    const rest = await json<RunList>(
+      await api.get(`${studioPaths.runs()}?limit=3&cursor=${first.next}`),
+    )
+    assert.deepEqual([...first.items, ...rest.items], all.items)
+    assert.equal(rest.next, null)
+
+    for (const h of headers) {
+      const view = await json<RunView>(await api.get(studioPaths.run(h.runId)))
+      const record = records.get(h.runId) as RunRecord
+      const withoutFacts = buildRunView(record, { recorded: h.recorded })
+      const strip = (v: RunView) => ({
+        ...v,
+        evals: v.evals.map((e) => ({
+          ...e,
+          attempts: e.attempts.map((a) => ({ ...a, facts: null })),
+        })),
+      })
+      assert.deepEqual(strip(view), JSON.parse(JSON.stringify(withoutFacts)))
+      for (const a of view.evals.flatMap((e) => e.attempts)) {
+        assert.equal(
+          a.facts !== null,
+          a.transcript,
+          `${a.key}: facts wherever a transcript was kept`,
+        )
+      }
+    }
+    assert.equal((await api.get(studioPaths.run('20200101T000000Z_abc1234_x_k3f9'))).status, 404)
+  })
+
+  test("each attempt's facts are the tool calls history.db classifies", async () => {
+    const api = await paired()
+    const runId = headers[0]?.runId as string
+    const r = await runCli(dir, [
+      'query',
+      `SELECT attempt_key, class, COUNT(*) AS n FROM tool_calls WHERE run_id = '${runId}' GROUP BY 1, 2`,
+      '--json',
+    ])
+    assert.equal(r.code, 0, r.stderr)
+    const rows = JSON.parse(r.stdout) as Array<{ attempt_key: string; class: string; n: number }>
+    assert.ok(rows.length > 0, `the fake agent made tool calls: ${r.stdout}`)
+    const view = await json<RunView>(await api.get(studioPaths.run(runId)))
+    for (const a of view.evals.flatMap((e) => e.attempts)) {
+      const mine = rows.filter((row) => row.attempt_key === a.key)
+      for (const [cls, n] of Object.entries(a.facts?.byClass ?? {})) {
+        assert.equal(n, mine.find((row) => row.class === cls)?.n ?? 0, `${a.key} ${cls}`)
+      }
+    }
+  })
+
+  test('serves an attempt, its transcript a page at a time, and its files as untrusted bytes', async () => {
+    const api = await paired()
+    const runId = headers[0]?.runId as string
+    const record = records.get(runId) as RunRecord
+    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
+    const view = await json<AttemptView>(await api.get(studioPaths.attempt(runId, attempt.key)))
+    assert.equal(view.key, attempt.key)
+    assert.ok(view.facts)
+    assert.equal(
+      (await api.get(studioPaths.attempt(runId, `${attempt.key}0`))).status,
+      404,
+      'an unknown attempt',
+    )
+
+    const lines = parseTranscript(
+      await readFile(
+        join(source.historyDir, runId, attempt.files.transcript?.path as string),
+        'utf8',
+      ),
+    )
+    const whole = await json<AttemptTrace>(
+      await api.get(studioPaths.transcript(runId, attempt.key)),
+    )
+    assert.deepEqual(whole, {
+      items: JSON.parse(JSON.stringify(lines)),
+      next: null,
+      totalLines: lines.length,
+    })
+    const page = await json<AttemptTrace>(
+      await api.get(`${studioPaths.transcript(runId, attempt.key)}?limit=1&cursor=1`),
+    )
+    assert.deepEqual(page.items, whole.items.slice(1, 2))
+    assert.equal(page.next, lines.length > 2 ? '2' : null)
+
+    const file = await api.get(
+      studioPaths.artifact(runId, attempt.files.transcript?.path as string),
+    )
+    assert.equal(file.status, 200)
+    assert.equal(file.headers.get('content-security-policy'), 'sandbox')
+    assert.equal(file.headers.get('content-type'), 'application/json; charset=utf-8')
+    assert.equal(file.headers.get('x-content-type-options'), 'nosniff')
+    const summary = await api.get(studioPaths.artifact(runId, 'summary.md'))
+    assert.equal(summary.headers.get('content-type'), 'text/plain; charset=utf-8')
+  })
+
+  test('traversal, encoded tricks and symlinks out of a run never reach a file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reeval-studio-api-'))
+    await cp(source.historyDir, join(root, 'evals/.history'), { recursive: true })
+    const runId = headers[0]?.runId as string
+    writeFileSync(join(root, 'secret.txt'), 'secret')
+    await symlink(join(root, 'secret.txt'), join(root, 'evals/.history', runId, 'leak.txt'))
+    const linked = '20260101T000000Z_abc1234_x_k3f9'
+    await symlink(join(root, 'evals/.history', runId), join(root, 'evals/.history', linked))
+    writeFileSync(
+      join(root, 'evals/.history', `${linked}.json`),
+      readFileSync(join(root, 'evals/.history', `${runId}.json`)),
+    )
+    const api = await paired({ root, historyDir: join(root, 'evals/.history'), scratch: false })
+    for (const path of [
+      studioPaths.artifact(runId, 'leak.txt'),
+      studioPaths.artifact(linked, 'summary.md'),
+      `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/..%2f..%2fsecret.txt`,
+      `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/%2e%2e/%2e%2e/secret.txt`,
+      `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/../../secret.txt`,
+      `${STUDIO_API_PREFIX}/runs/${runId}.json/artifacts/x`,
+    ]) {
+      const res = await api.get(path)
+      assert.equal(res.status, 404, path)
+      assert.doesNotMatch(await res.text(), /secret/, path)
+    }
+    assert.equal((await api.get(studioPaths.artifact(runId, 'summary.md'))).status, 200)
+  })
+})
 
 describe('a record landing while the studio lists runs', () => {
   test("Windows refusing the cache's rename or a record's read skips it until the next read", async () => {
@@ -1181,17 +1275,7 @@ describe('a record landing while the studio lists runs', () => {
         listed.map((h) => h.runId),
         headers.map((h) => h.runId).filter((id) => id !== landing?.runId),
       )
-      const app = createStudioApp({
-        source: fresh,
-        app: fakeApp(),
-        reeval: 'test',
-        project: 'studio',
-        token: TOKEN,
-        hosts: [HOST],
-      })
-      const res = await app.request(`http://${HOST}/${manifestPath}`, {
-        headers: { host: HOST, cookie: `${COOKIE}=${TOKEN}` },
-      })
+      const res = await (await paired(fresh)).get(studioPaths.runs())
       assert.equal(res.status, 200)
     } finally {
       mock.restoreAll()
@@ -1210,167 +1294,53 @@ describe('a record landing while the studio lists runs', () => {
   })
 })
 
-describe('reeval studio build', () => {
-  test('writes a static site with the same paths the server answers', async () => {
+describe('reeval studio', () => {
+  test('opens the hosted page with its server and a one-time token, and says when it never pairs', async () => {
     assert.ok(existsSync(join(pkgRoot, 'dist/cli.js')), 'run pnpm build first')
-    const out = join(dir, 'site')
-    const r = await runCli(dir, ['studio', 'build', '--out', out, '--scratch'])
-    assert.equal(r.code, 0, r.stderr)
-    assert.match(r.stdout, /built site\/: 4 runs/)
-    const written = filesIn(out)
-    assert.ok(written.includes('index.html'))
-    assert.ok(written.some((f) => /^assets\/.+\.js$/.test(f)))
-    assert.ok(!written.some((f) => f.endsWith('escape.txt')), 'symlinks are never published')
-    const html = readFileSync(join(out, 'index.html'), 'utf8')
-    assert.doesNotMatch(html, /(src|href)="\/(?!\/)/, 'assets are relative')
-    const info = JSON.parse(readFileSync(join(out, 'studio.json'), 'utf8'))
-    assert.equal(info.mode, 'static')
-    assert.equal(info.features.artifacts, true)
-    assert.equal(info.features.debug, false, 'local debug data is never published')
-    assert.ok(existsSync(join(dir, '.reeval/debug')), 'twin: the project has debug data')
-    assert.deepEqual(
-      written.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson|^api\//.test(f)),
-      [],
-    )
-
-    const app = createStudioApp({
-      source: { ...source, historyDir: source.historyDir },
-      app: new Map(),
-      reeval: 'test',
-      project: 'studio',
-      token: null,
-      hosts: [],
-    })
-    const urls = [manifestPath, ...new Set(headers.map((h) => shardPath(h.startedAt.slice(0, 7))))]
-    for (const h of headers) {
-      urls.push(recordPath(h.runId))
-      const run = records.get(h.runId) as RunRecord
-      for (const a of run.evals.flatMap((e) => e.attempts)) {
-        const refs = [...Object.values(a.files), ...a.checks.flatMap((c) => (c.log ? [c.log] : []))]
-        for (const ref of refs) urls.push(artifactPath(h.runId, ref.path))
-      }
-    }
-    const compared = headers[2]?.runId as string
-    const built = JSON.parse(readFileSync(join(out, recordPath(compared)), 'utf8')) as RunRecord
-    assert.equal(built.evals[0]?.answers?.[0]?.question, 'Which wrote hello.txt?')
-    assert.deepEqual(built.evals[0]?.answers, records.get(compared)?.evals[0]?.answers)
-    for (const url of urls) {
-      assert.ok(written.includes(url), `${url} is in the build`)
-      const served = await (await app.request(`http://x/${url}`)).text()
-      const built = readFileSync(join(out, url), 'utf8')
-      if (url === manifestPath) {
-        const strip = (s: string) => JSON.stringify({ ...JSON.parse(s), generatedAt: null })
-        assert.equal(strip(built), strip(served), url)
-      } else {
-        assert.equal(built, served, url)
-      }
-    }
-  })
-
-  test("a run's notes are in the build as the server serves them; a cached summary only live", async () => {
-    const p = await project('studio-notes', {
-      'reeval.config.ts': fakeConfig({
-        extra: `analysis: { model: fakeAnalysis({ output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
-      }).replace(
-        "import { fakeJudge } from 'reeval/judge'",
-        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
-      ),
-      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('writes', async (c) => {
-  await c.send('Write it')
-  expect(1).toBe(1)
-})
-`,
-    })
-    const run = await runCli(p.dir)
-    assert.equal(run.code, 0, run.stdout + run.stderr)
-    const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
-    const notes = join(p.dir, '.reeval/analysis', runId as string, 'notes')
-    mkdirSync(notes, { recursive: true })
-    const note: AnalysisNote = {
-      kind: 'reeval-analysis-note',
-      schemaVersion: 1,
-      runId: runId as string,
-      evalId: 'evals/a.eval.ts › writes',
-      harness: 'fake',
-      model: 'fake',
-      resolvedModel: null,
-      createdAt: '2026-10-21T00:00:00.000Z',
-      attempts: ['fake#1'],
-      text: 'A note.',
-      usage: { inputTokens: null, outputTokens: null },
-    }
-    writeFileSync(join(notes, 'writes__fake.json'), JSON.stringify(note))
-    const analyzed = await runCli(p.dir, ['analyze', 'latest', '--vs', 'none'])
-    assert.equal(analyzed.code, 0, analyzed.stdout + analyzed.stderr)
-    const out = join(p.dir, 'site')
-    assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
-    const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
-    assert.deepEqual(
-      [built.entries, built.notes.map((n: { text: string }) => n.text)],
-      [[], ['A note.']],
-    )
-    const app = createStudioApp({
-      source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
-      app: new Map(),
-      reeval: 'test',
-      project: 'studio',
-      token: null,
-      hosts: [],
-    })
-    const served = await (await app.request(`http://x/${analysisDataPath(runId as string)}`)).json()
-    assert.deepEqual(served.notes, built.notes)
-    assert.deepEqual(
-      served.entries.map((e: { source: string; doc: { analysis: { tldr: string } } }) => [
-        e.source,
-        e.doc.analysis.tldr,
-      ]),
-      [['cached', 'A summary.']],
-    )
-  })
-
-  test('--no-artifacts writes records and the index only; a non-studio folder is refused', async () => {
-    const out = join(dir, 'site-lean')
-    const r = await runCli(dir, ['studio', 'build', '--out', out, '--no-artifacts'])
-    assert.equal(r.code, 0, r.stderr)
-    const runs = filesIn(join(out, 'data')).filter((f) => f.startsWith('runs/'))
-    assert.deepEqual(
-      runs,
-      headers.filter((h) => h.recorded).map((h) => `runs/${h.runId}.json`),
-    )
-    assert.equal(
-      JSON.parse(readFileSync(join(out, 'studio.json'), 'utf8')).features.artifacts,
-      false,
-    )
-
-    const refused = await runCli(dir, ['studio', 'build', '--out', 'evals'])
-    assert.equal(refused.code, 2)
-    assert.match(refused.stderr, /isn't empty and isn't a previous studio build/)
-  })
-
-  test('reeval studio prints a tokenized 127.0.0.1 URL and serves the app', async () => {
     const child = spawn(
       process.execPath,
-      [join(pkgRoot, 'dist/cli.js'), 'studio', '--port', '47311'],
-      { cwd: dir, env: baseEnv },
+      [join(pkgRoot, 'dist/cli.js'), 'studio', '--no-open', '--port', '47311'],
+      { cwd: dir, env: { ...baseEnv, REEVAL_CLOUD_URL: ORIGIN } },
     )
+    let out = ''
+    child.stdout.on('data', (d) => (out += d))
+    child.stderr.on('data', (d) => (out += d))
+    const until = async (pattern: RegExp, ms: number) => {
+      const deadline = Date.now() + ms
+      while (!pattern.test(out)) {
+        assert.ok(Date.now() < deadline, `never printed ${pattern}: ${out}`)
+        await new Promise((r) => setTimeout(r, 50))
+      }
+      return pattern.exec(out) as RegExpExecArray
+    }
     try {
-      const url = await new Promise<string>((resolve, reject) => {
-        let out = ''
-        child.stdout.on('data', (d) => {
-          out += d
-          const m = /http:\/\/127\.0\.0\.1:\d+\/\?token=[\w-]+/.exec(out)
-          if (m) resolve(m[0])
-        })
-        child.on('exit', () => reject(new Error(out)))
+      const printed = (await until(/https:\/\/studio\.example\/studio\?\S+/, 20_000))[0]
+      const url = new URL(printed)
+      const server = url.searchParams.get('s') as string
+      assert.match(server, /^http:\/\/localhost:\d+$/)
+      assert.equal(url.searchParams.get('run'), headers.at(-1)?.runId)
+      const token = new URLSearchParams(url.hash.slice(1)).get('t') as string
+      assert.match(token, /^[\w-]{40,}$/)
+      assert.doesNotMatch(url.search, new RegExp(token), 'the token is only in the fragment')
+
+      await until(/hasn't connected yet/, 15_000)
+      assert.match(out, new RegExp(`\\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`))
+
+      const local = server.replace('localhost', '127.0.0.1')
+      const pair = await fetch(`${local}${studioPaths.pair()}`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify({ token }),
       })
-      const redirect = await fetch(url, { redirect: 'manual' })
-      assert.equal(redirect.status, 302)
-      const cookie = (redirect.headers.get('set-cookie') ?? '').split(';')[0] as string
-      const page = await fetch(new URL('/', url), { headers: { cookie } })
-      assert.equal(page.status, 200)
-      assert.match(await page.text(), /<div id="root">/)
-      assert.equal((await fetch(new URL('/', url))).status, 401)
+      assert.equal(pair.status, 200)
+      const { session } = (await pair.json()) as PairResponse
+      await until(/Paired with the studio page/, 5_000)
+      const runs = await fetch(`${local}${studioPaths.runs()}`, {
+        headers: { origin: ORIGIN, authorization: `Bearer ${session}` },
+      })
+      assert.equal(runs.status, 200)
+      assert.equal(runs.headers.get('access-control-allow-origin'), ORIGIN)
+      assert.equal(((await runs.json()) as RunList).items.length, headers.length)
     } finally {
       child.kill('SIGINT')
     }

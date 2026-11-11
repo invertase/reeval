@@ -154,8 +154,6 @@ export type AnalysisIndex = {
   notes?: AnalysisNote[]
 }
 
-export const analysisDataPath = (runId: string) => `data/analysis/${runId}.json`
-
 /** The newest analysis that wrote a TL;DR, for the studio run header. */
 export function pinnedAnalysis(entries: readonly AnalysisEntry[]): AnalysisEntry | undefined {
   return sortAnalyses([...entries]).find(

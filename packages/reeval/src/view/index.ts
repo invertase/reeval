@@ -29,6 +29,7 @@ export type {
   TranscriptEvent,
 } from '../types.ts'
 export * from './analysis.ts'
+export * from './api.ts'
 export * from './capture.ts'
 export * from './compare.ts'
 export * from './cost.ts'
@@ -41,7 +42,6 @@ export * from './live.ts'
 export * from './model.ts'
 export * from './observations.ts'
 export * from './patch.ts'
-export * from './paths.ts'
 export {
   NewerSchemaError,
   readableAnalysis,
@@ -52,6 +52,7 @@ export {
 } from './record.ts'
 export * from './remarks.ts'
 export * from './report/core.ts'
+export * from './run-view.ts'
 export { runScope } from './scope.ts'
 export * from './suite.ts'
 export { type TurnErrorKind, turnErrorKind } from './turn-error.ts'

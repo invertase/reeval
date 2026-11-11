@@ -290,7 +290,7 @@ async function run(argv: string[]): Promise<number> {
     const config = await historyConfig(configPath, 'studio', values.profile)
     localStudio(config)
     const { studioCommand } = await import('./studio/command.ts')
-    return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
+    return studioCommand({ config, flags: values, version, run: filters[0] })
   }
   if (command === 'mcp') {
     // On stdio, stdout carries the protocol: anything the config prints goes to stderr.

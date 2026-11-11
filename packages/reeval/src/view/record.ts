@@ -11,8 +11,7 @@ import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CredentialsFile } from '../login/types.ts'
 import type { CliInvocation } from '../report/types.ts'
 import type { CapturePageFile } from '../types.ts'
-import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
-import type { DebugRequest } from './debug.ts'
+import type { AnalysisDoc } from './analysis.ts'
 import type { TranscriptLine } from './model.ts'
 import type { RunRemarks } from './remarks.ts'
 
@@ -200,19 +199,9 @@ export const readableTranscriptLine = (line: TranscriptLine): TranscriptLine =>
 export const readableAnalysis = (doc: AnalysisDoc, what = 'This analysis'): AnalysisDoc =>
   fillDefaults('analysis', upgrade('analysis', doc, what))
 
-/** A run's note as every reader sees it; one from a newer reeval throws. */
-export const readableAnalysisNote = (
-  note: AnalysisNote,
-  what = 'This analysis note',
-): AnalysisNote => fillDefaults('analysis-note', upgrade('analysis-note', note, what))
-
 /** A run's remarks as every reader sees them; a file from a newer reeval throws. */
 export const readableRemarks = (doc: RunRemarks, what = 'These remarks'): RunRemarks =>
   fillDefaults('remarks', upgrade('remarks', doc, what))
-
-/** A gateway request line from `.reeval/debug` as the studio sees it. */
-export const readableDebugRequest = (request: DebugRequest): DebugRequest =>
-  fillDefaults('debug-request', request)
 
 /** A line of `.reeval/cli.jsonl` as `reeval report` sees it. */
 export const readableCliInvocation = (entry: CliInvocation): CliInvocation =>

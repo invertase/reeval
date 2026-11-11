@@ -48,13 +48,10 @@ export const FLAGS = {
   http: { type: 'boolean' },
   port: { type: 'string' },
   host: { type: 'string', multiple: true },
-  open: { type: 'boolean' },
   out: { type: 'string' },
-  scratch: { type: 'boolean' },
   'no-scratch': { type: 'boolean' },
-  'no-token': { type: 'boolean' },
+  'no-open': { type: 'boolean' },
   token: { type: 'string' },
-  'no-artifacts': { type: 'boolean' },
   schema: { type: 'boolean' },
   rebuild: { type: 'boolean' },
   vs: { type: 'string' },
@@ -505,26 +502,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   studio: {
-    flags: ['port', 'host', 'open', 'no-scratch', 'no-token', 'profile'],
-    positionals: 0,
+    flags: ['port', 'no-open', 'no-scratch', 'profile'],
+    positionals: 1,
     help: `
-  reeval studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
-    --port <n>                  First port to try (default 4984); --host <addr> (default 127.0.0.1)
-    --open                      Open the browser; --no-scratch hides unrecorded runs from .reeval/runs
-    --no-token                  Skip the session token (for scripts; anyone local can then read it)
+  reeval studio [run]           Open the hosted studio on your local runs: serves them on 127.0.0.1
+                                to the studio page at REEVAL_CLOUD_URL, which pairs with a one-time
+                                token (default run: the newest)
+    --port <n>                  First port to try (default 4984)
+    --no-open                   Print the studio URL without opening the browser; --no-scratch hides
+                                unrecorded runs from .reeval/runs
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
-    sub: {
-      build: {
-        flags: ['out', 'scratch', 'no-artifacts', 'profile'],
-        positionals: 0,
-        help: `
-  reeval studio build           Write the studio as a static site for Pages, Netlify or any host
-    --out <dir>                 Output folder (default studio-dist beside the config); --scratch
-                                adds unrecorded runs
-    --no-artifacts              Records and index only: no transcripts, diffs, logs or judge inputs
-    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
-      },
-    },
   },
   report: {
     flags: ['out', 'json', 'last', 'issue', 'yes'],

@@ -7,7 +7,7 @@ export type CliInvocation = {
   reeval: string
   /** The arguments after `reeval`, with every flag value and argument replaced by `<value>` or `<arg>`. */
   argv: string[]
-  /** `run`, `studio build`, …; null when the command line didn't parse. */
+  /** `run`, `image build`, …; null when the command line didn't parse. */
   command: string | null
   exitCode: number
   durationMs: number

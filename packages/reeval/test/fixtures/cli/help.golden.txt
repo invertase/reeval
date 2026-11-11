@@ -238,15 +238,12 @@ Usage:
     --offline --all-branches    A remote history.store: read its copy without pulling first; list
                                 every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
-  reeval studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
-    --port <n>                  First port to try (default 4984); --host <addr> (default 127.0.0.1)
-    --open                      Open the browser; --no-scratch hides unrecorded runs from .reeval/runs
-    --no-token                  Skip the session token (for scripts; anyone local can then read it)
-    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
-  reeval studio build           Write the studio as a static site for Pages, Netlify or any host
-    --out <dir>                 Output folder (default studio-dist beside the config); --scratch
-                                adds unrecorded runs
-    --no-artifacts              Records and index only: no transcripts, diffs, logs or judge inputs
+  reeval studio [run]           Open the hosted studio on your local runs: serves them on 127.0.0.1
+                                to the studio page at REEVAL_CLOUD_URL, which pairs with a one-time
+                                token (default run: the newest)
+    --port <n>                  First port to try (default 4984)
+    --no-open                   Print the studio URL without opening the browser; --no-scratch hides
+                                unrecorded runs from .reeval/runs
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
   reeval report [run]           Collect a bug report: versions, reeval doctor, the config's shape, the
                                 last reeval command's error and stack, the run's failures and their

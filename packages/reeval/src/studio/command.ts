@@ -1,74 +1,80 @@
-import { basename, join, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { cloudUrl } from '../cloud-run.ts'
 import { UsageError } from '../errors.ts'
+import { scratchDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
 import type { ResolvedConfig } from '../types.ts'
-import { buildStudio, embeddedApp, openBrowser, startStudio } from './index.ts'
+import { RUN_ID } from '../view/api.ts'
+import { openBrowser, startStudio } from './index.ts'
+import { listHeaders, type StudioSource } from './source.ts'
 
 export type StudioFlags = {
   port?: string
-  host?: string[]
-  open?: boolean
-  out?: string
-  scratch?: boolean
+  'no-open'?: boolean
   'no-scratch'?: boolean
-  'no-token'?: boolean
-  'no-artifacts'?: boolean
 }
 
-type Args = { config: ResolvedConfig; flags: StudioFlags; version: string; build: boolean }
+type Args = {
+  config: ResolvedConfig
+  flags: StudioFlags
+  version: string
+  run: string | undefined
+  /** How long to wait for the hosted page to pair before printing the summary's path. */
+  handshakeMs?: number
+}
 
-const kb = (bytes: number) =>
-  bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`
-
-export async function studioCommand({ config, flags, version, build }: Args): Promise<number> {
-  const project = basename(config.root)
-  const rel = (path: string) => fromCwd(path) || '.'
-  if (build) {
-    const out = flags.out ? resolve(flags.out) : join(config.root, 'studio-dist')
-    const artifacts = !flags['no-artifacts']
-    const result = await buildStudio({
-      source: { root: config.root, historyDir: config.history.dir, scratch: !!flags.scratch },
-      app: await embeddedApp(),
-      out,
-      artifacts,
-      reeval: version,
-      project,
-    })
-    console.log(
-      `built ${rel(out)}/: ${result.runs} run${result.runs === 1 ? '' : 's'}, ${result.files} files, ${kb(result.bytes)}${artifacts ? ' (records, transcripts, diffs, logs and judge inputs)' : ' (records only: --no-artifacts)'}`,
-    )
-    console.log(
-      'Serve it from any static host. Anyone who can open it can read every included file.',
-    )
-    return 0
+/** The run's summary.md, from the history folder or `.reeval/runs`; null when neither has one. */
+function summaryPath(source: StudioSource, runId: string): string | null {
+  for (const dir of [source.historyDir, scratchDir(source.root)]) {
+    const file = join(dir, runId, 'summary.md')
+    if (existsSync(file)) return file
   }
+  return null
+}
+
+export async function studioCommand({ config, flags, version, run, handshakeMs = 8000 }: Args) {
   const port = flags.port === undefined ? 4984 : Number(flags.port)
   if (!(Number.isInteger(port) && port > 0 && port < 65536)) {
     throw new UsageError(`--port must be a port number (got ${flags.port})`)
   }
-  const host = flags.host?.at(-1) ?? '127.0.0.1'
-  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
-    console.error(`warning: studio is listening on ${host}, reachable beyond this machine`)
+  if (run !== undefined && !RUN_ID.test(run)) throw new UsageError(`${run} isn't a run id`)
+  const source: StudioSource = {
+    root: config.root,
+    historyDir: config.history.dir,
+    scratch: !flags['no-scratch'],
   }
-  const token = !flags['no-token']
-  if (!token) console.error('warning: --no-token lets any local process or user read the studio')
+  const focus = run ?? (await listHeaders(source)).at(-1)?.runId ?? null
+  let paired = false
   const studio = await startStudio({
-    source: { root: config.root, historyDir: config.history.dir, scratch: !flags['no-scratch'] },
-    host,
+    source,
     port,
-    token,
     reeval: version,
-    project,
-    app: await embeddedApp(),
+    project: basename(config.root),
+    studioUrl: new URL('studio', cloudUrl()),
+    focus,
+    onPair: () => {
+      paired = true
+      console.log('Paired with the studio page.')
+    },
   })
-  console.log(`reeval studio · ${project} · ${rel(config.history.dir)}/`)
+  console.log(`reeval studio · ${basename(config.root)} · serving ${studio.server} (loopback only)`)
   console.log(`  ${studio.url}`)
   console.log('Ctrl-C to stop.')
-  if (flags.open) openBrowser(studio.url)
+  if (!flags['no-open']) openBrowser(studio.url)
+  const waiting = setTimeout(() => {
+    if (paired) return
+    const summary = focus ? summaryPath(source, focus) : null
+    console.log(
+      `The studio page hasn't connected yet: your browser may block it from reaching ${studio.server}.`,
+    )
+    if (summary) console.log(`The run's report is at ${fromCwd(summary) || summary}`)
+  }, handshakeMs)
   await new Promise<void>((resolveStop) => {
     process.once('SIGINT', resolveStop)
     process.once('SIGTERM', resolveStop)
   })
+  clearTimeout(waiting)
   studio.close()
   return 0
 }

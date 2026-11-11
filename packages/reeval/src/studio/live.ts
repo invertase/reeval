@@ -1,23 +1,13 @@
 // Runs in progress for `reeval studio`: each running `reeval run`'s `.reeval/staging/<runId>/live.json`,
-// until its record lands. Only the local server reads these; a static build never has them.
+// until its record lands.
 
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
-import { recordFileName } from '../ids.ts'
-import { redactJsonText } from '../redact.ts'
-import { isCompletedAttempt, loadPrevious, previousAttempt } from '../resume.ts'
-import type { EvalRecord } from '../types.ts'
-import {
-  isFinished,
-  LIVE_FILE,
-  type LiveProgress,
-  type LiveRun,
-  readableLiveProgress,
-} from '../view/live.ts'
-import { RUN_ID } from '../view/paths.ts'
+import { RUN_ID } from '../view/api.ts'
+import { LIVE_FILE, type LiveProgress, type LiveRun, readableLiveProgress } from '../view/live.ts'
 import { fileInside, type StudioSource } from './source.ts'
 
 /** A live run whose heartbeat is older than this is shown as stopped. */
@@ -77,70 +67,4 @@ export async function listLive(
     runs.push({ ...run, state: quiet || exited(progress) ? 'stopped' : progress.phase })
   }
   return runs
-}
-
-/**
- * The transcript a resume's previous assemble filed for an attempt it kept, or undefined when it
- * kept none there. The staged record a resume writes for a kept attempt has no turns.
- */
-async function keptTranscript(root: string, runId: string, key: string) {
-  const { record } = await loadPrevious(join(stagingRoot(root), runId))
-  const kept = previousAttempt(record, key)
-  const ref = kept && isCompletedAttempt(kept.outcome, kept.error) ? kept.files.transcript : null
-  if (!ref) return undefined
-  const path = ['previous-artifacts', ...ref.path.split('/')]
-  const file = await fileInside(stagingRoot(root), [runId], path)
-  return file ? redactJsonText(await readFile(file, 'utf8')) : undefined
-}
-
-/**
- * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged
- * (or, for one a resume kept, the transcript filed for it before); null for an attempt that isn't
- * live and finished, or a file outside the run's staging directory.
- */
-export async function liveTranscript(
-  source: StudioSource,
-  runId: string,
-  key: string,
-): Promise<string | null> {
-  if (!source.scratch || !RUN_ID.test(runId)) return null
-  const progress = await readProgress(source.root, runId)
-  const attempt = progress?.attempts.find((a) => a.key === key)
-  if (!attempt || !isFinished(attempt.status)) return null
-  try {
-    const kept = await keptTranscript(source.root, runId, key)
-    if (kept !== undefined) return kept
-    const file = await fileInside(stagingRoot(source.root), [runId], ['evals', recordFileName(key)])
-    if (!file) return null
-    const record = JSON.parse(await readFile(file, 'utf8')) as EvalRecord
-    const { transcriptLines } = await import('../history/assemble.ts')
-    return redactJsonText(transcriptLines(record))
-  } catch {
-    return null
-  }
-}
-
-/** Calls `onChange` with the live runs whenever they change, checking every `pollMs`. */
-export function watchLive(source: StudioSource, onChange: (runs: LiveRun[]) => void, pollMs = 400) {
-  let signature = ''
-  let busy = false
-  const check = async () => {
-    if (busy) return
-    busy = true
-    try {
-      const runs = await listLive(source)
-      const next = JSON.stringify(runs)
-      if (next !== signature) {
-        const first = signature === ''
-        signature = next
-        if (!first) onChange(runs)
-      }
-    } finally {
-      busy = false
-    }
-  }
-  void check()
-  const poll = setInterval(() => void check(), pollMs)
-  poll.unref()
-  return () => clearInterval(poll)
 }

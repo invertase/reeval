@@ -21,86 +21,12 @@ import {
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
 import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgments.ts'
-import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
-
-// ── Index ────────────────────────────────────────────────────────────────────────────────────
-
-export type EvalCatalogEntry = {
-  slug: string
-  id: string
-  file: string
-  /** Group names, then the eval name. */
-  path: string[]
-  runs: number
-  latest: { runId: string; outcome: Outcome }
-}
-
-export type IndexManifest = {
-  generatedAt: string
-  /** Newest first. */
-  shards: Array<{ id: string; runs: number }>
-  latest: string | null
-  evals: EvalCatalogEntry[]
-}
-
-export type StudioInfo = {
-  mode: 'live' | 'static'
-  reeval: string
-  project: string
-  generatedAt: string
-  /** `debug`: local debug data (`.reeval/debug`) can be read; never in a static build. */
-  features: { live: boolean; scratch: boolean; artifacts: boolean; debug: boolean }
-}
 
 /** Splits `file › group › … › name` back into its parts. */
 export function splitEvalId(id: string): { file: string; path: string[] } {
   const [file = id, ...path] = id.split(' › ')
   return { file, path: path.length ? path : [file] }
-}
-
-/** Month shards (newest run first) and the manifest over them, from every run's header. */
-export function buildIndex(entries: HistoryEntry[], generatedAt = new Date().toISOString()) {
-  const sorted = [...entries].sort((a, b) => (a.runId < b.runId ? 1 : -1))
-  const shards = new Map<string, HistoryEntry[]>()
-  for (const entry of sorted) {
-    const id = shardOf(entry.startedAt)
-    const list = shards.get(id) ?? []
-    list.push(entry)
-    shards.set(id, list)
-  }
-  const evals = new Map<string, EvalCatalogEntry>()
-  for (const run of sorted) {
-    for (const e of run.evals) {
-      const known = evals.get(e.slug)
-      if (known) {
-        known.runs++
-        continue
-      }
-      evals.set(e.slug, {
-        slug: e.slug,
-        id: e.id,
-        ...splitEvalId(e.id),
-        runs: 1,
-        latest: { runId: run.runId, outcome: e.outcome },
-      })
-    }
-  }
-  const manifest: IndexManifest = {
-    generatedAt,
-    shards: [...shards].map(([id, runs]) => ({ id, runs: runs.length })),
-    latest: sorted[0]?.runId ?? null,
-    evals: [...evals.values()].sort((a, b) => (a.id < b.id ? -1 : 1)),
-  }
-  return { manifest, shards }
-}
-
-/** Every file the index consists of, by relative path. */
-export function indexFiles(entries: HistoryEntry[], generatedAt?: string): Map<string, unknown> {
-  const { manifest, shards } = buildIndex(entries, generatedAt)
-  const files = new Map<string, unknown>([[manifestPath, manifest]])
-  for (const [id, list] of shards) files.set(shardPath(id), list)
-  return files
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────────────────────────

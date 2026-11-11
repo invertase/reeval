@@ -56,7 +56,7 @@ export function parseCli(argv: string[]): ParsedCli {
       )
       subcommand.argument('[args...]').action(() => {
         // commander hands the parent its own flags wherever they are, as it does `--config`.
-        // A flag both take (`studio build --profile`) is the subcommand's.
+        // A flag both take is the subcommand's.
         const own = valuesOf(command, spec.flags)
         const stray = Object.keys(own).find((flag) => !sub.flags.includes(flag as FlagName))
         if (stray) {

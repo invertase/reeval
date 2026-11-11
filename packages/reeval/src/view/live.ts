@@ -69,10 +69,6 @@ export type LiveRun = Omit<LiveProgress, 'schemaVersion' | 'pid' | 'host' | 'hea
 
 export type LiveIndex = { runs: LiveRun[] }
 
-export const liveApiPath = 'api/live'
-export const liveTranscriptPath = (runId: string, attemptKey: string) =>
-  `api/live/${runId}/transcript?attempt=${encodeURIComponent(attemptKey)}`
-
 export const FINISHED: readonly LiveStatus[] = ['pass', 'fail', 'infra_error', 'skipped']
 export const isFinished = (status: LiveStatus) => FINISHED.includes(status)
 

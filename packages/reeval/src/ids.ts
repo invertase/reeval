@@ -71,4 +71,4 @@ export function newRunId(
   return `${stamp}_${sha ? sha.slice(0, 7) : 'nogit'}_${author}_${suffix}`
 }
 
-export { RUN_ID } from './view/paths.ts'
+export { RUN_ID } from './view/api.ts'

@@ -144,7 +144,7 @@ export function redactArgv(argv: string[]): string[] {
   return out
 }
 
-/** The command an argv names: `run`, `studio build`, or null. */
+/** The command an argv names: `run`, `image build`, or null. */
 export function commandOf(argv: string[]): string | null {
   const words = redactArgv(argv).filter((w) => !w.startsWith('-') && !w.startsWith('<'))
   return words.length ? words.join(' ') : null

@@ -1,59 +1,41 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import { extname, relative, sep } from 'node:path'
 import { Readable } from 'node:stream'
-import { gzipSync } from 'node:zlib'
-import { readTree, writeTar } from '@reeval/sandbox-docker'
 import { type Context, Hono } from 'hono'
-import { getCookie, setCookie } from 'hono/cookie'
-import { streamSSE } from 'hono/streaming'
-import { attemptDebugDir, debugRoot, parseAttemptKey } from '../debug/files.ts'
-import { scratchDir } from '../history/files.ts'
-import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
-  DEBUG_LOG,
-  type DebugRequest,
-  type DebugView,
-  parseDebugLog,
-  parseNdjson,
-  REQUESTS_FILE,
-  TRACE_FILE,
-} from '../view/debug.ts'
-import type { LiveIndex, LiveRun } from '../view/live.ts'
-import type { StudioInfo } from '../view/model.ts'
-import { indexFiles } from '../view/model.ts'
-import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
-import { readableDebugRequest } from '../view/record.ts'
-import type { StudioAppFiles } from './app.ts'
-import { listLive, liveTranscript } from './live.ts'
-import {
-  fileInside,
-  listHeaders,
-  resolveFile,
-  type StudioSource,
-  snapshotInside,
-} from './source.ts'
+  artifactType,
+  type Handshake,
+  type PairResponse,
+  pageLimit,
+  parseStudioPath,
+  RUN_LIST_LIMIT,
+  type RunList,
+  STUDIO_API_VERSION,
+  STUDIO_ROUTES,
+  TRANSCRIPT_LIMIT,
+  VIEW_VERSION,
+} from '../view/api.ts'
+import { parseTranscript } from '../view/model.ts'
+import { buildAttemptView, buildRunView } from '../view/run-view.ts'
+import { factsOf, readTranscript, runFacts } from './facts.ts'
+import { listHeaders, readRun, resolveFile, type StudioSource } from './source.ts'
 
-export const COOKIE = 'reeval_studio_token'
-
-export type StudioServerOptions = {
+export type StudioApiOptions = {
   source: StudioSource
-  /** The prebuilt web app (index.html and assets/). */
-  app: StudioAppFiles
   reeval: string
   project: string
-  /** null turns the token check off (`--no-token`). */
-  token: string | null
+  /** The one origin a browser may call from: the hosted studio's. */
+  origin: string
+  /** The one-time token the hosted page trades for a session. */
+  pairingToken: string
   /** Host headers to accept, e.g. `127.0.0.1:4984`; empty accepts any (tests only). */
   hosts: string[]
-  /** Subscribes to history and live-run changes; returns an unsubscribe function. */
-  subscribe?: (listener: (event: StudioEvent) => void) => () => void
-  maxEventClients?: number
+  /** The run to open first; null opens the newest. */
+  focus: string | null
+  /** Called once, when the pairing token is traded for a session. */
+  onPair?: () => void
 }
-
-/** What `/api/events` streams: a run landed or was recorded, or a run in progress moved. */
-export type StudioEvent = { type: 'history.changed' } | { type: 'run.progress'; runs: LiveRun[] }
 
 export const newToken = () => randomBytes(32).toString('base64url')
 
@@ -64,276 +46,152 @@ export function allowedHosts(host: string, port: number): string[] {
   return [...names].map((name) => `${name}:${port}`)
 }
 
-const APP_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.json': 'application/json; charset=utf-8',
-}
-
-const APP_CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "connect-src 'self'",
-  "font-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join('; ')
-
 const sameToken = (a: string, b: string) => {
   const x = Buffer.from(a)
   const y = Buffer.from(b)
   return x.length === y.length && timingSafeEqual(x, y)
 }
 
-/** The request path relative to the root, percent-decoded exactly once; null if malformed. */
-function requestPath(url: string): string | null {
-  let path: string
-  try {
-    path = decodeURIComponent(new URL(url).pathname)
-  } catch {
-    return null
-  }
-  if (path.includes('\0') || path.includes('\\')) return null
-  return path.replace(/^\/+/, '')
-}
+const MAX_PAIR_BODY = 1024
 
-async function sendFile(
-  c: Context,
-  file: string,
-  headers: Record<string, string>,
-): Promise<Response> {
-  const info = await stat(file)
-  const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`
-  const common = { ...headers, ETag: etag, 'Content-Length': String(info.size) }
-  if (c.req.header('if-none-match') === etag) return c.body(null, 304, { ETag: etag })
-  if (c.req.method === 'HEAD') return c.body(null, 200, common)
-  const body = Readable.toWeb(createReadStream(file)) as ReadableStream
-  return c.body(body, 200, common)
-}
-
-/** The studio's local HTTP app: read-only, GET only, behind a Host check and a session token. */
-export function createStudioApp(options: StudioServerOptions) {
-  const { source, token, hosts } = options
-  const maxClients = options.maxEventClients ?? 16
-  let clients = 0
+/**
+ * `reeval studio`'s data server: the studio API over local run files. It answers a browser only
+ * from `origin`, and every route but `pair` only with the session that the one-time pairing token
+ * was traded for, which lives as long as this process.
+ */
+export function createStudioApi(options: StudioApiOptions) {
+  const { source, origin, hosts } = options
+  let pairingToken: string | null = options.pairingToken
+  let session: string | null = null
+  const handshake = async (): Promise<Handshake> => ({
+    api: STUDIO_API_VERSION,
+    viewVersion: VIEW_VERSION,
+    reeval: options.reeval,
+    project: options.project,
+    routes: [...STUDIO_ROUTES],
+    focus: options.focus ?? (await listHeaders(source)).at(-1)?.runId ?? null,
+  })
   const app = new Hono()
 
   app.use('*', async (c, next) => {
     c.header('Referrer-Policy', 'no-referrer')
     c.header('X-Content-Type-Options', 'nosniff')
-    c.header('Cross-Origin-Resource-Policy', 'same-origin')
-    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
-      return c.text('Method not allowed', 405, { Allow: 'GET, HEAD' })
-    }
+    c.header('Cache-Control', 'no-store')
+    c.header('Vary', 'Origin')
     const host = c.req.header('host') ?? ''
     if (hosts.length && !hosts.includes(host)) return c.text('Unknown host', 403)
-    const origin = c.req.header('origin')
-    if (origin && hosts.length && !hosts.some((h) => origin === `http://${h}`)) {
-      return c.text('Cross-origin requests are not allowed', 403)
+    const from = c.req.header('origin')
+    if (from !== undefined && from !== origin) {
+      return c.text('Cross-origin requests are only allowed from the hosted studio', 403)
     }
-    if (token === null) return next()
-    const url = new URL(c.req.url)
-    const offered = url.searchParams.get('token')
-    if (offered !== null) {
-      if (!sameToken(offered, token)) return c.text('Wrong studio token', 401)
-      setCookie(c, COOKIE, token, { httpOnly: true, sameSite: 'Strict', path: '/' })
-      url.searchParams.delete('token')
-      return c.redirect(`${url.pathname}${url.search}${url.hash}`, 302)
+    if (from !== undefined) c.header('Access-Control-Allow-Origin', origin)
+    if (c.req.method === 'OPTIONS') {
+      if (from === undefined) return c.text('Not a CORS preflight', 400)
+      c.header('Access-Control-Allow-Methods', 'GET, POST')
+      c.header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+      c.header('Access-Control-Max-Age', '600')
+      if (c.req.header('access-control-request-private-network') === 'true') {
+        c.header('Access-Control-Allow-Private-Network', 'true')
+      }
+      return c.body(null, 204)
     }
-    const cookie = getCookie(c, COOKIE)
-    if (!cookie || !sameToken(cookie, token)) {
-      return c.text(
-        'This studio needs its session token. Open the full URL that reeval studio printed.',
-        401,
-      )
+    const target = parseStudioPath(new URL(c.req.url).pathname)
+    if (!target) return c.text('Not found', 404)
+    const method = target.route === 'pair' ? 'POST' : 'GET'
+    if (c.req.method !== method && !(method === 'GET' && c.req.method === 'HEAD')) {
+      return c.text('Method not allowed', 405, { Allow: method === 'GET' ? 'GET, HEAD' : 'POST' })
+    }
+    if (target.route === 'pair') return next()
+    const auth = c.req.header('authorization') ?? ''
+    const offered = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    if (!session || !offered || !sameToken(offered, session)) {
+      return c.text('Pair with this studio first: open the URL reeval studio printed', 401)
     }
     return next()
   })
 
-  app.get('/api/events', (c) => {
-    if (!options.subscribe) return c.text('Live updates are off', 404)
-    if (clients >= maxClients) return c.text('Too many live clients', 503)
-    const subscribe = options.subscribe
-    clients++
-    return streamSSE(c, async (stream) => {
-      let id = 0
-      const unsubscribe = subscribe((event) => {
-        const data = event.type === 'run.progress' ? JSON.stringify({ runs: event.runs }) : '{}'
-        void stream.writeSSE({ event: event.type, data, id: String(++id) })
-      })
-      const closed = new Promise<void>((resolve) => stream.onAbort(resolve))
-      await stream.writeSSE({ event: 'ready', data: '{}', id: String(id) })
-      const ping = setInterval(() => void stream.writeSSE({ event: 'ping', data: '{}' }), 25_000)
-      await closed
-      clearInterval(ping)
-      unsubscribe()
-      clients--
-    })
+  app.post('/api/v1/pair', async (c) => {
+    const text = await c.req.text()
+    if (text.length > MAX_PAIR_BODY) return c.text('Pairing request too large', 413)
+    let token: unknown
+    try {
+      token = (JSON.parse(text) as { token?: unknown }).token
+    } catch {
+      return c.text('Send { "token": "<pairing token>" }', 400)
+    }
+    if (pairingToken === null) return c.text('This studio is already paired', 409)
+    if (typeof token !== 'string' || !sameToken(token, pairingToken)) {
+      return c.text('Wrong pairing token', 401)
+    }
+    pairingToken = null
+    session = newToken()
+    options.onPair?.()
+    const body: PairResponse = { session, handshake: await handshake() }
+    return c.json(body)
   })
 
-  // Runs in progress, from .reeval/staging: only here, never in a static build.
-  app.get('/api/live', async (c) => {
-    const index: LiveIndex = { runs: await listLive(source) }
-    return c.json(index, 200, { 'Cache-Control': 'no-cache' })
-  })
-  app.get('/api/live/:runId/transcript', async (c) => {
-    const text = await liveTranscript(source, c.req.param('runId'), c.req.query('attempt') ?? '')
-    if (text === null) return c.text('No transcript for this attempt yet', 404)
-    return c.body(text, 200, {
-      'Cache-Control': 'no-cache',
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Content-Security-Policy': 'sandbox',
-    })
-  })
+  app.get('/api/v1/handshake', async (c) => c.json(await handshake()))
 
-  // Local debug data from .reeval/debug: only here, never in a static build. Only the debug folder
-  // itself is resolved, so a symlinked run or attempt folder is never read through.
-  const debugFile = async (runId: string, key: string | undefined, name: string) => {
-    const attempt = key ? parseAttemptKey(key) : null
-    if (!RUN_ID.test(runId) || !attempt) return null
-    const base = debugRoot(source.root)
-    const dir = attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
-    return fileInside(base, relative(base, dir).split(sep), [name])
-  }
-  const readText = async (file: string | null) =>
-    file === null ? null : readFile(file, 'utf8').catch(() => null)
-  app.get('/api/debug/:runId', async (c) => {
-    const file = (name: string) => debugFile(c.req.param('runId'), c.req.query('attempt'), name)
-    const log = await readText(await file(DEBUG_LOG))
-    // Most attempts have none (recorded elsewhere, or cleaned): that's an answer, not an error.
-    if (log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
-    const view: DebugView = {
-      lines: parseDebugLog(log),
-      requests: parseNdjson<DebugRequest>((await readText(await file(REQUESTS_FILE))) ?? '').map(
-        readableDebugRequest,
-      ),
-      trace: (await file(TRACE_FILE)) !== null,
-    }
-    return c.json(view, 200, { 'Cache-Control': 'no-cache' })
-  })
-  app.get('/api/debug/:runId/trace', async (c) => {
-    const file = await debugFile(c.req.param('runId'), c.req.query('attempt'), TRACE_FILE)
-    if (!file) return c.text('No trace for this attempt', 404)
-    return sendFile(c, file, {
-      'Cache-Control': 'no-cache',
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Content-Security-Policy': 'sandbox',
-    })
-  })
-
-  // Snapshots, from the run's directory in .reeval/runs whether or not it was recorded: a
-  // compressed one as it is, a directory as a tar.gz made now. Only the runs folder is resolved,
-  // so a symlinked run or attempt folder is never read through.
-  app.get('/api/snapshot/:runId', async (c) => {
-    const runId = c.req.param('runId')
-    const parts = (c.req.query('path') ?? '').split('/')
-    const name = parts.at(-1) ?? ''
-    if (
-      !RUN_ID.test(runId) ||
-      parts.length < 3 ||
-      parts.at(-2) !== 'snapshots' ||
-      parts.some((p) => !p || p === '.' || p === '..' || p.includes('\\') || p.includes('\0'))
-    ) {
-      return c.text('Bad snapshot path', 400)
-    }
-    const found = await snapshotInside(scratchDir(source.root), [runId], parts)
-    if (!found) return c.text('No such snapshot', 404)
-    const file = `${runId}-${parts
-      .filter((p) => p !== 'snapshots')
-      .join('-')
-      .replace(/\.tar\.gz$/, '')}.tar.gz`
-    const headers = {
-      'Cache-Control': 'no-cache',
-      'Content-Type': 'application/gzip',
-      'Content-Disposition': `attachment; filename="${file.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
-    }
-    if (found.file) {
-      if (!name.endsWith('.tar.gz')) return c.text('No such snapshot', 404)
-      return sendFile(c, found.path, headers)
-    }
-    const body = gzipSync(writeTar(await readTree(found.path)))
-    return c.body(new Uint8Array(body), 200, { ...headers, 'Content-Length': String(body.length) })
+  app.get('/api/v1/runs', async (c) => {
+    const limit = pageLimit(c.req.query('limit'), RUN_LIST_LIMIT)
+    const cursor = c.req.query('cursor')
+    const newest = (await listHeaders(source)).reverse()
+    const from = cursor ? newest.findIndex((h) => h.runId < cursor) : 0
+    const items = from < 0 ? [] : newest.slice(from, from + limit)
+    const more = from >= 0 && from + limit < newest.length
+    const body: RunList = { items, next: more ? (items.at(-1)?.runId ?? null) : null }
+    return c.json(body)
   })
 
   app.get('*', async (c) => {
-    const path = requestPath(c.req.url)
-    if (path === null) return c.text('Bad path', 400)
-    const target = parseDataPath(path)
-    if (target) {
-      const noStore = { 'Cache-Control': 'no-cache' }
-      if (target.kind === 'studio') {
-        const info: StudioInfo = {
-          mode: 'live',
-          reeval: options.reeval,
-          project: options.project,
-          generatedAt: new Date().toISOString(),
-          features: {
-            live: !!options.subscribe,
-            scratch: source.scratch,
-            artifacts: true,
-            debug: true,
-          },
-        }
-        return c.json(info, 200, noStore)
-      }
-      if (target.kind === 'manifest' || target.kind === 'shard') {
-        const files = indexFiles(await listHeaders(source))
-        const body = files.get(path)
-        if (body === undefined) return c.json([], 200, noStore)
-        return c.json(body, 200, noStore)
-      }
-      if (target.kind === 'analysis') {
-        const { listAnalyses, listNotes } = await import('../analysis/files.ts')
-        const entries = await listAnalyses(source.root, [source.historyDir], target.runId, true)
-        const notes = await listNotes(source.root, target.runId)
-        const index: AnalysisIndex = {
-          runId: target.runId,
-          entries: sortAnalyses(entries),
-          ...(notes.length ? { notes } : {}),
-        }
-        return c.json(index, 200, noStore)
-      }
-      const file = await resolveFile(source, target)
+    const target = parseStudioPath(new URL(c.req.url).pathname)
+    if (!target || !('runId' in target)) return c.text('Not found', 404)
+    if (target.route === 'artifact') {
+      const file = await resolveFile(source, { kind: 'artifact', ...target })
       if (!file) return c.text('Not found', 404)
-      if (target.kind === 'record') {
-        return sendFile(c, file, { ...noStore, 'Content-Type': APP_TYPES['.json'] as string })
-      }
-      return sendFile(c, file, {
-        ...noStore,
-        'Content-Type': artifactType(file),
-        'Content-Security-Policy': 'sandbox',
-      })
+      return sendFile(c, file, artifactType(file))
     }
-    if (path.startsWith('data/') || path.startsWith('api/')) return c.text('Not found', 404)
-    return serveApp(c, options.app, path)
+    const run = await readRun(source, target.runId)
+    if (!run) return c.text(`No run ${target.runId}`, 404)
+    if (target.route === 'run') {
+      return c.json(
+        buildRunView(run.record, {
+          recorded: run.recorded,
+          facts: await runFacts(source, run.record),
+        }),
+      )
+    }
+    const attempt = run.record.evals
+      .flatMap((e) => e.attempts)
+      .find((a) => a.key === target.attemptKey)
+    if (!attempt) return c.text(`No attempt ${target.attemptKey} in ${target.runId}`, 404)
+    const transcript = await readTranscript(source, target.runId, attempt)
+    if (target.route === 'attempt') {
+      const facts = transcript === null ? null : factsOf(run.record, attempt, transcript)
+      return c.json(buildAttemptView(run.record, attempt.key, facts))
+    }
+    if (transcript === null) return c.text('No transcript was kept for this attempt', 404)
+    const lines = parseTranscript(transcript)
+    const start = Math.max(0, Number.parseInt(c.req.query('cursor') ?? '0', 10) || 0)
+    const end = start + pageLimit(c.req.query('limit'), TRANSCRIPT_LIMIT)
+    return c.json({
+      items: lines.slice(start, end),
+      next: end < lines.length ? String(end) : null,
+      totalLines: lines.length,
+    })
   })
 
   return app
 }
 
-function serveApp(c: Context, app: StudioAppFiles, path: string): Response {
-  const name = path === '' ? 'index.html' : path
-  const file = app.get(name)
-  if (!file) return c.text('Not found', 404)
+async function sendFile(c: Context, file: string, type: string): Promise<Response> {
+  const info = await stat(file)
   const headers = {
-    'Content-Type': APP_TYPES[extname(name)] ?? 'application/octet-stream',
-    'Cache-Control': name.startsWith('assets/')
-      ? 'public, max-age=31536000, immutable'
-      : 'no-cache',
-    ...(name === 'index.html' ? { 'Content-Security-Policy': APP_CSP } : {}),
-    ETag: file.etag,
+    'Content-Type': type,
+    'Content-Length': String(info.size),
+    'Content-Security-Policy': 'sandbox',
   }
-  if (c.req.header('if-none-match') === file.etag) return c.body(null, 304, { ETag: file.etag })
-  const common = { ...headers, 'Content-Length': String(file.body.length) }
-  if (c.req.method === 'HEAD') return c.body(null, 200, common)
-  return c.body(new Uint8Array(file.body), 200, common)
+  if (c.req.method === 'HEAD') return c.body(null, 200, headers)
+  if (info.size < 64 * 1024) return c.body(new Uint8Array(await readFile(file)), 200, headers)
+  return c.body(Readable.toWeb(createReadStream(file)) as ReadableStream, 200, headers)
 }

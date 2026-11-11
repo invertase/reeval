@@ -4,8 +4,8 @@
 //   node scripts/binary-smoke.mjs <binary> [--docker]
 //
 // From an empty directory it checks `reeval --version` against packages/reeval/package.json, then
-// plans and runs a copy of examples/with-skill-lift. Then it builds the studio from that run
-// and serves it with `reeval studio`, fetching the app and one of its assets. With --docker it builds the sandbox image
+// plans and runs a copy of examples/with-skill-lift. Then it serves that run with `reeval studio`,
+// pairs with it as the hosted page would and fetches the run's view. With --docker it builds the sandbox image
 // with the binary and runs one egress fixture in Docker, whose eval passes and canary fails.
 import { spawn, spawnSync } from 'node:child_process'
 import {
@@ -13,7 +13,6 @@ import {
   cpSync,
   existsSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -104,16 +103,6 @@ check(`the example plans (${evals} evals)`, plan.status === 0 && evals > 0)
 const run = reeval(example, ['run'])
 check('the example runs', run.status === 0 && /^\d+ passed$/.test(outcome(run) ?? ''))
 
-const site = join(example, 'site')
-const built = reeval(example, ['studio', 'build', '--scratch', '--out', site])
-const runs = Number(stripVTControlCharacters(built.out).match(/built \S+: (\d+) runs?/)?.[1] ?? 0)
-const scripts = existsSync(join(site, 'assets'))
-  ? readdirSync(join(site, 'assets')).filter((f) => f.endsWith('.js'))
-  : []
-check(
-  `reeval studio build writes ${runs} run, index.html and ${scripts.length} script`,
-  built.status === 0 && runs > 0 && existsSync(join(site, 'index.html')) && scripts.length > 0,
-)
 await serveStudio(example)
 
 if (values.docker) {
@@ -138,13 +127,14 @@ if (failures.length) {
 }
 console.log(`\nbinary-smoke: ${basename(binary)} ${version} works on its own`)
 
-/** Starts `reeval studio` in `cwd`, opens its token URL, then fetches `/` and one of its scripts. */
+/** Starts `reeval studio` in `cwd`, pairs with its token as the studio page does, then reads the runs. */
 async function serveStudio(cwd) {
   const port = String(43000 + Math.floor(Math.random() * 2000))
-  const child = spawn(binary, ['studio', '--port', port], {
+  const origin = 'https://studio.example'
+  const child = spawn(binary, ['studio', '--no-open', '--port', port], {
     cwd,
     windowsHide: true,
-    env: { ...process.env, ...cacheEnv },
+    env: { ...process.env, ...cacheEnv, REEVAL_CLOUD_URL: origin },
   })
   let out = ''
   child.stdout.on('data', (d) => {
@@ -157,38 +147,48 @@ async function serveStudio(cwd) {
     const started = performance.now()
     let url
     while (!url && performance.now() - started < 30_000) {
-      url = stripVTControlCharacters(out).match(/https?:\/\/\S+token=\S+/)?.[0]
+      url = stripVTControlCharacters(out).match(/https?:\/\/\S+#t=\S+/)?.[0]
       if (!url) await new Promise((r) => setTimeout(r, 100))
     }
-    console.log(`\n$ reeval studio --port ${port}`)
-    console.log(stripVTControlCharacters(out).trimEnd())
-    if (!url) return check('reeval studio prints its URL', false)
-    const opened = await fetch(url, { redirect: 'manual' })
-    const cookie = opened.headers.get('set-cookie')?.split(';')[0] ?? ''
+    console.log(`\n$ reeval studio --no-open --port ${port}`)
+    console.log(
+      stripVTControlCharacters(out)
+        .replace(/#t=\S+/g, '#t=…')
+        .trimEnd(),
+    )
+    if (!url) return check('reeval studio prints its pairing URL', false)
+    const page = new URL(url)
+    const server = page.searchParams.get('s')
+    const token = new URLSearchParams(page.hash.slice(1)).get('t')
+    const pair = await fetch(`${server}/api/v1/pair`, {
+      method: 'POST',
+      headers: { origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const { session } = pair.ok ? await pair.json() : {}
+    check(
+      `reeval studio pairs (${pair.status}, ${pair.headers.get('access-control-allow-origin')})`,
+      pair.status === 200 && typeof session === 'string',
+    )
     const get = async (path) => {
-      const r = await fetch(new URL(path, url), { headers: { cookie } })
-      const type = r.headers.get('content-type') ?? ''
+      const r = await fetch(`${server}${path}`, {
+        headers: { origin, authorization: `Bearer ${session}` },
+      })
       const body = await r.text()
-      console.log(`GET ${path} → ${r.status} ${type} (${body.length} bytes)`)
-      return { status: r.status, type, body }
+      console.log(`GET ${path} → ${r.status} (${body.length} bytes)`)
+      return { status: r.status, json: r.ok ? JSON.parse(body) : null }
     }
-    const page = await get('/')
+    const runs = await get('/api/v1/runs')
+    const first = runs.json?.items?.[0]?.runId
     check(
-      'reeval studio serves / as HTML',
-      page.status === 200 && page.type.startsWith('text/html') && page.body.includes('<div'),
+      `reeval studio lists ${runs.json?.items?.length ?? 0} run`,
+      runs.status === 200 && !!first,
     )
-    const script = page.body.match(/src="(?:\.?\/)?(assets\/[^"]+\.js)"/)?.[1]
-    if (!script) return check('index.html names a script', false)
-    const asset = await get(`/${script}`)
+    if (!first) return
+    const view = await get(`/api/v1/runs/${first}`)
     check(
-      `reeval studio serves /${script} as JavaScript`,
-      asset.status === 200 && /javascript/.test(asset.type) && asset.body.length > 1000,
-    )
-    const style = page.body.match(/href="(?:\.?\/)?(assets\/[^"]+\.css)"/)?.[1]
-    const css = style ? await get(`/${style}`) : { status: 0, type: '' }
-    check(
-      `reeval studio serves /${style} as CSS`,
-      css.status === 200 && css.type.startsWith('text/css'),
+      "reeval studio serves the run's view",
+      view.status === 200 && view.json?.header?.runId === first && view.json.evals.length > 0,
     )
   } finally {
     child.kill()

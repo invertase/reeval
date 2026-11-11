@@ -196,7 +196,6 @@
     "@types/picomatch": "4.0.3",
     "@types/react": "19.3.0",
     "ink-testing-library": "4.0.0",
-    "studio-web": "workspace:*",
     "tsdown": "0.23.7"
   }
 }
