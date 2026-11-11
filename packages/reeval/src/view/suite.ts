@@ -323,7 +323,7 @@ export type JudgeResult = {
   scores: number[]
 }
 
-export type Interval = { low: number; high: number }
+type Interval = { low: number; high: number }
 
 /** A null counter is one the harness didn't record; a recorded zero stays zero. */
 export type EffortCounters = {

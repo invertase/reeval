@@ -7,6 +7,7 @@ import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
 import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { RunRemarks } from '../view/remarks.ts'
+import type { Interval } from '../stats.ts'
 import type {
   Across,
   AttemptQuestionResult,
@@ -16,7 +17,6 @@ import type {
   CheckResult,
   Effect,
   EvalResult,
-  Interval,
   PooledArm,
   PooledRate,
   QuestionResult,
