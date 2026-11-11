@@ -216,10 +216,11 @@ export const assertionRecordSchema = z.strictObject({
   label: z.string(),
   labelled: z.boolean(),
   matcher: z.string(),
-  status: z.enum(['pass', 'fail', 'error']),
+  status: z.enum(['pass', 'fail', 'error', 'not_applicable']),
   soft: z.boolean(),
   at: z.string().optional(),
   message: z.string().optional(),
+  reason: z.string().optional(),
   durationMs: z.number().optional(),
 })
 
@@ -805,6 +806,12 @@ export const attemptDoneSchema = z
     error: attemptErrorSchema
       .optional()
       .describe('What the body threw, if it threw. A failed `expect.require` is one.'),
+    turnStatusRead: z
+      .boolean()
+      .optional()
+      .describe(
+        'True when the body read turn.status. False when a turn errored and status was never read.',
+      ),
   })
   .describe(
     "The runner to reeval: the eval's body has finished. The attempt's checks and record follow.",

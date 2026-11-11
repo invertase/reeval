@@ -298,6 +298,12 @@ export function ran(actual: unknown, command?: RegExp | string | RunMatch): Resu
  */
 export const TURN_EDITED: unique symbol = Symbol('reeval.turnEdited')
 
+/**
+ * Raw mid-turn status on a frozen `Turn`, so wire serializers can copy it without going through
+ * the `status` getter that marks the body as having inspected the error.
+ */
+export const TURN_STATUS: unique symbol = Symbol('reeval.turnStatus')
+
 const editedIn = (turn: unknown): string[] => {
   if (!isObjectLike(turn)) return []
   const own = (turn as { [TURN_EDITED]?: unknown })[TURN_EDITED]

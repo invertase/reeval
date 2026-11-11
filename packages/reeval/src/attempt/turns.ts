@@ -1,4 +1,4 @@
-import { TURN_EDITED } from '../assert.ts'
+import { TURN_EDITED, TURN_STATUS } from '../assert.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { changedBetween, diffSinceSnapshot, workspaceBlobs } from '../diff.ts'
 import { ProviderStopError } from '../harness/provider-stop.ts'
@@ -6,7 +6,15 @@ import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration, plural } from '../text.ts'
-import type { ExecEnv, ExecResult, ExecRetry, Turn, TurnData, TurnRecord } from '../types.ts'
+import type {
+  ExecEnv,
+  ExecResult,
+  ExecRetry,
+  Turn,
+  TurnData,
+  TurnRecord,
+  TurnStatus,
+} from '../types.ts'
 import {
   type McpStartupLog,
   mcpStartupOf,
@@ -267,9 +275,21 @@ export function turnSender(
     a.record.diff = diff
     if (a.spec.snapshot.when === 'turns')
       await takeSnapshot(a, box, `turn-${turnNumber}`, 'harness')
-    const data: TurnData = { prompt, ...result, diff }
+    const { status: turnStatus, ...rest } = result
+    const data: TurnData = { prompt, ...rest, status: turnStatus, diff }
     const turn: Turn = Object.freeze(
-      Object.assign({ ...data, ...checks }, { [TURN_EDITED]: edited }),
+      Object.assign(
+        {
+          ...data,
+          ...checks,
+          [TURN_STATUS]: turnStatus,
+          get status(): TurnStatus {
+            a.turnStatusRead = true
+            return turnStatus
+          },
+        },
+        { [TURN_EDITED]: edited },
+      ),
     )
     a.turns.push(turn)
     return turn

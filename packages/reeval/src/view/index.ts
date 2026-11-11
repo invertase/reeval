@@ -51,4 +51,4 @@ export {
 export * from './remarks.ts'
 export * from './report/index.ts'
 export * from './suite.ts'
-export { turnErrorKind, type TurnErrorKind } from './turn-error.ts'
+export { type TurnErrorKind, turnErrorKind } from './turn-error.ts'

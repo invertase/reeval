@@ -9,6 +9,7 @@ import type { BrokerPhases } from '../sandbox/phases.ts'
 import type { ResourceMeter } from '../sandbox/resources.ts'
 import type { PreparedHost } from '../sandbox/tart-hosts.ts'
 import type {
+  AttemptContext,
   BackgroundHandle,
   CaptureOptions,
   EnvVars,
@@ -114,6 +115,21 @@ export type Attempt = {
   readonly snapshotDir: string
   /** The tokens of each step the harness reported, by turn record; never written. */
   turnSteps: Map<TurnRecord, TokenUsage[]>
+  /**
+   * Set when the eval body reads `turn.status`. Unhandled mid-turn errors stay counted only then.
+   */
+  turnStatusRead: boolean
+}
+
+/** Lets the language-runner host find the live Attempt from the body's `AttemptContext`. */
+const attemptByContext = new WeakMap<AttemptContext, Attempt>()
+
+export function bindAttemptContext(c: AttemptContext, a: Attempt): void {
+  attemptByContext.set(c, a)
+}
+
+export function attemptForContext(c: AttemptContext): Attempt | undefined {
+  return attemptByContext.get(c)
 }
 
 export function createAttempt(
@@ -179,6 +195,7 @@ export function createAttempt(
     stepBlobs: new Map(),
     snapshotDir,
     turnSteps: new Map(),
+    turnStatusRead: false,
   }
   return a
 }

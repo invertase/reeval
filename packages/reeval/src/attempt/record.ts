@@ -15,10 +15,41 @@ import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
 import { resourcesLine } from '../view/resources.ts'
+import { messageLine } from '../view/suite.ts'
 import { inferDurations, sumSplits, timeSplit } from '../view/timeline.ts'
+import { turnErrorKind } from '../view/turn-error.ts'
 import { checkFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
+
+/**
+ * An unhandled mid-turn `status === 'error'` (body never read `turn.status`) becomes an
+ * infra error so crashed attempts leave the counted pass/fail denominator.
+ */
+export function reclassifyTurnErrors(a: Attempt): void {
+  const { record } = a
+  if (record.outcome !== 'pass' && record.outcome !== 'fail') return
+  const index = record.turns.findIndex((t) => t.status === 'error')
+  if (index < 0) return
+  // Persist whether the body inspected status, so older-record viewers can tell.
+  if (a.turnStatusRead) {
+    record.turnStatusRead = true
+    return
+  }
+  record.turnStatusRead = false
+  const turn = record.turns[index]
+  if (!turn) return
+  const errEvent = turn.transcript.find((e) => e.type === 'error')
+  const errText = errEvent && errEvent.type === 'error' ? errEvent.message : undefined
+  const kind = turnErrorKind(errText)
+  const detail = messageLine(errText ?? 'unknown error')
+  record.outcome = 'infra_error'
+  record.error = {
+    kind: 'infra',
+    message: `Turn ${index} ended with an error: ${detail}`,
+    turn: { index, kind },
+  }
+}
 
 function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; message: string } {
   const message = error instanceof Error ? error.message : String(error)
@@ -282,13 +313,15 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
 
 /** The record's checks that didn't pass, for the terminal; unset when all did. */
 function failedChecks(record: EvalRecord): Pick<EvalMeta, 'failedChecks'> {
-  const failed = (record.assertions ?? []).filter((x) => x.status !== 'pass')
+  const failed = (record.assertions ?? []).filter(
+    (x) => x.status !== 'pass' && x.status !== 'not_applicable',
+  )
   if (!failed.length) return {}
   return {
     failedChecks: failed.map((x) => ({
       label: x.label,
       ...(x.at ? { at: x.at } : {}),
-      message: clip(x.message?.split('\n')[0] ?? '', 500),
+      message: clip(x.message?.split('\n')[0] ?? x.reason?.split('\n')[0] ?? '', 500),
     })),
   }
 }

@@ -1,5 +1,6 @@
 // Answers attempt-protocol calls from a language runner on the real AttemptContext.
 
+import { TURN_STATUS } from '../assert.ts'
 import { type ExpectCall, expectCall, recordCall } from '../attempt/match.ts'
 import {
   type AttemptCall,
@@ -17,7 +18,29 @@ import type {
   JudgeCallFields,
   JudgeCallOptions,
   Turn,
+  TurnData,
+  TurnStatus,
 } from '../types.ts'
+
+/** Wire `TurnData` without reading `turn.status` (that getter marks the body as having inspected it). */
+function turnData(turn: Turn): TurnData {
+  const status = (turn as Turn & { [TURN_STATUS]?: TurnStatus })[TURN_STATUS]
+  if (status === undefined) {
+    throw new Error("The turn has no raw status; the language runner can't copy it")
+  }
+  return {
+    prompt: turn.prompt,
+    text: turn.text,
+    status,
+    startedAt: turn.startedAt,
+    durationMs: turn.durationMs,
+    transcript: turn.transcript,
+    usage: turn.usage,
+    model: turn.model,
+    unreported: turn.unreported,
+    diff: turn.diff,
+  }
+}
 
 /** The turn or value a wire `JudgeOn` names, as `c.judge`'s own `on` takes it. */
 function judgeTarget(c: AttemptContext, on: JudgeOn): JudgeCallFields['on'] {
@@ -71,8 +94,7 @@ async function perform(
   switch (call.op) {
     case 'send': {
       const turn = await c.send(call.prompt)
-      const { exec, readFile, ...data } = turn as Turn
-      return { turn: data }
+      return { turn: turnData(turn) }
     }
     case 'exec': {
       const env = call.env === undefined ? {} : { env: call.env }
