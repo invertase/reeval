@@ -9,7 +9,7 @@ import { attemptId, attemptKey, evalId, evalSlug, relativeFile } from '../ids.ts
 import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
-import { assertionRecords, checkFailure } from './assertions.ts'
+import { assertionRecords, checkFailure, linkJudgmentAssertions } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
@@ -172,6 +172,7 @@ async function attemptBody(
     const { record } = a
     const checked = assertionRecords(assertions())
     if (checked.length) record.assertions = checked
+    linkJudgmentAssertions(record.judgements ?? [], checked)
     for (const x of checked) {
       const why = x.message ? ` · ${clip(redactSecrets(x.message.split('\n')[0] ?? ''), 160)}` : ''
       const mark = x.status === 'pass' || x.status === 'not_applicable' ? '✓' : '✗'

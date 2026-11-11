@@ -75,6 +75,7 @@ export const judgeFields = {
     .min(0, 'must be between 0 and 1')
     .max(1, 'must be between 0 and 1')
     .optional(),
+  label: z.string().optional(),
   providerOptions: z.record(z.string(), z.record(z.string(), jsonValueSchema)).optional(),
   maxConcurrent: z.number().int().min(1).optional(),
   gateway: z.union([gatewayNameSchema, gatewayDescriptorSchema]).optional(),

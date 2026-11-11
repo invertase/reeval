@@ -265,11 +265,14 @@ export function labeledJudgments(
   const zip = passes.length === a.judgements.length
   return a.judgements.map((judgment, i) => {
     const x = zip ? passes[i] : undefined
+    const check = judgment.assertion ?? x?.label
+    const fromRecord = judgment.label !== undefined
+    const fromAssert = x?.labelled === true
     return {
       judgment,
-      label: x?.labelled ? x.label : judgeText(judgment.question),
-      labelled: x?.labelled === true,
-      ...(x ? { check: x.label } : {}),
+      label: judgment.label ?? (fromAssert ? (x?.label as string) : judgeText(judgment.question)),
+      labelled: fromRecord || fromAssert,
+      ...(check !== undefined ? { check } : {}),
     }
   })
 }
