@@ -224,7 +224,7 @@
 
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| `evals[].answers[].input`: what each pairwise question's model was sent, per pair and order | ✓ 1 | — | ● 1 | ● 1 | — | — |
+| `evals[].answers[].input`: what each pairwise question's model was sent, per pair and order | ✓ 2 | — | ● 1 | ● 1 | — | — |
 | Budget-stopped runs are recorded with status `budget` | ✓ 1 | — | — | — | — | — |
 | Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates | ✓ 1 | — | ● 2 | ● 1 | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 1 | — | — | — | — | — |
@@ -267,19 +267,19 @@
 | Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest’s `context-use` fact | ✓ 2 | — | — | — | — | — |
 | Each labeled check’s pass rate per cell, control and variant alike (`check_rates`) | ✓ 1 | — | — | — | — | — |
 | Each check’s streak of clean recorded runs per cell, setup and branch (`check_streaks`) | ✓ 1 | — | — | — | — | — |
-| Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts | ✓ 1 | — | — | — | — | — |
-| Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 1 | — | — | — | — | — |
-| Token usage on each attempt and a per-cell sum of counted attempts, in the studio | ✓ 1 | — | — | — | — | — |
+| Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts | ✓ 2 | — | — | — | — | — |
+| Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 2 | — | — | — | — | — |
+| Token usage on each attempt and a per-cell sum of counted attempts, in the studio | ✓ 2 | — | — | — | — | — |
 | `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 1 | — | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 1 | — | — | — | — | — |
-| A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document | ✓ 1 | — | — | — | — | — |
+| A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document | ✓ 2 | — | — | — | — | — |
 | `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 5 | ✓ 1 | ● 11 | ● 14 | — | — |
 | `c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output, or on a given port something already listened on | ✓ 1 | — | ● 3 | ● 5 | ● 5 | — |
 | `c.capture()`'s page reaches sandbox ports at `localhost`, `127.0.0.1` and `[::1]`, through tunnels opened on its first request | ✓ 1 | — | — | ● 1 | ● 1 | — |
 | `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 4 | ✓ 1 | ● 3 | ● 8 | — | — |
-| `reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
+| `reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in Node, a browser and a Worker) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only | ✓ 2 | — | — | — | — | ◐ 1 (1 without a canary) |
 | Runs in progress: `reeval run`'s `.reeval/staging/<run>/live.json`, attempts filling in, `stopped` for a killed run, and the record replacing it | ✓ 1 | — | — | — | — | — |
-| Compare questions' answers as `reeval/view` tallies them: win rates within and across harnesses, the model, and a failed call's error | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
+| Compare questions' answers as `reeval/view` tallies them: win rates within and across harnesses, the model, and a failed call's error | ✓ 2 | — | — | — | — | ◐ 1 (1 without a canary) |
 
 ## CLI and runner
 

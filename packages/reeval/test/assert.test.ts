@@ -20,13 +20,14 @@ import {
   withinLimits,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
-import { AGENTS, type AgentKind, SKILL_DIRS } from '../src/harness/agents.ts'
+import { AGENTS, type AgentKind } from '../src/harness/agents.ts'
+import { SKILL_DIRS } from '../src/harness/skill-dirs.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
-import { toolCalls } from '../src/history/db.ts'
 import { classifyCall, skillsUsed } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { matchers } from '../src/matchers.ts'
 import type { TranscriptEvent } from '../src/types.ts'
+import { toolCalls } from '../src/view/classify.ts'
 import { testDir } from './support/fixture.ts'
 
 extendExpect(matchers)

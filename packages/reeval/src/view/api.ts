@@ -25,7 +25,7 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import type { CellEffort } from './effort.ts'
-import type { TranscriptLine } from './model.ts'
+import { parseTranscript, type TranscriptLine } from './model.ts'
 
 /** The routes' version, in their prefix: a breaking change to a route or shape bumps it. */
 export const STUDIO_API_VERSION = 1
@@ -247,6 +247,38 @@ export function pageLimit(
 ) {
   const n = raw ? Number(raw) : Number.NaN
   return Number.isInteger(n) && n > 0 ? Math.min(n, bounds.max) : bounds.default
+}
+
+/**
+ * One page of runs, newest first, from every header oldest first as the history lists them. The
+ * cursor is the last run id of the page before, so a run recorded meanwhile never shifts a page.
+ */
+export function pageRuns(
+  oldestFirst: readonly RunListItem[],
+  query: { cursor?: string | null; limit?: string | null },
+): RunList {
+  const limit = pageLimit(query.limit, RUN_LIST_LIMIT)
+  const newest = [...oldestFirst].reverse()
+  const cursor = query.cursor
+  const from = cursor ? newest.findIndex((h) => h.runId < cursor) : 0
+  const items = from < 0 ? [] : newest.slice(from, from + limit)
+  const more = from >= 0 && from + limit < newest.length
+  return { items, next: more ? (items.at(-1)?.runId ?? null) : null }
+}
+
+/** One page of a transcript's lines; the cursor is the index of the page's first line. */
+export function pageTranscript(
+  transcript: string,
+  query: { cursor?: string | null; limit?: string | null },
+): AttemptTrace {
+  const lines = parseTranscript(transcript)
+  const start = Math.max(0, Number.parseInt(query.cursor ?? '0', 10) || 0)
+  const end = start + pageLimit(query.limit, TRANSCRIPT_LIMIT)
+  return {
+    items: lines.slice(start, end),
+    next: end < lines.length ? String(end) : null,
+    totalLines: lines.length,
+  }
 }
 
 const TYPES: Array<[RegExp, string]> = [

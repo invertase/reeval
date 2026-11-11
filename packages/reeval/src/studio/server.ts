@@ -7,18 +7,15 @@ import {
   artifactType,
   type Handshake,
   type PairResponse,
-  pageLimit,
+  pageRuns,
+  pageTranscript,
   parseStudioPath,
-  RUN_LIST_LIMIT,
-  type RunList,
   STUDIO_API_VERSION,
   STUDIO_ROUTES,
-  TRANSCRIPT_LIMIT,
   VIEW_VERSION,
 } from '../view/api.ts'
-import { parseTranscript } from '../view/model.ts'
 import { buildAttemptView, buildRunView } from '../view/run-view.ts'
-import { factsOf, readTranscript, runFacts } from './facts.ts'
+import { readTranscript, runTranscripts } from './facts.ts'
 import { listHeaders, readRun, resolveFile, type StudioSource } from './source.ts'
 
 export type StudioApiOptions = {
@@ -133,14 +130,7 @@ export function createStudioApi(options: StudioApiOptions) {
   app.get('/api/v1/handshake', async (c) => c.json(await handshake()))
 
   app.get('/api/v1/runs', async (c) => {
-    const limit = pageLimit(c.req.query('limit'), RUN_LIST_LIMIT)
-    const cursor = c.req.query('cursor')
-    const newest = (await listHeaders(source)).reverse()
-    const from = cursor ? newest.findIndex((h) => h.runId < cursor) : 0
-    const items = from < 0 ? [] : newest.slice(from, from + limit)
-    const more = from >= 0 && from + limit < newest.length
-    const body: RunList = { items, next: more ? (items.at(-1)?.runId ?? null) : null }
-    return c.json(body)
+    return c.json(pageRuns(await listHeaders(source), c.req.query()))
   })
 
   app.get('*', async (c) => {
@@ -157,7 +147,7 @@ export function createStudioApi(options: StudioApiOptions) {
       return c.json(
         buildRunView(run.record, {
           recorded: run.recorded,
-          facts: await runFacts(source, run.record),
+          transcripts: await runTranscripts(source, run.record),
         }),
       )
     }
@@ -167,18 +157,10 @@ export function createStudioApi(options: StudioApiOptions) {
     if (!attempt) return c.text(`No attempt ${target.attemptKey} in ${target.runId}`, 404)
     const transcript = await readTranscript(source, target.runId, attempt)
     if (target.route === 'attempt') {
-      const facts = transcript === null ? null : factsOf(run.record, attempt, transcript)
-      return c.json(buildAttemptView(run.record, attempt.key, facts))
+      return c.json(buildAttemptView(run.record, attempt.key, transcript))
     }
-    if (transcript === null) return c.text('No transcript was kept for this attempt', 404)
-    const lines = parseTranscript(transcript)
-    const start = Math.max(0, Number.parseInt(c.req.query('cursor') ?? '0', 10) || 0)
-    const end = start + pageLimit(c.req.query('limit'), TRANSCRIPT_LIMIT)
-    return c.json({
-      items: lines.slice(start, end),
-      next: end < lines.length ? String(end) : null,
-      totalLines: lines.length,
-    })
+    if (transcript === undefined) return c.text('No transcript was kept for this attempt', 404)
+    return c.json(pageTranscript(transcript, c.req.query()))
   })
 
   return app

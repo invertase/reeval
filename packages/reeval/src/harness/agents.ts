@@ -59,6 +59,7 @@ import type {
   SecretTemplate,
   WebEventType,
 } from '../types.ts'
+import { SKILL_LAYOUTS, type SkillLayout } from './skill-dirs.ts'
 import type { PlacedPlugin } from './types.ts'
 import type { PluginUnpack } from './unpack.ts'
 
@@ -66,17 +67,9 @@ import type { PluginUnpack } from './unpack.ts'
 export type AgentKind = AgentHarnessDescriptor['kind']
 
 /** Where an agent reads what the environment gives it. */
-export type Layout = {
+export type Layout = SkillLayout & {
   /** The workspace file environment `rules` are written to. */
   rulesFile: string
-  /** The repo skill directory for `placement: 'workspace'`, relative to the workspace. */
-  workspaceSkillDir: string
-  /** Where the adapter puts harness-placed skills, under `~/`; the fake agent writes them there. */
-  harnessSkillDir: string
-  /** Other skill directories the agent reads, in the workspace and under `~/`, that reeval never places into. */
-  alsoReadsSkillDirs?: readonly string[]
-  /** Where the agent CLI keeps the skills it ships with, under `~/`: never an eval's skill use. */
-  builtinSkillDirs?: readonly string[]
   /**
    * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
    * environment's skills and MCP servers (so names can clash), or `namespaced` under the
@@ -1128,16 +1121,14 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // fetches the key owner's account plugins.
   cursor: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.cursor/skills',
-    harnessSkillDir: '.agents/skills',
+    ...SKILL_LAYOUTS.cursor,
     pluginPlacement: 'flat',
     pluginUnpack: CURSOR_PLUGIN_UNPACK,
     pluginHookEvents: Object.keys(CURSOR_HOOK_EVENTS),
   },
   'claude-code': {
     rulesFile: 'CLAUDE.md',
-    workspaceSkillDir: '.claude/skills',
-    harnessSkillDir: '.claude/skills',
+    ...SKILL_LAYOUTS['claude-code'],
     pluginPlacement: 'namespaced',
     pluginFiles: claudePluginFiles,
   },
@@ -1145,9 +1136,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // Plugins are installed whole with `agy plugin install`, which the adapter runs as it starts.
   antigravity: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.agents/skills',
-    harnessSkillDir: '.gemini/config/skills',
-    builtinSkillDirs: ['.gemini/antigravity-cli/builtin/skills'],
+    ...SKILL_LAYOUTS.antigravity,
     pluginPlacement: 'namespaced',
     // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
     pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
@@ -1158,9 +1147,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // are code modules, never loaded from an environment's plugins.
   opencode: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.opencode/skills',
-    harnessSkillDir: '.config/opencode/skills',
-    alsoReadsSkillDirs: ['.claude/skills', '.agents/skills'],
+    ...SKILL_LAYOUTS.opencode,
     pluginPlacement: 'flat',
     pluginUnpack: OPENCODE_PLUGIN_UNPACK,
   },
@@ -1168,9 +1155,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // reads .agents/skills and .claude/skills; nothing turns that off.
   goose: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.goose/skills',
-    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills',
-    alsoReadsSkillDirs: ['.agents/skills', '.claude/skills'],
+    ...SKILL_LAYOUTS.goose,
     pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
@@ -1179,8 +1164,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // plugins, with extension code) are never loaded from an environment's plugins.
   pi: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.pi/skills',
-    harnessSkillDir: '.pi/agent/skills',
+    ...SKILL_LAYOUTS.pi,
     pluginPlacement: 'flat',
     pluginUnpack: PI_PLUGIN_UNPACK,
   },
@@ -1188,16 +1172,14 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // ~/.codex and the workspace.
   codex: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.agents/skills',
-    harnessSkillDir: '.agents/skills',
+    ...SKILL_LAYOUTS.codex,
     pluginPlacement: 'namespaced',
   },
   // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
   // the ACP bootstrap gives it. It has no plugins of its own: plugin skills join its home skills.
   fx: {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.fx/skills',
-    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/home/.fx/skills',
+    ...SKILL_LAYOUTS.fx,
     pluginPlacement: 'flat',
   },
   // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
@@ -1205,9 +1187,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   // GROK_FOLDER_TRUST=false makes it; it also reads .agents/skills and .claude/skills.
   'grok-build': {
     rulesFile: 'AGENTS.md',
-    workspaceSkillDir: '.grok/skills',
-    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills',
-    alsoReadsSkillDirs: ['.agents/skills', '.claude/skills'],
+    ...SKILL_LAYOUTS['grok-build'],
     pluginPlacement: 'namespaced',
   },
 }
@@ -1925,29 +1905,9 @@ export const harnessCredentials = (h: HarnessDescriptor): string[] =>
 /** The fake agent's own layout. */
 const FAKE_LAYOUT: Layout = {
   rulesFile: 'AGENTS.md',
-  workspaceSkillDir: '.agents/skills',
-  harnessSkillDir: '.agents/skills',
+  ...SKILL_LAYOUTS.fake,
   pluginPlacement: 'flat',
 }
-
-/**
- * Every skill directory some agent reads, as a path's tail (`.claude/skills`, `.config/goose/skills`):
- * a skill under one is the agent's to load, whoever put it there.
- */
-export const SKILL_DIRS: readonly string[] = [
-  ...new Set(
-    [FAKE_LAYOUT, ...Object.values(LAYOUTS)].flatMap((l) => [
-      l.workspaceSkillDir,
-      l.harnessSkillDir.replace(/^\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/home\//, ''),
-      ...(l.alsoReadsSkillDirs ?? []),
-    ]),
-  ),
-]
-
-/** Every agent CLI's own skill directories (`builtinSkillDirs`), as a path's tail. */
-export const BUILTIN_SKILL_DIRS: readonly string[] = [
-  ...new Set(Object.values(LAYOUTS).flatMap((l) => l.builtinSkillDirs ?? [])),
-]
 
 /** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */
 export function layoutOf(descriptor: HarnessDescriptor): Layout {

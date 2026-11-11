@@ -8,26 +8,19 @@ import type {
   RunView,
 } from './api.ts'
 import { VIEW_VERSION } from './api.ts'
+import { type ClassifiedCall, classifyAttempt } from './classify.ts'
 import { cellEffort } from './effort.ts'
 import { runHeader } from './header.ts'
-
-/** One classified tool call, as `classifyAttempt` returns it; only what facts count. */
-export type FactCall = {
-  line: number
-  class: keyof AttemptFacts['byClass']
-  files: string[]
-  skills: Array<{ skill: string; source: string }>
-}
 
 export type RunViewOptions = {
   /** Whether the run is in the history folder, not only `.reeval/runs`. */
   recorded: boolean
-  /** Each attempt's transcript facts, by attempt key; an attempt without one gets null. */
-  facts?: ReadonlyMap<string, AttemptFacts>
+  /** Each attempt's kept transcript.jsonl, by attempt key; an attempt without one gets null facts. */
+  transcripts?: ReadonlyMap<string, string>
 }
 
 /** Counts an attempt's classified tool calls into its facts. */
-export function attemptFacts(calls: readonly FactCall[]): AttemptFacts {
+function countFacts(calls: readonly ClassifiedCall[]): AttemptFacts {
   const byClass: AttemptFacts['byClass'] = {
     context: 0,
     dependency: 0,
@@ -57,6 +50,26 @@ export function attemptFacts(calls: readonly FactCall[]): AttemptFacts {
     contextFiles: [...files.values()],
   }
 }
+
+/**
+ * One attempt's facts from its transcript, its calls classified as `reeval query` classifies them
+ * against the skills and MCP servers of the attempt's environment.
+ */
+export function attemptFacts(
+  record: RunRecord,
+  a: AttemptRecord,
+  transcript: string,
+): AttemptFacts {
+  const digest = record.evals
+    .find((e) => e.attempts.includes(a))
+    ?.cells.find((c) => c.key === a.cell)?.environmentDigest
+  const env = record.environments.find((x) => x.digest === digest)
+  const declared = { skills: env?.skills.map((s) => s.name) ?? [], mcp: env?.mcp ?? [] }
+  return countFacts(classifyAttempt(a, declared, transcript).calls)
+}
+
+const factsOf = (record: RunRecord, a: AttemptRecord, transcript: string | undefined) =>
+  transcript === undefined ? null : attemptFacts(record, a, transcript)
 
 const tally = (statuses: readonly string[]) => ({
   passed: statuses.filter((s) => s === 'pass').length,
@@ -90,7 +103,11 @@ function attemptSummary(
   }
 }
 
-function evalView(e: EvalEntry, facts: RunViewOptions['facts']): EvalView {
+function evalView(
+  record: RunRecord,
+  e: EvalEntry,
+  transcripts: RunViewOptions['transcripts'],
+): EvalView {
   const checks = new Set<string>()
   for (const a of e.attempts) for (const x of a.assertions ?? []) checks.add(x.label)
   return {
@@ -109,13 +126,15 @@ function evalView(e: EvalEntry, facts: RunViewOptions['facts']): EvalView {
     ...(e.lifts ? { lifts: e.lifts } : {}),
     checks: [...checks],
     cells: e.cells.map((c): CellView => ({ ...c, effortStats: cellEffort(e, c.key) })),
-    attempts: e.attempts.map((a) => attemptSummary(e, a, facts?.get(a.key) ?? null)),
+    attempts: e.attempts.map((a) =>
+      attemptSummary(e, a, factsOf(record, a, transcripts?.get(a.key))),
+    ),
   }
 }
 
 /**
- * The view of one run that a studio page draws, from its record alone (and, when given, its
- * transcripts' facts). Pure: the same record and facts give the same view, wherever it runs.
+ * The view of one run that a studio page draws, from its record and the transcripts it is given.
+ * Pure, and free of Node: the same inputs give the same view in the CLI, a browser or a Worker.
  */
 export function buildRunView(record: RunRecord, options: RunViewOptions): RunView {
   return {
@@ -128,7 +147,7 @@ export function buildRunView(record: RunRecord, options: RunViewOptions): RunVie
     environments: record.environments,
     artifacts: record.artifacts,
     errors: record.errors ?? [],
-    evals: record.evals.map((e) => evalView(e, options.facts)),
+    evals: record.evals.map((e) => evalView(record, e, options.transcripts)),
   }
 }
 
@@ -155,11 +174,14 @@ export function attemptFileRefs(a: AttemptRecord): FileRef[] {
   return [...refs.values()]
 }
 
-/** One attempt of a run, by key: its record without turns and context, or null if no such attempt. */
+/**
+ * One attempt of a run, by key: its record without turns and context, with its facts when its
+ * transcript is given, or null if no such attempt.
+ */
 export function buildAttemptView(
   record: RunRecord,
   attemptKey: string,
-  facts: AttemptFacts | null,
+  transcript?: string,
 ): AttemptView | null {
   for (const e of record.evals) {
     const a = e.attempts.find((x) => x.key === attemptKey)
@@ -170,7 +192,7 @@ export function buildAttemptView(
       evalKey: e.key,
       turns: turns.length,
       contextFiles: context.length,
-      facts,
+      facts: factsOf(record, a, transcript),
       fileRefs: attemptFileRefs(a),
     }
   }

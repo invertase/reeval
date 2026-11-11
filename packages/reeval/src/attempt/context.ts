@@ -117,16 +117,3 @@ export function contextTaker(a: Attempt) {
     a.record.context = await agentContext(box, signal)
   }
 }
-
-const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/(?:implementation\/)?home\//
-
-const RETIRED_RUNTIME_STATE = new Set([
-  '.cursor/cli-config.json',
-  '.cursor/skills-cursor/.sync-manifest.json',
-])
-
-/** A context path that is some agent CLI's own runtime state, whichever harness recorded it. */
-export function isRuntimeState(path: string): boolean {
-  if (!path.startsWith('~/')) return false
-  return RETIRED_RUNTIME_STATE.has(path.replace(ADAPTER_HOME, '~/').slice(2))
-}

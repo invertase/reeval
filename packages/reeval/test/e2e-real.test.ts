@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { runFacts } from '../src/studio/facts.ts'
+import { runTranscripts } from '../src/studio/facts.ts'
 import { readRun as readStudioRun } from '../src/studio/source.ts'
 import { buildRunView } from '../src/view/run-view.ts'
 import { type CliRun, readRun, recordedRuns, runCli } from './helpers.ts'
@@ -126,7 +126,7 @@ for (const row of harnesses.filter((r) => !r.harness)) {
         assert.ok(run, id)
         const view = buildRunView(run.record, {
           recorded: true,
-          facts: await runFacts(source, run.record),
+          transcripts: await runTranscripts(source, run.record),
         })
         const attempts = view.evals.flatMap((e) => e.attempts)
         assert.ok(attempts.length > 0, id)

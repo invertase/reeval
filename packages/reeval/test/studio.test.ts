@@ -963,52 +963,52 @@ describe('buildRunView', () => {
   test('is pure: the same record gives the same view and is left as it was', () => {
     const record = records.get(headers[2]?.runId as string) as RunRecord
     const before = JSON.stringify(record)
-    const facts = new Map([[record.evals[0]?.attempts[0]?.key as string, attemptFacts([])]])
-    const a = buildRunView(record, { recorded: true, facts })
-    const b = buildRunView(structuredClone(record), { recorded: true, facts })
+    const first = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
+    const transcripts = new Map([[first.key, '']])
+    const a = buildRunView(record, { recorded: true, transcripts })
+    const b = buildRunView(structuredClone(record), { recorded: true, transcripts })
     assert.deepEqual(a, b)
     assert.equal(JSON.stringify(record), before)
     assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'the view is plain JSON')
-    assert.deepEqual(a.evals[0]?.attempts[0]?.facts, attemptFacts([]))
+    assert.deepEqual(a.evals[0]?.attempts[0]?.facts, attemptFacts(record, first, ''))
+    assert.equal(a.evals[0]?.attempts[0]?.facts?.toolCalls, 0)
     assert.equal(a.evals[0]?.attempts[1]?.facts ?? null, null)
   })
 
-  test('facts count classified calls: classes, skills and context files with their first line', () => {
-    const facts = attemptFacts([
-      {
-        line: 3,
-        class: 'context',
-        files: ['.claude/skills/s/SKILL.md'],
-        skills: [{ skill: 's', source: 'placed' }],
-      },
-      { line: 5, class: 'workspace', files: [], skills: [] },
-      {
-        line: 9,
-        class: 'context',
-        files: ['.claude/skills/s/SKILL.md'],
-        skills: [{ skill: 's', source: 'placed' }],
-      },
-      { line: 11, class: 'verify', files: [], skills: [] },
-    ])
+  test("facts classify the transcript's calls, as `reeval query` does, from the record alone", () => {
+    const record = records.get(headers[0]?.runId as string) as RunRecord
+    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
+    const tool = (input: object, name = 'read') =>
+      JSON.stringify({ type: 'tool', tool: name, input, ok: true })
+    const transcript = [
+      JSON.stringify({ type: 'text', text: 'start' }),
+      tool({ path: '.claude/skills/s/SKILL.md' }),
+      tool({ command: 'npm test' }, 'shell'),
+      'not json',
+      tool({ path: '.claude/skills/s/SKILL.md' }),
+    ].join('\n')
+    const facts = attemptFacts(record, attempt, transcript)
     assert.deepEqual(facts, {
-      toolCalls: 4,
-      byClass: { context: 2, dependency: 0, web: 0, verify: 1, workspace: 1 },
-      skills: [{ skill: 's', source: 'placed', reads: 2, firstLine: 3 }],
-      contextFiles: [{ path: '.claude/skills/s/SKILL.md', reads: 2, firstLine: 3 }],
+      toolCalls: 3,
+      byClass: { context: 2, dependency: 0, web: 0, verify: 1, workspace: 0 },
+      skills: [{ skill: 's', source: 'skill-dir', reads: 2, firstLine: 2 }],
+      contextFiles: [],
     })
+    const view = buildAttemptView(record, attempt.key, transcript)
+    assert.deepEqual(view?.facts, facts)
   })
 
   test("an attempt's view drops turns and context and lists every file its record names", () => {
     const record = records.get(headers[0]?.runId as string) as RunRecord
     const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-    const view = buildAttemptView(record, attempt.key, null)
+    const view = buildAttemptView(record, attempt.key)
     assert.ok(view)
     assert.equal('context' in view, false)
     assert.equal(view.turns, attempt.turns.length)
     assert.equal(view.contextFiles, attempt.context.length)
     assert.ok(view.fileRefs.some((f) => f.path === attempt.files.transcript?.path))
     assert.equal(new Set(view.fileRefs.map((f) => f.path)).size, view.fileRefs.length)
-    assert.equal(buildAttemptView(record, 'no such attempt', null), null)
+    assert.equal(buildAttemptView(record, 'no such attempt'), null)
   })
 })
 

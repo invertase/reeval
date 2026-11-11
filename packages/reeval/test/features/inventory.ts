@@ -239,7 +239,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: "`evals[].answers[].input`: what each pairwise question's model was sent, per pair and order",
     fixtures: ['compare/question-input'],
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'questions.attempt',
@@ -2337,19 +2337,19 @@ export const inventory: InventoryFeature[] = [
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'summary.judge-score',
     area: 'Records and studio',
     name: 'Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count)',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'summary.usage',
     area: 'Records and studio',
     name: 'Token usage on each attempt and a per-cell sum of counted attempts, in the studio',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'analyze',
@@ -2367,7 +2367,7 @@ export const inventory: InventoryFeature[] = [
     id: 'analysis.notes',
     area: 'Records and studio',
     name: "A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document",
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'ui.capture',
@@ -2445,8 +2445,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'studio',
     area: 'Records and studio',
-    name: "`reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only",
-    unit: ['reeval/test/studio.test.ts'],
+    name: "`reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in Node, a browser and a Worker) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only",
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
     real: ["e2e › the studio's run view: both runs, with every attempt's transcript facts"],
   },
   {
@@ -2459,7 +2459,7 @@ export const inventory: InventoryFeature[] = [
     id: 'studio.answers',
     area: 'Records and studio',
     name: "Compare questions' answers as `reeval/view` tallies them: win rates within and across harnesses, the model, and a failed call's error",
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
     real: ['questions › test/real-agents --profile questions'],
   },
 
