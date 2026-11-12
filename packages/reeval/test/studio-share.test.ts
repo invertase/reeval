@@ -19,6 +19,7 @@ import { hostname } from 'node:os'
 import { join, sep } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { openArchive } from '../src/archive/index.ts'
+import { readableRunReport } from '../src/view/report/schema.ts'
 import { baseEnv, fakeConfig, project, runCli, tempDir } from './helpers.ts'
 
 const TOKEN = 'cli-session-token-0123'
@@ -774,6 +775,12 @@ describe('reeval cloud push --out and --json', () => {
       assert.equal(archive.manifest.runId, id)
       const record = JSON.parse((await archive.read(`${id}.json`)).toString())
       assert.equal(record.artifacts, 'all')
+      assert.ok(archive.has(`${id}/summary.md`))
+      const report = readableRunReport(
+        JSON.parse((await archive.read(`${id}/report.json`)).toString()),
+      )
+      assert.equal(report.runId, id)
+      assert.equal(report.provenance.artifacts, 'all', 'the report is built at the pushed level')
     } finally {
       await archive.close()
     }
@@ -789,6 +796,12 @@ describe('reeval cloud push --out and --json', () => {
     ])
     assert.equal(none.code, 0, none.stdout + none.stderr)
     assert.deepEqual(await transcripts(join(scratchOnly, 'none.zip')), [])
+    const bare = await openArchive(join(scratchOnly, 'none.zip'))
+    try {
+      assert.ok(!bare.has(`${id}/summary.md`) && !bare.has(`${id}/report.json`))
+    } finally {
+      await bare.close()
+    }
 
     const p = await platform()
     try {
