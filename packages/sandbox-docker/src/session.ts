@@ -23,6 +23,7 @@ import {
   SANDBOX_STATE,
   SANDBOX_USER,
 } from './image.ts'
+import { ownerLabel } from './orphans.ts'
 import { shellQuote as q } from './process.ts'
 import { engineLabel, spawnEngine } from './remote-engine.ts'
 import { traceDocker } from './trace.ts'
@@ -411,7 +412,12 @@ async function networkMode(id: string, engine?: Engine): Promise<string> {
  */
 export async function createDockerSession(options: SessionOptions): Promise<DockerSession> {
   const nonce = randomBytes(8).toString('hex')
-  const labels = { [LABEL.managed]: 'true', [LABEL.session]: nonce, ...options.labels }
+  const labels = {
+    [LABEL.managed]: 'true',
+    [LABEL.session]: nonce,
+    [LABEL.owner]: ownerLabel(),
+    ...options.labels,
+  }
   const lifetime = Math.ceil((options.lifetimeMs ?? 24 * 3_600_000) / 1000)
   const signal = options.abortSignal
   const { engine } = options

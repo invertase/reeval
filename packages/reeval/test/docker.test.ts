@@ -13,6 +13,7 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
+  ownerLabel,
   PLATFORM,
 } from '@reeval/sandbox-docker'
 import {
@@ -1131,6 +1132,75 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('wait') })
       assert.equal(started, 2)
     },
   )
+
+  test('SIGKILL to reeval and its workers mid-turn leaves containers that reeval clean and the next reeval run remove', {
+    ...docker,
+    skip: docker.skip || (process.platform === 'win32' && 'needs POSIX signals'),
+  }, async () => {
+    const p = await project('docker-sigkill', {
+      'reeval.config.ts': config('{ delayMs: 60_000 }'),
+      'evals/d.eval.ts': `import { evaluate } from 'reeval'
+evaluate('slow', { runs: 2 }, async (c) => { await c.send('wait') })
+`,
+      'evals/quick.eval.ts': `import { evaluate } from 'reeval'
+evaluate('quick', async () => {})
+`,
+    })
+    let started = 0
+    const r = await runCli(
+      p.dir,
+      ['run', 'evals/d.eval.ts', '--concurrency', '2', '--output-logs', 'full'],
+      {
+        ...slow,
+        onOutput: (stdout, pid) => {
+          started = stdout.match(/\] {2}\+\d+:\d\d turn 1 started$/gm)?.length ?? 0
+          if (started < 2) return false
+          // Workers run in process groups of their own, so they outlive the CLI's.
+          const workers = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' })
+            .stdout.split(/\s+/)
+            .filter(Boolean)
+          for (const worker of workers) process.kill(Number(worker), 'SIGKILL')
+          process.kill(-pid, 'SIGKILL')
+          return true
+        },
+      },
+    )
+    assert.equal(r.code, null, r.stdout + r.stderr)
+    const [runId] = readdirSync(join(p.dir, '.reeval/staging'))
+    assert.ok(runId, 'the run has staging')
+    // The canary: nothing was left alive to remove them.
+    assert.notEqual(liveContainers(runId), '')
+
+    const cleaned = await runCli(p.dir, ['clean'])
+    assert.equal(cleaned.code, 0, cleaned.stdout + cleaned.stderr)
+    assert.match(cleaned.stdout, /Removed \d+ sandboxes that a killed reeval left running/)
+    assert.equal(liveContainers(runId), '')
+
+    const exited = spawnSync(process.execPath, ['-e', 'console.log(process.pid)'], {
+      encoding: 'utf8',
+    })
+    const orphan = execFileSync(
+      'docker',
+      [
+        'run',
+        '--detach',
+        '--rm',
+        '--label',
+        `${LABEL.run}=${runId}`,
+        '--label',
+        `${LABEL.owner}=${ownerLabel(Number(exited.stdout))}`,
+        '--entrypoint',
+        'sleep',
+        DEFAULT_IMAGE,
+        '300',
+      ],
+      { encoding: 'utf8' },
+    ).trim()
+    const next = await runCli(p.dir, ['run', 'evals/quick.eval.ts'], slow)
+    assert.equal(next.code, 0, next.stdout + next.stderr)
+    assert.match(next.stderr, /reeval: removed 1 sandbox a killed reeval left running/)
+    assert.equal(liveContainers(runId), '', `${orphan} was removed`)
+  })
 
   test('Ctrl-C mid-capture stops the browser and the run', docker, async () => {
     // The page's script never answers, so its load never fires within the capture's budget.
