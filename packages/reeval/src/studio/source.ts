@@ -49,7 +49,8 @@ export async function fileInside(
 /**
  * The file a record or artifact path names, or null. A run resolves to the history folder first,
  * then `.reeval/runs/`; the real path must stay inside that folder's directory for the run, so
- * neither a symlink inside the run nor a symlinked run directory can lead elsewhere.
+ * neither a symlink inside the run nor a symlinked run directory can lead elsewhere. The artifact
+ * path `<runId>.json` is the run's record, beside its directory.
  */
 export async function resolveFile(
   source: StudioSource,
@@ -61,19 +62,23 @@ export async function resolveFile(
     const record = await fileInside(dir, [], [`${target.runId}.json`])
     if (!record) continue
     if (target.kind === 'record') return record
+    if (target.segments.length === 1 && target.segments[0] === `${target.runId}.json`) return record
     return fileInside(dir, [target.runId], target.segments)
   }
   return null
 }
 
-/** A run's record, and whether it came from the history folder; null when neither folder has it. */
+/**
+ * A run's record, the folder that holds it and whether that's the history folder; null when
+ * neither folder has it.
+ */
 export async function readRun(
   source: StudioSource,
   runId: string,
-): Promise<{ record: RunRecord; recorded: boolean } | null> {
+): Promise<{ record: RunRecord; dir: string; recorded: boolean } | null> {
   for (const dir of dirsOf(source)) {
     const file = await fileInside(dir, [], [`${runId}.json`])
-    if (file) return { record: await readRecord(file), recorded: dir === source.historyDir }
+    if (file) return { record: await readRecord(file), dir, recorded: dir === source.historyDir }
   }
   return null
 }

@@ -1,8 +1,10 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { type Context, Hono } from 'hono'
+import { readReportInputs } from '../history/report-inputs.ts'
 import {
   artifactType,
   type Handshake,
@@ -10,12 +12,12 @@ import {
   pageRuns,
   pageTranscript,
   parseStudioPath,
+  reportLinks,
   STUDIO_API_VERSION,
   STUDIO_ROUTES,
-  VIEW_VERSION,
 } from '../view/api.ts'
-import { buildAttemptView, buildRunView } from '../view/run-view.ts'
-import { readTranscript, runTranscripts } from './facts.ts'
+import { buildRunReport } from '../view/report/build.ts'
+import { REPORT_VERSION, splitRunReport } from '../view/report/split.ts'
 import { listHeaders, readRun, resolveFile, type StudioSource } from './source.ts'
 
 export type StudioApiOptions = {
@@ -82,7 +84,7 @@ export function createStudioApi(options: StudioApiOptions) {
   let session: string | null = null
   const handshake = async (): Promise<Handshake> => ({
     api: STUDIO_API_VERSION,
-    viewVersion: VIEW_VERSION,
+    reportVersion: REPORT_VERSION,
     reeval: options.reeval,
     project: options.project,
     routes: [...STUDIO_ROUTES],
@@ -159,28 +161,24 @@ export function createStudioApi(options: StudioApiOptions) {
     if (target.route === 'artifact') {
       const file = await resolveFile(source, { kind: 'artifact', ...target })
       if (!file) return c.text('Not found', 404)
+      const query = c.req.query()
+      if (file.endsWith('.jsonl') && ('cursor' in query || 'limit' in query)) {
+        return c.json(pageTranscript(await readFile(file, 'utf8'), query))
+      }
       return sendFile(c, file, artifactType(file))
     }
     const run = await readRun(source, target.runId)
     if (!run) return c.text(`No run ${target.runId}`, 404)
-    if (target.route === 'run') {
-      return c.json(
-        buildRunView(run.record, {
-          recorded: run.recorded,
-          transcripts: await runTranscripts(source, run.record),
-        }),
-      )
-    }
-    const attempt = run.record.evals
-      .flatMap((e) => e.attempts)
-      .find((a) => a.key === target.attemptKey)
-    if (!attempt) return c.text(`No attempt ${target.attemptKey} in ${target.runId}`, 404)
-    const transcript = await readTranscript(source, target.runId, attempt)
-    if (target.route === 'attempt') {
-      return c.json(buildAttemptView(run.record, attempt.key, transcript))
-    }
-    if (transcript === undefined) return c.text('No transcript was kept for this attempt', 404)
-    return c.json(pageTranscript(transcript, c.req.query()))
+    if (run.record.evals.length === 0) return c.text(`Run ${target.runId} has no evals`, 404)
+    const report = buildRunReport(run.record, {
+      ...(await readReportInputs(join(run.dir, target.runId))),
+      links: reportLinks(target.runId),
+    })
+    const { index, details } = splitRunReport(report)
+    if (target.route === 'report') return c.json(index)
+    const detail = details.find((d) => d.eval.id === target.evalId)
+    if (!detail) return c.text(`No eval ${target.evalId} in ${target.runId}`, 404)
+    return c.json(detail)
   })
 
   return app

@@ -52,7 +52,6 @@ export {
 } from './record.ts'
 export * from './remarks.ts'
 export * from './report/core.ts'
-export * from './run-view.ts'
 export { runScope } from './scope.ts'
 export * from './suite.ts'
 export { type TurnErrorKind, turnErrorKind } from './turn-error.ts'

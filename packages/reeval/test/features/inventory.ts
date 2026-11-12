@@ -2486,9 +2486,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'studio',
     area: 'Records and studio',
-    name: "`reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in any JavaScript runtime) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only",
-    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
-    real: ["e2e › the studio's run view: both runs, with every attempt's transcript facts"],
+    name: "`reeval studio`: the studio API (`reeval/view`'s routes and shapes, each run's report as an index and per-eval details, transcripts a page at a time, the same in any JavaScript runtime) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only",
+    unit: [
+      'reeval/test/studio.test.ts',
+      'reeval/test/report-split.test.ts',
+      'reeval/test/view-boundary.test.ts',
+    ],
+    real: ["e2e › the studio's report: both runs, linking every attempt's transcript"],
   },
   {
     id: 'studio.live',

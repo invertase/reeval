@@ -6,31 +6,23 @@
  *   POST /api/v1/pair                                       { token } → PairResponse
  *   GET  /api/v1/handshake                                  Handshake
  *   GET  /api/v1/runs?cursor&limit                          RunList, newest first
- *   GET  /api/v1/runs/:runId/view                           RunView
- *   GET  /api/v1/runs/:runId/attempts/:attemptKey           AttemptView
- *   GET  /api/v1/runs/:runId/attempts/:attemptKey/transcript?cursor&limit   AttemptTrace
+ *   GET  /api/v1/runs/:runId/report                         RunReportIndex
+ *   GET  /api/v1/runs/:runId/report/evals/:evalId           EvalDetail
  *   GET  /api/v1/runs/:runId/artifacts/*path                the file's bytes
+ *   GET  /api/v1/runs/:runId/artifacts/*path?cursor&limit   TranscriptPage, for a .jsonl file
  *
  * Every route but `pair` needs `Authorization: Bearer <session>`, the session `pair` returned
- * for the one-time pairing token. An attempt key is one path segment, percent-encoded.
+ * for the one-time pairing token. An eval id is one path segment, percent-encoded. An artifact
+ * path is relative to the run's folder, as the record's `FileRef.path`s are; `<runId>.json`, the
+ * one path outside it, is the run's record. The report's links point at the artifacts route.
  */
 
-import type {
-  ArtifactLevel,
-  AttemptRecord,
-  CellRecord,
-  EvalEntry,
-  FileRef,
-  HistoryEntry,
-  RunRecord,
-} from '../history/types.ts'
-import type { CellEffort } from './effort.ts'
+import type { HistoryEntry } from '../history/types.ts'
 import { parseTranscript, type TranscriptLine } from './model.ts'
+import type { EvalDetail, REPORT_VERSION, RunReportIndex } from './report/split.ts'
 
 /** The routes' version, in their prefix: a breaking change to a route or shape bumps it. */
 export const STUDIO_API_VERSION = 1
-/** The run view's version: it moves when `buildRunView` derives something new or differently. */
-export const VIEW_VERSION = 1
 export const STUDIO_API_PREFIX = `/api/v${STUDIO_API_VERSION}`
 
 export const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}$/
@@ -45,19 +37,17 @@ export type StudioRoutes = {
   pair: PairResponse
   handshake: Handshake
   runs: RunList
-  run: RunView
-  attempt: AttemptView
-  transcript: AttemptTrace
-  artifact: Uint8Array
+  report: RunReportIndex
+  eval: EvalDetail
+  artifact: Uint8Array | TranscriptPage
 }
 export type StudioRoute = keyof StudioRoutes
 export const STUDIO_ROUTES: readonly StudioRoute[] = [
   'pair',
   'handshake',
   'runs',
-  'run',
-  'attempt',
-  'transcript',
+  'report',
+  'eval',
   'artifact',
 ]
 
@@ -70,10 +60,11 @@ export type Page<T> = { items: T[]; next: Cursor | null }
 export type PairRequest = { token: string }
 export type PairResponse = { session: string; handshake: Handshake }
 
-/** What a server of runs is and serves, so a client knows which routes and view it can read. */
+/** What a server of runs is and serves, so a client knows which routes and report it can read. */
 export type Handshake = {
   api: typeof STUDIO_API_VERSION
-  viewVersion: number
+  /** The newest `RunReport.reportVersion` the server answers with. */
+  reportVersion: typeof REPORT_VERSION
   /** The reeval that serves the runs. */
   reeval: string
   project: string
@@ -85,96 +76,8 @@ export type Handshake = {
 export type RunListItem = HistoryEntry
 export type RunList = Page<RunListItem>
 
-/** One run, as a page draws it: the record's run-level fields and every eval's cells and attempts. */
-export type RunView = {
-  viewVersion: number
-  header: RunListItem
-  stack: RunRecord['stack']
-  config: RunRecord['config']
-  plan: RunRecord['plan']
-  profile: RunRecord['profile']
-  environments: RunRecord['environments']
-  artifacts: ArtifactLevel
-  errors: string[]
-  evals: EvalView[]
-}
-
-export type EvalView = Pick<
-  EvalEntry,
-  | 'key'
-  | 'id'
-  | 'slug'
-  | 'name'
-  | 'file'
-  | 'group'
-  | 'tags'
-  | 'outcome'
-  | 'passRate'
-  | 'fingerprint'
-  | 'compare'
-  | 'cases'
-  | 'lifts'
-> & {
-  /** Every check label the eval's attempts asserted, in first-seen order. */
-  checks: string[]
-  cells: CellView[]
-  attempts: AttemptSummary[]
-}
-
-export type CellView = CellRecord & {
-  /** Tool calls, agent time, tokens and cost over the cell's attempts; null with none that ran. */
-  effortStats: CellEffort | null
-}
-
-/** Facts read from an attempt's transcript; null on the attempt when it wasn't kept. */
-export type AttemptFacts = {
-  toolCalls: number
-  byClass: Record<'context' | 'dependency' | 'web' | 'verify' | 'workspace', number>
-  skills: Array<{
-    skill: string
-    source: string
-    reads: number
-    /** The transcript line of its first use. */
-    firstLine: number
-  }>
-  contextFiles: Array<{ path: string; reads: number; firstLine: number }>
-}
-
-export type AttemptSummary = Pick<
-  AttemptRecord,
-  | 'key'
-  | 'id'
-  | 'cell'
-  | 'case'
-  | 'n'
-  | 'outcome'
-  | 'error'
-  | 'startedAt'
-  | 'durationMs'
-  | 'usage'
-  | 'servedModels'
-  | 'effort'
-  | 'servedEffort'
-> & {
-  evalKey: string
-  assertions: { passed: number; failed: number }
-  judgements: { passed: number; failed: number }
-  facts: AttemptFacts | null
-  /** Whether a transcript was kept, so `transcript` answers. */
-  transcript: boolean
-}
-
-/** One attempt: its record without the turn-by-turn detail, which the transcript has. */
-export type AttemptView = Omit<AttemptRecord, 'turns' | 'context'> & {
-  evalKey: string
-  turns: number
-  contextFiles: number
-  facts: AttemptFacts | null
-  /** Every file kept for the attempt, by its path under `artifacts/`. */
-  fileRefs: FileRef[]
-}
-
-export type AttemptTrace = Page<TranscriptLine> & { totalLines: number }
+/** A page of a `.jsonl` artifact's lines; `next` and the cursor are line indexes. */
+export type TranscriptPage = Page<TranscriptLine> & { totalLines: number }
 
 // ── Paths ──────────────────────────────────────────────────────────────────────────────────
 
@@ -184,27 +87,30 @@ export const studioPaths = {
   pair: () => `${STUDIO_API_PREFIX}/pair`,
   handshake: () => `${STUDIO_API_PREFIX}/handshake`,
   runs: () => `${STUDIO_API_PREFIX}/runs`,
-  run: (runId: string) => `${STUDIO_API_PREFIX}/runs/${runId}/view`,
-  attempt: (runId: string, attemptKey: string) =>
-    `${STUDIO_API_PREFIX}/runs/${runId}/attempts/${enc(attemptKey)}`,
-  transcript: (runId: string, attemptKey: string) =>
-    `${STUDIO_API_PREFIX}/runs/${runId}/attempts/${enc(attemptKey)}/transcript`,
+  report: (runId: string) => `${STUDIO_API_PREFIX}/runs/${runId}/report`,
+  eval: (runId: string, evalId: string) =>
+    `${STUDIO_API_PREFIX}/runs/${runId}/report/evals/${enc(evalId)}`,
   artifact: (runId: string, path: string) => `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/${path}`,
 } satisfies Record<StudioRoute, (...args: string[]) => string>
+
+/** Where a run's report links point: its files at the artifacts route, its record beside them. */
+export const reportLinks = (runId: string) => ({
+  base: studioPaths.artifact(runId, ''),
+  record: studioPaths.artifact(runId, `${runId}.json`),
+})
 
 export type StudioTarget =
   | { route: 'pair' }
   | { route: 'handshake' }
   | { route: 'runs' }
-  | { route: 'run'; runId: string }
-  | { route: 'attempt'; runId: string; attemptKey: string }
-  | { route: 'transcript'; runId: string; attemptKey: string }
+  | { route: 'report'; runId: string }
+  | { route: 'eval'; runId: string; evalId: string }
   | { route: 'artifact'; runId: string; segments: string[] }
 
 /**
  * What a request's pathname (as sent, still percent-encoded) names, or null. Run ids and
  * artifact segments must match an allowlist, so `.`, `..`, empty segments, backslashes and NUL
- * never get through; an attempt key is decoded once and may hold any character but NUL.
+ * never get through; an eval id is decoded once and may hold any character but NUL.
  */
 export function parseStudioPath(pathname: string): StudioTarget | null {
   if (!pathname.startsWith(`${STUDIO_API_PREFIX}/`)) return null
@@ -217,21 +123,16 @@ export function parseStudioPath(pathname: string): StudioTarget | null {
   }
   const [area, runId, kind, ...rest] = parts as [string, string, string?, ...string[]]
   if (area !== 'runs' || !RUN_ID.test(runId)) return null
-  if (kind === 'view' && rest.length === 0) return { route: 'run', runId }
-  if (
-    kind === 'attempts' &&
-    (rest.length === 1 || (rest.length === 2 && rest[1] === 'transcript'))
-  ) {
-    let attemptKey: string
+  if (kind === 'report' && rest.length === 0) return { route: 'report', runId }
+  if (kind === 'report' && rest.length === 2 && rest[0] === 'evals') {
+    let evalId: string
     try {
-      attemptKey = decodeURIComponent(rest[0] as string)
+      evalId = decodeURIComponent(rest[1] as string)
     } catch {
       return null
     }
-    if (!attemptKey || attemptKey.includes('\0')) return null
-    return rest.length === 1
-      ? { route: 'attempt', runId, attemptKey }
-      : { route: 'transcript', runId, attemptKey }
+    if (!evalId || evalId.includes('\0')) return null
+    return { route: 'eval', runId, evalId }
   }
   if (kind === 'artifacts' && rest.length > 0 && rest.length <= MAX_DEPTH) {
     if (!rest.every((s) => SEGMENT.test(s))) return null
@@ -266,11 +167,14 @@ export function pageRuns(
   return { items, next: more ? (items.at(-1)?.runId ?? null) : null }
 }
 
-/** One page of a transcript's lines; the cursor is the index of the page's first line. */
+/**
+ * One page of a `.jsonl` file's lines, each read as a transcript line (`parseTranscript`: a line
+ * that isn't JSON is skipped); the cursor is the index of the page's first line.
+ */
 export function pageTranscript(
   transcript: string,
   query: { cursor?: string | null; limit?: string | null },
-): AttemptTrace {
+): TranscriptPage {
   const lines = parseTranscript(transcript)
   const start = Math.max(0, Number.parseInt(query.cursor ?? '0', 10) || 0)
   const end = start + pageLimit(query.limit, TRANSCRIPT_LIMIT)

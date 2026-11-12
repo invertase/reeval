@@ -185,10 +185,10 @@ async function serveStudio(cwd) {
       runs.status === 200 && !!first,
     )
     if (!first) return
-    const view = await get(`/api/v1/runs/${first}/view`)
+    const report = await get(`/api/v1/runs/${first}/report`)
     check(
-      "reeval studio serves the run's view",
-      view.status === 200 && view.json?.header?.runId === first && view.json.evals.length > 0,
+      "reeval studio serves the run's report",
+      report.status === 200 && report.json?.runId === first && report.json.evals.length > 0,
     )
   } finally {
     child.kill()

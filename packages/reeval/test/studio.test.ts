@@ -15,38 +15,39 @@ import { connect } from 'node:net'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
+import type { ShapeSchema } from '../scripts/schema/generate.ts'
+import { validate } from '../scripts/schema/validate.ts'
+import { readReportInputs } from '../src/history/report-inputs.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { handshakeTimeoutLines, timeoutRun } from '../src/studio/command.ts'
 import { startStudio } from '../src/studio/index.ts'
 import { createStudioApi } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
-  type AttemptTrace,
-  type AttemptView,
   activityLabel,
   answerRows,
   attemptAnswerRows,
-  attemptFacts,
-  buildAttemptView,
-  buildRunView,
-  cellEffort,
+  buildRunReport,
   cellJudgeRates,
   cellRows,
   cellUsage,
   collapsedJudgeLabel,
   compareView,
+  type EvalDetail,
   evalHistory,
   evalTree,
   failedJudgeLabels,
+  joinRunReport,
   judgeLabel,
   type PairResponse,
   pageLimit,
   parseStudioPath,
   parseTranscript,
+  REPORT_VERSION,
   RUN_LIST_LIMIT,
   type RunList,
-  type RunView,
-  runHeader,
+  type RunReportIndex,
+  reportLinks,
   runLead,
   runOutcome,
   runRows,
@@ -56,10 +57,11 @@ import {
   splitPatch,
   studioPaths,
   TRANSCRIPT_LIMIT,
+  type TranscriptPage,
   transcriptItems,
   uniqueJudgeLabels,
-  VIEW_VERSION,
 } from '../src/view/index.ts'
+import { readableRunReport } from '../src/view/report/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
 
@@ -884,21 +886,16 @@ const json = async <T>(res: Response) => {
 }
 
 describe('studio API contract', () => {
-  test('every path builder parses back to its route, attempt keys of any character included', () => {
-    const key = 'evals/hello.eval.ts › greet › writes hello [case 1] # fake/a b#1 100%'
+  test('every path builder parses back to its route, eval ids of any character included', () => {
+    const evalId = 'evals/hello.eval.ts › greet › writes hello [case 1] # fake/a b#1 100%'
     assert.deepEqual(parseStudioPath(studioPaths.pair()), { route: 'pair' })
     assert.deepEqual(parseStudioPath(studioPaths.handshake()), { route: 'handshake' })
     assert.deepEqual(parseStudioPath(studioPaths.runs()), { route: 'runs' })
-    assert.deepEqual(parseStudioPath(studioPaths.run(RUN)), { route: 'run', runId: RUN })
-    assert.deepEqual(parseStudioPath(studioPaths.attempt(RUN, key)), {
-      route: 'attempt',
+    assert.deepEqual(parseStudioPath(studioPaths.report(RUN)), { route: 'report', runId: RUN })
+    assert.deepEqual(parseStudioPath(studioPaths.eval(RUN, evalId)), {
+      route: 'eval',
       runId: RUN,
-      attemptKey: key,
-    })
-    assert.deepEqual(parseStudioPath(studioPaths.transcript(RUN, key)), {
-      route: 'transcript',
-      runId: RUN,
-      attemptKey: key,
+      evalId,
     })
     assert.deepEqual(
       parseStudioPath(studioPaths.artifact(RUN, 'my-eval/fake-x/1/transcript.jsonl')),
@@ -908,6 +905,10 @@ describe('studio API contract', () => {
         segments: ['my-eval', 'fake-x', '1', 'transcript.jsonl'],
       },
     )
+    assert.deepEqual(reportLinks(RUN), {
+      base: `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/`,
+      record: `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/${RUN}.json`,
+    })
     assert.deepEqual(
       [...new Set(Object.keys(studioPaths))].sort(),
       [...STUDIO_ROUTES].sort(),
@@ -915,7 +916,7 @@ describe('studio API contract', () => {
     )
   })
 
-  test('traversal, odd segments, bad run ids and unknown routes name nothing', () => {
+  test('traversal, odd segments, bad run ids, removed and unknown routes name nothing', () => {
     for (const path of [
       `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/../x`,
       `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/./x`,
@@ -924,13 +925,17 @@ describe('studio API contract', () => {
       `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/a%2fb`,
       `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts/${'a/'.repeat(9)}x`,
       `${STUDIO_API_PREFIX}/runs/${RUN}/artifacts`,
-      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/%00`,
-      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/%E0%A4%A`,
-      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/`,
-      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/x/other`,
-      `${STUDIO_API_PREFIX}/runs/not-a-run/view`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/evals/%00`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/evals/%E0%A4%A`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/evals/`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/evals/x/other`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/evals`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/report/x`,
+      `${STUDIO_API_PREFIX}/runs/not-a-run/report`,
       `${STUDIO_API_PREFIX}/runs/${RUN}`,
-      `${STUDIO_API_PREFIX}/runs/${RUN}/view/x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/view`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/x`,
+      `${STUDIO_API_PREFIX}/runs/${RUN}/attempts/x/transcript`,
       `${STUDIO_API_PREFIX}/other`,
       '/api/v2/runs',
       '/studio.json',
@@ -949,86 +954,17 @@ describe('studio API contract', () => {
   })
 })
 
-describe('buildRunView', () => {
-  test('carries every eval, cell and attempt of the record, with the header the history lists', () => {
-    for (const h of headers) {
-      const record = records.get(h.runId) as RunRecord
-      const view = buildRunView(record, { recorded: h.recorded })
-      assert.equal(view.viewVersion, VIEW_VERSION)
-      assert.deepEqual(view.header, runHeader(record, h.recorded))
-      assert.deepEqual(view.header, h)
-      assert.deepEqual(
-        view.evals.map((e) => [e.key, e.cells.map((c) => c.key), e.attempts.map((a) => a.key)]),
-        record.evals.map((e) => [e.key, e.cells.map((c) => c.key), e.attempts.map((a) => a.key)]),
-      )
-      for (const e of view.evals) {
-        const source = record.evals.find((x) => x.key === e.key) as RunRecord['evals'][number]
-        for (const c of e.cells) assert.deepEqual(c.effortStats, cellEffort(source, c.key))
-        for (const a of e.attempts) {
-          const rec = source.attempts.find((x) => x.key === a.key)
-          assert.equal(a.evalKey, e.key)
-          assert.equal(a.facts, null, 'no facts without transcripts')
-          assert.equal(a.transcript, !!rec?.files.transcript)
-          assert.equal(a.assertions.passed + a.assertions.failed, rec?.assertions?.length ?? 0)
-          assert.equal(a.judgements.passed + a.judgements.failed, rec?.judgements.length)
-        }
-      }
-      const passed = view.evals.flatMap((e) => e.attempts).filter((a) => a.outcome === 'pass')
-      assert.equal(passed.length, record.summary.pass)
-    }
-  })
+/** The run's report as the server serves it: its index and every eval's detail, joined. */
+async function servedReport(get: (path: string) => Response | Promise<Response>, runId: string) {
+  const index = await json<RunReportIndex>(await get(studioPaths.report(runId)))
+  const details: EvalDetail[] = []
+  for (const e of index.evals)
+    details.push(await json<EvalDetail>(await get(studioPaths.eval(runId, e.id))))
+  return { index, details, report: joinRunReport(index, details) }
+}
 
-  test('is pure: the same record gives the same view and is left as it was', () => {
-    const record = records.get(headers[2]?.runId as string) as RunRecord
-    const before = JSON.stringify(record)
-    const first = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-    const transcripts = new Map([[first.key, '']])
-    const a = buildRunView(record, { recorded: true, transcripts })
-    const b = buildRunView(structuredClone(record), { recorded: true, transcripts })
-    assert.deepEqual(a, b)
-    assert.equal(JSON.stringify(record), before)
-    assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'the view is plain JSON')
-    assert.deepEqual(a.evals[0]?.attempts[0]?.facts, attemptFacts(record, first, ''))
-    assert.equal(a.evals[0]?.attempts[0]?.facts?.toolCalls, 0)
-    assert.equal(a.evals[0]?.attempts[1]?.facts ?? null, null)
-  })
-
-  test("facts classify the transcript's calls, as `reeval query` does, from the record alone", () => {
-    const record = records.get(headers[0]?.runId as string) as RunRecord
-    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-    const tool = (input: object, name = 'read') =>
-      JSON.stringify({ type: 'tool', tool: name, input, ok: true })
-    const transcript = [
-      JSON.stringify({ type: 'text', text: 'start' }),
-      tool({ path: '.claude/skills/s/SKILL.md' }),
-      tool({ command: 'npm test' }, 'shell'),
-      'not json',
-      tool({ path: '.claude/skills/s/SKILL.md' }),
-    ].join('\n')
-    const facts = attemptFacts(record, attempt, transcript)
-    assert.deepEqual(facts, {
-      toolCalls: 3,
-      byClass: { context: 2, dependency: 0, web: 0, verify: 1, workspace: 0 },
-      skills: [{ skill: 's', source: 'skill-dir', reads: 2, firstLine: 2 }],
-      contextFiles: [],
-    })
-    const view = buildAttemptView(record, attempt.key, transcript)
-    assert.deepEqual(view?.facts, facts)
-  })
-
-  test("an attempt's view drops turns and context and lists every file its record names", () => {
-    const record = records.get(headers[0]?.runId as string) as RunRecord
-    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-    const view = buildAttemptView(record, attempt.key)
-    assert.ok(view)
-    assert.equal('context' in view, false)
-    assert.equal(view.turns, attempt.turns.length)
-    assert.equal(view.contextFiles, attempt.context.length)
-    assert.ok(view.fileRefs.some((f) => f.path === attempt.files.transcript?.path))
-    assert.equal(new Set(view.fileRefs.map((f) => f.path)).size, view.fileRefs.length)
-    assert.equal(buildAttemptView(record, 'no such attempt'), null)
-  })
-})
+const reportSchema = (): ShapeSchema =>
+  JSON.parse(readFileSync(join(pkgRoot, 'schema/run-report.schema.json'), 'utf8'))
 
 describe('studio data server', () => {
   test('the pairing token trades once for a session, and only the right one does', async () => {
@@ -1051,7 +987,7 @@ describe('studio data server', () => {
     assert.notEqual(body.session, PAIRING)
     assert.deepEqual(body.handshake, {
       api: STUDIO_API_VERSION,
-      viewVersion: VIEW_VERSION,
+      reportVersion: REPORT_VERSION,
       reeval: 'test',
       project: 'studio',
       routes: [...STUDIO_ROUTES],
@@ -1090,13 +1026,17 @@ describe('studio data server', () => {
 
   test('every route but pair needs the session; the pairing token is not one', async () => {
     const api = await paired()
-    const key = records.get(headers[0]?.runId as string)?.evals[0]?.attempts[0]?.key as string
+    const runId = headers[0]?.runId as string
+    const record = records.get(runId) as RunRecord
+    const transcript = record.evals[0]?.attempts[0]?.files.transcript?.path as string
     const routes = [
       studioPaths.handshake(),
       studioPaths.runs(),
-      studioPaths.run(headers[0]?.runId as string),
-      studioPaths.attempt(headers[0]?.runId as string, key),
-      studioPaths.transcript(headers[0]?.runId as string, key),
+      studioPaths.report(runId),
+      studioPaths.eval(runId, record.evals[0]?.key as string),
+      studioPaths.artifact(runId, `${runId}.json`),
+      studioPaths.artifact(runId, transcript),
+      `${studioPaths.artifact(runId, transcript)}?limit=1`,
     ]
     for (const path of routes) {
       assert.equal((await api.get(path)).status, 200, path)
@@ -1166,7 +1106,7 @@ describe('studio data server', () => {
     assert.equal((await api.call(studioPaths.pair())).status, 405)
   })
 
-  test('serves runs newest first a page at a time, and each run as buildRunView builds it', async () => {
+  test('serves runs newest first a page at a time', async () => {
     const api = await paired()
     const all = await json<RunList>(await api.get(studioPaths.runs()))
     assert.deepEqual(
@@ -1181,93 +1121,147 @@ describe('studio data server', () => {
     )
     assert.deepEqual([...first.items, ...rest.items], all.items)
     assert.equal(rest.next, null)
+  })
 
+  test("serves each run's report as buildRunReport builds it, an index and a detail per eval", async () => {
+    const api = await paired()
+    const schema = reportSchema()
     for (const h of headers) {
-      const view = await json<RunView>(await api.get(studioPaths.run(h.runId)))
-      const record = records.get(h.runId) as RunRecord
-      const withoutFacts = buildRunView(record, { recorded: h.recorded })
-      const strip = (v: RunView) => ({
-        ...v,
-        evals: v.evals.map((e) => ({
-          ...e,
-          attempts: e.attempts.map((a) => ({ ...a, facts: null })),
-        })),
+      const { index, details, report } = await servedReport(api.get, h.runId)
+      const folder = h.recorded ? source.historyDir : join(dir, '.reeval/runs')
+      const built = buildRunReport(records.get(h.runId) as RunRecord, {
+        ...(await readReportInputs(join(folder, h.runId))),
+        links: reportLinks(h.runId),
       })
-      assert.deepEqual(strip(view), JSON.parse(JSON.stringify(withoutFacts)))
-      for (const a of view.evals.flatMap((e) => e.attempts)) {
-        assert.equal(
-          a.facts !== null,
-          a.transcript,
-          `${a.key}: facts wherever a transcript was kept`,
-        )
-      }
+      assert.deepEqual(report, JSON.parse(JSON.stringify(built)), h.runId)
+      assert.equal(index.reportVersion, REPORT_VERSION)
+      assert.equal('attempts' in index, false, 'the attempt rows are in the details')
+      assert.deepEqual(
+        details.map((d) => d.eval.id),
+        (records.get(h.runId) as RunRecord).evals.map((e) => e.key),
+      )
+      assert.deepEqual(readableRunReport(report), report, `${h.runId} reads back as it is`)
+      assert.deepEqual(validate(schema, report), [], h.runId)
+      assert.equal(report.provenance.record, studioPaths.artifact(h.runId, `${h.runId}.json`))
     }
-    assert.equal((await api.get(studioPaths.run('20200101T000000Z_abc1234_x_k3f9'))).status, 404)
   })
 
-  test("each attempt's facts are the tool calls history.db classifies", async () => {
+  test("every link the report makes into the run's files is served", async () => {
     const api = await paired()
     const runId = headers[0]?.runId as string
-    const r = await runCli(dir, [
-      'query',
-      `SELECT attempt_key, class, COUNT(*) AS n FROM tool_calls WHERE run_id = '${runId}' GROUP BY 1, 2`,
-      '--json',
+    const { report } = await servedReport(api.get, runId)
+    const record = await json<RunRecord>(await api.get(report.provenance.record as string))
+    assert.equal(record.runId, runId)
+    const links = report.attempts.flatMap((a) => [
+      a.links.transcript,
+      a.links.diff,
+      ...a.links.captures.map((c) => c.href),
     ])
-    assert.equal(r.code, 0, r.stderr)
-    const rows = JSON.parse(r.stdout) as Array<{ attempt_key: string; class: string; n: number }>
-    assert.ok(rows.length > 0, `the fake agent made tool calls: ${r.stdout}`)
-    const view = await json<RunView>(await api.get(studioPaths.run(runId)))
-    for (const a of view.evals.flatMap((e) => e.attempts)) {
-      const mine = rows.filter((row) => row.attempt_key === a.key)
-      for (const [cls, n] of Object.entries(a.facts?.byClass ?? {})) {
-        assert.equal(n, mine.find((row) => row.class === cls)?.n ?? 0, `${a.key} ${cls}`)
-      }
+    const transcripts = report.attempts.flatMap((a) => (a.links.transcript ? [a] : []))
+    assert.equal(transcripts.length, report.attempts.length, "artifacts: 'all' keeps every one")
+    for (const href of links) {
+      if (href) assert.equal((await api.get(href)).status, 200, href)
+    }
+    for (const a of transcripts) {
+      const href = a.links.transcript as string
+      const page = await json<TranscriptPage>(await api.get(`${href}?cursor=0`))
+      const raw = await (await api.get(href)).text()
+      assert.deepEqual(page.items, JSON.parse(JSON.stringify(parseTranscript(raw))), a.key)
+      assert.equal(page.totalLines, page.items.length)
     }
   })
 
-  test('serves an attempt, its transcript a page at a time, and its files as untrusted bytes', async () => {
+  test('an unknown run, eval or file is a 404, as are the removed view routes', async () => {
     const api = await paired()
     const runId = headers[0]?.runId as string
-    const record = records.get(runId) as RunRecord
-    const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-    const view = await json<AttemptView>(await api.get(studioPaths.attempt(runId, attempt.key)))
-    assert.equal(view.key, attempt.key)
-    assert.ok(view.facts)
-    assert.equal(
-      (await api.get(studioPaths.attempt(runId, `${attempt.key}0`))).status,
-      404,
-      'an unknown attempt',
-    )
+    const unknown = '20200101T000000Z_abc1234_x_k3f9'
+    const key = records.get(runId)?.evals[0]?.key as string
+    for (const path of [
+      studioPaths.report(unknown),
+      studioPaths.eval(unknown, key),
+      studioPaths.eval(runId, `${key}0`),
+      studioPaths.eval(runId, 'no such eval'),
+      studioPaths.artifact(unknown, 'summary.md'),
+      studioPaths.artifact(runId, 'no-such-file.txt'),
+      studioPaths.artifact(runId, `${unknown}.json`),
+      `${STUDIO_API_PREFIX}/runs/${runId}/view`,
+      `${STUDIO_API_PREFIX}/runs/${runId}/attempts/${encodeURIComponent(key)}`,
+      `${STUDIO_API_PREFIX}/runs/${runId}/attempts/${encodeURIComponent(key)}/transcript`,
+    ]) {
+      assert.equal((await api.get(path)).status, 404, path)
+    }
+  })
 
-    const lines = parseTranscript(
-      await readFile(
-        join(source.historyDir, runId, attempt.files.transcript?.path as string),
-        'utf8',
-      ),
-    )
-    const whole = await json<AttemptTrace>(
-      await api.get(studioPaths.transcript(runId, attempt.key)),
-    )
-    assert.deepEqual(whole, {
-      items: JSON.parse(JSON.stringify(lines)),
+  test('serves files as untrusted bytes, and a JSONL file a page at a time when asked', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reeval-studio-jsonl-'))
+    await cp(source.historyDir, join(root, 'evals/.history'), { recursive: true })
+    const runId = headers[0]?.runId as string
+    const runDir = join(root, 'evals/.history', runId)
+    const line = (n: number) => JSON.stringify({ type: 'text', turn: 1, text: `line ${n}` })
+    const many = TRANSCRIPT_LIMIT.max + 500
+    const files = {
+      'empty.jsonl': '',
+      'unterminated.jsonl': `${line(0)}\n${line(1)}`,
+      'many.jsonl': `${Array.from({ length: many }, (_, i) => line(i)).join('\n')}\n`,
+      'wide.jsonl': `${JSON.stringify({ type: 'text', turn: 1, text: 'x'.repeat(256 * 1024) })}\n${line(1)}\n`,
+      'mixed.jsonl': `not json\n\n${line(0)}\n{"no":"type"}\n${line(1)}\n`,
+    }
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(runDir, name), text)
+    const api = await paired({ root, historyDir: join(root, 'evals/.history'), scratch: false })
+    const page = async (name: string, query: string) =>
+      json<TranscriptPage>(await api.get(`${studioPaths.artifact(runId, name)}?${query}`))
+
+    for (const [name, text] of Object.entries(files)) {
+      const res = await api.get(studioPaths.artifact(runId, name))
+      assert.equal(res.status, 200, name)
+      assert.equal(await res.text(), text, `${name}: the bytes without a cursor or limit`)
+      assert.equal(res.headers.get('content-security-policy'), 'sandbox')
+      assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8')
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff')
+    }
+
+    assert.deepEqual(await page('empty.jsonl', 'cursor=0'), {
+      items: [],
       next: null,
-      totalLines: lines.length,
+      totalLines: 0,
     })
-    const page = await json<AttemptTrace>(
-      await api.get(`${studioPaths.transcript(runId, attempt.key)}?limit=1&cursor=1`),
+    const unterminated = await page('unterminated.jsonl', 'limit=5')
+    assert.deepEqual(
+      unterminated.items.map((l) => (l as { text: string }).text),
+      ['line 0', 'line 1'],
+      'the last line counts without its newline',
     )
-    assert.deepEqual(page.items, whole.items.slice(1, 2))
-    assert.equal(page.next, lines.length > 2 ? '2' : null)
+    assert.equal(unterminated.next, null)
 
-    const file = await api.get(
-      studioPaths.artifact(runId, attempt.files.transcript?.path as string),
+    const clamped = await page('many.jsonl', 'limit=100000')
+    assert.equal(clamped.items.length, TRANSCRIPT_LIMIT.max, 'the limit clamps to the maximum')
+    assert.equal(clamped.next, String(TRANSCRIPT_LIMIT.max))
+    assert.equal(clamped.totalLines, many)
+    const rest = await page('many.jsonl', `limit=100000&cursor=${clamped.next}`)
+    assert.equal(rest.items.length, many - TRANSCRIPT_LIMIT.max)
+    assert.equal(rest.next, null)
+    assert.equal((await page('many.jsonl', 'cursor=0')).items.length, TRANSCRIPT_LIMIT.default)
+    assert.deepEqual(await page('many.jsonl', `cursor=${many + 10}`), {
+      items: [],
+      next: null,
+      totalLines: many,
+    })
+    assert.equal((await page('many.jsonl', 'cursor=abc&limit=1')).items.length, 1)
+    assert.equal((await page('many.jsonl', 'cursor=abc&limit=1')).next, '1')
+
+    const wide = await page('wide.jsonl', 'limit=1')
+    assert.equal((wide.items[0] as { text: string }).text.length, 256 * 1024)
+    assert.equal(wide.next, '1')
+    assert.deepEqual(
+      (await page('mixed.jsonl', 'limit=10')).items.map((l) => (l as { text: string }).text),
+      ['line 0', 'line 1'],
+      'lines that are not transcript lines are skipped',
     )
-    assert.equal(file.status, 200)
-    assert.equal(file.headers.get('content-security-policy'), 'sandbox')
-    assert.equal(file.headers.get('content-type'), 'application/json; charset=utf-8')
-    assert.equal(file.headers.get('x-content-type-options'), 'nosniff')
+
     const summary = await api.get(studioPaths.artifact(runId, 'summary.md'))
     assert.equal(summary.headers.get('content-type'), 'text/plain; charset=utf-8')
+    const md = await api.get(`${studioPaths.artifact(runId, 'summary.md')}?limit=1`)
+    assert.equal(await md.text(), readFileSync(join(runDir, 'summary.md'), 'utf8'))
   })
 
   test('traversal, encoded tricks and symlinks out of a run never reach a file', async () => {
@@ -1275,7 +1269,12 @@ describe('studio data server', () => {
     await cp(source.historyDir, join(root, 'evals/.history'), { recursive: true })
     const runId = headers[0]?.runId as string
     writeFileSync(join(root, 'secret.txt'), 'secret')
+    writeFileSync(join(root, 'evals/secret.jsonl'), '{"type":"text","text":"secret"}\n')
     await symlink(join(root, 'secret.txt'), join(root, 'evals/.history', runId, 'leak.txt'))
+    await symlink(
+      join(root, 'evals/secret.jsonl'),
+      join(root, 'evals/.history', runId, 'leak.jsonl'),
+    )
     const linked = '20260101T000000Z_abc1234_x_k3f9'
     await symlink(join(root, 'evals/.history', runId), join(root, 'evals/.history', linked))
     writeFileSync(
@@ -1285,17 +1284,73 @@ describe('studio data server', () => {
     const api = await paired({ root, historyDir: join(root, 'evals/.history'), scratch: false })
     for (const path of [
       studioPaths.artifact(runId, 'leak.txt'),
+      studioPaths.artifact(runId, 'leak.jsonl'),
+      `${studioPaths.artifact(runId, 'leak.jsonl')}?limit=1`,
       studioPaths.artifact(linked, 'summary.md'),
+      studioPaths.artifact(runId, `${linked}.json`),
       `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/..%2f..%2fsecret.txt`,
       `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/%2e%2e/%2e%2e/secret.txt`,
       `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/../../secret.txt`,
+      `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/../secret.jsonl?limit=1`,
       `${STUDIO_API_PREFIX}/runs/${runId}.json/artifacts/x`,
     ]) {
       const res = await api.get(path)
       assert.equal(res.status, 404, path)
       assert.doesNotMatch(await res.text(), /secret/, path)
     }
+    const climbing = await api.get(
+      `${STUDIO_API_PREFIX}/runs/${runId}/report/evals/..%2fsecret.txt`,
+    )
+    assert.equal(climbing.status, 404, 'an eval id is a key, never a path')
+    assert.equal(await climbing.text(), `No eval ../secret.txt in ${runId}`)
     assert.equal((await api.get(studioPaths.artifact(runId, 'summary.md'))).status, 200)
+  })
+
+  test("a run recorded at evidence links only the transcripts it kept: a passing attempt's is null", async () => {
+    const p = await project('studio-evidence', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig({
+        harness: agent,
+        extra: "history: { artifacts: 'evidence' },",
+      }),
+      'evals/hello.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes hello', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f hello.txt')).toSucceed()
+})
+evaluate('writes bye', async (c) => {
+  await c.send('write bye.txt')
+  await expect(c.exec('test -f bye.txt')).toSucceed()
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--record'])
+    assert.equal(r.code, 1, r.stderr + r.stdout)
+    const src = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: false }
+    const [h] = await listHeaders(src)
+    assert.ok(h)
+    const api = await paired(src)
+    const { report } = await servedReport(api.get, h.runId)
+    assert.equal(report.provenance.artifacts, 'evidence')
+    assert.deepEqual(validate(reportSchema(), report), [])
+    assert.deepEqual(readableRunReport(report), report)
+    const outcomes = report.attempts.map((a) => [
+      a.evalId.split(' › ').at(-1),
+      a.outcome,
+      !!a.links.transcript,
+    ])
+    assert.deepEqual(outcomes, [
+      ['writes hello', 'pass', false],
+      ['writes bye', 'fail', true],
+    ])
+    const failed = report.attempts.find((a) => a.outcome === 'fail')?.links.transcript as string
+    const page = await json<TranscriptPage>(
+      await api.get(`${failed}?limit=${TRANSCRIPT_LIMIT.max}`),
+    )
+    assert.ok(
+      page.items.some((l) => l.type === 'prompt'),
+      'the failing transcript pages',
+    )
   })
 })
 

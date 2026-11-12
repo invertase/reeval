@@ -3,11 +3,12 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createStudioApi } from '../../src/studio/server.ts'
 import type { StudioSource } from '../../src/studio/source.ts'
-import { type PairResponse, type RunList, type RunView, studioPaths } from '../../src/view/api.ts'
+import { type PairResponse, type RunList, studioPaths } from '../../src/view/api.ts'
+import type { EvalDetail, RunReportIndex } from '../../src/view/report/core.ts'
 
 /**
  * Everything `reeval studio`'s data server answers for a project's runs (the run list, each run's
- * view, and each attempt with its transcript), fetched as a paired page would and written under
+ * report index, each eval's detail and each transcript it links), fetched as a paired page would and written under
  * `out`, one file per response, so a test can search what the studio shows.
  */
 export async function writeStudioResponses(source: StudioSource, out: string): Promise<void> {
@@ -39,10 +40,12 @@ export async function writeStudioResponses(source: StudioSource, out: string): P
   mkdirSync(out, { recursive: true })
   const runs = (await get(`${studioPaths.runs()}?limit=100`)) as RunList
   for (const { runId } of runs.items) {
-    const view = (await get(studioPaths.run(runId))) as RunView
-    for (const a of view.evals.flatMap((e) => e.attempts)) {
-      await get(studioPaths.attempt(runId, a.key))
-      await get(`${studioPaths.transcript(runId, a.key)}?limit=2000`, true)
+    const index = (await get(studioPaths.report(runId), true)) as RunReportIndex | null
+    for (const e of index?.evals ?? []) {
+      const detail = (await get(studioPaths.eval(runId, e.id))) as EvalDetail
+      for (const a of detail.attempts) {
+        if (a.links.transcript) await get(`${a.links.transcript}?limit=2000`, true)
+      }
     }
   }
 }
