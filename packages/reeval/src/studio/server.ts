@@ -10,7 +10,6 @@ import {
   type Handshake,
   type PairResponse,
   pageRuns,
-  pageTranscript,
   parseStudioPath,
   reportLinks,
   STUDIO_API_VERSION,
@@ -19,6 +18,7 @@ import {
 } from '../view/api.ts'
 import { buildRunReport } from '../view/report/build.ts'
 import { REPORT_VERSION, splitRunReport } from '../view/report/split.ts'
+import { pageJsonl } from './jsonl.ts'
 import { listHeaders, readRun, resolveFile, type StudioSource } from './source.ts'
 
 export type StudioApiOptions = {
@@ -166,7 +166,7 @@ export function createStudioApi(options: StudioApiOptions) {
       if (file.endsWith('.jsonl') && ('cursor' in query || 'limit' in query)) {
         const range = transcriptQuery(query)
         if (typeof range === 'string') return c.text(range, 400)
-        return c.json(pageTranscript(await readFile(file, 'utf8'), range))
+        return c.json(await pageJsonl(file, range))
       }
       return sendFile(c, file, artifactType(file))
     }

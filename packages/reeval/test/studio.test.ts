@@ -41,6 +41,7 @@ import {
   judgeLabel,
   type PairResponse,
   pageLimit,
+  pageTranscript,
   parseStudioPath,
   parseTranscript,
   REPORT_VERSION,
@@ -1206,6 +1207,7 @@ describe('studio data server', () => {
       'many.jsonl': `${Array.from({ length: many }, (_, i) => line(i)).join('\n')}\n`,
       'wide.jsonl': `${JSON.stringify({ type: 'text', turn: 1, text: 'x'.repeat(256 * 1024) })}\n${line(1)}\n`,
       'mixed.jsonl': `not json\n\n${line(0)}\n{"no":"type"}\n${line(1)}\n`,
+      'crlf.jsonl': `${line(0)}\r\n${line(1)}\r\n\r\n`,
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(runDir, name), text)
     const api = await paired({ root, historyDir: join(root, 'evals/.history'), scratch: false })
@@ -1280,6 +1282,35 @@ describe('studio data server', () => {
       ['line 0', 'line 1'],
       'lines that are not transcript lines are skipped',
     )
+
+    for (const [name, text] of Object.entries(files)) {
+      for (const query of ['cursor=0', 'limit=1', `cursor=${TRANSCRIPT_LIMIT.max}&limit=7`]) {
+        const range = transcriptQuery(Object.fromEntries(new URLSearchParams(query)))
+        assert.ok(typeof range !== 'string')
+        assert.deepEqual(
+          await page(name, query),
+          JSON.parse(JSON.stringify(pageTranscript(text, range))),
+          `${name}?${query}: the streamed page is pageTranscript's`,
+        )
+      }
+    }
+    const readFileOf = fsp.readFile
+    mock.method(fsp, 'readFile', (async (path: string, ...rest: []) => {
+      if (String(path).endsWith('.jsonl')) throw new Error('a paged .jsonl file was read whole')
+      return readFileOf(path, ...rest)
+    }) as typeof fsp.readFile)
+    syncBuiltinESMExports()
+    try {
+      const tail = await page('many.jsonl', `cursor=${many - 3}`)
+      assert.deepEqual(
+        tail.items.map((l) => (l as { text: string }).text),
+        [`line ${many - 3}`, `line ${many - 2}`, `line ${many - 1}`],
+      )
+      assert.equal(tail.totalLines, many)
+    } finally {
+      mock.restoreAll()
+      syncBuiltinESMExports()
+    }
 
     const summary = await api.get(studioPaths.artifact(runId, 'summary.md'))
     assert.equal(summary.headers.get('content-type'), 'text/plain; charset=utf-8')
