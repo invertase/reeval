@@ -69,7 +69,7 @@ export const HARNESS_PACKAGES: Record<
   },
   opencode: {
     name: '@reeval/harness-opencode',
-    version: '0.2.17',
+    version: '0.2.18',
     bootstrap: {
       name: 'OpenCode',
       cli: 'opencode',

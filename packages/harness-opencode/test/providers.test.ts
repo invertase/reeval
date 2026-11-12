@@ -112,7 +112,11 @@ test("the main providers' keys go where OpenCode sends them", () => {
     vercel: {
       env: 'AI_GATEWAY_API_KEY',
       headers: bearer,
-      posts: ['ai-gateway.vercel.sh/v1/messages'],
+      posts: [
+        'ai-gateway.vercel.sh/v1/chat/completions',
+        'ai-gateway.vercel.sh/v1/messages',
+        'ai-gateway.vercel.sh/v1/responses',
+      ],
     },
     agentrouter: {
       env: 'AGENTROUTER_API_KEY',
