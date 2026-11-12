@@ -6,14 +6,17 @@ import { closeSync, fstatSync, mkdirSync, openSync, readSync, writeSync } from '
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import type { EngineOptions } from './engine/node.ts'
 import { redactJson, redactSecrets, stripCredentials } from './redact.ts'
 import { processAlive } from './resume.ts'
+import type { MachineHoldings } from './sandbox/machine-service.ts'
 import { formatDuration } from './text.ts'
 import type { PrepareTargetView, ReevalEvent, Renderer } from './ui/events.ts'
 import {
   EVENTS_SCHEMA_VERSION,
   type RunEventLine,
   type RunEventsHeader,
+  type RunEventsHeartbeat,
   readableEventLine,
 } from './view/events.ts'
 
@@ -32,6 +35,10 @@ const POST_TIMEOUT_MS = 10_000
 
 /** A run writes a heartbeat line in each interval this long that it wrote nothing else in. */
 export const HEARTBEAT_MS = 5_000
+/** How often, while the eval files run, a heartbeat line names the attempts in progress. */
+export const ATTEMPTS_HEARTBEAT_MS = 30_000
+/** The intervals `REEVAL_EVENTS_HEARTBEAT` takes besides 0. */
+export const ATTEMPTS_HEARTBEAT_RANGE = { min: 1_000, max: 600_000, says: '1s to 10m' }
 /** How long `reeval attach` hears nothing from a run that writes heartbeats before it says so. */
 export const STALL_MS = 20_000
 /** How long it hears nothing before it stops following the run as lost. */
@@ -98,14 +105,61 @@ export function notEventStream(file: string): string | null {
 
 export type EventStream = {
   write(event: ReevalEvent): void
+  /** Writes a heartbeat line naming the attempts in progress; no renderer draws it. */
+  heartbeat(beat: AttemptsHeartbeat): void
   /** Writes the exit line; resolves once the last POST is sent (or gives up). */
   end(code: number): Promise<void>
 }
 
+/** What an attempts heartbeat line carries beside its type and time. */
+export type AttemptsHeartbeat = Required<Pick<RunEventsHeartbeat, 'attempts' | 'machines'>> &
+  Pick<RunEventsHeartbeat, 'done'>
+
+/** The run's attempts heartbeat: how often, and where each beat goes. */
+export type AttemptsBeat = { ms: number; send: (beat: AttemptsHeartbeat) => void }
+
+/** The engine's heartbeat for `beat`, with each attempt's machine and the machines `pools` hold. */
+export function beatWith(
+  beat: AttemptsBeat,
+  pools: { holdings(): MachineHoldings },
+): NonNullable<EngineOptions['heartbeat']> {
+  return {
+    ms: beat.ms,
+    beat: (keys, done) => {
+      const { machines, leases } = pools.holdings()
+      beat.send({
+        attempts: keys.map((key) => {
+          const machine = leases.get(key)
+          return machine === undefined ? { key } : { key, machine }
+        }),
+        machines,
+        ...(done ? { done: true as const } : {}),
+      })
+    },
+  }
+}
+
+/** The waits before each try again of a batch the target failed, the last repeated. */
+const RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000]
+/** The most of the queue one POST carries; a longer line goes alone. */
+const BATCH_BYTES = 1024 * 1024
+/** The most the queue holds while the target fails; past it, its oldest lines go. */
+const QUEUE_BYTES = 32 * 1024 * 1024
+
+/** Statuses that refuse a batch for good: it's dropped (or, for 413, split) and the rest go on. */
+const refusesBatch = (status: number) =>
+  status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429
+
+type Queued = { text: string; bytes: number; beat: boolean }
+
 /**
  * Opens a run's stream: writes `file` (a resume adds its lines after the run's) and POSTs
- * batches of lines to `url`, in order, one request at a time. A failing target is dropped with one
- * warning; the run goes on. Until the exit line, a quiet stream gets a heartbeat line.
+ * batches of lines to `url`, in order, one request at a time. A batch the target fails (a network
+ * error, a timeout, a 408, 425, 429 or 5xx) is tried again, after a backoff, with every line after
+ * it kept; one it refuses with another 4xx is dropped, and one too large (413) is split until a
+ * single line is, which is dropped. While the target fails, a newer attempts heartbeat replaces
+ * a queued one and, past `QUEUE_BYTES`, the oldest queued lines go, each with a warning. The run
+ * goes on. Until the exit line, a quiet stream gets a heartbeat line.
  */
 export function openEventStream(options: {
   file?: string
@@ -117,6 +171,10 @@ export function openEventStream(options: {
   fetch?: typeof fetch
   /** `HEARTBEAT_MS` unless given; 0 writes none. */
   heartbeatMs?: number
+  /** `RETRY_MS` unless given. */
+  retryMs?: readonly number[]
+  /** How long `end` waits for the queue to go; `POST_DRAIN_MS` unless given. */
+  drainMs?: number
 }): EventStream {
   let fd: number | null = null
   const refused = options.file ? notEventStream(options.file) : null
@@ -130,40 +188,108 @@ export function openEventStream(options: {
     }
   }
   const post = options.fetch ?? fetch
-  let url = options.url
-  const queue: string[] = []
-  let sending: Promise<void> | null = null
+  const url = options.url
+  const shown = url ? displayUrl(url) : ''
+  const retryMs = options.retryMs ?? RETRY_MS
+  const warn = (message: string) => options.warn(redactSecrets(message))
+  const queue: Queued[] = []
+  let queuedBytes = 0
+  /** How many of the queue's first lines the POST under way carries. */
+  let inFlight = 0
+  let sending = false
+  let retry: NodeJS.Timeout | undefined
+  let failures = 0
+  let batchBytes = BATCH_BYTES
+  /** The target is failing: the first failure warned, and dropped lines warn once until it's back. */
+  let failing = false
+  let droppedWarned = false
+  const unqueue = (index: number, count: number) => {
+    for (const q of queue.splice(index, count)) queuedBytes -= q.bytes
+  }
+  const settle = async (res: Response | Error, sent: number, bytes: number) => {
+    if (!(res instanceof Error) && res.ok) {
+      unqueue(0, sent)
+      failures = 0
+      batchBytes = BATCH_BYTES
+      if (failing) warn(`posting the event stream to ${shown} again`)
+      failing = droppedWarned = false
+      return 0
+    }
+    if (!(res instanceof Error) && refusesBatch(res.status)) {
+      const said = await serverMessage(res)
+      if (res.status === 413 && sent > 1) {
+        batchBytes = Math.max(1, Math.floor(bytes / 2))
+        return 0
+      }
+      unqueue(0, sent)
+      warn(
+        res.status === 413
+          ? `dropped a line of the event stream to ${shown}: the server refused it as too large (HTTP 413${said})`
+          : `dropped ${sent === 1 ? 'a line' : `${sent} lines`} of the event stream to ${shown}: the server refused them (HTTP ${res.status}${said})`,
+      )
+      return 0
+    }
+    const why = res instanceof Error ? res.message : `HTTP ${res.status}${await serverMessage(res)}`
+    if (!failing) warn(`posting the event stream to ${shown} failed, trying again: ${why}`)
+    failing = true
+    failures++
+    return retryMs[Math.min(failures, retryMs.length) - 1] ?? 0
+  }
   const pump = () => {
-    if (sending || !url || !queue.length) return
-    const body = queue.splice(0).join('')
-    const to = url
-    sending = post(to, {
+    if (sending || retry || !url || !queue.length) return
+    let bytes = 0
+    let sent = 0
+    while (sent < queue.length && (sent === 0 || bytes + (queue[sent]?.bytes ?? 0) <= batchBytes)) {
+      bytes += queue[sent]?.bytes ?? 0
+      sent++
+    }
+    const body = queue
+      .slice(0, sent)
+      .map((q) => q.text)
+      .join('')
+    sending = true
+    inFlight = sent
+    post(url, {
       method: 'POST',
       headers: { 'content-type': 'application/x-ndjson' },
       body,
       signal: AbortSignal.timeout(POST_TIMEOUT_MS),
     })
-      .then(async (res) => {
-        if (res.ok) return
-        const said = await serverMessage(res)
-        if (res.status === 413) {
-          throw new Error(
-            `HTTP 413: the server refused a batch as too large, likely a line over its size limit${said}`,
-          )
+      .catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))))
+      .then((res) => settle(res, sent, bytes))
+      .then((wait) => {
+        sending = false
+        inFlight = 0
+        if (wait > 0) {
+          retry = setTimeout(() => {
+            retry = undefined
+            pump()
+          }, wait)
+          retry.unref()
         }
-        throw new Error(`HTTP ${res.status}${said}`)
-      })
-      .catch((error: Error) => {
-        url = undefined
-        queue.length = 0
-        options.warn(
-          redactSecrets(`stopped posting the event stream to ${displayUrl(to)}: ${error.message}`),
-        )
-      })
-      .finally(() => {
-        sending = null
         pump()
       })
+  }
+  const enqueue = (text: string, beat: boolean) => {
+    if (beat) {
+      for (let i = queue.length - 1; i >= inFlight; i--) {
+        if (queue[i]?.beat) unqueue(i, 1)
+      }
+    }
+    queue.push({ text, bytes: Buffer.byteLength(text), beat })
+    queuedBytes += Buffer.byteLength(text)
+    let dropped = 0
+    while (queuedBytes > QUEUE_BYTES && queue.length > inFlight + 1) {
+      unqueue(inFlight, 1)
+      dropped++
+    }
+    if (dropped && !droppedWarned) {
+      droppedWarned = true
+      warn(
+        `the event stream's queue for ${shown} passed ${QUEUE_BYTES / 1024 / 1024} MiB while posting failed: dropping its oldest lines`,
+      )
+    }
+    pump()
   }
   let quiet = true
   const emit = (value: RunEventLine) => {
@@ -178,10 +304,7 @@ export function openEventStream(options: {
         fd = null
       }
     }
-    if (url) {
-      queue.push(text)
-      pump()
-    }
+    if (url) enqueue(text, value.type === 'heartbeat' && value.attempts !== undefined)
   }
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
   emit({
@@ -205,6 +328,9 @@ export function openEventStream(options: {
     write: (event) => {
       if (!ended) emit(wire(event))
     },
+    heartbeat: (beat) => {
+      if (!ended) emit({ type: 'heartbeat', at: Date.now(), ...beat })
+    },
     async end(code) {
       if (ended) return
       clearInterval(beating)
@@ -212,9 +338,13 @@ export function openEventStream(options: {
       ended = true
       if (fd !== null) closeSync(fd)
       fd = null
-      const deadline = Date.now() + POST_DRAIN_MS
-      while ((sending || queue.length) && url && Date.now() < deadline) {
-        await (sending ?? sleep(10))
+      const deadline = Date.now() + (options.drainMs ?? POST_DRAIN_MS)
+      while (queue.length && url && Date.now() < deadline) await sleep(10)
+      clearTimeout(retry)
+      if (queue.length && url) {
+        warn(
+          `gave up posting the event stream to ${shown} at exit: ${queue.length === 1 ? 'its last line' : `its last ${queue.length} lines`} didn't go`,
+        )
       }
     },
   }

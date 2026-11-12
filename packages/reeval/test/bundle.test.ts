@@ -108,7 +108,7 @@ describe('reeval bundle', () => {
     ])
     const manifest = manifestOf(entries)
     assert.equal(manifest.schemaVersion, 1)
-    assert.deepEqual(manifest.features, ['secrets-file', 'vm-layout', 'vm-waits'])
+    assert.deepEqual(manifest.features, ['heartbeat', 'secrets-file', 'vm-layout', 'vm-waits'])
     assert.equal(manifest.project, '')
     assert.equal(manifest.config, 'reeval.config.ts')
     assert.equal(manifest.git, null)

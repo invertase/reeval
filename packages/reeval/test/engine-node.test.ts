@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { basename, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { runEngine } from '../src/engine/node.ts'
 import type { Exit, Spawn, WorkerProcess } from '../src/engine/pool.ts'
 import { type FromWorker, PROTOCOL, type ToWorker, type WireTest } from '../src/engine/protocol.ts'
@@ -856,6 +857,57 @@ describe('runEngine: running', () => {
       ],
     )
     assert.equal(events.filter((e) => e.type === 'eval-end').length, 2)
+  })
+
+  test('the heartbeat beats as the files start, names the attempts in progress until each ends or its worker exits, and ends with one done beat', async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const tests = {
+      'a.eval.ts': [test0(0, 'one'), test0(1, 'two')],
+      'b.eval.ts': [test0(0, 'three')],
+    }
+    const { spawn } = fakeSpawn(async (ctl) => {
+      const file = basename(ctl.init.file) as keyof typeof tests
+      ctl.emit({ t: 'collected', tests: tests[file], harnesses: [], traits: [] })
+      if (!ctl.init.select) {
+        ctl.emit({ t: 'done' })
+        return ctl.exit()
+      }
+      if (file === 'a.eval.ts') {
+        ctl.emit({ t: 'start', index: 0, at: 1 })
+        ctl.emit({ t: 'start', index: 1, at: 1 })
+        await sleep(150)
+        ctl.emit({ t: 'result', index: 0, result: { state: 'passed', errors: [], durationMs: 0 } })
+        await sleep(150)
+        // `two` never ends: its worker dies with it in progress.
+        return ctl.exit({ code: null, signal: 'SIGKILL' })
+      }
+      await sleep(50)
+      ctl.emit({ t: 'start', index: 0, at: 1 })
+      await sleep(400)
+      ctl.emit({ t: 'result', index: 0, result: { state: 'passed', errors: [], durationMs: 0 } })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const beats: { keys: string[]; done: boolean }[] = []
+    const r = await engine(
+      { run, heartbeat: { ms: 10, beat: (keys, done) => beats.push({ keys, done }) } },
+      spawn,
+    )
+    assert.deepEqual(
+      r.evals.map((e) => e.state),
+      ['passed', 'failed', 'passed'],
+    )
+    assert.deepEqual(beats[0], { keys: [], done: false }, 'a beat as the files start')
+    assert.deepEqual(beats.at(-1), { keys: [], done: true }, 'a done beat as they end')
+    assert.equal(beats.filter((b) => b.done).length, 1)
+    const after = beats.length
+    await sleep(60)
+    assert.equal(beats.length, after, 'no heartbeat once the files have run')
+    const name = (key: string) => key.slice(key.lastIndexOf(' ') + 1)
+    const states = beats
+      .map((b) => b.keys.map(name).join(','))
+      .filter((s, i, all) => s !== all[i - 1] && s !== '')
+    assert.deepEqual(states, ['one,two', 'one,two,three', 'two,three', 'three'])
   })
 
   test('a file that fails to load on its second pass fails its selected attempts with the load error', async () => {

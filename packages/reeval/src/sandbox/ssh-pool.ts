@@ -147,6 +147,7 @@ export async function createPooledSshSandbox(
             sandbox: descriptor,
             ...(o.image !== undefined && { image: o.image }),
             runId: options.runId,
+            ...(options.attempt !== undefined && { attempt: options.attempt }),
             root: process.cwd(),
             ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
           },

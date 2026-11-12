@@ -67,6 +67,10 @@ For more information about config keys, see [Options](/reference/options). For m
 
 `REEVAL_HEARTBEAT` is the quiet wait before a still-running line. With no value, the wait is 60 seconds. `0` turns it off. A bare number is seconds, and `ms`, `s`, or `m` names the unit. Another shape stops the command. `agent` forces 0.
 
+## `REEVAL_EVENTS_HEARTBEAT`
+
+`REEVAL_EVENTS_HEARTBEAT` is how often a run's event stream gets a `heartbeat` line naming the attempts in progress. With no value, it is 30 seconds. `0` turns it off. A bare number is seconds, and `ms`, `s`, or `m` names the unit, from 1 second to 10 minutes. Another value stops the command.
+
 ## `REEVAL_DEBUG`
 
 A non-empty `REEVAL_DEBUG` prints worker output, image-prepare lines, egress-gateway lines, and the crash error. With no value, those lines stay hidden.

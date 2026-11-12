@@ -8,6 +8,8 @@ import { InfraError, RunStopped, type Sandbox } from './types.ts'
 
 export type SandboxOptions = {
   runId: string
+  /** The attempt's key, which a pooled machine's lease names. */
+  attempt?: string
   timeoutMs: number
   signal: AbortSignal
   /** Variables for every process in the sandbox. */

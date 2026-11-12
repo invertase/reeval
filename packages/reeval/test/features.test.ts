@@ -48,6 +48,7 @@ import { installId } from '../src/sandbox/id-part.ts'
 import { vmPrefix } from '../src/sandbox/tart.ts'
 import { boat, createBoat } from '../src/sandbox-boat.ts'
 import { createDaytona, daytona } from '../src/sandbox-daytona.ts'
+import type { RunEventLine } from '../src/view/events.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, project, readRun, runCli, spawnTool } from './helpers.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
@@ -1313,6 +1314,34 @@ export const features: Feature[] = [
       for (const q of creates) {
         assert.deepEqual(q.body?.labels, { 'sweep-job': 'job_42', ...runLabels(boat(), run.runId) })
       }
+    },
+  },
+  {
+    dir: 'sandbox/boat-heartbeat',
+    tiers: ['docker'],
+    env: 'vm',
+    ...onFakeBoat,
+    hostEnv: () => ({
+      BOAT_BASE_URL: boatApi.url,
+      BOAT_API_KEY: boatApi.key,
+      REEVAL_EVENTS_HEARTBEAT: '1s',
+    }),
+    args: ['--events-file', 'events.ndjson'],
+    canary: /expected 'held' to be 'released'/,
+    record: ({ run, project }) => {
+      boatCleanedUp(run)
+      const machine = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.resources?.machine.id
+      assert.match(machine ?? '', /^bx_[0-9a-f]{8}$/)
+      const beats = readFileSync(join(project, 'events.ndjson'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l) as RunEventLine)
+        .flatMap((l) => (l.type === 'heartbeat' && l.attempts ? [l] : []))
+      const holding = beats.filter((b) => b.attempts?.some((a) => a.machine === machine))
+      assert.ok(holding.length >= 1, JSON.stringify(beats))
+      for (const b of holding) assert.ok(b.machines?.includes(machine ?? ''), JSON.stringify(b))
+      assert.deepEqual(beats.at(-1)?.attempts, [])
+      assert.equal(beats.at(-1)?.done, true)
     },
   },
   {

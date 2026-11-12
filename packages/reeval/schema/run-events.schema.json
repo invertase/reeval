@@ -4346,6 +4346,21 @@
         }
       ]
     },
+    "HeartbeatAttempt": {
+      "description": "An attempt in progress, as a heartbeat names it.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The attempt's key, as its events name it.",
+          "type": "string"
+        },
+        "machine": {
+          "description": "The id of the pooled machine it holds a slot on, once it has one; absent otherwise.",
+          "type": "string"
+        }
+      },
+      "required": ["key"]
+    },
     "InstallStep": {
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
@@ -6646,6 +6661,10 @@
       "description": "The first line a `reeval run` writes to the stream: what the renderers need to draw it.",
       "type": "object",
       "properties": {
+        "attemptsHeartbeatMs": {
+          "description": "How often the run writes a heartbeat with `attempts` while its eval files run, so a reader can treat a gap past it as a stall. Absent when it writes none.",
+          "type": "number"
+        },
         "cwd": {
           "description": "The `reeval run`'s current directory from its project root, as a `/` path (`''` when it ran in the root). The paths the run prints are from that directory, so a reader turns them into the project's with it. Absent from an older reeval's streams, and when the two share no path.",
           "type": "string"
@@ -6700,11 +6719,29 @@
       ]
     },
     "RunEventsHeartbeat": {
-      "description": "Written while the stream is otherwise quiet, so a reader can tell a run that's still going from one that stalled or was lost. Streams from before it have none.",
+      "description": "Written while the stream is otherwise quiet, so a reader can tell a run that's still going from one that stalled or was lost, and, with `attempts`, every `attemptsHeartbeatMs` while the run's eval files run: once as they start, then on that interval, and once more with `done` as the last of them ends. Streams from before it have none.",
       "type": "object",
       "properties": {
         "at": {
           "type": "number"
+        },
+        "attempts": {
+          "description": "The attempts in progress, in the order they started: each started (its lease granted, its sandbox setup, turns and judging under way) and not yet ended, in a worker process that hasn't exited. Absent from the heartbeats a quiet stream gets.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeartbeatAttempt"
+          }
+        },
+        "done": {
+          "description": "The eval files have ended: `attempts` is empty, and no later line lists any.",
+          "const": true
+        },
+        "machines": {
+          "description": "The ids of every pooled machine the run holds, idle ones included, from each one's start until it's removed. With `attempts`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "type": {
           "const": "heartbeat"
