@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Assert, Same } from '../../contract/shared.ts'
+import { type Assert, dataProblem, type Same } from '../../contract/shared.ts'
 import { fillDefaults, MIGRATIONS, NewerSchemaError } from '../record.ts'
 import type {
   Arm,
@@ -666,7 +666,7 @@ export const runReportSchema: z.ZodType<RunReport> = z.strictObject({
   integrity: z.array(integrityIssueSchema),
   rollup: executiveRollupSchema.nullable(),
   roster: z.array(rosterRowSchema),
-  evals: z.array(evalSectionSchema).min(1),
+  evals: z.array(evalSectionSchema).min(1, 'must hold at least one eval'),
   actions: z.array(reportClaimSchema),
   provenance: provenanceStateSchema,
   attempts: z.array(attemptIndexRowSchema),
@@ -807,8 +807,9 @@ export const looseRunReportSchema: z.ZodType<RunReport> = loose(runReportSchema)
 /**
  * A stored `report.json` as a reader sees it: migrated to this reeval's `reportVersion`, each field
  * added after it was written read as its default (`READ_DEFAULTS['run-report']`), and fields a
- * newer reeval added, at any depth, passed through, while a missing or mistyped field fails the
- * parse. One with a `reportVersion` above this reeval's throws a `NewerSchemaError`.
+ * newer reeval added, at any depth, passed through. A missing or mistyped field throws one sentence
+ * naming it (`This report's header.title is missing: …`), and a `reportVersion` above this reeval's
+ * a `NewerSchemaError`.
  */
 export function readableRunReport(value: unknown, what = 'This report'): RunReport {
   let version = (value as { reportVersion?: unknown } | null)?.reportVersion
@@ -821,5 +822,8 @@ export function readableRunReport(value: unknown, what = 'This report'): RunRepo
     if (!migrate) break
     v = migrate(v as never)
   }
-  return looseRunReportSchema.parse(fillDefaults('run-report', v))
+  const filled = fillDefaults('run-report', v)
+  const parsed = looseRunReportSchema.safeParse(filled)
+  if (parsed.success) return parsed.data
+  throw new Error(dataProblem(looseRunReportSchema, filled, what, () => []))
 }

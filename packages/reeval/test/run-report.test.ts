@@ -361,13 +361,26 @@ describe('readableRunReport', () => {
   test('still refuses a missing or mistyped field', () => {
     const missing = golden()
     delete (missing.header as Record<string, unknown>).title
-    assert.throws(() => readableRunReport(missing))
+    assert.throws(() => readableRunReport(missing), {
+      message: "This report's header.title is missing: it must be a string",
+    })
     const mistyped = golden()
     ;(mistyped.attempts as Array<Record<string, unknown>>)[0]!.id = 7
-    assert.throws(() => readableRunReport(mistyped))
+    assert.throws(() => readableRunReport(mistyped, 'report.json'), {
+      message: "report.json's attempts[0].id must be a string (got 7)",
+    })
     const empty = golden()
     empty.evals = []
-    assert.throws(() => readableRunReport(empty), 'evals keeps its .min(1)')
+    assert.throws(() => readableRunReport(empty), {
+      message: "This report's evals must hold at least one eval (got [])",
+    })
+    const variant = golden()
+    const section = (variant.evals as Array<Record<string, unknown>>)[0]!
+    section.primary = { kind: 'future-kind' }
+    assert.throws(
+      () => readableRunReport(variant),
+      /^Error: This report's evals\[0\]\.primary[^\n]+$/,
+    )
   })
 
   test('refuses a report from a newer reeval', () => {
