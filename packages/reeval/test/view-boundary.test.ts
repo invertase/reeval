@@ -13,7 +13,7 @@ import { pkgRoot } from './helpers.ts'
  * The modules that may import zod, with every module they load and nothing else: the RunReport
  * schema behind `reeval/view/report`, whose refusals come from `src/contract/shared.ts`.
  */
-const ZOD_MODULES = ['src/view/report/schema.ts']
+const ZOD_MODULES = ['src/view/analysis-schema.ts', 'src/view/report/schema.ts']
 
 const NODE_GLOBALS = /\b(process|Buffer|require|__dirname|__filename|global|setImmediate)\b\s*[.([]/
 
@@ -127,9 +127,10 @@ test('everything src/view loads runs in any JavaScript runtime: no Node, no pack
   )
 })
 
-test('zod is allowed in the RunReport schema module only, and the reeval/view root never loads it', () => {
+test('zod is allowed in the RunReport and analysis schema modules only, and the reeval/view root never loads it', () => {
   assert.deepEqual(walk(viewModules()).problems.sort(), [
     'src/contract/shared.ts imports zod',
+    'src/view/analysis-schema.ts imports zod',
     'src/view/report/schema.ts imports zod',
   ])
   const root = walk([join(pkgRoot, 'src/view/index.ts')], ZOD_MODULES)

@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { z } from 'zod'
+import { ANALYSIS_SCHEMAS } from '../../src/view/analysis-schema.ts'
 import type { ShapeName } from '../../src/view/record.ts'
 import { REPORT_SCHEMAS } from '../../src/view/report/schema.ts'
 
@@ -45,6 +46,7 @@ export const SHAPES: PersistedShape[] = [
     file: 'src/view/analysis.ts',
     type: 'AnalysisDoc',
     where: 'A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json',
+    zod: ANALYSIS_SCHEMAS,
     versionField: 'schemaVersion',
   },
   {
