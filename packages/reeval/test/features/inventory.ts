@@ -1614,6 +1614,7 @@ export const inventory: InventoryFeature[] = [
       'harness/workspace-skills:fx',
       'harness/home-skills:fx',
       'harness/dockerfile:fx',
+      'harness/fx-mcp-env',
     ],
     plan: ['fx/fx'],
     unit: [

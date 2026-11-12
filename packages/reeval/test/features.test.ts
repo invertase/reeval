@@ -3107,6 +3107,23 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/fx-mcp-env',
+    tiers: ['real'],
+    realHarness: 'fx',
+    env: 'probed',
+    canaryEnv: 'own',
+    hostEnv: () => ({ REEVAL_FIXTURE_TOKEN: TOKEN, ...egressEnv() }),
+    canary: /to include 'word=HERON-41'/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.ok(
+        egress?.contacted.some((h) => h.host === egressTarget.host),
+        JSON.stringify(egress),
+      )
+      assert.deepEqual(egress?.blocked, [], 'nothing it needed was refused')
+    },
+  },
+  {
     dir: 'harness/goose-reports-usage',
     tiers: ['real'],
     realHarness: 'goose',

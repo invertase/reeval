@@ -50,7 +50,7 @@ To build a header from several host variables, pass `secret.template()` with a `
 headers: { authorization: secret.template('Bearer ${DOCS_TOKEN}') },
 ```
 
-An unset variable ends the attempt as an infrastructure error. For more information about brokering, see [Secrets](/configuration/environments/secrets), and for the options, see [`mcp.http()`](/reference/environment-helpers#mcphttp). OpenCode, Goose, pi, and Codex have no SSE transport, so `mcp.sse` stops the plan with exit code 2 on them. Use `mcp.http` or `mcp.stdio`.
+An unset variable ends the attempt as an infrastructure error. For more information about brokering, see [Secrets](/configuration/environments/secrets), and for the options, see [`mcp.http()`](/reference/environment-helpers#mcphttp). OpenCode, Goose, pi, Codex, and fx have no SSE transport, so `mcp.sse` stops the plan with exit code 2 on them. Use `mcp.http` or `mcp.stdio`.
 
 ## Check the agent called the server
 

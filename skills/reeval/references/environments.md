@@ -30,7 +30,7 @@ export const withDocs = houseStyle.extendEnvironment(
     files: { 'docs/api.md': file('../docs/api.md') },
     // AGENTS.md (CLAUDE.md for Claude Code)
     rules: file('../rules/house.md'),
-    // or mcp.http(url) / mcp.sse(url) (not on OpenCode, Goose, pi or Codex)
+    // or mcp.http(url) / mcp.sse(url) (not on OpenCode, Goose, pi, Codex or fx)
     mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) },
     // every attempt, before the agent
     setup: [{ run: 'npm ci', timeout: '5m' }],

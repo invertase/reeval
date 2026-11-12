@@ -898,7 +898,7 @@ evaluate('refused', async () => {})
     }
   })
 
-  test('an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
+  test('an mcp.sse server on OpenCode, Goose, pi, Codex or fx exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
       [
         'opencode',
@@ -919,6 +919,11 @@ evaluate('refused', async () => {})
         'codex',
         'gpt-5.4-mini',
         /evaluate\("streams"\) on codex:gpt-5\.4-mini: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
+      ],
+      [
+        'fx',
+        'gpt-4.1-mini',
+        /evaluate\("streams"\) on fx:gpt-4\.1-mini: fx has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
     ] as const) {
       const p = await project(`sse-${factory}`, {

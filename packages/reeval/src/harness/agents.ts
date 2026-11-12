@@ -880,6 +880,20 @@ export function acpMcpServers(
   )
 }
 
+/** fx's ACP `session/new` servers: its `initialize` reports `mcpCapabilities.sse: false`. */
+function fxMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, Record<string, unknown>> {
+  for (const [name, s] of Object.entries(servers)) {
+    if (s.transport === 'sse') {
+      throw new InfraError(
+        `fx has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+      )
+    }
+  }
+  return acpMcpServers(servers)
+}
+
 /**
  * fx on the model's provider: OpenAI's Chat Completions API for a bare OpenAI id, and Vercel AI
  * Gateway for a gateway id, which only `vercel()` in the gateway list serves. Each response's
@@ -1528,7 +1542,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,
-    mcpServers: acpMcpServers,
+    mcpServers: fxMcpServers,
     adapter: async ({ auth, env, mcpServers, model, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
