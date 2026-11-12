@@ -356,9 +356,9 @@ evaluate(
     assert.equal(ev?.outcome, 'pass')
     const summary = read('summary.md')
     assert.match(summary, /^## Baseline vs\. variants$/m)
-    assert.match(summary, /^\| Arm \| Pass rate \| Lift \| Verdict \|/m)
-    assert.match(summary, /^\| base \| 0% \| n\/a \| baseline \|/m)
-    assert.match(summary, /^\| skilled \| 100% \| \+100 pts \| helped \|/m)
+    assert.match(summary, /^\| Arm \| Pass rate \| Lift \| Pass-rate verdict \|/m)
+    assert.match(summary, /^\| base \| 0% \| n\/a \| Baseline \|/m)
+    assert.match(summary, /^\| skilled \| 100% \| \+100 pts \| Helped \|/m)
     assert.match(
       summary,
       /^\| toHaveFile ok\.txt \| toHaveFile \| 0 of 6 \| 6 of 6 \| 6 of 12 \|$/m,
@@ -500,9 +500,9 @@ group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
 
     const md = readRun(p.dir).read('summary.md')
     assert.match(md, /^## Baseline vs\. variants$/m)
-    assert.match(md, /^\| Arm \| Pass rate \| Lift \| Verdict \|/m)
-    assert.match(md, /^\| base \| 0% \| n\/a \| baseline \|/m)
-    assert.match(md, /^\| skilled \| 100% \| \+100 pts \| too-few-runs \|/m)
+    assert.match(md, /^\| Arm \| Pass rate \| Lift \| Pass-rate verdict \|/m)
+    assert.match(md, /^\| base \| 0% \| n\/a \| Baseline \|/m)
+    assert.match(md, /^\| skilled \| 100% \| \+100 pts \| Too few runs \|/m)
     assert.match(md, /^\| Assertion \| Matcher \| base \| skilled \| Total \|$/m)
     assert.match(md, /^\| toBe base \| toBe \| 2 of 2 \| n\/a \| 2 of 2 \|$/m)
     assert.match(md, /^\| toHaveFile ok\.txt \| toHaveFile \| 0 of 2 \| 2 of 2 \| 2 of 4 \|$/m)
