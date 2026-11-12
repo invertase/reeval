@@ -134,7 +134,7 @@ function evalView(
 
 /**
  * The view of one run that a studio page draws, from its record and the transcripts it is given.
- * Pure, and free of Node: the same inputs give the same view in the CLI, a browser or a Worker.
+ * Pure, and free of Node: the same inputs give the same view in the CLI or any JavaScript runtime.
  */
 export function buildRunView(record: RunRecord, options: RunViewOptions): RunView {
   return {

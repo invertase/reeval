@@ -1,4 +1,4 @@
-// `reeval/view` runs in the hosted studio (a browser and a Worker) as well as in the CLI: the studio's
+// `reeval/view` runs in the hosted studio (in any JavaScript runtime) as well as in the CLI: the studio's
 // views must come out the same in each. So nothing it loads may use Node, the filesystem or another
 // package: these tests walk its imports, in src/ and in the built dist/, and refuse a `node:` or bare
 // import and a Node global. The one exception is zod in the RunReport schema module and the modules
@@ -111,7 +111,7 @@ const viewModules = () =>
     .filter((f) => f.endsWith('.ts'))
     .map((f) => join(pkgRoot, 'src/view', f))
 
-test('everything src/view loads runs in a browser or a Worker: no Node, no packages', () => {
+test('everything src/view loads runs in any JavaScript runtime: no Node, no packages', () => {
   const { files, problems } = walk(viewModules(), ZOD_MODULES)
   assert.deepEqual(problems, [])
   for (const shared of [

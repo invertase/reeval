@@ -1,6 +1,6 @@
 // Which tool calls an attempt made, what each did and which skills it used, from its record and
-// transcript.jsonl alone. `reeval query` stores these facts and the studio view shows them, in Node,
-// a browser or a Worker, so nothing this module reaches may use Node or the filesystem
+// transcript.jsonl alone. `reeval query` stores these facts and the studio view shows them, in any
+// JavaScript runtime, so nothing this module reaches may use Node or the filesystem
 // (test/view-boundary.test.ts holds it).
 import { SKILL_DIRS } from '../harness/skill-dirs.ts'
 import {

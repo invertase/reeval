@@ -1,6 +1,6 @@
 // Where each agent reads skills, as plain data. `LAYOUTS` in agents.ts takes these, and the tool-call
-// classifier reads them in the studio view too, so this module imports nothing: it runs in Node, a
-// browser and a Worker alike.
+// classifier reads them in the studio view too, so this module imports nothing: it runs alike in any
+// JavaScript runtime.
 
 /** One agent's skill directories. */
 export type SkillLayout = {

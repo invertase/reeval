@@ -277,7 +277,7 @@
 | `c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output, or on a given port something already listened on | ✓ 1 | — | ● 3 | ● 5 | ● 5 | — |
 | `c.capture()`'s page reaches sandbox ports at `localhost`, `127.0.0.1` and `[::1]`, through tunnels opened on its first request | ✓ 1 | — | — | ● 1 | ● 1 | — |
 | `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 4 | ✓ 1 | ● 3 | ● 8 | — | — |
-| `reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in Node, a browser and a Worker) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only | ✓ 2 | — | — | — | — | ◐ 1 (1 without a canary) |
+| `reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in any JavaScript runtime) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only | ✓ 2 | — | — | — | — | ◐ 1 (1 without a canary) |
 | Runs in progress: `reeval run`'s `.reeval/staging/<run>/live.json`, attempts filling in, `stopped` for a killed run, and the record replacing it | ✓ 1 | — | — | — | — | — |
 | Compare questions' answers as `reeval/view` tallies them: win rates within and across harnesses, the model, and a failed call's error | ✓ 2 | — | — | — | — | ◐ 1 (1 without a canary) |
 
