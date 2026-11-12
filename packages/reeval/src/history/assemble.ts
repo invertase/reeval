@@ -10,7 +10,6 @@ import type {
 import { UNRECORDED_QUESTION_STATE } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
-import { isTimeout } from '../errors.ts'
 import { evalFile, sourcesPart } from '../eval-source.ts'
 import {
   effortFromModelLabel,
@@ -72,6 +71,7 @@ import { turnErrorKind } from '../view/turn-error.ts'
 import { checkTallies, discrimination, foldCases } from './cases.ts'
 import { withCosts } from './cost.ts'
 import { familiesOf, pooledPassRate } from './families.ts'
+import { mergeOutcome } from './outcome.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -200,30 +200,6 @@ export function capText(raw: string, cap = OUTPUT_CAP): string {
 
 const readRecord = async (path: string): Promise<EvalRecord | null> =>
   JSON.parse(await readFile(path, 'utf8').catch(() => 'null'))
-
-type Merged = Pick<EvalRecord, 'error'> & { outcome: Outcome }
-
-/** The engine and the worker's record can disagree, e.g. when a timeout fails the eval first. */
-export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
-  // A resume skips a completed attempt: keep the staged (or previous) outcome, including pass.
-  if (e.state === 'skipped' && record) return { outcome: record.outcome, error: record.error }
-  if (e.state === 'skipped') return { outcome: 'skipped', error: null }
-  // An unhandled mid-turn error is reclassified to infra_error without throwing, so the engine
-  // still reports `passed`; the worker record is the source of truth.
-  if (e.state === 'passed') {
-    if (record?.outcome === 'infra_error') return { outcome: 'infra_error', error: record.error }
-    return { outcome: 'pass', error: null }
-  }
-  const message = e.errors[0] ?? 'Eval failed'
-  // The worker's own classification wins: a setup InfraError whose message says "timed out"
-  // isn't the eval's timeout. Without a record, the engine's error name is all there is.
-  const error =
-    record?.error ??
-    (isTimeout({ name: e.errorName })
-      ? { kind: 'timeout' as const, message }
-      : { kind: 'assertion' as const, message })
-  return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
-}
 
 /**
  * The harness as the measurement sees it: without the operational limits (`maxConcurrent`,

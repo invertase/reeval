@@ -3438,6 +3438,44 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/unread-turn-error-is-infra',
+    tiers: ['fake'],
+    env: 'plain',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message: /^Turn 0 ended with an error: 503 Service Unavailable: overloaded/,
+      },
+    },
+    canary: /expected 'error' to be 'completed'/,
+    async record({ run, project, tier }) {
+      // The body's own check held: only the unread turn error makes it an infra error.
+      assert.deepEqual(
+        landed(run)?.assertions?.map((a) => a.status),
+        ['pass'],
+      )
+      assert.equal(landed(run)?.turnStatusRead, false)
+      assert.equal(run.evals.find((e) => e.name === 'canary')?.attempts[0]?.turnStatusRead, true)
+      // The canary's assertion failure outranks an infra error in the whole run's exit code.
+      const env = { REEVAL_FIXTURE_SANDBOX: tier }
+      const alone = await runCli(project, ['run', 'evals/lands.eval.ts'], {
+        env,
+        timeoutMs: 20_000,
+        deadlineMs: 20_000,
+        graceMs: 5_000,
+      })
+      assert.equal(alone.code, 3, alone.stdout + alone.stderr)
+      // Two runs in one second sort by their random suffix, so check this is the lands-only run.
+      const second = readRun(project).run
+      assert.deepEqual(
+        second.evals.map((e) => e.name),
+        ['lands'],
+      )
+      assert.equal(landed(second)?.outcome, 'infra_error')
+    },
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',

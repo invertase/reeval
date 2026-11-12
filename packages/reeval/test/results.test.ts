@@ -21,6 +21,7 @@ import {
   voteOf,
 } from '../src/compare/pairs.ts'
 import {
+  answerable,
   answerQuestion,
   blindInput,
   blindPair,
@@ -42,8 +43,9 @@ import {
   optionsHash,
   sourcesPart,
 } from '../src/eval-source.ts'
-import { fingerprintOf, judgmentKey, mergeOutcome } from '../src/history/assemble.ts'
+import { fingerprintOf, judgmentKey } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
+import { mergeOutcome } from '../src/history/outcome.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
 import { sha256 } from '../src/ids.ts'
@@ -1072,6 +1074,7 @@ describe('compare question pairs', () => {
     const e = (state: EngineEval['state']) =>
       ({
         state,
+        errors: [],
         attempt: { cell: { key: 'h/sdk/fake', harness: 'h', environment: 'sdk' }, n: 2 },
       }) as unknown as EngineEval
     const record = (kind?: 'judge' | 'assertion') =>
@@ -1098,6 +1101,29 @@ describe('compare question pairs', () => {
       id: 'h/sdk/fake#2',
       key: undefined,
     })
+  })
+
+  test('a passed attempt whose turn crashed is an infra_error: no checks held, no questions', () => {
+    const e = (state: EngineEval['state']) =>
+      ({
+        state,
+        errors: [],
+        attempt: { cell: { key: 'h/sdk/fake', harness: 'h', environment: 'sdk' }, n: 1 },
+      }) as unknown as EngineEval
+    const record = (outcome: EvalRecord['outcome'], kind?: 'infra' | 'judge') =>
+      ({
+        outcome,
+        diff: { patch: '', files: [] },
+        error: kind ? { kind, message: 'Turn 0 ended with an error: boom' } : null,
+        turns: [{ prompt: 'go' }],
+        checks: [],
+      }) as unknown as EvalRecord
+    assert.equal(stagedAttempt(e('passed'), record('infra_error', 'infra'))?.checksPassed, false)
+    assert.equal(answerable(e('passed'), record('infra_error', 'infra')), false)
+    assert.equal(answerable(e('failed'), record('infra_error', 'infra')), false)
+    assert.equal(answerable(e('passed'), record('pass')), true)
+    assert.equal(answerable(e('failed'), record('fail', 'judge')), true)
+    assert.equal(answerable(e('passed'), null), false)
   })
 })
 

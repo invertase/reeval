@@ -10,6 +10,7 @@ import { cannedModel, type HostModelSettings, hostModel, isFake } from '../analy
 import { observedName } from '../attempt/observe.ts'
 import type { EngineEval } from '../engine/node.ts'
 import type { VertexSettings } from '../gateway/vertex.ts'
+import { mergeOutcome } from '../history/outcome.ts'
 import type { AttemptRecord, FileRef, RunRecord } from '../history/types.ts'
 import { recordFileName } from '../ids.ts'
 import { judgeDiff } from '../judge/patch.ts'
@@ -753,10 +754,11 @@ const attemptCall = (
 })
 
 /** Ran to a pass or a fail: what a question asked of one attempt is asked of. */
-const answerable = (e: EngineEval, record: EvalRecord | null) =>
-  record !== null &&
-  (e.state === 'passed' ||
-    (e.state === 'failed' && record.error?.kind !== 'infra' && record.error?.kind !== 'aborted'))
+export function answerable(e: EngineEval, record: EvalRecord | null): boolean {
+  if (record === null || (e.state !== 'passed' && e.state !== 'failed')) return false
+  const { outcome, error } = mergeOutcome(e, record)
+  return outcome !== 'infra_error' && error?.kind !== 'infra' && error?.kind !== 'aborted'
+}
 
 /** Runs `work` at most `limit` at a time, in the order it was asked. */
 function limiter(limit: number) {
@@ -783,8 +785,7 @@ function limiter(limit: number) {
 export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAttempt | null {
   const cell = e.attempt?.cell
   if (!cell) return null
-  const outcome = e.state === 'skipped' ? record?.outcome : e.state === 'passed' ? 'pass' : 'fail'
-  const checksPassed = record !== null && outcome !== undefined && checksHeld(outcome, record.error)
+  const checksPassed = record !== null && checksHeld(mergeOutcome(e, record).outcome, record.error)
   return {
     harness: cell.harness,
     arm: cell.environment,
