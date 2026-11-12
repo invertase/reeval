@@ -20,12 +20,12 @@ import { GooseLedger } from './goose-usage.ts'
 
 export const GOOSE_HARNESS_ID = 'goose'
 /** The Goose release the bootstrap installs, checked against its published sha256s. */
-export const GOOSE_CLI_VERSION = '1.56.0'
+export const GOOSE_CLI_VERSION = '1.59.0'
 /** Linux's build for each arch, and macOS's for Apple Silicon (a Tart VM). */
 export const GOOSE_CLI_SHA256 = {
-  x86_64: '225a929b35b5130fb691eafdb50be236f2c0a150019b53973775938f8f19c281',
-  aarch64: '26bcb7d3f55aac485a91d81cbdecd8d90e5af1acadeca6e580b4d58b64a888e4',
-  'darwin-aarch64': '52f3f8d62e3d144c5de70c5c471de39d8b92c24d41d5b3436eb8bab11ba4bc24',
+  x86_64: 'a774667de6c20206a60d78d7bece2d9dda8389667e4f5c2fc8aaa758d1e81ef3',
+  aarch64: 'ba96b78394e3050077482bb285ff35f34613646e90b84a18b5d674b71905166e',
+  'darwin-aarch64': '0142839f339e3484b49326d69de9d9cf808999087ab421ae9304d2620e647cbc',
 } as const
 export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 /** The header Goose's `google` provider sends the key in. */
