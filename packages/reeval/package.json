@@ -172,7 +172,7 @@
     "@daytona/sdk": "0.231.0",
     "@modelcontextprotocol/client": "2.4.0",
     "@reeval/harness-antigravity": "workspace:0.1.16",
-    "@reeval/harness-codex": "workspace:0.1.13",
+    "@reeval/harness-codex": "workspace:0.1.14",
     "@reeval/harness-cursor-sdk": "workspace:0.1.9",
     "@reeval/harness-fx": "workspace:0.1.11",
     "@reeval/harness-goose": "workspace:0.1.16",

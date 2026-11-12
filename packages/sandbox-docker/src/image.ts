@@ -112,7 +112,7 @@ export const HARNESS_PACKAGES: Record<
   },
   codex: {
     name: '@reeval/harness-codex',
-    version: '0.1.13',
+    version: '0.1.14',
     bootstrap: {
       name: 'Codex',
       cli: 'codex',
