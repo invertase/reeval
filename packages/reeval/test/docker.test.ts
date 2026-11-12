@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
-import { hostname, networkInterfaces } from 'node:os'
+import { networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
@@ -13,6 +13,7 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
+  ownerLabel,
   PLATFORM,
 } from '@reeval/sandbox-docker'
 import {
@@ -1187,7 +1188,7 @@ evaluate('quick', async () => {})
         '--label',
         `${LABEL.run}=${runId}`,
         '--label',
-        `${LABEL.owner}=${exited.stdout.trim()}@${hostname()}`,
+        `${LABEL.owner}=${ownerLabel(Number(exited.stdout))}`,
         '--entrypoint',
         'sleep',
         DEFAULT_IMAGE,

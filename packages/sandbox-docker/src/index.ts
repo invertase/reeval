@@ -154,7 +154,7 @@ export {
   WORKSPACE_DIR,
 } from './image.ts'
 export { MCP_TIMER } from './mcp-timer.ts'
-export { removeOrphans } from './orphans.ts'
+export { ownerLabel, removeOrphans } from './orphans.ts'
 export {
   enginePlatform,
   pullLayer,
