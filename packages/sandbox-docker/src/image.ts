@@ -98,7 +98,7 @@ export const HARNESS_PACKAGES: Record<
   },
   pi: {
     name: '@reeval/harness-pi',
-    version: '0.2.9',
+    version: '0.2.10',
     bootstrap: {
       name: 'pi',
       cli: 'pi',

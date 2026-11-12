@@ -818,7 +818,7 @@ importers:
         specifier: workspace:0.2.16
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.9
+        specifier: workspace:0.2.10
         version: link:../harness-pi
       '@reeval/sandbox-docker':
         specifier: workspace:*
@@ -874,7 +874,7 @@ importers:
         specifier: workspace:0.2.16
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.9
+        specifier: workspace:0.2.10
         version: link:../harness-pi
       ws:
         specifier: 8.22.1

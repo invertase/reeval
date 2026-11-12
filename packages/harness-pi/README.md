@@ -31,7 +31,7 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
 
 ## How it works
 
-- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 1.4.0 from the lockfile in `assets/`,
+- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 1.5.2 from the lockfile in `assets/`,
   with no build scripts (pi doesn't need them).
 - **Turns.** Each turn is one `pi --mode json -p --offline --approve --no-extensions --provider
   <provider> --model <model> --session-id <id>` process; every turn uses the session's id, so pi

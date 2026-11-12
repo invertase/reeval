@@ -178,7 +178,7 @@
     "@reeval/harness-goose": "workspace:0.1.17",
     "@reeval/harness-grok-build": "workspace:0.1.13",
     "@reeval/harness-opencode": "workspace:0.2.16",
-    "@reeval/harness-pi": "workspace:0.2.9",
+    "@reeval/harness-pi": "workspace:0.2.10",
     "@reeval/sandbox-docker": "workspace:*",
     "@types/picomatch": "4.0.3",
     "@types/react": "19.3.0",
