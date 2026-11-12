@@ -28,6 +28,7 @@ import { toolTarget } from '../src/history/tool-target.ts'
 import { matchers } from '../src/matchers.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { toolCalls } from '../src/view/classify.ts'
+import { transcriptByLine } from '../src/view/model.ts'
 import { testDir } from './support/fixture.ts'
 
 extendExpect(matchers)
@@ -424,7 +425,9 @@ describe('toolTarget and toolCalls', () => {
     assert.equal(toolTarget({ name: 'house-greeting' }, 'load_skill'), 'house-greeting')
     assert.equal(toolTarget({ path: 'notes.txt' }, 'read'), 'notes.txt')
     const calls = toolCalls(
-      `${JSON.stringify({ type: 'tool', tool: 'skill', input: { id: 'foo' } })}\n`,
+      transcriptByLine(
+        `${JSON.stringify({ type: 'tool', tool: 'skill', input: { id: 'foo' } })}\n`,
+      ),
     )
     assert.deepEqual(
       calls.map((c) => [c.tool, c.target]),
@@ -440,7 +443,10 @@ describe('toolTarget and toolCalls', () => {
       { type: 'tool', tool: 'read', input: { path: 'd' } },
     ]
     assert.deepEqual(
-      toolCalls(lines.map((l) => JSON.stringify(l)).join('\n')).map((c) => [c.target, c.ok]),
+      toolCalls(transcriptByLine(lines.map((l) => JSON.stringify(l)).join('\n'))).map((c) => [
+        c.target,
+        c.ok,
+      ]),
       [
         ['a', true],
         ['b', false],
@@ -617,7 +623,9 @@ describe("every harness's skill use", () => {
       expect(t).toHaveCalledSkill('contract-probe')
       expect(t).not.toHaveCalledSkill('contract')
       expect(t).not.toHaveCalledSkill('probe')
-      const [call] = toolCalls(JSON.stringify({ type: 'tool', tool: use.tool, input: use.input }))
+      const [call] = toolCalls(
+        transcriptByLine(JSON.stringify({ type: 'tool', tool: use.tool, input: use.input })),
+      )
       assert.ok(call)
       assert.deepEqual(skillsUsed(call.tool, call.text, ['other', 'contract-probe']), [
         'contract-probe',
