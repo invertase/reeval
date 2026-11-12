@@ -110,24 +110,13 @@ async function pick(config: ResolvedConfig, ref = 'latest', entries?: HistoryEnt
   }
 }
 
-/** The recorded run `ref` names; a run only in `.reeval/runs` is refused with how to record it. */
+/** The run `ref` names, as `show` resolves it; one only in `.reeval/runs` is refused with how to record it. */
 export async function recordedRun(config: ResolvedConfig, ref = 'latest'): Promise<HistoryEntry> {
-  try {
-    return resolveRun(await recorded(config), ref)
-  } catch (error) {
-    if (!(error instanceof RefError)) throw error
-    let found: HistoryEntry
-    try {
-      found = resolveRun(await allRuns(config, false), ref)
-    } catch {
-      throw error
-    }
-    if (found.recorded && !/^latest(?:~\d+)?$/.test(ref)) return found
-    if (found.recorded) throw error
-    throw new CommandError(
-      `Run ${found.runId} isn't recorded: reeval record ${found.runId} records it into the history folder first`,
-    )
-  }
+  const found = await pick(config, ref)
+  if (found.recorded) return found
+  throw new CommandError(
+    `Run ${found.runId} isn't recorded: reeval record ${found.runId} records it into the history folder first`,
+  )
 }
 
 export async function lines(root: string, args: string[]): Promise<string[] | null> {

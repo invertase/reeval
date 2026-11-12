@@ -652,6 +652,22 @@ async function archiveRun(
   }
 }
 
+/**
+ * A run archive's files as `runArchiveFiles` lists them, read under the run's claim so a
+ * recording in progress can't mix two revisions; exit 2 while another process holds it.
+ */
+export async function readRunArchiveFiles(
+  dir: string,
+  runId: string,
+): Promise<Array<{ path: string; data: Uint8Array }>> {
+  const release = await claimRun(dir, runId)
+  try {
+    return await runArchiveFiles(dir, runId, await readFile(recordFile(dir, runId)))
+  } finally {
+    await release()
+  }
+}
+
 /** What a run archive of `runId` holds: `record`, and the run's files in `dir` but `analysis/`. */
 export async function runArchiveFiles(
   dir: string,
