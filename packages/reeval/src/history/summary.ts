@@ -2,7 +2,8 @@ import { runReportMarkdown } from '../renderer/markdown.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { tallyLine } from '../ui/layout.ts'
-import { harnessLabel, languageLabel, runtimeLabel } from '../view/model.ts'
+import { type AttemptFacts, attemptFacts } from '../view/classify.ts'
+import { harnessLabel, languageLabel, runtimeLabel, transcriptByLine } from '../view/model.ts'
 import { buildRunReport, type RunReportOptions } from '../view/report/index.ts'
 import { runResourcesLine } from '../view/resources.ts'
 import { suiteResult } from '../view/suite.ts'
@@ -106,6 +107,22 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
  */
 export function renderSummary(run: RunRecord, opts: RunReportOptions = {}): string {
   return runReportMarkdown(buildRunReport(run, { links: { base: './' }, ...opts }))
+}
+
+/** Each attempt's facts from the transcript `record` keeps, as `files` holds it to write. */
+export function keptFacts(
+  record: RunRecord,
+  files: ReadonlyMap<string, Uint8Array>,
+): Map<string, AttemptFacts> {
+  const facts = new Map<string, AttemptFacts>()
+  for (const e of record.evals) {
+    for (const a of e.attempts) {
+      const bytes = a.files.transcript && files.get(a.files.transcript.path)
+      if (!bytes) continue
+      facts.set(a.key, attemptFacts(record, a, transcriptByLine(Buffer.from(bytes).toString())))
+    }
+  }
+  return facts
 }
 
 /** The `RunReport` behind summary.md, in the run's folder beside it. */

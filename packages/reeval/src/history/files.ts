@@ -20,10 +20,8 @@ import { debugArchiveFile, debugRoot } from '../debug/files.ts'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
 import type { QuestionInput } from '../types.ts'
-import { type AttemptFacts, attemptFacts } from '../view/classify.ts'
 import { DEBUG_LOG, REQUESTS_FILE, TRACE_FILE } from '../view/debug.ts'
 import { runHeader } from '../view/header.ts'
-import { transcriptByLine } from '../view/model.ts'
 import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
 import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import {
@@ -35,7 +33,7 @@ import {
   ignoredRecordedFiles,
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
-import { summaryFiles } from './summary.ts'
+import { keptFacts, summaryFiles } from './summary.ts'
 import type {
   ArtifactLevel,
   ArtifactRef,
@@ -766,19 +764,6 @@ async function differs(
   return isDeepStrictEqual(comparable(rebuilt), comparable(recorded))
     ? null
     : 'its record differs from the recorded one'
-}
-
-/** Each attempt's facts from the transcript `record` keeps, as `files` holds it to record. */
-function keptFacts(record: RunRecord, files: Map<string, Uint8Array>): Map<string, AttemptFacts> {
-  const facts = new Map<string, AttemptFacts>()
-  for (const e of record.evals) {
-    for (const a of e.attempts) {
-      const bytes = a.files.transcript && files.get(a.files.transcript.path)
-      if (!bytes) continue
-      facts.set(a.key, attemptFacts(record, a, transcriptByLine(Buffer.from(bytes).toString())))
-    }
-  }
-  return facts
 }
 
 /**

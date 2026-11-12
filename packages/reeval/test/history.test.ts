@@ -168,6 +168,15 @@ describe('recording runs into evals/.history', () => {
       [['A1', trial?.key]],
       'report.json is the RunReport summary.md renders',
     )
+    const scratchReport = readableRunReport(
+      JSON.parse(readFileSync(join(p.dir, '.reeval/runs', run.runId, 'report.json'), 'utf8')),
+    )
+    assert.ok(report.attempts[0]?.facts, 'the recorded report has the facts of the kept transcript')
+    assert.deepEqual(
+      scratchReport.attempts.map((a) => a.facts),
+      report.attempts.map((a) => a.facts),
+      ".reeval/runs' report.json has the same facts as the history copy",
+    )
     const summary = recorded.read('summary.md')
     assert.match(summary, /^# agent$/m, 'passes get detail')
     assert.match(
