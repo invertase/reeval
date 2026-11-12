@@ -756,7 +756,7 @@ async function differs(
   }
   let rebuilt: RunRecord
   try {
-    rebuilt = (await leveled(dir, run, recorded.artifacts, options)).record
+    rebuilt = (await leveled(dir, run, recorded.artifacts, { ...options, summary: false })).record
   } catch (error) {
     if (error instanceof HistoryError) return error.message
     throw error
@@ -769,13 +769,14 @@ async function differs(
 /**
  * The record and files a run in `source` keeps at `level`, as `recordRun` records them: each
  * file checked against its hash, the worktree patch left out when it looks like it holds a
- * secret (unless `skipSecretScan`), and the summary rendered for what's kept. Writes nothing.
+ * secret (unless `skipSecretScan`), and the summary rendered for what's kept (unless `summary` is
+ * false). Writes nothing.
  */
 async function leveled(
   source: string,
   run: RunRecord,
   level: ArtifactLevel,
-  options: { skipSecretScan?: boolean },
+  options: { skipSecretScan?: boolean; summary?: boolean },
 ): Promise<{
   record: RunRecord
   files: Map<string, Uint8Array>
@@ -885,7 +886,7 @@ async function leveled(
     if (bytes && sha256(bytes) === ref.sha256) files.set(ref.path, bytes)
     else delete record.spans
   }
-  if (level !== 'none') {
+  if (level !== 'none' && options.summary !== false) {
     const facts = keptFacts(record, files)
     for (const [name, bytes] of summaryFiles(record, { remarks, facts })) files.set(name, bytes)
   }
