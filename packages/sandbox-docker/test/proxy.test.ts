@@ -267,6 +267,10 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         out.writeHead(200, { 'content-type': 'application/grpc' })
         return out.end(`frame ${String(req.headers.authorization ?? '')}`)
       }
+      if (req.url === '/hang') {
+        // A model call still running when the client gives up on it.
+        return setTimeout(() => out.writeHead(400).end(), 2_000).unref()
+      }
       if (req.url === '/trailers') {
         out.writeHead(200, { 'content-type': 'application/grpc', trailer: 'grpc-status' })
         out.write('payload')
@@ -1917,6 +1921,91 @@ describe('brokered secrets through the proxy', () => {
           ['elsewhere.test', false],
         ],
       )
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a request the client gives up on before its response has no status, over HTTP/1.1 and HTTP/2', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy({ mode: 'allow-all' }, { onEvent: (e) => events.push(e) })
+    const decrypted = () =>
+      events.flatMap((e) => (e.type === 'request' && e.via === 'decrypted' ? [e] : []))
+    const requests = async (n: number) => {
+      for (let i = 0; i < 100 && decrypted().length < n; i++) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      return decrypted()
+    }
+    const upstreamSaw = async (path: string) => {
+      for (let i = 0; i < 100 && !seen.some((s) => s.path === path); i++) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+    }
+    try {
+      gw.proxy.addTransformations([
+        {
+          match: {
+            host: HOST,
+            path: { exact: '/hang' },
+            method: ['POST'],
+            headers: [{ key: { exact: 'x-goog-api-key' }, value: { exact: PLACEHOLDER } }],
+          },
+          transform: { headers: { 'x-goog-api-key': REAL } },
+        },
+      ])
+      seen.length = 0
+      const h1Tunnel = await connect(gw, HOST, h1.port)
+      assert.ok(h1Tunnel.ok)
+      const h1Req = https.request({
+        host: HOST,
+        port: h1.port,
+        method: 'POST',
+        path: '/hang',
+        headers: { 'x-goog-api-key': PLACEHOLDER },
+        createConnection: () =>
+          tls.connect({ socket: h1Tunnel.socket, servername: HOST, ca: gw.ca.cert }),
+      })
+      h1Req.on('error', () => {})
+      h1Req.end('{}')
+      await upstreamSaw('/hang')
+      h1Req.destroy()
+
+      seen.length = 0
+      const h2Tunnel = await connect(gw, HOST, h2.port)
+      assert.ok(h2Tunnel.ok)
+      const session = http2.connect(`https://${HOST}:${h2.port}`, {
+        createConnection: () =>
+          tls.connect({
+            socket: h2Tunnel.socket,
+            servername: HOST,
+            ca: gw.ca.cert,
+            ALPNProtocols: ['h2'],
+          }),
+      })
+      session.on('error', () => {})
+      const stream = session.request({
+        ':method': 'POST',
+        ':path': '/hang',
+        'x-goog-api-key': PLACEHOLDER,
+      })
+      stream.on('error', () => {})
+      stream.end('{}')
+      await upstreamSaw('/hang')
+      stream.close(http2.constants.NGHTTP2_CANCEL)
+      session.close()
+
+      const hung = await requests(2)
+      assert.equal(hung.length, 2, JSON.stringify(events))
+      for (const e of hung) {
+        assert.deepEqual(e.credentials, ['x-goog-api-key'])
+        assert.equal(e.status, undefined, JSON.stringify(e))
+      }
+      // Twin: a request that got its response has its status.
+      const r = await viaProxyH2(gw, HOST, h2.port, '/echo')
+      assert.equal(r.status, 200)
+      const answered = (await requests(3)).at(-1)
+      assert.equal(answered?.status, 200)
     } finally {
       gw.close()
     }
