@@ -803,7 +803,7 @@ importers:
         specifier: workspace:0.1.14
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
         specifier: workspace:0.1.13
@@ -859,7 +859,7 @@ importers:
         specifier: workspace:0.1.14
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
         specifier: workspace:0.1.13
