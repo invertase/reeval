@@ -33,6 +33,7 @@ const pairs = (text: string | undefined): Record<string, string> => {
  * but can't be used.
  */
 export function otlpTarget(env: Env): OtlpTarget | string | null {
+  if (env.OTEL_SDK_DISABLED?.trim().toLowerCase() === 'true') return null
   const exporters = env.OTEL_TRACES_EXPORTER?.trim()
   if (exporters && !exporters.split(',').some((e) => e.trim() === 'otlp')) return null
   const traces = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()
@@ -104,7 +105,27 @@ export function otlpRequest(spans: readonly RunSpan[], target: OtlpTarget, versi
   }
 }
 
-/** Posts the spans; resolves to null, or to why they weren't sent. Never throws. */
+/** Spans per request: the OpenTelemetry SDK's default batch, well under a collector's body limit. */
+export const OTLP_BATCH = 512
+
+/** The URL as a message may show it: no user, password or query, which can carry a token. */
+export function shownUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    u.username = ''
+    u.password = ''
+    u.search = ''
+    u.hash = ''
+    return u.toString()
+  } catch {
+    return 'the collector'
+  }
+}
+
+/**
+ * Posts the spans, `OTLP_BATCH` a request, one after another until one fails; resolves to null,
+ * or to why they weren't all sent. Never throws.
+ */
 export async function exportSpans(
   spans: readonly RunSpan[],
   env: Env,
@@ -114,16 +135,22 @@ export async function exportSpans(
   const target = otlpTarget(env)
   if (target === null || !spans.length) return null
   if (typeof target === 'string') return target
-  try {
-    const response = await fetcher(target.url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...target.headers },
-      body: JSON.stringify(otlpRequest(spans, target, version)),
-      signal: AbortSignal.timeout(target.timeoutMs),
-    })
-    await response.body?.cancel().catch(() => {})
-    return response.ok ? null : `${target.url} answered ${response.status}`
-  } catch (error) {
-    return `couldn't reach ${target.url}: ${(error as Error).message}`
+  const url = shownUrl(target.url)
+  for (let sent = 0; sent < spans.length; sent += OTLP_BATCH) {
+    const left = sent ? `, after ${sent} of ${spans.length} spans` : ''
+    try {
+      const response = await fetcher(target.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...target.headers },
+        body: JSON.stringify(otlpRequest(spans.slice(sent, sent + OTLP_BATCH), target, version)),
+        signal: AbortSignal.timeout(target.timeoutMs),
+      })
+      await response.body?.cancel().catch(() => {})
+      if (!response.ok) return `${url} answered ${response.status}${left}`
+    } catch (error) {
+      const message = (error as Error).message.split(target.url).join(url)
+      return `couldn't reach ${url}${left}: ${message}`
+    }
   }
+  return null
 }

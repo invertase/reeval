@@ -596,6 +596,22 @@ describe('machine pool', () => {
       await p.close()
     }
   })
+
+  test("a machine still starting when the run ends isn't an error in the run's trace", async () => {
+    const gone: GoneMachine<unknown>[] = []
+    const p = pool(
+      fakeProvider(() => 'hang'),
+      { onGone: (m) => gone.push(m) },
+    )
+    const waiting = p.acquire()
+    waiting.catch(() => {})
+    await new Promise((r) => setTimeout(r, 20))
+    await p.close()
+    await assert.rejects(waiting)
+    await until(() => gone.length === 1)
+    assert.equal(gone[0]?.why, 'run ended')
+    assert.equal(gone[0]?.error, undefined)
+  })
 })
 
 describe('pools on one account', () => {

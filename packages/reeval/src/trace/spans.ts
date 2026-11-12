@@ -40,6 +40,8 @@ export type OpenSpan = {
   readonly spanId: string
   set(attributes: SpanAttributes): void
   link(spanId: string): void
+  /** Marks the span an error, with `message`, when it ends without one of its own. */
+  fail(message: string): void
   end(error?: unknown): void
 }
 
@@ -53,6 +55,7 @@ export function openSpan(
   const attrs: SpanAttributes = { ...attributes }
   const links: string[] = []
   let ended = false
+  let failed: string | undefined
   return {
     spanId,
     set(more) {
@@ -60,6 +63,9 @@ export function openSpan(
     },
     link(id) {
       links.push(id)
+    },
+    fail(message) {
+      failed ??= message
     },
     end(error) {
       if (ended) return
@@ -71,10 +77,16 @@ export function openSpan(
         startMs,
         endMs: Date.now(),
         attributes: attrs,
-        ...(error !== undefined && {
+        ...((error !== undefined || failed !== undefined) && {
           status: {
             code: 'error' as const,
-            message: redactSecrets(error instanceof Error ? error.message : String(error)),
+            message: redactSecrets(
+              error === undefined
+                ? (failed as string)
+                : error instanceof Error
+                  ? error.message
+                  : String(error),
+            ),
           },
         }),
         ...(links.length && { links: links.map((spanId) => ({ traceId: '', spanId })) }),

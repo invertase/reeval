@@ -21,6 +21,7 @@ import {
   issueServerCertificate,
 } from '../../sandbox-docker/src/egress/cert.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { parseSpans } from '../src/view/spans.ts'
 import { assertKeyRejected, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { startRegistry } from './support/registry.ts'
 
@@ -134,6 +135,16 @@ evaluate('docker', async (c) => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.stack.images[0]?.ref, DEFAULT_IMAGE)
+    const spans = parseSpans(readRun(p.dir).read('spans.jsonl'))
+    const root = spans.find((s) => s.name === 'reeval.run')
+    const container = spans.find((s) => s.name === 'container')
+    const attempt = spans.find((s) => s.name === 'attempt')
+    assert.equal(container?.parentSpanId, root?.spanId, 'a local container sits under the run')
+    assert.equal(container?.attributes['reeval.sandbox'], 'docker')
+    assert.equal(container?.attributes['container.image.name'], DEFAULT_IMAGE)
+    assert.match(String(container?.attributes['container.id']), /^[0-9a-f]{12}$/)
+    assert.equal(attempt?.attributes['container.id'], container?.attributes['container.id'])
+    assert.ok((container?.startMs ?? 0) <= (container?.endMs ?? 0))
     assert.match(run.stack.images[0]?.id ?? '', /^sha256:[0-9a-f]{64}$/)
     assert.match(run.stack.images[0]?.agentCli ?? '', /^@cursor\/sdk \d+\.\d+\.\d+$/)
     const shown = await runCli(p.dir, ['show', 'latest'])

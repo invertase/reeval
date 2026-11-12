@@ -206,6 +206,9 @@ async function attemptBody(
       `record ${scratch}.json · artifacts ${scratch}/${evalSlug(id)}/${evalSlug(spec.cell.key)}/${spec.n} · debug ${rel(debug.dir)}`,
     )
     attemptSpan()?.set({ 'reeval.outcome': record.outcome })
+    if (record.outcome === 'fail' || record.outcome === 'infra_error') {
+      attemptSpan()?.fail(record.error?.message.split('\n')[0] ?? record.outcome)
+    }
     setMeta(await writeRecord(a, stagingDir, id))
     await debug.finish(debug.verbosity === 2 || record.outcome !== 'pass')
   }

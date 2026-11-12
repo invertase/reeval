@@ -3,15 +3,15 @@
 // OTEL_EXPORTER_OTLP_ENDPOINT set the run posts it to a collector as OTLP/HTTP JSON.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { otlpRequest, otlpTarget } from '../src/trace/otlp.ts'
-import { traceIdOf } from '../src/trace/run.ts'
+import { exportSpans, OTLP_BATCH, otlpRequest, otlpTarget, shownUrl } from '../src/trace/otlp.ts'
+import { RunTrace, traceIdOf } from '../src/trace/run.ts'
 import { parseSpans, type RunSpan } from '../src/view/spans.ts'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const evalFile = `import { evaluate, expect } from 'reeval'
 evaluate('writes hello', async (c) => {
@@ -115,6 +115,62 @@ describe('run spans', () => {
     assert.match(root?.startTimeUnixNano ?? '', /^\d{19}$/)
   })
 
+  test('a failed attempt is an error span with its outcome, and the run goes on', async () => {
+    const p = await project('spans-fail', {
+      'reeval.config.ts': fakeConfig({ harness }),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('fails', async (c) => {
+  await c.send('write hello.txt')
+  expect(1).toBe(2)
+})
+evaluate('throws', async () => {
+  throw new Error('boom ghp_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'}')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run, read } = readRun(p.dir)
+    const text = read('spans.jsonl')
+    assert.doesNotMatch(text, /ghp_a1B2/, 'errors in the trace are redacted')
+    const attempts = byName(parseSpans(text), 'attempt')
+    const of = (name: string) => {
+      const key = run.evals.find((e) => e.name === name)?.attempts[0]?.key
+      return attempts.find((a) => a.attributes['reeval.attempt.key'] === key)
+    }
+    assert.equal(of('fails')?.attributes['reeval.outcome'], 'fail')
+    assert.equal(of('throws')?.attributes['reeval.outcome'], 'fail')
+    for (const a of [of('fails'), of('throws')]) {
+      assert.ok(a && a.endMs >= a.startMs)
+      assert.equal(a.status?.code, 'error')
+    }
+    assert.match(of('throws')?.status?.message ?? '', /^boom \[REDACTED\]/)
+  })
+
+  test("a collector that hangs never holds up the run's record", async (t) => {
+    const p = await fakeProject('spans-otlp-slow')
+    const runs = join(p.dir, '.reeval/runs')
+    const recorded = () => existsSync(runs) && readdirSync(runs).some((f) => f.endsWith('.json'))
+    let sawRecord = false
+    const server = createServer(async (req, res) => {
+      req.resume()
+      for (let i = 0; i < 200 && !recorded(); i++) await new Promise((r) => setTimeout(r, 100))
+      sawRecord = recorded()
+      res.writeHead(200).end('{}')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => server.close())
+    const { port } = server.address() as AddressInfo
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+        OTEL_EXPORTER_OTLP_TIMEOUT: '120000',
+      },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.ok(sawRecord, 'the record was written while the export was still waiting')
+  })
+
   test('a collector that refuses the spans is a warning, not a failed run', async () => {
     const p = await fakeProject('spans-otlp-down')
     const r = await runCli(p.dir, ['run'], {
@@ -130,6 +186,19 @@ describe('run spans', () => {
 })
 
 describe('OTLP target', () => {
+  test('OTEL_SDK_DISABLED turns the export off', () => {
+    const on = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c:4318' }
+    assert.equal(otlpTarget({ ...on, OTEL_SDK_DISABLED: 'true' }), null)
+    assert.equal(typeof otlpTarget({ ...on, OTEL_SDK_DISABLED: 'false' }), 'object')
+  })
+
+  test('a message shows the URL without its credentials', () => {
+    assert.equal(
+      shownUrl('https://user:pass@c.example:4318/v1/traces?token=abc'),
+      'https://c.example:4318/v1/traces',
+    )
+  })
+
   test('reads the standard variables', () => {
     assert.equal(otlpTarget({}), null)
     assert.equal(
@@ -199,5 +268,70 @@ describe('OTLP target', () => {
       links: [{ traceId: 'a'.repeat(32), spanId: 'd'.repeat(16) }],
       status: { code: 2, message: 'gone' },
     })
+  })
+})
+
+const span = (i: number): RunSpan => ({
+  traceId: 'a'.repeat(32),
+  spanId: i.toString(16).padStart(16, '0'),
+  name: 'attempt',
+  startMs: 1,
+  endMs: 2,
+  attributes: {},
+})
+
+describe('OTLP export', () => {
+  const env = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://user:secret@c.example:4318' }
+  const many = Array.from({ length: OTLP_BATCH * 2 + 76 }, (_, i) => span(i))
+  const sizes = (bodies: string[]) =>
+    bodies.map(
+      (b) =>
+        (JSON.parse(b) as ReturnType<typeof otlpRequest>).resourceSpans[0]?.scopeSpans[0]?.spans
+          .length,
+    )
+
+  test('sends the spans in batches, one request after another', async () => {
+    const bodies: string[] = []
+    let inFlight = 0
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      inFlight++
+      assert.equal(inFlight, 1, 'one request at a time')
+      bodies.push(init.body as string)
+      await new Promise((r) => setTimeout(r, 5))
+      inFlight--
+      return new Response('{}')
+    }) as typeof fetch
+    assert.equal(await exportSpans(many, env, '1.0.0', fetcher), null)
+    assert.deepEqual(sizes(bodies), [OTLP_BATCH, OTLP_BATCH, 76])
+  })
+
+  test('stops at the first refused batch, and the message hides the credentials', async () => {
+    const bodies: string[] = []
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      bodies.push(init.body as string)
+      return new Response('', { status: bodies.length === 2 ? 413 : 200 })
+    }) as typeof fetch
+    const why = await exportSpans(many, env, '1.0.0', fetcher)
+    assert.equal(
+      why,
+      `http://c.example:4318/v1/traces answered 413, after ${OTLP_BATCH} of ${many.length} spans`,
+    )
+    assert.equal(bodies.length, 2)
+  })
+})
+
+describe('RunTrace', () => {
+  test('keeps spans for an exporter only when asked, and redacts errors as it writes', () => {
+    const token = `ghp_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'}`
+    for (const keep of [false, true]) {
+      const dir = tempDir('run-trace')
+      const trace = new RunTrace({ dir, runId: 'r', keep })
+      trace.add({ ...span(1), status: { code: 'error', message: `start failed: ${token}` } })
+      const kept = trace.close()
+      assert.equal(kept.length, keep ? 2 : 0)
+      const text = readFileSync(join(dir, 'spans.jsonl'), 'utf8')
+      assert.equal(parseSpans(text).length, 2)
+      assert.doesNotMatch(text + JSON.stringify(kept), /ghp_a1B2/)
+    }
   })
 })

@@ -4,6 +4,7 @@
 // artifacts.
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { redactSecrets } from '../redact.ts'
 import { sha256Hex } from '../sha256.ts'
 import type { PrepareView } from '../ui/events.ts'
 import { type RunSpan, SPANS_FILE, type SpanAttributes } from '../view/spans.ts'
@@ -18,14 +19,17 @@ export class RunTrace {
   readonly #file: string
   readonly #startMs = Date.now()
   readonly #attributes: SpanAttributes
-  readonly #spans: RunSpan[] = []
+  readonly #spans: RunSpan[] | undefined
   readonly #images = new Map<string, { name: string; cached: boolean }>()
   #closed: RunSpan[] | undefined
+  #dirMade = false
 
-  constructor(o: { dir: string; runId: string; attributes?: SpanAttributes }) {
+  /** `keep` holds every span in memory too, for an exporter to send once the run ends. */
+  constructor(o: { dir: string; runId: string; attributes?: SpanAttributes; keep?: boolean }) {
     this.traceId = traceIdOf(o.runId)
     this.#file = join(o.dir, SPANS_FILE)
     this.#attributes = { 'reeval.run.id': o.runId, ...o.attributes }
+    if (o.keep) this.#spans = []
   }
 
   /** Makes this process's spans this trace's, outside a worker. */
@@ -79,7 +83,7 @@ export class RunTrace {
     })
   }
 
-  /** Ends the run's span and stops taking spans; returns this process's, for an exporter. */
+  /** Ends the run's span and stops taking spans; returns the spans it kept, for an exporter. */
   close(o: { status?: string; error?: string } = {}): RunSpan[] {
     if (this.#closed) return this.#closed
     this.#write({
@@ -92,14 +96,21 @@ export class RunTrace {
       ...(o.error && { status: { code: 'error' as const, message: o.error } }),
     })
     setLocalSpanSink(undefined)
-    this.#closed = this.#spans
+    this.#closed = this.#spans ?? []
     return this.#closed
   }
 
-  #write(span: RunSpan) {
-    this.#spans.push(span)
+  #write(written: RunSpan) {
+    const span = written.status?.message
+      ? {
+          ...written,
+          status: { ...written.status, message: redactSecrets(written.status.message) },
+        }
+      : written
+    this.#spans?.push(span)
     try {
-      mkdirSync(join(this.#file, '..'), { recursive: true })
+      if (!this.#dirMade) mkdirSync(join(this.#file, '..'), { recursive: true })
+      this.#dirMade = true
       appendFileSync(this.#file, `${JSON.stringify(span)}\n`)
     } catch {}
   }

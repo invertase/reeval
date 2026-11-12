@@ -609,8 +609,9 @@ export class MachinePool<M> {
         machine.draining = true
         machine.unclaimed = []
         this.#forget(machine)
+        const closing = this.#closing.signal.aborted
         if (error === this.#stopReason) machine.why ??= 'unwanted'
-        this.#gone(machine, error === this.#stopReason ? undefined : error)
+        this.#gone(machine, error === this.#stopReason || closing ? undefined : error)
         throw error
       },
     )

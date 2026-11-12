@@ -109,7 +109,7 @@ A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash
 
 ## `OTEL_EXPORTER_OTLP_ENDPOINT`
 
-`OTEL_EXPORTER_OTLP_ENDPOINT`, or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, makes `reeval run` send the run's spans to that OpenTelemetry collector as it ends, over OTLP/HTTP JSON. `OTEL_EXPORTER_OTLP_HEADERS` adds headers, `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` describe the service, and `OTEL_TRACES_EXPORTER` of `none` turns the export off. A protocol other than `http/json` in `OTEL_EXPORTER_OTLP_PROTOCOL`, or a failed export, warns.
+`OTEL_EXPORTER_OTLP_ENDPOINT`, or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, makes `reeval run` send the run's spans to that OpenTelemetry collector as it ends, over OTLP/HTTP JSON. `OTEL_EXPORTER_OTLP_HEADERS` adds headers, `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` describe the service, and `OTEL_TRACES_EXPORTER` of `none` or `OTEL_SDK_DISABLED` of `true` turns the export off. reeval sends at most 512 spans a request, after it writes the run's record. A protocol other than `http/json` in `OTEL_EXPORTER_OTLP_PROTOCOL`, or a failed export, warns.
 
 ## `AI_GATEWAY_API_KEY`
 
