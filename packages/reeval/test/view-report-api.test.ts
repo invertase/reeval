@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { pkgRoot } from './helpers.ts'
@@ -38,6 +39,20 @@ const CONSUMER_RUNTIME = [
   'ptsDelta',
 ] as const
 
+/** On `reeval/view/report` only, so the `reeval/view` root stays free of zod. */
+const SCHEMA_EXPORTS: readonly string[] = [
+  'runReportSchema',
+  'attemptRefSchema',
+  'countSchema',
+  'deltaSchema',
+  'figureSchema',
+  'headlinePrimarySchema',
+  'intervalSchema',
+  'rateSchema',
+  'reportClaimSchema',
+  'spreadSchema',
+]
+
 describe('reeval/view/report public export', () => {
   test('package.json exposes ./view/report beside ./view', () => {
     assert.equal(pkg.name, 'reeval')
@@ -65,11 +80,33 @@ describe('reeval/view/report public export', () => {
     assert.ok(mod.runReportSchema && typeof mod.runReportSchema === 'object')
   })
 
-  test('reeval/view re-exports the same consumer runtime surface', async () => {
+  test('reeval/view re-exports the zod-free surface, not the schema', async () => {
     const view = await loadExport('./view')
     const report = await loadExport('./view/report')
-    for (const name of CONSUMER_RUNTIME) {
+    for (const name of CONSUMER_RUNTIME.filter((n) => !SCHEMA_EXPORTS.includes(n))) {
       assert.equal(typeof view[name], typeof report[name], name)
     }
+    for (const name of SCHEMA_EXPORTS) {
+      assert.notEqual(report[name], undefined, `reeval/view/report exports ${name}`)
+      assert.equal(view[name], undefined, `reeval/view must not export ${name}`)
+    }
+  })
+
+  test("reeval/view's built modules never import zod", () => {
+    const target = pkg.exports['./view']
+    assert.ok(target && typeof target === 'object')
+    const seen = new Set<string>()
+    const importers: string[] = []
+    const visit = (file: string) => {
+      if (seen.has(file)) return
+      seen.add(file)
+      const code = readFileSync(file, 'utf8')
+      if (/\bfrom\s*["']zod["']|import\(\s*["']zod["']\s*\)/.test(code)) importers.push(file)
+      for (const [, spec] of code.matchAll(/\bfrom\s*["'](\.{1,2}\/[^"']+)["']/g)) {
+        visit(resolve(dirname(file), spec as string))
+      }
+    }
+    visit(join(pkgRoot, target.default))
+    assert.deepEqual(importers, [], 'modules reachable from reeval/view that import zod')
   })
 })
