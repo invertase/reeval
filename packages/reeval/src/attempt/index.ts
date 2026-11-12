@@ -62,6 +62,7 @@ async function attemptBody(
   const ctx = getRunContext()
   const { runId, stagingDir, config } = ctx
   tracePlan(debug, spec, ctx)
+  const key = attemptKey(id, spec.cell.key, spec.n)
   let timer: AbortSignal | undefined
   let clock: ReturnType<typeof evalTimer> | undefined
   // The environment and image are prepared on the test's signal; the eval timer starts after,
@@ -74,12 +75,12 @@ async function attemptBody(
       debug.log('container', `starting the sandbox and session for ${who}`)
       clock?.pause()
       try {
-        return await a.timed('setupMs', () => startSession(a, runId))
+        return await a.timed('setupMs', () => startSession(a, runId, key))
       } finally {
         clock?.resume()
       }
     },
-    snapshotSidecar(stagingDir, attemptKey(id, spec.cell.key, spec.n)),
+    snapshotSidecar(stagingDir, key),
   )
   // The running turn's CLI stores its usage in the sandbox: read it before the sandbox goes.
   const destroy = () =>

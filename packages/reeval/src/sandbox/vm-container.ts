@@ -85,6 +85,7 @@ export async function createVmContainerSandbox(
       {
         sandbox: descriptor,
         runId: options.runId,
+        ...(options.attempt !== undefined && { attempt: options.attempt }),
         root: process.cwd(),
         ttlSeconds: Math.ceil(options.timeoutMs / 1000) + TTL_MARGIN_S,
         image: base.snapshot,

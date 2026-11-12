@@ -859,7 +859,7 @@ describe('runEngine: running', () => {
     assert.equal(events.filter((e) => e.type === 'eval-end').length, 2)
   })
 
-  test('the heartbeat names the attempts in progress until each ends or its worker exits, and stops with the run', async () => {
+  test('the heartbeat beats as the files start, names the attempts in progress until each ends or its worker exits, and ends with one done beat', async () => {
     const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
     const tests = {
       'a.eval.ts': [test0(0, 'one'), test0(1, 'two')],
@@ -888,18 +888,24 @@ describe('runEngine: running', () => {
       ctl.emit({ t: 'done' })
       ctl.exit()
     })
-    const beats: string[][] = []
-    const r = await engine({ run, heartbeat: { ms: 10, beat: (a) => beats.push(a) } }, spawn)
+    const beats: { keys: string[]; done: boolean }[] = []
+    const r = await engine(
+      { run, heartbeat: { ms: 10, beat: (keys, done) => beats.push({ keys, done }) } },
+      spawn,
+    )
     assert.deepEqual(
       r.evals.map((e) => e.state),
       ['passed', 'failed', 'passed'],
     )
+    assert.deepEqual(beats[0], { keys: [], done: false }, 'a beat as the files start')
+    assert.deepEqual(beats.at(-1), { keys: [], done: true }, 'a done beat as they end')
+    assert.equal(beats.filter((b) => b.done).length, 1)
     const after = beats.length
     await sleep(60)
     assert.equal(beats.length, after, 'no heartbeat once the files have run')
     const name = (key: string) => key.slice(key.lastIndexOf(' ') + 1)
     const states = beats
-      .map((b) => b.map(name).join(','))
+      .map((b) => b.keys.map(name).join(','))
       .filter((s, i, all) => s !== all[i - 1] && s !== '')
     assert.deepEqual(states, ['one,two', 'one,two,three', 'two,three', 'three'])
   })

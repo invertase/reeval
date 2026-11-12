@@ -80,6 +80,22 @@ describe('MachineService', () => {
     await assert.rejects(service.call('w1', lease('3')), /machine pools are closed/)
   })
 
+  test("the holdings name each attempt's machine and every machine the pools hold, idle ones included", async () => {
+    const fake = fakePooled(2)
+    const service = new MachineService({ pooled: () => fake.pooled })
+    assert.deepEqual(service.holdings(), { machines: [], leases: new Map() })
+    await service.call('w1', { ...lease('1'), attempt: 'one' })
+    await service.call('w1', lease('2'))
+    assert.deepEqual(service.holdings(), {
+      machines: ['m1', 'm2'],
+      leases: new Map([['one', 'm1']]),
+    })
+    await service.call('w1', { op: 'release', ticket: '1', broken: false })
+    assert.deepEqual(service.holdings(), { machines: ['m1', 'm2'], leases: new Map() }, 'm1 idle')
+    await service.close()
+    assert.deepEqual(service.holdings(), { machines: [], leases: new Map() })
+  })
+
   test('a worker that exits gives back what it held as broken, and stops what it waited for', async () => {
     const fake = fakePooled()
     const service = new MachineService({ pooled: () => fake.pooled })

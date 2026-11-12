@@ -21,7 +21,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
 import { attach, viewerEvent, viewerPath } from '../src/attach.ts'
-import { EventStreamError, openEventStream } from '../src/events.ts'
+import { beatWith, EventStreamError, openEventStream } from '../src/events.ts'
 import { stripAnsi } from '../src/ui/colors.ts'
 import type { ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import type { OutputOptions } from '../src/ui/mode.ts'
@@ -50,6 +50,12 @@ const header = (runId = 'run-1') => ({
 })
 
 const notice = (text: string): ReevalEvent => ({ type: 'notice', at: 1, level: 'warn', text })
+/** Until `ready()`, checked every few milliseconds, for at most 10s. */
+const until = async (ready: () => boolean) => {
+  for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
+  }
+}
 
 const capture = () => {
   const out = { text: '', write: (chunk: string) => (out.text += chunk) }
@@ -247,15 +253,26 @@ describe('the stream', () => {
       url: 'https://user:hunter2@relay.test/events',
       header: header(),
       warn: (w) => warnings.push(w),
+      retryMs: [5],
+      drainMs: 50,
       fetch: async () => {
         throw new Error(`refused with ${key}`)
       },
     })
     await stream.end(0)
-    assert.equal(warnings.length, 1)
-    assert.match(warnings[0] ?? '', /to https:\/\/relay\.test\/events: refused with/)
-    assert.ok(!warnings[0]?.includes('hunter2'))
-    assert.ok(!warnings[0]?.includes(key))
+    assert.equal(warnings.length, 2)
+    assert.match(
+      warnings[0] ?? '',
+      /to https:\/\/relay\.test\/events failed, trying again: refused with/,
+    )
+    assert.match(
+      warnings[1] ?? '',
+      /^gave up posting the event stream to https:\/\/relay\.test\/events at exit/,
+    )
+    for (const warning of warnings) {
+      assert.ok(!warning.includes('hunter2'))
+      assert.ok(!warning.includes(key))
+    }
   })
 
   test("a prepare event keeps what the terminal shows, not preflight's handles", async () => {
@@ -283,43 +300,140 @@ describe('the stream', () => {
     })
   })
 
-  test('a line the server refuses as too large (413) says so, with its message and no token', async () => {
+  test('a batch the server refuses as too large (413) is split, and a line it still refuses is dropped, with its message and no token', async () => {
     const warnings: string[] = []
+    const got: string[] = []
+    let gate: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      gate = resolve
+    })
     const stream = openEventStream({
       url: 'https://relay.test/api/runs/r1/events?token=hunter2',
       header: header(),
       warn: (w) => warnings.push(w),
-      fetch: async () =>
-        Response.json(
-          {
-            error: { code: 'payload_too_large', message: 'line 2 is too large', retryable: false },
-          },
-          { status: 413 },
-        ),
+      fetch: async (_url, init) => {
+        const body = String(init?.body)
+        if (!got.length) {
+          got.push(body)
+          await held
+          return new Response(null, { status: 204 })
+        }
+        if (body.includes('x'.repeat(100)) || body.split('\n').length > 2) {
+          return Response.json(
+            { error: { code: 'payload_too_large', message: 'line too large', retryable: false } },
+            { status: 413 },
+          )
+        }
+        got.push(body)
+        return new Response(null, { status: 204 })
+      },
     })
+    stream.write(notice('a'))
+    stream.write(notice('x'.repeat(100)))
+    stream.write(notice('b'))
+    gate?.()
     await stream.end(0)
+    const sent = got
+      .join('')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as RunEventLine)
+    assert.deepEqual(
+      sent.map((l) => (l.type === 'notice' ? l.text : l.type)),
+      ['header', 'a', 'b', 'exit'],
+    )
     assert.deepEqual(warnings, [
-      'stopped posting the event stream to https://relay.test/api/runs/r1/events?token=***: HTTP 413: the server refused a batch as too large, likely a line over its size limit (line 2 is too large)',
+      'dropped a line of the event stream to https://relay.test/api/runs/r1/events?token=***: the server refused it as too large (HTTP 413 (line too large))',
     ])
   })
 
-  test('a failing URL warns once and the run goes on', async () => {
+  test('a batch the server refuses for good (4xx) is dropped and the stream goes on', async () => {
     const warnings: string[] = []
+    const got: string[] = []
+    let calls = 0
+    const stream = openEventStream({
+      url: 'https://relay.test/events',
+      header: header(),
+      warn: (w) => warnings.push(w),
+      fetch: async (_url, init) => {
+        if (++calls === 1) return new Response('bad', { status: 400 })
+        got.push(String(init?.body))
+        return new Response(null, { status: 204 })
+      },
+    })
+    await until(() => calls === 1)
+    stream.write(notice('after'))
+    await stream.end(0)
+    assert.match(got.join(''), /"after"/)
+    assert.doesNotMatch(got.join(''), /"type":"header"/)
+    assert.deepEqual(warnings, [
+      'dropped a line of the event stream to https://relay.test/events: the server refused them (HTTP 400)',
+    ])
+  })
+
+  test('a failing URL is tried again with backoff, keeping every line in order, and warns once until it is back', async () => {
+    const warnings: string[] = []
+    const got: string[] = []
+    const failures = ['500', 'network', '429', 'timeout']
     const stream = openEventStream({
       url: 'http://127.0.0.1:9/events',
       header: header(),
       warn: (w) => warnings.push(w),
-      fetch: async () => new Response('no', { status: 500 }),
+      retryMs: [5, 10],
+      fetch: async (_url, init) => {
+        const failure = failures.shift()
+        if (failure === '500') return new Response('no', { status: 500 })
+        if (failure === '429') return new Response('slow down', { status: 429 })
+        if (failure === 'network') throw new TypeError('fetch failed')
+        if (failure === 'timeout') throw new DOMException('timed out', 'TimeoutError')
+        got.push(String(init?.body))
+        return new Response(null, { status: 204 })
+      },
     })
     stream.write(notice('a'))
-    await sleep(20)
+    await sleep(5)
     stream.write(notice('b'))
     await stream.end(0)
-    assert.equal(warnings.length, 1)
-    assert.match(
-      warnings[0] ?? '',
-      /stopped posting the event stream to http:\/\/127\.0\.0\.1:9\/events: HTTP 500/,
+    const sent = got
+      .join('')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as RunEventLine)
+    assert.deepEqual(
+      sent.map((l) => (l.type === 'notice' ? l.text : l.type)),
+      ['header', 'a', 'b', 'exit'],
     )
+    assert.deepEqual(warnings, [
+      'posting the event stream to http://127.0.0.1:9/events failed, trying again: HTTP 500',
+      'posting the event stream to http://127.0.0.1:9/events again',
+    ])
+  })
+
+  test('a target that never comes back keeps one attempts heartbeat queued, and exit says what did not go', async () => {
+    const warnings: string[] = []
+    const bodies: string[] = []
+    const stream = openEventStream({
+      url: 'https://relay.test/events',
+      header: header(),
+      warn: (w) => warnings.push(w),
+      retryMs: [5],
+      drainMs: 50,
+      fetch: async (_url, init) => {
+        bodies.push(String(init?.body))
+        return new Response(null, { status: 503 })
+      },
+    })
+    for (const key of ['one', 'two', 'three']) {
+      stream.heartbeat({ attempts: [{ key }], machines: [] })
+    }
+    await stream.end(1)
+    const last = bodies.at(-1) ?? ''
+    assert.match(last, /"key":"three"/)
+    assert.doesNotMatch(last, /"key":"(one|two)"/)
+    assert.deepEqual(warnings, [
+      'posting the event stream to https://relay.test/events failed, trying again: HTTP 503',
+      "gave up posting the event stream to https://relay.test/events at exit: its last 3 lines didn't go",
+    ])
   })
 
   test("a file it can't open warns and the run goes on", async () => {
@@ -894,12 +1008,6 @@ describe('attach', () => {
 })
 
 describe('heartbeats', () => {
-  /** Until `ready()`, checked every few milliseconds, for at most 10s. */
-  const until = async (ready: () => boolean) => {
-    for (const deadline = Date.now() + 10_000; !ready(); await sleep(5)) {
-      if (Date.now() > deadline) throw new Error(`timed out waiting for ${ready}`)
-    }
-  }
   const beats = (file: string) => readLines(file).filter((l) => l.type === 'heartbeat').length
   /** A stream from a run on another host, which attach can't check for a live process. */
   const remote = (file: string, ...lines: object[]) =>
@@ -966,15 +1074,44 @@ describe('heartbeats', () => {
   test('a heartbeat with the attempts in progress is written as given, and none after the exit line', async () => {
     const file = join(tempDir('events'), 'attempts.ndjson')
     const stream = openEventStream({ file, header: header(), warn: assert.fail, heartbeatMs: 0 })
-    stream.heartbeat(['evals/a.eval.ts › one # fake/-/fake#1'])
-    stream.heartbeat([])
+    const key = 'evals/a.eval.ts › one # fake/-/fake#1'
+    stream.heartbeat({ attempts: [{ key, machine: 'm-1' }], machines: ['m-1', 'm-2'] })
+    stream.heartbeat({ attempts: [], machines: ['m-1'], done: true })
     await stream.end(0)
-    stream.heartbeat(['late'])
+    stream.heartbeat({ attempts: [{ key: 'late' }], machines: [] })
     const lines = readLines(file)
     assert.deepEqual(
-      lines.map((l) => (l.type === 'heartbeat' ? l.attempts : l.type)),
-      ['header', ['evals/a.eval.ts › one # fake/-/fake#1'], [], 'exit'],
+      lines.map((l) => (l.type === 'heartbeat' ? { ...l, at: 0 } : l.type)),
+      [
+        'header',
+        { type: 'heartbeat', at: 0, attempts: [{ key, machine: 'm-1' }], machines: ['m-1', 'm-2'] },
+        { type: 'heartbeat', at: 0, attempts: [], machines: ['m-1'], done: true },
+        'exit',
+      ],
     )
+  })
+
+  test("a beat names each attempt's machine and every machine the pools hold", () => {
+    const sent: unknown[] = []
+    const { ms, beat } = beatWith(
+      { ms: 1000, send: (b) => sent.push(b) },
+      {
+        holdings: () => ({
+          machines: ['m-1', 'm-2'],
+          leases: new Map([
+            ['a', 'm-1'],
+            ['gone', 'm-2'],
+          ]),
+        }),
+      },
+    )
+    assert.equal(ms, 1000)
+    beat(['a', 'b'], false)
+    beat([], true)
+    assert.deepEqual(sent, [
+      { attempts: [{ key: 'a', machine: 'm-1' }, { key: 'b' }], machines: ['m-1', 'm-2'] },
+      { attempts: [], machines: ['m-1', 'm-2'], done: true },
+    ])
   })
 
   test('a URL sink gets the heartbeats too', async () => {
@@ -1206,26 +1343,35 @@ evaluate('slow', { environments: slow }, async (c) => {
       'evals/both.eval.ts': `import { evaluate, expect } from 'reeval'
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 evaluate('quick', async (c) => {
-  await wait(600)
+  await wait(2000)
   expect(c.attempt.n).toBe(1)
 })
 evaluate('slow', async (c) => {
-  await wait(1800)
+  await wait(4500)
   expect(c.attempt.n).toBe(1)
 })
 `,
     })
     const stream = join(tempDir('events-attempts-heartbeat'), 'run.ndjson')
     const ran = await runCli(p.dir, ['run', '--events-file', stream], {
-      env: { REEVAL_EVENTS_HEARTBEAT: '100ms' },
+      env: { REEVAL_EVENTS_HEARTBEAT: '1s' },
     })
     assert.equal(ran.code, 0, ran.stderr)
     const lines = readLines(stream)
-    const beats = lines.flatMap((l, i) =>
-      l.type === 'heartbeat' && l.attempts ? [{ i, names: l.attempts.map(nameOf) }] : [],
+    assert.equal((lines[0] as RunEventsHeader).attemptsHeartbeatMs, 1000)
+    const beats = lines.flatMap((l, i) => (l.type === 'heartbeat' && l.attempts ? [{ i, l }] : []))
+    assert.deepEqual(
+      beats.map(({ l }) => ({ ...l, at: 0 })).at(0),
+      { type: 'heartbeat', at: 0, attempts: [], machines: [] },
+      'a beat as the files start',
+    )
+    assert.deepEqual(
+      beats.map(({ l }) => ({ ...l, at: 0 })).at(-1),
+      { type: 'heartbeat', at: 0, attempts: [], machines: [], done: true },
+      'a done beat as they end',
     )
     const states = beats
-      .map((b) => b.names.join(','))
+      .map(({ l }) => (l.attempts ?? []).map((a) => nameOf(a.key)).join(','))
       .filter((s, i, all) => s !== all[i - 1] && s !== '')
     assert.deepEqual(states, ['quick,slow', 'slow'])
     const end = lines.findIndex((l) => l.type === 'run-end')
@@ -1244,7 +1390,10 @@ evaluate('slow', async (c) => {
       env: { REEVAL_EVENTS_HEARTBEAT: 'often' },
     })
     assert.equal(refused.code, 2)
-    assert.match(refused.stderr, /REEVAL_EVENTS_HEARTBEAT must be a duration like 30s/)
+    assert.match(
+      refused.stderr,
+      /REEVAL_EVENTS_HEARTBEAT must be 0 for none or a duration from 1s to 10m \(got often\)/,
+    )
   })
 
   test("run-end names the record, files and archive --record wrote; an unrecorded run's names none", async () => {

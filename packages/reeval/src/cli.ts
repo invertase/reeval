@@ -28,11 +28,14 @@ import {
 } from './config.ts'
 import { ciRunner, directOnCloud, isDirect, rootlessPodmanSwitch, setupEgress } from './egress.ts'
 import { budgetMarker } from './engine/budget.ts'
-import type { CollectedPlan, EngineOptions, EngineRun, PlannedItem } from './engine/node.ts'
+import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import {
   ATTEMPTS_HEARTBEAT_MS,
+  ATTEMPTS_HEARTBEAT_RANGE,
+  type AttemptsBeat,
+  beatWith,
   displayUrl,
   type EventStream,
   isAttachUrl,
@@ -1209,12 +1212,13 @@ async function runCommand(
   const savedEvents = eventsTo ? relativeFile(root, eventsTo) : undefined
   if (startedWith && savedEvents) startedWith.events = savedEvents
   const eventsUrl = flags['events-url']
-  let heartbeat: EngineOptions['heartbeat']
+  let heartbeat: AttemptsBeat | undefined
   if (eventsTo || eventsUrl) {
     const ms = parseHeartbeat(
       'REEVAL_EVENTS_HEARTBEAT',
       process.env.REEVAL_EVENTS_HEARTBEAT,
       ATTEMPTS_HEARTBEAT_MS,
+      ATTEMPTS_HEARTBEAT_RANGE,
     )
     const cwd = cwdIn(root)
     eventStream = openEventStream({
@@ -1227,11 +1231,12 @@ async function runCommand(
         harness,
         verbosity: ctx.verbosity ?? 0,
         ...(cwd === undefined ? {} : { cwd }),
+        ...(ms > 0 ? { attemptsHeartbeatMs: ms } : {}),
       },
       warn: (message) => process.stderr.write(yellow(`reeval: ${message}\n`)),
     })
     const stream = eventStream
-    if (ms > 0) heartbeat = { ms, beat: (attempts) => stream.heartbeat(attempts) }
+    if (ms > 0) heartbeat = { ms, send: (beat) => stream.heartbeat(beat) }
   }
   const renderer = eventStream ? teeRenderer(drawn, eventStream) : drawn
   let executed: Awaited<ReturnType<typeof executeRun>>
@@ -1855,7 +1860,7 @@ async function executeRun(
     /** The event stream file, as live.json names it. */
     events?: string
     /** The event stream's heartbeat of the attempts in progress. */
-    heartbeat?: EngineOptions['heartbeat']
+    heartbeat?: AttemptsBeat
     /** Where a run that asked for the cloud platform goes, and the dry run's line for it. */
     target?: RunTarget
     targetDetail?: string
@@ -2349,7 +2354,7 @@ async function executeRun(
       run,
       filters,
       onPlan,
-      ...(started.heartbeat ? { heartbeat: started.heartbeat } : {}),
+      ...(started.heartbeat ? { heartbeat: beatWith(started.heartbeat, machines) } : {}),
       services: {
         call: (owner, service, body) =>
           service === MACHINES

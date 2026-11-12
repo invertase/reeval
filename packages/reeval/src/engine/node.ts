@@ -284,9 +284,10 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   const active = new Map<string, string>()
   const { heartbeat } = input
   const beating = heartbeat
-    ? setInterval(() => heartbeat.beat([...active.keys()]), heartbeat.ms)
+    ? setInterval(() => heartbeat.beat([...active.keys()], false), heartbeat.ms)
     : undefined
   beating?.unref()
+  heartbeat?.beat([], false)
   let owner = 0
   await eachLimited(
     collected,
@@ -460,7 +461,10 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       }
     },
     () => !canceled,
-  ).finally(() => clearInterval(beating))
+  ).finally(() => {
+    clearInterval(beating)
+    heartbeat?.beat([], true)
+  })
 
   // Attempts finish in any order; results are listed by file, then as declared.
   const evals: EngineEval[] = []

@@ -2624,10 +2624,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'run.events',
     area: 'CLI and runner',
-    name: "`reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host), with heartbeat lines that show a quiet run as stalled, then lost, and, every `REEVAL_EVENTS_HEARTBEAT` (30s), name the attempts in progress, and a `run-end` that names where a recorded run's record, files and archive landed (a remote store's local copy included); `reeval clean` prunes the streams",
-    fixtures: ['output/events'],
+    name: "`reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host), with heartbeat lines that show a quiet run as stalled, then lost, and, every `REEVAL_EVENTS_HEARTBEAT` (30s, from 1s to 10m) from the files' start to a `done` beat as they end, name the attempts in progress, each with its pooled machine, and the machines the run holds (the stream's POSTs tried again on failure), and a `run-end` that names where a recorded run's record, files and archive landed (a remote store's local copy included); `reeval clean` prunes the streams",
+    fixtures: ['output/events', 'sandbox/boat-heartbeat'],
     unit: [
       'reeval/test/events.test.ts',
+      'reeval/test/machine-service.test.ts',
       'reeval/test/store.test.ts',
       'reeval/test/ui.test.ts',
       'reeval/test/ink-list.test.ts',

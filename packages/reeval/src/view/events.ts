@@ -29,6 +29,11 @@ export type RunEventsHeader = {
    */
   heartbeatMs?: number
   /**
+   * How often the run writes a heartbeat with `attempts` while its eval files run, so a reader can
+   * treat a gap past it as a stall. Absent when it writes none.
+   */
+  attemptsHeartbeatMs?: number
+  /**
    * The `reeval run`'s current directory from its project root, as a `/` path (`''` when it ran in
    * the root). The paths the run prints are from that directory, so a reader turns them into the
    * project's with it. Absent from an older reeval's streams, and when the two share no path.
@@ -43,20 +48,36 @@ export type RunEventsExit = {
   code: number
 }
 
+/** An attempt in progress, as a heartbeat names it. */
+export type HeartbeatAttempt = {
+  /** The attempt's key, as its events name it. */
+  key: string
+  /** The id of the pooled machine it holds a slot on, once it has one; absent otherwise. */
+  machine?: string
+}
+
 /**
  * Written while the stream is otherwise quiet, so a reader can tell a run that's still going from
- * one that stalled or was lost, and, with `attempts`, on the run's own interval while its eval
- * files run. Streams from before it have none.
+ * one that stalled or was lost, and, with `attempts`, every `attemptsHeartbeatMs` while the run's
+ * eval files run: once as they start, then on that interval, and once more with `done` as the
+ * last of them ends. Streams from before it have none.
  */
 export type RunEventsHeartbeat = {
   type: 'heartbeat'
   at: number
   /**
-   * The keys of the attempts in progress, in the order they started: each started (its lease
-   * granted, its sandbox setup, turns and judging under way) and not yet ended, in a worker
-   * process that hasn't exited. Absent from the heartbeats a quiet stream gets.
+   * The attempts in progress, in the order they started: each started (its lease granted, its
+   * sandbox setup, turns and judging under way) and not yet ended, in a worker process that hasn't
+   * exited. Absent from the heartbeats a quiet stream gets.
    */
-  attempts?: string[]
+  attempts?: HeartbeatAttempt[]
+  /**
+   * The ids of every pooled machine the run holds, idle ones included, from each one's start until
+   * it's removed. With `attempts`.
+   */
+  machines?: string[]
+  /** The eval files have ended: `attempts` is empty, and no later line lists any. */
+  done?: true
 }
 
 /** One line of a run's event stream. */

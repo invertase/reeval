@@ -307,6 +307,11 @@ export class MachinePool<M> {
     return { ...this.#stats }
   }
 
+  /** The ids of the machines it holds: from each start's return until the machine is removed. */
+  machineIds(): string[] {
+    return [...this.#machines].flatMap((m) => (m.id === undefined ? [] : [m.id]))
+  }
+
   /** Removes every machine, those in use and starting included; waiting attempts fail. */
   close(): Promise<void> {
     this.#closed ??= (async () => {

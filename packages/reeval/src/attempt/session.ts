@@ -550,12 +550,17 @@ function startHarness(
  * the diff, switches to the agent's egress, and starts the harness session with the
  * harness-placed skills and MCP servers.
  */
-export async function startSession(a: Attempt, runId: string): Promise<[Sandbox, HarnessSession]> {
+export async function startSession(
+  a: Attempt,
+  runId: string,
+  attempt: string,
+): Promise<[Sandbox, HarnessSession]> {
   const startedAt = performance.now()
   const { spec } = a
   const env = a.env as ResolvedEnvironment
   const box = await createSandbox(spec.sandbox, {
     runId,
+    attempt,
     timeoutMs: spec.timeoutMs + setupAllowance(spec) + 60_000,
     signal: a.signal,
     env: env.vars,
