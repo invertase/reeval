@@ -97,13 +97,13 @@ export const SCHEMA_VERSIONS = {
   credentials: 1,
 } as const
 
-/** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
+/** A file from a newer reeval, whose version (`field`, `schemaVersion` by default) this reeval doesn't know. */
 export class NewerSchemaError extends Error {
   override name = 'NewerSchemaError'
   /** The message without its subject: `written by a newer reeval (…). Upgrade reeval to read it.` */
   readonly reason: string
-  constructor(what: string, version: number, newest: number) {
-    const reason = `written by a newer reeval (schemaVersion ${version}; this reeval reads up to ${newest}). Upgrade reeval to read it.`
+  constructor(what: string, version: number, newest: number, field = 'schemaVersion') {
+    const reason = `written by a newer reeval (${field} ${version}; this reeval reads up to ${newest}). Upgrade reeval to read it.`
     super(`${what} was ${reason}`)
     this.reason = reason
   }

@@ -373,6 +373,12 @@ describe('readableRunReport', () => {
   test('refuses a report from a newer reeval', () => {
     const newer = { ...golden(), reportVersion: REPORT_VERSION + 1 }
     assert.throws(() => readableRunReport(newer), NewerSchemaError)
+    assert.throws(
+      () => readableRunReport(newer),
+      new RegExp(
+        `This report was written by a newer reeval \\(reportVersion ${REPORT_VERSION + 1}; `,
+      ),
+    )
   })
 })
 

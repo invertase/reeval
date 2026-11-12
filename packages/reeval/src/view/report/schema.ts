@@ -813,7 +813,7 @@ export const looseRunReportSchema: z.ZodType<RunReport> = loose(runReportSchema)
 export function readableRunReport(value: unknown, what = 'This report'): RunReport {
   let version = (value as { reportVersion?: unknown } | null)?.reportVersion
   if (typeof version === 'number' && version > REPORT_VERSION) {
-    throw new NewerSchemaError(what, version, REPORT_VERSION)
+    throw new NewerSchemaError(what, version, REPORT_VERSION, 'reportVersion')
   }
   let v = value
   for (; typeof version === 'number' && version < REPORT_VERSION; version++) {
