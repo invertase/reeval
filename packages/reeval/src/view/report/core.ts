@@ -19,7 +19,14 @@ export {
   tokensText,
   usdFigure,
 } from './format.ts'
-export { type AttemptIdMap, attemptAnchor, attemptIds, idOf, selectedEvals } from './ids.ts'
+export {
+  type AttemptIdMap,
+  attemptAnchor,
+  attemptAnchorId,
+  attemptIds,
+  idOf,
+  selectedEvals,
+} from './ids.ts'
 export {
   COMPARE_STATUS_LABEL,
   compareStatusLabel,

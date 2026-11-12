@@ -22,7 +22,13 @@ export type Rate = {
   interval: Interval | null
 }
 /** `href` is the citation target (Section 2.10). */
-export type AttemptRef = { id: string; href: string }
+export type AttemptRef = {
+  /** The display label, `A1..AN`, numbered over the evals the report covers. */
+  id: string
+  /** The attempt's `AttemptRecord.key`, the same in every report of its run. */
+  key: string
+  href: string
+}
 export type Fairness = 'clear' | 'within-noise' | 'too-few-runs'
 export type MeasureKey =
   | 'tokens'

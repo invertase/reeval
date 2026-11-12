@@ -1,4 +1,6 @@
 import type { EvalEntry, RunRecord } from '../../history/types.ts'
+import { sha256Hex } from '../../sha256.ts'
+import { slugify } from '../../slug.ts'
 
 export type AttemptIdMap = ReadonlyMap<string, string>
 
@@ -30,9 +32,18 @@ export function idOf(ids: AttemptIdMap, attemptKey: string): string | null {
   return ids.get(attemptKey) ?? null
 }
 
-/** Anchor fragment for an attempt ID (`#a12` for `A12`). */
-export function attemptAnchor(id: string): string {
-  return `#${id.toLowerCase()}`
+/**
+ * The HTML id of an attempt's row in the attempt index, from its stable key, so a link to it holds
+ * in any report of the run: `attempt-` and a slug of the key, with a hash of the whole key that
+ * keeps two keys whose slugs match apart.
+ */
+export function attemptAnchorId(key: string): string {
+  return `attempt-${slugify(key, 60) || 'key'}-${sha256Hex(key).slice(0, 8)}`
+}
+
+/** Anchor fragment for an attempt: `#` and its `attemptAnchorId`. */
+export function attemptAnchor(key: string): string {
+  return `#${attemptAnchorId(key)}`
 }
 
 /** Eval entries in report order, optionally filtered by `options.evals`. */

@@ -89,6 +89,7 @@ const rateSchema: z.ZodType<Rate> = z.strictObject({
 
 const attemptRefSchema: z.ZodType<AttemptRef> = z.strictObject({
   id: z.string(),
+  key: z.string(),
   href: z.string(),
 })
 

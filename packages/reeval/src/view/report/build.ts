@@ -137,7 +137,7 @@ function assignAttemptHrefs(ctx: Ctx): void {
       if (a.seq === null) continue
       const id = ctx.ids.get(a.key)
       if (!id) continue
-      const href = attemptHref(e, a, id, ctx.linkBase, ctx.hrefs)
+      const href = attemptHref(e, a, ctx.linkBase, ctx.hrefs)
       ctx.hrefByKey.set(a.key, href)
     }
   }
@@ -926,7 +926,7 @@ function chooseHeadline(
         // Citation filled later when we have ids; placeholder href for structure.
         lead = {
           text: leadAnswer.text.slice(0, 200),
-          attempt: { id: 'A?', href: '#' },
+          attempt: { id: 'A?', key: attempt.key, href: '#' },
           harness: cellOf(e, attempt.cell)?.harness ?? attempt.cell,
           arm: cellOf(e, attempt.cell)?.environment ?? null,
           case: attempt.case ?? null,
@@ -1899,7 +1899,7 @@ function buildAttemptIndex(ctx: Ctx): AttemptIndexRow[] {
       const id = ids.get(a.key)
       if (!id) continue
       const cell = cellOf(e, a.cell)
-      const href = hrefByKey.get(a.key) ?? attemptHref(e, a, id, linkBase, ctx.hrefs)
+      const href = hrefByKey.get(a.key) ?? attemptHref(e, a, linkBase, ctx.hrefs)
       const diffStats = attemptDiffStats(a)
       const reclassified =
         a.outcome === 'infra_error' &&

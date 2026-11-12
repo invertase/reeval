@@ -2,6 +2,7 @@
 // `reeval show --md`, `reeval compare --md`, the MCP server's `md` and `reeval analyze --save`.
 
 import { medianWithDelta } from '../view/report/format.ts'
+import { attemptAnchorId } from '../view/report/ids.ts'
 import {
   COMPARE_STATUS_LABEL,
   contrastMeasureLabel,
@@ -779,7 +780,7 @@ export const blockMarkdown: BlockMarkdown = {
             .filter(Boolean)
             .join(', ')
           return [
-            `<a id="${r.id.toLowerCase()}"></a>${r.id}`,
+            `<a id="${attemptAnchorId(r.key)}"></a>${r.id}`,
             r.evalId,
             r.harness,
             [r.arm, r.case].filter(Boolean).join(' / ') || 'n/a',

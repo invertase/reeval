@@ -7,6 +7,8 @@ import { FORBIDDEN_OUTPUT, runReportMarkdown } from '../src/renderer/markdown.ts
 import type { CompareRow } from '../src/view/compare.ts'
 import { NewerSchemaError, readableRecord } from '../src/view/record.ts'
 import {
+  attemptAnchor,
+  attemptAnchorId,
   buildRunReport,
   REPORT_VERSION,
   readableRunReport,
@@ -264,7 +266,36 @@ describe('buildRunReport', () => {
     const hrefs = report.attempts.map((row) => row.href)
     assert.equal(new Set(hrefs).size, hrefs.length)
     assert.ok(hrefs.some((h) => h.includes('shared/transcript.jsonl')))
-    assert.ok(hrefs.some((h) => /^#a\d+$/.test(h)))
+    assert.ok(hrefs.includes(attemptAnchor(b.key)), 'the second falls back to its anchor')
+    assert.match(attemptAnchor(b.key), /^#attempt-[a-z0-9-]+$/)
+  })
+
+  test('attempt anchors come from the stable key, the same in any report of the run, and each resolves', () => {
+    const record = loadCorpusRun('with-layouts')
+    const whole = buildRunReport(record)
+    const lastSeq = (e: (typeof record.evals)[number]) =>
+      Math.max(-1, ...e.attempts.map((a) => a.seq ?? -1))
+    const last = [...record.evals].sort((a, b) => lastSeq(b) - lastSeq(a))[0]
+    assert.ok(last)
+    const one = buildRunReport(record, { evals: [last.key] })
+    const keyOf = (r: typeof whole) => new Map(r.attempts.map((a) => [a.key, a]))
+    const all = keyOf(whole)
+    let renumbered = 0
+    for (const row of one.attempts) {
+      const same = all.get(row.key)
+      assert.ok(same, row.key)
+      if (same.id !== row.id) renumbered++
+      if (row.href.startsWith('#')) assert.equal(row.href, same.href, 'the anchor is the same')
+    }
+    assert.ok(renumbered > 0, 'the one-eval report numbers its attempts from A1')
+    const md = runReportMarkdown(whole)
+    const targets = new Set([...md.matchAll(/<a id="([^"]+)"><\/a>/g)].map((m) => m[1]))
+    assert.equal(targets.size, whole.attempts.length, 'one anchor per attempt, all distinct')
+    for (const a of whole.attempts) assert.ok(targets.has(attemptAnchorId(a.key)), a.key)
+    const links = [...md.matchAll(/\]\(#(attempt-[^)]+)\)/g)].map((m) => m[1] as string)
+    for (const link of links) assert.ok(targets.has(link), `#${link} has a target`)
+    const cites = JSON.stringify(whole).match(/"id":"A\d+","key":"[^"]+"/g) ?? []
+    assert.ok(cites.length > 0, 'every AttemptRef carries its key')
   })
 
   test('text headlines disclose representative multi-answer collapse', () => {

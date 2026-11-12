@@ -21,15 +21,15 @@ function kept(ref: FileRef | undefined | null): string | null {
 }
 
 /**
- * Citation target for an attempt: transcript, else diff, else first capture, else `#aN`.
+ * Citation target for an attempt: transcript, else diff, else first capture, else its anchor in
+ * the attempt index (`attemptAnchor`).
  * `FileRef.path` values are already relative to the run directory.
- * When `used` is set, a path already claimed by another attempt falls back to `#aN`
+ * When `used` is set, a path already claimed by another attempt falls back to the anchor
  * so baseline and variant cites stay distinct.
  */
 export function attemptHref(
   _evalEntry: Pick<EvalEntry, 'slug'>,
   attempt: AttemptRecord,
-  id: string,
   linkBase?: string,
   used?: Set<string>,
 ): string {
@@ -42,14 +42,14 @@ export function attemptHref(
         if (diff) return withBase(linkBase, diff)
         const capture = files.artifacts?.[0]
         if (capture) return withBase(linkBase, capture.path)
-        return attemptAnchor(id)
+        return attemptAnchor(attempt.key)
       })()
   if (!used) return preferred
   if (!used.has(preferred) || preferred.startsWith('#')) {
     used.add(preferred)
     return preferred
   }
-  const fallback = attemptAnchor(id)
+  const fallback = attemptAnchor(attempt.key)
   used.add(fallback)
   return fallback
 }
@@ -65,8 +65,8 @@ export function attemptRef(
   const id = idOf(ids, attempt.key)
   if (!id) return null
   const assigned = hrefByKey?.get(attempt.key)
-  if (assigned) return { id, href: assigned }
-  return { id, href: attemptHref(evalEntry, attempt, id, linkBase, used) }
+  if (assigned) return { id, key: attempt.key, href: assigned }
+  return { id, key: attempt.key, href: attemptHref(evalEntry, attempt, linkBase, used) }
 }
 
 /** Capture PNG link, or null when not kept (caller prints `name (not kept)`). */
