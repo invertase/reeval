@@ -1,4 +1,4 @@
-import type { ArtifactLevel, RunRecord } from '../../history/types.ts'
+import type { ArtifactLevel, RunRecord, RunScope } from '../../history/types.ts'
 import type { CompareCut, Outcome } from '../../types.ts'
 import type { ActionKind, Confidence } from '../analysis.ts'
 import type { CompareStatus } from '../compare.ts'
@@ -80,6 +80,8 @@ export type RunHeader = {
   author: string
   reeval: string
   profile: string | null
+  /** Which runs this one is like-with-like with (`runScope`); unset in reports built before it. */
+  scope?: RunScope
   /** Null when cells ran different counts. */
   runsPerCell: number | null
   wall: Figure

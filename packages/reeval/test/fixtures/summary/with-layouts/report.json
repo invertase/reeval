@@ -9,6 +9,11 @@
     "author": "cursor-agent",
     "reeval": "0.10.0",
     "profile": null,
+    "scope": {
+      "profile": null,
+      "subset": false,
+      "configKey": "20046482a8869074cc92a287684012ae8d185e05d93e7449c6a3b749b96aa926"
+    },
     "runsPerCell": null,
     "wall": {
       "value": 1754,

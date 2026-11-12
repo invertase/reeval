@@ -11,6 +11,7 @@ import { effortSample, filesChanged, formatCount, formatSeconds } from '../effor
 import { labeledJudgments } from '../judgments.ts'
 import { attemptAnswerRows, isUngatedMiss } from '../model.ts'
 import type { RunRemarks } from '../remarks.ts'
+import { runScope } from '../scope.ts'
 import { factSegment, messageLine } from '../suite.ts'
 import { turnErrorKind } from '../turn-error.ts'
 import {
@@ -394,6 +395,7 @@ function buildHeader(ctx: Ctx): RunHeader {
     author: record.author,
     reeval: record.stack.reeval,
     profile: record.profile?.name ?? null,
+    scope: runScope(record),
     runsPerCell: runsPerCell(evals),
     wall: durationFigure(record.durationMs),
     tally,

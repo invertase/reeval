@@ -1971,6 +1971,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts'],
   },
   {
+    id: 'history.scope',
+    area: 'Records and studio',
+    name: "A run's scope (`runScope` in `reeval/view`): its profile, whether `reeval run`'s arguments narrowed it, and a key over its profile, arguments and settings, on each history entry and the `RunReport` header",
+    unit: ['reeval/test/run-scope.test.ts'],
+  },
+  {
     id: 'history.artifacts',
     area: 'Records and studio',
     name: "`history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did",

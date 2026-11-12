@@ -546,6 +546,13 @@ const runHeaderSchema: z.ZodType<RunHeader> = z.strictObject({
   author: z.string(),
   reeval: z.string(),
   profile: z.string().nullable(),
+  scope: z
+    .strictObject({
+      profile: z.string().nullable(),
+      subset: z.boolean(),
+      configKey: z.string().regex(/^[0-9a-f]{64}$/),
+    })
+    .optional(),
   runsPerCell: z.number().int().positive().nullable(),
   wall: figureSchema,
   tally: runTallySchema,

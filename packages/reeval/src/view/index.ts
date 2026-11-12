@@ -16,6 +16,7 @@ export type {
   JudgmentRecord,
   RunDebug,
   RunRecord,
+  RunScope,
   StackSummary,
 } from '../history/types.ts'
 export type {
@@ -51,5 +52,6 @@ export {
 } from './record.ts'
 export * from './remarks.ts'
 export * from './report/core.ts'
+export { runScope } from './scope.ts'
 export * from './suite.ts'
 export { type TurnErrorKind, turnErrorKind } from './turn-error.ts'

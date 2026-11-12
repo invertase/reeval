@@ -1161,6 +1161,33 @@ export type FamilyLiftSummary = Pick<FamilyLift, 'variant' | 'vs' | 'points' | '
 }
 
 /**
+ * Which runs a run is like-with-like with, derived from its record (`runScope` in `reeval/view`):
+ * runs with the same `configKey` ran the same profile, `reeval run` arguments and settings.
+ */
+export type RunScope = {
+  /** The profile's name; null without one. */
+  profile: string | null
+  /**
+   * The run was narrowed: `invocation` has filters, `--tag`, `--trait` or `--runs`. An eval left
+   * out by `.only` doesn't set it, since the record's `skip` doesn't tell `.only` from `.skip`.
+   */
+  subset: boolean
+  /**
+   * The hex `sha256` of the profile's `name`, `defaults` (its `timeout` in milliseconds) and
+   * `limit`, the invocation's `runs`, `filters`, `tags` and `traits`, the config's `environment`,
+   * `runs`, `bestOf`, `judgeModel`, `threshold` and `timeoutMs`, and `stack.fingerprintScope`, as
+   * canonical JSON with a version, `v: 1`, which any change to these inputs or their
+   * canonicalization bumps, so a newer reeval's keys never silently match an older one's.
+   * Nothing that follows the evals that ran: not `config.sandbox`, the harnesses or the
+   * environments' contents (which a
+   * `--retry-errors`, a renamed file or a new eval change), nor the author, git, time or
+   * concurrency. So adding an eval keeps the key, runs on other harnesses can share it, and each
+   * cell's fingerprint guards the cell.
+   */
+  configKey: string
+}
+
+/**
  * One line of the derived history listing: cached locally by the CLI, and the run header in the
  * studio's index shards.
  */
@@ -1168,6 +1195,8 @@ export type HistoryEntry = {
   runId: string
   recorded: boolean
   status: RunRecord['status']
+  /** Unset on entries built before it; `runScope` derives it from any record. */
+  scope?: RunScope
   startedAt: string
   durationMs: number
   author: string

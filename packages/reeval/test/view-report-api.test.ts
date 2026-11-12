@@ -108,6 +108,7 @@ describe('reeval/view/report and reeval/renderer/* public exports', () => {
   test('reeval/view re-exports the zod-free surface, not the schema', async () => {
     const view = await loadExport('./view')
     const report = await loadExport('./view/report')
+    assert.equal(typeof view.runScope, 'function', 'reeval/view exports runScope')
     for (const name of CONSUMER_RUNTIME.filter((n) => !SCHEMA_EXPORTS.includes(n))) {
       assert.equal(typeof view[name], typeof report[name], name)
     }
@@ -117,7 +118,7 @@ describe('reeval/view/report and reeval/renderer/* public exports', () => {
     }
   })
 
-  test("reeval/view's built modules never import zod", () => {
+  test("reeval/view's built modules never import zod or a node: module", () => {
     const target = pkg.exports['./view']
     assert.ok(target && typeof target === 'object')
     const seen = new Set<string>()
@@ -126,12 +127,13 @@ describe('reeval/view/report and reeval/renderer/* public exports', () => {
       if (seen.has(file)) return
       seen.add(file)
       const code = readFileSync(file, 'utf8')
-      if (/\bfrom\s*["']zod["']|import\(\s*["']zod["']\s*\)/.test(code)) importers.push(file)
+      if (/\bfrom\s*["'](zod|node:[^"']+)["']|import\(\s*["'](zod|node:[^"']+)["']\s*\)/.test(code))
+        importers.push(file)
       for (const [, spec] of code.matchAll(/\bfrom\s*["'](\.{1,2}\/[^"']+)["']/g)) {
         visit(resolve(dirname(file), spec as string))
       }
     }
     visit(join(pkgRoot, target.default))
-    assert.deepEqual(importers, [], 'modules reachable from reeval/view that import zod')
+    assert.deepEqual(importers, [], 'modules reachable from reeval/view that import zod or node:')
   })
 })
