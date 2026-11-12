@@ -1133,6 +1133,9 @@ describe('studio data server', () => {
     const served = await api.get(studioPaths.runs())
     assert.equal(served.headers.get('access-control-allow-origin'), ORIGIN)
     assert.equal(served.headers.get('vary'), 'Origin')
+    for (const res of [served, preflight, await api.call(studioPaths.runs())]) {
+      assert.equal(res.headers.get('referrer-policy'), 'no-referrer', `${res.status}`)
+    }
 
     for (const origin of [
       'https://evil.example',
