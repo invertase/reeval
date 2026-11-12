@@ -32,6 +32,12 @@ export class CloudError extends Error {
   override name = 'CloudError'
 }
 
+/** A redirect from the platform, which reeval follows nowhere: it would carry the sign-in on. */
+export const redirected = (what: string) =>
+  new CloudError(
+    `the cloud platform redirected the request to ${what} elsewhere, and reeval doesn't send your sign-in on: check REEVAL_CLOUD_URL`,
+  )
+
 /**
  * Where a run that asked for the cloud platform runs: there, or here and why. `--dry-run --json`
  * prints it as the plan's `target`.

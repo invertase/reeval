@@ -14,7 +14,7 @@ import { ArchiveError, openArchive, writeArchive } from './archive/index.ts'
 import { safeZipPath } from './archive/zip.ts'
 import type { Flags } from './cli-spec.ts'
 import { scanPush } from './cloud-push-scan.ts'
-import { CloudError, platformError, printable, request } from './cloud-run.ts'
+import { CloudError, platformError, printable, redirected, request } from './cloud-run.ts'
 import { type Target, target } from './cloud-secrets.ts'
 import { CommandError, parseLevel, pick, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
@@ -197,11 +197,6 @@ function runState(body: unknown): RunState | null {
   }
 }
 
-export const redirected = (what: string) =>
-  new CloudError(
-    `the cloud platform redirected the request to ${what} elsewhere, and reeval doesn't send your sign-in on: check REEVAL_CLOUD_URL`,
-  )
-
 /** `zip` written from `files`, with an archive the writer refuses as a usage error. */
 async function writeRunArchive(zip: string, run: ScannedRun): Promise<void> {
   await writeArchive(zip, { contents: 'run', runId: run.runId, files: run.files }).catch(
@@ -248,7 +243,7 @@ export async function scannedRun(
   warn: (line: string) => void,
 ): Promise<ScannedRun> {
   const { runId, files: runFiles } = await archiveFiles(config, flags, ref, warn)
-  const files = [...runFiles, ...(await savedAnalysisFiles(config.history.dir, runId))]
+  const files = [...runFiles, ...(await savedAnalysisFiles(config.history.dir, runId, warn))]
   const { findings, unread, mask } = await scanPush(files)
   const listed = (lines: string[]) => lines.map((l) => `  ${l}`).join('\n')
   if (flags['skip-secret-scan']) {

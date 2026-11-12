@@ -58,8 +58,14 @@ type Answer =
   | { redirect: true }
   | { redirectStatus: true }
 
-/** `known`: the runs the platform has before any upload; an upload adds its run. */
-async function platform(answer: Answer, known: string[] = []) {
+/** How the platform answers an analysis upload: as its route does by default, or otherwise. */
+type AnalysisAnswer = 'route' | 'no-route' | 'redirect' | 401 | 503
+
+/**
+ * `known`: the runs the platform has before any upload; an upload adds its run. `analysis`: how it
+ * answers `PUT /api/v1/runs/:runId/analysis`.
+ */
+async function platform(answer: Answer, known: string[] = [], analysis: AnalysisAnswer = 'route') {
   const seen: Seen[] = []
   const runs = new Set(known)
   let polls = 0
@@ -91,10 +97,19 @@ async function platform(answer: Answer, known: string[] = []) {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) {
       return fail(res, 401, 'unauthorized', 'Sign in first.')
     }
-    const analysis = /^\/api\/v1\/runs\/([^/]+)\/analysis$/.exec(url.pathname)
-    if (analysis && req.method === 'PUT') {
-      const runId = decodeURIComponent(analysis[1] as string)
-      if (!runs.has(runId)) return fail(res, 404, 'not_found', `No run ${runId}.`)
+    const analysisRun = /^\/api\/v1\/runs\/([^/]+)\/analysis$/.exec(url.pathname)?.[1]
+    if (analysisRun && req.method === 'PUT') {
+      const runId = decodeURIComponent(analysisRun)
+      if (analysis === 'no-route') return fail(res, 404, 'not_found', `no route ${url.pathname}`)
+      if (analysis === 'redirect') {
+        res.writeHead(307, { location: `${base}/elsewhere` })
+        return res.end()
+      }
+      if (analysis === 401) return fail(res, 401, 'unauthorized', 'That token was revoked.')
+      if (analysis === 503) return fail(res, 503, 'unavailable', 'Try again shortly.')
+      if (!runs.has(runId)) {
+        return json(res, 404, { error: 'run_not_found', message: `No run ${runId}.` })
+      }
       return json(res, 200, { runId, stored: true })
     }
     const m = /^\/api\/orgs\/org_a\/projects\/proj_a\/studio\/runs\/([^/]+)$/.exec(url.pathname)
@@ -578,28 +593,87 @@ describe('reeval cloud push', () => {
     return withFile(`analysis/${ANALYSIS_NAME}`, data, fn)
   }
 
-  test("carries the run's saved analyses, which its history archive leaves out", async () => {
+  test("carries the run's saved analyses, which its history archive leaves out, without their Markdown", async () => {
     const p = await platform({ status: 'ready' })
     try {
-      await withAnalysis(analysisOf(), async () => {
-        const r = await runCli(dir, ['cloud', 'push', runId, '--no-wait'], {
-          env: envFor(p.base),
-        })
-        assert.equal(r.code, 0, r.stdout + r.stderr)
-        const archive = await openArchive(bufferSource((p.seen[0] as Seen).body))
-        const path = `${runId}/analysis/${ANALYSIS_NAME}`
-        assert.ok(archive.has(path), archive.manifest.files.map((f) => f.path).join('\n'))
-        assert.equal(JSON.parse((await archive.read(path)).toString()).anchor, runId)
-        assert.ok(
-          !archive.manifest.files.some(
-            (f) => f.path.endsWith('.md') && f.path.includes('/analysis/'),
-          ),
-          'only the analysis documents, not their Markdown',
-        )
-        await archive.verify()
-        await archive.close()
-      })
+      await withAnalysis(analysisOf(), () =>
+        withFile(
+          `analysis/${ANALYSIS_NAME.replace(/\.json$/, '.md')}`,
+          '# The analysis\n',
+          async () => {
+            const r = await runCli(dir, ['cloud', 'push', runId, '--no-wait'], {
+              env: envFor(p.base),
+            })
+            assert.equal(r.code, 0, r.stdout + r.stderr)
+            const archive = await openArchive(bufferSource((p.seen[0] as Seen).body))
+            const path = `${runId}/analysis/${ANALYSIS_NAME}`
+            const paths = archive.manifest.files.map((f) => f.path)
+            assert.ok(archive.has(path), paths.join('\n'))
+            assert.equal(JSON.parse((await archive.read(path)).toString()).anchor, runId)
+            assert.deepEqual(
+              paths.filter((f) => f.includes('/analysis/')),
+              [path],
+              'only the analysis documents, not their Markdown',
+            )
+            await archive.verify()
+            await archive.close()
+          },
+        ),
+      )
     } finally {
+      await p.close()
+    }
+  })
+
+  test('--out writes the saved analyses into the archive too', async () => {
+    const out = join(tempDir('cloud-push-out'), 'run.zip')
+    await withAnalysis(analysisOf(), async () => {
+      const r = await runCli(dir, ['cloud', 'push', runId, '--out', out], {
+        env: envFor('http://127.0.0.1:9'),
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const archive = await openArchive(bufferSource(readFileSync(out)))
+      assert.ok(archive.has(`${runId}/analysis/${ANALYSIS_NAME}`))
+      await archive.close()
+    })
+  })
+
+  test("a .json that isn't an analysis, and an analysis linked from outside the run's folder, are left out with a warning", async () => {
+    const p = await platform({ status: 'ready' })
+    const outside = join(dir, 'outside.json')
+    writeFileSync(outside, analysisOf())
+    const link = join(dir, HISTORY, runId, 'analysis', 'linked.json')
+    try {
+      await withAnalysis(analysisOf(), () =>
+        withFile('analysis/notes.json', '{"kind": "my-notes"}', async () => {
+          symlinkSync(outside, link)
+          const r = await runCli(dir, ['cloud', 'push', runId, '--no-wait'], {
+            env: envFor(p.base),
+          })
+          assert.equal(r.code, 0, r.stdout + r.stderr)
+          assert.match(
+            r.stderr,
+            new RegExp(
+              `Leaving ${runId}/analysis/notes\\.json out of the push: it isn't a reeval analysis`,
+            ),
+          )
+          assert.match(
+            r.stderr,
+            new RegExp(
+              `Leaving ${runId}/analysis/linked\\.json out of the push: it links outside the run's folder`,
+            ),
+          )
+          const archive = await openArchive(bufferSource((p.seen[0] as Seen).body))
+          assert.deepEqual(
+            archive.manifest.files.map((f) => f.path).filter((f) => f.includes('/analysis/')),
+            [`${runId}/analysis/${ANALYSIS_NAME}`],
+          )
+          await archive.close()
+        }),
+      )
+    } finally {
+      rmSync(link, { force: true })
+      rmSync(outside)
       await p.close()
     }
   })
@@ -632,6 +706,16 @@ describe('reeval cloud push', () => {
         new RegExp(`${path} was written by a newer reeval \\(schemaVersion 99`),
       ],
       ['{"kind": "reeval-analysis", ', new RegExp(`${path} isn't JSON`)],
+      [
+        '{"kind": "reeval-analysis"}',
+        new RegExp(`${path} has no schemaVersion, which every reeval analysis has`),
+      ],
+      [
+        analysisOf((d) => {
+          d.analysis = {}
+        }),
+        new RegExp(`${path}'s analysis\\.tldr`),
+      ],
       [
         analysisOf(() => {}, '20260101T000000Z_0000000_ci_aaaa'),
         new RegExp(`${path} is an analysis of run 20260101T000000Z_0000000_ci_aaaa, not ${runId}`),
@@ -966,11 +1050,13 @@ describe('the analyses a push carries', () => {
   })
 })
 
-/** A canned analysis: one claim, no citations to check. */
+/** A canned analysis, no citations to check; \`TEST_TLDR_BYTES\` pads its TL;DR to that size. */
 const ANALYZE = `analysis: {
     model: fakeAnalysis({
       output: () => ({
-        tldr: 'The agent wrote hello.txt.',
+        tldr: process.env.TEST_TLDR_BYTES
+          ? 'x'.repeat(Number(process.env.TEST_TLDR_BYTES))
+          : 'The agent wrote hello.txt.',
         whatHappened: [],
         results: [],
         why: [],
@@ -1006,7 +1092,9 @@ describe('reeval analyze --save --push', () => {
     fresh()
     const p = await platform({ status: 'ready' }, [runId])
     try {
-      const r = await runCli(dir, ['analyze', runId, '--save', '--push'], { env: envFor(p.base) })
+      const r = await runCli(dir, ['analyze', runId, '--save', '--push', '--no-cache'], {
+        env: envFor(p.base),
+      })
       assert.equal(r.code, 0, r.stdout + r.stderr)
       assert.deepEqual(
         p.seen.map((s) => `${s.method} ${s.path}`),
@@ -1052,6 +1140,105 @@ describe('reeval analyze --save --push', () => {
       const archive = await openArchive(bufferSource((p.seen.at(-1) as Seen).body))
       assert.ok(archive.has(`${runId}/analysis/${saved()[0]}`))
       await archive.close()
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a platform that takes no analysis uploads exits 3, saying so, and keeps the analysis saved', async () => {
+    fresh()
+    const p = await platform({ status: 'ready' }, [runId], 'no-route')
+    try {
+      const r = await runCli(dir, ['analyze', runId, '--save', '--push'], { env: envFor(p.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        new RegExp(
+          `The cloud platform doesn't take analysis uploads \\(HTTP 404 from /api/v1/runs/${runId}/analysis\\), so the analysis stays saved here only\\.`,
+        ),
+      )
+      assert.doesNotMatch(r.stderr, /reeval cloud push/)
+      assert.equal(saved().length, 1)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a redirected analysis upload is refused and followed nowhere', async () => {
+    fresh()
+    const p = await platform({ status: 'ready' }, [runId], 'redirect')
+    try {
+      const r = await runCli(dir, ['analyze', runId, '--save', '--push'], { env: envFor(p.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /redirected the request to the analysis upload elsewhere, and reeval doesn't send your sign-in on: check REEVAL_CLOUD_URL/,
+      )
+      assert.deepEqual(
+        p.seen.map((s) => `${s.method} ${s.path}`),
+        [`PUT /api/v1/runs/${runId}/analysis`],
+      )
+      assert.equal(saved().length, 1)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a refused token exits 2 and a failing platform 3, naming the upload, never the token', async () => {
+    for (const [answer, code, said] of [
+      [
+        401,
+        2,
+        `the cloud platform refused to upload the analysis of run ${runId}: That token was revoked\\.`,
+      ],
+      [503, 3, `couldn't upload the analysis of run ${runId}: Try again shortly\\.`],
+    ] as const) {
+      fresh()
+      const p = await platform({ status: 'ready' }, [runId], answer)
+      try {
+        const r = await runCli(dir, ['analyze', runId, '--save', '--push'], {
+          env: envFor(p.base),
+        })
+        assert.equal(r.code, code, r.stdout + r.stderr)
+        assert.match(r.stderr, new RegExp(said))
+        never(r.stdout + r.stderr)
+        assert.equal(saved().length, 1)
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test('an analysis that fails its checks is refused before anything is sent, and stays saved', async () => {
+    fresh()
+    const p = await platform({ status: 'ready' }, [runId])
+    try {
+      const r = await runCli(dir, ['analyze', runId, '--save', '--push', '--no-cache'], {
+        env: { ...envFor(p.base), TEST_TLDR_BYTES: String(2 ** 20) },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /Refusing to push the analysis: \S+\.json is \d{7} bytes, and an analysis may be at most 1048576 \(1 MiB\)/,
+      )
+      assert.deepEqual(p.seen, [], 'nothing is sent')
+      assert.equal(saved().length, 1)
+    } finally {
+      rmSync(join(dir, '.reeval', 'analysis'), { recursive: true, force: true })
+      await p.close()
+    }
+  })
+
+  test('--save --push --dry-run plans without signing in', async () => {
+    fresh()
+    const p = await platform({ status: 'ready' }, [runId])
+    try {
+      const r = await runCli(dir, ['analyze', runId, '--save', '--push', '--dry-run'], {
+        env: envFor(p.base, null),
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(r.stdout, new RegExp(`digest ${runId}: `))
+      assert.deepEqual(p.seen, [])
     } finally {
       await p.close()
     }

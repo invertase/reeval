@@ -343,7 +343,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       `${head.runId} isn't recorded, so there's no history folder to save into. Run reeval record ${head.runId} first, then reeval analyze ${head.runId} --save.`,
     )
   }
-  const cloud = flags.push ? await signedIn() : null
+  const cloud = flags.push && !flags.context && !flags['dry-run'] ? await signedIn() : null
   // Fail on a missing model or key before any work, unless no call is coming.
   const model = flags.context || flags['dry-run'] ? null : resolveAnalysisModel(config)
 

@@ -12,14 +12,13 @@ import {
   projectUrl,
   type RunState,
   readFailed,
-  redirected,
   type ScannedRun,
   scannedRun,
   signedInTarget,
   uploadRun,
   waitRead,
 } from './cloud-push.ts'
-import { CloudError, platformError, platformMessage, request } from './cloud-run.ts'
+import { CloudError, platformError, platformMessage, redirected, request } from './cloud-run.ts'
 import type { Target } from './cloud-secrets.ts'
 import { recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
