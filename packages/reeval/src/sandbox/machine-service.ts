@@ -4,9 +4,10 @@
 // ends. A worker leases a slot over its IPC channel (or, outside
 // a worker, from pools in its own process) and gives it back when its attempt is done.
 import { callService } from '../scheduler/services.ts'
+import { attemptSpan, emitSpan, openSpan } from '../trace/spans.ts'
 import type { MachineDescriptor } from './machine.ts'
 import { MACHINE_PROVIDERS } from './machines.ts'
-import { type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
+import { type GoneMachine, type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
 import { PoolAccount } from './pool-account.ts'
 import { RunStopped } from './types.ts'
 
@@ -116,8 +117,8 @@ export class MachineService {
       throw new Error('The attempt stopped waiting for a machine')
     }
     this.#held.set(key, { owner, ...attempt, lease })
-    const { info, machine, slot, reused, start, lost } = lease
-    return { info, machine, slot, reused, start, lost } satisfies WireLease
+    const { info, machine, span, slot, reused, start, lost } = lease
+    return { info, machine, span, slot, reused, start, lost } satisfies WireLease
   }
 
   /** `owner`'s worker is gone: what it waited for is abandoned, what it held is broken. */
@@ -180,6 +181,7 @@ export class MachineService {
         }
         const opened = new MachinePool(provider, {
           ...options,
+          onGone: (m) => emitSpan(machineSpan(call.sandbox.kind, m)),
           ...(account && { account }),
           ...(this.#idleMs !== undefined && { idleMs: this.#idleMs }),
         })
@@ -190,6 +192,39 @@ export class MachineService {
       this.#pools.set(key, pool)
     }
     return pool
+  }
+}
+
+const text = (info: unknown, key: string): string | undefined => {
+  const v = (info as Record<string, unknown> | undefined)?.[key]
+  return typeof v === 'string' ? v : undefined
+}
+
+/** A pooled machine's span in the run's trace: from the pool asking for it until it's gone. */
+function machineSpan(sandbox: string, m: GoneMachine<unknown>) {
+  const name = text(m.info, 'name')
+  const size = text(m.info, 'size')
+  return {
+    spanId: m.span,
+    name: 'machine',
+    startMs: m.requestedAt,
+    endMs: m.goneAt,
+    attributes: {
+      'reeval.sandbox': sandbox,
+      ...(m.id !== undefined && { 'host.id': m.id }),
+      ...(name !== undefined && { 'host.name': name }),
+      ...(size !== undefined && { 'host.type': size }),
+      'reeval.machine.slots': m.slots,
+      'reeval.machine.leases': m.leases,
+      ...(m.upAt !== undefined && { 'reeval.machine.up_ms': m.upAt - m.requestedAt }),
+      ...(m.start && {
+        'reeval.machine.start_ms': m.start.ms,
+        'reeval.machine.queued_ms': m.start.queuedMs,
+        'reeval.machine.rate_limited': m.start.rateLimited,
+      }),
+      ...(m.why !== undefined && { 'reeval.machine.gone': m.why }),
+    },
+    ...(m.error !== undefined && { status: { code: 'error' as const, message: m.error } }),
   }
 }
 
@@ -223,6 +258,7 @@ export async function leaseMachine(
   signal: AbortSignal,
 ): Promise<MachineLease> {
   signal.throwIfAborted()
+  const asked = Date.now()
   const ticket = `${process.pid}-${++tickets}`
   const send = (body: MachineCall) => callService(MACHINES, body, localCall)
   const leased = send({ op: 'lease', ticket, ...request }) as Promise<WireLease | WireEnded>
@@ -233,9 +269,28 @@ export async function leaseMachine(
   try {
     const lease = await Promise.race([leased, stop])
     if ('ended' in lease) throw new RunStopped(lease.ended)
+    const placement = {
+      'reeval.sandbox': request.sandbox.kind,
+      'host.id': lease.machine,
+      'reeval.machine.slot': lease.slot,
+      'reeval.machine.use': lease.reused + 1,
+    }
+    attemptSpan()?.set(placement)
+    const span = openSpan(
+      'lease',
+      {
+        ...placement,
+        'reeval.lease.wait_ms': Date.now() - asked,
+        'reeval.machine.started': lease.start !== null,
+      },
+      { parentSpanId: attemptSpan()?.spanId },
+    )
+    span.link(lease.span)
     return {
       ...lease,
       release: async (broken = false) => {
+        if (broken) span.set({ 'reeval.lease.broken': true })
+        span.end()
         await send({ op: 'release', ticket, broken }).catch(() => {})
       },
     }

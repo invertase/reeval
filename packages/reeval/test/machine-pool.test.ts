@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
+  type GoneMachine,
   MachinePool,
   type PoolOptions,
   type PoolProvider,
@@ -106,6 +107,56 @@ const until = async (check: () => boolean, ms = 2_000) => {
 }
 
 describe('machine pool', () => {
+  test("reports each machine to the run's trace once, under the span its leases name", async () => {
+    const provider = fakeProvider()
+    const gone: GoneMachine<unknown>[] = []
+    const p = pool(provider, { attemptsPerMachine: 2, reuse: true, onGone: (m) => gone.push(m) })
+    const a = await p.acquire()
+    const b = await p.acquire()
+    assert.equal(a.machine, b.machine)
+    assert.equal(a.span, b.span)
+    assert.match(a.span, /^[0-9a-f]{16}$/)
+    a.release()
+    b.release()
+    await p.close()
+    assert.equal(gone.length, 1)
+    const [m] = gone
+    assert.equal(m?.span, a.span)
+    assert.equal(m?.id, a.machine)
+    assert.equal(m?.slots, 2)
+    assert.equal(m?.leases, 2)
+    assert.equal(m?.why, 'run ended')
+    assert.ok(m?.start)
+    assert.ok((m?.requestedAt ?? 0) <= (m?.upAt ?? 0) && (m?.upAt ?? 0) <= (m?.goneAt ?? 0))
+    assert.equal(m?.error, undefined)
+  })
+
+  test("reports a machine whose start failed to the run's trace, with the error", async () => {
+    const gone: GoneMachine<unknown>[] = []
+    const p = pool(
+      fakeProvider(() => new Error('no capacity')),
+      { onGone: (m) => gone.push(m) },
+    )
+    await assert.rejects(p.acquire(), /no capacity/)
+    await p.close()
+    assert.equal(gone.length, 1)
+    assert.equal(gone[0]?.error, 'no capacity')
+    assert.equal(gone[0]?.id, undefined)
+  })
+
+  test("a machine that's broken, or idle, says so in the run's trace", async () => {
+    const gone: GoneMachine<unknown>[] = []
+    const p = pool(fakeProvider(), { reuse: true, idleMs: 20, onGone: (m) => gone.push(m) })
+    ;(await p.acquire()).release(true)
+    ;(await p.acquire()).release()
+    await until(() => gone.length === 2)
+    assert.deepEqual(
+      gone.map((m) => m.why),
+      ['broken', 'idle'],
+    )
+    await p.close()
+  })
+
   test('holds starts to the per-minute window, sliding', async () => {
     const provider = fakeProvider()
     const p = pool(provider, {

@@ -312,7 +312,8 @@ describe('recording runs into evals/.history', () => {
       archived.some((p) => p.endsWith('/diff.patch')),
       'evidence default keeps a passing attempt diff in the archive',
     )
-    assert.equal(archived.length, 4)
+    assert.ok(archived.includes(`${runId}/spans.jsonl`), "archive keeps the run's trace")
+    assert.equal(archived.length, 5)
     assert.equal(
       sh(p.dir, 'check-attr', 'binary', '--', `${HISTORY}/${runId}.zip`),
       `${HISTORY}/${runId}.zip: binary: set`,

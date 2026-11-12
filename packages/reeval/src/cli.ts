@@ -2310,7 +2310,10 @@ async function executeRun(
         {
           root: config.root,
           runId,
-          onEvent: (e) => renderer.onEvent({ type: 'prepare', at: Date.now(), ...e }),
+          onEvent: (e) => {
+            trace?.prepare(e)
+            renderer.onEvent({ type: 'prepare', at: Date.now(), ...e })
+          },
           ...(setup.registry ? { registry: setup.registry } : {}),
         },
       )
@@ -2347,6 +2350,18 @@ async function executeRun(
   let cutShort = false
   const { MACHINES, MachineService } = await import('./sandbox/machine-service.ts')
   const machines = new MachineService()
+  const { TRACE } = await import('./trace/spans.ts')
+  const { RunTrace } = await import('./trace/run.ts')
+  const trace = setup.dryRun
+    ? undefined
+    : new RunTrace({
+        dir: stagingDir,
+        runId,
+        attributes: {
+          'reeval.version': version,
+          ...(profile && { 'reeval.profile': profile.name }),
+        },
+      }).install()
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
@@ -2359,9 +2374,11 @@ async function executeRun(
         call: (owner, service, body) =>
           service === MACHINES
             ? machines.call(owner, body)
-            : service === SECRETS_SERVICE
-              ? Promise.resolve(heldSecrets())
-              : Promise.reject(new Error(`This run has no ${service} service`)),
+            : service === TRACE
+              ? (trace?.call(body) ?? Promise.resolve(null))
+              : service === SECRETS_SERVICE
+                ? Promise.resolve(heldSecrets())
+                : Promise.reject(new Error(`This run has no ${service} service`)),
         released: (owner) => machines.released(owner),
       },
       onRunStart: (files) => {
@@ -2482,6 +2499,20 @@ async function executeRun(
   } finally {
     clearTimeout(budgetTimer)
     await machines.close()
+    if (trace) {
+      const spans = trace.close({
+        status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
+      })
+      const { exportSpans } = await import('./trace/otlp.ts')
+      const why = await exportSpans(spans, process.env, version)
+      if (why)
+        renderer.onEvent({
+          type: 'notice',
+          at: Date.now(),
+          level: 'warn',
+          text: `OpenTelemetry export: ${why}`,
+        })
+    }
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
     const { removePreparedWorkspaces } = await import('./workspace.ts')

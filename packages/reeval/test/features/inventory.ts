@@ -491,6 +491,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts'],
   },
   {
+    id: 'record.spans',
+    area: 'Records and studio',
+    name: "The run's trace, `spans.jsonl`: each machine and container, each attempt on its lease, and OTLP export",
+    unit: [
+      'reeval/test/spans.test.ts',
+      'reeval/test/machine-pool.test.ts',
+      'reeval/test/machine-service.test.ts',
+      'reeval/test/sandbox-provider-conformance.test.ts',
+    ],
+  },
+  {
     id: 'budget.recorded',
     area: 'Records and studio',
     name: 'Budget-stopped runs are recorded with status `budget`',

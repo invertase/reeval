@@ -22,6 +22,7 @@ import { vmPrefix } from '../src/sandbox/tart.ts'
 import { hasNetworkSession, type Sandbox } from '../src/sandbox/types.ts'
 import { boat } from '../src/sandbox-boat.ts'
 import { daytona } from '../src/sandbox-daytona.ts'
+import { openSpan, type SpanInput, setLocalSpanSink, withAttemptSpan } from '../src/trace/spans.ts'
 import { type FakeBoat, fakeBoat } from './support/boat.ts'
 import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import { fakeTart, holdLoopback } from './support/fake-tart.ts'
@@ -478,6 +479,34 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           await until('cleanupRun left a machine', () => backend.machines(id).length === 0)
         } finally {
           await left.destroy()
+        }
+      })
+
+      test("the run's trace has the machine, and puts the attempt on it", async () => {
+        const spans: SpanInput[] = []
+        setLocalSpanSink((span) => spans.push(span))
+        try {
+          const id = `${runId}-trace`
+          const attempt = openSpan('attempt')
+          const own = await withAttemptSpan(attempt, () => create(id))
+          await own.destroy()
+          attempt.end()
+          await until('the machine span', () => spans.some((s) => s.name === 'machine'), 30_000)
+          const on = spans.find((s) => s.name === 'attempt')?.attributes ?? {}
+          const host = spans.find((s) => s.name === 'machine')
+          assert.equal(on['reeval.sandbox'], machine.kind)
+          assert.equal(typeof on['host.id'], 'string')
+          assert.equal(host?.attributes['host.id'], on['host.id'])
+          assert.ok((host?.startMs ?? 0) <= (host?.endMs ?? 0))
+          if (machine.pool) {
+            const lease = spans.find((s) => s.name === 'lease')
+            assert.equal(lease?.parentSpanId, attempt.spanId)
+            assert.equal(lease?.links?.[0]?.spanId, host?.spanId)
+            assert.equal(lease?.attributes['host.id'], on['host.id'])
+            assert.equal(on['reeval.machine.slot'], 0)
+          }
+        } finally {
+          setLocalSpanSink(undefined)
         }
       })
 

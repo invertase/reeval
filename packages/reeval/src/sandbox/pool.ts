@@ -4,6 +4,7 @@
 // counts the machines of every pool on it, and p-retry waits out a rate-limited start. What a
 // provider gives it is how to start and remove a machine, how to keep one alive, its limits, and
 // how to tell a rate limit from a real failure.
+import { randomBytes } from 'node:crypto'
 import pRetry from 'p-retry'
 import tarn, { type Pool } from 'tarn'
 import {
@@ -54,6 +55,8 @@ export type PoolOptions = {
   attemptsPerMachine: number
   /** A slot takes another attempt after its first, reset; else each slot runs one. */
   reuse: boolean
+  /** Called once for each machine when it's gone, or its start failed, for the run's trace. */
+  onGone?: (machine: GoneMachine<unknown>) => void
   /** How long a free slot waits for another attempt before it goes. Default 15 s. */
   idleMs?: number
   /**
@@ -72,6 +75,8 @@ export type PoolOptions = {
 /** What a lease says about its machine, for the attempt's debug trace. */
 export type LeaseFacts = {
   machine: string
+  /** The machine's span in the run's trace. */
+  span: string
   slot: number
   /** The attempts this slot ran before this one. */
   reused: number
@@ -88,6 +93,27 @@ export type LeaseFacts = {
 }
 
 export type MachineStart = { ms: number; queuedMs: number; rateLimited: number }
+
+/** A machine that's gone, or never came up, as the run's trace records it. */
+export type GoneMachine<M> = {
+  span: string
+  id?: string
+  info?: M
+  /** Epoch milliseconds: when the pool asked for it, when it was up, and when it was gone. */
+  requestedAt: number
+  upAt?: number
+  goneAt: number
+  start: MachineStart | null
+  slots: number
+  leases: number
+  /**
+   * Why it went: `idle`, `used`, `broken`, `evicted`, `reclaimed`, `keep-alive failed`,
+   * `unwanted` (no attempt waited for it any more) or `run ended`.
+   */
+  why?: string
+  /** Its start failed. */
+  error?: string
+}
 
 export type PoolLease<M> = LeaseFacts & {
   info: M
@@ -113,6 +139,15 @@ export type PoolStats = {
 type Machine<M> = {
   id?: string
   info?: M
+  span: string
+  requestedAt: number
+  upAt?: number
+  /** Its first start's facts, kept after `start` is handed to its first lease. */
+  started: MachineStart | null
+  leases: number
+  why?: string
+  /** Its span has been emitted. */
+  traced?: true
   ready: Promise<void>
   unclaimed: number[]
   alive: number
@@ -157,7 +192,8 @@ const FOREVER_MS = 2 ** 31 - 1
 
 export class MachinePool<M> {
   readonly #provider: PoolProvider<M>
-  readonly #options: Required<Omit<PoolOptions, 'limits' | 'account' | 'machines'>>
+  readonly #options: Required<Omit<PoolOptions, 'limits' | 'account' | 'machines' | 'onGone'>>
+  readonly #onGone: PoolOptions['onGone']
   readonly #account: PoolAccount
   readonly #ownAccount: boolean
   readonly #member: AccountMember
@@ -187,7 +223,8 @@ export class MachinePool<M> {
   constructor(provider: PoolProvider<M>, options: PoolOptions) {
     this.#provider = provider
     this.#stopReason = new InfraError(`${provider.helper}: no attempt waits for this machine`)
-    const { limits, account, machines, ...rest } = options
+    const { limits, account, machines, onGone, ...rest } = options
+    this.#onGone = onGone
     this.#options = {
       idleMs: 15_000,
       ...RATE_LIMIT_WAITS,
@@ -251,6 +288,7 @@ export class MachinePool<M> {
           const reclaimed = error instanceof MachineReclaimed
           if (reclaimed) this.#stats.reclaimed++
           else this.#stats.keepAliveFailed++
+          machine.why ??= reclaimed ? 'reclaimed' : 'keep-alive failed'
           lost.push({
             machine: machine.id as string,
             error: (error as Error)?.message ?? String(error),
@@ -262,12 +300,14 @@ export class MachinePool<M> {
         }
       }
       const reused = slot.uses++
+      machine.leases++
       this.#leased.add(slot)
       this.#stats.leases++
       if (reused) this.#stats.reusedLeases++
       let released = false
       return {
         machine: machine.id as string,
+        span: machine.span,
         slot: slot.slot,
         reused,
         start: first,
@@ -316,6 +356,7 @@ export class MachinePool<M> {
   close(): Promise<void> {
     this.#closed ??= (async () => {
       this.#closing.abort(new InfraError(`${this.#provider.helper}'s machine pool closed`))
+      for (const m of this.#machines) m.why ??= 'run ended'
       clearInterval(this.#reaping)
       this.#account.leave(this.#member)
       if (this.#ownAccount) this.#account.close()
@@ -372,7 +413,10 @@ export class MachinePool<M> {
         }
       }
     }
-    if (broken) machine.draining = true
+    if (broken) {
+      machine.draining = true
+      machine.why ??= 'broken'
+    }
     if (broken || !this.#options.reuse) this.#kill(slot)
     this.#slots.release(slot)
   }
@@ -427,6 +471,7 @@ export class MachinePool<M> {
 
   /** tarn's `destroy`: an idle, broken or used-up slot. */
   async #retire(slot: Slot<M>) {
+    slot.machine.why ??= this.#options.reuse ? 'idle' : 'used'
     this.#kill(slot)
     await slot.machine.removed
   }
@@ -446,6 +491,7 @@ export class MachinePool<M> {
       await machine.ready.catch(() => {})
       if (machine.id) await this.#provider.remove(machine.id).catch(() => {})
       this.#forget(machine)
+      this.#gone(machine)
     })()
     return machine.removed
   }
@@ -489,7 +535,28 @@ export class MachinePool<M> {
     return { since: machine.idleSince, evict: () => this.#evict(machine) }
   }
 
+  #gone(machine: Machine<M>, error?: unknown) {
+    if (machine.traced || !this.#onGone) return
+    machine.traced = true
+    try {
+      this.#onGone({
+        span: machine.span,
+        ...(machine.id !== undefined && { id: machine.id }),
+        ...(machine.info !== undefined && { info: machine.info }),
+        requestedAt: machine.requestedAt,
+        ...(machine.upAt !== undefined && { upAt: machine.upAt }),
+        goneAt: Date.now(),
+        start: machine.started,
+        slots: this.#options.attemptsPerMachine,
+        leases: machine.leases,
+        ...(machine.why !== undefined && { why: machine.why }),
+        ...(error !== undefined && { error: (error as Error)?.message ?? String(error) }),
+      })
+    } catch {}
+  }
+
   #evict(machine: Machine<M>) {
+    machine.why ??= 'evicted'
     this.#stats.evicted++
     machine.evicted = true
     machine.draining = true
@@ -500,6 +567,10 @@ export class MachinePool<M> {
   #startMachine(): Machine<M> {
     const k = this.#options.attemptsPerMachine
     const machine: Machine<M> = {
+      span: randomBytes(8).toString('hex'),
+      requestedAt: Date.now(),
+      started: null,
+      leases: 0,
       ready: Promise.resolve(),
       unclaimed: Array.from({ length: k }, (_, i) => i),
       alive: 0,
@@ -530,12 +601,16 @@ export class MachinePool<M> {
           queuedMs: Math.round(queuedMs),
           rateLimited,
         }
+        machine.started = machine.start
+        machine.upAt = Date.now()
         this.#account.resetBackoff()
       },
       (error: unknown) => {
         machine.draining = true
         machine.unclaimed = []
         this.#forget(machine)
+        if (error === this.#stopReason) machine.why ??= 'unwanted'
+        this.#gone(machine, error === this.#stopReason ? undefined : error)
         throw error
       },
     )

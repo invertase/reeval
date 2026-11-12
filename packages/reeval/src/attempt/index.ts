@@ -8,6 +8,7 @@ import { TimeoutError } from '../errors.ts'
 import { attemptId, attemptKey, evalId, evalSlug, relativeFile } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
+import { attemptSpan, openSpan, withAttemptSpan } from '../trace/spans.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
 import { assertionRecords, checkFailure, linkJudgmentAssertions } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
@@ -49,7 +50,23 @@ export async function runAttempt(spec: AttemptSpec, fn: EvalFn, handle: TestHand
     traceLimit: config.debug?.traceBufferBytes ?? TRACE_BUFFER_DEFAULT,
     ...(verbosity > 0 ? { emit: handle.debug } : {}),
   })
-  return withDebug(debug, () => attemptBody(spec, fn, handle, id, debug))
+  const span = openSpan('attempt', {
+    'reeval.eval.id': id,
+    'reeval.attempt.key': attemptKey(id, spec.cell.key, spec.n),
+    'reeval.cell': spec.cell.key,
+    'reeval.attempt.n': spec.n,
+  })
+  let error: unknown
+  try {
+    return await withDebug(debug, () =>
+      withAttemptSpan(span, () => attemptBody(spec, fn, handle, id, debug)),
+    )
+  } catch (thrown) {
+    error = thrown
+    throw thrown
+  } finally {
+    span.end(error)
+  }
 }
 
 async function attemptBody(
@@ -75,7 +92,7 @@ async function attemptBody(
       debug.log('container', `starting the sandbox and session for ${who}`)
       clock?.pause()
       try {
-        return await a.timed('setupMs', () => startSession(a, runId, key))
+        return await a.timed('setupMs', () => startSession(a, runId, key), 'sandbox')
       } finally {
         clock?.resume()
       }
@@ -188,6 +205,7 @@ async function attemptBody(
       'teardown',
       `record ${scratch}.json · artifacts ${scratch}/${evalSlug(id)}/${evalSlug(spec.cell.key)}/${spec.n} · debug ${rel(debug.dir)}`,
     )
+    attemptSpan()?.set({ 'reeval.outcome': record.outcome })
     setMeta(await writeRecord(a, stagingDir, id))
     await debug.finish(debug.verbosity === 2 || record.outcome !== 'pass')
   }

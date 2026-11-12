@@ -67,6 +67,7 @@ import { promptTokens, sumUsage } from '../usage.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
 import { isLockfile, splitPatch } from '../view/patch.ts'
+import { SPANS_FILE } from '../view/spans.ts'
 import { turnErrorKind } from '../view/turn-error.ts'
 import { checkTallies, discrimination, foldCases } from './cases.ts'
 import { withCosts } from './cost.ts'
@@ -1295,6 +1296,33 @@ function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
   return state
 }
 
+/**
+ * The run's `spans.jsonl`: the spans of the run it resumes or retries, then this process's, each
+ * span once.
+ */
+async function spansFile(
+  stagingDir: string,
+  previous: RunRecord | null | undefined,
+  from: string | null | undefined,
+  out: Artifacts,
+): Promise<FileRef | null> {
+  const read = (path: string) => readFile(path, 'utf8').catch(() => '')
+  const before =
+    previous?.spans && from ? await read(join(from, ...previous.spans.path.split('/'))) : ''
+  const seen = new Set<string>()
+  const lines: string[] = []
+  for (const line of `${before}\n${await read(join(stagingDir, SPANS_FILE))}`.split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const { spanId } = JSON.parse(line) as { spanId?: unknown }
+      if (typeof spanId !== 'string' || seen.has(spanId)) continue
+      seen.add(spanId)
+      lines.push(line)
+    } catch {}
+  }
+  return lines.length ? out.add(SPANS_FILE, `${lines.join('\n')}\n`) : null
+}
+
 /** A retried run's git state as it ran, with its `worktree.patch` carried over byte-exact. */
 async function keptGit(
   previous: RunRecord,
@@ -1496,6 +1524,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const stack = stackOf(input, seen, judgeModel, runJudge.threshold)
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
     list === undefined ? undefined : [list].flat().map(harnessId)
+  const spans = await spansFile(ctx.stagingDir, input.previous, input.previousArtifacts, out)
   const record: RunRecord = {
     kind: 'reeval-run',
     schemaVersion: SCHEMA_VERSION,
@@ -1530,6 +1559,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       : {}),
     author: input.author,
     git: retried ? await keptGit(retried, input.previousArtifacts, out) : gitState(input, out),
+    ...(spans && { spans }),
     runner: input.runner,
     dependencies: retried ? retried.dependencies : { lockfiles: input.lockfiles },
     // The images, harnesses and context a retried attempt saw are its cell's, which the retry
