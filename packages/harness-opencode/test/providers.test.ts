@@ -263,7 +263,7 @@ test("a provider's headers are in name order, whatever order the probe saw them 
   )
 })
 
-test("another upstream's model adds only the endpoints it sent the key to in a header", () => {
+test("another upstream's model adds only header-keyed endpoints on the provider's own hosts", () => {
   const call = (path: string, key: string) => ({
     method: 'POST',
     host: 'gw.test',
@@ -289,10 +289,13 @@ test("another upstream's model adds only the endpoints it sent the key to in a h
           error: 'Model unavailable',
         }),
         variant('meta/m', [call('/v1/chat?key=<key>', 'query')], { also: true }),
+        variant('xai/m', [{ ...call('/v1/responses', 'authorization'), host: 'xai.gw.test' }], {
+          also: true,
+        }),
       ],
     },
   }
-  const models = { 'google/m': {}, 'openai/m': {}, 'meta/m': {} }
+  const models = { 'google/m': {}, 'openai/m': {}, 'meta/m': {}, 'xai/m': {} }
   const { supported, refused } = buildTable(probe, { gw: { models } })
   assert.deepEqual(refused, [])
   assert.deepEqual(

@@ -111,8 +111,12 @@ function templated(id: string, host: string) {
   return out
 }
 
-/** Whether the request carried the key in a header only, on a fixed host and path. */
-const inHeaders = (r: Request) =>
+/**
+ * Whether another upstream's request adds an endpoint: the key in a header only, on a fixed path,
+ * and on a host the provider's own probes sent it to, so a new host never gets the key brokered.
+ */
+const inHeaders = (r: Request, hosts: ReadonlySet<string>) =>
+  hosts.has(r.host) &&
   r.key.length > 0 &&
   !r.key.some((k) => k === 'query' || k === 'body' || k === 'host') &&
   !r.path.includes('<key>') &&
@@ -158,9 +162,12 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
     }
     const endpoints = new Map<string, OpenCodeProvider['endpoints'][number]>()
     const headers = new Map<string, OpenCodeProvider['headers'][number]>()
+    const hosts = new Set(
+      (p.variants ?? []).filter((v) => !v.also).flatMap((v) => v.requests.map((r) => r.host)),
+    )
     for (const v of p.variants ?? []) {
       for (const r of v.requests) {
-        if (v.also && !inHeaders(r)) continue
+        if (v.also && !inHeaders(r, hosts)) continue
         const e = {
           host: templated(id, r.host),
           method: [r.method],

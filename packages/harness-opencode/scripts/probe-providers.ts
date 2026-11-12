@@ -18,6 +18,7 @@ import {
   issueServerCertificate,
 } from '../../sandbox-docker/src/egress/cert.ts'
 import { openCodeConfig } from '../src/opencode-harness.ts'
+import { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } from '../src/opencode-provider-table.ts'
 import { PROVIDER_VARS } from './provider-vars.ts'
 
 const [opencode, catalogFile, outFile, ...only] = process.argv.slice(2)
@@ -196,7 +197,15 @@ async function integrations(): Promise<Integration[]> {
     }
     await get('/api/provider')
     const { data } = await get('/api/integration')
-    if (!data.length) throw new Error('opencode serve listed no integrations')
+    // Plugins that hadn't loaded would show as providers gone: a few can go in a release, not most.
+    const listed = new Set(data.map((i) => i.id))
+    const known = [...OPENCODE_PROVIDERS, ...REFUSED_OPENCODE_PROVIDERS].map((p) => p.id)
+    const missing = known.filter((id) => !listed.has(id))
+    if (missing.length > known.length / 4) {
+      throw new Error(
+        `opencode serve listed ${data.length} integrations, without ${missing.length} of the table's ${known.length}`,
+      )
+    }
     return data
   } finally {
     child.kill('SIGKILL')
@@ -249,6 +258,14 @@ function variants(id: string) {
   }
   return [...groups].map(([key, list]) => ({ key, models: list }))
 }
+
+/**
+ * The packages that pick each model's API by its upstream, as OpenCode's Vercel AI Gateway sends
+ * `openai/…` models to /v1/responses and `anthropic/…` ones to /v1/messages. A group on one of
+ * them probes one model per upstream too. Every other package sends all its models one way,
+ * however many upstreams their ids name, so one model shows where the key goes.
+ */
+const PER_UPSTREAM_PACKAGES = new Set(['@ai-sdk/gateway'])
 
 const clean = (text: string) =>
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colors
@@ -316,9 +333,8 @@ async function worker() {
         })
       }
       probed.push(last)
-      // A gateway can run each upstream's models on its own API (OpenCode sends Vercel AI
-      // Gateway's `openai/` models to /v1/responses and `anthropic/` ones to /v1/messages), so the
-      // newest model of every other upstream runs too, and only where its key went is kept.
+      // Only where the extra models' key went is kept (`also`): their failures aren't the provider's.
+      if (!PER_UPSTREAM_PACKAGES.has(group.key.split(' ')[0] ?? '')) continue
       const upstream = (model: string) => (model.includes('/') ? model.split('/')[0] : undefined)
       const others = new Map<string, string>()
       for (const model of group.models) {
