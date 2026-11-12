@@ -71,7 +71,18 @@ export async function startMinio(bucket = 'reeval-runs'): Promise<Minio> {
       accessKey,
       secretKey,
     })
-    await client.makeBucket(bucket)
+    // MinIO answers its readiness check before it has initialized its object layer, and refuses
+    // requests with XMinioServerNotInitialized (503) until then.
+    for (;;) {
+      try {
+        await client.makeBucket(bucket)
+        break
+      } catch (error) {
+        const code = (error as { code?: unknown }).code
+        if (code !== 'XMinioServerNotInitialized' || Date.now() > deadline) throw error
+        await new Promise((r) => setTimeout(r, 250))
+      }
+    }
     return {
       url,
       bucket,
