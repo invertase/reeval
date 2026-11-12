@@ -401,6 +401,25 @@ describe('mergeOutcome and abort classification', () => {
     })
   })
 
+  test('a passed engine state keeps a reclassified infra_error from the worker record', () => {
+    const record = {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message: 'Turn 0 ended with an error: The API rejected GEMINI_API_KEY',
+        turn: { index: 0, kind: 'config' },
+      },
+    } as EvalRecord
+    assert.deepEqual(mergeOutcome({ state: 'passed', errors: [] } as EngineEval, record), {
+      outcome: 'infra_error',
+      error: record.error,
+    })
+    assert.deepEqual(mergeOutcome({ state: 'passed', errors: [] } as EngineEval, null), {
+      outcome: 'pass',
+      error: null,
+    })
+  })
+
   test('recordFailure classifies an abort by TimeoutError, not the message', () => {
     const attempt = (signal: AbortSignal) =>
       ({
