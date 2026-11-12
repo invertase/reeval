@@ -69,10 +69,10 @@ export type VmService = {
   /** Why the service can grant a machine less time than asked: `; it …`. */
   ttlLimit?: string
   /**
-   * A refused start is waited on for as long as the service asks, and only a `409` with one of
-   * these codes, which says the service ended the run, stops the run's attempts.
+   * A refused start is waited on for as long as the service asks, and only an answer with one of
+   * these codes and its status, which says the service ended the run, stops the run's attempts.
    */
-  endsRun?: readonly string[]
+  endsRun?: Readonly<Record<string, number>>
   /**
    * The spec `spec` becomes under the layout the service's `/limits` names, which decides the
    * machine type, reuse and attempts per machine in place of the eval's; null, for no layout or
@@ -193,6 +193,17 @@ export function boatError(error: unknown): string {
 }
 
 const status = (error: unknown) => (error instanceof VmApiError ? error.status : undefined)
+
+/** Whether `error` is one of the answers `service.endsRun` says end the run, code and status. */
+const endsRun = (service: VmService, error: unknown) => {
+  const code = error instanceof VmApiError ? error.code : null
+  return (
+    !!code &&
+    !!service.endsRun &&
+    Object.hasOwn(service.endsRun, code) &&
+    status(error) === service.endsRun[code]
+  )
+}
 
 /**
  * The attempt can't finish on a machine granted `granted` seconds of the `asked` it asked for,
@@ -430,7 +441,7 @@ export function vmPoolProvider(
         if (status(error) === 409 && code && code === service.reclaims) {
           throw new MachineReclaimed(`${service.name} took sandbox ${id} back: ${boatError(error)}`)
         }
-        if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+        if (endsRun(service, error)) {
           throw new RunStopped(
             `${service.name} ended the run, so its machines take no more attempts: ${boatError(error)}`,
           )
@@ -512,8 +523,7 @@ export async function startVm(
       })
       .catch((error: unknown) => {
         const why = boatError(error)
-        const code = error instanceof VmApiError ? error.code : null
-        if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+        if (endsRun(service, error)) {
           throw new RunStopped(
             `${service.name} ended the run, so it starts no more machines: ${why}`,
           )
