@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Assert, Same } from '../../contract/shared.ts'
+import { NewerSchemaError } from '../record.ts'
 import type {
   Arm,
   ArmRef,
@@ -694,4 +695,71 @@ export {
   rateSchema,
   reportClaimSchema,
   spreadSchema,
+}
+
+/** The newest `reportVersion` this reeval writes and reads. */
+export const REPORT_VERSION = 1
+
+const LEAVES = new Set(['string', 'number', 'boolean', 'literal', 'enum', 'null', 'unknown'])
+const loosened = new WeakMap<z.ZodType, z.ZodType>()
+
+/**
+ * `schema` with every object in it, at any depth, accepting keys it doesn't list (kept, not
+ * stripped). Each node is a clone of the strict one with only its children and `catchall`
+ * replaced, so checks such as `.min(1)` hold in both.
+ */
+function loose<T extends z.ZodType>(schema: T): T {
+  const known = loosened.get(schema)
+  if (known) return known as T
+  // biome-ignore lint/suspicious/noExplicitAny: each case reads its own kind's def
+  const def = schema.def as any
+  let out: z.ZodType
+  switch (def.type) {
+    case 'object':
+      out = schema.clone({
+        ...def,
+        shape: Object.fromEntries(
+          Object.entries(def.shape as Record<string, z.ZodType>).map(([k, v]) => [k, loose(v)]),
+        ),
+        catchall: z.unknown(),
+      })
+      break
+    case 'array':
+      out = schema.clone({ ...def, element: loose(def.element) })
+      break
+    case 'nullable':
+    case 'optional':
+      out = schema.clone({ ...def, innerType: loose(def.innerType) })
+      break
+    case 'union':
+      out = schema.clone({ ...def, options: def.options.map(loose) })
+      break
+    case 'tuple':
+      out = schema.clone({ ...def, items: def.items.map(loose), rest: def.rest && loose(def.rest) })
+      break
+    case 'record':
+      out = schema.clone({ ...def, valueType: loose(def.valueType) })
+      break
+    default:
+      if (!LEAVES.has(def.type)) throw new Error(`loose(): no rule for a Zod ${def.type} schema`)
+      out = schema
+  }
+  loosened.set(schema, out)
+  return out as T
+}
+
+/** `runReportSchema` with unknown fields allowed at every level, for reading a stored report. */
+export const looseRunReportSchema: z.ZodType<RunReport> = loose(runReportSchema)
+
+/**
+ * A stored `report.json` as a reader sees it: fields a newer reeval added, at any depth, pass
+ * through, while a missing or mistyped field fails the parse. One with a `reportVersion` above
+ * this reeval's throws a `NewerSchemaError`.
+ */
+export function readableRunReport(value: unknown, what = 'This report'): RunReport {
+  const version = (value as { reportVersion?: unknown } | null)?.reportVersion
+  if (typeof version === 'number' && version > REPORT_VERSION) {
+    throw new NewerSchemaError(what, version, REPORT_VERSION)
+  }
+  return looseRunReportSchema.parse(value)
 }

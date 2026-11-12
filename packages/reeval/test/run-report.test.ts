@@ -3,10 +3,15 @@ import { readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { corpusEntries } from '../scripts/schema/corpus.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import type { CompareRow } from '../src/view/compare.ts'
-import { readableRecord } from '../src/view/record.ts'
 import { FORBIDDEN_OUTPUT, runReportMarkdown } from '../src/renderer/markdown.ts'
-import { buildRunReport, runReportSchema } from '../src/view/report/index.ts'
+import type { CompareRow } from '../src/view/compare.ts'
+import { NewerSchemaError, readableRecord } from '../src/view/record.ts'
+import {
+  buildRunReport,
+  REPORT_VERSION,
+  readableRunReport,
+  runReportSchema,
+} from '../src/view/report/index.ts'
 
 function loadCorpusRun(name: string): RunRecord {
   const file = corpusEntries()
@@ -291,5 +296,51 @@ describe('buildRunReport', () => {
       assert.ok(primary.answered.k >= 2)
     }
     assert.match(runReportMarkdown(report), /Showing 1 of \d+ answers as representative/)
+  })
+})
+
+describe('readableRunReport', () => {
+  const golden = () =>
+    JSON.parse(
+      readFileSync(new URL('./fixtures/summary/with-layouts/report.json', import.meta.url), 'utf8'),
+    ) as Record<string, unknown>
+
+  /** The report's `z.record` fields, whose own keys are data, not fields. */
+  const RECORDS = new Set(['cells', 'counts'])
+
+  /** Adds `newerField` to every object in `value`, at every depth; returns how many it marked. */
+  function markEveryObject(value: unknown, record = false): number {
+    if (Array.isArray(value)) return value.reduce((n, v) => n + markEveryObject(v), 0)
+    if (typeof value !== 'object' || value === null) return 0
+    let n = record ? 0 : 1
+    for (const [k, v] of Object.entries(value)) n += markEveryObject(v, RECORDS.has(k))
+    if (!record) (value as Record<string, unknown>).newerField = { from: 'a newer reeval' }
+    return n
+  }
+
+  test('passes unknown fields at every level, which the strict schema refuses', () => {
+    const report = golden()
+    const marked = markEveryObject(report)
+    assert.ok(marked > 100, `marked ${marked} objects`)
+    assert.throws(() => runReportSchema.parse(report))
+    const read = readableRunReport(structuredClone(report))
+    assert.deepEqual(read, report, 'every unknown field is kept')
+  })
+
+  test('still refuses a missing or mistyped field', () => {
+    const missing = golden()
+    delete (missing.header as Record<string, unknown>).title
+    assert.throws(() => readableRunReport(missing))
+    const mistyped = golden()
+    ;(mistyped.attempts as Array<Record<string, unknown>>)[0]!.id = 7
+    assert.throws(() => readableRunReport(mistyped))
+    const empty = golden()
+    empty.evals = []
+    assert.throws(() => readableRunReport(empty), 'evals keeps its .min(1)')
+  })
+
+  test('refuses a report from a newer reeval', () => {
+    const newer = { ...golden(), reportVersion: REPORT_VERSION + 1 }
+    assert.throws(() => readableRunReport(newer), NewerSchemaError)
   })
 })

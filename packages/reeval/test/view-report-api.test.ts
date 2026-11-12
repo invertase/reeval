@@ -42,6 +42,8 @@ const MARKDOWN_EXPORTS = ['blockMarkdown', 'runReportMarkdown', 'FORBIDDEN_OUTPU
 
 const SCHEMA_EXPORTS: readonly string[] = [
   'runReportSchema',
+  'looseRunReportSchema',
+  'readableRunReport',
   'attemptRefSchema',
   'countSchema',
   'deltaSchema',
