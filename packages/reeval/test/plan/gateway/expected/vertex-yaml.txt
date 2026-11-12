@@ -1,18 +1,18 @@
 no profile · 2 evals · 6 cells · 6 attempts
 hint: gateway: claude-code:sonnet falls back to direct (vertex can't serve it: Claude Code resolves sonnet on Vertex AI to claude-sonnet-4-5, which Anthropic retires on 2026-11-30: name the model, e.g. claude-sonnet-5-5)
 hint: gateway: codex:gpt-5.4-mini falls back to direct (vertex can't serve it: Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve)
-evals/g.eval.ts › greets  claude-code:claude-sonnet-5-5/-/docker    control  gated  ×1  effort medium · gateway: claude-code:claude-sonnet-5-5 → vertex · gateway: claude-code:sonnet → direct (fallback) · gateway: claude-code:claude-haiku-5-5 → vertex · gateway: codex:gpt-5.4-mini → direct (fallback) · gateway: fx:gemini-3.8-flash[effort=low] → vertex · gateway: judge openai/gpt-5.4-mini → direct (fallback) · effort: claude-code:claude-haiku-5-5 none (Claude Code sends no effort to claude-haiku-5-5 on Vertex AI) · efforts differ: medium on claude-code:claude-sonnet-5-5, claude-code:sonnet, codex:gpt-5.4-mini; none on claude-code:claude-haiku-5-5; low on fx:gemini-3.8-flash[effort=low]
+evals/g.eval.ts › greets  claude-code:claude-sonnet-5-5/-/docker    control  gated  ×1  effort medium · gateway: claude-code:claude-sonnet-5-5 → vertex · gateway: claude-code:sonnet → direct (fallback) · gateway: claude-code:claude-opus-4-5 → vertex · gateway: codex:gpt-5.4-mini → direct (fallback) · gateway: fx:gemini-3.8-flash[effort=low] → vertex · gateway: judge openai/gpt-5.4-mini → direct (fallback) · effort: claude-code:claude-opus-4-5 none (Claude Code sends no effort to claude-opus-4-5 on Vertex AI) · efforts differ: medium on claude-code:claude-sonnet-5-5, claude-code:sonnet, codex:gpt-5.4-mini; none on claude-code:claude-opus-4-5; low on fx:gemini-3.8-flash[effort=low]
                           claude-code:sonnet/-/docker               control  gated  ×1  effort medium
-                          claude-code:claude-haiku-5-5/-/docker     control  gated  ×1
+                          claude-code:claude-opus-4-5/-/docker      control  gated  ×1
                           codex:gpt-5.4-mini/-/docker               control  gated  ×1  effort medium
                           fx:gemini-3.8-flash[effort=low]/-/docker  control  gated  ×1
 evals/g.eval.ts › pinned  b/-/docker                                control  gated  ×1  gateway: b → direct · gateway: judge openai/gpt-5.4-mini → direct (fallback)
 excluded: —
 image docker · claude-code · 1 evals
-  base  reeval-sandbox:claude-code-1.0.176-patch.a9d56a8c  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.185-patch.37fa4e82  (reeval's image: built when missing or when its base changed)
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.13  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
-  base  reeval-sandbox:fx-0.1.11  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:fx-0.1.12  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.9  (reeval's image: built when missing or when its base changed)

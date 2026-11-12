@@ -24,6 +24,7 @@ import { promptTokens, tokenUsage } from '../src/usage.ts'
 import {
   type BridgePart,
   replayBridge,
+  replayBridgeQuery,
   withSessionStartHook,
 } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
@@ -1229,6 +1230,25 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
     try {
       const unread = await replayBridge({ bridge: thinkless, start, messages })
       assert.deepEqual(output(unread), { total: 534, text: 534 })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("the shipped bridge loads the workspace's settings, where reeval puts rules and skills", async () => {
+    const { settingSources } = await replayBridgeQuery({ bridge: shipped, start, messages })
+    assert.deepEqual(settingSources, ['user', 'project', 'local'])
+    // The twin: upstream's bridge loads the user's settings only, so no CLAUDE.md or
+    // .claude/skills in the workspace reaches Claude Code.
+    const source = readFileSync(shipped, 'utf8')
+    const sources = /settingSources: \[\s*"user",\s*"project",\s*"local"\s*\]/
+    assert.match(source, sources, 'the shipped bridge loads the project settings')
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-user-only-'))
+    const userOnly = join(dir, 'bridge.mjs')
+    writeFileSync(userOnly, source.replace(sources, 'settingSources: ["user"]'))
+    try {
+      const upstream = await replayBridgeQuery({ bridge: userOnly, start, messages })
+      assert.deepEqual(upstream.settingSources, ['user'])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

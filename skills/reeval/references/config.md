@@ -93,7 +93,7 @@ the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `verte
 with no key: reeval mints a token from Application Default Credentials on the host and the egress
 gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`, Grok Build's xAI model as `xai/<id>` on Vertex's Chat Completions API).
 There Claude Code sends `effort` only to the models its own catalog lists, so `effort` on one it
-doesn't, such as `claude-haiku-5-5`, falls through, and with none set that model runs with no effort. The `sonnet`
+doesn't, such as `claude-opus-4-5`, falls through, and with none set that model runs with no effort. The `sonnet`
 and `opusplan` aliases fall through too: Claude Code resolves them on Vertex AI to Sonnet 4.5, which Anthropic retires on 2026-11-30, so name
 `claude-sonnet-5-5` instead. Claude ids work in
 either form (`claude-opus-4-5-20251101` is sent as Vertex's `claude-opus-4-5@20251101`), so one

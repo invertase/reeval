@@ -37,16 +37,16 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.172",
-    "@ai-sdk/harness-claude-code": "1.0.176",
+    "@ai-sdk/harness": "1.0.181",
+    "@ai-sdk/harness-claude-code": "1.0.185",
     "@balena/dockerignore": "1.0.2",
     "@reeval/harness-antigravity": "workspace:0.1.16",
     "@reeval/harness-codex": "workspace:0.1.13",
     "@reeval/harness-cursor-sdk": "workspace:0.1.9",
-    "@reeval/harness-fx": "workspace:0.1.11",
-    "@reeval/harness-goose": "workspace:0.1.16",
-    "@reeval/harness-grok-build": "workspace:0.1.12",
-    "@reeval/harness-opencode": "workspace:0.2.16",
+    "@reeval/harness-fx": "workspace:0.1.12",
+    "@reeval/harness-goose": "workspace:0.1.17",
+    "@reeval/harness-grok-build": "workspace:0.1.13",
+    "@reeval/harness-opencode": "workspace:0.2.17",
     "@reeval/harness-pi": "workspace:0.2.9",
     "ws": "8.22.1",
     "zod": "4.6.7"

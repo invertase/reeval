@@ -10,6 +10,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { createBridgeAuthKeyPair, createBridgeWebSocketConnect } from '@ai-sdk/harness/utils'
 import WebSocket from 'ws'
 
 export type BridgePart = { type: string; [key: string]: unknown }
@@ -17,9 +18,13 @@ export type BridgePart = { type: string; [key: string]: unknown }
 const require = createRequire(import.meta.url)
 const packageDir = (name: string) => dirname(require.resolve(`${name}/package.json`))
 
-/** The only SDK export the bridge calls: `query`, here a replay of the captured messages. */
-const STUB_SDK = `import { readFileSync } from 'node:fs'
-export function query({ prompt }) {
+/**
+ * The only SDK export the bridge calls: `query`, here a replay of the captured messages that also
+ * writes down the settings sources the bridge asked for.
+ */
+const STUB_SDK = `import { readFileSync, writeFileSync } from 'node:fs'
+export function query({ prompt, options }) {
+  writeFileSync(process.env.REEVAL_REPLAY_SDK_OPTIONS, JSON.stringify({ settingSources: options?.settingSources ?? null }))
   const messages = readFileSync(process.env.REEVAL_REPLAY_SDK_MESSAGES, 'utf8')
     .split('\\n').filter(Boolean).map((line) => JSON.parse(line))
   async function* replay() {
@@ -51,13 +56,25 @@ export function withSessionStartHook(messages: string): string {
     .join('\n')
 }
 
-/** The bridge's parts for one turn of `messages`, started with `start`, up to `finish` or `error`. */
-export async function replayBridge(options: {
+type ReplayOptions = {
   bridge: string
   start: Record<string, unknown>
   messages: string
   timeoutMs?: number
-}): Promise<BridgePart[]> {
+}
+
+/** The bridge's parts for one turn of `messages`, started with `start`, up to `finish` or `error`. */
+export async function replayBridge(options: ReplayOptions): Promise<BridgePart[]> {
+  return (await replayBridgeQuery(options)).parts
+}
+
+/**
+ * {@link replayBridge}'s parts, and the settings sources the bridge gave the SDK's `query`
+ * (`null` when it left them out, which loads every source).
+ */
+export async function replayBridgeQuery(
+  options: ReplayOptions,
+): Promise<{ parts: BridgePart[]; settingSources: string[] | null }> {
   const dir = mkdtempSync(join(tmpdir(), 'reeval-claude-bridge-'))
   try {
     const modules = join(dir, 'node_modules')
@@ -71,11 +88,12 @@ export async function replayBridge(options: {
     writeFileSync(join(mcp, 'mcp.js'), 'export class McpServer {}\n')
     for (const name of ['ws', 'zod']) symlinkSync(packageDir(name), join(modules, name))
     writeFileSync(join(dir, 'bridge.mjs'), readFileSync(options.bridge))
+    const queryOptions = join(dir, 'query-options.json')
     const messages = join(dir, 'messages.jsonl')
     writeFileSync(messages, options.messages)
     mkdirSync(join(dir, 'work'))
 
-    const token = 'replay-token'
+    const { privateKey, publicKey } = createBridgeAuthKeyPair()
     const child = spawn(
       process.execPath,
       ['bridge.mjs', '--workdir', join(dir, 'work'), '--bridge-state-dir', join(dir, 'state')],
@@ -83,9 +101,10 @@ export async function replayBridge(options: {
         cwd: dir,
         env: {
           PATH: process.env.PATH,
-          BRIDGE_CHANNEL_TOKEN: token,
+          BRIDGE_AUTH_PUBLIC_KEY: publicKey,
           BRIDGE_WS_PORT: '0',
           REEVAL_REPLAY_SDK_MESSAGES: messages,
+          REEVAL_REPLAY_SDK_OPTIONS: queryOptions,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
@@ -95,7 +114,7 @@ export async function replayBridge(options: {
       stderr += d
     })
     try {
-      return await new Promise<BridgePart[]>((resolve, reject) => {
+      const parts = await new Promise<BridgePart[]>((resolve, reject) => {
         const timer = setTimeout(
           () => reject(new Error(`the bridge didn't finish the turn:\n${stderr}`)),
           options.timeoutMs ?? 20_000,
@@ -115,26 +134,33 @@ export async function replayBridge(options: {
           })()
           if (ready.type === 'bridge-fatal') fail(new Error(`bridge-fatal: ${ready.message}`))
           if (ready.type !== 'bridge-ready') return
-          const ws = new WebSocket(`ws://127.0.0.1:${ready.port}/?agent_bridge_token=${token}`)
-          const parts: BridgePart[] = []
-          ws.on('error', fail)
-          ws.on('message', (data) => {
-            const part = JSON.parse(String(data)) as BridgePart
-            if (part.type === 'bridge-hello') {
-              ws.send(JSON.stringify({ ...options.start, type: 'start' }))
-              return
-            }
-            if (typeof part.seq !== 'number') return
-            const { seq: _, ...rest } = part
-            parts.push(rest)
-            if (part.type === 'finish' || part.type === 'error') {
-              clearTimeout(timer)
-              ws.close()
-              resolve(parts)
-            }
+          const connect = createBridgeWebSocketConnect({
+            endpoint: { url: `ws://127.0.0.1:${ready.port}/` },
+            privateKey,
+            webSocketConstructor: WebSocket,
           })
+          const parts: BridgePart[] = []
+          connect({ abortSignal: new AbortController().signal, reason: 'open' }).then((ws) => {
+            ws.on('error', fail)
+            ws.on('message', (data) => {
+              const part = JSON.parse(String(data)) as BridgePart
+              if (typeof part.seq !== 'number') return
+              const { seq: _, ...rest } = part
+              parts.push(rest)
+              if (part.type === 'finish' || part.type === 'error') {
+                clearTimeout(timer)
+                ws.close()
+                resolve(parts)
+              }
+            })
+            ws.send(JSON.stringify({ ...options.start, type: 'start' }))
+          }, fail)
         })
       })
+      const { settingSources } = JSON.parse(readFileSync(queryOptions, 'utf8')) as {
+        settingSources: string[] | null
+      }
+      return { parts, settingSources }
     } finally {
       // Windows can't remove a directory a live process still has open.
       const exited = child.exitCode === null && child.signalCode === null && once(child, 'exit')

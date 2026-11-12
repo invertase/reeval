@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-goose",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "private": true,
   "description": "An AI SDK harness adapter for Goose on a provider's API key, a gateway or Vertex AI, over its ACP server (goose acp)",
   "license": "Apache-2.0",
@@ -28,10 +28,10 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.172",
-    "@ai-sdk/harness-acp": "1.0.112",
-    "@ai-sdk/provider": "4.0.35",
-    "@ai-sdk/provider-utils": "5.0.73",
+    "@ai-sdk/harness": "1.0.181",
+    "@ai-sdk/harness-acp": "1.0.121",
+    "@ai-sdk/provider": "4.0.37",
+    "@ai-sdk/provider-utils": "5.0.79",
     "zod": "4.6.7"
   }
 }

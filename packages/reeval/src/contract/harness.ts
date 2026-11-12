@@ -334,7 +334,7 @@ function explain(kind: HarnessDescriptor['kind']) {
 }
 
 /**
- * Claude Code drops `effort` for these models and sends none (claude-code 2.1.290's
+ * Claude Code drops `effort` for these models and sends none (claude-code 2.1.319's
  * `supportsEffort`): every `claude-3-` model, and the ones named.
  */
 const CLAUDE_CODE_NO_EFFORT = new Set([
@@ -346,16 +346,18 @@ const CLAUDE_CODE_NO_EFFORT = new Set([
 ])
 
 /**
- * The model each alias names in claude-code 2.1.290's catalog: its default, and on Vertex AI its
- * Vertex one where that differs. `opusplan` runs Opus in plan mode and Sonnet's model otherwise.
+ * The model each alias names in claude-code 2.1.319's catalog: its default, and on Vertex AI its
+ * Vertex one where that differs, with the day Anthropic retires that one if it's announced.
+ * `opusplan` runs Opus in plan mode and Sonnet's model otherwise.
  */
-const CLAUDE_CODE_ALIASES: Record<string, { default: string; vertex?: string }> = {
-  opus: { default: 'claude-opus-5-5' },
-  sonnet: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5' },
-  opusplan: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5' },
-  haiku: { default: 'claude-haiku-4-5' },
-  fable: { default: 'claude-fable-5-1' },
-}
+const CLAUDE_CODE_ALIASES: Record<string, { default: string; vertex?: string; retires?: string }> =
+  {
+    opus: { default: 'claude-opus-5-5' },
+    sonnet: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5', retires: '2026-11-30' },
+    opusplan: { default: 'claude-sonnet-5-5', vertex: 'claude-sonnet-4-5', retires: '2026-11-30' },
+    haiku: { default: 'claude-haiku-5-5', vertex: 'claude-haiku-4-5' },
+    fable: { default: 'claude-fable-5-1' },
+  }
 
 /**
  * `claude-haiku-4-5` from `claude-haiku-4-5@20251001`, `claude-haiku-4-5-20251001` or
@@ -374,11 +376,12 @@ const claudeBase = (model: string, gateway?: string) => {
 }
 
 /**
- * The models Claude Code's own catalog says take effort (claude-code 2.1.290). On Vertex AI it
- * sends an effort only to these: a model its catalog doesn't list, such as `claude-haiku-5-5`,
- * gets none there, though it gets one on Anthropic's API and through a base URL.
+ * The models Claude Code's own catalog says take effort (claude-code 2.1.319). On Vertex AI it
+ * sends an effort only to these: a model its catalog doesn't list gets none there, though it gets
+ * one on Anthropic's API and through a base URL.
  */
 const CLAUDE_CODE_CATALOG_EFFORT = new Set([
+  'claude-haiku-5-5',
   'claude-sonnet-4-6',
   'claude-sonnet-5',
   'claude-sonnet-5-5',
@@ -401,13 +404,13 @@ export const claudeCodeModelName = (model: string, gateway?: string): string =>
   claudeAlias(model) ? `${model} (${claudeBase(model, gateway)})` : model
 
 /**
- * Why Claude Code can't run the alias `model` on Vertex AI: claude-code 2.1.290 resolves `sonnet`
+ * Why Claude Code can't run the alias `model` on Vertex AI: claude-code 2.1.319 resolves `sonnet`
  * and `opusplan` there to `claude-sonnet-4-5`, which Anthropic retires on 2026-11-30.
  */
 export const claudeCodeVertexAliasRefusal = (model: string): string | undefined => {
-  const retired = claudeAlias(model)?.vertex
-  return retired
-    ? `Claude Code resolves ${model} on Vertex AI to ${retired}, which Anthropic retires on 2026-11-30: name the model, e.g. claude-sonnet-5-5`
+  const alias = claudeAlias(model)
+  return alias?.vertex && alias.retires
+    ? `Claude Code resolves ${model} on Vertex AI to ${alias.vertex}, which Anthropic retires on ${alias.retires}: name the model, e.g. claude-sonnet-5-5`
     : undefined
 }
 
