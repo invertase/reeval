@@ -456,7 +456,13 @@ async function sandboxEnv(
       `Couldn't read the sandbox's environment for fx's stdio MCP servers (exit ${read.exitCode}): ${String(read.stderr ?? '').trim()}`,
     )
   }
-  return JSON.parse(read.stdout) as Record<string, string>
+  try {
+    return JSON.parse(read.stdout) as Record<string, string>
+  } catch {
+    throw new Error(
+      `Couldn't read the sandbox's environment for fx's stdio MCP servers: its output isn't JSON, so something else in the sandbox writes to stdout`,
+    )
+  }
 }
 
 /**
