@@ -91,7 +91,8 @@ export type RunReportOptions = {
 export type ReportLinks = {
   /**
    * Where the run's folder is, which every artifact link is relative to: a path or URL, read as a
-   * folder whether or not it ends in `/`. `./` in `summary.md`.
+   * folder whether or not it ends in `/`. `./` in `summary.md`. A base with a query string or
+   * fragment, such as a signed URL, isn't supported: a host that needs one rewrites each link.
    */
   base?: string
   /** The run record's href. `../<runId>.json`, the record beside the run's folder, by default. */
