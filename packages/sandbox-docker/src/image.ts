@@ -40,7 +40,7 @@ export const HARNESS_PACKAGES: Record<
 > = {
   cursor: {
     name: '@reeval/harness-cursor-sdk',
-    version: '0.1.9',
+    version: '0.1.10',
     bootstrap: {
       name: 'Cursor',
       cli: '@cursor/sdk',
