@@ -1,17 +1,17 @@
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The Codex release the bootstrap installs, checked against npm's published sha512s. */
-export const CODEX_CLI_VERSION = '0.164.0'
+export const CODEX_CLI_VERSION = '0.167.2'
 /**
  * The `dist.integrity` of `@openai/codex@<version>-<platform>`, its native builds: Linux's for
  * each arch, and macOS's for Apple Silicon (a Tart VM).
  */
 export const CODEX_CLI_INTEGRITY = {
-  x64: 'sha512-XLAoaWsGOT2khzl+P4FYDPTkzAr9W0VFXFaVkqlFdkM0soa1gH/4S0wSD57Ek3HHwkirAEGz2/Mwehseh+l5Mg==',
+  x64: 'sha512-2Rw3VkWonMxwCSgOw+NkiKLOuOzyoQNWmxU7x8GniesdMfhKc4asNqOzTgQwJLKCrSlPc4/6fYTaH7fYcuGWGQ==',
   arm64:
-    'sha512-LL5iTQjyDL4YRX44EWqhIfEQ5uGnmgxkQBJSxjZSeJ8L1Og83pdlzUJW/PRJ76oaVwOVgh6HXwuPEiBNEHU4lg==',
+    'sha512-x/PhPRq0X+hBZDqXKE0YIm4NZoSyCF99KcJJWRn0B2WNdmYk3eBDtjNO5+wl7zWMCBwjTOev5Tz2ZZ6+Y14YQA==',
   'darwin-arm64':
-    'sha512-pDizgOUAtq3/k3AbUFHbaU19WpYKCja+oFpNSTLKrDQj4lTUNSDuTPJip4uQVn2/1EipQdpQrGMOQBVuI1znAA==',
+    'sha512-JB6L+L2jefDIaNgoHi7ePZKK1u2riDhlbwgm6zK57ZWpMGAYAwKgDYDb7l+xie7oUkRZuCVx307wsB/k4VsMKw==',
 } as const
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CODEX_BOOTSTRAP_DIR = '.harness-bootstrap/codex'
