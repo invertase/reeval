@@ -571,7 +571,7 @@ export function daytonaPoolProvider(
   descriptor: DaytonaSandboxDescriptor,
   api: Daytona,
   runId: string,
-  start?: DaytonaStart & { image?: unknown },
+  start?: DaytonaStart & { image?: Image },
 ): PoolProvider<PooledSshMachine> {
   const size = descriptor.size ?? 'medium'
   const snapshot = start ? start.snapshot : snapshotOf(descriptor)
