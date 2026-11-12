@@ -9,7 +9,8 @@ import { fromCwd } from '../ids.ts'
 import { countSecrets, findSecretsInJson } from '../redact.ts'
 import { fileInside } from '../studio/source.ts'
 import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
-import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
+import { parsedAnalysis } from '../view/analysis-schema.ts'
+import { NewerSchemaError } from '../view/record.ts'
 
 export const analysisCacheDir = (root: string) => join(root, '.reeval', 'analysis')
 export const savedAnalysisDir = (historyDir: string, runId: string) =>
@@ -17,15 +18,28 @@ export const savedAnalysisDir = (historyDir: string, runId: string) =>
 
 const warned = new Set<string>()
 
-/** An analysis file as this reeval reads it; null if it isn't one, or (with a warning) is newer. */
-const parse = (text: string, file: string): AnalysisDoc | null => {
+/**
+ * An analysis file's `text` as this reeval reads it; null if it isn't an analysis, or (with a
+ * warning, once per file) is newer or doesn't fit `AnalysisDoc`.
+ */
+export const readAnalysisText = (text: string, file: string): AnalysisDoc | null => {
+  let value: unknown
   try {
-    const doc = JSON.parse(text) as AnalysisDoc
-    return doc?.kind === 'reeval-analysis' ? readableAnalysis(doc, file) : null
+    value = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if ((value as { kind?: unknown } | null)?.kind !== 'reeval-analysis') return null
+  try {
+    return parsedAnalysis(value, fromCwd(file))
   } catch (error) {
-    if (error instanceof NewerSchemaError && !warned.has(file)) {
+    if (!warned.has(file)) {
       warned.add(file)
-      process.stderr.write(`warning: skipped ${fromCwd(file)}: ${error.reason}\n`)
+      const why =
+        error instanceof NewerSchemaError
+          ? `${fromCwd(file)}: ${error.reason}`
+          : `${(error as Error).message}, so this reeval can't read it`
+      process.stderr.write(`warning: skipped ${why}\n`)
     }
     return null
   }
@@ -35,7 +49,7 @@ const parse = (text: string, file: string): AnalysisDoc | null => {
 export async function readCached(root: string, key: string): Promise<AnalysisDoc | null> {
   const file = join(analysisCacheDir(root), `${key}.json`)
   const text = await readFile(file, 'utf8').catch(() => null)
-  const doc = text === null ? null : parse(text, file)
+  const doc = text === null ? null : readAnalysisText(text, file)
   return doc?.error === undefined ? doc : null
 }
 
@@ -116,7 +130,7 @@ export async function listAnalyses(
       const file = join(folder, name)
       const real = await fileInside(dir, [runId, 'analysis'], [name])
       if (!real) continue
-      const doc = parse(await readFile(real, 'utf8').catch(() => ''), file)
+      const doc = readAnalysisText(await readFile(real, 'utf8').catch(() => ''), file)
       if (doc) entries.push({ file: `analysis/${name}`, source: 'saved', doc })
     }
     if (entries.length) break
@@ -126,7 +140,7 @@ export async function listAnalyses(
     for (const name of await readdir(cache).catch((): string[] => [])) {
       if (!name.endsWith('.json')) continue
       const file = join(cache, name)
-      const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
+      const doc = readAnalysisText(await readFile(file, 'utf8').catch(() => ''), file)
       if (doc?.anchor === runId)
         entries.push({ file: `.reeval/analysis/${name}`, source: 'cached', doc })
     }
