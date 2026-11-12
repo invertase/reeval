@@ -220,6 +220,29 @@ describe('persisted shapes', () => {
     )
   })
 
+  test('a whole-number const is within an integer type, and no new value', () => {
+    const doc = (n: Schema): ShapeSchema => ({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $comment: '',
+      title: 'T',
+      $ref: '#/$defs/T',
+      $defs: { T: { type: 'object', properties: { n }, required: ['n'] } },
+    })
+    const changes = (a: Schema, b: Schema) =>
+      compare(doc(a), doc(b), none).map((c) => [c.kind, c.path, c.breaking])
+    assert.deepEqual(changes({ type: 'integer' }, { const: 3 }), [['narrowed', 'n', true]])
+    assert.deepEqual(changes({ const: 3 }, { type: 'integer' }), [['widened', 'n', false]])
+    assert.deepEqual(
+      changes({ type: 'integer' }, { anyOf: [{ type: 'integer' }, { const: 3 }] }),
+      [],
+    )
+    assert.deepEqual(changes({ const: 1.5 }, { type: 'integer' }), [
+      ['narrowed', 'n', true],
+      ['widened', 'n', false],
+    ])
+    assert.deepEqual(changes({ type: 'number' }, { anyOf: [{ type: 'number' }, { const: 3 }] }), [])
+  })
+
   test('a transcript event type that disappears fails, by its variant', () => {
     const now = snapshot('transcript-line')
     const fewer = copy(now)

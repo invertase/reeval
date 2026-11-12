@@ -61,6 +61,14 @@ function alternatives(doc: Doc, schema: Schema): Schema[] {
   return [s]
 }
 
+/** Whether a schema of one plain `type` admits `value`: a whole number is an `integer` too. */
+const admits = (s: Schema, value: unknown) =>
+  s.type === 'integer'
+    ? Number.isInteger(value)
+    : s.type === 'null'
+      ? value === null
+      : s.type === typeof value
+
 const kindOf = (s: Schema) =>
   Object.keys(s).length === 0 ? 'any' : 'const' in s ? 'const' : (s.type ?? 'any')
 
@@ -130,9 +138,7 @@ export function compare(
     for (const o of olds) {
       const kind = kindOf(o)
       if (kind === 'const') {
-        const covered = news.some((n) =>
-          'const' in n ? n.const === o.const : n.type === typeof o.const,
-        )
+        const covered = news.some((n) => ('const' in n ? n.const === o.const : admits(n, o.const)))
         if (!covered) lost.push(o)
       } else if (kind === 'array') {
         const n = news.find((a) => kindOf(a) === 'array')
@@ -189,7 +195,7 @@ export function compare(
           'const' in n
             ? 'const' in o
               ? o.const === n.const
-              : o.type === typeof n.const
+              : admits(o, n.const)
             : kindOf(o) === kindOf(n),
         ),
     )
