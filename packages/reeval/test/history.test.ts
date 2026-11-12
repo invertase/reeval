@@ -765,6 +765,39 @@ evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
     assert.ok(!existsSync(join(q.dir, HISTORY, local)), 'no artifact dir with none')
   })
 
+  test('run --artifacts beats history.artifacts, and a re-recorded run keeps its level', async () => {
+    const p = await project('record-run-artifacts', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig({
+        harness: `{ ...${harness()}, ...(process.env.REEVAL_TEST_OUTAGE && { failWith: 'outage' }) }`,
+        extra: `history: { artifacts: 'none' }, record: 'always',`,
+      }),
+      'evals/agent.eval.ts': agent(),
+    })
+    sh(p.dir, 'init', '-q', '-b', 'main')
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'init')
+
+    const all = await runCli(p.dir, ['run', '--artifacts', 'all'])
+    assert.equal(all.code, 0, all.stdout + all.stderr)
+    const first = readRun(p.dir, { history: HISTORY })
+    assert.equal(first.run.artifacts, 'all')
+    const pass = first.evals.find((e) => e.outcome === 'pass')
+    assert.ok(existsSync(join(first.dir, pass?.slug ?? 'x')), "the passing attempt's artifacts")
+    await rm(join(p.dir, HISTORY), { recursive: true })
+
+    const out = await runCli(p.dir, ['run', '--artifacts', 'all'], {
+      env: { REEVAL_TEST_OUTAGE: '1' },
+    })
+    assert.notEqual(out.code, 0, out.stdout + out.stderr)
+    assert.equal(readRun(p.dir, { history: HISTORY }).run.artifacts, 'all')
+    const retried = await runCli(p.dir, ['run', '--retry-errors', '--artifacts', 'none'])
+    assert.equal(retried.code, 0, retried.stdout + retried.stderr)
+    const kept = readRun(p.dir, { history: HISTORY })
+    assert.equal(kept.run.artifacts, 'all', 'a re-recorded run keeps the level it was recorded at')
+    assert.equal(kept.evals.find((e) => e.outcome === 'pass')?.outcome, 'pass')
+  })
+
   test('two branches record, merge with zero conflicts, and old checkouts show old history', async () => {
     const p = await gitProject('record-merge', { 'evals/agent.eval.ts': agent() })
     sh(p.dir, 'checkout', '-q', '-b', 'a')

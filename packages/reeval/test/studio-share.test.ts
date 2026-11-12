@@ -3,7 +3,7 @@
 // refusing as they do.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -28,11 +28,29 @@ type Share = {
   revokedAt: string | null
 }
 
-async function platform(options: { ready?: string[]; limit?: boolean } = {}) {
+type Options = {
+  /** Runs the project has read. */
+  ready?: string[]
+  /** Runs the project has a copy of that it answers pending for one status check. */
+  pending?: string[]
+  /** The share limit's refusal, with this status. */
+  limit?: number
+  limitMessage?: string
+  /** How many share requests answer 409 not_ready whatever the run's state. */
+  notReady?: number
+  /** Changes each share the POST answers with. */
+  answer?: (made: Share) => unknown
+  /** Changes each share the list answers with. */
+  listed?: (s: Share) => unknown
+}
+
+async function platform(options: Options = {}) {
   const seen: Seen[] = []
-  const runs = new Map<string, { revision: number; status: 'pending' | 'ready' }>(
-    (options.ready ?? []).map((id) => [id, { revision: 1, status: 'ready' }]),
-  )
+  const runs = new Map<string, { revision: number; pendingChecks: number }>([
+    ...(options.ready ?? []).map((id) => [id, { revision: 1, pendingChecks: 0 }] as const),
+    ...(options.pending ?? []).map((id) => [id, { revision: 1, pendingChecks: 1 }] as const),
+  ])
+  let notReady = options.notReady ?? 0
   const shares: Share[] = []
   let base = ''
   const json = (res: ServerResponse, status: number, body?: unknown) => {
@@ -65,27 +83,33 @@ async function platform(options: { ready?: string[]; limit?: boolean } = {}) {
     if (run) {
       const runId = decodeURIComponent(run[1] as string)
       const there = runs.get(runId)
-      const state = () => ({ runId, ...runs.get(runId), error: null })
       if (req.method === 'PUT') {
-        runs.set(runId, { revision: (there?.revision ?? 0) + 1, status: 'pending' })
-        return json(res, 202, state())
+        const revision = (there?.revision ?? 0) + 1
+        runs.set(runId, { revision, pendingChecks: 0 })
+        return json(res, 202, { runId, revision, status: 'pending', error: null })
       }
       if (req.method === 'GET') {
         if (!there) return fail(res, 404, 'not_found', `No run ${runId}.`)
-        there.status = 'ready'
-        return json(res, 200, state())
+        const status = there.pendingChecks > 0 ? 'pending' : 'ready'
+        there.pendingChecks = Math.max(0, there.pendingChecks - 1)
+        return json(res, 200, { runId, revision: there.revision, status, error: null })
       }
     }
     if (url.pathname === `${prefix}/shares` && req.method === 'POST') {
       const { runId, type, scope } = JSON.parse(body.toString()) as Share
+      if (options.limit) {
+        return fail(res, options.limit, 'share_limit', options.limitMessage ?? LIMIT_MESSAGE)
+      }
       const there = runs.get(runId)
       if (!there) return fail(res, 404, 'not_found', `No run ${runId}.`)
-      if (there.status !== 'ready') return fail(res, 409, 'not_ready', 'Not read yet.')
+      if (there.pendingChecks > 0 || notReady > 0) {
+        notReady--
+        return fail(res, 409, 'not_ready', 'Not read yet.')
+      }
       const same = shares.find(
         (s) => s.runId === runId && s.type === type && s.scope === scope && !s.revokedAt,
       )
-      if (same) return json(res, 200, same)
-      if (options.limit) return fail(res, 402, 'share_limit', LIMIT_MESSAGE)
+      if (same) return json(res, 200, options.answer ? options.answer(same) : same)
       const id = `sh${shares.length + 1}xxxxxxxxxxxxxxxxxxxx`
       const made = {
         id,
@@ -98,11 +122,12 @@ async function platform(options: { ready?: string[]; limit?: boolean } = {}) {
       }
       shares.push(made)
       const { revokedAt: _, ...created } = made
-      return json(res, 201, created)
+      return json(res, 201, options.answer ? options.answer(made) : created)
     }
     if (url.pathname === `${prefix}/shares` && req.method === 'GET') {
       const runId = url.searchParams.get('runId')
-      return json(res, 200, { shares: shares.filter((s) => !runId || s.runId === runId) })
+      const listed = shares.filter((s) => !runId || s.runId === runId)
+      return json(res, 200, { shares: options.listed ? listed.map(options.listed) : listed })
     }
     const one = new RegExp(`^${prefix}/shares/([^/]+)$`).exec(url.pathname)
     if (one && req.method === 'DELETE') {
@@ -202,7 +227,7 @@ describe('reeval studio share', () => {
       const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
       assert.equal(r.code, 0, r.stdout + r.stderr)
       assert.deepEqual(p.calls(), [
-        `GET /runs/${runId}`,
+        'POST /shares',
         `PUT /runs/${runId}`,
         `GET /runs/${runId}`,
         'POST /shares',
@@ -230,8 +255,7 @@ describe('reeval studio share', () => {
     try {
       const r = await runCli(dir, ['studio', 'share', runId], { env: envFor(p.base) })
       assert.equal(r.code, 0, r.stdout + r.stderr)
-      assert.deepEqual(p.calls(), [`GET /runs/${runId}`, 'POST /shares'])
-      assert.match(r.stdout, /has run .* already \(revision 1\)/)
+      assert.deepEqual(p.calls(), ['POST /shares'])
       assert.doesNotMatch(r.stdout, /Pushing/)
       const again = await runCli(dir, ['studio', 'share', runId], { env: envFor(p.base) })
       assert.equal(again.code, 0, again.stdout + again.stderr)
@@ -248,6 +272,10 @@ describe('reeval studio share', () => {
       const full = await runCli(dir, ['studio', 'share', '--full'], { env: envFor(p.base) })
       assert.equal(full.code, 0, full.stdout + full.stderr)
       assert.match(full.stdout, /^This share includes the run's transcripts and artifacts\.$/m)
+      assert.match(
+        full.stderr,
+        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: reeval run --artifacts all/,
+      )
       assert.doesNotMatch(full.stdout, /without signing in/)
       assert.match(full.stdout, /\(full, team\)/)
       const pub = await runCli(dir, ['studio', 'share', '--public'], { env: envFor(p.base) })
@@ -280,6 +308,7 @@ describe('reeval studio share', () => {
       assert.equal(share.scope, 'public')
       assert.equal(share.url, `${p.base}/s/${share.id}`)
       assert.equal(share.pushed, true)
+      assert.equal(share.created, true)
       assert.match(r.stderr, /Pushing /)
       assert.match(r.stderr, /transcripts/)
       assert.match(r.stderr, /without signing in/)
@@ -288,13 +317,123 @@ describe('reeval studio share', () => {
     }
   })
 
-  test("a refused share prints the platform's message as it is and exits 2", async () => {
-    const p = await platform({ ready: [runId], limit: true })
+  test("the share limit prints the platform's message as it is and exits 2, at any status", async () => {
+    for (const limit of [402, 403]) {
+      const p = await platform({ limit })
+      try {
+        const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.equal(r.stderr.trim(), `reeval: ${LIMIT_MESSAGE}`)
+        assert.doesNotMatch(r.stdout, /Shared|Pushing/)
+        assert.deepEqual(p.calls(), ['POST /shares'])
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test("the platform's message loses its control characters", async () => {
+    const p = await platform({ limit: 402, limitMessage: 'Limit\u001b[2J reached\u0007.' })
     try {
       const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
       assert.equal(r.code, 2, r.stdout + r.stderr)
-      assert.equal(r.stderr.trim(), `reeval: ${LIMIT_MESSAGE}`)
-      assert.doesNotMatch(r.stdout, /Shared/)
+      assert.equal(r.stderr.trim(), 'reeval: Limit[2J reached.')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a copy still being read is waited on, not uploaded again', async () => {
+    const p = await platform({ pending: [runId] })
+    try {
+      const r = await runCli(dir, ['studio', 'share', '--json'], { env: envFor(p.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(p.calls(), [
+        'POST /shares',
+        `GET /runs/${runId}`,
+        `GET /runs/${runId}`,
+        'POST /shares',
+      ])
+      assert.match(r.stderr, /Waiting for the cloud platform to read run .* \(revision 1\)/)
+      const share = JSON.parse(r.stdout)
+      assert.equal(share.pushed, false)
+      assert.equal(share.created, true)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a share refused as not ready right after the run is read is asked for once more', async () => {
+    const once = await platform({ ready: [runId], notReady: 2 })
+    try {
+      const r = await runCli(dir, ['studio', 'share'], { env: envFor(once.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(once.calls(), [
+        'POST /shares',
+        `GET /runs/${runId}`,
+        'POST /shares',
+        'POST /shares',
+      ])
+    } finally {
+      await once.close()
+    }
+    const stuck = await platform({ ready: [runId], notReady: 3 })
+    try {
+      const r = await runCli(dir, ['studio', 'share'], { env: envFor(stuck.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(r.stderr, /has read run .* but won't share it yet/)
+      assert.equal(stuck.calls().filter((c) => c === 'POST /shares').length, 3)
+    } finally {
+      await stuck.close()
+    }
+  })
+
+  test('a share answer for something else exits 3 and says how to revoke it', async () => {
+    for (const answer of [
+      (s: Share) => ({ ...s, scope: 'public' }),
+      (s: Share) => ({ ...s, url: `https://elsewhere.example/s/${s.id}` }),
+    ]) {
+      const p = await platform({ ready: [runId], answer })
+      try {
+        const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
+        assert.equal(r.code, 3, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          /different share \(sh1\w+, .*\): revoke it with reeval studio share --revoke sh1|answered share run .* with something else/,
+        )
+        assert.doesNotMatch(r.stdout, /elsewhere/)
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test('a listed share with a bad revokedAt or another origin is a bad answer', async () => {
+    for (const listed of [
+      (s: Share) => ({ ...s, revokedAt: 5 }),
+      (s: Share) => ({ ...s, url: 'https://elsewhere.example/s/x' }),
+    ]) {
+      const p = await platform({ ready: [runId], listed })
+      try {
+        const env = envFor(p.base)
+        assert.equal((await runCli(dir, ['studio', 'share'], { env })).code, 0)
+        const r = await runCli(dir, ['studio', 'share', '--list'], { env })
+        assert.equal(r.code, 3, r.stdout + r.stderr)
+        assert.match(r.stderr, /answered list the project's shares with something else/)
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test('--list passes a run id it has no record of straight through', async () => {
+    const p = await platform()
+    try {
+      const other = '20990101T000000Z_main_agent_abcd'
+      const r = await runCli(dir, ['studio', 'share', '--list', other], { env: envFor(p.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(p.calls(), [`GET /shares?runId=${other}`])
+      assert.equal(r.stdout.trim(), `Run ${other} has no shares`)
     } finally {
       await p.close()
     }
@@ -357,10 +496,19 @@ describe('reeval studio share', () => {
         ['--revoke', 'x', runId],
         ['--list', '--public'],
         ['--port', '1'],
+        ['--public', '--skip-secret-scan'],
+        ['--revoke', '../runs/x'],
+        ['--revoke', 'a/b'],
       ]) {
         const r = await runCli(dir, ['studio', 'share', ...args], { env: envFor(p.base) })
         assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
       }
+      const pub = await runCli(dir, ['studio', 'share', '--public', '--skip-secret-scan'], {
+        env: envFor(p.base),
+      })
+      assert.match(pub.stderr, /a public share needs a clean secret scan/)
+      const bad = await runCli(dir, ['studio', 'share', '--revoke', '..'], { env: envFor(p.base) })
+      assert.match(bad.stderr, /--revoke takes a share's id/)
       assert.deepEqual(p.seen, [])
     } finally {
       await p.close()
@@ -452,6 +600,21 @@ describe('reeval cloud push --out and --json', () => {
     }
   })
 
+  test('--out refuses a place where reeval keeps runs, a folder and stdout', async () => {
+    for (const [target, why] of [
+      [`${HISTORY}/run.zip`, /is inside .*, where reeval keeps runs/],
+      ['.reeval/run.zip', /is inside .*, where reeval keeps runs/],
+      ['evals', /is a folder/],
+      ['-', /./],
+    ] as const) {
+      const r = await runCli(dir, ['cloud', 'push', '--out', target])
+      assert.equal(r.code, 2, `${target}: ${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, why)
+    }
+    assert.ok(!readdirSync(join(dir, HISTORY)).includes('run.zip'))
+    assert.ok(!existsSync(join(dir, '.reeval', 'run.zip')))
+  })
+
   test('--out with an upload flag is refused', async () => {
     const r = await runCli(dir, ['cloud', 'push', '--out', 'x.zip', '--no-wait'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -493,5 +656,7 @@ describe('reeval cloud push --out and --json', () => {
     const failures = await runCli(dir, ['cloud', 'push', '--out', 'out/run.zip'])
     assert.equal(failures.code, 0, failures.stdout + failures.stderr)
     assert.deepEqual(await transcripts(out()), [], "'failures' leaves a passing attempt's out")
+    const unrecorded = await runCli(all, ['run', '--artifacts', 'all'])
+    assert.match(unrecorded.stderr, /--artifacts applies when the run is recorded: pass --record/)
   })
 })

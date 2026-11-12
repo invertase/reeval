@@ -473,7 +473,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.push-out',
     area: 'Config and selection',
-    name: "`reeval cloud push --out <file>`: the recorded run's secret-scanned history archive written to the file, with nothing sent and no sign-in needed; `--json` prints what it wrote, or on an upload the run's last state; `reeval run --artifacts all|failures|none` sets the level the run is recorded at, as `reeval record --artifacts` does",
+    name: "`reeval cloud push --out <file>`: the recorded run's secret-scanned history archive written to the file, with nothing sent and no sign-in needed; `--json` prints what it wrote, or on an upload the run's last state",
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
@@ -2031,6 +2031,12 @@ export const inventory: InventoryFeature[] = [
     name: "`history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did",
     fixtures: ['history/artifacts-failures'],
     unit: ['reeval/test/history.test.ts'],
+  },
+  {
+    id: 'history.run-artifacts',
+    area: 'Records and studio',
+    name: '`reeval run --artifacts all|failures|none`: the level the run is recorded at (auto-record or `--record`), over `history.artifacts`; a re-recorded run (`--retry-errors`, `--resume`) keeps the level it was recorded at, and an unrecorded run warns that the flag applies only when recording',
+    unit: ['reeval/test/history.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'history.archive',

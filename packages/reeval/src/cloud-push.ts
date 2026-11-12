@@ -6,7 +6,7 @@
 import { rmSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { ArchiveError, writeArchive } from './archive/index.ts'
 import { safeZipPath } from './archive/zip.ts'
@@ -17,6 +17,7 @@ import { type Target, target } from './cloud-secrets.ts'
 import { CommandError, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
 import { readRunArchiveFiles } from './history/files.ts'
+import type { ArtifactLevel } from './history/types.ts'
 import { plural } from './text.ts'
 import type { ResolvedConfig } from './types.ts'
 import { formatBytes } from './view/debug.ts'
@@ -28,6 +29,8 @@ const MAX_POLL_MS = 5_000
 /** The upload's time limit: this, plus a second for every 32 KB the archive holds. */
 const UPLOAD_BASE_MS = 2 * 60_000
 const UPLOAD_BYTES_PER_SECOND = 32 * 1024
+/** How long a single read of the run's state retries before it stops. */
+const STATE_MS = 30_000
 const STATUSES = ['pending', 'ready', 'failed'] as const
 
 export type RunState = {
@@ -48,9 +51,18 @@ export type PushIo = {
 }
 
 /** A recorded run's archive files, scanned and safe to zip. */
-export type ScannedRun = { runId: string; files: Array<{ path: string; data: Uint8Array }> }
+export type ScannedRun = {
+  runId: string
+  files: Array<{ path: string; data: Uint8Array }>
+  /** The level the run was recorded at, which sets whose transcripts it has. */
+  artifacts: ArtifactLevel
+}
 
 const seg = encodeURIComponent
+
+/** `path` under the cloud project's API, `api/orgs/<org>/projects/<project>/<path>`. */
+export const projectUrl = (t: Target, path: string) =>
+  new URL(`api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId ?? '')}/${path}`, t.base)
 
 /** The platform's answer about the run, or null when it isn't one. */
 function runState(body: unknown): RunState | null {
@@ -66,7 +78,7 @@ function runState(body: unknown): RunState | null {
   }
 }
 
-const redirected = (what: string) =>
+export const redirected = (what: string) =>
   new CloudError(
     `the cloud platform redirected the request to ${what} elsewhere, and reeval doesn't send your sign-in on: check REEVAL_CLOUD_URL`,
   )
@@ -147,14 +159,13 @@ export async function scannedRun(
       `${runId} has a file whose name can't go in an archive: ${JSON.stringify(mask(unsafe.path))} (a backslash, an empty, . or .. part, or a NUL). Rename or remove it, then push again.`,
     )
   }
-  return { runId, files }
+  const record = JSON.parse(Buffer.from(files[0]?.data ?? '{}').toString()) as {
+    artifacts?: ArtifactLevel
+  }
+  return { runId, files, artifacts: record.artifacts ?? 'failures' }
 }
 
-const runUrl = (t: Target, runId: string) =>
-  new URL(
-    `api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId ?? '')}/studio/runs/${seg(runId)}`,
-    t.base,
-  )
+const runUrl = (t: Target, runId: string) => projectUrl(t, `studio/runs/${seg(runId)}`)
 
 /** Where the cloud studio shows `runId`. */
 export function studioUrl(t: Target, runId: string): URL {
@@ -163,22 +174,82 @@ export function studioUrl(t: Target, runId: string): URL {
   return studio
 }
 
-/** How the cloud project's copy of `runId` stands, or null when it has none. */
-export async function cloudRunState(t: Target, runId: string): Promise<RunState | null> {
+/** When reading the run's state stops retrying, and the error it then throws. */
+type Deadline = { at: number; timeout: (problem: string) => Error }
+
+/**
+ * How the cloud project's copy of `runId` stands, or null when it has none. No answer, a 5xx, a
+ * 429 or a refusal the platform marks retryable is asked again, backing off, until `deadline`.
+ */
+async function readState(t: Target, runId: string, deadline: Deadline): Promise<RunState | null> {
   const what = `read how run ${runId} stands`
-  const answer = await request(
-    runUrl(t, runId),
-    { method: 'GET', what, redirect: 'manual' },
-    t.auth.headers,
-  )
-  if (answer.status >= 300 && answer.status < 400) throw redirected('the status check')
-  if (answer.status === 404) return null
-  if (!answer.ok) throw platformError(answer, what, t.auth)
-  const state = runState(answer.body)
-  if (!state) {
-    throw new CloudError(`the cloud platform answered how run ${runId} stands with something else`)
+  let wait = FIRST_POLL_MS
+  let problem = ''
+  for (;;) {
+    let answer: Awaited<ReturnType<typeof request>> | null = null
+    try {
+      answer = await request(
+        runUrl(t, runId),
+        { method: 'GET', what, redirect: 'manual' },
+        t.auth.headers,
+      )
+    } catch (error) {
+      if (!(error instanceof CloudError)) throw error
+      problem = error.message
+    }
+    if (answer) {
+      if (answer.status >= 300 && answer.status < 400) throw redirected('the status check')
+      const retryable =
+        (answer.body as { error?: { retryable?: unknown } } | null)?.error?.retryable === true
+      if (answer.status >= 500 || answer.status === 429 || (!answer.ok && retryable)) {
+        problem = platformError(answer, what, t.auth).message
+      } else {
+        if (answer.status === 404) return null
+        if (!answer.ok) throw platformError(answer, what, t.auth)
+        const state = runState(answer.body)
+        if (!state) {
+          throw new CloudError(
+            `the cloud platform answered how run ${runId} stands with something else`,
+          )
+        }
+        return state
+      }
+    }
+    if (Date.now() >= deadline.at) throw deadline.timeout(problem)
+    await setTimeout(Math.min(wait, Math.max(0, deadline.at - Date.now())))
+    wait = Math.min(wait * 2, MAX_POLL_MS)
   }
-  return state
+}
+
+/** How the cloud project's copy of `runId` stands, or null when it has none. */
+export function cloudRunState(t: Target, runId: string): Promise<RunState | null> {
+  return readState(t, runId, {
+    at: Date.now() + STATE_MS,
+    timeout: (problem) => new CloudError(`couldn't read how run ${runId} stands: ${problem}`),
+  })
+}
+
+/** Waits while the platform reads `runId`, from `state`: its last state, `failed` included. */
+export async function waitRead(t: Target, runId: string, state: RunState): Promise<RunState> {
+  const studio = studioUrl(t, runId)
+  const deadline: Deadline = {
+    at: Date.now() + WAIT_MS,
+    timeout: (problem) =>
+      new CloudError(
+        `run ${runId} still wasn't read after ${WAIT_MS / 60_000} minutes${problem ? ` (last: ${problem})` : ''}; the studio shows it once it is: ${studio.href}`,
+      ),
+  }
+  let wait = FIRST_POLL_MS
+  let current = state
+  while (current.status === 'pending') {
+    if (Date.now() >= deadline.at) throw deadline.timeout('')
+    await setTimeout(Math.min(wait, Math.max(0, deadline.at - Date.now())))
+    wait = Math.min(wait * 2, MAX_POLL_MS)
+    const next = await readState(t, runId, deadline)
+    if (!next) throw new CloudError(`the cloud platform has no run ${runId} any more`)
+    current = next
+  }
+  return current
 }
 
 /**
@@ -191,14 +262,13 @@ export async function uploadRun(
   options: { wait: boolean; progress: (line: string) => void },
 ): Promise<RunState> {
   const { runId } = run
-  const url = runUrl(t, runId)
   const body = await archiveBytes(run)
   options.progress(
     `Pushing ${runId}: ${plural(run.files.length, 'file')}, ${formatBytes(body.length)}`,
   )
   const what = `upload run ${runId}`
   const answer = await request(
-    url,
+    runUrl(t, runId),
     {
       method: 'PUT',
       what,
@@ -212,56 +282,18 @@ export async function uploadRun(
   )
   if (answer.status >= 300 && answer.status < 400) throw redirected('the upload')
   if (!answer.ok) throw platformError(answer, what, t.auth)
-  let state = runState(answer.body)
+  const state = runState(answer.body)
   if (!state) {
     throw new CloudError(`the cloud platform took run ${runId} without saying how it stands`)
   }
-  const { revision } = state
-  const studio = studioUrl(t, runId)
   if (!options.wait) {
     options.progress(
-      `Uploaded revision ${revision}; the studio shows it once it's read: ${studio.href}`,
+      `Uploaded revision ${state.revision}; the studio shows it once it's read: ${studioUrl(t, runId).href}`,
     )
     return state
   }
-  options.progress(`Uploaded revision ${revision}; waiting for the cloud platform to read it`)
-  const deadline = Date.now() + WAIT_MS
-  const poll = `read how run ${runId} stands`
-  let wait = FIRST_POLL_MS
-  let problem = ''
-  while (state.status === 'pending') {
-    if (Date.now() >= deadline) {
-      throw new CloudError(
-        `run ${runId} still wasn't read after ${WAIT_MS / 60_000} minutes${problem ? ` (last: ${problem})` : ''}; the studio shows it once it is: ${studio.href}`,
-      )
-    }
-    await setTimeout(Math.min(wait, Math.max(0, deadline - Date.now())))
-    wait = Math.min(wait * 2, MAX_POLL_MS)
-    let polled: Awaited<ReturnType<typeof request>>
-    try {
-      polled = await request(url, { method: 'GET', what: poll, redirect: 'manual' }, t.auth.headers)
-    } catch (error) {
-      if (!(error instanceof CloudError)) throw error
-      problem = error.message
-      continue
-    }
-    if (polled.status >= 300 && polled.status < 400) throw redirected('the status check')
-    const retryable =
-      (polled.body as { error?: { retryable?: unknown } } | null)?.error?.retryable === true
-    if (polled.status >= 500 || polled.status === 429 || (!polled.ok && retryable)) {
-      problem = platformError(polled, poll, t.auth).message
-      continue
-    }
-    if (!polled.ok) throw platformError(polled, poll, t.auth)
-    const next = runState(polled.body)
-    if (!next) {
-      throw new CloudError(
-        `the cloud platform answered how run ${runId} stands with something else`,
-      )
-    }
-    state = next
-  }
-  return state
+  options.progress(`Uploaded revision ${state.revision}; waiting for the cloud platform to read it`)
+  return waitRead(t, runId, state)
 }
 
 export const readFailed = (runId: string, state: RunState) =>
@@ -277,6 +309,36 @@ export async function signedInTarget(flags: Flags, io: PushIo, command: string):
     throw new UsageError(`reeval ${command} needs you signed in: ${t.auth.refused}`)
   }
   return t
+}
+
+const inside = (dir: string, file: string) => {
+  const rel = relative(resolve(dir), file)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+/** Where `--out` writes: a file, never `-`, a folder, or anywhere reeval keeps runs. */
+async function outFile(config: ResolvedConfig, out: string): Promise<string> {
+  if (out === '-') {
+    throw new UsageError('--out takes a file to write the archive to, not - (stdout)')
+  }
+  const file = resolve(out)
+  for (const [dir, what] of [
+    [config.history.dir, 'the history folder'],
+    [join(config.root, '.reeval'), '.reeval/'],
+  ] as const) {
+    if (inside(dir, file)) {
+      throw new UsageError(
+        `--out ${out} is inside ${what}, where reeval keeps runs: write the archive somewhere else`,
+      )
+    }
+  }
+  const there = await stat(file).catch(() => null)
+  if (there?.isDirectory()) {
+    throw new UsageError(
+      `--out ${out} is a folder: name the file to write, e.g. ${join(out, 'run.zip')}`,
+    )
+  }
+  return file
 }
 
 /** Pushes the recorded run `args[0]` names (default the newest) and returns the exit code. */
@@ -295,8 +357,8 @@ export async function pushCommand(
         `--out writes the archive to a file and uploads nothing: leave out ${extra.map((f) => `--${f}`).join(', ')}`,
       )
     }
+    const file = await outFile(config, flags.out)
     const run = await scannedRun(config, flags, args[0], warn)
-    const file = resolve(flags.out)
     await mkdir(dirname(file), { recursive: true })
     await writeRunArchive(file, run)
     const bytes = (await stat(file)).size

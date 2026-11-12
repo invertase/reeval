@@ -1,20 +1,28 @@
-// `reeval studio share`: a link to a recorded run's view in the cloud studio. It pushes the run as
-// `reeval cloud push` does, secret scan included, unless the cloud project has read it already,
-// then asks the platform for the share. Shares are the report only and for the org's members
-// unless `--full` and `--public` say otherwise. `--list` and `--revoke` manage them.
+// `reeval studio share`: a link to a recorded run's view in the cloud studio. It scans the run as
+// `reeval cloud push` does, then asks the platform for the share; only when the platform has no
+// copy of the run, or hasn't read it yet, does it push it (or wait on the copy being read) and ask
+// again. Shares are the report only and for the org's members unless `--full` and `--public` say
+// otherwise. `--list` and `--revoke` manage them.
+import { setTimeout } from 'node:timers/promises'
 import type { Flags } from './cli-spec.ts'
 import {
   cloudRunState,
   type PushIo,
+  projectUrl,
+  type RunState,
   readFailed,
+  redirected,
+  type ScannedRun,
   scannedRun,
   signedInTarget,
   uploadRun,
+  waitRead,
 } from './cloud-push.ts'
 import { CloudError, platformError, platformMessage, request } from './cloud-run.ts'
 import type { Target } from './cloud-secrets.ts'
 import { recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
+import { RUN_ID } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
 
 export type Share = {
@@ -28,21 +36,26 @@ export type Share = {
 }
 
 const COMMAND = 'studio share'
-const seg = encodeURIComponent
+/** A share id as the platform makes them; anything else would change the request's path. */
+const SHARE_ID = /^[A-Za-z0-9_-]{1,128}$/
+/** How long a share asked for right after the run was read waits before it's asked once more. */
+const NOT_READY_RETRY_MS = 1_000
 
 const sharesUrl = (t: Target, id?: string) =>
-  new URL(
-    `api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId ?? '')}/studio/shares${id ? `/${seg(id)}` : ''}`,
-    t.base,
-  )
+  projectUrl(t, `studio/shares${id ? `/${encodeURIComponent(id)}` : ''}`)
 
-function share(body: unknown): Share | null {
+/** A share as the platform answers it, or null when it isn't one or links somewhere else. */
+function share(body: unknown, t: Target): Share | null {
   const b = body as Partial<Record<keyof Share, unknown>> | null
   if (typeof b !== 'object' || b === null) return null
   const strings = ['id', 'url', 'runId', 'createdAt'] as const
   if (!strings.every((k) => typeof b[k] === 'string')) return null
   if (b.type !== 'report' && b.type !== 'full') return null
   if (b.scope !== 'team' && b.scope !== 'public') return null
+  if (b.revokedAt !== undefined && b.revokedAt !== null && typeof b.revokedAt !== 'string') {
+    return null
+  }
+  if (URL.parse(b.url as string)?.origin !== t.base.origin) return null
   return {
     id: b.id as string,
     url: b.url as string,
@@ -50,14 +63,21 @@ function share(body: unknown): Share | null {
     type: b.type,
     scope: b.scope,
     createdAt: b.createdAt as string,
-    ...(b.revokedAt !== undefined && {
-      revokedAt: typeof b.revokedAt === 'string' ? b.revokedAt : null,
-    }),
+    ...(b.revokedAt !== undefined && { revokedAt: b.revokedAt as string | null }),
   }
 }
 
+type Answer = Awaited<ReturnType<typeof request>>
+
+const errorCode = (answer: Answer) =>
+  (answer.body as { error?: { code?: unknown } } | null)?.error?.code
+
 /** One JSON request to the platform's share routes, never following a redirect. */
-async function send(t: Target, url: URL, init: { method: string; what: string; body?: unknown }) {
+async function send(
+  t: Target,
+  url: URL,
+  init: { method: string; what: string; body?: unknown },
+): Promise<Answer> {
   const answer = await request(
     url,
     {
@@ -72,11 +92,7 @@ async function send(t: Target, url: URL, init: { method: string; what: string; b
     },
     t.auth.headers,
   )
-  if (answer.status >= 300 && answer.status < 400) {
-    throw new CloudError(
-      `the cloud platform redirected the request to ${init.what} elsewhere, and reeval doesn't send your sign-in on: check REEVAL_CLOUD_URL`,
-    )
-  }
+  if (answer.status >= 300 && answer.status < 400) throw redirected(init.what)
   return answer
 }
 
@@ -91,13 +107,22 @@ function refuseMixed(flags: Flags, args: string[]): void {
     if (extra.length) {
       throw new UsageError(`--revoke takes only the share's id: leave out ${extra.join(', ')}`)
     }
-    if (!flags.revoke) throw new UsageError("--revoke needs the share's id")
+    if (!SHARE_ID.test(flags.revoke)) {
+      throw new UsageError(
+        "--revoke takes a share's id (letters, digits, - and _), as reeval studio share --list shows it",
+      )
+    }
   }
   if (flags.list) {
     const extra = given(['full', 'public', 'skip-secret-scan'])
     if (extra.length) {
       throw new UsageError(`--list lists the shares there are: leave out ${extra.join(', ')}`)
     }
+  }
+  if (flags.public && flags['skip-secret-scan']) {
+    throw new UsageError(
+      'a public share needs a clean secret scan: leave out --skip-secret-scan, or push the run with reeval cloud push --skip-secret-scan and share it with the team',
+    )
   }
 }
 
@@ -110,6 +135,40 @@ const listLine = (s: Share) =>
     s.createdAt,
     s.revokedAt ? `revoked ${s.revokedAt}` : s.url,
   ].join('  ')
+
+/** Why a `--full` share lacks some transcripts, from the level the run was recorded at. */
+function missingTranscripts(run: ScannedRun): string | null {
+  if (run.artifacts === 'all') return null
+  const which =
+    run.artifacts === 'none'
+      ? 'no attempt keeps its transcript'
+      : "passing attempts' transcripts weren't kept"
+  return `Run ${run.runId} was recorded with artifacts ${run.artifacts}, so ${which}: reeval run --artifacts all records every attempt's.`
+}
+
+/**
+ * Gets the cloud project's copy of `run` read: waits on a copy being read, and uploads the run
+ * when there's none or the platform failed to read it. True when it uploaded.
+ */
+async function ensureRead(
+  t: Target,
+  run: ScannedRun,
+  missing: boolean,
+  note: (line: string) => void,
+): Promise<boolean> {
+  let state: RunState | null = missing ? null : await cloudRunState(t, run.runId)
+  let pushed = false
+  if (state?.status === 'pending') {
+    note(`Waiting for the cloud platform to read run ${run.runId} (revision ${state.revision})`)
+    state = await waitRead(t, run.runId, state)
+  }
+  if (!state || state.status === 'failed') {
+    state = await uploadRun(t, run, { wait: true, progress: note })
+    pushed = true
+  }
+  if (state.status === 'failed') throw readFailed(run.runId, state)
+  return pushed
+}
 
 /** `reeval studio share [run]`, `--list [run]` and `--revoke <id>`; returns the exit code. */
 export async function shareCommand(
@@ -133,14 +192,20 @@ export async function shareCommand(
   }
 
   if (flags.list) {
-    const runId = args[0] === undefined ? undefined : (await recordedRun(config, args[0])).runId
+    const ref = args[0]
+    const runId =
+      ref === undefined
+        ? undefined
+        : RUN_ID.test(ref)
+          ? ref
+          : (await recordedRun(config, ref)).runId
     const url = sharesUrl(t)
     if (runId) url.searchParams.set('runId', runId)
     const what = runId ? `list run ${runId}'s shares` : "list the project's shares"
     const answer = await send(t, url, { method: 'GET', what })
     if (!answer.ok) throw platformError(answer, what, t.auth)
     const listed = (answer.body as { shares?: unknown } | null)?.shares
-    const shares = Array.isArray(listed) ? listed.map(share) : null
+    const shares = Array.isArray(listed) ? listed.map((s) => share(s, t)) : null
     if (!shares || shares.some((s) => s === null)) {
       throw new CloudError(`the cloud platform answered ${what} with something else`)
     }
@@ -155,34 +220,48 @@ export async function shareCommand(
   const scope = flags.public ? 'public' : 'team'
   const run = await scannedRun(config, flags, args[0], warn)
   const { runId } = run
-  if (flags.full) note("This share includes the run's transcripts and artifacts.")
-  if (flags.public) note('Anyone with the link can view it, without signing in.')
-  const there = await cloudRunState(t, runId)
-  let pushed = false
-  if (there?.status === 'ready') {
-    note(`The cloud project has run ${runId} already (revision ${there.revision})`)
-  } else {
-    const state = await uploadRun(t, run, { wait: true, progress: note })
-    if (state.status === 'failed') throw readFailed(runId, state)
-    pushed = true
+  if (flags.full) {
+    note("This share includes the run's transcripts and artifacts.")
+    const missing = missingTranscripts(run)
+    if (missing) warn(missing)
   }
+  if (flags.public) note('Anyone with the link can view it, without signing in.')
   const what = `share run ${runId}`
-  const answer = await send(t, sharesUrl(t), {
-    method: 'POST',
-    what,
-    body: { runId, type, scope },
-  })
+  const ask = () => send(t, sharesUrl(t), { method: 'POST', what, body: { runId, type, scope } })
+  const notReady = (a: Answer) => a.status === 409 && errorCode(a) === 'not_ready'
+  let answer = await ask()
+  let pushed = false
+  const missing = answer.status === 404 && errorCode(answer) === 'not_found'
+  if (missing || notReady(answer)) {
+    pushed = await ensureRead(t, run, missing, note)
+    answer = await ask()
+    if (notReady(answer)) {
+      await setTimeout(NOT_READY_RETRY_MS)
+      answer = await ask()
+      if (notReady(answer)) {
+        throw new CloudError(
+          `the cloud platform has read run ${runId} but won't share it yet: try again shortly`,
+        )
+      }
+    }
+  }
   // The platform's own words, which say what the plan allows.
-  if (answer.status === 402) {
+  if (errorCode(answer) === 'share_limit') {
     throw new UsageError(platformMessage(answer.body) ?? `the cloud platform refused to ${what}`)
   }
   if (!answer.ok) throw platformError(answer, what, t.auth)
-  const made = share(answer.body)
+  const made = share(answer.body, t)
   if (!made) throw new CloudError(`the cloud platform answered ${what} with something else`)
+  if (made.runId !== runId || made.type !== type || made.scope !== scope) {
+    throw new CloudError(
+      `the cloud platform answered with a different share (${made.id}, ${made.runId}, ${made.type}, ${made.scope}): revoke it with reeval studio share --revoke ${made.id}`,
+    )
+  }
+  const created = answer.status === 201
   io.out(
     flags.json
-      ? JSON.stringify({ ...made, pushed })
-      : `${answer.status === 200 ? 'Already shared' : 'Shared'} ${runId} (${made.type}, ${made.scope}): ${made.url}`,
+      ? JSON.stringify({ ...made, pushed, created })
+      : `${created ? 'Shared' : 'Already shared'} ${runId} (${made.type}, ${made.scope}): ${made.url}`,
   )
   return 0
 }
