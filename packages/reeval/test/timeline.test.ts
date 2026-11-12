@@ -362,7 +362,7 @@ evaluate('waits', async (c) => {
     assert.equal(typeof readCall.durationMs, 'number')
     assert.match(
       read('summary.md'),
-      /^\| <a id="a1"><\/a>A1 \| evals\/w\.eval\.ts › waits \| fake \| fake \| pass \| not reported \| 1s \| 3 \|/m,
+      /^\| <a id="attempt-[a-z0-9-]+"><\/a>A1 \| evals\/w\.eval\.ts › waits \| fake \| fake \| pass \| not reported \| 1s \| 3 \|/m,
     )
     const effort = await runCli(p.dir, [
       'query',

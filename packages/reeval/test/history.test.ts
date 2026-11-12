@@ -159,7 +159,7 @@ describe('recording runs into evals/.history', () => {
     assert.match(summary, /^# agent$/m, 'passes get detail')
     assert.match(
       summary,
-      /^\| <a id="a1"><\/a>A1 \| evals\/agent\.eval\.ts › agent \| fake \| fake \| pass \|/m,
+      /^\| <a id="attempt-[a-z0-9-]+"><\/a>A1 \| evals\/agent\.eval\.ts › agent \| fake \| fake \| pass \|/m,
     )
     assert.match(summary, /^## Judgments$/m)
     assert.match(summary, /Did it write hello\.txt/)
