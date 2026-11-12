@@ -639,6 +639,14 @@ export function parseTranscript(text: string): TranscriptLine[] {
   return text.split('\n').flatMap((line) => parseTranscriptLine(line) ?? [])
 }
 
+/**
+ * `transcript.jsonl`'s lines in file order, each as `parseTranscriptLine` reads it, so line `n`
+ * (from 1) is at index `n - 1`.
+ */
+export function transcriptByLine(text: string): Array<TranscriptLine | null> {
+  return text.split('\n').map((line) => parseTranscriptLine(line))
+}
+
 /** One line of a transcript, or null when it's blank, isn't JSON or has no `type`. */
 export function parseTranscriptLine(line: string): TranscriptLine | null {
   if (!line.trim()) return null

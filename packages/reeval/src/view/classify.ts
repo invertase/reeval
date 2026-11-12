@@ -1,18 +1,20 @@
 // Which tool calls an attempt made, what each did and which skills it used, from its record and
-// transcript.jsonl alone. `reeval query` stores these facts and the studio view shows them, in any
+// transcript.jsonl alone. `reeval query` stores these facts and the run report shows them, in any
 // JavaScript runtime, so nothing this module reaches may use Node or the filesystem
 // (test/view-boundary.test.ts holds it).
 import { SKILL_DIRS } from '../harness/skill-dirs.ts'
 import {
   type ClassContext,
   classifyCall,
+  type SkillSource,
   skillDirSkill,
   skillsWritten,
   skillUses,
   type ToolClass,
 } from '../history/tool-class.ts'
 import { targetText, toolTarget } from '../history/tool-target.ts'
-import type { AttemptRecord } from '../history/types.ts'
+import type { AttemptRecord, RunRecord } from '../history/types.ts'
+import type { TranscriptLine } from './model.ts'
 
 const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/(?:implementation\/)?home\//
 
@@ -53,17 +55,13 @@ export type ToolCall = {
   durationMs: number | null
 }
 
-/** The tool calls in a transcript.jsonl, numbered by line from 1; lines that aren't JSON are skipped. */
-export function toolCalls(transcript: string): ToolCall[] {
+type Event = Record<string, unknown>
+
+/** The tool calls in a transcript's lines (`transcriptByLine`), numbered by line from 1. */
+export function toolCalls(lines: readonly (TranscriptLine | null)[]): ToolCall[] {
   const calls: ToolCall[] = []
-  transcript.split('\n').forEach((line, i) => {
-    if (!line.trim()) return
-    let event: Record<string, unknown>
-    try {
-      event = JSON.parse(line)
-    } catch {
-      return
-    }
+  lines.forEach((line, i) => {
+    const event = line as Event | null
     if (event?.type !== 'tool') return
     calls.push({
       line: i + 1,
@@ -83,16 +81,10 @@ export function toolCalls(transcript: string): ToolCall[] {
  * The skills whose `SKILL.md` an attempt wrote: by a file-editing tool that created or rewrote it,
  * or by a shell command (a redirect, `tee`, `cp` and the like).
  */
-function skillsAuthored(transcript: string, calls: ToolCall[]): Set<string> {
+function skillsAuthored(lines: readonly (TranscriptLine | null)[], calls: ToolCall[]): Set<string> {
   const authored = new Set(calls.flatMap((t) => skillsWritten(t.tool, t.text)))
-  for (const line of transcript.split('\n')) {
-    if (!line.includes('"file-edit"')) continue
-    let event: Record<string, unknown>
-    try {
-      event = JSON.parse(line)
-    } catch {
-      continue
-    }
+  for (const line of lines) {
+    const event = line as Event | null
     if (event?.type !== 'file-edit' || (event.kind !== 'create' && event.kind !== 'write')) continue
     for (const name of skillsWritten('write', String(event.path ?? ''))) authored.add(name)
   }
@@ -130,17 +122,17 @@ export type AttemptCalls = {
 }
 
 /**
- * Classifies one attempt's tool calls from its transcript: what `tool_calls`, `context_reads`,
- * `skill_uses` and `found_skills` hold, and what the run view's facts count.
+ * Classifies one attempt's tool calls from its transcript's lines: what `tool_calls`,
+ * `context_reads`, `skill_uses` and `found_skills` hold, and what {@link attemptFacts} counts.
  */
 export function classifyAttempt(
   a: AttemptRecord,
   env: { skills: string[]; mcp: string[] },
-  transcript: string | undefined,
+  lines: readonly (TranscriptLine | null)[] | undefined,
 ): AttemptCalls {
   const { skills } = env
-  const calls = transcript ? toolCalls(transcript) : []
-  const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
+  const calls = lines ? toolCalls(lines) : []
+  const authored = lines ? skillsAuthored(lines, calls) : new Set<string>()
   const found = new Map<string, { source: string; path: string | null }>()
   for (const c of a.context) {
     const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
@@ -171,4 +163,67 @@ export function classifyAttempt(
     return { ...t, class: call.class, files: call.files, skills: used }
   })
   return { calls: classified, found }
+}
+
+/** What one attempt's transcript shows it did, counted from its classified tool calls. */
+export type AttemptFacts = {
+  toolCalls: number
+  byClass: Record<ToolClass, number>
+  /** Each skill its calls used, by where it came from, in order of first use. */
+  skills: Array<{
+    skill: string
+    source: SkillSource
+    /** The calls that used it. */
+    reads: number
+    /** The transcript line of its first use, from 1. */
+    firstLine: number
+  }>
+  /** Each placed context file its calls read, directly or through a glob, in order of first read. */
+  contextFiles: Array<{ path: string; reads: number; firstLine: number }>
+}
+
+/**
+ * One attempt's facts from its transcript's lines (as `transcriptByLine` parses them), its
+ * calls classified as `reeval query`'s `tool_calls`, `context_reads` and `skill_uses` classify them,
+ * against the skills and MCP servers of the attempt's environment in `record`.
+ */
+export function attemptFacts(
+  record: RunRecord,
+  attempt: AttemptRecord,
+  lines: readonly (TranscriptLine | null)[],
+): AttemptFacts {
+  const digest = record.evals
+    .find((e) => e.attempts.includes(attempt))
+    ?.cells.find((c) => c.key === attempt.cell)?.environmentDigest
+  const env = record.environments.find((x) => x.digest === (digest ?? ''))
+  const declared = { skills: env?.skills.map((s) => s.name) ?? [], mcp: env?.mcp ?? [] }
+  const byClass: AttemptFacts['byClass'] = {
+    context: 0,
+    dependency: 0,
+    web: 0,
+    verify: 0,
+    workspace: 0,
+  }
+  const skills = new Map<string, AttemptFacts['skills'][number]>()
+  const files = new Map<string, AttemptFacts['contextFiles'][number]>()
+  const { calls } = classifyAttempt(attempt, declared, lines)
+  for (const call of calls) {
+    byClass[call.class]++
+    for (const { skill, source } of call.skills) {
+      const seen = skills.get(`${source}\0${skill}`)
+      if (seen) seen.reads++
+      else skills.set(`${source}\0${skill}`, { skill, source, reads: 1, firstLine: call.line })
+    }
+    for (const path of call.files) {
+      const seen = files.get(path)
+      if (seen) seen.reads++
+      else files.set(path, { path, reads: 1, firstLine: call.line })
+    }
+  }
+  return {
+    toolCalls: calls.length,
+    byClass,
+    skills: [...skills.values()],
+    contextFiles: [...files.values()],
+  }
 }
