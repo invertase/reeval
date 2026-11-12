@@ -1270,6 +1270,8 @@ describe('studio data server', () => {
       'cursor=0x10',
       'cursor=%207',
       'cursor=',
+      'cursor=007',
+      'cursor=00',
       'limit=0',
       'limit=-1',
       'limit=1.5',
@@ -1286,6 +1288,7 @@ describe('studio data server', () => {
       limit: TRANSCRIPT_LIMIT.max,
     })
     assert.deepEqual(transcriptQuery({}), { start: 0, limit: TRANSCRIPT_LIMIT.default })
+    assert.deepEqual(transcriptQuery({ cursor: '0', limit: '10' }), { start: 0, limit: 10 })
 
     const wide = await page('wide.jsonl', 'limit=1')
     assert.equal((wide.items[0] as { text: string }).text.length, 256 * 1024)

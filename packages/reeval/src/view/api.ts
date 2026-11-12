@@ -175,15 +175,16 @@ export type TranscriptRange = { start: number; limit: number }
 
 /**
  * A `.jsonl` page's query, read strictly: the cursor is a whole number (0 when absent), the limit
- * a positive whole number clamped to `TRANSCRIPT_LIMIT.max` (the default when absent). Anything
- * else is the sentence saying why, which the server answers with a 400.
+ * a positive whole number clamped to `TRANSCRIPT_LIMIT.max` (the default when absent), neither
+ * with a leading zero. Anything else is the sentence saying why, which the server answers with a
+ * 400.
  */
 export function transcriptQuery(query: {
   cursor?: string | null
   limit?: string | null
 }): TranscriptRange | string {
   const { cursor, limit } = query
-  if (cursor != null && !/^\d{1,15}$/.test(cursor)) {
+  if (cursor != null && !/^(0|[1-9]\d{0,14})$/.test(cursor)) {
     return `cursor must be a whole number of lines (got ${JSON.stringify(cursor)})`
   }
   if (limit != null && !/^[1-9]\d{0,15}$/.test(limit)) {
