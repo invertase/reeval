@@ -271,10 +271,10 @@ describe("the report's facts", () => {
       [three.key, facts(['x', 'skill-dir', 2])],
       [four.key, facts(['plugin:x', 'placed', 2])],
     ])
-    const labelled = discovery(uses)
-    assert.equal(labelled?.found.text, '3 of 4')
+    const ownLabel = discovery(uses)
+    assert.equal(ownLabel?.found.text, '3 of 4')
     assert.deepEqual(
-      labelled?.sources,
+      ownLabel?.sources,
       [
         { source: 'skill-dir', count: 1 },
         { source: 'elsewhere', count: 1 },

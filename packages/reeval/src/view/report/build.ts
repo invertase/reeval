@@ -1302,7 +1302,7 @@ function buildChoices(e: EvalEntry): ChoiceBreakdown[] {
 
 const SKILL_SOURCES = ['placed', 'skill-dir', 'elsewhere'] as const
 
-/** An unlabelled `toHaveCalledSkill` record's label: the skill, then any ` #n` that keeps it unique. */
+/** An unlabeled `toHaveCalledSkill` record's label: the skill, then any ` #n` that keeps it unique. */
 const CHECKED_SKILL = /^toHaveCalledSkill (.+?)(?: #\d+)*$/
 
 /**
