@@ -27,7 +27,7 @@ export type EffortSample = {
   /** The agent's cost in US dollars (`cost.usd`); omitted when the attempt has none. */
   usd?: number
 }
-export type Spread = { median: number; q1: number; q3: number }
+type Spread = { median: number; q1: number; q3: number }
 /** One cell's effort over its counted attempts (passes and fails; infra errors and skips aren't). */
 export type CellEffort = {
   n: number

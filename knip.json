@@ -3,6 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "ignoreIssues": {
     "packages/reeval/src/contract/*.ts": ["types"],
+    "packages/reeval/src/view/report/schema.ts": ["types"],
     "packages/studio-web/src/components/ui/*.tsx": ["exports"]
   },
   "workspaces": {

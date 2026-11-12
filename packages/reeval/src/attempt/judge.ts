@@ -324,6 +324,7 @@ export function judgeCaller(
         0,
         {
           ...recorded,
+          ...(options.label ? { label: options.label } : {}),
           ...(retries.length ? { retries } : {}),
           ...(usage ? { usage } : {}),
           call: order,

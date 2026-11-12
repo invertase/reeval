@@ -58,17 +58,56 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
     } while (used.has(label))
     seen.set(base, n)
     used.add(label)
+    const reason =
+      r.matcher === 'skip' && typeof r.args[0] === 'string'
+        ? clipped(r.args[0], MESSAGE_LIMIT)
+        : undefined
+    const fileMatcher = /(^|\.)toHaveFile$/.test(r.matcher)
+    const target =
+      r.target ??
+      (fileMatcher && typeof r.args[0] === 'string'
+        ? r.args[1] === undefined
+          ? r.args[0]
+          : `${r.args[0]} ${r.args[1] instanceof RegExp ? r.args[1].source : shown(r.args[1])}`
+        : undefined)
     return {
       label,
-      labelled: r.label !== undefined,
+      labelled: r.label !== undefined || r.matcher === 'skip',
       matcher: r.matcher,
       status: r.status,
       soft: r.soft,
       ...(r.at ? { at: r.at } : {}),
-      ...(r.status === 'pass' ? {} : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
+      ...(r.status === 'pass' || r.status === 'not_applicable'
+        ? {}
+        : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
+      ...(reason !== undefined ? { reason } : {}),
+      ...(target !== undefined ? { target: clipped(target, LABEL_LIMIT) } : {}),
+      ...(r.preSatisfied ? { preSatisfied: true } : {}),
       ...(r.durationMs === undefined ? {} : { durationMs: r.durationMs }),
     }
   })
+}
+
+const JUDGE_ERROR = /^judge failed for /
+
+/**
+ * Writes each judgment's `assertion` from the matching `toPass` label when counts align, and
+ * copies `JudgeOptions.label` already on the judgment.
+ */
+export function linkJudgmentAssertions(
+  judgments: Array<{ question: string; label?: string; assertion?: string }>,
+  assertions: AssertionRecord[],
+): void {
+  const passes = assertions.filter(
+    (x) => /(^|\.)toPass$/.test(x.matcher) && !JUDGE_ERROR.test(x.message ?? ''),
+  )
+  if (passes.length !== judgments.length) return
+  for (let i = 0; i < judgments.length; i++) {
+    const j = judgments[i]
+    const x = passes[i]
+    if (!j || !x) continue
+    j.assertion = x.label
+  }
 }
 
 export const CAUGHT_HINT =
@@ -80,7 +119,7 @@ export const CAUGHT_HINT =
  * `CAUGHT_HINT` after its message.
  */
 export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
-  const failed = raw.find((r) => r.status !== 'pass')
+  const failed = raw.find((r) => r.status !== 'pass' && r.status !== 'not_applicable')
   if (!failed) return undefined
   const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
   if (failed.soft) return error

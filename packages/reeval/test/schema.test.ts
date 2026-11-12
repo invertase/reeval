@@ -151,6 +151,64 @@ describe('persisted shapes', () => {
     )
   })
 
+  test("Zod's shapes are walked too: a `type` list and a discriminated union's `oneOf`", () => {
+    const now = snapshot('run-report')
+    const wider = copy(now)
+    const change = def(wider, 'Arm').properties?.change as Schema
+    assert.deepEqual(change.type, ['string', 'null'])
+    change.type = ['string', 'null', 'number']
+    const ref = def(wider, 'AttemptRef')
+    ref.properties = { ...ref.properties, gone: { type: 'string' } }
+    const changes = compare(wider, now, none).filter((c) => c.breaking)
+    assert.ok(
+      changes.some(
+        (c) =>
+          c.kind === 'narrowed' && c.path === 'evals[].primary.<kind=comparison>.arms[].change',
+      ),
+      changes.map((c) => c.path).join('\n'),
+    )
+    assert.ok(changes.some((c) => c.kind === 'removed' && c.path === 'rollup.lead.cites[].gone'))
+    assert.deepEqual(compare(now, copy(now), none), [])
+  })
+
+  test('a shape read with Zod breaks on a new enum value or variant, not on a new optional field', () => {
+    const report = shape('run-report')
+    const now = snapshot('run-report')
+    const breaking = (older: ShapeSchema, newer: ShapeSchema = now) =>
+      checkShape(report, newer, older).breaking.map((c) => [c.kind, c.path])
+
+    const fewerValues = copy(now)
+    const fairness = def(fewerValues, 'EvalHeadline').properties?.fairness as Schema
+    assert.deepEqual(fairness.enum, ['clear', 'within-noise', 'too-few-runs'])
+    fairness.enum = ['clear', 'within-noise']
+    assert.deepEqual(breaking(fewerValues), [['widened', 'evals[].headline.fairness']])
+    assert.match(
+      explain([checkShape(report, now, fewerValues)]),
+      /bump RunReport's reportVersion and add a migration/,
+    )
+
+    const fewerVariants = copy(now)
+    const primary = def(fewerVariants, 'EvalSection').properties?.primary as Schema
+    const union = primary.anyOf?.[0] as Schema
+    union.oneOf = union.oneOf?.filter((v) => v.$ref !== '#/$defs/RegressionChanges')
+    const added = breaking(fewerVariants)
+    assert.ok(
+      added.length > 0 &&
+        added.every(([kind, path]) => kind === 'widened' && /primary\.<kind=\w+>$/.test(path)),
+      JSON.stringify(added),
+    )
+
+    const withOptional = copy(now)
+    const ref = def(withOptional, 'AttemptRef')
+    ref.properties = { ...ref.properties, title: { type: 'string' } }
+    assert.deepEqual(breaking(now, withOptional), [])
+    assert.ok(
+      checkShape(report, withOptional, now).changes.some(
+        (c) => c.kind === 'added-optional' && c.path.endsWith('.title'),
+      ),
+    )
+  })
+
   test('widening passes: an older reeval reading the new file is the forward-direction test', () => {
     const now = snapshot('run-record')
     const wider = copy(now)
@@ -160,6 +218,29 @@ describe('persisted shapes', () => {
       compare(now, wider, none).map((c) => [c.kind, c.path, c.breaking]),
       [['widened', 'status', false]],
     )
+  })
+
+  test('a whole-number const is within an integer type, and no new value', () => {
+    const doc = (n: Schema): ShapeSchema => ({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $comment: '',
+      title: 'T',
+      $ref: '#/$defs/T',
+      $defs: { T: { type: 'object', properties: { n }, required: ['n'] } },
+    })
+    const changes = (a: Schema, b: Schema) =>
+      compare(doc(a), doc(b), none).map((c) => [c.kind, c.path, c.breaking])
+    assert.deepEqual(changes({ type: 'integer' }, { const: 3 }), [['narrowed', 'n', true]])
+    assert.deepEqual(changes({ const: 3 }, { type: 'integer' }), [['widened', 'n', false]])
+    assert.deepEqual(
+      changes({ type: 'integer' }, { anyOf: [{ type: 'integer' }, { const: 3 }] }),
+      [],
+    )
+    assert.deepEqual(changes({ const: 1.5 }, { type: 'integer' }), [
+      ['narrowed', 'n', true],
+      ['widened', 'n', false],
+    ])
+    assert.deepEqual(changes({ type: 'number' }, { anyOf: [{ type: 'number' }, { const: 3 }] }), [])
   })
 
   test('a transcript event type that disappears fails, by its variant', () => {
@@ -212,7 +293,18 @@ describe('persisted shapes', () => {
     const now = snapshot('run-record')
     assert.match(def(now, 'Cost').description ?? '', /\w/)
     assert.match(def(now, 'RunRecord').properties?.status?.description ?? '', /\w/)
-    const bare = JSON.parse(JSON.stringify(now), (k, v) => (k === 'description' ? undefined : v))
+    // Strip schema annotations only: a property literally named `description` stays.
+    const stripDocs = (node: unknown, inProperties = false): unknown => {
+      if (Array.isArray(node)) return node.map((n) => stripDocs(n, false))
+      if (!node || typeof node !== 'object') return node
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (k === 'description' && !inProperties) continue
+        out[k] = stripDocs(v, k === 'properties')
+      }
+      return out
+    }
+    const bare = stripDocs(now) as ShapeSchema
     const reworded = copy(now)
     def(reworded, 'Cost').description = 'Reworded.'
     for (const [before, after] of [
@@ -246,8 +338,14 @@ const has = (value: unknown, segments: string[]): boolean => {
 }
 
 describe('read defaults', () => {
-  const { records, transcripts, analyses } = corpus()
+  const { records, transcripts, analyses, eventStreams } = corpus()
   const lines = transcripts.flatMap((f) =>
+    readFileSync(f, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l)),
+  )
+  const eventLines = eventStreams.flatMap((f) =>
     readFileSync(f, 'utf8')
       .split('\n')
       .filter((l) => l.trim())
@@ -255,20 +353,24 @@ describe('read defaults', () => {
   )
 
   test('each read default runs on a corpus file written before its field existed', () => {
-    const files = {
+    const files: Record<string, unknown[]> = {
       'run-record': records.map((r) => r.value),
       'transcript-line': lines,
       analysis: analyses.map((a) => a.value),
+      'analysis-note': [],
+      remarks: [],
       'debug-request': [],
+      'live-progress': [],
       'cli-invocation': [],
       'capture-page': [],
+      'run-events': eventLines,
       'bundle-manifest': [],
       'archive-manifest': [],
       credentials: [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {
-        const lacking = files[name as keyof typeof files].some((v) => !has(v, d.path.split('.')))
+        const lacking = (files[name] ?? []).some((v) => !has(v, d.path.split('.')))
         assert.ok(
           lacking,
           `READ_DEFAULTS['${name}'] has ${d.path}, but no file in test/fixtures/records/ lacks it, so nothing tests the default. Add a corpus entry recorded before the field existed (see AGENTS.md).`,

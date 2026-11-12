@@ -84,7 +84,7 @@ test('every judgment in the record corpus fits a judge reply, in Zod and in the 
   ) as Array<Record<string, unknown>>
   assert.ok(judgments.length >= 10, `${judgments.length} judgments`)
   const reply = snapshot('attempt-reply')
-  for (const [i, { key: _, retries: __, ...verdict }] of judgments.entries()) {
+  for (const [i, { key: _, retries: __, assertion: ___, ...verdict }] of judgments.entries()) {
     const value = { id: String(i), ok: true, op: 'judge', verdict }
     const parsed = attemptReplySchema.safeParse(value)
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues[0]))

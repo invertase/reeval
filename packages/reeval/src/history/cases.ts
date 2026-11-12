@@ -35,10 +35,11 @@ export function checkTallies(entry: Pick<EvalEntry, 'attempts' | 'cells'>): void
     )
     if (!counted.length) continue
     c.checks = labels.map((label) => {
-      const tally = { label, pass: 0, fail: 0, error: 0, notRun: 0 }
+      const tally = { label, pass: 0, fail: 0, error: 0, notRun: 0, notApplicable: 0 }
       for (const a of counted) {
         const status = a.assertions?.find((x) => x.label === label)?.status
         if (status === undefined) tally.notRun++
+        else if (status === 'not_applicable') tally.notApplicable++
         else tally[status]++
       }
       return tally
@@ -130,10 +131,12 @@ function mergedParts(pairs: ReadonlyArray<readonly [string, CellRecord]>): Finge
 function caseOf(member: EvalEntry, template: string): CaseRecord {
   const family = member.family as NonNullable<EvalEntry['family']>
   const key = caseKeyOf(template, member.name)
+  const named = member.name !== `${template} [${key}]` ? { name: member.name } : {}
   return {
     key,
     index: family.case,
-    ...(member.name !== `${template} [${key}]` ? { name: member.name } : {}),
+    ...named,
+    label: caseName({ name: template }, { key, ...named }),
     ...(member.source?.case !== undefined ? { hash: member.source.case } : {}),
     outcome: member.outcome,
     ...(member.verdict ? { verdict: member.verdict } : {}),

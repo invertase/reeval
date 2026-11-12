@@ -12,7 +12,12 @@ import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { evalFile, sourcesPart } from '../eval-source.ts'
-import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
+import {
+  effortFromModelLabel,
+  harnessEffort,
+  resolvedEffortOf,
+  servedEffortOf,
+} from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
@@ -62,6 +67,8 @@ import type {
 import { promptTokens, sumUsage } from '../usage.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
+import { isLockfile, splitPatch } from '../view/patch.ts'
+import { turnErrorKind } from '../view/turn-error.ts'
 import { checkTallies, discrimination, foldCases } from './cases.ts'
 import { withCosts } from './cost.ts'
 import { familiesOf, pooledPassRate } from './families.ts'
@@ -201,7 +208,12 @@ export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   // A resume skips a completed attempt: keep the staged (or previous) outcome, including pass.
   if (e.state === 'skipped' && record) return { outcome: record.outcome, error: record.error }
   if (e.state === 'skipped') return { outcome: 'skipped', error: null }
-  if (e.state === 'passed') return { outcome: 'pass', error: null }
+  // An unhandled mid-turn error is reclassified to infra_error without throwing, so the engine
+  // still reports `passed`; the worker record is the source of truth.
+  if (e.state === 'passed') {
+    if (record?.outcome === 'infra_error') return { outcome: 'infra_error', error: record.error }
+    return { outcome: 'pass', error: null }
+  }
   const message = e.errors[0] ?? 'Eval failed'
   // The worker's own classification wins: a setup InfraError whose message says "timed out"
   // isn't the eval's timeout. Without a record, the engine's error name is all there is.
@@ -461,9 +473,23 @@ function historyPatch(patch: string): string {
     .join('')
 }
 
-function changedFiles(files: FileChange[]): AttemptRecord['changedFiles'] {
+function changedFiles(files: FileChange[], patch?: string | null): AttemptRecord['changedFiles'] {
+  const lines = new Map(
+    (patch ? splitPatch(patch) : []).map((p) => [p.path, { added: p.added, removed: p.removed }]),
+  )
   const { kept, dirs } = collapseDependencies(files, (f) => f.path)
-  return [...kept, ...dirs.map((d) => ({ path: d.dir, status: 'added' as const, count: d.count }))]
+  return [
+    ...kept.map((f) => {
+      const stats = lines.get(f.path)
+      const lockfile = isLockfile(f.path)
+      return {
+        ...f,
+        ...(stats ? { added: stats.added, removed: stats.removed } : {}),
+        ...(lockfile ? { lockfile: true } : {}),
+      }
+    }),
+    ...dirs.map((d) => ({ path: d.dir, status: 'added' as const, count: d.count })),
+  ]
 }
 
 /** Judge inputs whose diff is the recorded diff point at `diff.patch` instead of repeating it. */
@@ -957,6 +983,7 @@ async function addAttempt(
       ]) ?? null,
     outcome,
     error,
+    ...(record?.turnStatusRead !== undefined ? { turnStatusRead: record.turnStatusRead } : {}),
     durationMs: e.durationMs,
     ...retriesOf(seen.retries.get(e.key), record),
     ...(await attemptEvidence(
@@ -1043,7 +1070,8 @@ async function attemptEvidence(
     const raw = rawLines(record)
     if (raw) files.rawTranscript = out.add(`${dir}/transcript.raw.jsonl`, raw)
   }
-  const patch = record?.diff ? historyPatch(record.diff.patch) : null
+  const rawPatch = record?.diff?.patch ?? null
+  const patch = rawPatch !== null ? historyPatch(rawPatch) : null
   if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
   if (record?.judgeInputs?.length) {
     files.judgeInput = out.json(`${dir}/judge-input.json`, judgeInputs(record, patch, 'diff.patch'))
@@ -1090,21 +1118,39 @@ async function attemptEvidence(
     key: judgmentKey(call ?? i, j.question),
   }))
   return {
-    turns: (record?.turns ?? []).map((t) => ({
-      prompt: t.prompt,
-      status: t.status,
-      startedAt: t.startedAt,
-      durationMs: t.durationMs,
-      usage: t.usage ?? null,
-      model: t.model ?? null,
-      unreported: t.unreported ?? [],
-      error: turnError(t.transcript),
-      ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
-      ...(t.reasoningMs !== undefined ? { reasoningMs: t.reasoningMs } : {}),
-      ...(t.timeSplit ? { timeSplit: t.timeSplit } : {}),
-      ...(t.cost ? { cost: t.cost } : {}),
-      text: turnText(t.text),
-    })),
+    turns: (record?.turns ?? []).map((t) => {
+      const error = turnError(t.transcript)
+      // Harness label first; else the gateway's main model-call in this turn's window.
+      const fromGateway = (t.transcript ?? [])
+        .filter(
+          (e) =>
+            e.type === 'model-call' &&
+            e.model &&
+            (e.role === 'main' || e.role === undefined || e.stream),
+        )
+        .map((e) => (e.type === 'model-call' ? e.model : null))
+        .find((m): m is string => !!m)
+      const servedModel = t.model ?? fromGateway ?? null
+      const effort = effortFromModelLabel(servedModel) ?? null
+      return {
+        prompt: t.prompt,
+        status: t.status,
+        startedAt: t.startedAt,
+        durationMs: t.durationMs,
+        usage: t.usage ?? null,
+        model: t.model ?? null,
+        servedModel,
+        servedEffort: effort,
+        unreported: t.unreported ?? [],
+        error,
+        ...(t.status === 'error' ? { errorKind: turnErrorKind(error) } : {}),
+        ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
+        ...(t.reasoningMs !== undefined ? { reasoningMs: t.reasoningMs } : {}),
+        ...(t.timeSplit ? { timeSplit: t.timeSplit } : {}),
+        ...(t.cost ? { cost: t.cost } : {}),
+        text: turnText(t.text),
+      }
+    }),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
     ...(record?.timeSplit ? { timeSplit: record.timeSplit } : {}),
     ...(record?.captureUse ? { captureUse: record.captureUse } : {}),
@@ -1139,7 +1185,7 @@ async function attemptEvidence(
           }
         : {}),
     })),
-    changedFiles: changedFiles(record?.diff?.files ?? []),
+    changedFiles: changedFiles(record?.diff?.files ?? [], rawPatch),
     files,
   }
 }
@@ -1230,6 +1276,16 @@ function rollUp(evals: EvalEntry[]): void {
     entry.fingerprint = sha256(
       JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
     )
+    for (const c of entry.cells) {
+      const seen = new Map<string, { sha256: string; at?: string }>()
+      for (const a of entry.attempts.filter((x) => x.cell === c.key)) {
+        const prompt = a.turns[0]?.prompt
+        if (!prompt) continue
+        const digest = sha256(prompt)
+        if (!seen.has(digest)) seen.set(digest, { sha256: digest })
+      }
+      if (seen.size) c.prompts = [...seen.values()]
+    }
   }
 }
 
@@ -1445,11 +1501,21 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
 
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
-  const notGated = evals
-    .flatMap((e) =>
-      e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gate === 'none'),
-    )
-    .filter((a) => a.outcome === 'fail').length
+  const ungatedOf = (a: (typeof attempts)[number]) => {
+    const e = evals.find((x) => x.attempts.includes(a))
+    return e?.cells.find((c) => c.key === a.cell)?.gate === 'none'
+  }
+  const notGated = attempts.filter((a) => ungatedOf(a) && a.outcome === 'fail').length
+  const gatedPass = attempts.filter((a) => !ungatedOf(a) && a.outcome === 'pass').length
+  const gatedFail = attempts.filter((a) => !ungatedOf(a) && a.outcome === 'fail').length
+  const ungatedPass = attempts.filter((a) => ungatedOf(a) && a.outcome === 'pass').length
+  const ungatedFail = attempts.filter((a) => ungatedOf(a) && a.outcome === 'fail').length
+  const reclassified = attempts.filter(
+    (a) =>
+      a.outcome === 'infra_error' &&
+      (a.turnStatusRead === false ||
+        (a.turnStatusRead === undefined && a.turns.some((t) => t.status === 'error'))),
+  ).length
   const retried = input.retry && input.previous ? input.previous : null
   const stack = stackOf(input, seen, judgeModel, runJudge.threshold)
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
@@ -1558,6 +1624,10 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       notGated,
       infraError: count('infra_error'),
       skipped: count('skipped'),
+      counted: gatedPass + gatedFail,
+      gated: { pass: gatedPass, fail: gatedFail },
+      ungated: { pass: ungatedPass, fail: ungatedFail },
+      reclassified,
     },
     evals,
     ...(families.length ? { families } : {}),

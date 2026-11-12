@@ -15,6 +15,10 @@
         "evalId": {
           "type": "string"
         },
+        "evalKey": {
+          "description": "The eval's record key (`EvalEntry.key`), when known. Optional on older remarks; `evalId` keeps the encoded fact path used for `remarkId`.",
+          "type": "string"
+        },
         "evidence": {
           "description": "Facts from this run (or history facts) showing it mattered now.",
           "type": "array",

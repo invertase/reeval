@@ -38,10 +38,21 @@ import type {
 } from '../types.ts'
 import type { CellEffort } from '../view/effort.ts'
 
+/**
+ * One path the attempt's workspace diff changed. Optional line counts come from
+ * `splitPatch` on the uncapped patch at record time; older records omit them.
+ */
+export type ChangedFile = FileChange & {
+  count?: number
+  added?: number
+  removed?: number
+  lockfile?: boolean
+}
+
 /** Stays 1 while reeval is pre-release: the record changes in place. */
 export const SCHEMA_VERSION = 1
 
-export type ArtifactLevel = 'all' | 'failures' | 'none'
+export type ArtifactLevel = 'all' | 'evidence' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'
 
 /** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */
@@ -74,6 +85,8 @@ export type ArtifactRef = FileRef & {
     status?: number
     /** How many uncaught exceptions and unhandled rejections the page had; absent when none. */
     pageErrors?: number
+    /** How many console error messages the page logged; absent when none or on older records. */
+    consoleErrors?: number
     /** `artifacts/<name>.capture.json` beside the PNG: what the browser saw, a `CapturePage`. */
     page?: FileRef
     /** Set on the screenshot taken as one of the capture's instructions ended. */
@@ -147,6 +160,13 @@ export type JudgmentRecord = {
    * whichever finishes first.
    */
   key: string
+  /** From `JudgeOptions.label` when set; optional on older records. */
+  label?: string
+  /**
+   * The `toPass` assertion label that consumed this verdict, when the attempt linked them; optional
+   * on older records.
+   */
+  assertion?: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */
   retries?: JudgeRetry[]
   /** Captures this call sent the judge as file parts, when any. */
@@ -284,6 +304,12 @@ export type AttemptRecord = {
   servedEffort: string | null
   outcome: Outcome
   error: AttemptError | null
+  /**
+   * True when the eval body read `turn.status` (so a mid-turn error was intentional). False when a
+   * turn errored and the body never inspected status. Absent on older records; the report then
+   * applies the same reclassification rule from `turns[].status === 'error'`.
+   */
+  turnStatusRead?: boolean
   durationMs: number
   /**
    * `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl`
@@ -301,6 +327,15 @@ export type AttemptRecord = {
     usage: TokenUsage | null
     /** The model the harness says served the turn; null when it reports none. */
     model: string | null
+    /**
+     * Served model for the turn (harness label, else gateway), optional on older records. Same as
+     * `model` when the harness reported one.
+     */
+    servedModel?: string | null
+    /** Reasoning effort from the served-model label (`[effort=…]`); optional on older records. */
+    servedEffort?: string | null
+    /** Classified mid-turn error kind when `status === 'error'`; optional on older records. */
+    errorKind?: 'transport' | 'config'
     /**
      * What the harness says the turn cost (Claude Code, pi), else its tokens at the list price of
      * its model (or the cell's); unset when neither is known.
@@ -428,8 +463,12 @@ export type AttemptRecord = {
   }>
   /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
-  /** Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. */
-  changedFiles: Array<FileChange & { count?: number }>
+  /**
+   * Files under a dependency directory, such as the `node_modules/` directory or `.venv/`
+   * directory, collapse to one entry with `count`. Optional `added` / `removed` come from the
+   * uncapped patch at record time; `lockfile` marks dependency lockfiles excluded from line totals.
+   */
+  changedFiles: ChangedFile[]
   files: AttemptFiles
   /**
    * The eval's questions asked of this attempt on its own (those without `across`), in question
@@ -540,6 +579,11 @@ export type CaseRecord = {
    * isn't `<eval name> [<key>]` (a name template's, `fixes GH-101` for `fixes $id`).
    */
   name?: string
+  /**
+   * Display label (`caseName`): `adds a check [nextjs]` or a custom case name. Optional on older
+   * records; readers derive it from `name` / `key` when absent.
+   */
+  label?: string
   /** `EvalEntry.source.case`: the hash of the case's data. */
   hash?: string
   /**
@@ -786,10 +830,22 @@ export type CellRecord = Cell & {
    * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
    */
   checks?: CellCheck[]
+  /**
+   * Distinct first-turn prompts this cell's attempts sent (`sha256` of the prompt text). Optional
+   * on older records; readers compare `turns[0].prompt` when absent.
+   */
+  prompts?: Array<{ sha256: string; at?: string }>
 }
 
 /** How often one check passed: a counted attempt that never reached it counts it `notRun`. */
-export type CheckTally = { pass: number; fail: number; error: number; notRun: number }
+export type CheckTally = {
+  pass: number
+  fail: number
+  error: number
+  notRun: number
+  /** Attempts that recorded `not_applicable` for this check; never in the pass/fail denominator. */
+  notApplicable: number
+}
 
 /**
  * One check over a cell's counted attempts. `verdict` (variant cells) is `discriminates` when
@@ -816,6 +872,14 @@ export type RunSummary = {
   notGated: number
   infraError: number
   skipped: number
+  /** Pass plus fail over gated cells: the pass-rate denominator. Optional on older records. */
+  counted?: number
+  /** Gated-cell pass/fail split; optional on older records. */
+  gated?: { pass: number; fail: number }
+  /** Ungated-cell pass/fail split; optional on older records. */
+  ungated?: { pass: number; fail: number }
+  /** Attempts an unhandled turn error moved out of pass or fail; optional on older records. */
+  reclassified?: number
 }
 
 /** The tokens the run used, as the harnesses count them, and what they cost. */

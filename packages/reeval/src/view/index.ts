@@ -1,4 +1,5 @@
-// `reeval/view`: browser-safe data for the studio. No `node:` imports.
+// `reeval/view`: browser-safe data for the studio. No `node:` imports, and no zod: the RunReport
+// schema is on `reeval/view/report` only.
 
 export { caseEntries, familyOf } from '../history/cases.ts'
 export type {
@@ -49,4 +50,6 @@ export {
   readableTranscriptLine,
 } from './record.ts'
 export * from './remarks.ts'
+export * from './report/core.ts'
 export * from './suite.ts'
+export { type TurnErrorKind, turnErrorKind } from './turn-error.ts'

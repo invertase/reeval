@@ -29,17 +29,29 @@
           "type": "string"
         },
         "message": {
-          "description": "Why it failed or couldn't answer, cut at 1 KB.",
+          "description": "Why it failed or couldn't answer, or why `expect.skip` marked it not applicable, cut at 1 KB.",
+          "type": "string"
+        },
+        "preSatisfied": {
+          "description": "A passing `toHaveFile` / `not.toHaveFile` the agent didn't satisfy (path already matched, or was absent before and after). Optional on older records.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why the check does not apply (`expect.skip`'s second argument).",
           "type": "string"
         },
         "soft": {
-          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail.",
+          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail. True for `expect.skip`.",
           "type": "boolean"
         },
         "status": {
-          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report).",
+          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). `not_applicable`: `expect.skip` (or a language runner's equivalent); never fails the attempt and leaves the check's pass/fail denominator.",
           "type": "string",
-          "enum": ["pass", "fail", "error"]
+          "enum": ["pass", "fail", "error", "not_applicable"]
+        },
+        "target": {
+          "description": "File matcher target: `toHaveFile`'s path, or `path <pattern>` when a pattern was given. Optional on older records and non-file matchers.",
+          "type": "string"
         }
       },
       "required": ["label", "labelled", "matcher", "soft", "status"],

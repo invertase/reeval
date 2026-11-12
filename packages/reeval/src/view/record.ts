@@ -31,6 +31,7 @@ export type ShapeName =
   | 'bundle-manifest'
   | 'archive-manifest'
   | 'credentials'
+  | 'run-report'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -52,6 +53,10 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
     { path: 'evals[].attempts[].activity.stalledTools', empty: () => 0 },
     { path: 'evals[].attempts[].activity.maxToolMs', empty: () => null },
     { path: 'evals[].attempts[].egress.unresolved', empty: () => [] },
+    { path: 'evals[].cells[].checks[].notApplicable', empty: () => 0 },
+    { path: 'evals[].cases[].cells[].checks[].notApplicable', empty: () => 0 },
+    { path: 'evals[].cases[].cells[].checks[].control.notApplicable', empty: () => 0 },
+    { path: 'evals[].cells[].checks[].control.notApplicable', empty: () => 0 },
   ],
   'transcript-line': [],
   analysis: [],
@@ -61,10 +66,16 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'live-progress': [],
   'cli-invocation': [],
   'capture-page': [],
-  'run-events': [],
+  'run-events': [
+    { path: 'record.evals[].cells[].checks[].notApplicable', empty: () => 0 },
+    { path: 'record.evals[].cases[].cells[].checks[].notApplicable', empty: () => 0 },
+    { path: 'record.evals[].cases[].cells[].checks[].control.notApplicable', empty: () => 0 },
+    { path: 'record.evals[].cells[].checks[].control.notApplicable', empty: () => 0 },
+  ],
   'bundle-manifest': [],
   'archive-manifest': [],
   credentials: [],
+  'run-report': [],
 }
 
 /**
@@ -86,13 +97,13 @@ export const SCHEMA_VERSIONS = {
   credentials: 1,
 } as const
 
-/** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
+/** A file from a newer reeval, whose version (`field`, `schemaVersion` by default) this reeval doesn't know. */
 export class NewerSchemaError extends Error {
   override name = 'NewerSchemaError'
   /** The message without its subject: `written by a newer reeval (…). Upgrade reeval to read it.` */
   readonly reason: string
-  constructor(what: string, version: number, newest: number) {
-    const reason = `written by a newer reeval (schemaVersion ${version}; this reeval reads up to ${newest}). Upgrade reeval to read it.`
+  constructor(what: string, version: number, newest: number, field = 'schemaVersion') {
+    const reason = `written by a newer reeval (${field} ${version}; this reeval reads up to ${newest}). Upgrade reeval to read it.`
     super(`${what} was ${reason}`)
     this.reason = reason
   }

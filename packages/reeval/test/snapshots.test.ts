@@ -384,10 +384,8 @@ describe('snapshots through the CLI', () => {
       assert.ok(!readFileSync(join(at, '.env'), 'utf8').includes(SECRET))
     }
     const summary = readFileSync(join(p.dir, '.reeval/runs', record.runId, 'summary.md'), 'utf8')
-    assert.match(
-      summary,
-      /- Snapshots \(in \.reeval\/runs, never recorded\): \[final\]\(\S+\/snapshots\/final\)/,
-    )
+    assert.match(summary, /\| Artifacts \| all \|/)
+    assert.doesNotMatch(summary, /\.reeval\/runs\//)
     const history = join(p.dir, 'evals/.history', record.runId)
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

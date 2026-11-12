@@ -21,12 +21,7 @@ import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { fenced } from '../src/text.ts'
 import { colors, stripAnsi } from '../src/ui/colors.ts'
-import {
-  type CompareInput,
-  compareTally,
-  renderCompare,
-  renderCompareMarkdown,
-} from '../src/ui/compare-layout.ts'
+import { type CompareInput, compareTally, renderCompare } from '../src/ui/compare-layout.ts'
 import { layout, render, tallyLine } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
 import type { SuiteTally } from '../src/view/suite.ts'
@@ -313,42 +308,6 @@ describe('catch regressions (reeval compare)', () => {
     assert.doesNotMatch(full, /^base /m, 'a regressed block names them')
   })
 
-  test('--md is the same layout in a text block under a heading naming both runs', () => {
-    const g = compareGolden('compare')
-    const input = goldenCompare(g)
-    const md = renderCompareMarkdown(input, { color: true, verbose: false })
-    assert.equal(
-      md,
-      [
-        `### reeval compare: ${input.head.runId} vs ${input.base?.runId}`,
-        '',
-        '```text',
-        ...comparedText(g),
-        '```',
-        '',
-      ].join('\n'),
-    )
-  })
-
-  test('--md fences the layout past any backticks an assertion carries', () => {
-    const g = compareGolden('compare-regressed')
-    const input = goldenCompare(g)
-    for (const e of input.head.suite.files.flatMap((f) => f.evals)) {
-      for (const k of e.cells?.flatMap((cell) => cell.checks) ?? []) {
-        if (k.outcome.status === 'ran' && k.outcome.assertion) {
-          k.outcome.assertion = 'expected "```ts" to be "```js"'
-        }
-      }
-    }
-    const md = renderCompareMarkdown(input, { color: false, verbose: false }).split('\n')
-    assert.equal(md[2], '````text')
-    assert.equal(md.at(-2), '````')
-    assert.ok(
-      md.some((l) => l.includes('```ts')),
-      'the assertion is in the block',
-    )
-  })
-
   test('a removed eval sits where base had it, beside the one renamed from it', () => {
     const text = comparedText(compareGolden('compare'))
     const at = (re: RegExp) => text.findIndex((l) => re.test(l))
@@ -427,24 +386,7 @@ describe('catch regressions (reeval compare)', () => {
   })
 })
 
-/** Each fenced code block in `md` by CommonMark's rule: a run of backticks closes on as many. */
-function codeBlocks(md: string): Array<{ fence: string; body: string[] }> {
-  const blocks: Array<{ fence: string; body: string[] }> = []
-  let open: { fence: string; body: string[] } | null = null
-  for (const line of md.split('\n')) {
-    if (!open) {
-      const m = /^(`{3,})[^`]*$/.exec(line)
-      if (m?.[1]) open = { fence: m[1], body: [] }
-    } else if (/^`+\s*$/.test(line) && line.trim().length >= open.fence.length) {
-      blocks.push(open)
-      open = null
-    } else open.body.push(line)
-  }
-  assert.equal(open, null, 'every block closes')
-  return blocks
-}
-
-describe('summary.md code blocks', () => {
+describe('summary.md from RunReport', () => {
   const run = () => {
     const file = corpusEntries()
       .find((e) => e.name === 'with-layouts')
@@ -452,28 +394,14 @@ describe('summary.md code blocks', () => {
     assert.ok(file, 'with-layouts has a run')
     return readableRecord(JSON.parse(readFileSync(file, 'utf8')) as RunRecord)
   }
-  const failed = (r: RunRecord) => {
-    const a = r.evals.flatMap((e) => e.attempts).find((x) => x.error?.kind === 'assertion')
-    assert.ok(a?.error, 'the run has a failed check')
-    return a.error
-  }
 
-  test("a failed check's backticks get a longer fence, and the message stays in one block", () => {
-    const r = run()
-    const error = failed(r)
-    error.message = 'expected output to match\n```ts\nconst a = 1\n```\nand ```` four'
-    const blocks = codeBlocks(renderSummary(r))
-    const block = blocks.find((b) => b.body.includes('```ts'))
-    assert.ok(block, 'the message is inside a block')
-    assert.equal(block.fence, '`````')
-    assert.deepEqual(block.body, error.message.split('\n'))
-  })
-
-  test('canary: ordinary output keeps three backticks', () => {
+  test('renderSummary emits a GFM report with one H1 and no text dump fence', () => {
     const md = renderSummary(run())
-    const blocks = codeBlocks(md)
-    assert.ok(blocks.length > 1, 'the results and a failure message')
-    assert.deepEqual(new Set(blocks.map((b) => b.fence)), new Set(['```']))
+    assert.match(md, /^# /m)
+    assert.equal([...md.matchAll(/^# /gm)].length, 1)
+    assert.doesNotMatch(md, /^```text$/m)
+    assert.match(md, /^## Attempt index/m)
+    assert.match(md, /^## State/m)
   })
 
   test('fenced is three backticks, or one more than the longest run inside', () => {

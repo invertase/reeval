@@ -17,7 +17,14 @@ import type {
 } from './types.ts'
 import { totalTokens } from './usage.ts'
 
-export type Result = { pass: boolean; message: () => string }
+export type Result = {
+  pass: boolean
+  message: () => string
+  /** File matcher target (`toHaveFile`), as recorded on the assertion. */
+  target?: string
+  /** Passing file check that the agent didn't satisfy (path already matched). */
+  preSatisfied?: boolean
+}
 
 /**
  * A matcher handed a subject it can't read, such as `toHaveEdited(1)`: recorded as `error`, an
@@ -297,6 +304,12 @@ export function ran(actual: unknown, command?: RegExp | string | RunMatch): Resu
  * Not the turn's `diff`, which also has earlier turns' changes and the eval's own writes.
  */
 export const TURN_EDITED: unique symbol = Symbol('reeval.turnEdited')
+
+/**
+ * Raw mid-turn status on a frozen `Turn`, so wire serializers can copy it without going through
+ * the `status` getter that marks the body as having inspected the error.
+ */
+export const TURN_STATUS: unique symbol = Symbol('reeval.turnStatus')
 
 const editedIn = (turn: unknown): string[] => {
   if (!isObjectLike(turn)) return []

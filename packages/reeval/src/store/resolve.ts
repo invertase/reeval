@@ -14,7 +14,7 @@ import type {
   S3StoreDescriptor,
 } from '../types.ts'
 
-const ARTIFACTS = ['all', 'failures', 'none'] as const
+const ARTIFACTS = ['all', 'evidence', 'failures', 'none'] as const
 const HISTORY_KEYS = ['store', 'artifacts', 'debug', 'archive', 'debugArchive']
 const DEBUG = ['none', 'requests', 'all'] as const
 const LOCAL_KEYS = ['kind', 'dir']
@@ -242,12 +242,12 @@ function resolveStore(
 ): Omit<ResolvedHistory, 'debug' | 'archive' | 'debugArchive'> {
   if (value !== undefined && !isObjectLike(value)) {
     throw new UsageError(
-      `${where} in ${file} must be an object like { store: local(), artifacts: 'failures' } (got ${JSON.stringify(value)})`,
+      `${where} in ${file} must be an object like { store: local(), artifacts: 'evidence' } (got ${JSON.stringify(value)})`,
     )
   }
   const history = (value ?? {}) as HistoryConfig & Record<string, unknown>
   unknownKey(history, HISTORY_KEYS, where, file)
-  const artifacts: ArtifactLevel = history.artifacts ?? base?.artifacts ?? 'failures'
+  const artifacts: ArtifactLevel = history.artifacts ?? base?.artifacts ?? 'evidence'
   if (!ARTIFACTS.includes(artifacts)) {
     throw new UsageError(
       `${where}.artifacts in ${file} is ${oneOf(ARTIFACTS)} (got ${JSON.stringify(artifacts)})`,

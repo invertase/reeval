@@ -166,6 +166,9 @@ export default defineConfig({
     'internal/vm': 'src/internal-vm.ts',
     gateway: 'src/gateway.ts',
     'view/index': 'src/view/index.ts',
+    'view/report/index': 'src/view/report/index.ts',
+    'renderer/markdown': 'src/renderer/markdown.ts',
+    'renderer/ascii': 'src/renderer/ascii.ts',
     testing: 'src/testing.ts',
     // `reeval`, and `reeval __worker`, which the engine starts for each eval file (src/engine/pool.ts).
     cli: 'src/bin.ts',

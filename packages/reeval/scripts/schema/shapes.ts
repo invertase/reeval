@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url'
+import type { z } from 'zod'
 import type { ShapeName } from '../../src/view/record.ts'
+import { REPORT_SCHEMAS } from '../../src/view/report/schema.ts'
 
 export const PACKAGE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 /** Where the committed snapshots live, one `<name>.schema.json` per shape. */
@@ -17,6 +19,11 @@ export type PersistedShape = {
   where: string
   /** The field holding its schema version literal, when it has one. */
   versionField?: string
+  /**
+   * The Zod schemas that own its JSON Schema, by the name of the type in `file` each validates, when
+   * a Zod schema reads it; the snapshot is theirs (`z.toJSONSchema`), held to those types.
+   */
+  zod?: Record<string, z.ZodType>
 }
 
 export const SHAPES: PersistedShape[] = [
@@ -103,6 +110,15 @@ export const SHAPES: PersistedShape[] = [
     type: 'ArchiveManifest',
     where: "reeval-archive.json, the last entry of a history archive: a run's <runId>.zip",
     versionField: 'schemaVersion',
+  },
+  {
+    name: 'run-report',
+    file: 'src/view/report/types.ts',
+    type: 'RunReport',
+    where:
+      "The RunReport behind a run's summary.md: <run>/report.json in the history folder or .reeval/runs",
+    versionField: 'reportVersion',
+    zod: REPORT_SCHEMAS,
   },
   {
     name: 'credentials',

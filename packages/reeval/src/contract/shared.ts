@@ -185,7 +185,9 @@ export function dataProblem(
     const hint = near ? `. Did you mean "${near}"?` : ''
     return `${field ? `${what}'s ${field}` : what} has an unknown key "${issue.keys[0]}"${hint}`
   }
-  return `${what}'s ${genericProblem('', issue, value)}`
+  const problem = genericProblem('', issue, value)
+  // At the root the path is empty, so the problem starts with its verb: `what` is its subject.
+  return field ? `${what}'s ${problem}` : `${what}${problem}`
 }
 
 /**

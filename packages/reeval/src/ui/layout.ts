@@ -2,6 +2,8 @@
 // eval, a pooled family being one, laid out by what the eval's cells compare, then the tally.
 // Pure and deterministic: the same SuiteResult and remarks always print the same lines. Counts
 // read `N of M` and effects are words; statistics print only with `verbose`.
+
+import type { Interval } from '../stats.ts'
 import { clip, plural } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
@@ -16,7 +18,6 @@ import type {
   CheckResult,
   Effect,
   EvalResult,
-  Interval,
   PooledArm,
   PooledRate,
   QuestionResult,

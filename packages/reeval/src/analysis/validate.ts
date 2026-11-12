@@ -9,6 +9,7 @@ import type {
   AnalysisAnomaly,
   AnalysisBody,
   AnalysisClaim,
+  AnalysisClaimRole,
   AnalysisValidation,
   Confidence,
 } from '../view/analysis.ts'
@@ -21,6 +22,32 @@ const TRANSCRIPT = /^transcript:(.+)#L(\d+)$/
 
 const normal = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
 const NUMBER = /(?<![\w.#/:-])[−-]?\d+(?:\.\d+)?(?![\w/])/g
+
+/**
+ * Resolves attempt cites on a claim into attempt ids, paths, and a shared eval tag when every
+ * cite points at one eval.
+ */
+function claimKeys(
+  cites: string[],
+  digest: Digest,
+): { evalId?: string; attempts?: Array<{ attemptId: string; path: string }> } {
+  const attempts: Array<{ attemptId: string; path: string }> = []
+  const seen = new Set<string>()
+  const evalIds = new Set<string>()
+  for (const cite of cites) {
+    const c = cite.trim().replace(/^\[|\]$/g, '')
+    const id = c.replace(/:exec\d+$/, '')
+    const row = digest.attempts[id]
+    if (!row || seen.has(id)) continue
+    seen.add(id)
+    attempts.push({ attemptId: row.attempt, path: id })
+    if (row.eval) evalIds.add(row.eval)
+  }
+  return {
+    ...(evalIds.size === 1 ? { evalId: [...evalIds][0] } : {}),
+    ...(attempts.length ? { attempts } : {}),
+  }
+}
 
 /** A digest's citation checker: whether an id is valid, and the text it names. */
 export function citations(digest: Digest) {
@@ -212,7 +239,11 @@ export function validateAnalysis(
     validation.dropped++
     return null
   }
-  const claims = (where: string, items: AnalysisOutput['whatHappened']): AnalysisClaim[] =>
+  const claims = (
+    where: string,
+    items: AnalysisOutput['whatHappened'],
+    role: AnalysisClaimRole,
+  ): AnalysisClaim[] =>
     items.flatMap((item, i) => {
       const c = cited(`${where}[${i}]`, item.cites)
       if (!c) return []
@@ -227,30 +258,36 @@ export function validateAnalysis(
       }
       const numbers = numbersOrDrop(`${where}[${i}]`, item.text, c.good, c.texts)
       if (!numbers) return []
+      const keys = claimKeys(c.good, digest)
       return [
         {
           text: item.text,
           cites: c.good,
           confidence: item.confidence,
+          role,
           ...(item.quotes?.length ? { quotes: item.quotes } : {}),
           ...(numbers.length ? { unverifiedNumbers: numbers } : {}),
+          ...keys,
         },
       ]
     })
-  const whatHappened = claims('whatHappened', output.whatHappened)
-  const results = claims('results', output.results)
-  const why = claims('why', output.why)
+  const whatHappened = claims('whatHappened', output.whatHappened, 'finding')
+  const results = claims('results', output.results, 'finding')
+  const why = claims('why', output.why, 'finding')
   const anomalies: AnalysisAnomaly[] = output.anomalies.flatMap((a, i) => {
     const c = cited(`anomalies[${i}]`, a.cites)
     if (!c) return []
     const numbers = numbersOrDrop(`anomalies[${i}]`, a.text, c.good, c.texts)
     if (!numbers) return []
+    const keys = claimKeys(c.good, digest)
     return [
       {
         text: a.text,
         kind: a.kind,
         cites: c.good,
+        role: 'caveat',
         ...(numbers.length ? { unverifiedNumbers: numbers } : {}),
+        ...keys,
       },
     ]
   })
@@ -265,6 +302,7 @@ export function validateAnalysis(
       validation.dropped++
       return []
     }
+    const keys = claimKeys(c.good, digest)
     return [
       {
         title: a.title,
@@ -276,6 +314,8 @@ export function validateAnalysis(
         impact: a.impact,
         effort: a.effort,
         cites: c.good,
+        role: 'action',
+        ...keys,
       },
     ]
   })

@@ -10,6 +10,21 @@
     "AnalysisAction": {
       "type": "object",
       "properties": {
+        "attempts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attemptId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["attemptId", "path"]
+          }
+        },
         "change": {
           "type": "string"
         },
@@ -22,6 +37,9 @@
         "effort": {
           "$ref": "#/$defs/Level"
         },
+        "evalId": {
+          "type": "string"
+        },
         "expectedEffect": {
           "type": "string"
         },
@@ -30,6 +48,9 @@
         },
         "kind": {
           "$ref": "#/$defs/ActionKind"
+        },
+        "role": {
+          "enum": ["action", "caveat", "finding"]
         },
         "target": {
           "type": "string"
@@ -68,14 +89,35 @@
     "AnalysisAnomaly": {
       "type": "object",
       "properties": {
+        "attempts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attemptId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["attemptId", "path"]
+          }
+        },
         "cites": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
+        "evalId": {
+          "type": "string"
+        },
         "kind": {
           "$ref": "#/$defs/AnomalyKind"
+        },
+        "role": {
+          "enum": ["action", "caveat", "finding"]
         },
         "text": {
           "type": "string"
@@ -144,6 +186,22 @@
     "AnalysisClaim": {
       "type": "object",
       "properties": {
+        "attempts": {
+          "description": "Attempt cites resolved to ids and paths; optional on older docs.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attemptId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["attemptId", "path"]
+          }
+        },
         "cites": {
           "description": "Fact (`F3`), evidence (`E2`, `E2:L39`), attempt (`r2/scaffold/reeval-good#1`) or check ids.",
           "type": "array",
@@ -154,12 +212,20 @@
         "confidence": {
           "$ref": "#/$defs/Confidence"
         },
+        "evalId": {
+          "description": "Eval id this claim is about, when resolved from attempt cites; optional on older docs.",
+          "type": "string"
+        },
         "quotes": {
           "description": "Exact spans from the cited evidence; a claim whose quote isn't there is dropped.",
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "role": {
+          "description": "Section role; optional on older docs (derived from which body array it sits in).",
+          "enum": ["action", "caveat", "finding"]
         },
         "text": {
           "type": "string"

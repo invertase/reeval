@@ -16,6 +16,7 @@ import {
   readableRemarks,
   readableTranscriptLine,
 } from '../../src/view/record.ts'
+import { readableRunReport } from '../../src/view/report/schema.ts'
 import { type Change, checkDefaults, compare } from './compat.ts'
 import { CORPUS_DIR, corpus } from './corpus.ts'
 import { generate, type ShapeSchema } from './generate.ts'
@@ -70,7 +71,7 @@ export function checkShape(
   },
 ): ShapeReport {
   const changes = [
-    ...(committed ? compare(committed, current, options) : []),
+    ...(committed ? compare(committed, current, { closed: !!shape.zod, ...options }) : []),
     ...checkDefaults(current, options.defaults),
   ]
   return {
@@ -86,6 +87,7 @@ const FIX: Partial<Record<Change['kind'], string>> = {
   'made-required': 'new',
   removed: 'removed',
   narrowed: 'narrowed',
+  widened: 'widened',
 }
 
 /** What the author has to do, for each breaking change, in words. */
@@ -125,6 +127,12 @@ export function explain(reports: ShapeReport[]): string {
           '    1. Keep accepting the old values in the type (widen it back) and handle them where it is read; or',
           `    2. ${version} that maps the old values to new ones.`,
         )
+      } else if (how === 'widened') {
+        lines.push(
+          `    ${shape.type} is read with Zod, which refuses a value it doesn't list. Either:`,
+          '    1. Keep writing only the values the old type lists; or',
+          `    2. ${version} (one that returns the old file as it is), so an older reeval refuses the new files with a clear message instead.`,
+        )
       } else if (c.kind === 'default-unused') {
         lines.push('    (READ_DEFAULTS is in src/view/record.ts.)')
       } else if (c.kind === 'version') {
@@ -159,7 +167,8 @@ export async function checkCorpus(current: Map<string, ShapeSchema>): Promise<st
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses, remarks, capturePages, eventStreams, archives } = corpus()
+  const { records, transcripts, analyses, remarks, capturePages, reports, eventStreams, archives } =
+    corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -193,6 +202,13 @@ export async function checkCorpus(current: Map<string, ShapeSchema>): Promise<st
       p.file,
       validate(shape('capture-page'), readableCapturePage(structuredClone(p.value) as never)),
     )
+  }
+  for (const r of reports) {
+    try {
+      report(r.file, validate(shape('run-report'), readableRunReport(structuredClone(r.value))))
+    } catch (error) {
+      report(r.file, [(error as Error).message.split('\n').slice(0, 8).join(' ')])
+    }
   }
   for (const file of archives) {
     let archive: Archive | null = null

@@ -7,7 +7,7 @@
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
 
 import type { HistoryCell, RunRecord } from '../history/types.ts'
-import { fenced, plural } from '../text.ts'
+import { plural } from '../text.ts'
 import type { CostTotal } from '../types.ts'
 import type {
   CompareCell,
@@ -768,14 +768,4 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
     ...costNote(c, input.base, input.head),
   ]
   return [...blocks.flatMap((b) => [...b, '']), ...notes, compareTally(c, input.rows)]
-}
-
-/** `reeval compare --md`: a heading with both run ids, and the layout in a text block. */
-export function renderCompareMarkdown(input: CompareInput, opts: CompareOptions): string {
-  const title = input.base
-    ? `### reeval compare: ${input.head.runId} vs ${input.base.runId}`
-    : `### reeval compare: ${input.head.runId}`
-  return [title, '', ...fenced(renderCompare(input, { ...opts, color: false }), 'text'), ''].join(
-    '\n',
-  )
 }

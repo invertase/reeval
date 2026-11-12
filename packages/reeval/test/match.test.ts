@@ -333,6 +333,8 @@ describe('one matcher table', () => {
         args: ['greet.js'],
         soft: true,
         status: 'pass',
+        target: 'greet.js',
+        preSatisfied: true,
         durationMs: 'number',
       },
     )

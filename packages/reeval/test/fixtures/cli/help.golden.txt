@@ -173,7 +173,7 @@ Usage:
     --bundles                   Also delete the copies reeval run --bundle extracted into the
                                 temporary directory, each with its run's .reeval/, but a running one's
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
-                                --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+                                --artifacts all|evidence|failures|none --allow-incomplete --skip-secret-scan
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
   reeval history [filter]       Pass/fail per recorded eval over recent runs
                                 --limit <n> --all (include unrecorded runs) --json

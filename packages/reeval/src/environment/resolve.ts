@@ -724,11 +724,21 @@ export async function resolveEnvironment(
   let egressSet = false
   let workspace: GitWorkspace | undefined
   let sandboxSet = false
+  let label: string | undefined
+  let description: string | undefined
   for (const layer of environment.layers) {
     const { spec } = layer
     if (spec.sandbox !== undefined) {
       if (sandboxSet) overrides.add('sandbox')
       sandboxSet = true
+    }
+    if (spec.label !== undefined) {
+      if (label !== undefined) overrides.add('label')
+      label = spec.label
+    }
+    if (spec.description !== undefined) {
+      if (description !== undefined) overrides.add('description')
+      description = spec.description
     }
     if (spec.workspace !== undefined) {
       if (workspace) overrides.add('workspace')
@@ -1021,6 +1031,8 @@ export async function resolveEnvironment(
   return {
     record: {
       name: environment.name,
+      ...(label !== undefined ? { label } : {}),
+      ...(description !== undefined ? { description } : {}),
       parent: environment.parent,
       overrides: [...overrides],
       digest,

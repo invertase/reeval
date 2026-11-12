@@ -68,6 +68,7 @@ loading. The `reeval.config.ts` follows the config API like any other project.
 | `with-resource-followups` | The same fixtures read from out of the agent's reach (the container from a sibling container, the VM as root), with `usage.p95Cores`, and a container's `usage.cgroupPeakMemoryBytes` and `usage.throttling` from an attempt whose two busy threads its one CPU's quota throttled |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 | `with-archive` | The corpus recipe's run with its history archive, `<runId>.zip` beside it (written by `corpus:add --archive`): the record and every file recorded with it, and `reeval-archive.json` (`ArchiveManifest`) listing each with its sha256; the saved analysis, added after recording, stays beside the zip |
+| `with-run-report` | The corpus recipe's run with `<run>/report.json` (`RunReport`) beside its summary.md, both from one report built when the run was recorded |
 
 What reads them:
 

@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
-import { readRecord } from '../history/files.ts'
+import { readRecord, runDir } from '../history/files.ts'
+import { readReportInputs } from '../history/report-inputs.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
@@ -237,12 +238,15 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       },
       guard(async ({ run, format }) => {
         const record = await showRecord(config, run)
-        return format === 'md'
-          ? {
-              runId: record.runId,
-              markdown: renderSummary(record).trimEnd(),
-            }
-          : (record as Json)
+        if (format === 'md') {
+          const dir = runDir(config.history.dir, record.runId)
+          const inputs = await readReportInputs(dir)
+          return {
+            runId: record.runId,
+            markdown: renderSummary(record, inputs).trimEnd(),
+          }
+        }
+        return record as Json
       }),
     )
 

@@ -249,7 +249,19 @@ export async function collectReport(
         runId: record.runId,
         status: record.status,
         outcome: runOutcome(record),
-        summary: { ...record.summary },
+        summary: {
+          evals: record.summary.evals,
+          attempts: record.summary.attempts,
+          pass: record.summary.pass,
+          fail: record.summary.fail,
+          notGated: record.summary.notGated,
+          infraError: record.summary.infraError,
+          skipped: record.summary.skipped,
+          ...(record.summary.counted !== undefined ? { counted: record.summary.counted } : {}),
+          ...(record.summary.reclassified !== undefined
+            ? { reclassified: record.summary.reclassified }
+            : {}),
+        },
         stack: record.stack,
         failures: failed
           .slice(0, MAX_FAILURES)

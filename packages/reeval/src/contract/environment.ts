@@ -53,6 +53,8 @@ export const traitsSchema = z
 
 export const environmentSpecSchema = z.strictObject({
   sandbox: sandboxDescriptorSchema.optional(),
+  label: z.string().optional(),
+  description: z.string().optional(),
   workspace: gitWorkspaceSchema.optional(),
   env: envVarsSchema.optional(),
   egress: egressSchema.optional(),

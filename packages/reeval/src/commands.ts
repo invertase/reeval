@@ -5,7 +5,15 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { debugRoot } from './debug/files.ts'
 import { git, gitText } from './git.ts'
-import { listRuns, type RecordResult, readRecord, recordRun, scratchDir } from './history/files.ts'
+import {
+  listRuns,
+  type RecordResult,
+  readRecord,
+  recordRun,
+  runDir,
+  scratchDir,
+} from './history/files.ts'
+import { readReportInputs } from './history/report-inputs.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry, RunDebug } from './history/types.ts'
 import {
@@ -41,7 +49,7 @@ import {
   uploadPending,
 } from './store/sync.ts'
 import type { ResolvedConfig } from './types.ts'
-import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { renderCompare } from './ui/compare-layout.ts'
 import { runCost } from './view/cost.ts'
 import type { LiveRun } from './view/live.ts'
 import type { TranscriptLine } from './view/model.ts'
@@ -153,8 +161,10 @@ const rel = (path: string) => fromCwd(path) || path
 
 export function parseLevel(value: string | undefined, fallback: ArtifactLevel): ArtifactLevel {
   if (value === undefined) return fallback
-  if (value === 'all' || value === 'failures' || value === 'none') return value
-  throw new CommandError(`--artifacts is all, failures or none (got ${value})`)
+  if (value === 'all' || value === 'evidence' || value === 'failures' || value === 'none') {
+    return value
+  }
+  throw new CommandError(`--artifacts is all, evidence, failures or none (got ${value})`)
 }
 
 export async function record(
@@ -473,8 +483,11 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
     return 0
   }
   const remarks = await readRemarks(runRemarksFile(config, entry))
-  if (ctx.flags.md) ctx.out(renderSummary(run, { remarks }).trimEnd())
-  else ctx.out(formatShow(run, { remarks }))
+  if (ctx.flags.md) {
+    const artifactDir = runDir(dir, entry.runId)
+    const inputs = await readReportInputs(artifactDir)
+    ctx.out(renderSummary(run, { ...inputs, remarks: inputs.remarks ?? remarks }).trimEnd())
+  } else ctx.out(formatShow(run, { remarks }))
   return 0
 }
 
@@ -530,18 +543,29 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
         cost: runCost(record.cost),
       }
     }
+    const changes = base ? stackChanges(base, head) : []
     const input = {
       base: base ? await side(base) : null,
       head: await side(head),
       rows,
-      changes: base ? stackChanges(base, head) : [],
+      changes,
     }
     const opts = { color: false, verbose: !!ctx.flags.verbose?.length }
-    ctx.out(
-      ctx.flags.md
-        ? renderCompareMarkdown(input, opts).trimEnd()
-        : renderCompare(input, opts).join('\n'),
-    )
+    if (ctx.flags.md) {
+      const headRecord = await recordOf(ctx.config, head)
+      const baseRecord = base ? await recordOf(ctx.config, base) : null
+      const headDir = runDir(
+        head.recorded ? ctx.config.history.dir : scratchDir(ctx.config.root),
+        head.runId,
+      )
+      const inputs = await readReportInputs(headDir)
+      ctx.out(
+        renderSummary(headRecord, {
+          ...inputs,
+          prior: baseRecord ? { record: baseRecord, rows, changes } : null,
+        }).trimEnd(),
+      )
+    } else ctx.out(renderCompare(input, opts).join('\n'))
   }
   return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
 }

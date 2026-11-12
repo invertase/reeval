@@ -9,7 +9,7 @@ import { attemptId, attemptKey, evalId, evalSlug, relativeFile } from '../ids.ts
 import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
-import { assertionRecords, checkFailure } from './assertions.ts'
+import { assertionRecords, checkFailure, linkJudgmentAssertions } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
@@ -20,6 +20,7 @@ import { observer } from './observe.ts'
 import {
   attemptError,
   judgeErrorsMessage,
+  reclassifyTurnErrors,
   recordEgress,
   recordFailure,
   recordOom,
@@ -29,7 +30,7 @@ import {
 } from './record.ts'
 import { startSession } from './session.ts'
 import { snapshotSidecar, takeSnapshot } from './snapshot.ts'
-import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
+import { type AttemptSpec, bindAttemptContext, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
 
 export type { AttemptSpec } from './state.ts'
@@ -105,6 +106,7 @@ async function attemptBody(
     send: turnSender(a, takeContext, { exec, readFile }),
     judge: judgeCaller(a, readFile),
   }
+  bindAttemptContext(c, a)
 
   const timedOut = () => !!timer?.aborted && !testSignal.aborted
   let failure: { error: unknown } | undefined
@@ -170,13 +172,13 @@ async function attemptBody(
     const { record } = a
     const checked = assertionRecords(assertions())
     if (checked.length) record.assertions = checked
+    linkJudgmentAssertions(record.judgements ?? [], checked)
     for (const x of checked) {
       const why = x.message ? ` · ${clip(redactSecrets(x.message.split('\n')[0] ?? ''), 160)}` : ''
-      debug.log(
-        'check',
-        `assert ${x.status === 'pass' ? '✓' : '✗'} ${x.label} (${x.matcher}, ${x.status})${why}`,
-      )
+      const mark = x.status === 'pass' || x.status === 'not_applicable' ? '✓' : '✗'
+      debug.log('check', `assert ${mark} ${x.label} (${x.matcher}, ${x.status})${why}`)
     }
+    reclassifyTurnErrors(a)
     const error = record.error ? ` · ${record.error.kind}: ${record.error.message}` : ''
     debug.log('teardown', `outcome ${record.outcome}${error}`)
     const rel = (path: string) => relativeFile(config.root, path) || '.'

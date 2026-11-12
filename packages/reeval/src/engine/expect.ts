@@ -21,9 +21,15 @@ import {
   type Tester,
 } from '@vitest/expect'
 import { inspect } from '@vitest/utils/display'
-import type { Limits, RunMatch } from '../assert.ts'
+import { type Limits, misuseError, type RunMatch } from '../assert.ts'
 import { fromCwd } from '../ids.ts'
-import type { AtLeastOne, MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import {
+  type AtLeastOne,
+  type MATCHERS,
+  type MatcherArgs,
+  type MatcherName,
+  takeFileMeta,
+} from '../matchers.ts'
 import { isThenable } from '../object.ts'
 import { redactStrings } from '../redact.ts'
 import type {
@@ -100,6 +106,11 @@ declare module '@vitest/expect' {
   interface ExpectStatic {
     assert: Chai.AssertStatic
     unreachable: (message?: string) => never
+    /**
+     * Marks a check as not applicable for this attempt: recorded as `not_applicable`, never fails
+     * the attempt, and leaves the check's pass/fail denominator.
+     */
+    skip: (label: string, reason?: string) => void
     /**
      * `expect` for a gate: a failed matcher ends the eval's body there, as a thrown error does,
      * where `expect` records the failure and carries on.
@@ -249,9 +260,13 @@ export type RawAssertion = {
   soft: boolean
   /** `path:line` of the call in the eval file, relative to the project root. */
   at?: string
-  status: 'pass' | 'fail' | 'error'
+  status: 'pass' | 'fail' | 'error' | 'not_applicable'
   /** What the matcher threw, unless it passed. */
   error?: unknown
+  /** File matcher target (`toHaveFile`). */
+  target?: string
+  /** Passing file check the agent didn't satisfy. */
+  preSatisfied?: boolean
   /** Async matchers only. */
   durationMs?: number
 }
@@ -372,6 +387,9 @@ function settle(entry: Recorded, error: unknown, startedAt?: number) {
   entry.status = error === undefined ? 'pass' : isUnanswerable(error) ? 'error' : 'fail'
   if (error !== undefined) entry.error = error
   if (startedAt !== undefined) entry.durationMs = Math.round(performance.now() - startedAt)
+  const meta = takeFileMeta()
+  if (meta?.target !== undefined) entry.target = meta.target
+  if (meta?.preSatisfied) entry.preSatisfied = true
 }
 
 /** What a matcher failed with when its subject didn't match, not an error raised under it. */
@@ -530,6 +548,22 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
   expect.poll = createPoll(expect, task && list, task?.file, false)
   expect.unreachable = (message) => {
     chai.assert.fail(`expected${message ? ` "${message}" ` : ' '}not to be reached`)
+  }
+  expect.skip = (label, reason) => {
+    if (typeof label !== 'string' || !label.trim()) {
+      throw misuseError('expect.skip(label, reason?): label must be a non-empty string')
+    }
+    const { assertionCalls } = getState(expect)
+    setState({ assertionCalls: assertionCalls + 1 }, expect)
+    if (!task) return
+    list.push({
+      matcher: 'skip',
+      args: reason === undefined ? [] : [reason],
+      label,
+      soft: true,
+      status: 'not_applicable',
+      ...(reason !== undefined ? { error: new Error(reason) } : {}),
+    })
   }
   function assertions(expected: number) {
     const errorGen = () =>

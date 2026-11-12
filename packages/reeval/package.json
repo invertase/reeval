@@ -66,6 +66,18 @@
       "types": "./dist/view/index.d.ts",
       "default": "./dist/view/index.js"
     },
+    "./view/report": {
+      "types": "./dist/view/report/index.d.ts",
+      "default": "./dist/view/report/index.js"
+    },
+    "./renderer/markdown": {
+      "types": "./dist/renderer/markdown.d.ts",
+      "default": "./dist/renderer/markdown.js"
+    },
+    "./renderer/ascii": {
+      "types": "./dist/renderer/ascii.d.ts",
+      "default": "./dist/renderer/ascii.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"

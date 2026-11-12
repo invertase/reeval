@@ -908,7 +908,11 @@ evaluate('coin', { runs: 3 }, async (c) => {
           'coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it. Fix at evals/coin.eval.ts:8: make "lands heads" check something every good try does, or raise runs so one try doesn\'t decide it.',
         )
         const summary = readFileSync(history(recordedRuns(p.dir).at(-1) as string, 'summary.md'))
-        assert.match(summary.toString(), /Remarks:\n {2}coin: "lands heads"/)
+        // RunReport: concerns under Failures and caveats → Worth knowing (not the CLI Remarks: block).
+        assert.match(
+          summary.toString(),
+          /## coin[\s\S]*Worth knowing[\s\S]*\(concern\) "lands heads" passed/,
+        )
       }
     }
     assert.deepEqual(

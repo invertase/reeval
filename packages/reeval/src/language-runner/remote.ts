@@ -1,6 +1,7 @@
 // Out-of-process eval files: declaration tree over the runner session, bodies over attempt protocol v2.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { relative } from 'node:path'
+import { attemptForContext } from '../attempt/state.ts'
 import type { AttemptDone } from '../contract/attempt.ts'
 import { attemptRecordings } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
@@ -117,8 +118,10 @@ function remoteBody(
         },
         onLog: ({ stream, text }) =>
           inAttempt(() => console[stream === 'stderr' ? 'error' : 'log'](text)),
-        onDone: ({ error }) =>
+        onDone: ({ error, turnStatusRead }) =>
           finish(() => {
+            const a = attemptForContext(t)
+            if (a && turnStatusRead === true) a.turnStatusRead = true
             if (!error) return resolve()
             reject(errorFrom(error))
           }),

@@ -805,6 +805,7 @@ export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAtt
       })) ?? [],
     ...(record?.observations ? { observations: record.observations } : {}),
     id: `${cell.key}#${e.attempt?.n ?? 1}`,
+    key: e.key,
   }
 }
 
@@ -872,6 +873,7 @@ async function keptAttempt(
     ...(kept.observations ? { observations: kept.observations } : {}),
     ...(captures ? { captures: shots.flat() } : {}),
     id: `${cell.key}#${e.attempt?.n ?? kept.n}`,
+    key: kept.key,
   }
 }
 

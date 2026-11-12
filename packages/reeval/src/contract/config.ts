@@ -103,7 +103,7 @@ export const historyStoreDescriptorSchema = z.discriminatedUnion('kind', [
 
 export const historyConfigDataSchema = z.strictObject({
   store: historyStoreDescriptorSchema.optional(),
-  artifacts: z.enum(['all', 'failures', 'none']).optional(),
+  artifacts: z.enum(['all', 'evidence', 'failures', 'none']).optional(),
   debug: z.enum(['none', 'requests', 'all']).optional(),
   archive: z.boolean().optional(),
   debugArchive: z.boolean().optional(),

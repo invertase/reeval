@@ -33,7 +33,7 @@ import {
   ignoredRecordedFiles,
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
-import { renderSummary } from './summary.ts'
+import { summaryFiles } from './summary.ts'
 import type {
   ArtifactLevel,
   ArtifactRef,
@@ -478,18 +478,31 @@ async function writeClaimed(
 
 const failed = (x: { outcome: string }) => x.outcome === 'fail' || x.outcome === 'infra_error'
 
+/** Whether the attempt keeps its heavy evidence at this artifact level. */
 const keeps = (x: { outcome: string }, level: ArtifactLevel) =>
-  level === 'all' || (level === 'failures' && failed(x))
+  level === 'all' || level === 'evidence' || (level === 'failures' && failed(x))
+
+/** Passing attempts under `evidence` drop transcript, setup, checks, and judge input. */
+const evidencePass = (a: { outcome: string }, level: ArtifactLevel) =>
+  level === 'evidence' && !failed(a)
 
 /** Each capture's PNG, then the page facts beside it. */
 const withPages = (refs: ArtifactRef[]): FileRef[] =>
   refs.flatMap((r) => (r.capture?.page ? [r, r.capture.page] : [r]))
 
-const attemptRefs = (a: AttemptRecord): FileRef[] => [
-  ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? withPages(v) : v ? [v] : [])),
-  ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
-  ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
-]
+const attemptRefs = (a: AttemptRecord, level: ArtifactLevel = 'all'): FileRef[] => {
+  const files = evidencePass(a, level)
+    ? {
+        diff: a.files.diff,
+        artifacts: a.files.artifacts,
+      }
+    : a.files
+  return [
+    ...Object.values(files).flatMap((v) => (Array.isArray(v) ? withPages(v) : v ? [v] : [])),
+    ...(evidencePass(a, level) ? [] : a.checks.flatMap((c) => (c.log ? [c.log] : []))),
+    ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
+  ]
+}
 
 export type RecordOptions = {
   root: string
@@ -743,7 +756,14 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       const cell = e.cells.find((c) => c.key === a.cell)
       const all = whole || (cell !== undefined && failed(cell) && !cellFailed)
       if (level !== 'none' && (all || keeps(a, level))) {
-        for (const ref of attemptRefs(a)) await keep(ref)
+        for (const ref of attemptRefs(a, all ? 'all' : level)) await keep(ref)
+        if (evidencePass(a, level) && !all) {
+          a.files = {
+            ...(a.files.diff ? { diff: a.files.diff } : {}),
+            ...(a.files.artifacts?.length ? { artifacts: a.files.artifacts } : {}),
+          }
+          for (const c of a.checks) delete c.log
+        }
         continue
       }
       // Kept beside a failed attempt of its cell and case: `flaky_cells`, per case, tells the
@@ -789,7 +809,9 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       files.set(REMARKS_FILE, remarkBytes)
     } catch {}
   }
-  if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
+  if (level !== 'none') {
+    for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
+  }
   const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
   if (debug) record.debug = debug
 

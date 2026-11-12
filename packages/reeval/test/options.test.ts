@@ -354,9 +354,14 @@ evaluate(
       ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
     )
     assert.equal(ev?.outcome, 'pass')
+    const summary = read('summary.md')
+    assert.match(summary, /^## Baseline vs\. variants$/m)
+    assert.match(summary, /^\| Arm \| Pass rate \| Lift \| Pass-rate verdict \|/m)
+    assert.match(summary, /^\| base \| 0% \| n\/a \| Baseline \|/m)
+    assert.match(summary, /^\| skilled \| 100% \| \+100 pts \| Helped \|/m)
     assert.match(
-      read('summary.md'),
-      /^ {2}pass {2}all cases\n {4}arm +pass\n {4}base {11}0 of 6\n {4}skilled +6 of 6 {2}helped$/m,
+      summary,
+      /^\| toHaveFile ok\.txt \| toHaveFile \| 0 of 6 \| 6 of 6 \| 6 of 12 \|$/m,
     )
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
@@ -494,12 +499,15 @@ group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
     assert.equal(gha.stdout.match(/^::group::/gm)?.length, 4, 'expected misses collapse too')
 
     const md = readRun(p.dir).read('summary.md')
-    assert.match(
-      md,
-      /^pass {13}g › writes ok\.txt\n {2}arm +pass\n {2}base {15}0 of 2\n {2}skilled +2 of 2 {2}helped\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m,
-    )
-    assert.match(md, /^#### ○ fake\/base\/fake#1 · 1 check failed$/m)
-    assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
+    assert.match(md, /^## Baseline vs\. variants$/m)
+    assert.match(md, /^\| Arm \| Pass rate \| Lift \| Pass-rate verdict \|/m)
+    assert.match(md, /^\| base \| 0% \| n\/a \| Baseline \|/m)
+    assert.match(md, /^\| skilled \| 100% \| \+100 pts \| Too few runs \|/m)
+    assert.match(md, /^\| Assertion \| Matcher \| base \| skilled \| Total \|$/m)
+    assert.match(md, /^\| toBe base \| toBe \| 2 of 2 \| n\/a \| 2 of 2 \|$/m)
+    assert.match(md, /^\| toHaveFile ok\.txt \| toHaveFile \| 0 of 2 \| 2 of 2 \| 2 of 4 \|$/m)
+    assert.match(md, /^## Failures and caveats$/m)
+    assert.match(md, /^\| assertion \| toHaveFile ok\.txt \|/m)
     const { run, evals } = readRun(p.dir)
     const [e] = evals
     assert.equal(e?.outcome, 'pass', 'the ungated control fails without failing the eval')

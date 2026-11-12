@@ -40,6 +40,11 @@ export type Remark = {
    */
   id: string
   evalId: string
+  /**
+   * The eval's record key (`EvalEntry.key`), when known. Optional on older remarks; `evalId` keeps
+   * the encoded fact path used for `remarkId`.
+   */
+  evalKey?: string
   kind:
     | 'too-few-tries'
     | 'cant-tell-apart'

@@ -24,5 +24,9 @@ describe('missingReason', () => {
       missingReason({ artifacts: 'failures' }, false, true),
       /history\.artifacts' default, failures/,
     )
+    assert.match(
+      missingReason({ artifacts: 'evidence' }, false, true),
+      /history\.artifacts evidence/,
+    )
   })
 })

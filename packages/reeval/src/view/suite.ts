@@ -323,7 +323,7 @@ export type JudgeResult = {
   scores: number[]
 }
 
-export type Interval = { low: number; high: number }
+type Interval = { low: number; high: number }
 
 /** A null counter is one the harness didn't record; a recorded zero stays zero. */
 export type EffortCounters = {
@@ -438,7 +438,15 @@ function checksOf(
   const attempts = e.attempts.filter((a) => a.cell === cell.key && counted(a))
   // The record tallies checks over counted attempts only, so a cell with none has no tallies.
   const tallies =
-    cell.checks ?? declared.map((label) => ({ label, pass: 0, fail: 0, error: 0, notRun: 0 }))
+    cell.checks ??
+    declared.map((label) => ({
+      label,
+      pass: 0,
+      fail: 0,
+      error: 0,
+      notRun: 0,
+      notApplicable: 0,
+    }))
   return tallies.map((k, order) => {
     const ran = k.pass + k.fail + k.error
     const answered = attempts
@@ -454,6 +462,7 @@ function checksOf(
           fail: 0,
           error: 0,
           notRun: 0,
+          notApplicable: 0,
         })
       : undefined
     const judged = attempts.flatMap((a) =>

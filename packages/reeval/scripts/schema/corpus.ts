@@ -54,6 +54,8 @@ export function corpus(): {
   analyses: Array<{ file: string; value: Record<string, unknown> }>
   remarks: Array<{ file: string; value: Record<string, unknown> }>
   capturePages: Array<{ file: string; value: Record<string, unknown> }>
+  /** Each run's `report.json`, beside its summary.md. */
+  reports: Array<{ file: string; value: Record<string, unknown> }>
   /** Runs' event streams, kept in an entry's `events/`. */
   eventStreams: string[]
   /** History archives, `<runId>.zip` beside a run. */
@@ -64,6 +66,7 @@ export function corpus(): {
   const analyses: Array<{ file: string; value: Record<string, unknown> }> = []
   const remarks: Array<{ file: string; value: Record<string, unknown> }> = []
   const capturePages: Array<{ file: string; value: Record<string, unknown> }> = []
+  const reports: Array<{ file: string; value: Record<string, unknown> }> = []
   const eventStreams: string[] = []
   const archives: string[] = []
   const walk = (dir: string) => {
@@ -74,6 +77,8 @@ export function corpus(): {
       else if (e.name.endsWith('.zip')) archives.push(path)
       else if (e.name === 'remarks.json') {
         remarks.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
+      } else if (e.name === 'report.json') {
+        reports.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       } else if (e.name.endsWith('.capture.json')) {
         capturePages.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       } else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
@@ -90,5 +95,14 @@ export function corpus(): {
       if (n.endsWith('.ndjson')) eventStreams.push(join(events, n))
     }
   }
-  return { records, transcripts, analyses, remarks, capturePages, eventStreams, archives }
+  return {
+    records,
+    transcripts,
+    analyses,
+    remarks,
+    capturePages,
+    reports,
+    eventStreams,
+    archives,
+  }
 }
