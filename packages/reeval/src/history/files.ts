@@ -731,23 +731,19 @@ async function stageDebug(
 /** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
 export const SECRET_NOTE = 'not kept: it looked like it held a secret'
 
-/** Promotes a scratch run into the committed history folder. reeval never commits it. */
-export async function recordRun(options: RecordOptions): Promise<RecordResult> {
-  const { runId, artifacts: level } = options
-  const source = scratchDir(options.root)
-  let scratch: RunRecord
-  try {
-    scratch = await readRecord(join(source, `${runId}.json`))
-  } catch (error) {
-    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .reeval/runs`)
-    throw error
-  }
-  if (scratch.status !== 'complete' && !options.allowIncomplete) {
-    throw new HistoryError(
-      `Run ${runId} was ${scratch.status}; pass --allow-incomplete to record it`,
-    )
-  }
-  const record: RunRecord = structuredClone(scratch)
+/**
+ * The record and files a run in `source` keeps at `level`, as `recordRun` records them: each
+ * file checked against its hash, the worktree patch left out when it looks like it holds a
+ * secret (unless `skipSecretScan`), and the summary rendered for what's kept. Writes nothing.
+ */
+async function leveled(
+  source: string,
+  run: RunRecord,
+  level: ArtifactLevel,
+  options: { skipSecretScan?: boolean },
+): Promise<{ record: RunRecord; files: Map<string, Uint8Array>; droppedPatch: string[] }> {
+  const { runId } = run
+  const record: RunRecord = structuredClone(run)
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
   const keep = async (ref: FileRef) => {
@@ -846,6 +842,56 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   if (level !== 'none') {
     for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
   }
+  return { record, files, droppedPatch }
+}
+
+/**
+ * The files of a run archive of `runId` at `level`, built from `dir`'s copy of the run (the
+ * history folder's or `.reeval/runs`') under its claim, as `recordRun` would keep them; nothing is
+ * written or recorded. `check` sees the run's record first and may refuse it.
+ */
+export async function leveledArchiveFiles(
+  dir: string,
+  runId: string,
+  level: ArtifactLevel,
+  options: { skipSecretScan?: boolean; check?: (run: RunRecord) => void },
+): Promise<{ files: Array<{ path: string; data: Uint8Array }>; droppedPatch: string[] }> {
+  const release = await claimRun(dir, runId)
+  try {
+    const run = await readRecord(recordFile(dir, runId))
+    options.check?.(run)
+    const { record, files, droppedPatch } = await leveled(dir, run, level, options)
+    return {
+      files: [
+        { path: `${runId}.json`, data: encodeRecord(record) },
+        ...[...files]
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([path, data]) => ({ path: `${runId}/${path}`, data })),
+      ],
+      droppedPatch,
+    }
+  } finally {
+    await release()
+  }
+}
+
+/** Promotes a scratch run into the committed history folder. reeval never commits it. */
+export async function recordRun(options: RecordOptions): Promise<RecordResult> {
+  const { runId, artifacts: level } = options
+  const source = scratchDir(options.root)
+  let scratch: RunRecord
+  try {
+    scratch = await readRecord(join(source, `${runId}.json`))
+  } catch (error) {
+    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .reeval/runs`)
+    throw error
+  }
+  if (scratch.status !== 'complete' && !options.allowIncomplete) {
+    throw new HistoryError(
+      `Run ${runId} was ${scratch.status}; pass --allow-incomplete to record it`,
+    )
+  }
+  const { record, files, droppedPatch } = await leveled(source, scratch, level, options)
   const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
   if (debug) record.debug = debug
 

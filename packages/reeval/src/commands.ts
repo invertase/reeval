@@ -98,8 +98,8 @@ export async function allRuns(config: ResolvedConfig, scoped = true): Promise<Hi
   )
 }
 
-/** The run `ref` names; a run id or SHA also finds a remote store's runs on other branches. */
-async function pick(config: ResolvedConfig, ref = 'latest', entries?: HistoryEntry[]) {
+/** The run `ref` names, recorded or not; a run id or SHA also finds a remote store's runs on other branches. */
+export async function pick(config: ResolvedConfig, ref = 'latest', entries?: HistoryEntry[]) {
   const scoped = entries ?? (await allRuns(config))
   try {
     return resolveRun(scoped, ref)

@@ -5,7 +5,7 @@
 // to a file instead and uploads nothing.
 import { rmSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { ArchiveError, writeArchive } from './archive/index.ts'
@@ -14,13 +14,15 @@ import type { Flags } from './cli-spec.ts'
 import { scanPush } from './cloud-push-scan.ts'
 import { CloudError, platformError, printable, request } from './cloud-run.ts'
 import { type Target, target } from './cloud-secrets.ts'
-import { CommandError, recordedRun } from './commands.ts'
+import { CommandError, parseLevel, pick, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
-import { readRunArchiveFiles } from './history/files.ts'
+import { leveledArchiveFiles, readRunArchiveFiles, scratchDir } from './history/files.ts'
 import type { ArtifactLevel } from './history/types.ts'
+import { RUN_ID } from './ids.ts'
 import { plural } from './text.ts'
 import type { ResolvedConfig } from './types.ts'
 import { formatBytes } from './view/debug.ts'
+import { LIVE_FILE, readableLiveProgress } from './view/live.ts'
 
 /** How long the push waits for the platform to read the run before it stops waiting. */
 const WAIT_MS = 5 * 60_000
@@ -31,6 +33,8 @@ const UPLOAD_BASE_MS = 2 * 60_000
 const UPLOAD_BYTES_PER_SECOND = 32 * 1024
 /** How long a single read of the run's state retries before it stops. */
 const STATE_MS = 30_000
+/** A progress file from another host this old means its run stopped, as the studio reads it. */
+const LIVE_STALE_MS = 15_000
 const STATUSES = ['pending', 'ready', 'failed'] as const
 
 export type RunState = {
@@ -50,12 +54,90 @@ export type PushIo = {
   projectDir?: string
 }
 
-/** A recorded run's archive files, scanned and safe to zip. */
+/** A run's archive files, scanned and safe to zip. */
 export type ScannedRun = {
   runId: string
   files: Array<{ path: string; data: Uint8Array }>
-  /** The level the run was recorded at, which sets whose transcripts it has. */
+  /** The level the archive carries: the run's recorded one, or `--artifacts`. */
   artifacts: ArtifactLevel
+}
+
+/** What each level keeps, widest first. */
+const LEVELS: readonly ArtifactLevel[] = ['all', 'failures', 'none']
+
+/** Whether `runId`'s `reeval run` is still going: its progress file's process is alive. */
+async function stillRunning(root: string, runId: string): Promise<boolean> {
+  const text = await readFile(join(root, '.reeval', 'staging', runId, LIVE_FILE), 'utf8').catch(
+    () => null,
+  )
+  if (!text) return false
+  let progress: ReturnType<typeof readableLiveProgress> = null
+  try {
+    progress = readableLiveProgress(JSON.parse(text))
+  } catch {}
+  if (!progress || progress.runId !== runId) return false
+  if (progress.host !== hostname()) {
+    return Date.now() - Date.parse(progress.heartbeatAt) < LIVE_STALE_MS
+  }
+  try {
+    process.kill(progress.pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
+  }
+}
+
+const refuseRunning = async (config: ResolvedConfig, runId: string) => {
+  if (await stillRunning(config.root, runId)) {
+    throw new CommandError(`Run ${runId} is still running: push it once it ends`)
+  }
+}
+
+/**
+ * The run's archive files: as recorded, or with `--artifacts`, at that level, from the recorded
+ * run (narrower only) or from a run only in `.reeval/runs`, which stays unrecorded.
+ */
+async function archiveFiles(
+  config: ResolvedConfig,
+  flags: Flags,
+  ref: string | undefined,
+  warn: (line: string) => void,
+): Promise<{ runId: string; files: ScannedRun['files'] }> {
+  if (flags.artifacts === undefined) {
+    const { runId } = await recordedRun(config, ref ?? 'latest')
+    return { runId, files: await readRunArchiveFiles(config.history.dir, runId) }
+  }
+  const level = parseLevel(flags.artifacts, 'all')
+  if (ref && RUN_ID.test(ref)) await refuseRunning(config, ref)
+  const entry = await pick(config, ref ?? 'latest')
+  const { runId } = entry
+  await refuseRunning(config, runId)
+  let same = false
+  const built = await leveledArchiveFiles(
+    entry.recorded ? config.history.dir : scratchDir(config.root),
+    runId,
+    level,
+    {
+      ...(flags['skip-secret-scan'] && { skipSecretScan: true }),
+      check: (run) => {
+        if (!entry.recorded) return
+        const was = run.artifacts
+        if (LEVELS.indexOf(level) < LEVELS.indexOf(was)) {
+          throw new CommandError(
+            `Run ${runId} was recorded with artifacts ${was}, so --artifacts ${level} can't add what recording left out: push it at ${LEVELS.slice(LEVELS.indexOf(was)).join(' or ')}`,
+          )
+        }
+        same = level === was
+      },
+    },
+  )
+  if (same) return { runId, files: await readRunArchiveFiles(config.history.dir, runId) }
+  if (built.droppedPatch.length) {
+    warn(
+      `Left ${runId}'s worktree patch out of the archive: it looks like it holds a secret:\n${built.droppedPatch.map((l) => `  ${l}`).join('\n')}`,
+    )
+  }
+  return { runId, files: built.files }
 }
 
 const seg = encodeURIComponent
@@ -128,8 +210,7 @@ export async function scannedRun(
   ref: string | undefined,
   warn: (line: string) => void,
 ): Promise<ScannedRun> {
-  const { runId } = await recordedRun(config, ref ?? 'latest')
-  const files = await readRunArchiveFiles(config.history.dir, runId)
+  const { runId, files } = await archiveFiles(config, flags, ref, warn)
   const { findings, unread, mask } = await scanPush(files)
   const listed = (lines: string[]) => lines.map((l) => `  ${l}`).join('\n')
   if (flags['skip-secret-scan']) {

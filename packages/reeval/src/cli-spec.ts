@@ -368,6 +368,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
           'all-branches',
           'out',
           'json',
+          'artifacts',
         ],
         positionals: 1,
         help: `
@@ -381,6 +382,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --no-wait                   Return once it's uploaded
     --out <file>                Write the scanned archive to this file instead, uploading nothing
                                 (no sign-in needed)
+    --artifacts <level>         all, failures or none: archive the attempts' artifacts and
+                                transcripts at this level; takes a run only in .reeval/runs, which
+                                stays unrecorded, and narrows a recorded run's
     --json                      The run's last state, or what --out wrote, as JSON
     --skip-secret-scan          Upload even then, printing what the scan found as a warning
     --org <slug>                The org, by slug or id, instead of the linked one

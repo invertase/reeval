@@ -477,6 +477,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.push-artifacts',
+    area: 'Config and selection',
+    name: "`reeval cloud push [run] --artifacts all|failures|none`: the archive at that level, built under the run's claim from a run only in `.reeval/runs` (which stays unrecorded; a run still running is refused) or from a recorded run, whose level it only narrows (a wider one is refused); scanned as any push is. Without it an unrecorded run is refused with how to record it",
+    unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'studio.share',
     area: 'Config and selection',
     name: "`reeval studio share [run]`: pushes the recorded run as `reeval cloud push` does (secret scan included, nothing sent on a finding) unless the cloud project has read it already, then creates a share of its report for the org's members and prints its link; `--full` shares the transcripts and artifacts too and `--public` makes the link viewable without signing in, each saying so in one line; a refused share prints the platform's message and exits 2; `--json` prints the share; `--list [run]` lists the project's shares and `--revoke <id>` revokes one",

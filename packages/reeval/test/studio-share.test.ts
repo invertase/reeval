@@ -14,6 +14,7 @@ import {
 } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { openArchive } from '../src/archive/index.ts'
@@ -732,6 +733,173 @@ describe('reeval cloud push --out and --json', () => {
       assert.match(r.stderr, /Pushing /)
     } finally {
       await p.close()
+    }
+  })
+
+  test('--artifacts archives a run only in .reeval/runs at that level and never records it', async () => {
+    const scratchOnly = await linkedProject('cloud-push-unrecorded')
+    const ran = await runCli(scratchOnly, ['run'])
+    assert.equal(ran.code, 0, ran.stdout + ran.stderr)
+    const runs = join(scratchOnly, '.reeval', 'runs')
+    const id = (readdirSync(runs).find((f) => f.endsWith('.json')) as string).replace(/\.json$/, '')
+    const staged = readdirSync(join(runs, id), { recursive: true }).map(String)
+    assert.ok(
+      staged.some((f) => /transcript/.test(f)),
+      `the passing attempt's transcript is in .reeval/runs: ${staged.join(', ')}`,
+    )
+
+    const refused = await runCli(scratchOnly, ['cloud', 'push', id, '--out', 'run.zip'])
+    assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+    assert.match(refused.stderr, new RegExp(`Run ${id} isn't recorded: reeval record ${id}`))
+    assert.ok(!existsSync(join(scratchOnly, 'run.zip')))
+
+    const r = await runCli(scratchOnly, [
+      'cloud',
+      'push',
+      id,
+      '--artifacts',
+      'all',
+      '--out',
+      'run.zip',
+      '--json',
+    ])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(JSON.parse(r.stdout).runId, id)
+    const file = join(scratchOnly, 'run.zip')
+    assert.ok((await transcripts(file)).length > 0, "the passing attempt's transcript")
+    const archive = await openArchive(file)
+    try {
+      await archive.verify()
+      assert.equal(archive.manifest.runId, id)
+      const record = JSON.parse((await archive.read(`${id}.json`)).toString())
+      assert.equal(record.artifacts, 'all')
+    } finally {
+      await archive.close()
+    }
+    assert.ok(!existsSync(join(scratchOnly, HISTORY)), 'the run stays unrecorded')
+    const none = await runCli(scratchOnly, [
+      'cloud',
+      'push',
+      id,
+      '--artifacts',
+      'none',
+      '--out',
+      'none.zip',
+    ])
+    assert.equal(none.code, 0, none.stdout + none.stderr)
+    assert.deepEqual(await transcripts(join(scratchOnly, 'none.zip')), [])
+
+    const p = await platform()
+    try {
+      const up = await runCli(scratchOnly, ['cloud', 'push', '--artifacts', 'all'], {
+        env: envFor(p.base),
+      })
+      assert.equal(up.code, 0, up.stdout + up.stderr)
+      assert.deepEqual(p.calls(), [`PUT /runs/${id}`, `GET /runs/${id}`])
+      assert.ok(!existsSync(join(scratchOnly, HISTORY)))
+    } finally {
+      await p.close()
+    }
+
+    const staging = join(scratchOnly, '.reeval', 'staging', id)
+    mkdirSync(staging, { recursive: true })
+    const now = new Date().toISOString()
+    writeFileSync(
+      join(staging, 'live.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        runId: id,
+        startedAt: now,
+        pid: process.pid,
+        host: hostname(),
+        heartbeatAt: now,
+        phase: 'running',
+        attempts: [],
+      }),
+    )
+    try {
+      const running = await runCli(scratchOnly, [
+        'cloud',
+        'push',
+        id,
+        '--artifacts',
+        'all',
+        '--out',
+        'x.zip',
+      ])
+      assert.equal(running.code, 2, running.stdout + running.stderr)
+      assert.match(running.stderr, new RegExp(`Run ${id} is still running: push it once it ends`))
+      assert.ok(!existsSync(join(scratchOnly, 'x.zip')))
+    } finally {
+      rmSync(staging, { recursive: true })
+    }
+  })
+
+  test('--artifacts only narrows a recorded run', async () => {
+    const wider = await runCli(dir, [
+      'cloud',
+      'push',
+      runId,
+      '--artifacts',
+      'all',
+      '--out',
+      'w.zip',
+    ])
+    assert.equal(wider.code, 2, wider.stdout + wider.stderr)
+    assert.match(
+      wider.stderr,
+      new RegExp(
+        `Run ${runId} was recorded with artifacts failures, so --artifacts all can't add what recording left out: push it at failures or none`,
+      ),
+    )
+    assert.ok(!existsSync(join(dir, 'w.zip')))
+    const same = await runCli(dir, [
+      'cloud',
+      'push',
+      runId,
+      '--artifacts',
+      'failures',
+      '--out',
+      'out/same.zip',
+    ])
+    assert.equal(same.code, 0, same.stdout + same.stderr)
+    const recorded = await runCli(dir, ['cloud', 'push', runId, '--out', 'out/recorded.zip'])
+    assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+    const listed = async (zip: string) => {
+      const archive = await openArchive(join(dir, 'out', zip))
+      try {
+        await archive.verify()
+        return archive.manifest.files
+      } finally {
+        await archive.close()
+      }
+    }
+    assert.deepEqual(
+      await listed('same.zip'),
+      await listed('recorded.zip'),
+      'the same level is the recorded archive',
+    )
+    const none = await runCli(dir, [
+      'cloud',
+      'push',
+      runId,
+      '--artifacts',
+      'none',
+      '--out',
+      'out/none.zip',
+    ])
+    assert.equal(none.code, 0, none.stdout + none.stderr)
+    const archive = await openArchive(join(dir, 'out', 'none.zip'))
+    try {
+      await archive.verify()
+      const record = JSON.parse((await archive.read(`${runId}.json`)).toString())
+      assert.equal(record.artifacts, 'none')
+      assert.deepEqual(
+        archive.manifest.files.map((f) => f.path).filter((f) => f !== `${runId}.json`),
+        [`${runId}/remarks.json`].filter((f) => archive.has(f)),
+      )
+    } finally {
+      await archive.close()
     }
   })
 
