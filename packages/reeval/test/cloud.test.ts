@@ -403,6 +403,8 @@ describe("the service's layout", () => {
       error.message,
       `reeval took sandbox ${made.sandbox.id} back: 409 vm_released: The run holds 2 VMs, more than its 1 now.`,
     )
+    assert.deepEqual(p.live(), [made.sandbox.id], 'the client deletes it, after its last attempt')
+    await inRun(on(p), () => provider.remove(made.sandbox.id))
     assert.deepEqual(p.live(), [])
   })
 })

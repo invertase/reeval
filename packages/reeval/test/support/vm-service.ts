@@ -38,7 +38,10 @@ export type FakeVmService = {
   end(): void
   /** The service ends the run: every create and keep-alive after it is a final `409 code`. */
   stopRun(code: string, message: string): void
-  /** The next `count` keep-alives take their VM back: deleted, and a `409 vm_released`. */
+  /**
+   * The next `count` keep-alives take their VM back: a `409 vm_released`, then and at every later
+   * keep-alive of it. The VM stays up until the client deletes it.
+   */
   reclaim(count: number): void
   close(): Promise<void>
 }
@@ -89,6 +92,7 @@ export async function fakeVmService(
   let ended = false
   let stopped: Answer | undefined
   let reclaiming = 0
+  const released = new Set<string>()
 
   const upstream = async (method: string, path: string, body?: unknown, headers = {}) => {
     const res = await fetch(`${boat.url}${path}`, {
@@ -222,10 +226,11 @@ export async function fakeVmService(
         return error(400, 'invalid_request', 'Only ttlSeconds can change.')
       }
       if (stopped) return stopped
-      if (reclaiming > 0) {
+      if (reclaiming > 0 && !released.has(id)) {
         reclaiming--
-        await upstream('DELETE', path, undefined, { 'x-ascii-confirm-delete': id })
-        owned.delete(id)
+        released.add(id)
+      }
+      if (released.has(id)) {
         return error(409, 'vm_released', 'The run holds 2 VMs, more than its 1 now.')
       }
       const ttlSeconds = ttlFor(b.ttlSeconds)
