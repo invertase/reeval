@@ -11,7 +11,6 @@ export {
   headlinePrimarySchema,
   intervalSchema,
   looseRunReportSchema,
-  REPORT_VERSION,
   rateSchema,
   readableRunReport,
   reportClaimSchema,
