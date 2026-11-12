@@ -1,3 +1,12 @@
+// Public surface for `reeval/view/report` (also re-exported from `reeval/view`).
+// Downstream gallery / check-text consumers import from `reeval/view/report`:
+//   - types: `RunReport`, block shapes (`EvalSection`, `BlockMarkdown`, …)
+//   - schema: `runReportSchema` (+ shared figure schemas as needed)
+//   - build: `buildRunReport`, `RunReportOptions`
+//   - markdown: `blockMarkdown`, `runReportMarkdown`, `FORBIDDEN_OUTPUT`
+//   - ASCII/number helpers: `tokensText`, `*Figure`, `countOf`, `rateOf`, deltas, …
+// Prefer this subpath over deep `src/` imports so pins stay on the package export.
+
 export { buildRunReport, type RunReportOptions } from './build.ts'
 export {
   countFigure,

@@ -66,6 +66,10 @@
       "types": "./dist/view/index.d.ts",
       "default": "./dist/view/index.js"
     },
+    "./view/report": {
+      "types": "./dist/view/report/index.d.ts",
+      "default": "./dist/view/report/index.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"

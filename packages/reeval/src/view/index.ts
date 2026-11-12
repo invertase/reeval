@@ -1,4 +1,5 @@
 // `reeval/view`: browser-safe data for the studio. No `node:` imports.
+// RunReport contract for gallery / Markdown consumers: prefer `reeval/view/report`.
 
 export { caseEntries, familyOf } from '../history/cases.ts'
 export type {
