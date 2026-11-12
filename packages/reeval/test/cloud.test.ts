@@ -226,6 +226,7 @@ const ENDS_RUN = [
   ['run_deadline', 409],
   ['units_exhausted', 402],
   ['overage_limit', 402],
+  ['suspended', 403],
 ] as const
 
 describe('a run the service ended', () => {

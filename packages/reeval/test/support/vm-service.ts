@@ -36,7 +36,10 @@ export type FakeVmService = {
   starts(): number
   /** Ends the run, or its token expires: the token stops working. */
   end(): void
-  /** The service ends the run: every create and keep-alive after it is a final `409 code`. */
+  /**
+   * The service ends the run: every create and keep-alive after it is a final `code`, `409`
+   * unless `status` says.
+   */
   stopRun(code: string, message: string, status?: number): void
   /**
    * The next `count` keep-alives take their VM back: a `409 vm_released`, then and at every later

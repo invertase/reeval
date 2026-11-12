@@ -77,7 +77,13 @@ export const CLOUD: VmService = {
   reservedLabels: 'reeval.platform.',
   expiry: ', which is no longer valid',
   ttlLimit: ': the VM service grants no more, so give the eval a shorter timeout',
-  endsRun: { run_cancelled: 409, run_deadline: 409, units_exhausted: 402, overage_limit: 402 },
+  endsRun: {
+    run_cancelled: 409,
+    run_deadline: 409,
+    units_exhausted: 402,
+    overage_limit: 402,
+    suspended: 403,
+  },
   laidOut: cloudLayout,
   reclaims: 'vm_released',
 }
