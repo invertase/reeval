@@ -220,14 +220,22 @@ describe("the run's pool", () => {
   })
 })
 
+/** The answers that say the service ended the run, at a create or a keep-alive. */
+const ENDS_RUN = [
+  ['run_cancelled', 409],
+  ['run_deadline', 409],
+  ['units_exhausted', 402],
+  ['overage_limit', 402],
+] as const
+
 describe('a run the service ended', () => {
-  for (const code of ['run_cancelled', 'run_deadline']) {
-    test(`a 409 ${code} stops the start for good, not as infra or a rate limit`, async () => {
+  for (const [code, httpStatus] of ENDS_RUN) {
+    test(`a ${httpStatus} ${code} stops the start for good, not as infra or a rate limit`, async () => {
       const p = await service()
       const { provider } = await inRun(on(p), () =>
         openCloudPool(cloud(), { runId: `run-${code}`, root: process.cwd() }),
       )
-      p.stopRun(code, 'The run starts no more VMs.')
+      p.stopRun(code, 'The run starts no more VMs.', httpStatus)
       const error = (await inRun(on(p), () =>
         provider.start(new AbortController().signal, 600),
       ).catch((e: Error) => e)) as Error
@@ -235,7 +243,7 @@ describe('a run the service ended', () => {
       assert.equal(provider.rateLimited(error), null)
       assert.equal(
         error.message,
-        `reeval ended the run, so it starts no more machines: 409 ${code}: The run starts no more VMs.`,
+        `reeval ended the run, so it starts no more machines: ${httpStatus} ${code}: The run starts no more VMs.`,
       )
     })
   }
@@ -246,6 +254,18 @@ describe('a run the service ended', () => {
       openCloudPool(cloud(), { runId: 'run-conflict', root: process.cwd() }),
     )
     p.stopRun('conflict', 'Something else.')
+    const error = (await inRun(on(p), () =>
+      provider.start(new AbortController().signal, 600),
+    ).catch((e: Error) => e)) as Error
+    assert.equal(error.name, 'InfraError')
+  })
+
+  test('a code that ends the run under another status fails the start as infra', async () => {
+    const p = await service()
+    const { provider } = await inRun(on(p), () =>
+      openCloudPool(cloud(), { runId: 'run-wrong-status', root: process.cwd() }),
+    )
+    p.stopRun('units_exhausted', 'Something else.', 409)
     const error = (await inRun(on(p), () =>
       provider.start(new AbortController().signal, 600),
     ).catch((e: Error) => e)) as Error
@@ -410,19 +430,21 @@ describe("the service's layout", () => {
 })
 
 describe('a run the service ends', () => {
-  test("stops the run's attempts at a reused VM's keep-alive", async () => {
-    const p = await service()
-    const made = (await (await create(p)).json()) as { sandbox: { id: string } }
-    const { provider } = await inRun(on(p), () =>
-      openCloudPool(cloud({}), { runId: 'run-ended', root: process.cwd() }),
-    )
-    p.stopRun('run_cancelled', 'The run ended, so its VMs take no more attempts.')
-    const error = (await inRun(on(p), async () =>
-      provider.keepAlive?.(made.sandbox.id, 1200),
-    ).catch((e: Error) => e)) as Error
-    assert.equal(error.name, 'RunStopped')
-    assert.match(error.message, /ended the run, so its machines take no more attempts/)
-  })
+  for (const [code, httpStatus] of ENDS_RUN) {
+    test(`a ${httpStatus} ${code} stops the run's attempts at a reused VM's keep-alive`, async () => {
+      const p = await service()
+      const made = (await (await create(p)).json()) as { sandbox: { id: string } }
+      const { provider } = await inRun(on(p), () =>
+        openCloudPool(cloud({}), { runId: 'run-ended', root: process.cwd() }),
+      )
+      p.stopRun(code, 'The run ended, so its VMs take no more attempts.', httpStatus)
+      const error = (await inRun(on(p), async () =>
+        provider.keepAlive?.(made.sandbox.id, 1200),
+      ).catch((e: Error) => e)) as Error
+      assert.equal(error.name, 'RunStopped')
+      assert.match(error.message, /ended the run, so its machines take no more attempts/)
+    })
+  }
 })
 
 describe("a run's cleanup", () => {
