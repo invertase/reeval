@@ -84,6 +84,8 @@ export type RunHeader = {
   cost: {
     agent: Figure | null
     judge: Figure | null
+    /** Labeled total when agent and judge are both present; else null. */
+    total: Figure | null
     basis: 'reported' | 'estimated' | 'mixed'
   } | null
   /** `repo` is the basename of `git.remote`. */
@@ -175,7 +177,14 @@ export type EvalHeadline = {
 }
 
 export type HeadlinePrimary =
-  | { kind: 'pass-rate'; rate: Rate; assertions: number; harnesses: number }
+  | {
+      kind: 'pass-rate'
+      rate: Rate
+      assertions: number
+      harnesses: number
+      /** Product outcome noun: passed (default), found, or used. */
+      outcome: 'passed' | 'found' | 'used'
+    }
   | {
       kind: 'lift'
       baseline: ArmRef
@@ -217,7 +226,21 @@ export type HeadlinePrimary =
       spread: Spread
       atOrAbove: Count | null
     }
-  | { kind: 'text'; question: string; answered: Count; lead: Quote | null }
+  | {
+      kind: 'text'
+      question: string
+      answered: Count
+      lead: Quote | null
+      /** When many answers collapse to one quote shown in the headline. */
+      leadRole: 'sole' | 'representative' | null
+    }
+  | {
+      kind: 'regression'
+      worse: number
+      fixed: number
+      /** First gated worse/fixed change, else first change row. */
+      lead: ChangeRow | null
+    }
 
 export type CheckCell = {
   status: 'pass' | 'fail' | 'mixed' | 'na' | 'error' | 'not-run'
@@ -228,6 +251,8 @@ export type CheckCell = {
   preSatisfied: number
   /** `12 of 12`, `0 of 4`, `n/a`, `12 of 12, 12 pre-satisfied`. */
   text: string
+  /** Why the check was n/a when known (`expect.skip` reason); null otherwise. */
+  reason: string | null
 }
 
 export type AssertionRow = {
@@ -279,7 +304,10 @@ export type ArmRow = {
   rate: Rate
   lift: Delta | null
   interval: Interval | null
+  /** Pass-rate certainty only; measure direction lives in measure cells. */
   verdict: 'baseline' | 'helped' | 'made-worse' | 'within-noise' | 'too-few-runs'
+  /** Always `pass-rate` for this column today. */
+  verdictScope: 'pass-rate'
   measures: Record<MeasureKey, MeasureVsBaseline>
 }
 
@@ -300,6 +328,8 @@ export type ContrastRow = {
   delta: Delta
   interval: Interval | null
   verdict: 'helped' | 'made-worse' | 'within-noise' | 'too-few-runs' | 'fewer' | 'more'
+  /** `pass-rate` when the contrast is on pass rate; else the measure's own direction. */
+  verdictScope: 'pass-rate' | 'measure'
 }
 
 export type VariantComparison = {
@@ -330,7 +360,15 @@ export type ChangeRow = {
 export type RegressionChanges = {
   kind: 'regression'
   baseRunId: string
-  /** `whyChanged` plus `stackChanges`, one plain line each. */
+  /** Prior-run identity for reproducible comparison. */
+  prior: {
+    runId: string
+    startedAt: string
+    gitSha: string | null
+    branch: string | null
+    author: string
+  }
+  /** Experimental inputs that changed (`stackChanges` / config), not outcome rows. */
   whatChanged: string[]
   rows: ChangeRow[]
   unchanged: ChangeRow[]
@@ -368,7 +406,8 @@ export type JudgeRow = {
   threshold: number | null
   keys: string[]
   spread: Spread
-  atOrAbove: Count
+  /** Null when `threshold` is null (diagnostic): omit from "At or above". */
+  atOrAbove: Count | null
 }
 
 export type PairwiseRow = {

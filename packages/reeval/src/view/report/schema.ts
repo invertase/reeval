@@ -143,12 +143,35 @@ const tiedLeadSchema = z.strictObject({
   delta: deltaSchema,
 })
 
+const compareStatusSchema = z.enum([
+  'regressed',
+  'fixed',
+  'same',
+  'gate',
+  'drift',
+  'added',
+  'removed',
+  'infra',
+])
+
+const changeRowSchema: z.ZodType<ChangeRow> = z.strictObject({
+  signal: z.string(),
+  kind: z.enum(['outcome', 'assertion', 'judgment', 'choice', 'measure', 'observation']),
+  harness: z.string().nullable(),
+  prior: z.string(),
+  current: z.string(),
+  delta: deltaSchema.nullable(),
+  status: compareStatusSchema,
+  gate: z.boolean(),
+})
+
 export const headlinePrimarySchema: z.ZodType<HeadlinePrimary> = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('pass-rate'),
     rate: rateSchema,
     assertions: z.number().int().positive(),
     harnesses: z.number().int().positive(),
+    outcome: z.enum(['passed', 'found', 'used']),
   }),
   z.strictObject({
     kind: z.literal('lift'),
@@ -197,6 +220,13 @@ export const headlinePrimarySchema: z.ZodType<HeadlinePrimary> = z.discriminated
     question: z.string(),
     answered: countSchema,
     lead: quoteSchema.nullable(),
+    leadRole: z.enum(['sole', 'representative']).nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal('regression'),
+    worse: z.number().int().nonnegative(),
+    fixed: z.number().int().nonnegative(),
+    lead: changeRowSchema.nullable(),
   }),
 ])
 
@@ -218,6 +248,7 @@ const checkCellSchema: z.ZodType<CheckCell> = z.strictObject({
   notApplicable: z.number().int().nonnegative(),
   preSatisfied: z.number().int().nonnegative(),
   text: z.string(),
+  reason: z.string().nullable(),
 })
 
 const assertionRowSchema: z.ZodType<AssertionRow> = z.strictObject({
@@ -278,6 +309,7 @@ const armRowSchema: z.ZodType<ArmRow> = z.strictObject({
   lift: deltaSchema.nullable(),
   interval: intervalSchema.nullable(),
   verdict: z.enum(['baseline', 'helped', 'made-worse', 'within-noise', 'too-few-runs']),
+  verdictScope: z.literal('pass-rate'),
   measures: measureVsBaselineRecordSchema,
 })
 
@@ -301,6 +333,7 @@ const contrastRowSchema: z.ZodType<ContrastRow> = z.strictObject({
   delta: deltaSchema,
   interval: intervalSchema.nullable(),
   verdict: z.enum(['helped', 'made-worse', 'within-noise', 'too-few-runs', 'fewer', 'more']),
+  verdictScope: z.enum(['pass-rate', 'measure']),
 })
 
 const variantComparisonSchema = z.strictObject({
@@ -314,31 +347,16 @@ const variantComparisonSchema = z.strictObject({
   effortByHarness: z.array(effortPivotRowSchema),
 })
 
-const compareStatusSchema = z.enum([
-  'regressed',
-  'fixed',
-  'same',
-  'gate',
-  'drift',
-  'added',
-  'removed',
-  'infra',
-])
-
-const changeRowSchema: z.ZodType<ChangeRow> = z.strictObject({
-  signal: z.string(),
-  kind: z.enum(['outcome', 'assertion', 'judgment', 'choice', 'measure', 'observation']),
-  harness: z.string().nullable(),
-  prior: z.string(),
-  current: z.string(),
-  delta: deltaSchema.nullable(),
-  status: compareStatusSchema,
-  gate: z.boolean(),
-})
-
 const regressionChangesSchema = z.strictObject({
   kind: z.literal('regression'),
   baseRunId: z.string(),
+  prior: z.strictObject({
+    runId: z.string(),
+    startedAt: z.string(),
+    gitSha: z.string().nullable(),
+    branch: z.string().nullable(),
+    author: z.string(),
+  }),
   whatChanged: z.array(z.string()),
   rows: z.array(changeRowSchema),
   unchanged: z.array(changeRowSchema),
@@ -387,7 +405,7 @@ const judgeRowSchema: z.ZodType<JudgeRow> = z.strictObject({
   threshold: z.number().nullable(),
   keys: z.array(z.string()),
   spread: spreadSchema,
-  atOrAbove: countSchema,
+  atOrAbove: countSchema.nullable(),
 })
 
 const pairwiseRowSchema: z.ZodType<PairwiseRow> = z.strictObject({
@@ -539,6 +557,7 @@ const runHeaderSchema: z.ZodType<RunHeader> = z.strictObject({
     .strictObject({
       agent: figureSchema.nullable(),
       judge: figureSchema.nullable(),
+      total: figureSchema.nullable(),
       basis: z.enum(['reported', 'estimated', 'mixed']),
     })
     .nullable(),

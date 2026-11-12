@@ -831,7 +831,7 @@ evaluate('cased', { cases: ['a', 'b'], runs: 2 }, async (c, k) => {
     )
     const md = await runCli(p.dir, ['compare', '--md'])
     // compare --md is RunReport with prior; orphaned-base text stays on the plain compare layout.
-    assert.match(md.stdout, new RegExp(`Changes since ${before}`))
+    assert.match(md.stdout, new RegExp(`Changes since .*${before}`))
     assert.match(md.stdout, /Unchanged \(1\)/)
   })
 
@@ -1375,7 +1375,7 @@ evaluate('flips', async (c) => {
     assert.match(newFailing.out, /^1 new eval \(1 fail\)$/m)
     assert.match(
       (await compareCode('--md')).out,
-      /^# flips\n[\s\S]*\*\*0% pass rate\*\*/m,
+      /^# flips\n[\s\S]*\*\*0% passed\*\*/m,
       'compare --md with no base is the head RunReport',
     )
 

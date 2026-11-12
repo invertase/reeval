@@ -386,7 +386,7 @@
         "anchor": "adds-a-name-button-that-builds",
         "shapes": ["task"],
         "design": "3 prompts, 1 coding harness, 3 attempts",
-        "primary": "67% pass rate",
+        "primary": "67% passed",
         "medianTokens": {
           "value": null,
           "text": "not reported"
@@ -410,7 +410,7 @@
         "anchor": "greets-in-the-house-style-on-each-agent",
         "shapes": ["task"],
         "design": "2 coding harnesses, 2 attempts",
-        "primary": "50% pass rate",
+        "primary": "50% passed",
         "medianTokens": {
           "value": null,
           "text": "not reported"
@@ -470,7 +470,7 @@
         "anchor": "writes-greetjs",
         "shapes": ["task"],
         "design": "1 coding harness, 1 attempt",
-        "primary": "100% pass rate",
+        "primary": "100% passed",
         "medianTokens": {
           "value": null,
           "text": "not reported"
@@ -482,7 +482,7 @@
         "anchor": "greets-in-french",
         "shapes": ["task"],
         "design": "1 coding harness, 1 attempt",
-        "primary": "0% pass rate",
+        "primary": "0% passed",
         "medianTokens": {
           "value": null,
           "text": "not reported"
@@ -494,7 +494,7 @@
         "anchor": "explains-why-greetjs-fails",
         "shapes": ["task"],
         "design": "1 coding harness, 2 attempts",
-        "primary": "50% pass rate",
+        "primary": "50% passed",
         "medianTokens": {
           "value": null,
           "text": "not reported"
@@ -619,9 +619,10 @@
             }
           },
           "assertions": 3,
-          "harnesses": 1
+          "harnesses": 1,
+          "outcome": "passed"
         },
-        "foot": "2 of 3 counted attempts passed all 3 assertions. 1 coding harness."
+        "foot": "2 of 3 counted attempts passed on all 3 assertions. 1 coding harness."
       },
       "insights": [],
       "primary": {
@@ -639,7 +640,8 @@
                 "answered": 3,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "3 of 3"
+                "text": "3 of 3",
+                "reason": null
               }
             },
             "total": {
@@ -648,7 +650,8 @@
               "answered": 3,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "3 of 3"
+              "text": "3 of 3",
+              "reason": null
             }
           },
           {
@@ -662,7 +665,8 @@
                 "answered": 3,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "2 of 3"
+                "text": "2 of 3",
+                "reason": null
               }
             },
             "total": {
@@ -671,7 +675,8 @@
               "answered": 3,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "2 of 3"
+              "text": "2 of 3",
+              "reason": null
             }
           },
           {
@@ -685,7 +690,8 @@
                 "answered": 2,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "2 of 2"
+                "text": "2 of 2",
+                "reason": null
               }
             },
             "total": {
@@ -694,7 +700,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "2 of 2"
+              "text": "2 of 2",
+              "reason": null
             }
           }
         ],
@@ -924,6 +931,7 @@
             "lift": null,
             "interval": null,
             "verdict": "baseline",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -1047,6 +1055,7 @@
               "text": "+31 pts to +100 pts"
             },
             "verdict": "helped",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -1175,7 +1184,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 4"
+                "text": "0 of 4",
+                "reason": null
               },
               "with-skill": {
                 "status": "pass",
@@ -1183,7 +1193,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               }
             },
             "total": {
@@ -1192,7 +1203,8 @@
               "answered": 8,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "4 of 8"
+              "text": "4 of 8",
+              "reason": null
             }
           }
         ],
@@ -1535,9 +1547,10 @@
             }
           },
           "assertions": 3,
-          "harnesses": 2
+          "harnesses": 2,
+          "outcome": "passed"
         },
-        "foot": "1 of 2 counted attempts passed all 3 assertions. 2 coding harnesses."
+        "foot": "1 of 2 counted attempts passed on all 3 assertions. 2 coding harnesses."
       },
       "insights": [],
       "primary": {
@@ -1555,7 +1568,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               },
               "terse": {
                 "status": "pass",
@@ -1563,7 +1577,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -1572,7 +1587,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "2 of 2"
+              "text": "2 of 2",
+              "reason": null
             }
           },
           {
@@ -1586,7 +1602,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               },
               "terse": {
                 "status": "fail",
@@ -1594,7 +1611,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 1"
+                "text": "0 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -1603,7 +1621,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 2"
+              "text": "1 of 2",
+              "reason": null
             }
           },
           {
@@ -1617,7 +1636,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               },
               "terse": {
                 "status": "not-run",
@@ -1625,7 +1645,8 @@
                 "answered": 0,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "n/a"
+                "text": "n/a",
+                "reason": null
               }
             },
             "total": {
@@ -1634,7 +1655,8 @@
               "answered": 1,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 1"
+              "text": "1 of 1",
+              "reason": null
             }
           }
         ],
@@ -2023,6 +2045,7 @@
             "lift": null,
             "interval": null,
             "verdict": "baseline",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -2146,6 +2169,7 @@
               "text": "+7 pts to +78 pts"
             },
             "verdict": "helped",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -2274,7 +2298,8 @@
                 "answered": 8,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 8"
+                "text": "0 of 8",
+                "reason": null
               },
               "with-skill": {
                 "status": "mixed",
@@ -2282,7 +2307,8 @@
                 "answered": 8,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 8"
+                "text": "4 of 8",
+                "reason": null
               }
             },
             "total": {
@@ -2291,7 +2317,8 @@
               "answered": 16,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "4 of 16"
+              "text": "4 of 16",
+              "reason": null
             }
           }
         ],
@@ -3050,6 +3077,7 @@
             "lift": null,
             "interval": null,
             "verdict": "baseline",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -3173,6 +3201,7 @@
               "text": "+31 pts to +100 pts"
             },
             "verdict": "helped",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -3312,6 +3341,7 @@
               "text": "-49 pts to +49 pts"
             },
             "verdict": "within-noise",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -3440,7 +3470,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               },
               "with-skill": {
                 "status": "pass",
@@ -3448,7 +3479,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               },
               "with-doc": {
                 "status": "pass",
@@ -3456,7 +3488,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               }
             },
             "total": {
@@ -3465,7 +3498,8 @@
               "answered": 12,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "12 of 12"
+              "text": "12 of 12",
+              "reason": null
             }
           },
           {
@@ -3479,7 +3513,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 4"
+                "text": "0 of 4",
+                "reason": null
               },
               "with-skill": {
                 "status": "pass",
@@ -3487,7 +3522,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               },
               "with-doc": {
                 "status": "fail",
@@ -3495,7 +3531,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 4"
+                "text": "0 of 4",
+                "reason": null
               }
             },
             "total": {
@@ -3504,7 +3541,8 @@
               "answered": 12,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "4 of 12"
+              "text": "4 of 12",
+              "reason": null
             }
           },
           {
@@ -3518,7 +3556,8 @@
                 "answered": 0,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "n/a"
+                "text": "n/a",
+                "reason": null
               },
               "with-skill": {
                 "status": "pass",
@@ -3526,7 +3565,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               },
               "with-doc": {
                 "status": "not-run",
@@ -3534,7 +3574,8 @@
                 "answered": 0,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "n/a"
+                "text": "n/a",
+                "reason": null
               }
             },
             "total": {
@@ -3543,7 +3584,8 @@
               "answered": 4,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "4 of 4"
+              "text": "4 of 4",
+              "reason": null
             }
           }
         ],
@@ -3563,7 +3605,8 @@
               "hi": 1,
               "text": "+31 pts to +100 pts"
             },
-            "verdict": "helped"
+            "verdict": "helped",
+            "verdictScope": "pass-rate"
           },
           {
             "from": "with-doc",
@@ -3579,7 +3622,8 @@
               "hi": 0.49,
               "text": "-49 pts to +49 pts"
             },
-            "verdict": "within-noise"
+            "verdict": "within-noise",
+            "verdictScope": "pass-rate"
           },
           {
             "from": "with-doc",
@@ -3595,7 +3639,8 @@
               "hi": -0.307,
               "text": "-100 pts to -31 pts"
             },
-            "verdict": "made-worse"
+            "verdict": "made-worse",
+            "verdictScope": "pass-rate"
           }
         ],
         "effortByHarness": [
@@ -4169,6 +4214,7 @@
             "lift": null,
             "interval": null,
             "verdict": "baseline",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -4292,6 +4338,7 @@
               "text": "-100 pts to -31 pts"
             },
             "verdict": "made-worse",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -4420,7 +4467,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "4 of 4"
+                "text": "4 of 4",
+                "reason": null
               },
               "with-skill": {
                 "status": "fail",
@@ -4428,7 +4476,8 @@
                 "answered": 4,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 4"
+                "text": "0 of 4",
+                "reason": null
               }
             },
             "total": {
@@ -4437,7 +4486,8 @@
               "answered": 8,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "4 of 8"
+              "text": "4 of 8",
+              "reason": null
             }
           }
         ],
@@ -4853,6 +4903,7 @@
             "lift": null,
             "interval": null,
             "verdict": "baseline",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -4976,6 +5027,7 @@
               "text": "-12 pts to +100 pts"
             },
             "verdict": "too-few-runs",
+            "verdictScope": "pass-rate",
             "measures": {
               "tokens": {
                 "value": null,
@@ -5104,7 +5156,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 1"
+                "text": "0 of 1",
+                "reason": null
               },
               "with-skill": {
                 "status": "pass",
@@ -5112,7 +5165,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -5121,7 +5175,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 2"
+              "text": "1 of 2",
+              "reason": null
             }
           }
         ],
@@ -5440,9 +5495,10 @@
             }
           },
           "assertions": 1,
-          "harnesses": 1
+          "harnesses": 1,
+          "outcome": "passed"
         },
-        "foot": "1 of 1 counted attempts passed all 1 assertions. 1 coding harness."
+        "foot": "1 of 1 counted attempts passed on all 1 assertions. 1 coding harness."
       },
       "insights": [],
       "primary": {
@@ -5460,7 +5516,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -5469,7 +5526,8 @@
               "answered": 1,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 1"
+              "text": "1 of 1",
+              "reason": null
             }
           }
         ],
@@ -5590,9 +5648,10 @@
             }
           },
           "assertions": 2,
-          "harnesses": 1
+          "harnesses": 1,
+          "outcome": "passed"
         },
-        "foot": "0 of 1 counted attempts passed all 2 assertions. 1 coding harness."
+        "foot": "0 of 1 counted attempts passed on all 2 assertions. 1 coding harness."
       },
       "insights": [],
       "primary": {
@@ -5610,7 +5669,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 1"
+                "text": "1 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -5619,7 +5679,8 @@
               "answered": 1,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 1"
+              "text": "1 of 1",
+              "reason": null
             }
           },
           {
@@ -5633,7 +5694,8 @@
                 "answered": 1,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "0 of 1"
+                "text": "0 of 1",
+                "reason": null
               }
             },
             "total": {
@@ -5642,7 +5704,8 @@
               "answered": 1,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "0 of 1"
+              "text": "0 of 1",
+              "reason": null
             }
           }
         ],
@@ -5799,9 +5862,10 @@
             }
           },
           "assertions": 2,
-          "harnesses": 1
+          "harnesses": 1,
+          "outcome": "passed"
         },
-        "foot": "1 of 2 counted attempts passed all 2 assertions. 1 coding harness."
+        "foot": "1 of 2 counted attempts passed on all 2 assertions. 1 coding harness."
       },
       "insights": [],
       "primary": {
@@ -5819,7 +5883,8 @@
                 "answered": 2,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "2 of 2"
+                "text": "2 of 2",
+                "reason": null
               }
             },
             "total": {
@@ -5828,7 +5893,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "2 of 2"
+              "text": "2 of 2",
+              "reason": null
             }
           },
           {
@@ -5842,7 +5908,8 @@
                 "answered": 2,
                 "notApplicable": 0,
                 "preSatisfied": 0,
-                "text": "1 of 2"
+                "text": "1 of 2",
+                "reason": null
               }
             },
             "total": {
@@ -5851,7 +5918,8 @@
               "answered": 2,
               "notApplicable": 0,
               "preSatisfied": 0,
-              "text": "1 of 2"
+              "text": "1 of 2",
+              "reason": null
             }
           }
         ],

@@ -25,21 +25,35 @@ function kept(ref: FileRef | undefined | null): string | null {
 /**
  * Citation target for an attempt: transcript, else diff, else first capture, else `#aN`.
  * `FileRef.path` values are already relative to the run directory.
+ * When `used` is set, a path already claimed by another attempt falls back to `#aN`
+ * so baseline and variant cites stay distinct.
  */
 export function attemptHref(
   _evalEntry: Pick<EvalEntry, 'slug'>,
   attempt: AttemptRecord,
   id: string,
   linkBase?: string,
+  used?: Set<string>,
 ): string {
   const files = attempt.files
   const transcript = kept(files.transcript)
-  if (transcript) return withBase(linkBase, transcript)
-  const diff = kept(files.diff)
-  if (diff) return withBase(linkBase, diff)
-  const capture = files.artifacts?.[0]
-  if (capture) return withBase(linkBase, capture.path)
-  return attemptAnchor(id)
+  const preferred = transcript
+    ? withBase(linkBase, transcript)
+    : (() => {
+        const diff = kept(files.diff)
+        if (diff) return withBase(linkBase, diff)
+        const capture = files.artifacts?.[0]
+        if (capture) return withBase(linkBase, capture.path)
+        return attemptAnchor(id)
+      })()
+  if (!used) return preferred
+  if (!used.has(preferred) || preferred.startsWith('#')) {
+    used.add(preferred)
+    return preferred
+  }
+  const fallback = attemptAnchor(id)
+  used.add(fallback)
+  return fallback
 }
 
 export function attemptRef(
@@ -47,10 +61,14 @@ export function attemptRef(
   evalEntry: Pick<EvalEntry, 'slug'>,
   attempt: AttemptRecord,
   linkBase?: string,
+  used?: Set<string>,
+  hrefByKey?: Map<string, string>,
 ): AttemptRef | null {
   const id = idOf(ids, attempt.key)
   if (!id) return null
-  return { id, href: attemptHref(evalEntry, attempt, id, linkBase) }
+  const assigned = hrefByKey?.get(attempt.key)
+  if (assigned) return { id, href: assigned }
+  return { id, href: attemptHref(evalEntry, attempt, id, linkBase, used) }
 }
 
 /** Capture PNG link, or null when not kept (caller prints `name (not kept)`). */

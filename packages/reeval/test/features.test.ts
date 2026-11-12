@@ -4647,10 +4647,10 @@ export const features: Feature[] = [
       assert.deepEqual(rates('lands'), [[0.667, 0.6, 'pass']], 'the rate over the cases clears 0.6')
       assert.deepEqual(rates('canary'), [[0.667, 0.7, 'fail']], 'and is below 0.7')
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, /\| \[lands\]\(#lands\) \|[\s\S]*\| 67% pass rate \|/)
-      assert.match(summary, /\| \[canary\]\(#canary\) \|[\s\S]*\| 67% pass rate \|/)
-      assert.match(summary, /^## lands[\s\S]*\*\*67% pass rate\*\*/m)
-      assert.match(summary, /^## canary[\s\S]*\*\*67% pass rate\*\*/m)
+      assert.match(summary, /\| \[lands\]\(#lands\) \|[\s\S]*\| 67% passed \|/)
+      assert.match(summary, /\| \[canary\]\(#canary\) \|[\s\S]*\| 67% passed \|/)
+      assert.match(summary, /^## lands[\s\S]*\*\*67% passed\*\*/m)
+      assert.match(summary, /^## canary[\s\S]*\*\*67% passed\*\*/m)
     },
   },
   {

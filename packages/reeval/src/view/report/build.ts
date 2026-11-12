@@ -28,6 +28,7 @@ import {
   usdFigure,
 } from './format.ts'
 import { type AttemptIdMap, attemptIds, selectedEvals } from './ids.ts'
+import { measurePhrase, PASS_RATE_OUTCOME_LABEL, passRateOutcomeFromMatchers } from './labels.ts'
 import { attemptHref, attemptRef, captureHref, gfmAnchor, withBase } from './links.ts'
 import { REPORT_POLICY } from './policy.ts'
 import { provenanceState } from './provenance.ts'
@@ -121,6 +122,18 @@ const isLockfilePath = (path: string) => LOCKFILE_NAMES.has(path.split('/').pop(
 const countedOutcome = (o: AttemptRecord['outcome']) => o === 'pass' || o === 'fail'
 
 const cellOf = (e: EvalEntry, key: string) => e.cells.find((c) => c.key === key)
+
+function assignAttemptHrefs(ctx: Ctx): void {
+  for (const e of ctx.evals) {
+    for (const a of e.attempts) {
+      if (a.seq === null) continue
+      const id = ctx.ids.get(a.key)
+      if (!id) continue
+      const href = attemptHref(e, a, id, ctx.linkBase, ctx.hrefs)
+      ctx.hrefByKey.set(a.key, href)
+    }
+  }
+}
 
 const repoBasename = (remote: string | null | undefined): string | null => {
   if (!remote) return null
@@ -260,6 +273,10 @@ type Ctx = {
   analysis: AnalysisDoc | null
   pages?: ReadonlyMap<string, CapturePageFile>
   prior: RunReportOptions['prior']
+  /** Citation hrefs already claimed in this report; keeps per-arm evidence distinct. */
+  hrefs: Set<string>
+  /** Canonical evidence href per attempt key, assigned before section cites. */
+  hrefByKey: Map<string, string>
 }
 
 function deriveTally(evals: EvalEntry[]): RunTally {
@@ -374,12 +391,14 @@ function buildHeader(ctx: Ctx): RunHeader {
       ? {
           agent: agent ? usdFigure(agent.usd) : null,
           judge: judge ? usdFigure(judge.usd) : null,
+          total: agent && judge ? usdFigure(agent.usd + judge.usd) : null,
           basis,
         }
       : cost
         ? {
-            agent: usdFigure(cost.usd),
+            agent: null,
             judge: null,
+            total: usdFigure(cost.usd),
             basis: cost.basis === 'reported' ? 'reported' : 'estimated',
           }
         : null,
@@ -455,6 +474,7 @@ function checkCellOf(attempts: AttemptRecord[], label: string): CheckCell {
   let preSatisfied = 0
   let notRun = 0
   let reached = 0
+  let reason: string | null = null
   for (const a of attempts) {
     if (!countedOutcome(a.outcome) && a.outcome !== 'infra_error') continue
     const hit = (a.assertions ?? []).find((x) => x.label === label)
@@ -466,22 +486,25 @@ function checkCellOf(attempts: AttemptRecord[], label: string): CheckCell {
     const status = hit.status as string
     if (status === 'not_applicable') {
       notApplicable++
+      if (!reason && hit.reason) reason = hit.reason
       continue
     }
-    if ((hit as { preSatisfied?: boolean }).preSatisfied) preSatisfied++
+    if (hit.preSatisfied) preSatisfied++
     if (status === 'pass') passed++
     else if (status === 'fail') failed++
     else if (status === 'error') errored++
   }
   const answered = passed + failed
   if (reached === 0 || (answered === 0 && notApplicable > 0 && errored === 0)) {
+    const na = reason ? `n/a (${reason})` : 'n/a'
     return {
       status: reached === 0 ? 'not-run' : 'na',
       passed: 0,
       answered: 0,
       notApplicable,
       preSatisfied,
-      text: 'n/a',
+      text: reached === 0 ? 'n/a' : na,
+      reason: reached === 0 ? null : reason,
     }
   }
   if (errored && answered === 0) {
@@ -492,13 +515,22 @@ function checkCellOf(attempts: AttemptRecord[], label: string): CheckCell {
       notApplicable,
       preSatisfied,
       text: `${errored} error${errored === 1 ? '' : 's'}`,
+      reason: null,
     }
   }
   const status: CheckCell['status'] =
     answered === 0 ? 'na' : failed === 0 && errored === 0 ? 'pass' : passed === 0 ? 'fail' : 'mixed'
-  const base = answered === 0 ? 'n/a' : `${passed} of ${answered}`
+  const base = answered === 0 ? (reason ? `n/a (${reason})` : 'n/a') : `${passed} of ${answered}`
   const text = preSatisfied > 0 ? `${base}, ${preSatisfied} pre-satisfied` : base
-  return { status, passed, answered, notApplicable, preSatisfied, text }
+  return {
+    status,
+    passed,
+    answered,
+    notApplicable,
+    preSatisfied,
+    text,
+    reason: status === 'na' ? reason : null,
+  }
 }
 
 function passRateForAttempts(attempts: AttemptRecord[]): Rate {
@@ -582,11 +614,11 @@ function floorSentence(fairness: Fairness, n: number): string {
 function headlinePrimaryText(primary: HeadlinePrimary): string {
   switch (primary.kind) {
     case 'pass-rate':
-      return `${primary.rate.text} pass rate`
+      return `${primary.rate.text} ${PASS_RATE_OUTCOME_LABEL[primary.outcome]}`
     case 'lift':
       return `${primary.variant.label} vs ${primary.baseline.label}: ${primary.points.text} pass rate (${primary.variantRate.text} vs ${primary.baselineRate.text})`
     case 'tied-ceiling':
-      return `${primary.variant.label} vs ${primary.baseline.label}: tied at ${primary.rate.text} pass rate, median ${primary.lead.measure} ${primary.lead.delta.text} (${primary.lead.variant.text} vs ${primary.lead.baseline.text})`
+      return `${primary.variant.label} vs ${primary.baseline.label}: tied at ${primary.rate.text} pass rate, median ${measurePhrase(primary.lead.measure)} ${primary.lead.delta.text} (${primary.lead.variant.text} vs ${primary.lead.baseline.text})`
     case 'choice':
       return `${primary.question}: ${primary.options.map((o) => `${o.label} ${o.count}`).join(', ')}`
     case 'measure':
@@ -595,6 +627,15 @@ function headlinePrimaryText(primary: HeadlinePrimary): string {
       return `${primary.label}: median ${primary.spread.median.text} on ${primary.scale[0]} to ${primary.scale[1]}`
     case 'text':
       return primary.question
+    case 'regression': {
+      const parts = [
+        primary.worse ? `${primary.worse} worse` : null,
+        primary.fixed ? `${primary.fixed} fixed` : null,
+      ].filter(Boolean)
+      const counts = parts.length ? parts.join(', ') : 'no gated flips'
+      if (!primary.lead) return counts
+      return `${counts}: ${primary.lead.signal}, ${primary.lead.prior} to ${primary.lead.current}`
+    }
   }
 }
 
@@ -602,21 +643,54 @@ function chooseHeadline(
   e: EvalEntry,
   arms: Arm[],
   prior: Ctx['prior'],
+  regression: RegressionChanges | null,
 ): { primary: HeadlinePrimary; fairness: Fairness; foot: string; kicker: string | null } {
   const harnesses = new Set(e.cells.map((c) => c.harness)).size
   const assertions = assertionLabels(e)
   const compare = Boolean(e.compare)
 
   let kicker: string | null = null
-  if (prior) {
-    const regressed = prior.rows.filter((r) => r.status === 'regressed').length
-    const fixed = prior.rows.filter((r) => r.status === 'fixed').length
-    kicker = `Since ${prior.record.runId}: ${regressed} regressed, ${fixed} fixed`
+  if (regression && prior) {
+    const p = regression.prior
+    const when = p.startedAt.slice(0, 10)
+    const sha = p.gitSha ? p.gitSha.slice(0, 7) : null
+    const bits = [when, sha, p.runId].filter(Boolean)
+    kicker = `Compared with ${bits.join(', ')}`
   } else if (compare && arms.length >= 2) {
     const baseline = arms.find((a) => a.role === 'baseline')
     const variant = arms.find((a) => a.role === 'variant')
     if (baseline && variant) {
       kicker = `${variant.label} against the ${baseline.label} baseline`
+    }
+  }
+
+  if (regression) {
+    const worse = regression.rows.filter((r) => r.status === 'regressed').length
+    const fixed = regression.rows.filter((r) => r.status === 'fixed').length
+    const lead =
+      regression.rows.find((r) => r.gate && (r.status === 'regressed' || r.status === 'fixed')) ??
+      regression.rows.find((r) => r.status === 'regressed' || r.status === 'fixed') ??
+      regression.rows[0] ??
+      null
+    const sampleNs = (prior?.rows ?? []).flatMap((row) =>
+      (row.perCell ?? []).map((c) =>
+        Math.min(c.base.pass + c.base.fail, c.head.pass + c.head.fail),
+      ),
+    )
+    const minN = sampleNs.length ? Math.min(...sampleNs) : COMPARE_RUNS
+    const fairness: Fairness = minN < COMPARE_RUNS ? 'too-few-runs' : 'clear'
+    const footParts = [
+      `${worse} worse, ${fixed} fixed since ${regression.prior.runId}.`,
+      regression.prior.gitSha
+        ? `Prior ${regression.prior.startedAt.slice(0, 10)} at ${regression.prior.gitSha.slice(0, 7)}.`
+        : `Prior ${regression.prior.startedAt.slice(0, 10)}.`,
+      fairness === 'too-few-runs' ? floorSentence('too-few-runs', minN) : null,
+    ]
+    return {
+      primary: { kind: 'regression', worse, fixed, lead },
+      fairness,
+      foot: footParts.filter(Boolean).join(' '),
+      kicker,
     }
   }
 
@@ -752,15 +826,18 @@ function chooseHeadline(
       if (applicable.every((x) => x.status === 'pass')) passedAll++
     }
     const rate = rateOf(passedAll, pool.length)
+    const outcome = passRateOutcomeFromMatchers(assertions.map((a) => a.matcher)) ?? 'passed'
+    const outcomeWord = PASS_RATE_OUTCOME_LABEL[outcome]
     return {
       primary: {
         kind: 'pass-rate',
         rate,
         assertions: assertions.length,
         harnesses: Math.max(1, harnesses),
+        outcome,
       },
       fairness: pool.length < COMPARE_RUNS ? 'too-few-runs' : 'clear',
-      foot: `${rate.k} of ${rate.n} counted attempts passed all ${assertions.length} assertions. ${harnesses} coding harness${harnesses === 1 ? '' : 'es'}.`,
+      foot: `${rate.k} of ${rate.n} counted attempts ${outcomeWord} on all ${assertions.length} assertions. ${harnesses} coding harness${harnesses === 1 ? '' : 'es'}.`,
       kicker,
     }
   }
@@ -789,18 +866,19 @@ function chooseHeadline(
     const first = judgeRows[0]!
     const scores = judgeRows.filter((j) => j.label === first.label).map((j) => j.judgment.score)
     const spread = spreadOf(scores, (n) => n.toFixed(2))!
-    const threshold = first.judgment.threshold
+    const assertion = first.check ?? null
+    const threshold = assertion === null ? null : (first.judgment.threshold ?? null)
     const atOrAbove =
-      threshold !== undefined
-        ? countOf(scores.filter((s) => s >= threshold).length, scores.length)
-        : null
+      threshold === null
+        ? null
+        : countOf(scores.filter((s) => s >= threshold).length, scores.length)
     return {
       primary: {
         kind: 'judge',
         label: first.label,
         question: first.judgment.question,
         scale: [0, 1],
-        threshold: threshold ?? null,
+        threshold,
         spread,
         atOrAbove,
       },
@@ -848,15 +926,21 @@ function chooseHeadline(
         }
       }
     }
+    const leadRole =
+      answered.length > 1 && lead ? 'representative' : answered.length === 1 && lead ? 'sole' : null
     return {
       primary: {
         kind: 'text',
         question: textRow.question,
         answered: countOf(answered.length, textRow.answers.length),
         lead,
+        leadRole,
       },
       fairness: 'clear',
-      foot: `${answered.length} of ${textRow.answers.length} attempts answered.`,
+      foot:
+        leadRole === 'representative'
+          ? `${answered.length} of ${textRow.answers.length} attempts answered. Showing 1 representative answer.`
+          : `${answered.length} of ${textRow.answers.length} attempts answered.`,
       kicker,
     }
   }
@@ -949,6 +1033,7 @@ function buildVariantComparison(e: EvalEntry, arms: Arm[]): VariantComparison {
         lift: null,
         interval: null,
         verdict: 'baseline' as const,
+        verdictScope: 'pass-rate' as const,
         measures: vs,
       }
     }
@@ -973,6 +1058,7 @@ function buildVariantComparison(e: EvalEntry, arms: Arm[]): VariantComparison {
       lift: ptsDelta(points),
       interval: ptsInterval(low, high),
       verdict,
+      verdictScope: 'pass-rate' as const,
       measures: vs,
     }
   })
@@ -1024,6 +1110,7 @@ function buildVariantComparison(e: EvalEntry, arms: Arm[]): VariantComparison {
         delta: ptsDelta(c.lift.points),
         interval: ptsInterval(c.lift.interval.lo, c.lift.interval.hi),
         verdict,
+        verdictScope: 'pass-rate' as const,
       },
     ]
   })
@@ -1078,6 +1165,28 @@ function buildVariantComparison(e: EvalEntry, arms: Arm[]): VariantComparison {
   }
 }
 
+function compareSideText(row: CompareRow, side: 'base' | 'head'): string {
+  const cells = row.perCell
+  if (cells?.length) {
+    const pass = cells.reduce((n, c) => n + c[side].pass, 0)
+    const fail = cells.reduce((n, c) => n + c[side].fail, 0)
+    const n = pass + fail
+    if (n > 0) return `${pass} of ${n}`
+  }
+  return row[side] ?? 'n/a'
+}
+
+function compareSideDelta(row: CompareRow): ReturnType<typeof ptsDelta> | null {
+  const cells = row.perCell
+  if (!cells?.length) return null
+  const basePass = cells.reduce((n, c) => n + c.base.pass, 0)
+  const baseN = cells.reduce((n, c) => n + c.base.pass + c.base.fail, 0)
+  const headPass = cells.reduce((n, c) => n + c.head.pass, 0)
+  const headN = cells.reduce((n, c) => n + c.head.pass + c.head.fail, 0)
+  if (!baseN || !headN) return null
+  return ptsDelta(headPass / headN - basePass / baseN)
+}
+
 function buildRegression(prior: NonNullable<Ctx['prior']>): RegressionChanges {
   const rows: ChangeRow[] = []
   const unchanged: ChangeRow[] = []
@@ -1086,19 +1195,30 @@ function buildRegression(prior: NonNullable<Ctx['prior']>): RegressionChanges {
       signal: row.id,
       kind: 'outcome',
       harness: null,
-      prior: row.base ?? 'n/a',
-      current: row.head ?? 'n/a',
-      delta: null,
+      prior: compareSideText(row, 'base'),
+      current: compareSideText(row, 'head'),
+      delta: compareSideDelta(row),
       status: row.status,
       gate: Boolean(row.gate),
     }
     if (row.status === 'same') unchanged.push(change)
     else rows.push(change)
   }
-  const whatChanged = [...prior.changes.map((c) => `${c.label}: ${c.base} to ${c.head}`)]
+  const whatChanged = [
+    ...prior.changes.map((c) => `${c.label}: ${c.base} to ${c.head}`),
+    ...prior.rows.flatMap((r) => (r.changes ?? []).map((c) => `${r.id}: ${c}`)),
+  ]
+  const priorRec = prior.record
   return {
     kind: 'regression',
-    baseRunId: prior.record.runId,
+    baseRunId: priorRec.runId,
+    prior: {
+      runId: priorRec.runId,
+      startedAt: priorRec.startedAt,
+      gitSha: priorRec.git?.sha ?? null,
+      branch: priorRec.git?.branch ?? null,
+      author: priorRec.author,
+    },
     whatChanged,
     rows,
     unchanged,
@@ -1214,18 +1334,24 @@ function buildJudgments(e: EvalEntry): JudgmentBreakdown | null {
     list.push(s)
     byLabel.set(s.label, list)
   }
+  const hasArms = e.cells.some((c) => Boolean(c.environment))
   const judgeRows = [...byLabel.entries()].map(([label, rows]) => {
     const values = rows.map((r) => r.judgment.score)
     const spread = spreadOf(values, (n) => n.toFixed(2))!
-    const threshold = rows[0]!.judgment.threshold
+    const assertion = rows[0]!.check ?? null
+    // No `toPass` assertion: diagnostic. Omit threshold tally even if the call scored one.
+    const threshold = assertion === null ? null : (rows[0]!.judgment.threshold ?? null)
     return {
       label,
       question: rows[0]!.judgment.question,
-      assertion: rows[0]!.check ?? null,
-      threshold: threshold ?? null,
-      keys: ['Coding harness', 'Arm'],
+      assertion,
+      threshold,
+      keys: hasArms ? ['Coding harness', 'Arm'] : ['Coding harness'],
       spread,
-      atOrAbove: countOf(values.filter((v) => v >= threshold).length, values.length),
+      atOrAbove:
+        threshold === null
+          ? null
+          : countOf(values.filter((v) => v >= threshold).length, values.length),
     }
   })
   // Pairwise from eval.answers: rates only; attempt cites need PairVote.attempts (newer records).
@@ -1266,7 +1392,7 @@ function buildJudgments(e: EvalEntry): JudgmentBreakdown | null {
     }
   }
   return {
-    axes: ['Coding harness', 'Arm'],
+    axes: hasArms ? ['Coding harness', 'Arm'] : ['Coding harness'],
     scores: judgeRows,
     pairwise,
   }
@@ -1275,7 +1401,9 @@ function buildJudgments(e: EvalEntry): JudgmentBreakdown | null {
 function buildQualitative(
   e: EvalEntry,
   ids: AttemptIdMap,
-  linkBase?: string,
+  linkBase: string | undefined,
+  hrefs: Set<string>,
+  hrefByKey: Map<string, string>,
 ): QualitativeAnswers[] {
   return attemptAnswerRows(e)
     .filter((r) => !r.choices)
@@ -1285,7 +1413,7 @@ function buildQualitative(
         if (!ans.text.trim()) continue
         const attempt = e.attempts.find((a) => a.id === ans.attempt)
         if (!attempt) continue
-        const ref = attemptRef(ids, e, attempt, linkBase)
+        const ref = attemptRef(ids, e, attempt, linkBase, hrefs, hrefByKey)
         if (!ref) continue
         const cell = cellOf(e, attempt.cell)
         entries.push({
@@ -1310,6 +1438,8 @@ function buildCaptures(
   e: EvalEntry,
   ids: AttemptIdMap,
   linkBase: string | undefined,
+  hrefs: Set<string>,
+  hrefByKey: Map<string, string>,
   pages?: ReadonlyMap<string, CapturePageFile>,
 ): CaptureGallery | null {
   const rows = new Map<
@@ -1324,7 +1454,7 @@ function buildCaptures(
   for (const a of e.attempts) {
     const arts = a.files.artifacts ?? []
     if (!arts.length) continue
-    const ref = attemptRef(ids, e, a, linkBase)
+    const ref = attemptRef(ids, e, a, linkBase, hrefs, hrefByKey)
     if (!ref) continue
     const cell = cellOf(e, a.cell)
     const key = `${cell?.harness ?? ''}\0${cell?.environment ?? ''}\0${a.case ?? ''}`
@@ -1340,7 +1470,11 @@ function buildCaptures(
       row.shots.push({
         name: art.name,
         href: captureHref(art.path, linkBase),
-        meta: null,
+        meta:
+          page?.finalUrl ??
+          (art.capture?.instructions?.length
+            ? art.capture.instructions.join('; ')
+            : (art.capture?.path ?? null)),
         attempt: ref,
         status: art.capture?.status ?? page?.status ?? null,
         pageErrors: art.capture?.pageErrors ?? page?.errors.length ?? null,
@@ -1360,6 +1494,8 @@ function buildFailures(
   e: EvalEntry,
   ids: AttemptIdMap,
   linkBase: string | undefined,
+  hrefs: Set<string>,
+  hrefByKey: Map<string, string>,
   remarks: RunRemarks | null,
 ): FailureClusters | null {
   const counted = e.attempts.filter((a) => countedOutcome(a.outcome) || a.outcome === 'infra_error')
@@ -1370,7 +1506,7 @@ function buildFailures(
     at: string | null,
     attempt: AttemptRecord,
   ) => {
-    const ref = attemptRef(ids, e, attempt, linkBase)
+    const ref = attemptRef(ids, e, attempt, linkBase, hrefs, hrefByKey)
     if (!ref) return
     const key = `${kind}\0${label}\0${at ?? ''}`
     const existing = clusters.get(key)
@@ -1424,7 +1560,9 @@ function fillTextLeadCites(
   primary: HeadlinePrimary,
   e: EvalEntry,
   ids: AttemptIdMap,
-  linkBase?: string,
+  linkBase: string | undefined,
+  hrefs: Set<string>,
+  hrefByKey: Map<string, string>,
 ): HeadlinePrimary {
   if (primary.kind !== 'text' || !primary.lead) return primary
   const answers = attemptAnswerRows(e).find((r) => r.question === primary.question)
@@ -1432,7 +1570,7 @@ function fillTextLeadCites(
   if (!first) return primary
   const attempt = e.attempts.find((a) => a.id === first.attempt)
   if (!attempt) return primary
-  const ref = attemptRef(ids, e, attempt, linkBase)
+  const ref = attemptRef(ids, e, attempt, linkBase, hrefs, hrefByKey)
   if (!ref) return primary
   return { ...primary, lead: { ...primary.lead, attempt: ref } }
 }
@@ -1441,8 +1579,16 @@ function buildEvalSection(ctx: Ctx, e: EvalEntry, displayName: string): EvalSect
   const arms = armsOf(e)
   const shapes = shapesOf(e, Boolean(ctx.prior))
   const design = designOf(e)
-  const chosen = chooseHeadline(e, arms, ctx.prior)
-  const primaryHeadline = fillTextLeadCites(chosen.primary, e, ctx.ids, ctx.linkBase)
+  const regression = ctx.prior ? buildRegression(ctx.prior) : null
+  const chosen = chooseHeadline(e, arms, ctx.prior, regression)
+  const primaryHeadline = fillTextLeadCites(
+    chosen.primary,
+    e,
+    ctx.ids,
+    ctx.linkBase,
+    ctx.hrefs,
+    ctx.hrefByKey,
+  )
   const headline: EvalHeadline = {
     task: displayName,
     kicker: chosen.kicker,
@@ -1451,7 +1597,7 @@ function buildEvalSection(ctx: Ctx, e: EvalEntry, displayName: string): EvalSect
     foot: chosen.foot,
   }
   let primary: EvalSection['primary'] = null
-  if (ctx.prior) primary = buildRegression(ctx.prior)
+  if (regression) primary = regression
   else if (e.compare) primary = buildVariantComparison(e, arms)
   else primary = buildTaskResults(e)
 
@@ -1491,9 +1637,9 @@ function buildEvalSection(ctx: Ctx, e: EvalEntry, displayName: string): EvalSect
     choices: buildChoices(e),
     discovery: buildDiscovery(e),
     judgments: buildJudgments(e),
-    qualitative: buildQualitative(e, ctx.ids, ctx.linkBase),
-    captures: buildCaptures(e, ctx.ids, ctx.linkBase, ctx.pages),
-    failures: buildFailures(e, ctx.ids, ctx.linkBase, ctx.remarks),
+    qualitative: buildQualitative(e, ctx.ids, ctx.linkBase, ctx.hrefs, ctx.hrefByKey),
+    captures: buildCaptures(e, ctx.ids, ctx.linkBase, ctx.hrefs, ctx.hrefByKey, ctx.pages),
+    failures: buildFailures(e, ctx.ids, ctx.linkBase, ctx.hrefs, ctx.hrefByKey, ctx.remarks),
   }
 }
 
@@ -1523,7 +1669,7 @@ function buildIntegrity(ctx: Ctx): IntegrityIssue[] {
     for (const a of e.attempts) {
       const turnErr = a.turns.some((t) => t.status === 'error')
       if (!turnErr) continue
-      const ref = attemptRef(ids, e, a, linkBase)
+      const ref = attemptRef(ids, e, a, linkBase, ctx.hrefs, ctx.hrefByKey)
       if (ref) cites.push(ref)
     }
     if (cites.length) {
@@ -1592,9 +1738,52 @@ function buildIntegrity(ctx: Ctx): IntegrityIssue[] {
         text: `${unreported.length} counted attempt${unreported.length === 1 ? '' : 's'} reported no token usage; token medians omit them.`,
         evalId: e.key,
         cites: unreported.flatMap((a) => {
-          const ref = attemptRef(ids, e, a, linkBase)
+          const ref = attemptRef(ids, e, a, linkBase, ctx.hrefs, ctx.hrefByKey)
           return ref ? [ref] : []
         }),
+      })
+    }
+    const preHits = e.attempts.flatMap((a) =>
+      (a.assertions ?? [])
+        .filter((x) => x.preSatisfied)
+        .map((x) => ({ attempt: a, label: x.label })),
+    )
+    if (preHits.length) {
+      const labels = [...new Set(preHits.map((h) => h.label))]
+      issues.push({
+        kind: 'pre-satisfied',
+        severity: 'warn',
+        text: `${preHits.length} pre-satisfied check${preHits.length === 1 ? '' : 's'} (${labels.join(', ')}); existing workspace state may satisfy them without agent work.`,
+        evalId: e.key,
+        cites: preHits.flatMap((h) => {
+          const ref = attemptRef(ids, e, h.attempt, linkBase, ctx.hrefs, ctx.hrefByKey)
+          return ref ? [ref] : []
+        }),
+      })
+    }
+  }
+  if (ctx.prior) {
+    const sampleNs = ctx.prior.rows.flatMap((row) =>
+      (row.perCell ?? []).map((c) =>
+        Math.min(c.base.pass + c.base.fail, c.head.pass + c.head.fail),
+      ),
+    )
+    const gatedTiny = ctx.prior.rows.some(
+      (row) =>
+        (row.status === 'regressed' || row.status === 'fixed') &&
+        Boolean(row.gate) &&
+        (row.perCell ?? []).some(
+          (c) => Math.min(c.base.pass + c.base.fail, c.head.pass + c.head.fail) < COMPARE_RUNS,
+        ),
+    )
+    if (gatedTiny || (sampleNs.length && Math.min(...sampleNs) < COMPARE_RUNS)) {
+      const minN = sampleNs.length ? Math.min(...sampleNs) : 0
+      issues.push({
+        kind: 'fairness-floor',
+        severity: 'warn',
+        text: `A gated regression claim rests on fewer than ${COMPARE_RUNS} counted attempts per side${minN ? ` (as low as ${minN})` : ''}; treat worse/fixed as provisional.`,
+        evalId: null,
+        cites: [],
       })
     }
   }
@@ -1694,7 +1883,7 @@ function buildActions(analysis: AnalysisDoc | null): ReportClaim[] {
 }
 
 function buildAttemptIndex(ctx: Ctx): AttemptIndexRow[] {
-  const { evals, ids, linkBase, record } = ctx
+  const { evals, ids, linkBase, record, hrefByKey } = ctx
   const rows: AttemptIndexRow[] = []
   for (const e of evals) {
     for (const a of e.attempts) {
@@ -1702,7 +1891,7 @@ function buildAttemptIndex(ctx: Ctx): AttemptIndexRow[] {
       const id = ids.get(a.key)
       if (!id) continue
       const cell = cellOf(e, a.cell)
-      const href = attemptHref(e, a, id, linkBase)
+      const href = hrefByKey.get(a.key) ?? attemptHref(e, a, id, linkBase, ctx.hrefs)
       const diffStats = attemptDiffStats(a)
       const reclassified =
         a.outcome === 'infra_error' &&
@@ -1772,7 +1961,10 @@ export function buildRunReport(record: RunRecord, options: RunReportOptions = {}
     analysis: options.analysis ?? null,
     pages: options.pages,
     prior: options.prior ?? null,
+    hrefs: new Set(),
+    hrefByKey: new Map(),
   }
+  assignAttemptHrefs(ctx)
   const header = buildHeader(ctx)
   if (options.title) header.title = options.title
   else header.title = runTitle(record, evals)

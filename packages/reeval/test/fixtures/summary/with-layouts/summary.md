@@ -27,16 +27,16 @@ Run `20261020T205330Z_da3d797_cursor-agent_1k52` by cursor-agent, 2026-10-20, re
 
 | Evaluation | Shape / arms | Primary result | Effort |
 | --- | --- | --- | --- |
-| [adds a $name button that builds](#adds-a-name-button-that-builds) | task; 3 prompts, 1 coding harness, 3 attempts | 67% pass rate | not reported |
+| [adds a $name button that builds](#adds-a-name-button-that-builds) | task; 3 prompts, 1 coding harness, 3 attempts | 67% passed | not reported |
 | [greets %s in the house style](#greets-s-in-the-house-style) | ab; 4 prompts, 1 coding harness, 2 arms, 8 attempts | with-skill vs plain: +100 pts pass rate (100% vs 0%) | not reported |
-| [greets in the house style on each agent](#greets-in-the-house-style-on-each-agent) | task; 2 coding harnesses, 2 attempts | 50% pass rate | not reported |
+| [greets in the house style on each agent](#greets-in-the-house-style-on-each-agent) | task; 2 coding harnesses, 2 attempts | 50% passed | not reported |
 | [learns the house style from the skill](#learns-the-house-style-from-the-skill) | ab; 2 coding harnesses, 2 arms, 16 attempts | with-skill vs plain: +50 pts pass rate (50% vs 0%) | not reported |
 | [greets in the house style](#greets-in-the-house-style) | ab; 1 coding harness, 3 arms, 12 attempts | with-skill vs plain: +100 pts pass rate (100% vs 0%) | not reported |
 | [keeps the plain greeting](#keeps-the-plain-greeting) | ab; 1 coding harness, 2 arms, 8 attempts | with-skill vs plain: -100 pts pass rate (0% vs 100%) | not reported |
 | [greets once](#greets-once) | ab; 1 coding harness, 2 arms, 2 attempts | with-skill vs plain: +100 pts pass rate (100% vs 0%) | not reported |
-| [writes greet.js](#writes-greetjs) | task; 1 coding harness, 1 attempt | 100% pass rate | not reported |
-| [greets in French](#greets-in-french) | task; 1 coding harness, 1 attempt | 0% pass rate | not reported |
-| [explains why greet.js fails](#explains-why-greetjs-fails) | task; 1 coding harness, 2 attempts | 50% pass rate | not reported |
+| [writes greet.js](#writes-greetjs) | task; 1 coding harness, 1 attempt | 100% passed | not reported |
+| [greets in French](#greets-in-french) | task; 1 coding harness, 1 attempt | 0% passed | not reported |
+| [explains why greet.js fails](#explains-why-greetjs-fails) | task; 1 coding harness, 2 attempts | 50% passed | not reported |
 | [reads the fixture repo](#reads-the-fixture-repo) | task; 1 coding harness, 1 attempt | Median tokens: not reported | not reported |
 | [starts its sandbox](#starts-its-sandbox) | task; 1 coding harness, 1 attempt | Median tokens: not reported | not reported |
 | [greets in Welsh](#greets-in-welsh) | task; 1 coding harness, 0 attempts | Median tokens: not reported | not reported |
@@ -56,9 +56,9 @@ Run `20261020T205330Z_da3d797_cursor-agent_1k52` by cursor-agent, 2026-10-20, re
 
 `evals/family.eval.ts`. Task. 3 prompts, 1 coding harness, 3 attempts.
 
-**67% pass rate**
+**67% passed**
 
-2 of 3 counted attempts passed all 3 assertions. 1 coding harness.
+2 of 3 counted attempts passed on all 3 assertions. 1 coding harness.
 
 ### Assertions
 
@@ -70,7 +70,7 @@ Run `20261020T205330Z_da3d797_cursor-agent_1k52` by cursor-agent, 2026-10-20, re
 
 ### By Coding harness
 
-| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | 67% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 
@@ -96,10 +96,10 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 - **plain** (`sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9`): baseline
 - **with-skill** (`sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7`): variant: with-skill
 
-| Arm | Pass rate | Lift | Verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Arm | Pass rate | Lift | Pass-rate verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plain | 0% | n/a | baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
-| with-skill | 100% | +100 pts | helped | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+40%) | 1 (±0%) | not reported | not reported |
+| plain | 0% | n/a | Baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
+| with-skill | 100% | +100 pts | Helped | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+40%) | 1 (±0%) | not reported | not reported |
 
 ### Assertions by arm
 
@@ -109,7 +109,7 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 
 ### Effort by coding harness
 
-| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | plain | 0% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | fake | with-skill | 100% | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+40%) | 1 (±0%) | not reported | not reported |
@@ -125,9 +125,9 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 
 `evals/harnesses.eval.ts`. Task. 2 coding harnesses, 2 attempts.
 
-**50% pass rate**
+**50% passed**
 
-1 of 2 counted attempts passed all 3 assertions. 2 coding harnesses.
+1 of 2 counted attempts passed on all 3 assertions. 2 coding harnesses.
 
 ### Assertions
 
@@ -139,7 +139,7 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 
 ### By Coding harness
 
-| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | skilled | 100% | not reported | 0 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | terse | 0% | not reported | 0 | 1 | not reported | <0.1s | 1 | not reported | not reported |
@@ -167,10 +167,10 @@ n = 8 vs 8 counted attempts. 95% CI +7 pts to +78 pts.
 - **plain** (`sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9`): baseline
 - **with-skill** (`sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7`): variant: with-skill
 
-| Arm | Pass rate | Lift | Verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Arm | Pass rate | Lift | Pass-rate verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plain | 0% | n/a | baseline | not reported | 0 | 1 | not reported | <0.1s | 1 | not reported | not reported |
-| with-skill | 50% | +50 pts | helped | not reported | 0 | 1 (±0%) | not reported | <0.1s (+150%) | 1 (±0%) | not reported | not reported |
+| plain | 0% | n/a | Baseline | not reported | 0 | 1 | not reported | <0.1s | 1 | not reported | not reported |
+| with-skill | 50% | +50 pts | Helped | not reported | 0 | 1 (±0%) | not reported | <0.1s (+150%) | 1 (±0%) | not reported | not reported |
 
 ### Assertions by arm
 
@@ -180,7 +180,7 @@ n = 8 vs 8 counted attempts. 95% CI +7 pts to +78 pts.
 
 ### Effort by coding harness
 
-| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | learner | plain | 0% | not reported | 0 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | learner | with-skill | 100% | not reported | 0 | 1 (±0%) | not reported | <0.1s (+86%) | 1 (±0%) | not reported | not reported |
@@ -210,11 +210,11 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 - **with-skill** (`sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7`): variant: with-skill
 - **with-doc** (`sha256:4f15431ec693f3866e401362fea4634044b87652bded6bb599a035a762ecd345`): variant: with-doc
 
-| Arm | Pass rate | Lift | Verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Arm | Pass rate | Lift | Pass-rate verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plain | 0% | n/a | baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
-| with-skill | 100% | +100 pts | helped | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+60%) | 1 (±0%) | not reported | not reported |
-| with-doc | 0% | ±0 pts | within-noise | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+80%) | 1 (±0%) | not reported | not reported |
+| plain | 0% | n/a | Baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
+| with-skill | 100% | +100 pts | Helped | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+60%) | 1 (±0%) | not reported | not reported |
+| with-doc | 0% | ±0 pts | Within noise | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+80%) | 1 (±0%) | not reported | not reported |
 
 ### Assertions by arm
 
@@ -226,15 +226,15 @@ n = 4 vs 4 counted attempts. 95% CI +31 pts to +100 pts.
 
 ### Pairwise contrasts
 
-| From | To | Measure | Delta | Interval | Verdict |
+| From | To | Measure | Delta | Interval | Pass-rate verdict |
 | --- | --- | --- | --- | --- | --- |
-| with-skill | plain | pass-rate | +100 pts | +31 pts to +100 pts | helped |
-| with-doc | plain | pass-rate | ±0 pts | -49 pts to +49 pts | within-noise |
-| with-doc | with-skill | pass-rate | -100 pts | -100 pts to -31 pts | made-worse |
+| with-skill | plain | Pass rate | +100 pts | +31 pts to +100 pts | Helped |
+| with-doc | plain | Pass rate | ±0 pts | -49 pts to +49 pts | Within noise |
+| with-doc | with-skill | Pass rate | -100 pts | -100 pts to -31 pts | Made worse |
 
 ### Effort by coding harness
 
-| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | plain | 0% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | fake | with-skill | 100% | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (+60%) | 1 (±0%) | not reported | not reported |
@@ -262,10 +262,10 @@ n = 4 vs 4 counted attempts. 95% CI -100 pts to -31 pts.
 - **plain** (`sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9`): baseline
 - **with-skill** (`sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7`): variant: with-skill
 
-| Arm | Pass rate | Lift | Verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Arm | Pass rate | Lift | Pass-rate verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plain | 100% | n/a | baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
-| with-skill | 0% | -100 pts | made-worse | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-83%) | 1 (±0%) | not reported | not reported |
+| plain | 100% | n/a | Baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
+| with-skill | 0% | -100 pts | Made worse | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-83%) | 1 (±0%) | not reported | not reported |
 
 ### Assertions by arm
 
@@ -275,7 +275,7 @@ n = 4 vs 4 counted attempts. 95% CI -100 pts to -31 pts.
 
 ### Effort by coding harness
 
-| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | plain | 100% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | fake | with-skill | 0% | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-83%) | 1 (±0%) | not reported | not reported |
@@ -302,10 +302,10 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 - **plain** (`sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9`): baseline
 - **with-skill** (`sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7`): variant: with-skill
 
-| Arm | Pass rate | Lift | Verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Arm | Pass rate | Lift | Pass-rate verdict | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| plain | 0% | n/a | baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
-| with-skill | 100% | +100 pts | too-few-runs | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-25%) | 1 (±0%) | not reported | not reported |
+| plain | 0% | n/a | Baseline | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
+| with-skill | 100% | +100 pts | Too few runs | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-25%) | 1 (±0%) | not reported | not reported |
 
 ### Assertions by arm
 
@@ -315,7 +315,7 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 ### Effort by coding harness
 
-| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Arm | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | plain | 0% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 | fake | with-skill | 100% | not reported | 1 (±0%) | 1 (±0%) | not reported | <0.1s (-25%) | 1 (±0%) | not reported | not reported |
@@ -331,9 +331,9 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 `evals/results.eval.ts`. Task. 1 coding harness, 1 attempt.
 
-**100% pass rate**
+**100% passed**
 
-1 of 1 counted attempts passed all 1 assertions. 1 coding harness.
+1 of 1 counted attempts passed on all 1 assertions. 1 coding harness.
 
 ### Assertions
 
@@ -343,7 +343,7 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 ### By Coding harness
 
-| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | 100% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 
@@ -351,9 +351,9 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 `evals/results.eval.ts`. Task. 1 coding harness, 1 attempt.
 
-**0% pass rate**
+**0% passed**
 
-0 of 1 counted attempts passed all 2 assertions. 1 coding harness.
+0 of 1 counted attempts passed on all 2 assertions. 1 coding harness.
 
 ### Assertions
 
@@ -364,7 +364,7 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 ### By Coding harness
 
-| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | 0% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 
@@ -379,9 +379,9 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 `evals/results.eval.ts`. Task. 1 coding harness, 2 attempts.
 
-**50% pass rate**
+**50% passed**
 
-1 of 2 counted attempts passed all 2 assertions. 1 coding harness.
+1 of 2 counted attempts passed on all 2 assertions. 1 coding harness.
 
 ### Assertions
 
@@ -392,7 +392,7 @@ n = 1 vs 1 counted attempts. 95% CI -12 pts to +100 pts. 1 per side is below 4, 
 
 ### By Coding harness
 
-| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | +Lines | -Lines |
+| Coding harness | Pass rate | Tokens | Tool calls | Turns | Cost | Agent time | Files changed | Lines added | Lines removed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | fake | 50% | not reported | 1 | 1 | not reported | <0.1s | 1 | not reported | not reported |
 

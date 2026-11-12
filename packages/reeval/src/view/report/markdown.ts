@@ -1,4 +1,12 @@
 import { medianWithDelta } from './format.ts'
+import {
+  COMPARE_STATUS_LABEL,
+  contrastMeasureLabel,
+  DISCOVERY_SOURCE_LABEL,
+  MEASURE_LABEL,
+  PASS_RATE_OUTCOME_LABEL,
+  verdictLabel,
+} from './labels.ts'
 import type {
   ArmRow,
   AssertionRow,
@@ -40,17 +48,6 @@ export const FORBIDDEN_OUTPUT = [
   { name: 'scratch path', pattern: /\.reeval\/runs\// },
   { name: 'bold pseudo-heading', pattern: /^\*\*[^*]+\.\*\*$/m },
 ] as const
-
-const MEASURE_LABEL: Record<MeasureKey, string> = {
-  tokens: 'Tokens',
-  toolCalls: 'Tool calls',
-  turns: 'Turns',
-  costUsd: 'Cost',
-  agentMs: 'Agent time',
-  filesChanged: 'Files changed',
-  linesAdded: '+Lines',
-  linesRemoved: '-Lines',
-}
 
 const MEASURE_ORDER: MeasureKey[] = [
   'tokens',
@@ -112,7 +109,7 @@ function shapeLabel(shapes: EvalSection['shapes']): string {
 function headlineBold(primary: HeadlinePrimary): string {
   switch (primary.kind) {
     case 'pass-rate':
-      return `**${primary.rate.text} pass rate**`
+      return `**${primary.rate.text} ${PASS_RATE_OUTCOME_LABEL[primary.outcome]}**`
     case 'lift':
       return `**${primary.variant.label} vs ${primary.baseline.label}: ${primary.points.text} pass rate (${primary.variantRate.text} vs ${primary.baselineRate.text})**`
     case 'tied-ceiling':
@@ -125,6 +122,15 @@ function headlineBold(primary: HeadlinePrimary): string {
       return `**${primary.label}: median ${primary.spread.median.text} on ${primary.scale[0]} to ${primary.scale[1]}**`
     case 'text':
       return `**${primary.question}**`
+    case 'regression': {
+      const parts = [
+        primary.worse ? `${primary.worse} worse` : null,
+        primary.fixed ? `${primary.fixed} fixed` : null,
+      ].filter(Boolean)
+      const counts = parts.length ? parts.join(', ') : 'no gated flips'
+      if (!primary.lead) return `**${counts}**`
+      return `**${counts}: ${primary.lead.signal}, ${primary.lead.prior} to ${primary.lead.current}**`
+    }
   }
 }
 
@@ -150,12 +156,24 @@ function headerLine(header: RunHeader): string {
   if (header.tokens) {
     parts.push(`${header.tokens.total.text} tokens (${header.tokens.cacheRead.text} cache reads).`)
   }
-  if (header.cost?.agent || header.cost?.judge) {
+  if (header.cost) {
+    const basis =
+      header.cost.basis === 'estimated'
+        ? ' (est.)'
+        : header.cost.basis === 'mixed'
+          ? ' (mixed)'
+          : ''
     const bits = [
       header.cost.agent ? `agent ${header.cost.agent.text}` : null,
       header.cost.judge ? `judge ${header.cost.judge.text}` : null,
     ].filter(Boolean)
-    parts.push(`${bits.join(', ')}.`)
+    if (bits.length) {
+      parts.push(`${bits.join(', ')}${basis}.`)
+    } else if (header.cost.total) {
+      parts.push(`total ${header.cost.total.text}${basis}.`)
+    } else {
+      parts.push('No USD cost recorded.')
+    }
   } else {
     parts.push('No USD cost recorded.')
   }
@@ -174,6 +192,9 @@ function renderHeadline(headline: EvalHeadline, blockLevel: number): string[] {
   if (headline.primary.kind === 'text' && headline.primary.lead) {
     const q = headline.primary.lead
     lines.push('')
+    if (headline.primary.leadRole === 'representative') {
+      lines.push(`Showing 1 of ${headline.primary.answered.k} answers as representative.`, '')
+    }
     lines.push(`> ${clipCell(q.text, 400)} ([${q.attempt.id}, ${q.harness}](${q.attempt.href}))`)
   }
   lines.push('')
@@ -265,14 +286,14 @@ function comparisonMarkdown(primary: VariantComparison, blockLevel: number): str
       'Arm',
       'Pass rate',
       'Lift',
-      'Verdict',
+      'Pass-rate verdict',
       ...MEASURE_ORDER.map((k) => MEASURE_LABEL[k]),
     ]
     const rows = primary.summary.map((r) => [
       r.arm,
       r.rate.text,
       r.lift?.text ?? 'n/a',
-      r.verdict,
+      verdictLabel(r.verdict),
       ...measureCells(r),
     ])
     lines.push(table(headers, rows), '')
@@ -286,14 +307,14 @@ function comparisonMarkdown(primary: VariantComparison, blockLevel: number): str
     lines.push(h(blockLevel, 'Pairwise contrasts'), '')
     lines.push(
       table(
-        ['From', 'To', 'Measure', 'Delta', 'Interval', 'Verdict'],
+        ['From', 'To', 'Measure', 'Delta', 'Interval', 'Pass-rate verdict'],
         primary.contrasts.map((c: ContrastRow) => [
           c.from,
           c.to,
-          c.measure,
+          contrastMeasureLabel(c.measure),
           c.delta.text,
           c.interval?.text ?? 'n/a',
-          c.verdict,
+          verdictLabel(c.verdict),
         ]),
       ),
       '',
@@ -323,8 +344,16 @@ function comparisonMarkdown(primary: VariantComparison, blockLevel: number): str
 }
 
 function regressionMarkdown(primary: RegressionChanges, blockLevel: number): string[] {
-  const lines: string[] = [h(blockLevel, `Changes since ${primary.baseRunId}`), '']
+  const priorBits = [
+    primary.prior.startedAt.slice(0, 10),
+    primary.prior.gitSha ? primary.prior.gitSha.slice(0, 7) : null,
+    primary.prior.branch,
+    primary.prior.runId,
+  ].filter(Boolean)
+  const lines: string[] = [h(blockLevel, `Changes since ${priorBits.join(', ')}`), '']
+  lines.push(`Prior run by ${primary.prior.author} on ${primary.prior.startedAt.slice(0, 10)}.`, '')
   if (primary.whatChanged.length) {
+    lines.push(h(blockLevel + 1, 'What changed'), '')
     for (const line of primary.whatChanged) lines.push(`- ${line}`)
     lines.push('')
   }
@@ -339,7 +368,7 @@ function regressionMarkdown(primary: RegressionChanges, blockLevel: number): str
           r.prior,
           r.current,
           r.delta?.text ?? 'n/a',
-          r.status,
+          COMPARE_STATUS_LABEL[r.status],
           r.gate ? 'gate' : 'ungated',
         ]),
       ),
@@ -372,16 +401,34 @@ function choicesMarkdown(choices: ChoiceBreakdown[], blockLevel: number): string
     )
     if (c.rows.length) {
       const optionLabels = c.options.map((o) => o.label)
+      const showArm = c.rows.some((r) => r.arm !== null)
+      const headers = [
+        ...(showArm ? ['Arm'] : []),
+        'Prompt',
+        'Coding harness',
+        ...optionLabels,
+        'Attempts',
+      ]
       lines.push(
         table(
-          ['Arm', 'Prompt', 'Coding harness', ...optionLabels, 'Attempts'],
+          headers,
           c.rows.map((r) => [
-            r.arm ?? 'n/a',
+            ...(showArm ? [r.arm ?? 'n/a'] : []),
             r.prompt ?? 'n/a',
             r.harness,
             ...optionLabels.map((o) => String(r.counts[o] ?? 0)),
             String(r.attempts),
           ]),
+        ),
+        '',
+      )
+    }
+    if (c.passByPick.length) {
+      lines.push(h(blockLevel + 1, 'Pass rate by pick'), '')
+      lines.push(
+        table(
+          ['Pick', 'Pass rate', 'n'],
+          c.passByPick.map((p) => [p.option, p.rate.text, String(p.rate.n)]),
         ),
         '',
       )
@@ -394,12 +441,21 @@ function discoveryMarkdown(rows: DiscoveryRate[], blockLevel: number): string[] 
   const lines: string[] = []
   for (const d of rows) {
     lines.push(h(blockLevel, `Discovery: ${d.what}`), '')
-    lines.push(`${d.found.text} found (\`${d.matcher}\`).`, '')
+    lines.push(`${d.found.text} found.`, '')
     if (d.rows.length) {
       lines.push(
         table(
-          ['Group', 'Found'],
+          ['Coding harness', 'Found'],
           d.rows.map((r) => [r.keys.join(' / '), r.found.text]),
+        ),
+        '',
+      )
+    }
+    if (d.sources.length) {
+      lines.push(
+        table(
+          ['Source', 'Count'],
+          d.sources.map((s) => [DISCOVERY_SOURCE_LABEL[s.source], String(s.count)]),
         ),
         '',
       )
@@ -412,16 +468,25 @@ function judgmentsMarkdown(j: JudgmentBreakdown, blockLevel: number): string[] {
   const lines: string[] = []
   if (j.scores.length) {
     lines.push(h(blockLevel, 'Judgments'), '')
+    const showAt = j.scores.some((s) => s.atOrAbove !== null)
+    const headers = [
+      'Label',
+      'Question',
+      'Threshold',
+      'Keys',
+      'Median',
+      ...(showAt ? ['At or above'] : []),
+    ]
     lines.push(
       table(
-        ['Label', 'Question', 'Threshold', 'Keys', 'Median', 'At or above'],
+        headers,
         j.scores.map((s) => [
           s.label,
           s.question,
           s.threshold === null ? 'diagnostic' : String(s.threshold),
           s.keys.join(' / ') || 'n/a',
           s.spread.median.text,
-          s.atOrAbove.text,
+          ...(showAt ? [s.atOrAbove?.text ?? 'n/a'] : []),
         ]),
       ),
       '',
@@ -445,6 +510,17 @@ function judgmentsMarkdown(j: JudgmentBreakdown, blockLevel: number): string[] {
       ),
       '',
     )
+    const withReasons = j.pairwise.flatMap((p) =>
+      p.reasons.map((r) => ({ question: p.question, ...r })),
+    )
+    if (withReasons.length) {
+      lines.push(h(blockLevel + 1, 'Pairwise reasons'), '')
+      for (const r of withReasons) {
+        const cites = citeList(r.cites)
+        lines.push(`- ${clipCell(r.text, 300)}${cites ? ` (${cites})` : ''}`)
+      }
+      lines.push('')
+    }
   }
   return lines
 }
@@ -454,8 +530,12 @@ function qualitativeMarkdown(rows: QualitativeAnswers[], blockLevel: number): st
   for (const q of rows) {
     lines.push(h(blockLevel, `Answers: ${q.question}`), '')
     lines.push(`${q.answered.text} answered.`, '')
-    for (const e of q.entries.slice(0, 12)) {
+    const shown = q.entries.slice(0, 12)
+    for (const e of shown) {
       lines.push(`- ${clipCell(e.text, 240)} ([${e.attempt.id}, ${e.harness}](${e.attempt.href}))`)
+    }
+    if (q.entries.length > shown.length) {
+      lines.push(`- …and ${q.entries.length - shown.length} more.`)
     }
     lines.push('')
   }
@@ -464,23 +544,38 @@ function qualitativeMarkdown(rows: QualitativeAnswers[], blockLevel: number): st
 
 function capturesMarkdown(gallery: CaptureGallery, blockLevel: number): string[] {
   const lines: string[] = [h(blockLevel, 'Captures'), '']
+  const showArm = gallery.rows.some((r) => r.arm !== null)
+  const showNotes = gallery.rows.some((r) => r.shots.some((s) => s.meta))
   const rows: string[][] = []
   for (const r of gallery.rows) {
     for (const shot of r.shots) {
       const link = shot.href ? `[${shot.name}](${shot.href})` : `${shot.name} (not kept)`
       rows.push([
         r.harness,
-        r.arm ?? 'n/a',
+        ...(showArm ? [r.arm ?? 'n/a'] : []),
         r.case ?? 'n/a',
         link,
         shot.status === null ? 'n/a' : String(shot.status),
         shot.pageErrors === null ? 'n/a' : String(shot.pageErrors),
+        ...(showNotes ? [shot.meta ?? 'n/a'] : []),
         shot.attempt.id,
       ])
     }
   }
   lines.push(
-    table(['Coding harness', 'Arm', 'Case', 'Capture', 'HTTP', 'Page errors', 'Attempt'], rows),
+    table(
+      [
+        'Coding harness',
+        ...(showArm ? ['Arm'] : []),
+        'Case',
+        'Capture',
+        'HTTP',
+        'Page errors',
+        ...(showNotes ? ['Notes'] : []),
+        'Attempt',
+      ],
+      rows,
+    ),
     '',
   )
   return lines
