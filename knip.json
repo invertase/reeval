@@ -21,7 +21,7 @@
     },
     "packages/reeval": {
       "entry": [
-        "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,internal-vm,store-local,store-s3,judge,testing,bin}.ts",
+        "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,internal-vm,internal-vm-api,internal-vm-api-boat,internal-vm-api-daytona,store-local,store-s3,judge,testing,bin}.ts",
         "src/studio/index.ts",
         "test/**/*.{ts,mjs}",
         "scripts/**/*.ts"
@@ -33,10 +33,11 @@
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
         "@balena/dockerignore",
-        "@boatdev/sdk",
-        "@daytona/sdk",
         "studio-web"
       ]
+    },
+    "packages/vm-api": {
+      "entry": ["test/**/*.ts"]
     },
     "packages/harness-*": {
       "entry": ["test/**/*.ts"]

@@ -1,5 +1,5 @@
 // boat() without Docker or a key: preflight's check of the account, a run's cleanup by name prefix
-// and an attempt's lifecycle, all against the fake Boat API (support/boat.ts) through the real SDK.
+// and an attempt's lifecycle, all against the fake Boat API (support/boat.ts) through the Boat SDK.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { symlinkSync } from 'node:fs'
@@ -8,15 +8,12 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { type DockerSession, PNPM_VERSION } from '@reeval/sandbox-docker'
 import {
-  type BoatClient,
   boatCapacity,
   checkBoat,
-  deleteUntilGone,
   firstReachable,
   openBoatPool,
   removeRunSandboxes,
   runPrefix,
-  sshRoutes,
 } from '../src/sandbox/boat.ts'
 import { type HarnessBake, installHarness } from '../src/sandbox/harness-install.ts'
 import { sandboxLabels } from '../src/sandbox/labels.ts'
@@ -159,20 +156,6 @@ describe("reaching a sandbox's SSH server", () => {
     ({ host: '127.0.0.1', port, via }) as const
   const quick = { probeMs: 500, reachMs: 0 }
 
-  test("tries the machine's own address on port 22 first, then the public endpoint", () => {
-    assert.deepEqual(sshRoutes({ machineIp: '2001:db8::24', sshEndpoint: '198.51.100.7:19036' }), [
-      { host: '2001:db8::24', port: 22, via: 'machine address' },
-      { host: '198.51.100.7', port: 19036, via: 'public endpoint' },
-    ])
-    assert.deepEqual(sshRoutes({ sshEndpoint: '[2001:db8::7]:2222', machineIp: null }), [
-      { host: '2001:db8::7', port: 2222, via: 'public endpoint' },
-    ])
-    assert.deepEqual(sshRoutes({ machineIp: '198.51.100.9' }), [
-      { host: '198.51.100.9', port: 22, via: 'machine address' },
-    ])
-    assert.deepEqual(sshRoutes({ sshEndpoint: 'no-port' }), [])
-  })
-
   test('takes the machine address when both greet', async () => {
     const routes = [
       at(await listen(true), 'machine address'),
@@ -266,72 +249,6 @@ describe("installing a harness's CLI in a new VM", () => {
       message: `npm install pnpm@${PNPM_VERSION} exited 1: E404`,
     })
     assert.equal(failed.commands.length, 1)
-  })
-})
-
-describe('deleting a sandbox that never got ready', () => {
-  /** A sandbox Boat keeps provisioning through the first `drops` deletes, then removes. */
-  function stuck(drops: number, after: 'gone' | string = 'gone') {
-    const calls: string[] = []
-    let deletes = 0
-    const api = {
-      async deleteSandbox() {
-        calls.push('delete')
-        deletes++
-        return { ok: true }
-      },
-      async get() {
-        calls.push('get')
-        if (deletes <= drops) return { sandbox: { id: 'bx_1', name: 'n', state: 'provisioning' } }
-        if (after !== 'gone') return { sandbox: { id: 'bx_1', name: 'n', state: after } }
-        throw Object.assign(new Error('gone'), { response: new Response('{}', { status: 404 }) })
-      },
-    } as unknown as BoatClient
-    return { api, calls }
-  }
-  const quick = { pollMs: 5, redeleteMs: 30 }
-
-  test('sends the delete again until Boat answers 404', async () => {
-    const { api, calls } = stuck(2)
-    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
-    assert.equal(calls.filter((c) => c === 'delete').length, 3)
-    assert.equal(calls.at(-1), 'get')
-  })
-
-  for (const state of ['archiving', 'archived', 'error', 'cancelled']) {
-    test(`stops once Boat reports it ${state}`, async () => {
-      const { api, calls } = stuck(0, state)
-      assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 10_000 }), true)
-      assert.deepEqual(calls, ['delete', 'get'])
-    })
-  }
-
-  test('sends one delete and stops when the attempt was canceled', async () => {
-    const { api, calls } = stuck(Number.POSITIVE_INFINITY)
-    const canceled = new AbortController()
-    canceled.abort()
-    const signal = canceled.signal
-    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, signal }), false)
-    assert.deepEqual(calls, ['delete'])
-  })
-
-  test('stops polling as soon as the attempt is canceled', async () => {
-    const { api, calls } = stuck(Number.POSITIVE_INFINITY)
-    const canceled = new AbortController()
-    const started = Date.now()
-    setTimeout(() => canceled.abort(), 50)
-    const signal = canceled.signal
-    const options = { pollMs: 60_000, redeleteMs: 60_000, signal }
-    assert.equal(await deleteUntilGone(api, 'bx_1', options), false)
-    assert.ok(Date.now() - started < 5_000, 'it did not wait out the poll')
-    assert.deepEqual(calls, ['delete', 'get'])
-  })
-
-  test('gives up after its deadline', async () => {
-    const { api } = stuck(Number.POSITIVE_INFINITY)
-    const started = Date.now()
-    assert.equal(await deleteUntilGone(api, 'bx_1', { ...quick, deadlineMs: 100 }), false)
-    assert.ok(Date.now() - started < 5_000)
   })
 })
 

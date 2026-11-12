@@ -1,0 +1,57 @@
+{
+  "name": "@reeval/vm-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Boat's and Daytona's VM APIs through their SDKs, behind one interface",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reeval-ai/reeval.git",
+    "directory": "packages/vm-api"
+  },
+  "homepage": "https://github.com/reeval-ai/reeval/tree/main/packages/vm-api#readme",
+  "bugs": {
+    "url": "https://github.com/reeval-ai/reeval/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./boat": {
+      "types": "./dist/boat.d.ts",
+      "default": "./dist/boat.js"
+    },
+    "./daytona": {
+      "types": "./dist/daytona.d.ts",
+      "default": "./dist/daytona.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@boatdev/sdk": "^1.13.0",
+    "@daytona/sdk": ">=0.231.0 <1"
+  },
+  "peerDependenciesMeta": {
+    "@boatdev/sdk": {
+      "optional": true
+    },
+    "@daytona/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@boatdev/sdk": "1.13.0",
+    "@daytona/sdk": "0.231.0"
+  }
+}

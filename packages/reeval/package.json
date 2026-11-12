@@ -54,6 +54,18 @@
       "types": "./dist/internal/vm.d.ts",
       "default": "./dist/internal/vm.js"
     },
+    "./internal/vm-api": {
+      "types": "./dist/internal/vm-api.d.ts",
+      "default": "./dist/internal/vm-api.js"
+    },
+    "./internal/vm-api/boat": {
+      "types": "./dist/internal/vm-api/boat.d.ts",
+      "default": "./dist/internal/vm-api/boat.js"
+    },
+    "./internal/vm-api/daytona": {
+      "types": "./dist/internal/vm-api/daytona.d.ts",
+      "default": "./dist/internal/vm-api/daytona.js"
+    },
     "./judge": {
       "types": "./dist/judge.d.ts",
       "default": "./dist/judge.js"
@@ -180,6 +192,7 @@
     "@reeval/harness-opencode": "workspace:0.2.16",
     "@reeval/harness-pi": "workspace:0.2.9",
     "@reeval/sandbox-docker": "workspace:*",
+    "@reeval/vm-api": "workspace:*",
     "@types/picomatch": "4.0.3",
     "@types/react": "19.3.0",
     "ink-testing-library": "4.0.0",

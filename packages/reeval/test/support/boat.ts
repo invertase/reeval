@@ -1,4 +1,4 @@
-// A fake Boat API for tests: the routes of `@boatdev/sdk` that reeval calls (create, get, sshkey,
+// A fake Boat API for tests: the routes of Boat's REST API that reeval calls (create, get, sshkey,
 // list by name prefix, update, delete, limits and saved snapshots) on 127.0.0.1, with Boat's own shapes and quirks: a
 // sandbox reports `starting` before `ready`, a delete needs `X-Ascii-Confirm-Delete`, and every
 // call needs the key as a bearer token. Where its sandboxes run is up to `machines`: an SSH VM in a
@@ -10,7 +10,7 @@
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { boatClient, DEAD_STATES, runPrefix } from '../../src/sandbox/boat.ts'
+import { boatClient, runPrefix } from '../../src/sandbox/boat.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 import type { SshVm } from './ssh-vm.ts'
 
@@ -387,10 +387,10 @@ export async function boatSandboxesLeft(runId: string, deadlineMs = 30_000): Pro
   const until = Date.now() + deadlineMs
   let left: string[] = []
   do {
-    const { sandboxes } = await api.sandboxes({ namePrefix: prefix, limit: 100 })
-    left = sandboxes
-      .filter((s) => s.name.startsWith(prefix) && !DEAD_STATES.includes(s.state))
-      .map((s) => `${s.name} (${s.state})`)
+    left = []
+    for await (const vm of api.list({ namePrefix: prefix })) {
+      if (vm.name.startsWith(prefix) && vm.state !== 'dead') left.push(`${vm.name} (${vm.raw})`)
+    }
     if (!left.length) return []
     await new Promise((r) => setTimeout(r, 1000))
   } while (Date.now() < until)

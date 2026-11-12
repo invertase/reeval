@@ -26,7 +26,7 @@ import type {
   TartSandboxDescriptor,
   VmImage,
 } from '../types.ts'
-import type { BoatImage, BoatImageTimings, BoatSnapshotClient } from './boat-images.ts'
+import type { BoatImage, BoatImageTimings } from './boat-images.ts'
 import { harnessBake } from './harness-install.ts'
 import type { MACHINE_PROVIDERS } from './machines.ts'
 import type { PreparedImage, Refresh } from './prepare.ts'
@@ -637,7 +637,7 @@ export const boatProvider = (
       let image = images.get(identity)
       const shared = !!image
       if (!image) {
-        const api = (await boat.boatClient(sandbox, ctx.root)) as BoatSnapshotClient
+        const api = await boat.boatClient(sandbox, ctx.root)
         image = boatImage(boat.boatService(sandbox), api, sandbox, recipe, harness, ctx, {
           plugins,
           ...options,
