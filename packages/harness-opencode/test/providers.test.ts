@@ -259,6 +259,44 @@ test("a provider's headers are in name order, whatever order the probe saw them 
   )
 })
 
+test("another upstream's model adds only the endpoints it sent the key to in a header", () => {
+  const call = (path: string, key: string) => ({
+    method: 'POST',
+    host: 'gw.test',
+    path,
+    key: [key],
+  })
+  const variant = (model: string, requests: object[], extra = {}) => ({
+    variant: 'catalog',
+    model,
+    exit: 1,
+    error: '',
+    requests: requests.map((r) => ({ format: 'bearer', ...r })),
+    ...extra,
+  })
+  const probe = {
+    gw: {
+      name: 'Gateway',
+      env: ['GW_API_KEY'],
+      variants: [
+        variant('google/m', [call('/v1/messages', 'authorization')]),
+        variant('openai/m', [call('/v1/responses', 'authorization')], {
+          also: true,
+          error: 'Model unavailable',
+        }),
+        variant('meta/m', [call('/v1/chat?key=<key>', 'query')], { also: true }),
+      ],
+    },
+  }
+  const models = { 'google/m': {}, 'openai/m': {}, 'meta/m': {} }
+  const { supported, refused } = buildTable(probe, { gw: { models } })
+  assert.deepEqual(refused, [])
+  assert.deepEqual(
+    supported.flatMap((p) => p.endpoints.map((e) => e.path)),
+    [{ exact: '/v1/messages' }, { exact: '/v1/responses' }],
+  )
+})
+
 test('the gateway swaps the key into each header the provider uses, on each of its hosts', () => {
   const rules = providerTransformations(openCodeProvider('opencode/m'), {
     key: 'real',
