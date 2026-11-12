@@ -270,6 +270,7 @@
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 2 | — | — | — | — | — |
 | Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare’s control named by its environment in the digest | ✓ 1 | — | — | — | — | — |
 | The `RunReport` behind `summary.md`, written beside it as `report.json` and read back by `readableRunReport` (`reeval/view/report`), its attempts cited by their stable key, and rendered by `reeval/renderer/markdown` | ✓ 4 | — | — | — | — | — |
+| Each attempt's facts in the `RunReport` (`attemptFacts` in `reeval/view`: tool calls by class, skills used by source, context files read), counted from its kept transcript as `reeval query`'s `tool_calls`, `skill_uses` and `context_reads` count them, absent where the transcript wasn't kept, and a skill discovery's sources | ✓ 1 | — | — | — | — | — |
 | Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest’s `context-use` fact | ✓ 2 | — | — | — | — | — |
 | Each labeled check’s pass rate per cell, control and variant alike (`check_rates`) | ✓ 1 | — | — | — | — | — |
 | Each check’s streak of clean recorded runs per cell, setup and branch (`check_streaks`) | ✓ 1 | — | — | — | — | — |

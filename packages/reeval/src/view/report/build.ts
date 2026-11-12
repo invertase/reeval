@@ -4,6 +4,7 @@ import { COMPARE_RUNS, containsZero, liftInterval } from '../../stats.ts'
 import type { CapturePageFile } from '../../types.ts'
 import { totalTokens } from '../../usage.ts'
 import type { AnalysisDoc } from '../analysis.ts'
+import type { AttemptFacts } from '../classify.ts'
 import type { CompareRow, StackChange } from '../compare.ts'
 import { contrastsOf } from '../contrasts.ts'
 import { runCost } from '../cost.ts'
@@ -79,6 +80,11 @@ export type RunReportOptions = {
   analysis?: AnalysisDoc | null
   /** `.capture.json` files read beside the record, by `ArtifactRef.capture.page.path`. */
   pages?: ReadonlyMap<string, CapturePageFile>
+  /**
+   * Each attempt's facts from its kept transcript (`attemptFacts`), by `AttemptRecord.key`; an
+   * attempt with none has none in the report.
+   */
+  facts?: ReadonlyMap<string, AttemptFacts>
   prior?: { record: RunRecord; rows: CompareRow[]; changes: StackChange[] } | null
   /** Limits the report to these `EvalEntry.key`s; one key gives a single-eval report. */
   evals?: string[]
@@ -285,6 +291,7 @@ type Ctx = {
   remarks: RunRemarks | null
   analysis: AnalysisDoc | null
   pages?: ReadonlyMap<string, CapturePageFile>
+  facts?: ReadonlyMap<string, AttemptFacts>
   prior: RunReportOptions['prior']
   /** Citation hrefs already claimed in this report; keeps per-arm evidence distinct. */
   hrefs: Set<string>
@@ -1293,7 +1300,24 @@ function buildChoices(e: EvalEntry): ChoiceBreakdown[] {
     })
 }
 
-function buildDiscovery(e: EvalEntry): DiscoveryRate[] {
+const SKILL_SOURCES = ['placed', 'skill-dir', 'elsewhere'] as const
+
+/** How many of `attempts` used a skill from each source, by their facts. */
+function skillSources(
+  attempts: AttemptRecord[],
+  facts: ReadonlyMap<string, AttemptFacts> | undefined,
+): DiscoveryRate['sources'] {
+  if (!facts) return []
+  return SKILL_SOURCES.map((source) => ({
+    source,
+    count: attempts.filter((a) => facts.get(a.key)?.skills.some((s) => s.source === source)).length,
+  })).filter((s) => s.count > 0)
+}
+
+function buildDiscovery(
+  e: EvalEntry,
+  facts: ReadonlyMap<string, AttemptFacts> | undefined,
+): DiscoveryRate[] {
   if (e.compare) return []
   const matchers = [
     { what: 'skill', matcher: 'toHaveCalledSkill' },
@@ -1327,7 +1351,7 @@ function buildDiscovery(e: EvalEntry): DiscoveryRate[] {
         )
         return { keys: [h], found: countOf(found.length, pool.length) }
       }),
-      sources: [],
+      sources: m.what === 'skill' ? skillSources(foundAttempts, facts) : [],
     })
   }
   return out
@@ -1648,7 +1672,7 @@ function buildEvalSection(ctx: Ctx, e: EvalEntry, displayName: string): EvalSect
     insights,
     primary,
     choices: buildChoices(e),
-    discovery: buildDiscovery(e),
+    discovery: buildDiscovery(e, ctx.facts),
     judgments: buildJudgments(e),
     qualitative: buildQualitative(e, ctx.ids, ctx.linkBase, ctx.hrefs, ctx.hrefByKey),
     captures: buildCaptures(e, ctx.ids, ctx.linkBase, ctx.hrefs, ctx.hrefByKey, ctx.pages),
@@ -1926,6 +1950,7 @@ function buildAttemptIndex(ctx: Ctx): AttemptIndexRow[] {
         tokens: tokensFigure(a.usage ? totalTokens(a.usage) : null),
         agentMs: durationFigure(a.timings.agentMs),
         toolCalls: countFigure(a.activity.tools),
+        ...(ctx.facts?.has(a.key) ? { facts: ctx.facts.get(a.key) } : {}),
         diff:
           diffStats.files === 0 && diffStats.added === null
             ? null
@@ -1973,6 +1998,7 @@ export function buildRunReport(record: RunRecord, options: RunReportOptions = {}
     remarks: options.remarks ?? null,
     analysis: options.analysis ?? null,
     pages: options.pages,
+    facts: options.facts,
     prior: options.prior ?? null,
     hrefs: new Set(),
     hrefByKey: new Map(),

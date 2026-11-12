@@ -1131,8 +1131,9 @@ describe('studio data server', () => {
     for (const h of headers) {
       const { index, details, report } = await servedReport(api.get, h.runId)
       const folder = h.recorded ? source.historyDir : join(dir, '.reeval/runs')
-      const built = buildRunReport(records.get(h.runId) as RunRecord, {
-        ...(await readReportInputs(join(folder, h.runId))),
+      const record = records.get(h.runId) as RunRecord
+      const built = buildRunReport(record, {
+        ...(await readReportInputs(join(folder, h.runId), record)),
         links: reportLinks(h.runId),
       })
       assert.deepEqual(report, JSON.parse(JSON.stringify(built)), h.runId)

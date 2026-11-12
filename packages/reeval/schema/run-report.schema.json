@@ -157,6 +157,101 @@
       },
       "required": ["at", "cells", "label", "matcher", "total"]
     },
+    "AttemptFacts": {
+      "description": "What one attempt's transcript shows it did, counted from its classified tool calls.",
+      "type": "object",
+      "properties": {
+        "byClass": {
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "dependency": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "verify": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "web": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "workspace": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["context", "dependency", "verify", "web", "workspace"]
+        },
+        "contextFiles": {
+          "description": "Each placed context file its calls read, directly or through a glob, in order of first read.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstLine": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "path": {
+                "type": "string"
+              },
+              "reads": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["firstLine", "path", "reads"]
+          }
+        },
+        "skills": {
+          "description": "Each skill its calls used, by where it came from, in order of first use.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstLine": {
+                "description": "The transcript line of its first use, from 1.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reads": {
+                "description": "The calls that used it.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "skill": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": ["placed", "skill-dir", "elsewhere"]
+              }
+            },
+            "required": ["firstLine", "reads", "skill", "source"]
+          }
+        },
+        "toolCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["byClass", "contextFiles", "skills", "toolCalls"]
+    },
     "AttemptIndexRow": {
       "type": "object",
       "properties": {
@@ -217,6 +312,10 @@
         },
         "evalId": {
           "type": "string"
+        },
+        "facts": {
+          "description": "What its transcript shows it did, from the report's `facts`; absent when the report had none for it, such as a passing attempt whose transcript `evidence` didn't keep.",
+          "$ref": "#/$defs/AttemptFacts"
         },
         "harness": {
           "type": "string"
@@ -720,6 +819,7 @@
           }
         },
         "sources": {
+          "description": "For a skill, the attempts that found it whose skill uses came from each source, from the report's `facts`: an attempt counts once per source, and one with no facts in none. Empty without facts.",
           "type": "array",
           "items": {
             "type": "object",

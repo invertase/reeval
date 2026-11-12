@@ -176,7 +176,7 @@ export function createStudioApi(options: StudioApiOptions) {
     }
     if (run.record.evals.length === 0) return c.text(`Run ${target.runId} has no evals`, 404)
     const report = buildRunReport(run.record, {
-      ...(await readReportInputs(join(run.dir, target.runId))),
+      ...(await readReportInputs(join(run.dir, target.runId), run.record)),
       links: reportLinks(target.runId),
     })
     const { index, details } = splitRunReport(report)

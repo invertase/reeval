@@ -240,7 +240,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         const record = await showRecord(config, run)
         if (format === 'md') {
           const dir = runDir(config.history.dir, record.runId)
-          const inputs = await readReportInputs(dir)
+          const inputs = await readReportInputs(dir, record)
           return {
             runId: record.runId,
             markdown: renderSummary(record, inputs).trimEnd(),
