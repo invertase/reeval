@@ -8,7 +8,8 @@ import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { brotliCompressSync, gzipSync } from 'node:zlib'
+import * as zlib from 'node:zlib'
+import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib'
 import { MANIFEST_FILE, openArchive } from '../src/archive/index.ts'
 import { bufferSource, ZipWriter } from '../src/archive/zip.ts'
 import { scanPush } from '../src/cloud-push-scan.ts'
@@ -638,6 +639,39 @@ describe('the push scan', () => {
       'run/out.br!: line 1: GitHub token',
       'run/plain.br: line 1: GitHub token',
       'run/art.zip!/a/inner.zip!/b/x.txt: line 1: GitHub token',
+    ])
+  })
+
+  test('compressed data under any name is found by its magic number', async () => {
+    const token = `GITHUB_TOKEN=${SECRET}`
+    const zstd = (zlib as { zstdCompressSync?: (b: Buffer) => Buffer }).zstdCompressSync
+    const scan = await scanPush([
+      { path: 'run/blob.bin', data: deflateSync(token) },
+      { path: 'run/fast.bin', data: deflateSync(token, { level: 1 }) },
+      { path: 'run/x.txt', data: Buffer.from(`x^ ${token}`) },
+      {
+        path: 'run/a.bin',
+        data: Buffer.concat([Buffer.from('fd377a585a00', 'hex'), Buffer.from(token)]),
+      },
+      {
+        path: 'run/b.bin',
+        data: Buffer.concat([Buffer.from('BZh9'), Buffer.from('314159265359', 'hex')]),
+      },
+      {
+        path: 'run/c.bin',
+        data: zstd ? zstd(Buffer.from(token)) : Buffer.from('28b52ffd00', 'hex'),
+      },
+    ])
+    assert.deepEqual(scan.unread, [
+      'run/a.bin (xz-compressed)',
+      'run/b.bin (bzip2-compressed)',
+      ...(zstd ? [] : ['run/c.bin (zstd-compressed)']),
+    ])
+    assert.deepEqual(scan.findings, [
+      'run/blob.bin!: line 1: GitHub token',
+      'run/fast.bin!: line 1: GitHub token',
+      'run/x.txt: line 1: GitHub token',
+      ...(zstd ? ['run/c.bin!: line 1: GitHub token'] : []),
     ])
   })
 

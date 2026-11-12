@@ -366,7 +366,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 project reeval link linked, as its history archive, then wait until
                                 the platform has read it and print the studio URL; exit 2 when a
                                 file in it, or a file's name, looks like it holds a secret, or is
-                                compressed in a format the scan can't read
+                                compressed in a format the scan can't read (it unpacks gzip, zlib,
+                                brotli, zip and, on a Node that has it, zstd; raw deflate, which
+                                has no magic number, it scans as binary)
     --no-wait                   Return once it's uploaded
     --skip-secret-scan          Upload even then, printing what the scan found as a warning
     --org <slug>                The org, by slug or id, instead of the linked one

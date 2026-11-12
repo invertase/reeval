@@ -1,12 +1,15 @@
 // The secret scan over every file `reeval cloud push` uploads, binary ones included, and over every
 // segment of every path. The secret shapes are ASCII, so a file that isn't UTF-8 text is read as
 // UTF-16 when it looks like it, else byte for byte, its NULs dropped either way. Text is scanned in
-// overlapping windows, so no file or unpacked stream is ever one string. gzip and brotli are
-// inflated as streams into those windows and zip files are scanned entry by entry; a file
-// compressed in any other format, or one the scan can't finish, is named as unread.
+// overlapping windows, so no file or unpacked stream is ever one string. gzip, zlib and zstd
+// streams, found by their magic numbers, and brotli ones, found by a `.br` name, are inflated
+// into those windows, and zip files are scanned entry by entry. xz, bzip2, lzip, 7z and rar files,
+// found by their magic numbers or names, zstd where this Node can't inflate it, and files the scan
+// can't finish are named as unread. Raw deflate has no magic number, so it reads as binary.
 import { pipeline, Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
-import { createBrotliDecompress, createGunzip } from 'node:zlib'
+import * as zlib from 'node:zlib'
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { bufferSource, readZip } from './archive/zip.ts'
 import { type Finding, scanText } from './history/secret-scan.ts'
 import { findSecrets, findSecretsInJson } from './redact.ts'
@@ -33,7 +36,6 @@ const MASK = '[REDACTED]'
 const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
 
 const UNREADABLE: Array<[RegExp, string]> = [
-  [/\.(?:zst|zstd)$/i, 'zstd'],
   [/\.xz$/i, 'xz'],
   [/\.(?:lz|lzma)$/i, 'lzma'],
   [/\.bz2$/i, 'bzip2'],
@@ -56,6 +58,32 @@ class Unread extends Error {}
 const isGzip = (b: Buffer) => b[0] === 0x1f && b[1] === 0x8b
 const isZip = (b: Buffer) =>
   b[0] === 0x50 && b[1] === 0x4b && ((b[2] === 3 && b[3] === 4) || (b[2] === 5 && b[3] === 6))
+/** A zlib header with a 32 KiB window, as every common encoder writes: `78 01`, `5e`, `9c`, `da`. */
+const isZlib = (b: Buffer) =>
+  b.length >= 2 && b[0] === 0x78 && (0x7800 + (b[1] as number)) % 31 === 0
+const isZstd = (b: Buffer) => b.subarray(0, 4).equals(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]))
+const startsWith = (bytes: number[]) => (b: Buffer) =>
+  b.subarray(0, bytes.length).equals(Buffer.from(bytes))
+
+const UNREADABLE_MAGIC: Array<[(b: Buffer) => boolean, string]> = [
+  [startsWith([0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00]), 'xz'],
+  // `BZh`, a block size, then the first block's or the end-of-stream's magic number.
+  [
+    (b) =>
+      b.subarray(0, 3).toString('latin1') === 'BZh' &&
+      (b[3] as number) >= 0x31 &&
+      (b[3] as number) <= 0x39 &&
+      ['314159265359', '177245385090'].includes(b.subarray(4, 10).toString('hex')),
+    'bzip2',
+  ],
+  [startsWith([0x4c, 0x5a, 0x49, 0x50]), 'lzma'],
+  [startsWith([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]), '7z'],
+  [startsWith([0x52, 0x61, 0x72, 0x21, 0x1a, 0x07]), 'rar'],
+]
+
+type Inflater = () => NodeJS.ReadWriteStream
+/** Node's zstd decoder, on the Node versions that have one. */
+const zstdDecompress = (zlib as { createZstdDecompress?: Inflater }).createZstdDecompress
 
 /** Whether `b` looks like UTF-16: a byte-order mark, or NUL in every other byte of its start. */
 function utf16(b: Buffer): 'le' | 'be' | null {
@@ -215,20 +243,35 @@ async function scanStream(
   scan: Scan,
 ): Promise<void> {
   const { start, all } = await peek(source)
+  const unreadable = UNREADABLE_MAGIC.find(([test]) => test(start))
+  if (unreadable) throw new Unread(`${unreadable[1]}-compressed`)
   const gzip = isGzip(start)
   const zip = !gzip && isZip(start)
-  const brotli = !gzip && !zip && name !== null && /\.br$/i.test(name)
-  if ((gzip || zip || brotli) && depth >= MAX_DEPTH) {
+  const zstd = !gzip && !zip && (isZstd(start) || (name !== null && /\.zstd?$/i.test(name)))
+  // A zlib header and a `.br` name can both sit on data that isn't compressed.
+  const maybe: Inflater | null =
+    gzip || zip || zstd
+      ? null
+      : isZlib(start)
+        ? createInflate
+        : name !== null && /\.br$/i.test(name)
+          ? createBrotliDecompress
+          : null
+  if ((gzip || zip || zstd || maybe) && depth >= MAX_DEPTH) {
     throw new Unread(`compressed more than ${MAX_DEPTH} levels deep`)
   }
   const unpacked = path.endsWith('!') ? path : `${path}!`
   if (gzip) return scanStream(unpacked, null, inflated(all, createGunzip(), scan), depth + 1, scan)
+  if (zstd) {
+    if (!zstdDecompress) throw new Unread('zstd-compressed')
+    return scanStream(unpacked, null, inflated(all, zstdDecompress(), scan), depth + 1, scan)
+  }
   if (zip) {
     const chunks: Buffer[] = []
     for await (const chunk of all) chunks.push(chunk)
     return scanZip(path.replace(/!$/, ''), Buffer.concat(chunks), depth + 1, scan)
   }
-  if (brotli) {
+  if (maybe) {
     const chunks: Buffer[] = []
     for await (const chunk of all) chunks.push(chunk)
     const raw = Buffer.concat(chunks)
@@ -237,16 +280,26 @@ async function scanStream(
       return await scanStream(
         unpacked,
         null,
-        inflated(pieces(raw), createBrotliDecompress(), scan, progress),
+        inflated(pieces(raw), maybe(), scan, progress),
         depth + 1,
         scan,
       )
     } catch (error) {
-      // A `.br` name over data that isn't brotli: read it as it is.
+      // Data that only looked compressed and gave nothing when inflated: read it as it is.
       if (error instanceof Unread || progress.bytes > 0 || raw.length === 0) throw error
-      return scanStream(path, null, pieces(raw), depth, scan)
+      return scanPlain(path, raw, pieces(raw), scan)
     }
   }
+  return scanPlain(path, start, all, scan)
+}
+
+/** Scans a stream as text, decoded as its first bytes, `start`, say. */
+async function scanPlain(
+  path: string,
+  start: Buffer,
+  all: AsyncIterable<Buffer>,
+  scan: Scan,
+): Promise<void> {
   const decode = decoderFor(start)
   const text = new TextScan(path)
   for await (const chunk of all) {
