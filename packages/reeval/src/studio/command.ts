@@ -37,8 +37,8 @@ function summaryPath(source: StudioSource, runId: string): string | null {
 export function handshakeTimeoutLines(server: string, report: string | null): string[] {
   return [
     `The studio page hasn't connected yet: your browser may block it from reaching ${server}.`,
-    '  Chrome asks first whether the page may reach apps on your device: choose Allow.',
-    "  Safari can't reach a local server from a secure page: open the address in Chrome.",
+    '  Chrome and Firefox ask first whether the page may reach apps on your device: choose Allow.',
+    "  Safari can't reach a local server from a secure page: open the address in Chrome or Firefox.",
     ...(report ? [`The run's Markdown report is at ${report}`] : []),
   ]
 }

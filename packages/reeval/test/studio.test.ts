@@ -1299,7 +1299,7 @@ describe('reeval studio', () => {
   test("says why the page may not have paired and where the run's report is", () => {
     const lines = handshakeTimeoutLines('http://localhost:4984', '.reeval/runs/r1/summary.md')
     assert.match(lines[0] as string, /hasn't connected yet: .* reaching http:\/\/localhost:4984\./)
-    assert.ok(lines.some((l) => /Chrome asks first .*choose Allow/.test(l)))
+    assert.ok(lines.some((l) => /Chrome and Firefox ask first .*choose Allow/.test(l)))
     assert.ok(lines.some((l) => /Safari can't reach a local server from a secure page/.test(l)))
     assert.equal(lines.at(-1), "The run's Markdown report is at .reeval/runs/r1/summary.md")
     assert.ok(
@@ -1338,7 +1338,10 @@ describe('reeval studio', () => {
 
       await until(/hasn't connected yet/, 15_000)
       await until(/Markdown report is at/, 5_000)
-      assert.match(out, /Chrome asks first whether the page may reach apps on your device/)
+      assert.match(
+        out,
+        /Chrome and Firefox ask first whether the page may reach apps on your device/,
+      )
       assert.match(
         out,
         new RegExp(`Markdown report is at \\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`),
