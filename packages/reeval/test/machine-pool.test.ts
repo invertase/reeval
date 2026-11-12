@@ -12,7 +12,7 @@ import {
   type RateLimited,
 } from '../src/sandbox/pool.ts'
 import { type AccountOptions, PoolAccount } from '../src/sandbox/pool-account.ts'
-import { RunStopped } from '../src/sandbox/types.ts'
+import { MachineReclaimed, RunStopped } from '../src/sandbox/types.ts'
 
 class RateLimitError extends Error {
   readonly retryAfterMs: number | null
@@ -288,6 +288,7 @@ describe('machine pool', () => {
       leases: 2,
       reusedLeases: 1,
       keepAliveFailed: 0,
+      reclaimed: 0,
       evicted: 0,
     })
     await p.close()
@@ -318,6 +319,28 @@ describe('machine pool', () => {
     assert.deepEqual(b.lost, [{ machine: 'm1', error: '404 sandbox not found' }])
     assert.ok(provider.removed.includes('m1'))
     assert.equal(p.stats().keepAliveFailed, 1)
+    b.release()
+    await p.close()
+    assert.deepEqual(provider.live(), [])
+  })
+
+  test('a machine the provider takes back at its keep-alive goes as no failure, and the attempt gets a new one', async () => {
+    const provider = fakeProvider(() => 'ok', {
+      keepAlive: (id) => {
+        if (id === 'm1') throw new MachineReclaimed('took m1 back: 409 vm_released')
+      },
+    })
+    const p = pool(provider, { limits: { machines: 1 }, reuse: true })
+    ;(await p.acquire()).release()
+    const b = await p.acquire()
+    assert.equal(b.machine, 'm2')
+    assert.ok(b.start, 'a new machine')
+    assert.deepEqual(b.lost, [
+      { machine: 'm1', error: 'took m1 back: 409 vm_released', reclaimed: true },
+    ])
+    assert.ok(provider.removed.includes('m1'))
+    assert.equal(p.stats().reclaimed, 1)
+    assert.equal(p.stats().keepAliveFailed, 0)
     b.release()
     await p.close()
     assert.deepEqual(provider.live(), [])

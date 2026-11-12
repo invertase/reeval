@@ -18,6 +18,8 @@ export type FakeVmLimits = {
   maxTtl: number
   /** Seconds until the token expires; no VM lives past it. */
   tokenTtl: number
+  /** The layout `/limits` names, if any: whatever a test sets, read or not. */
+  layout?: unknown
 }
 
 export type FakeVmService = {
@@ -36,6 +38,8 @@ export type FakeVmService = {
   end(): void
   /** The service ends the run: every create after it is a final `409 code`. */
   stopRun(code: string, message: string): void
+  /** The next `count` keep-alives take their VM back: deleted, and a `409 vm_released`. */
+  reclaim(count: number): void
   close(): Promise<void>
 }
 
@@ -84,6 +88,7 @@ export async function fakeVmService(
   let inFlight = 0
   let ended = false
   let stopped: Answer | undefined
+  let reclaiming = 0
 
   const upstream = async (method: string, path: string, body?: unknown, headers = {}) => {
     const res = await fetch(`${boat.url}${path}`, {
@@ -137,6 +142,7 @@ export async function fakeVmService(
             available: allowed.includes(type),
             reason: allowed.includes(type) ? null : `A run's VMs may be at most ${c.maxType}.`,
           })),
+          ...(c.layout !== undefined && { layout: c.layout }),
         },
       }
     }
@@ -215,6 +221,12 @@ export async function fakeVmService(
       if (!b || Object.keys(b).some((k) => k !== 'ttlSeconds')) {
         return error(400, 'invalid_request', 'Only ttlSeconds can change.')
       }
+      if (reclaiming > 0) {
+        reclaiming--
+        await upstream('DELETE', path, undefined, { 'x-ascii-confirm-delete': id })
+        owned.delete(id)
+        return error(409, 'vm_released', 'The run holds 2 VMs, more than its 1 now.')
+      }
       const ttlSeconds = ttlFor(b.ttlSeconds)
       const got = await upstream('PATCH', path, { ttlSeconds })
       return got.ok ? { status: 200, body: got.body } : got.answer
@@ -258,6 +270,9 @@ export async function fakeVmService(
     },
     stopRun(code, message) {
       stopped = error(409, code, message)
+    },
+    reclaim(count) {
+      reclaiming = count
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   }

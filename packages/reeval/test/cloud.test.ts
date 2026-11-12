@@ -327,6 +327,86 @@ describe('a VM granted less time than the attempt needs', () => {
   })
 })
 
+describe("the service's layout", () => {
+  const LAYOUT = { reuse: true, attemptsPerMachine: 1, machineType: 'small' }
+  const open = (p: FakeVmService, o: Parameters<typeof cloud>[0], runId: string) =>
+    inRun(on(p), () => openCloudPool(cloud(o), { runId, root: process.cwd() }))
+
+  /** The machine type the pool's first start asks the service for. */
+  async function startedType(
+    p: FakeVmService,
+    provider: Awaited<ReturnType<typeof open>>['provider'],
+  ) {
+    api.requests.length = 0
+    const stop = new AbortController()
+    const started = inRun(on(p), () => provider.start(stop.signal, 900)).catch(() => null)
+    while (!api.requests.some((q) => q.call === 'POST /sandboxes'))
+      await new Promise((r) => setTimeout(r, 10))
+    stop.abort()
+    await started
+    return api.requests.find((q) => q.call === 'POST /sandboxes')?.body?.type
+  }
+
+  test("lays the pool out as /limits says, not as the eval's options do", async () => {
+    const p = await service({ layout: LAYOUT })
+    const { provider, options } = await open(
+      p,
+      { size: 'medium', reuse: false, attemptsPerMachine: 3 },
+      'run-laid-out',
+    )
+    assert.deepEqual([options.attemptsPerMachine, options.reuse], [1, true])
+    assert.equal(await startedType(p, provider), 'small')
+  })
+
+  test('starts the machine type the layout names', async () => {
+    const p = await service({
+      maxType: 'default',
+      layout: { reuse: false, attemptsPerMachine: 2, machineType: 'default' },
+    })
+    const { provider, options } = await open(p, {}, 'run-medium')
+    assert.deepEqual([options.attemptsPerMachine, options.reuse], [2, false])
+    assert.equal(await startedType(p, provider), 'default')
+  })
+
+  test("keeps the eval's options when the service names no layout, or one it can't read", async () => {
+    for (const layout of [
+      undefined,
+      null,
+      { reuse: 'yes' },
+      { ...LAYOUT, attemptsPerMachine: 0 },
+    ]) {
+      const p = await service({ layout })
+      const { options } = await open(p, { reuse: true, attemptsPerMachine: 2 }, 'run-own')
+      assert.deepEqual([options.attemptsPerMachine, options.reuse], [2, true], String(layout))
+    }
+  })
+
+  test("checks and counts the layout's machines, not the eval's", async () => {
+    const p = await service({ maxLive: 3, layout: LAYOUT })
+    await inRun(on(p), () => checkCloud(cloud({ size: 'medium' }), process.cwd()))
+    assert.deepEqual(
+      await inRun(on(p), () => cloudCapacity(cloud({ attemptsPerMachine: 2, maxConcurrent: 5 }))),
+      { machines: 3, attempts: 3 },
+    )
+  })
+
+  test('a reused VM the service takes back at its keep-alive is reclaimed, not failed', async () => {
+    const p = await service({ layout: LAYOUT })
+    const made = (await (await create(p)).json()) as { sandbox: { id: string } }
+    const { provider } = await open(p, {}, 'run-reclaimed')
+    p.reclaim(1)
+    const error = (await inRun(on(p), async () =>
+      provider.keepAlive?.(made.sandbox.id, 1200),
+    ).catch((e: Error) => e)) as Error
+    assert.equal(error.name, 'MachineReclaimed')
+    assert.equal(
+      error.message,
+      `reeval took sandbox ${made.sandbox.id} back: 409 vm_released: The run holds 2 VMs, more than its 1 now.`,
+    )
+    assert.deepEqual(p.live(), [])
+  })
+})
+
 describe("a run's cleanup", () => {
   test("deletes the run's VMs, and nobody else's", async () => {
     const p = await service()

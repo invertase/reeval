@@ -106,3 +106,11 @@ export class InfraError extends Error {
 export class RunStopped extends Error {
   override name = 'RunStopped'
 }
+
+/**
+ * The machine service took a reused machine back at the boundary before its next attempt (the run
+ * holds more machines than it may now), so the attempt gets another, and nothing failed.
+ */
+export class MachineReclaimed extends Error {
+  override name = 'MachineReclaimed'
+}

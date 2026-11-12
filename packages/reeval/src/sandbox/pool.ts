@@ -12,7 +12,7 @@ import {
   type PoolLimits,
   RATE_LIMIT_WAITS,
 } from './pool-account.ts'
-import { InfraError, RunStopped } from './types.ts'
+import { InfraError, MachineReclaimed, RunStopped } from './types.ts'
 
 export { RATE_LIMIT_WAITS }
 
@@ -33,7 +33,7 @@ export type PoolProvider<M> = {
   /**
    * Restarts the clock of a machine about to run another attempt: it now expires `ttlSeconds`
    * from this call, not from its start. A machine that can't be kept alive is taken out of the
-   * pool, so the attempt gets another.
+   * pool, so the attempt gets another; one the provider takes back throws `MachineReclaimed`.
    */
   keepAlive?(id: string, ttlSeconds: number): Promise<void>
   /** Whether `error`, from `start`, is the provider refusing for now rather than failing. */
@@ -80,8 +80,11 @@ export type LeaseFacts = {
    * room in the start windows, and the rate limits it waited out.
    */
   start: MachineStart | null
-  /** The machines dropped for this lease because keeping them alive failed, and why. */
-  lost: { machine: string; error: string }[]
+  /**
+   * The machines dropped for this lease because keeping them alive failed, and why, or because
+   * the provider took them back (`reclaimed`).
+   */
+  lost: { machine: string; error: string; reclaimed?: true }[]
 }
 
 export type MachineStart = { ms: number; queuedMs: number; rateLimited: number }
@@ -101,6 +104,8 @@ export type PoolStats = {
   reusedLeases: number
   /** Machines dropped because keeping them alive for another attempt failed. */
   keepAliveFailed: number
+  /** Machines the provider took back before another attempt. */
+  reclaimed: number
   /** Idle machines removed so another pool on the account could start one. */
   evicted: number
 }
@@ -175,6 +180,7 @@ export class MachinePool<M> {
     leases: 0,
     reusedLeases: 0,
     keepAliveFailed: 0,
+    reclaimed: 0,
     evicted: 0,
   }
 
@@ -237,10 +243,13 @@ export class MachinePool<M> {
         try {
           await this.#provider.keepAlive(machine.id as string, this.#ttlSeconds)
         } catch (error) {
-          this.#stats.keepAliveFailed++
+          const reclaimed = error instanceof MachineReclaimed
+          if (reclaimed) this.#stats.reclaimed++
+          else this.#stats.keepAliveFailed++
           lost.push({
             machine: machine.id as string,
             error: (error as Error)?.message ?? String(error),
+            ...(reclaimed && { reclaimed: true as const }),
           })
           this.#release(slot, true)
           signal?.throwIfAborted()
