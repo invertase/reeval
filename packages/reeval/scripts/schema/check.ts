@@ -71,7 +71,7 @@ export function checkShape(
   },
 ): ShapeReport {
   const changes = [
-    ...(committed ? compare(committed, current, options) : []),
+    ...(committed ? compare(committed, current, { closed: !!shape.zod, ...options }) : []),
     ...checkDefaults(current, options.defaults),
   ]
   return {
@@ -87,6 +87,7 @@ const FIX: Partial<Record<Change['kind'], string>> = {
   'made-required': 'new',
   removed: 'removed',
   narrowed: 'narrowed',
+  widened: 'widened',
 }
 
 /** What the author has to do, for each breaking change, in words. */
@@ -125,6 +126,12 @@ export function explain(reports: ShapeReport[]): string {
           '    Either:',
           '    1. Keep accepting the old values in the type (widen it back) and handle them where it is read; or',
           `    2. ${version} that maps the old values to new ones.`,
+        )
+      } else if (how === 'widened') {
+        lines.push(
+          `    ${shape.type} is read with Zod, which refuses a value it doesn't list. Either:`,
+          '    1. Keep writing only the values the old type lists; or',
+          `    2. ${version} (one that returns the old file as it is), so an older reeval refuses the new files with a clear message instead.`,
         )
       } else if (c.kind === 'default-unused') {
         lines.push('    (READ_DEFAULTS is in src/view/record.ts.)')

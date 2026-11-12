@@ -171,6 +171,44 @@ describe('persisted shapes', () => {
     assert.deepEqual(compare(now, copy(now), none), [])
   })
 
+  test('a shape read with Zod breaks on a new enum value or variant, not on a new optional field', () => {
+    const report = shape('run-report')
+    const now = snapshot('run-report')
+    const breaking = (older: ShapeSchema, newer: ShapeSchema = now) =>
+      checkShape(report, newer, older).breaking.map((c) => [c.kind, c.path])
+
+    const fewerValues = copy(now)
+    const fairness = def(fewerValues, 'EvalHeadline').properties?.fairness as Schema
+    assert.deepEqual(fairness.enum, ['clear', 'within-noise', 'too-few-runs'])
+    fairness.enum = ['clear', 'within-noise']
+    assert.deepEqual(breaking(fewerValues), [['widened', 'evals[].headline.fairness']])
+    assert.match(
+      explain([checkShape(report, now, fewerValues)]),
+      /bump RunReport's reportVersion and add a migration/,
+    )
+
+    const fewerVariants = copy(now)
+    const primary = def(fewerVariants, 'EvalSection').properties?.primary as Schema
+    const union = primary.anyOf?.[0] as Schema
+    union.oneOf = union.oneOf?.filter((v) => v.$ref !== '#/$defs/RegressionChanges')
+    const added = breaking(fewerVariants)
+    assert.ok(
+      added.length > 0 &&
+        added.every(([kind, path]) => kind === 'widened' && /primary\.<kind=\w+>$/.test(path)),
+      JSON.stringify(added),
+    )
+
+    const withOptional = copy(now)
+    const ref = def(withOptional, 'AttemptRef')
+    ref.properties = { ...ref.properties, title: { type: 'string' } }
+    assert.deepEqual(breaking(now, withOptional), [])
+    assert.ok(
+      checkShape(report, withOptional, now).changes.some(
+        (c) => c.kind === 'added-optional' && c.path.endsWith('.title'),
+      ),
+    )
+  })
+
   test('widening passes: an older reeval reading the new file is the forward-direction test', () => {
     const now = snapshot('run-record')
     const wider = copy(now)

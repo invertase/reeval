@@ -25,6 +25,12 @@ export type CompatOptions = {
   defaults: string[]
   /** `from` versions with a migration in `MIGRATIONS` (src/view/record.ts). */
   migrations: number[]
+  /**
+   * Whether a reader refuses a value its schema doesn't list, as a shape read with Zod does: a new
+   * enum value, const, type or union variant then breaks an older reader and needs a version bump.
+   * Unknown fields stay additive.
+   */
+  closed?: boolean
 }
 
 type Doc = Pick<ShapeSchema, '$defs'>
@@ -91,6 +97,10 @@ export function compare(
     changes.push({ path, kind, breaking, message })
 
   const values = (s: Schema[]) => s.map((a) => describe(newDoc, a)).join(' | ')
+  const closed = options.closed ?? false
+  const unknownToOlder = closed
+    ? "An older reeval refuses a file holding it, since its schema doesn't list it."
+    : "An older reeval reading a new file sees a value it doesn't know, which the forward-compatibility test covers."
 
   // A recursive type (`JSONValue`) refers to itself: a `$ref` pair already being walked further
   // up has nothing new below it.
@@ -156,6 +166,14 @@ export function compare(
           )
         }
       }
+      const known = new Set(oldObjects.flatMap((o) => constsOf(oldDoc, o, tag)))
+      for (const n of newObjects) {
+        const added = constsOf(newDoc, n, tag).filter((v) => !known.has(v))
+        for (const value of added) {
+          const branch = join(path, `<${tag}=${value}>`)
+          add(branch, 'widened', closed, `${shown(branch)} is a new variant. ${unknownToOlder}`)
+        }
+      }
     } else if (oldObjects.length === 1 && newObjects.length >= 1) {
       const o = oldObjects[0] as Schema
       const shared = (a: Schema) =>
@@ -168,15 +186,19 @@ export function compare(
     const gained = news.filter(
       (n) =>
         !olds.some((o) =>
-          'const' in n ? 'const' in o && o.const === n.const : kindOf(o) === kindOf(n),
+          'const' in n
+            ? 'const' in o
+              ? o.const === n.const
+              : o.type === typeof n.const
+            : kindOf(o) === kindOf(n),
         ),
     )
     if (gained.length) {
       add(
         path,
         'widened',
-        false,
-        `${shown(path)} can now also be ${values(gained)}. An older reeval reading a new file sees a value it doesn't know, which the forward-compatibility test covers.`,
+        closed,
+        `${shown(path)} can now also be ${values(gained)}. ${unknownToOlder}`,
       )
     }
   }
