@@ -205,9 +205,10 @@ export function summarize(
   if (!first || !last || first === last || !perSecond || last.at <= first.at) return resources
   const durationMs = last.at - first.at
   const cpuSeconds = Math.max(0, last.cpu - first.cpu) / perSecond
-  // A reading closer than half an interval to the last kept one (teardown's, right after one) says
-  // little alone, so it joins a neighboring sample. The samples cover the whole span between them,
-  // so the average, a duration-weighted mean of them, is never above the peak.
+  // A reading less than half an interval after the last kept one (teardown's, right after one) says
+  // little alone, so its sample runs on to the next kept reading, or the last sample ends at it.
+  // The samples cover the first reading to the last, so the average, a duration-weighted mean of
+  // them, is never above the peak.
   const bounds = [first]
   for (const r of readings.slice(1)) {
     if (r.at - (bounds.at(-1) as Reading).at >= o.sampleMs / 2) bounds.push(r)

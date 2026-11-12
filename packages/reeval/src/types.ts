@@ -3391,8 +3391,8 @@ export type AttemptResources = {
      */
     peakCores?: number
     /**
-     * The 95th percentile of the CPUs it kept busy between two readings, a second apart: what it
-     * needed but for its busiest twentieth of the time. Absent with fewer than two readings.
+     * The 95th percentile of the CPUs it kept busy over each sample, as `peakCores` takes them:
+     * what it needed but for its busiest twentieth of the time. Absent with no sample.
      */
     p95Cores?: number
     /**
