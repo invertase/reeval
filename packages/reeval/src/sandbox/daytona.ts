@@ -203,7 +203,7 @@ const spell = (ms: number) =>
 export const SNAPSHOT_WAITS = { pollMs: 2_000, waitMs: 15 * 60_000, buildMs: 30 * 60_000 }
 
 /** The SDK's `Image` of a Dockerfile, with the files its `COPY` lines name. */
-async function sdkImage(
+export async function sdkImage(
   image: { dockerfile?: string; contextDir?: string },
   root: string,
 ): Promise<Image> {
