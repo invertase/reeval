@@ -26,7 +26,7 @@ image docker · goose · 1 evals
 image docker · pi · 1 evals
   base  reeval-sandbox:pi-0.2.9  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 1 evals
-  base  reeval-sandbox:grok-build-0.1.12  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:grok-build-0.1.13  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
   base  reeval-sandbox:fx-0.1.11  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 1 evals

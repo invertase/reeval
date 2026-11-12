@@ -812,7 +812,7 @@ importers:
         specifier: workspace:0.1.16
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.12
+        specifier: workspace:0.1.13
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.16
@@ -868,7 +868,7 @@ importers:
         specifier: workspace:0.1.16
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.12
+        specifier: workspace:0.1.13
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.16
