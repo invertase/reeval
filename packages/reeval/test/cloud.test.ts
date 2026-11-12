@@ -423,12 +423,15 @@ evaluate('reaches', async (c) => {
     const p = await service({ maxLive: 0 })
     const dir = (await project('cloud-ended', files(''))).dir
     const env = { [VM_URL]: p.url, [VM_TOKEN]: p.token }
-    const stopping = setTimeout(
-      () => p.stopRun('run_deadline', 'The run waited past its start deadline.'),
-      1_500,
-    )
+    // The service ends the run once it has refused a create, however long the attempt took to ask.
+    const stopping = setInterval(() => {
+      if (p.requests.some((q) => q.call === 'POST /vm/sandboxes' && q.status === 429)) {
+        p.stopRun('run_deadline', 'The run waited past its start deadline.')
+        clearInterval(stopping)
+      }
+    }, 20)
     const run = await runCli(dir, ['run'], { env, timeoutMs: 90_000 }).finally(() =>
-      clearTimeout(stopping),
+      clearInterval(stopping),
     )
     const out = run.stdout + run.stderr
     const { evals } = readRun(dir)
