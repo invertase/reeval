@@ -473,19 +473,19 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.push-out',
     area: 'Config and selection',
-    name: "`reeval cloud push --out <file>`: the recorded run's secret-scanned history archive written to the file, with nothing sent and no sign-in needed; `--json` prints what it wrote, or on an upload the run's last state",
+    name: "`reeval cloud push --out <file>`: the recorded run's secret-scanned history archive written to the file, with nothing sent and no sign-in needed (a file already there must be a reeval archive); `--json` prints what it wrote, or on an upload the run's last state",
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'cloud.push-artifacts',
     area: 'Config and selection',
-    name: "`reeval cloud push [run] --artifacts all|failures|none`: the archive at that level, built under the run's claim from the run's copy in `.reeval/runs` (nothing is recorded; a run still running is refused, and an incomplete unrecorded one without `--allow-incomplete`), which for a recorded run must rebuild to its record at the recorded level (else, with a line saying why, from the history copy, whose level it only narrows; a wider one is refused); scanned as any push is. Without it an unrecorded run is refused with how to record it",
+    name: "`reeval cloud push [run] --artifacts all|evidence|failures|none`: the archive at that level, built under the run's claim from the run's copy in `.reeval/runs` (nothing is recorded; a run still running is refused, and an incomplete unrecorded one without `--allow-incomplete`), which for a recorded run must rebuild to its record at the recorded level (else, with a line saying why, from the history copy, whose level it only narrows; a wider one is refused); scanned as any push is, and a worktree patch it leaves out is named by file, line and rule only. Without it an unrecorded run is refused with how to record it, and `--allow-incomplete` is refused",
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'studio.share',
     area: 'Config and selection',
-    name: "`reeval studio share [run]`: pushes the recorded run as `reeval cloud push` does (secret scan included, nothing sent on a finding) unless the cloud project has read it already, then creates a share of its report for the org's members and prints its link; `--full` shares the transcripts and artifacts too and `--public` makes the link viewable without signing in, each saying so in one line; a refused share prints the platform's message and exits 2; `--json` prints the share; `--list [run]` lists the project's shares and `--revoke <id>` revokes one",
+    name: "`reeval studio share [run]`: pushes the recorded run as `reeval cloud push` does (secret scan included, nothing sent on a finding) unless the cloud project has read it already, then creates a share of its report for the org's members and prints its link; `--full` shares the transcripts and artifacts too and `--public` makes the link viewable without signing in, each saying so in one line (`--public` pushes the copy scanned here first, even when the project has the run); a refused share prints the platform's message and exits 2; `--json` prints the share; `--list [run]` lists the project's shares and `--revoke <id>` revokes one",
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
