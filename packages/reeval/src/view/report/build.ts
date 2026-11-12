@@ -83,8 +83,16 @@ export type RunReportOptions = {
   evals?: string[]
   /** Overrides the derived title. */
   title?: string
-  /** Prefix of every artifact link. `./` in `summary.md`. */
-  linkBase?: string
+  /** Where the report's links point. */
+  links?: ReportLinks
+}
+
+/** Where a report's links point, for a host that serves a run's files elsewhere than its folder. */
+export type ReportLinks = {
+  /** Prefix of every artifact link, which is relative to the run's folder. `./` in `summary.md`. */
+  base?: string
+  /** The run record's href. `../<runId>.json`, the record beside the run's folder, by default. */
+  record?: string
 }
 
 const MEASURE_KEYS: MeasureKey[] = [
@@ -1956,7 +1964,7 @@ export function buildRunReport(record: RunRecord, options: RunReportOptions = {}
     record,
     evals,
     ids,
-    linkBase: options.linkBase,
+    linkBase: options.links?.base,
     remarks: options.remarks ?? null,
     analysis: options.analysis ?? null,
     pages: options.pages,
@@ -1984,7 +1992,7 @@ export function buildRunReport(record: RunRecord, options: RunReportOptions = {}
     roster,
     evals: sections,
     actions: buildActions(ctx.analysis),
-    provenance: provenanceState(record, options.linkBase),
+    provenance: provenanceState(record, options.links?.record),
     attempts: buildAttemptIndex(ctx),
   }
 }

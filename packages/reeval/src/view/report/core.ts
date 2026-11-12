@@ -1,7 +1,7 @@
 // The report's zod-free surface: `reeval/view` re-exports this, and `reeval/view/report` adds the
 // schema (`./schema.ts`, the one module here that imports zod).
 
-export { buildRunReport, type RunReportOptions } from './build.ts'
+export { buildRunReport, type ReportLinks, type RunReportOptions } from './build.ts'
 export {
   countFigure,
   countOf,

@@ -106,7 +106,7 @@ export function warnings(run: RunRecord): string[] {
 }
 
 /** Provenance block for a run report. */
-export function provenanceState(run: RunRecord, linkBase?: string): ProvenanceState {
+export function provenanceState(run: RunRecord, recordLink?: string): ProvenanceState {
   const contextFiles = run.stack.context.map((c) => ({
     path: c.path,
     sha256: c.sha256,
@@ -115,7 +115,7 @@ export function provenanceState(run: RunRecord, linkBase?: string): ProvenanceSt
     rows: stateRows(run),
     context: { count: contextFiles.length, files: contextFiles },
     artifacts: run.artifacts,
-    record: recordHref(run.runId, linkBase),
+    record: recordHref(run.runId, recordLink),
     warnings: warnings(run),
   }
 }

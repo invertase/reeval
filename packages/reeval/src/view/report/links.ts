@@ -11,11 +11,9 @@ export function withBase(linkBase: string | undefined, path: string): string {
   return `${base}${trimmed}`
 }
 
-/** Record link is always kept beside the run directory. */
-export function recordHref(runId: string, linkBase?: string): string {
-  // The record sits next to the run directory: `../<runId>.json`.
-  void linkBase
-  return `../${runId}.json`
+/** The record's link: `href`, or `../<runId>.json`, the record beside the run's folder. */
+export function recordHref(runId: string, href?: string): string {
+  return href ?? `../${runId}.json`
 }
 
 function kept(ref: FileRef | undefined | null): string | null {

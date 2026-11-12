@@ -30,7 +30,7 @@ describe('summary.md goldens', () => {
   for (const g of GOLDENS) {
     test(g.name, () => {
       const record = loadCorpus(g.corpus)
-      const report = buildRunReport(record, { linkBase: './' })
+      const report = buildRunReport(record, { links: { base: './' } })
       assert.doesNotThrow(() => runReportSchema.parse(report))
       const md = runReportMarkdown(report)
       for (const forbidden of FORBIDDEN_OUTPUT) {

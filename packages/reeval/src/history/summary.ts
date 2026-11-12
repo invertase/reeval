@@ -105,5 +105,5 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
  * so every surface shares one view-model.
  */
 export function renderSummary(run: RunRecord, opts: RunReportOptions = {}): string {
-  return runReportMarkdown(buildRunReport(run, { linkBase: './', ...opts }))
+  return runReportMarkdown(buildRunReport(run, { links: { base: './' }, ...opts }))
 }

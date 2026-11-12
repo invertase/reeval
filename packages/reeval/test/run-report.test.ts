@@ -31,7 +31,7 @@ describe('buildRunReport', () => {
       const file = entry.runs.at(-1)?.file
       if (!file) continue
       const record = readableRecord(JSON.parse(readFileSync(file, 'utf8')) as RunRecord)
-      const report = buildRunReport(record, { linkBase: './' })
+      const report = buildRunReport(record, { links: { base: './' } })
       assert.doesNotThrow(() => runReportSchema.parse(report), entry.name)
       const md = runReportMarkdown(report)
       for (const forbidden of FORBIDDEN_OUTPUT) {
@@ -47,7 +47,7 @@ describe('buildRunReport', () => {
     const record = loadCorpusRun('with-layouts')
     const key = record.evals[0]?.key
     assert.ok(key)
-    const report = buildRunReport(record, { evals: [key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [key], links: { base: './' } })
     assert.equal(report.single, true)
     assert.equal(report.evals.length, 1)
     assert.equal(report.roster.length, 0)
@@ -93,7 +93,7 @@ describe('buildRunReport', () => {
     ]
     const report = buildRunReport(head, {
       evals: [evalKey],
-      linkBase: './',
+      links: { base: './' },
       prior: {
         record: prior,
         rows,
@@ -146,7 +146,7 @@ describe('buildRunReport', () => {
         },
       ]
     }
-    const report = buildRunReport(record, { evals: [e.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e.key], links: { base: './' } })
     const primary = report.evals[0]!.headline.primary
     assert.equal(primary.kind, 'pass-rate')
     if (primary.kind === 'pass-rate') assert.equal(primary.outcome, 'used')
@@ -174,7 +174,7 @@ describe('buildRunReport', () => {
         reason: 'baseline has no skill',
       },
     ]
-    const report = buildRunReport(record, { evals: [e.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e.key], links: { base: './' } })
     assert.ok(report.integrity.some((i) => i.kind === 'pre-satisfied'))
     const task = report.evals[0]!.primary
     assert.equal(task?.kind, 'task')
@@ -206,7 +206,7 @@ describe('buildRunReport', () => {
       // No toPass assertion → diagnostic; scored threshold must not invent an at-or-above tally.
       a.assertions = []
     }
-    const report = buildRunReport(record, { evals: [e.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e.key], links: { base: './' } })
     const judgments = report.evals[0]!.judgments
     assert.ok(judgments)
     assert.equal(judgments!.scores[0]!.threshold, null)
@@ -220,7 +220,7 @@ describe('buildRunReport', () => {
     const record = loadCorpusRun('with-layouts')
     const e = record.evals.find((ev) => ev.compare)
     assert.ok(e)
-    const report = buildRunReport(record, { evals: [e!.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e!.key], links: { base: './' } })
     const comparison = report.evals[0]!.primary
     assert.equal(comparison?.kind, 'comparison')
     if (comparison?.kind === 'comparison') {
@@ -238,7 +238,7 @@ describe('buildRunReport', () => {
       agentUsd: { usd: 1.25, basis: 'reported', source: 'fixture' },
       judgeUsd: { usd: 0.25, basis: 'estimated', source: 'fixture' },
     }
-    const report = buildRunReport(record, { linkBase: './' })
+    const report = buildRunReport(record, { links: { base: './' } })
     assert.ok(report.header.cost)
     assert.equal(report.header.cost!.basis, 'mixed')
     assert.ok(report.header.cost!.agent)
@@ -260,7 +260,7 @@ describe('buildRunReport', () => {
     }
     a.files.transcript = shared
     b.files.transcript = { ...shared }
-    const report = buildRunReport(record, { evals: [e!.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e!.key], links: { base: './' } })
     const hrefs = report.attempts.map((row) => row.href)
     assert.equal(new Set(hrefs).size, hrefs.length)
     assert.ok(hrefs.some((h) => h.includes('shared/transcript.jsonl')))
@@ -288,7 +288,7 @@ describe('buildRunReport', () => {
       a.observations = []
     }
     e.answers = undefined
-    const report = buildRunReport(record, { evals: [e.key], linkBase: './' })
+    const report = buildRunReport(record, { evals: [e.key], links: { base: './' } })
     const primary = report.evals[0]!.headline.primary
     assert.equal(primary.kind, 'text')
     if (primary.kind === 'text') {
@@ -342,5 +342,22 @@ describe('readableRunReport', () => {
   test('refuses a report from a newer reeval', () => {
     const newer = { ...golden(), reportVersion: REPORT_VERSION + 1 }
     assert.throws(() => readableRunReport(newer), NewerSchemaError)
+  })
+})
+
+describe('RunReport links', () => {
+  test('links.base prefixes artifact links and links.record replaces the record href', () => {
+    const record = loadCorpusRun('with-layouts')
+    const plain = buildRunReport(record)
+    assert.equal(plain.provenance.record, `../${record.runId}.json`, 'the record beside the folder')
+    const base = `/runs/${record.runId}/files/`
+    const hosted = buildRunReport(record, {
+      links: { base, record: `/runs/${record.runId}/record` },
+    })
+    assert.equal(hosted.provenance.record, `/runs/${record.runId}/record`)
+    const transcripts = hosted.attempts.flatMap((a) => a.links.transcript ?? [])
+    assert.ok(transcripts.length > 0)
+    for (const t of transcripts) assert.ok(t.startsWith(base), t)
+    assert.doesNotMatch(JSON.stringify(hosted), /"\.\/[^"]+"/, 'no link is left relative to ./')
   })
 })
