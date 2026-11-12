@@ -2,9 +2,9 @@ import type { AttemptRecord, EvalEntry, FileRef } from '../../history/types.ts'
 import { type AttemptIdMap, attemptAnchor, idOf } from './ids.ts'
 import type { AttemptRef } from './types.ts'
 
-/** Prefix every relative artifact link. Defaults to `./` in `summary.md`. */
+/** Prefix every relative artifact link: `linkBase` as a folder, `./` by default. */
 export function withBase(linkBase: string | undefined, path: string): string {
-  const base = linkBase ?? './'
+  const base = !linkBase ? (linkBase ?? './') : linkBase.endsWith('/') ? linkBase : `${linkBase}/`
   if (path.startsWith('#')) return path
   if (path.startsWith('../')) return path
   const trimmed = path.replace(/^\.\//, '')

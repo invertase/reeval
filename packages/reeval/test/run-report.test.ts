@@ -391,4 +391,18 @@ describe('RunReport links', () => {
     for (const t of transcripts) assert.ok(t.startsWith(base), t)
     assert.doesNotMatch(JSON.stringify(hosted), /"\.\/[^"]+"/, 'no link is left relative to ./')
   })
+
+  test('links.base is a folder with or without its trailing /', () => {
+    const record = loadCorpusRun('with-layouts')
+    const slashed = JSON.stringify(buildRunReport(record, { links: { base: 'https://h/x/' } }))
+    const bare = JSON.stringify(buildRunReport(record, { links: { base: 'https://h/x' } }))
+    assert.equal(bare, slashed)
+    assert.match(bare, /"https:\/\/h\/x\/evals-/)
+    assert.doesNotMatch(bare, /https:\/\/h\/x[^/]/)
+    assert.equal(
+      JSON.stringify(buildRunReport(record, { links: { base: './' } })),
+      JSON.stringify(buildRunReport(record)),
+      './ is the default',
+    )
+  })
 })
