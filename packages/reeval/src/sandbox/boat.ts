@@ -632,6 +632,11 @@ export function vmPoolProvider(
           if (status(error) === 409 && code && code === service.reclaims) {
             throw new MachineReclaimed(`${service.name} took sandbox ${id} back: ${why}`)
           }
+          if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+            throw new RunStopped(
+              `${service.name} ended the run, so its machines take no more attempts: ${why}`,
+            )
+          }
           throw error
         })
       const short = tooShort(service, id, ttlSeconds, updated?.sandbox?.ttlSeconds)

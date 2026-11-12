@@ -346,6 +346,49 @@ describe('machine pool', () => {
     assert.deepEqual(provider.live(), [])
   })
 
+  test('a keep-alive that says the run ended stops its attempts, starting no machine for them', async () => {
+    const ended = new RunStopped('the service ended the run')
+    const provider = fakeProvider(() => 'ok', {
+      keepAlive: () => {
+        throw ended
+      },
+    })
+    const p = pool(provider, { limits: { machines: 2 }, reuse: true })
+    ;(await p.acquire()).release()
+    await assert.rejects(p.acquire(), ended)
+    await assert.rejects(p.acquire(), ended)
+    assert.deepEqual(
+      provider.started.map((s) => s.id),
+      ['m1'],
+    )
+    await p.close()
+    assert.deepEqual(provider.live(), [])
+  })
+
+  test('a packed machine taken back keeps its running attempt, takes no new one and goes after it', async () => {
+    const provider = fakeProvider(() => 'ok', {
+      keepAlive: (id) => {
+        throw new MachineReclaimed(`took ${id} back`)
+      },
+    })
+    const p = pool(provider, { limits: { machines: 3 }, attemptsPerMachine: 2 })
+    const a = await p.acquire()
+    const b = await p.acquire()
+    assert.deepEqual(provider.kept, ['m1'], "the second slot's lease asks to keep m1")
+    assert.equal(a.machine, 'm1')
+    assert.equal(b.machine, 'm2')
+    assert.deepEqual(provider.removed, [], 'm1 stays while its first attempt runs')
+    const c = await p.acquire()
+    assert.notEqual(c.machine, 'm1', 'a machine taken back takes no new attempt')
+    a.release()
+    await until(() => provider.removed.includes('m1'))
+    assert.ok(!provider.live().includes('m1'))
+    b.release()
+    c.release()
+    await p.close()
+    assert.deepEqual(provider.live(), [])
+  })
+
   test("a start waiting on the hour's cap past maxRateWaitMs fails, naming the cap", async () => {
     const provider = fakeProvider()
     const p = pool(provider, {

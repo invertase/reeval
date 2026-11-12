@@ -243,6 +243,11 @@ export class MachinePool<M> {
         try {
           await this.#provider.keepAlive(machine.id as string, this.#ttlSeconds)
         } catch (error) {
+          if (error instanceof RunStopped) {
+            this.#ended ??= error
+            this.#release(slot, true)
+            throw error
+          }
           const reclaimed = error instanceof MachineReclaimed
           if (reclaimed) this.#stats.reclaimed++
           else this.#stats.keepAliveFailed++

@@ -36,7 +36,7 @@ export type FakeVmService = {
   starts(): number
   /** Ends the run, or its token expires: the token stops working. */
   end(): void
-  /** The service ends the run: every create after it is a final `409 code`. */
+  /** The service ends the run: every create and keep-alive after it is a final `409 code`. */
   stopRun(code: string, message: string): void
   /** The next `count` keep-alives take their VM back: deleted, and a `409 vm_released`. */
   reclaim(count: number): void
@@ -221,6 +221,7 @@ export async function fakeVmService(
       if (!b || Object.keys(b).some((k) => k !== 'ttlSeconds')) {
         return error(400, 'invalid_request', 'Only ttlSeconds can change.')
       }
+      if (stopped) return stopped
       if (reclaiming > 0) {
         reclaiming--
         await upstream('DELETE', path, undefined, { 'x-ascii-confirm-delete': id })

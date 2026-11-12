@@ -407,6 +407,22 @@ describe("the service's layout", () => {
   })
 })
 
+describe('a run the service ends', () => {
+  test("stops the run's attempts at a reused VM's keep-alive", async () => {
+    const p = await service()
+    const made = (await (await create(p)).json()) as { sandbox: { id: string } }
+    const { provider } = await inRun(on(p), () =>
+      openCloudPool(cloud({}), { runId: 'run-ended', root: process.cwd() }),
+    )
+    p.stopRun('run_cancelled', 'The run ended, so its VMs take no more attempts.')
+    const error = (await inRun(on(p), async () =>
+      provider.keepAlive?.(made.sandbox.id, 1200),
+    ).catch((e: Error) => e)) as Error
+    assert.equal(error.name, 'RunStopped')
+    assert.match(error.message, /ended the run, so its machines take no more attempts/)
+  })
+})
+
 describe("a run's cleanup", () => {
   test("deletes the run's VMs, and nobody else's", async () => {
     const p = await service()
