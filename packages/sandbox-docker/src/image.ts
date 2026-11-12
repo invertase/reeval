@@ -135,7 +135,7 @@ export const HARNESS_PACKAGES: Record<
   },
   'grok-build': {
     name: '@reeval/harness-grok-build',
-    version: '0.1.12',
+    version: '0.1.13',
     bootstrap: {
       name: 'Grok Build',
       cli: 'grok',

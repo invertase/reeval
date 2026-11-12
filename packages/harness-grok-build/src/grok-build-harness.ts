@@ -9,17 +9,17 @@ import { GROK_BUILD_BUILTIN_TOOLS, type GrokBuildBuiltinTools } from './grok-bui
 
 export const GROK_BUILD_HARNESS_ID = 'grok-build'
 /** The Grok Build release the bootstrap installs, checked against npm's published sha512s. */
-export const GROK_CLI_VERSION = '1.0.70'
+export const GROK_CLI_VERSION = '1.0.77'
 /**
  * The `dist.integrity` of `@xai-official/grok-<platform>@<version>`, its native builds: Linux's
  * for each arch, and macOS's for Apple Silicon (a Tart VM).
  */
 export const GROK_CLI_INTEGRITY = {
-  x64: 'sha512-rElshycz/6SgPSkiFGtKHA4vSVOI8qQ6d0jFeu4I92hXCMfvxgMiOvNSzuBhm2P8Jd+4rNGAty2zW0VwmgHSeA==',
+  x64: 'sha512-DuPSEw1NYj/bwLOCK/7LJw83N1rgKc8hEsIg4CggJ9y74yabAOUdamr4lfI+i2cKLPq9h8TQf2KNbyE/zX89yg==',
   arm64:
-    'sha512-rH0TfWOT/Ca/sBMtAJJ+GJ9UyZlr/TkTqIHq8FL7o+ZTzJMBWvCv40JC4T/XuwEZ3WMmxOHGiPap7H9B4SbDSw==',
+    'sha512-Kb4yKbVEztX07iM7cvKB2L/xiQP1M/kLjJnyRk84gNtr3IG7ahqJp6005uB/VLvw0isv1Cj50zJ9jYTK7NiOqw==',
   'darwin-arm64':
-    'sha512-TvzZ4b6YwpiK7UybJGJ4AXxAD7fz8Y912Q0tsY6VkoDFRgpxIUWBdbp6Ax8ICJn1REf7qnsLcRRuyiaOTwJbmg==',
+    'sha512-84xJbu3gT5CdY1o3uSxRXtcZyoPLdn2KmrkODUHyzB45+DnlpZDzZK33dSM3nlxh6X9NSeqWoqtO4eQnACo0Wg==',
 } as const
 /** The credential the adapter uses by default: an xAI API key. */
 export const GROK_CREDENTIAL_ENV = 'XAI_API_KEY'
