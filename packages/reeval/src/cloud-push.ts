@@ -69,7 +69,9 @@ export type ScannedRun = {
 }
 
 /** What each level keeps, widest first. */
-const LEVELS: readonly ArtifactLevel[] = ['all', 'failures', 'none']
+const LEVELS: readonly ArtifactLevel[] = ['all', 'evidence', 'failures', 'none']
+const orList = (items: readonly string[]) =>
+  items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`
 
 /** Whether `runId`'s `reeval run` is still going: its progress file's process is alive. */
 async function stillRunning(root: string, runId: string): Promise<boolean> {
@@ -154,7 +156,7 @@ async function archiveFiles(
         const was = run.artifacts
         if (LEVELS.indexOf(level) < LEVELS.indexOf(was)) {
           throw new CommandError(
-            `Run ${runId} was recorded with artifacts ${was}, so --artifacts ${level} can't add what recording left out: push it at ${LEVELS.slice(LEVELS.indexOf(was)).join(' or ')}`,
+            `Run ${runId} was recorded with artifacts ${was}, so --artifacts ${level} can't add what recording left out: push it at ${orList(LEVELS.slice(LEVELS.indexOf(was)))}`,
           )
         }
         same = level === was

@@ -287,7 +287,7 @@ describe('reeval studio share', () => {
       assert.match(full.stdout, /^This share includes the run's transcripts and artifacts\.$/m)
       assert.match(
         full.stderr,
-        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: for future runs, history\.artifacts: 'all' or reeval record --artifacts all/,
+        /recorded with artifacts evidence, so passing attempts' transcripts weren't kept: for future runs, history\.artifacts: 'all' or reeval record --artifacts all/,
       )
       assert.doesNotMatch(full.stdout, /without signing in/)
       assert.match(full.stdout, /\(full, team\)/)
@@ -1001,7 +1001,7 @@ describe('reeval cloud push --out and --json', () => {
     assert.equal(wider.code, 2, wider.stdout + wider.stderr)
     assert.equal(
       wider.stderr.trim(),
-      `reeval: Run ${runId} was recorded with artifacts failures, so --artifacts all can't add what recording left out: push it at failures or none`,
+      `reeval: Run ${runId} was recorded with artifacts evidence, so --artifacts all can't add what recording left out: push it at evidence, failures or none`,
     )
     assert.ok(!existsSync(join(dir, 'w.zip')))
     const same = await runCli(dir, [
@@ -1009,7 +1009,7 @@ describe('reeval cloud push --out and --json', () => {
       'push',
       runId,
       '--artifacts',
-      'failures',
+      'evidence',
       '--out',
       'out/same.zip',
     ])
@@ -1069,8 +1069,8 @@ describe('reeval cloud push --out and --json', () => {
     const r = await runCli(all, ['cloud', 'push', '--out', 'run.zip'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.ok((await transcripts(join(all, 'run.zip'))).length > 0, 'the passing attempt keeps it')
-    const failures = await runCli(dir, ['cloud', 'push', '--out', 'out/run.zip'])
-    assert.equal(failures.code, 0, failures.stdout + failures.stderr)
-    assert.deepEqual(await transcripts(out()), [], "'failures' leaves a passing attempt's out")
+    const evidence = await runCli(dir, ['cloud', 'push', '--out', 'out/run.zip'])
+    assert.equal(evidence.code, 0, evidence.stdout + evidence.stderr)
+    assert.deepEqual(await transcripts(out()), [], "'evidence' leaves a passing attempt's out")
   })
 })
