@@ -1,8 +1,9 @@
 // `reeval studio share`: a link to a recorded run's view in the cloud studio. It scans the run as
 // `reeval cloud push` does, then asks the platform for the share; only when the platform has no
 // copy of the run, or hasn't read it yet, does it push it (or wait on the copy being read) and ask
-// again. Shares are the report only and for the org's members unless `--full` and `--public` say
-// otherwise. `--list` and `--revoke` manage them.
+// again. A share serves the cloud project's current copy, so a `--public` one pushes the copy
+// scanned here first. Shares are the report only and for the org's members unless `--full` and
+// `--public` say otherwise. `--list` and `--revoke` manage them.
 import { setTimeout } from 'node:timers/promises'
 import type { Flags } from './cli-spec.ts'
 import {
@@ -227,20 +228,22 @@ export async function shareCommand(
   const scope = flags.public ? 'public' : 'team'
   const run = await scannedRun(config, flags, args[0], warn)
   const { runId } = run
-  if (flags.full) {
-    note("This share includes the run's transcripts and artifacts.")
-    const missing = missingTranscripts(run)
-    if (missing) warn(missing)
-  }
+  if (flags.full) note("This share includes the run's transcripts and artifacts.")
   if (flags.public) note('Anyone with the link can view it, without signing in.')
   const what = `share run ${runId}`
   const ask = () => send(t, sharesUrl(t), { method: 'POST', what, body: { runId, type, scope } })
   const notReady = (a: Answer) => a.status === 409 && errorCode(a) === 'not_ready'
-  let answer = await ask()
   let pushed = false
+  if (flags.public) {
+    // The cloud project's copy may have been pushed without a scan, or from another machine.
+    const state = await uploadRun(t, run, { wait: true, progress: note })
+    if (state.status === 'failed') throw readFailed(runId, state)
+    pushed = true
+  }
+  let answer = await ask()
   const missing = answer.status === 404 && errorCode(answer) === 'not_found'
   if (missing || notReady(answer)) {
-    pushed = await ensureRead(t, run, missing, note)
+    pushed = (await ensureRead(t, run, missing, note)) || pushed
     answer = await ask()
     if (notReady(answer)) {
       await setTimeout(NOT_READY_RETRY_MS)
@@ -252,7 +255,7 @@ export async function shareCommand(
       }
     }
   }
-  // The platform's own words, which say what the plan allows.
+  // The platform's own words for the refusal.
   if (errorCode(answer) === 'share_limit') {
     throw new UsageError(platformMessage(answer.body) ?? `the cloud platform refused to ${what}`)
   }
@@ -269,6 +272,9 @@ export async function shareCommand(
       `the cloud platform answered with a revoked share (${made.id}): ask for the share again`,
     )
   }
+  // Only a copy pushed here is known to be at the run's recorded level.
+  const missingNote = flags.full && pushed ? missingTranscripts(run) : null
+  if (missingNote) warn(missingNote)
   const created = answer.status === 201
   io.out(
     flags.json
