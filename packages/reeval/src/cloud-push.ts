@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
-import { ArchiveError, writeArchive } from './archive/index.ts'
+import { ArchiveError, openArchive, writeArchive } from './archive/index.ts'
 import { safeZipPath } from './archive/zip.ts'
 import type { Flags } from './cli-spec.ts'
 import { scanPush } from './cloud-push-scan.ts'
@@ -440,7 +440,10 @@ async function realAncestor(path: string): Promise<string> {
   return parent === path ? path : join(await realAncestor(parent), basename(path))
 }
 
-/** Where `--out` writes: a file, never `-`, a folder, or anywhere reeval keeps runs. */
+/**
+ * Where `--out` writes: a file, never `-`, a folder, anywhere reeval keeps runs, or a file that is
+ * there already and isn't a reeval archive.
+ */
 async function outFile(config: ResolvedConfig, out: string): Promise<string> {
   if (out === '-') {
     throw new UsageError('--out takes a file to write the archive to, not - (stdout)')
@@ -464,6 +467,15 @@ async function outFile(config: ResolvedConfig, out: string): Promise<string> {
       `--out ${out} is a folder: name the file to write, e.g. ${join(out, 'run.zip')}`,
     )
   }
+  if (there) {
+    const archive = await openArchive(file).catch(() => null)
+    await archive?.close()
+    if (!archive) {
+      throw new UsageError(
+        `--out ${out} is there already and isn't a reeval archive: name a new file, or remove it first`,
+      )
+    }
+  }
   return file
 }
 
@@ -476,6 +488,11 @@ export async function pushCommand(
 ): Promise<number> {
   const warn = io.err ?? io.out
   const progress = flags.json ? (io.note ?? warn) : io.out
+  if (flags['allow-incomplete'] && flags.artifacts === undefined) {
+    throw new UsageError(
+      '--allow-incomplete goes with --artifacts, which can push an unrecorded run: add --artifacts <level>, or leave it out',
+    )
+  }
   if (flags.out !== undefined) {
     const extra = (['no-wait', 'org', 'project'] as const).filter((f) => flags[f] !== undefined)
     if (extra.length) {

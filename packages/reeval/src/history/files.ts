@@ -776,7 +776,13 @@ async function leveled(
   run: RunRecord,
   level: ArtifactLevel,
   options: { skipSecretScan?: boolean },
-): Promise<{ record: RunRecord; files: Map<string, Uint8Array>; droppedPatch: string[] }> {
+): Promise<{
+  record: RunRecord
+  files: Map<string, Uint8Array>
+  droppedPatch: string[]
+  /** `droppedPatch` with each finding's rule alone, never any part of the value. */
+  droppedPatchRules: string[]
+}> {
   const { runId } = run
   const record: RunRecord = structuredClone(run)
   record.artifacts = level
@@ -838,6 +844,7 @@ async function leveled(
   }
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []
+  let droppedPatchRules: string[] = []
   if (patch && record.git && level !== 'none') {
     const bytes = await runFile(source, runId, patch.path)
     if (sha256(bytes) !== patch.sha256) {
@@ -847,6 +854,10 @@ async function leveled(
     const findings = options.skipSecretScan ? [] : scanText(patch.path, bytes.toString())
     if (findings.length > 0) {
       droppedPatch = findingLines(patch.path, findings)
+      droppedPatchRules = findingLines(
+        patch.path,
+        findings.map((f) => ({ ...f, what: f.rule })),
+      )
       record.git.worktreePatch = null
       record.git.worktreePatchNote = `${SECRET_NOTE} (${findingSummary(findings)})`
     } else {
@@ -877,13 +888,14 @@ async function leveled(
   if (level !== 'none') {
     for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
   }
-  return { record, files, droppedPatch }
+  return { record, files, droppedPatch, droppedPatchRules }
 }
 
 /**
  * The files of a run archive of `runId` at `level`, built from `dir`'s copy of the run (the
  * history folder's or `.reeval/runs`') under its claim, as `recordRun` would keep them; nothing is
- * written or recorded. `check` sees the run's record first and may refuse it.
+ * written or recorded. `check` sees the run's record first and may refuse it. `droppedPatch` says
+ * where the worktree patch looked like it held a secret and by which rule, never any part of it.
  */
 export async function leveledArchiveFiles(
   dir: string,
@@ -914,7 +926,7 @@ export async function leveledArchiveFiles(
       if (options.recorded && error instanceof HistoryError) return { mismatch: error.message }
       throw error
     }
-    const { record, files, droppedPatch } = made
+    const { record, files, droppedPatchRules } = made
     return {
       files: [
         { path: `${runId}.json`, data: encodeRecord(record) },
@@ -922,7 +934,7 @@ export async function leveledArchiveFiles(
           .sort(([a], [b]) => (a < b ? -1 : 1))
           .map(([path, data]) => ({ path: `${runId}/${path}`, data })),
       ],
-      droppedPatch,
+      droppedPatch: droppedPatchRules,
     }
   } finally {
     await release()
