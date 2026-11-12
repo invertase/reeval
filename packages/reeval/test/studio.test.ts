@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { connect } from 'node:net'
