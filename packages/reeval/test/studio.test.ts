@@ -59,6 +59,7 @@ import {
   TRANSCRIPT_LIMIT,
   type TranscriptPage,
   transcriptItems,
+  transcriptQuery,
   uniqueJudgeLabels,
 } from '../src/view/index.ts'
 import { readableRunReport } from '../src/view/report/index.ts'
@@ -1246,8 +1247,30 @@ describe('studio data server', () => {
       next: null,
       totalLines: many,
     })
-    assert.equal((await page('many.jsonl', 'cursor=abc&limit=1')).items.length, 1)
-    assert.equal((await page('many.jsonl', 'cursor=abc&limit=1')).next, '1')
+    for (const query of [
+      'cursor=abc',
+      'cursor=-5',
+      'cursor=1.9',
+      'cursor=1e3',
+      'cursor=0x10',
+      'cursor=%207',
+      'cursor=',
+      'limit=0',
+      'limit=-1',
+      'limit=1.5',
+      'limit=abc',
+      'limit=',
+      'cursor=0&limit=01',
+    ]) {
+      const res = await api.get(`${studioPaths.artifact(runId, 'many.jsonl')}?${query}`)
+      assert.equal(res.status, 400, query)
+      assert.match(await res.text(), /^(cursor|limit) must be a whole number of lines/, query)
+    }
+    assert.deepEqual(transcriptQuery({ cursor: '7', limit: '100000' }), {
+      start: 7,
+      limit: TRANSCRIPT_LIMIT.max,
+    })
+    assert.deepEqual(transcriptQuery({}), { start: 0, limit: TRANSCRIPT_LIMIT.default })
 
     const wide = await page('wide.jsonl', 'limit=1')
     assert.equal((wide.items[0] as { text: string }).text.length, 256 * 1024)

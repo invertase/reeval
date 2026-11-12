@@ -15,6 +15,7 @@ import {
   reportLinks,
   STUDIO_API_VERSION,
   STUDIO_ROUTES,
+  transcriptQuery,
 } from '../view/api.ts'
 import { buildRunReport } from '../view/report/build.ts'
 import { REPORT_VERSION, splitRunReport } from '../view/report/split.ts'
@@ -163,7 +164,9 @@ export function createStudioApi(options: StudioApiOptions) {
       if (!file) return c.text('Not found', 404)
       const query = c.req.query()
       if (file.endsWith('.jsonl') && ('cursor' in query || 'limit' in query)) {
-        return c.json(pageTranscript(await readFile(file, 'utf8'), query))
+        const range = transcriptQuery(query)
+        if (typeof range === 'string') return c.text(range, 400)
+        return c.json(pageTranscript(await readFile(file, 'utf8'), range))
       }
       return sendFile(c, file, artifactType(file))
     }

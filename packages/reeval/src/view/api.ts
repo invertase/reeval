@@ -76,7 +76,10 @@ export type Handshake = {
 export type RunListItem = HistoryEntry
 export type RunList = Page<RunListItem>
 
-/** A page of a `.jsonl` artifact's lines; `next` and the cursor are line indexes. */
+/**
+ * A page of a `.jsonl` artifact's transcript lines. `next`, the cursor and `totalLines` count the
+ * lines that parse as transcript lines; a line that isn't JSON, or has no `type`, is skipped.
+ */
 export type TranscriptPage = Page<TranscriptLine> & { totalLines: number }
 
 // ── Paths ──────────────────────────────────────────────────────────────────────────────────
@@ -167,17 +170,39 @@ export function pageRuns(
   return { items, next: more ? (items.at(-1)?.runId ?? null) : null }
 }
 
+/** Where a `.jsonl` page starts and how many lines it holds, as `transcriptQuery` reads them. */
+export type TranscriptRange = { start: number; limit: number }
+
 /**
- * One page of a `.jsonl` file's lines, each read as a transcript line (`parseTranscript`: a line
- * that isn't JSON is skipped); the cursor is the index of the page's first line.
+ * A `.jsonl` page's query, read strictly: the cursor is a whole number (0 when absent), the limit
+ * a positive whole number clamped to `TRANSCRIPT_LIMIT.max` (the default when absent). Anything
+ * else is the sentence saying why, which the server answers with a 400.
  */
-export function pageTranscript(
-  transcript: string,
-  query: { cursor?: string | null; limit?: string | null },
-): TranscriptPage {
+export function transcriptQuery(query: {
+  cursor?: string | null
+  limit?: string | null
+}): TranscriptRange | string {
+  const { cursor, limit } = query
+  if (cursor != null && !/^\d{1,15}$/.test(cursor)) {
+    return `cursor must be a whole number of lines (got ${JSON.stringify(cursor)})`
+  }
+  if (limit != null && !/^[1-9]\d{0,15}$/.test(limit)) {
+    return `limit must be a whole number of lines above 0 (got ${JSON.stringify(limit)})`
+  }
+  return {
+    start: cursor == null ? 0 : Number(cursor),
+    limit: limit == null ? TRANSCRIPT_LIMIT.default : Math.min(Number(limit), TRANSCRIPT_LIMIT.max),
+  }
+}
+
+/**
+ * One page of a `.jsonl` file's lines, each read as a transcript line (`parseTranscript`), from
+ * the line `range.start` counts to.
+ */
+export function pageTranscript(transcript: string, range: TranscriptRange): TranscriptPage {
   const lines = parseTranscript(transcript)
-  const start = Math.max(0, Number.parseInt(query.cursor ?? '0', 10) || 0)
-  const end = start + pageLimit(query.limit, TRANSCRIPT_LIMIT)
+  const { start } = range
+  const end = start + range.limit
   return {
     items: lines.slice(start, end),
     next: end < lines.length ? String(end) : null,
