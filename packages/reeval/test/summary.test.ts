@@ -7,8 +7,8 @@ import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { corpusEntries } from '../scripts/schema/corpus.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { readableRecord } from '../src/view/record.ts'
 import { FORBIDDEN_OUTPUT, runReportMarkdown } from '../src/renderer/markdown.ts'
+import { readableRecord } from '../src/view/record.ts'
 import { buildRunReport, runReportSchema } from '../src/view/report/index.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
