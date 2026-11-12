@@ -52,7 +52,6 @@ export function runScope(record: RunRecord): RunScope {
       traits: sorted(traits),
     },
     config: {
-      sandbox: config.sandbox,
       environment: config.environment,
       runs: config.runs,
       bestOf: config.bestOf,

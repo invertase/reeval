@@ -101,7 +101,6 @@ describe('runScope', () => {
       ['trait', (r) => (r.invocation.traits = ['os=linux'])],
       ['judge model', (r) => (r.config.judgeModel = 'other')],
       ['threshold', (r) => (r.config.threshold = 0.5)],
-      ['sandbox', (r) => (r.config.sandbox = 'docker')],
       ['config runs', (r) => (r.config.runs = 3)],
       ['bestOf', (r) => (r.config.bestOf = 3)],
       ['environment', (r) => (r.config.environment = 'skill')],
@@ -115,6 +114,13 @@ describe('runScope', () => {
     }
     keys.add(key({ ...base(), profile: null }))
     assert.equal(keys.size, changes.length + 2, 'every change, and no profile, gives its own key')
+  })
+
+  test("the run's sandboxes, which a retry, a rename or a new eval changes, keep the key", () => {
+    const both = edited((r) => (r.config.sandbox = 'fake-a, fake-b'))
+    for (const sandbox of ['fake-b', 'fake-b, fake-a', 'fake-b, fake-c, fake-a', 'docker']) {
+      assert.equal(key(edited((r) => (r.config.sandbox = sandbox))), key(both), sandbox)
+    }
   })
 
   test('the order of filters, tags, traits and set-like profile lists does not matter', () => {
