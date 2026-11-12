@@ -1129,24 +1129,21 @@ evaluate('passes', async () => {})
   })
 
   test('a model judge makes a real provider call: the request carries the question and transcript, the verdict the reply', async () => {
-    // A Gemini API stand-in: P(true) comes from the question, so one eval passes and one fails.
+    // A Google Decisions stand-in: P(true) comes from the question, so one eval passes and one fails.
     const requests: { path: string; key: string | undefined; body: string }[] = []
     const server = createServer(async (req, res) => {
       let body = ''
       for await (const chunk of req) body += chunk
       requests.push({ path: req.url ?? '', key: req.headers['x-goog-api-key'] as string, body })
       const p = body.includes('Is the greeting friendly?') ? 0.92 : 0.12
+      const { questions } = JSON.parse(body) as { questions: Record<string, unknown> }
       res.setHeader('content-type', 'application/json')
       res.end(
         JSON.stringify({
-          candidates: [
-            {
-              content: { role: 'model', parts: [{ text: JSON.stringify({ q0: p }) }] },
-              finishReason: 'STOP',
-            },
-          ],
-          usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 5, totalTokenCount: 45 },
-          modelVersion: 'gemini-stand-in-001',
+          answers: Object.fromEntries(
+            Object.keys(questions).map((id) => [id, { type: 'noul', noul: p }]),
+          ),
+          usage: { total_input_tokens: 40, total_output_tokens: 5, total_tokens: 45 },
         }),
       )
     })
@@ -1177,7 +1174,6 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       const friendly = byName.friendly?.trial.judgements[0]
       assert.equal(byName.friendly?.outcome, 'pass', r.stdout)
       assert.deepEqual([friendly?.verdict, friendly?.score], ['pass', 0.92])
-      // @ai-sdk/google reports the model it asked for, not the reply's modelVersion.
       assert.equal(friendly?.resolvedModel, 'gemini-under-test')
       assert.equal(byName.canary?.outcome, 'fail')
       assert.equal(byName.canary?.error?.kind, 'judge')
@@ -1185,7 +1181,8 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
 
       assert.equal(requests.length, 2, 'one call per judge, no retries')
       for (const req of requests) {
-        assert.equal(req.path, '/v1beta/models/gemini-under-test:generateContent')
+        assert.equal(req.path, '/v1beta/decisions')
+        assert.equal(JSON.parse(req.body).model, 'gemini-under-test')
         assert.equal(req.key, 'reeval-judge-test-key')
         assert.match(req.body, /Hello, friend!/, 'the transcript is in the state the judge sees')
       }
