@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { serve } from '@hono/node-server'
+import type { AddressInfo } from 'node:net'
+import { type ServerType, serve } from '@hono/node-server'
 import { allowedHosts, createStudioApi, newToken } from './server.ts'
 import type { StudioSource } from './source.ts'
 
@@ -16,10 +17,8 @@ export type StartOptions = {
 
 const HOST = '127.0.0.1'
 
-type Listening = { close(): void }
-
 function listen(app: ReturnType<typeof createStudioApi>, port: number) {
-  return new Promise<Listening>((resolve, reject) => {
+  return new Promise<ServerType>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, hostname: HOST, port })
     server.once('error', reject)
     server.once('listening', () => resolve(server))
@@ -54,11 +53,13 @@ export async function startStudio(options: StartOptions) {
     })
     try {
       const server = await listen(app, port)
-      const local = `http://localhost:${port}`
+      const address = server.address() as AddressInfo
+      // The address it bound, not `localhost`, which a browser may resolve to another process on ::1.
+      const local = `http://${address.address}:${address.port}`
       return {
         url: pairingUrl(options.studioUrl, local, token, options.focus),
         server: local,
-        port,
+        address,
         close: () => server.close(),
       }
     } catch (error) {

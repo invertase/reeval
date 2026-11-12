@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
-import { tmpdir } from 'node:os'
+import { connect } from 'node:net'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { handshakeTimeoutLines } from '../src/studio/command.ts'
+import { startStudio } from '../src/studio/index.ts'
 import { createStudioApi } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
@@ -1297,23 +1299,68 @@ describe('a record landing while the studio lists runs', () => {
 
 describe('reeval studio', () => {
   test("says why the page may not have paired and where the run's report is", () => {
-    const lines = handshakeTimeoutLines('http://localhost:4984', '.reeval/runs/r1/summary.md')
-    assert.match(lines[0] as string, /hasn't connected yet: .* reaching http:\/\/localhost:4984\./)
+    const lines = handshakeTimeoutLines('http://127.0.0.1:4984', '.reeval/runs/r1/summary.md')
+    assert.match(
+      lines[0] as string,
+      /hasn't connected yet: .* reaching http:\/\/127\.0\.0\.1:4984\./,
+    )
     assert.ok(lines.some((l) => /Chrome and Firefox ask first .*choose Allow/.test(l)))
     assert.ok(lines.some((l) => /Safari can't reach a local server from a secure page/.test(l)))
     assert.equal(lines.at(-1), "The run's Markdown report is at .reeval/runs/r1/summary.md")
     assert.ok(
-      handshakeTimeoutLines('http://localhost:4984', null).every((l) => !/report/.test(l)),
+      handshakeTimeoutLines('http://127.0.0.1:4984', null).every((l) => !/report/.test(l)),
       'no report line when the run has no summary.md',
     )
   })
 
+  test('serves on 127.0.0.1 only, and names that address rather than localhost', async () => {
+    const studio = await startStudio({
+      source,
+      port: 47330,
+      reeval: 'test',
+      project: 'studio',
+      studioUrl: new URL(`${ORIGIN}/studio`),
+      focus: null,
+    })
+    try {
+      assert.equal(studio.address.address, '127.0.0.1')
+      assert.equal(studio.server, `http://127.0.0.1:${studio.address.port}`)
+      assert.equal(new URL(studio.url).searchParams.get('s'), studio.server)
+      const outside = Object.values(networkInterfaces())
+        .flat()
+        .find((i) => i && i.family === 'IPv4' && !i.internal)?.address
+      for (const host of ['127.0.0.1', ...(outside ? [outside] : [])]) {
+        const reached = await new Promise<boolean>((resolve) => {
+          const socket = connect({ host, port: studio.address.port })
+          const done = (ok: boolean) => {
+            socket.destroy()
+            resolve(ok)
+          }
+          socket.once('connect', () => done(true)).once('error', () => done(false))
+          socket.setTimeout(2000, () => done(false))
+        })
+        assert.equal(reached, host === '127.0.0.1', host)
+      }
+    } finally {
+      studio.close()
+    }
+  })
+
   test('opens the hosted page with its server and a one-time token, and says when it never pairs', async () => {
     assert.ok(existsSync(join(pkgRoot, 'dist/cli.js')), 'run pnpm build first')
+    const bin = await mkdtemp(join(tmpdir(), 'reeval-opener-'))
+    const opened = join(bin, 'opened.txt')
+    for (const name of ['xdg-open', 'open']) {
+      writeFileSync(join(bin, name), `#!/bin/sh\nprintf '%s' "$1" > '${opened}'\n`)
+      chmodSync(join(bin, name), 0o755)
+    }
     const child = spawn(
       process.execPath,
-      [join(pkgRoot, 'dist/cli.js'), 'studio', '--no-open', '--port', '47311'],
-      { cwd: dir, env: { ...baseEnv, REEVAL_CLOUD_URL: ORIGIN } },
+      [join(pkgRoot, 'dist/cli.js'), 'studio', '--port', '47311'],
+      {
+        cwd: dir,
+        env: { ...baseEnv, PATH: `${bin}:${process.env.PATH}`, REEVAL_CLOUD_URL: ORIGIN },
+      },
     )
     let out = ''
     child.stdout.on('data', (d) => (out += d))
@@ -1330,7 +1377,17 @@ describe('reeval studio', () => {
       const printed = (await until(/https:\/\/studio\.example\/studio\?\S+/, 20_000))[0]
       const url = new URL(printed)
       const server = url.searchParams.get('s') as string
-      assert.match(server, /^http:\/\/localhost:\d+$/)
+      const port = Number(/serving http:\/\/127\.0\.0\.1:(\d+) /.exec(out)?.[1])
+      assert.ok(port >= 47311, out)
+      assert.equal(server, `http://127.0.0.1:${port}`)
+      const deadline = Date.now() + 5000
+      while (!existsSync(opened) || !readFileSync(opened, 'utf8')) {
+        assert.ok(Date.now() < deadline, 'the browser was never opened')
+        await new Promise((r) => setTimeout(r, 50))
+      }
+      const openedUrl = new URL(readFileSync(opened, 'utf8'))
+      assert.equal(openedUrl.toString(), printed)
+      assert.equal(openedUrl.searchParams.get('s'), `http://127.0.0.1:${port}`)
       assert.equal(url.searchParams.get('run'), headers.at(-1)?.runId)
       const token = new URLSearchParams(url.hash.slice(1)).get('t') as string
       assert.match(token, /^[\w-]{40,}$/)
@@ -1347,7 +1404,7 @@ describe('reeval studio', () => {
         new RegExp(`Markdown report is at \\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`),
       )
 
-      const local = server.replace('localhost', '127.0.0.1')
+      const local = server
       const pair = await fetch(`${local}${studioPaths.pair()}`, {
         method: 'POST',
         headers: { origin: ORIGIN, 'content-type': 'application/json' },
