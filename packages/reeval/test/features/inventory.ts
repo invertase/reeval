@@ -1447,6 +1447,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['sandbox-docker/test/session.test.ts', 'reeval/test/concurrency.test.ts'],
     real: ['contract › clean teardown', 'e2e › no container outlives the runs'],
   },
+  {
+    id: 'cleanup.killed',
+    area: 'Sandbox',
+    name: "Containers left running by a reeval killed outright (SIGKILL to the CLI and its workers) are removed by `reeval clean` and at the start and end of the next `reeval run` on that machine, once their owner process has exited; a live process's, another host's and a label inherited from an image stay",
+    unit: ['sandbox-docker/test/orphans.test.ts', 'reeval/test/docker.test.ts'],
+  },
 
   // Harnesses
   {

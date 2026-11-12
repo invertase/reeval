@@ -36,8 +36,11 @@ export type FakeVmService = {
   starts(): number
   /** Ends the run, or its token expires: the token stops working. */
   end(): void
-  /** The service ends the run: every create and keep-alive after it is a final `409 code`. */
-  stopRun(code: string, message: string): void
+  /**
+   * The service ends the run: every create and keep-alive after it is a final `code`, `409`
+   * unless `status` says.
+   */
+  stopRun(code: string, message: string, status?: number): void
   /**
    * The next `count` keep-alives take their VM back: a `409 vm_released`, then and at every later
    * keep-alive of it. The VM stays up until the client deletes it.
@@ -274,8 +277,8 @@ export async function fakeVmService(
     end() {
       ended = true
     },
-    stopRun(code, message) {
-      stopped = error(409, code, message)
+    stopRun(code, message, status = 409) {
+      stopped = error(status, code, message)
     },
     reclaim(count) {
       reclaiming = count

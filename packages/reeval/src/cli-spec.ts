@@ -369,7 +369,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   reeval clean                  Remove local debug data (.reeval/debug), snapshots (in .reeval/runs)
                                 and finished runs' event streams (.reeval/events); --keep <n> keeps
-                                the newest n runs'
+                                the newest n runs'. Also removes the containers a reeval on this
+                                machine left running when it was killed (reeval run does at its
+                                start and end too)
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds; with Tart, delete
                                 every Tart image reeval baked a harness into that isn't running
