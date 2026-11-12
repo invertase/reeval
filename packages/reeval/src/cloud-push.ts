@@ -4,15 +4,15 @@
 // the platform has read it, then prints where the studio shows it. With `--out` it writes the zip
 // to a file instead and uploads nothing.
 import { rmSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { ArchiveError, writeArchive } from './archive/index.ts'
 import { safeZipPath } from './archive/zip.ts'
 import type { Flags } from './cli-spec.ts'
 import { scanPush } from './cloud-push-scan.ts'
-import { CloudError, platformError, request } from './cloud-run.ts'
+import { CloudError, platformError, printable, request } from './cloud-run.ts'
 import { type Target, target } from './cloud-secrets.ts'
 import { CommandError, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
@@ -74,7 +74,7 @@ function runState(body: unknown): RunState | null {
   return {
     revision: b.revision,
     status: b.status as RunState['status'],
-    error: typeof b.error === 'string' ? b.error : null,
+    error: typeof b.error === 'string' ? printable(b.error) : null,
   }
 }
 
@@ -316,17 +316,27 @@ const inside = (dir: string, file: string) => {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
+/** `path` with its deepest existing ancestor's symlinks resolved and the rest joined back on. */
+async function realAncestor(path: string): Promise<string> {
+  const found = await realpath(path).catch(() => null)
+  if (found) return found
+  const parent = dirname(path)
+  return parent === path ? path : join(await realAncestor(parent), basename(path))
+}
+
 /** Where `--out` writes: a file, never `-`, a folder, or anywhere reeval keeps runs. */
 async function outFile(config: ResolvedConfig, out: string): Promise<string> {
   if (out === '-') {
     throw new UsageError('--out takes a file to write the archive to, not - (stdout)')
   }
   const file = resolve(out)
+  // Real paths, so a symlinked folder can't lead into either.
+  const real = join(await realAncestor(dirname(file)), basename(file))
   for (const [dir, what] of [
     [config.history.dir, 'the history folder'],
     [join(config.root, '.reeval'), '.reeval/'],
   ] as const) {
-    if (inside(dir, file)) {
+    if (inside(await realAncestor(resolve(dir)), real)) {
       throw new UsageError(
         `--out ${out} is inside ${what}, where reeval keeps runs: write the archive somewhere else`,
       )

@@ -3,7 +3,15 @@
 // refusing as they do.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -40,6 +48,8 @@ type Options = {
   notReady?: number
   /** Changes each share the POST answers with. */
   answer?: (made: Share) => unknown
+  /** The platform fails to read every upload, with this error. */
+  readError?: string
   /** Changes each share the list answers with. */
   listed?: (s: Share) => unknown
 }
@@ -90,9 +100,10 @@ async function platform(options: Options = {}) {
       }
       if (req.method === 'GET') {
         if (!there) return fail(res, 404, 'not_found', `No run ${runId}.`)
-        const status = there.pendingChecks > 0 ? 'pending' : 'ready'
+        const status = options.readError ? 'failed' : there.pendingChecks > 0 ? 'pending' : 'ready'
         there.pendingChecks = Math.max(0, there.pendingChecks - 1)
-        return json(res, 200, { runId, revision: there.revision, status, error: null })
+        const error = options.readError ?? null
+        return json(res, 200, { runId, revision: there.revision, status, error })
       }
     }
     if (url.pathname === `${prefix}/shares` && req.method === 'POST') {
@@ -408,6 +419,67 @@ describe('reeval studio share', () => {
     }
   })
 
+  test('a revoked share in the answer exits 3 and is never printed as shared', async () => {
+    const p = await platform({
+      ready: [runId],
+      answer: (s) => ({ ...s, revokedAt: '2026-11-12T00:00:00.000Z' }),
+    })
+    try {
+      const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(r.stderr, /answered with a revoked share \(sh1\w+\): ask for the share again/)
+      assert.doesNotMatch(r.stdout, /Shared/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a share with a bad id or date, or a link with credentials, is a bad answer', async () => {
+    for (const answer of [
+      (s: Share) => ({ ...s, id: '../x' }),
+      (s: Share) => ({ ...s, createdAt: 'yesterday\u001b[2J' }),
+      (s: Share) => ({ ...s, url: s.url.replace('http://', 'http://user:pw@') }),
+      (s: Share) => ({ ...s, url: s.url.replace('http://', 'http://evil@') }),
+    ]) {
+      const p = await platform({ ready: [runId], answer })
+      try {
+        const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
+        assert.equal(r.code, 3, r.stdout + r.stderr)
+        assert.match(r.stderr, /answered share run .* with something else/)
+        assert.doesNotMatch(r.stdout + r.stderr, /evil|user:pw/)
+        assert.ok(!(r.stdout + r.stderr).includes('\u001b'))
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test('the link is printed normalized', async () => {
+    const p = await platform({
+      ready: [runId],
+      answer: (s) => ({ ...s, url: s.url.replace('http://', 'HTTP://') }),
+    })
+    try {
+      const r = await runCli(dir, ['studio', 'share'], { env: envFor(p.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.ok(r.stdout.trimEnd().endsWith(`${p.base}/s/${p.shares[0]?.id}`), r.stdout)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("the platform's read error loses its control characters", async () => {
+    const p = await platform({ readError: 'bad \u001b[31mrecord\u001b[0m' })
+    try {
+      const r = await runCli(dir, ['cloud', 'push'], { env: envFor(p.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(r.stderr, /couldn't read run .*: bad \[31mrecord\[0m/)
+      assert.ok(!r.stderr.includes('\u001b'))
+    } finally {
+      await p.close()
+    }
+  })
+
   test('a listed share with a bad revokedAt or another origin is a bad answer', async () => {
     for (const listed of [
       (s: Share) => ({ ...s, revokedAt: 5 }),
@@ -612,6 +684,27 @@ describe('reeval cloud push --out and --json', () => {
       assert.match(r.stderr, why)
     }
     assert.ok(!readdirSync(join(dir, HISTORY)).includes('run.zip'))
+    mkdirSync(join(dir, 'links'), { recursive: true })
+    symlinkSync(join('..', HISTORY), join(dir, 'links', 'hist'))
+    symlinkSync(join('..', '.reeval'), join(dir, 'links', 'state'))
+    const record = readFileSync(join(dir, HISTORY, `${runId}.json`))
+    try {
+      for (const [target, what] of [
+        [`links/hist/${runId}.json`, 'the history folder'],
+        ['links/hist/new/run.zip', 'the history folder'],
+        ['links/state/run.zip', '.reeval/'],
+      ] as const) {
+        const r = await runCli(dir, ['cloud', 'push', '--out', target])
+        assert.equal(r.code, 2, `${target}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`is inside ${what.replace('.', '\\.')}, where reeval keeps runs`),
+        )
+      }
+      assert.deepEqual(readFileSync(join(dir, HISTORY, `${runId}.json`)), record)
+    } finally {
+      rmSync(join(dir, 'links'), { recursive: true })
+    }
     assert.ok(!existsSync(join(dir, '.reeval', 'run.zip')))
   })
 

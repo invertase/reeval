@@ -240,6 +240,9 @@ export async function request(
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g
 
+/** Text from the platform as it may reach a terminal: no escape sequences from its side. */
+export const printable = (text: string) => text.replace(CONTROL, '')
+
 /** The platform's own words for a refusal, in any of the shapes its routes answer with. */
 export function platformMessage(body: unknown): string | undefined {
   const b = body as {
@@ -250,8 +253,7 @@ export function platformMessage(body: unknown): string | undefined {
   const nested = (b?.error as { message?: unknown } | null | undefined)?.message
   for (const said of [nested, b?.error_description, b?.message, b?.error]) {
     if (typeof said !== 'string') continue
-    // Printed to a terminal: no escape sequences from the platform's side.
-    const clean = said.replace(CONTROL, '')
+    const clean = printable(said)
     if (clean) return clean
   }
   return undefined

@@ -44,25 +44,32 @@ const NOT_READY_RETRY_MS = 1_000
 const sharesUrl = (t: Target, id?: string) =>
   projectUrl(t, `studio/shares${id ? `/${encodeURIComponent(id)}` : ''}`)
 
-/** A share as the platform answers it, or null when it isn't one or links somewhere else. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+const isDate = (v: unknown): v is string =>
+  typeof v === 'string' && ISO_DATE.test(v) && !Number.isNaN(Date.parse(v))
+
+/**
+ * A share as the platform answers it, or null when it isn't one or links somewhere else. Every
+ * field it keeps is safe to print, and its url is the normalized link.
+ */
 function share(body: unknown, t: Target): Share | null {
   const b = body as Partial<Record<keyof Share, unknown>> | null
   if (typeof b !== 'object' || b === null) return null
-  const strings = ['id', 'url', 'runId', 'createdAt'] as const
-  if (!strings.every((k) => typeof b[k] === 'string')) return null
+  if (typeof b.id !== 'string' || !SHARE_ID.test(b.id)) return null
+  if (typeof b.runId !== 'string' || !RUN_ID.test(b.runId)) return null
+  if (typeof b.url !== 'string' || !isDate(b.createdAt)) return null
   if (b.type !== 'report' && b.type !== 'full') return null
   if (b.scope !== 'team' && b.scope !== 'public') return null
-  if (b.revokedAt !== undefined && b.revokedAt !== null && typeof b.revokedAt !== 'string') {
-    return null
-  }
-  if (URL.parse(b.url as string)?.origin !== t.base.origin) return null
+  if (b.revokedAt !== undefined && b.revokedAt !== null && !isDate(b.revokedAt)) return null
+  const url = URL.parse(b.url)
+  if (!url || url.origin !== t.base.origin || url.username || url.password) return null
   return {
-    id: b.id as string,
-    url: b.url as string,
-    runId: b.runId as string,
+    id: b.id,
+    url: url.href,
+    runId: b.runId,
     type: b.type,
     scope: b.scope,
-    createdAt: b.createdAt as string,
+    createdAt: b.createdAt,
     ...(b.revokedAt !== undefined && { revokedAt: b.revokedAt as string | null }),
   }
 }
@@ -255,6 +262,11 @@ export async function shareCommand(
   if (made.runId !== runId || made.type !== type || made.scope !== scope) {
     throw new CloudError(
       `the cloud platform answered with a different share (${made.id}, ${made.runId}, ${made.type}, ${made.scope}): revoke it with reeval studio share --revoke ${made.id}`,
+    )
+  }
+  if (made.revokedAt) {
+    throw new CloudError(
+      `the cloud platform answered with a revoked share (${made.id}): ask for the share again`,
     )
   }
   const created = answer.status === 201
