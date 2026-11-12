@@ -406,9 +406,11 @@ export type DiscoveryRate = {
   rows: Array<{ keys: string[]; found: Count }>
   /**
    * For a skill, the attempts that found it by where the skill they checked came from, its first
-   * use in the report's `facts`: one source an attempt, so the counts sum to `found` when every
-   * one has facts. An attempt with no facts, or whose `toHaveCalledSkill` had a label of its own
-   * (which doesn't name the skill), counts in none. Empty without facts.
+   * use in the report's `facts`: one source an attempt, so the counts sum to at most `found`. An
+   * attempt counts in none when it has no facts, when its passing `toHaveCalledSkill` had a label
+   * of its own (which doesn't name the skill), when the check that found it was a `not.`, or when
+   * the matcher passed on a call the facts leave out (a failed call, or a file under
+   * `skills/<name>/` that isn't its `SKILL.md`). Empty without facts.
    */
   sources: Array<{ source: 'placed' | 'skill-dir' | 'elsewhere' | 'mcp' | 'web'; count: number }>
 }
