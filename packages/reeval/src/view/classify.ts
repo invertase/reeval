@@ -193,7 +193,7 @@ export function attemptFacts(
   lines: readonly (TranscriptLine | null)[],
 ): AttemptFacts {
   const digest = record.evals
-    .find((e) => e.attempts.includes(attempt))
+    .find((e) => e.attempts.some((x) => x.key === attempt.key))
     ?.cells.find((c) => c.key === attempt.cell)?.environmentDigest
   const env = record.environments.find((x) => x.digest === (digest ?? ''))
   const declared = { skills: env?.skills.map((s) => s.name) ?? [], mcp: env?.mcp ?? [] }

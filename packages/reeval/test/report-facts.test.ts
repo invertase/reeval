@@ -1,7 +1,7 @@
 // The report's per-attempt facts (`attemptFacts`) against `reeval query`'s projection of the same
 // transcripts, on every corpus run, and what a report holds with and without the transcripts.
 import assert from 'node:assert/strict'
-import { cpSync } from 'node:fs'
+import { cpSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { corpusEntries, HISTORY_DIR } from '../scripts/schema/corpus.ts'
@@ -111,6 +111,26 @@ describe('attemptFacts', () => {
     assert.ok(attempts > 0 && calls > 0, 'the corpus has transcripts with tool calls')
     assert.ok(skills > 0, 'the corpus has a skill use')
     assert.ok(files > 0, 'the corpus has a context file read')
+  })
+
+  test("finds an attempt's environment by its key, not by object identity", async () => {
+    let compared = 0
+    for (const entry of entries) {
+      for (const run of entry.runs) {
+        const record = recordOf(run.raw)
+        const { facts } = await readReportInputs(join(entry.dir, HISTORY_DIR, record.runId), record)
+        for (const a of attemptsOf(record)) {
+          const ref = a.files.transcript
+          const kept = facts?.get(a.key)
+          if (!ref || !kept) continue
+          const text = readFileSync(join(entry.dir, HISTORY_DIR, record.runId, ref.path), 'utf8')
+          const clone = structuredClone(a)
+          assert.deepEqual(attemptFacts(record, clone, transcriptByLine(text)), kept, a.key)
+          if (kept.byClass.context > 0) compared++
+        }
+      }
+    }
+    assert.ok(compared > 0, 'an attempt read its environment, so a lost lookup would show')
   })
 
   test('numbers lines as the file does, past blank and unreadable ones', () => {
