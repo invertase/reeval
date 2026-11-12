@@ -2134,6 +2134,23 @@
             }
           ]
         },
+        "scope": {
+          "description": "Which runs this one is like-with-like with (`runScope`); unset in reports built before it.",
+          "type": "object",
+          "properties": {
+            "configKey": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "profile": {
+              "type": ["string", "null"]
+            },
+            "subset": {
+              "type": "boolean"
+            }
+          },
+          "required": ["configKey", "profile", "subset"]
+        },
         "startedAt": {
           "type": "string"
         },

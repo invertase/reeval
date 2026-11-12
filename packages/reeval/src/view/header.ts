@@ -6,6 +6,7 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import { cellEffort } from './effort.ts'
+import { runScope } from './scope.ts'
 
 /** The derived header of one run: what listings, indexes and comparisons need without the record. */
 export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
@@ -13,6 +14,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     runId: record.runId,
     recorded,
     status: record.status,
+    scope: runScope(record),
     startedAt: record.startedAt,
     durationMs: record.durationMs,
     author: record.author,
