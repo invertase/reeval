@@ -218,15 +218,17 @@ export class PoolAccount {
       startsPerHour != null && `${startsPerHour} an hour`,
       startsPerMinute != null && `${startsPerMinute} a minute`,
     ].filter(Boolean)
-    const timer = setTimeout(
-      () =>
-        waiting.abort(
-          new InfraError(
-            `${this.helper} had no room to start a machine for ${Math.round((performance.now() - queued) / 1000)}s${caps.length ? `: the account's starts are capped at ${caps.join(' and ')}, counting the ones it made before this run` : ''}`,
-          ),
-        ),
-      Math.max(0, withinMs),
-    )
+    const timer = Number.isFinite(withinMs)
+      ? setTimeout(
+          () =>
+            waiting.abort(
+              new InfraError(
+                `${this.helper} had no room to start a machine for ${Math.round((performance.now() - queued) / 1000)}s${caps.length ? `: the account's starts are capped at ${caps.join(' and ')}, counting the ones it made before this run` : ''}`,
+              ),
+            ),
+          Math.max(0, withinMs),
+        )
+      : undefined
     const run = () => {
       clearTimeout(timer)
       stop.removeEventListener('abort', stopped)

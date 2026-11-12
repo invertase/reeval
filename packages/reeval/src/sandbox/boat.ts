@@ -25,7 +25,7 @@ import {
   type PooledSshMachine,
   TTL_MARGIN_S,
 } from './ssh-pool.ts'
-import { InfraError, type NetworkSandbox } from './types.ts'
+import { InfraError, type NetworkSandbox, RunStopped } from './types.ts'
 
 export const BOAT_SDK = '@boatdev/sdk'
 export const BOAT_BASE_URL = 'BOAT_BASE_URL'
@@ -58,6 +58,11 @@ export type VmService = {
   expiry?: string
   /** Why the service can grant a machine less time than asked: `; it …`. */
   ttlLimit?: string
+  /**
+   * A refused start is waited on for as long as the service asks, and only a `409` with one of
+   * these codes, which says the service ended the run, stops the run's attempts.
+   */
+  endsRun?: readonly string[]
 }
 
 /** What a pool of the service's machines is asked for. */
@@ -221,17 +226,26 @@ export async function boatClient(
 
 /** What Boat said about a failed call: `404 not_found: …`, or the error's own message. */
 export async function boatError(error: unknown): Promise<string> {
+  return (await boatAnswer(error)).why
+}
+
+/** {@link boatError}'s text, and the error code the body named, if it named one. */
+async function boatAnswer(error: unknown): Promise<{ why: string; code: string | null }> {
   const response = (error as { response?: Response }).response
-  if (!response) return error instanceof Error ? error.message : String(error)
+  if (!response) return { why: error instanceof Error ? error.message : String(error), code: null }
   const body = await response.text().catch(() => '')
   let detail = body.slice(0, 300)
+  let code: string | null = null
   try {
     const parsed = JSON.parse(body) as { error?: { code?: string; message?: string } | string }
     const e = parsed.error
     if (typeof e === 'string') detail = e
-    else if (e) detail = [e.code, e.message].filter(Boolean).join(': ')
+    else if (e) {
+      detail = [e.code, e.message].filter(Boolean).join(': ')
+      code = typeof e.code === 'string' ? e.code : null
+    }
   } catch {}
-  return `${response.status}${detail ? ` ${detail}` : ''}`
+  return { why: `${response.status}${detail ? ` ${detail}` : ''}`, code }
 }
 
 const status = (error: unknown) => (error as { response?: Response }).response?.status
@@ -526,6 +540,7 @@ export async function openVmPool(
           : { startsPerHour: left === null ? null : Math.max(1, left) }),
       },
       ...(spec.maxConcurrent && { machines: Math.ceil(spec.maxConcurrent / k) }),
+      ...(service.endsRun && { maxRateWaitMs: Number.POSITIVE_INFINITY }),
       attemptsPerMachine: k,
       reuse: spec.reuse ?? false,
     },
@@ -649,7 +664,12 @@ export async function startVm(
         },
       })
       .catch(async (error: unknown) => {
-        const why = await boatError(error)
+        const { why, code } = await boatAnswer(error)
+        if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+          throw new RunStopped(
+            `${service.name} ended the run, so it starts no more machines: ${why}`,
+          )
+        }
         if (status(error) === 429) {
           const response = (error as { response?: Response }).response
           throw new BoatRateLimited(

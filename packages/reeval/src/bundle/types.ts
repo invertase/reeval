@@ -96,10 +96,12 @@ export type BundleManifest = {
   /**
    * What the reeval that wrote it supports that a runner must know of before it starts the run:
    * `secrets-file`, reading `REEVAL_SECRETS_FILE` and keeping its brokered and sandbox values from
-   * the eval code. Another reeval may list others.
+   * the eval code; `vm-waits`, its `cloud()` waiting on a refused machine start for as long as the
+   * service asks and stopping its attempts only when the service ends the run. Another reeval may
+   * list others.
    */
   features?: string[]
 }
 
 /** The features this reeval writes in every bundle's manifest. */
-export const BUNDLE_FEATURES = ['secrets-file']
+export const BUNDLE_FEATURES = ['secrets-file', 'vm-waits']

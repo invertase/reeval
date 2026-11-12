@@ -18,7 +18,7 @@ import { harnessBake } from './harness-install.ts'
 import type { SandboxOptions } from './index.ts'
 import { leaseMachine } from './machine-service.ts'
 import { startSandbox } from './start.ts'
-import { InfraError, type NetworkSandbox } from './types.ts'
+import { InfraError, type NetworkSandbox, RunStopped } from './types.ts'
 
 /** How a worker reaches a pooled machine: its SSH route, user and keys, in the main process's files. */
 export type PooledSshMachine = {
@@ -151,7 +151,8 @@ export async function createPooledSshSandbox(
           options.signal,
         ).catch((error: unknown) => {
           if (options.signal.aborted) throw options.signal.reason
-          throw error instanceof InfraError ? error : new InfraError((error as Error).message)
+          if (error instanceof InfraError || error instanceof RunStopped) throw error
+          throw new InfraError((error as Error).message)
         })
         const info = lease.info as PooledSshMachine
         if (info.secretUser) registerSecret(info.user)

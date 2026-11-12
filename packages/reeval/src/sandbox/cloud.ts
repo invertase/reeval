@@ -39,6 +39,7 @@ export const CLOUD: VmService = {
   reservedLabels: 'reeval.platform.',
   expiry: ', which is no longer valid',
   ttlLimit: ': the VM service grants no more, so give the eval a shorter timeout',
+  endsRun: ['run_cancelled', 'run_deadline'],
 }
 
 /** The machine type the service takes for each size. */

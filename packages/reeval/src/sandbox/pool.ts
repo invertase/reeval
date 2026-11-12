@@ -12,7 +12,7 @@ import {
   type PoolLimits,
   RATE_LIMIT_WAITS,
 } from './pool-account.ts'
-import { InfraError } from './types.ts'
+import { InfraError, RunStopped } from './types.ts'
 
 export { RATE_LIMIT_WAITS }
 
@@ -56,7 +56,10 @@ export type PoolOptions = {
   reuse: boolean
   /** How long a free slot waits for another attempt before it goes. Default 15 s. */
   idleMs?: number
-  /** How long starts may keep being rate-limited before the waiting attempts fail. Default 15 min. */
+  /**
+   * How long starts may keep being rate-limited before the waiting attempts fail. Default 15 min;
+   * `Infinity` waits for as long as the provider asks.
+   */
   maxRateWaitMs?: number
   /** The first wait after a rate limit that named none, doubling to `maxBackoffMs`. Default 5 s. */
   backoffMs?: number
@@ -160,6 +163,8 @@ export class MachinePool<M> {
   readonly #slots: Pool<Slot<M>>
   readonly #closing = new AbortController()
   readonly #stopReason: InfraError
+  /** The provider ended the run: every later start fails with this, without asking it. */
+  #ended: RunStopped | undefined
   #reaping: NodeJS.Timeout | undefined
   #ttlSeconds = 0
   #closed: Promise<void> | undefined
@@ -532,11 +537,17 @@ export class MachinePool<M> {
         this.#account.gate(
           async () => {
             signal.throwIfAborted()
+            if (this.#ended) throw this.#ended
             this.#account.takeStart()
             this.#stats.starts++
             // Only the pool's close cuts a start short: a machine stopped mid-provision can come up
             // anyway (Boat drops a delete sent then), and only a canceled run reaps by name.
-            const started = await provider.start(this.#closing.signal, this.#ttlSeconds)
+            const started = await provider
+              .start(this.#closing.signal, this.#ttlSeconds)
+              .catch((error: unknown) => {
+                if (error instanceof RunStopped) this.#ended ??= error
+                throw error
+              })
             // Stopped as it booted: nothing would hold the machine, so it goes now.
             if (signal.aborted) {
               await provider.remove(started.id).catch(() => {})

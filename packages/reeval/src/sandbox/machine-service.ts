@@ -8,6 +8,7 @@ import type { MachineDescriptor } from './machine.ts'
 import { MACHINE_PROVIDERS } from './machines.ts'
 import { type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
 import { PoolAccount } from './pool-account.ts'
+import { RunStopped } from './types.ts'
 
 export const MACHINES = 'machines'
 
@@ -32,6 +33,12 @@ export type MachineCall =
 
 /** A granted lease, as it crosses the channel. */
 export type WireLease = LeaseFacts & { info: unknown }
+
+/**
+ * The provider ended the run, which an error crossing the channel would lose: only its message
+ * survives there.
+ */
+type WireEnded = { ended: string }
 
 type Held = { owner: string; lease?: PoolLease<unknown>; waiting?: AbortController }
 
@@ -84,6 +91,7 @@ export class MachineService {
       lease = await pool.acquire({ signal: waiting.signal, ttlSeconds: call.ttlSeconds })
     } catch (error) {
       this.#held.delete(key)
+      if (error instanceof RunStopped) return { ended: error.message } satisfies WireEnded
       throw error
     }
     if (!this.#held.has(key)) {
@@ -187,13 +195,14 @@ export async function leaseMachine(
   signal.throwIfAborted()
   const ticket = `${process.pid}-${++tickets}`
   const send = (body: MachineCall) => callService(MACHINES, body, localCall)
-  const leased = send({ op: 'lease', ticket, ...request }) as Promise<WireLease>
+  const leased = send({ op: 'lease', ticket, ...request }) as Promise<WireLease | WireEnded>
   const stop = new Promise<never>((_, reject) => {
     signal.addEventListener('abort', () => reject(signal.reason), { once: true })
   })
   stop.catch(() => {})
   try {
     const lease = await Promise.race([leased, stop])
+    if ('ended' in lease) throw new RunStopped(lease.ended)
     return {
       ...lease,
       release: async (broken = false) => {

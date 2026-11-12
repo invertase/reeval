@@ -12,6 +12,7 @@ import {
   type RateLimited,
 } from '../src/sandbox/pool.ts'
 import { type AccountOptions, PoolAccount } from '../src/sandbox/pool-account.ts'
+import { RunStopped } from '../src/sandbox/types.ts'
 
 class RateLimitError extends Error {
   readonly retryAfterMs: number | null
@@ -181,6 +182,28 @@ describe('machine pool', () => {
       p.acquire(),
       /fake\(\) kept refusing to start a machine .*429 rate_limited/,
     )
+    await p.close()
+  })
+
+  test('with maxRateWaitMs Infinity, rate limits are waited out however long they last', async () => {
+    const provider = fakeProvider((n) => (n < 6 ? new RateLimitError(30) : 'ok'))
+    const p = pool(provider, { maxRateWaitMs: Number.POSITIVE_INFINITY })
+    const lease = await p.acquire()
+    assert.equal(lease.start?.rateLimited, 6)
+    await p.close()
+  })
+
+  test('the provider ending the run fails its attempts, and the pool asks it for no more', async () => {
+    let asked = 0
+    const provider = fakeProvider((n) => {
+      asked = n + 1
+      return n === 0 ? new RunStopped('fake() ended the run') : 'ok'
+    })
+    const p = pool(provider, { limits: { machines: 1 }, maxRateWaitMs: Number.POSITIVE_INFINITY })
+    await assert.rejects(p.acquire(), (error) => error instanceof RunStopped)
+    await assert.rejects(p.acquire(), (error) => error instanceof RunStopped)
+    assert.equal(asked, 1)
+    assert.equal(p.stats().rateLimited, 0)
     await p.close()
   })
 
@@ -446,6 +469,22 @@ describe('machine pool', () => {
 
 describe('pools on one account', () => {
   const account = (o: AccountOptions) => new PoolAccount('fake()', o)
+
+  test('a start with no bound on its wait waits out a held window', async () => {
+    const shared = account({ limits: { machines: 1, startsPerMinute: 10 } })
+    shared.hold(80)
+    const t0 = performance.now()
+    const stop = new AbortController()
+    const got = await shared.gate(
+      async () => 'started',
+      Number.POSITIVE_INFINITY,
+      stop.signal,
+      () => {},
+    )
+    assert.equal(got, 'started')
+    assert.ok(performance.now() - t0 >= 70)
+    shared.close()
+  })
 
   test("share the account's machines: a pool waits while the others hold them all", async () => {
     const provider = fakeProvider()
