@@ -491,15 +491,17 @@ for (const machine of MACHINE_PROVIDERS as readonly MachineProvider<MachineDescr
           const own = await withAttemptSpan(attempt, () => create(id))
           await own.destroy()
           attempt.end()
-          await until('the machine span', () => spans.some((s) => s.name === 'machine'), 30_000)
-          const on = spans.find((s) => s.name === 'attempt')?.attributes ?? {}
-          const host = spans.find((s) => s.name === 'machine')
+          const on = spans.find((s) => s.spanId === attempt.spanId)?.attributes ?? {}
           assert.equal(on['reeval.sandbox'], machine.kind)
           assert.equal(typeof on['host.id'], 'string')
-          assert.equal(host?.attributes['host.id'], on['host.id'])
+          // The suite's other machines report to the same sink as they go.
+          const ours = () =>
+            spans.find((s) => s.name === 'machine' && s.attributes['host.id'] === on['host.id'])
+          await until('the machine span', () => ours() !== undefined, 30_000)
+          const host = ours()
           assert.ok((host?.startMs ?? 0) <= (host?.endMs ?? 0))
           if (machine.pool) {
-            const lease = spans.find((s) => s.name === 'lease')
+            const lease = spans.find((s) => s.name === 'lease' && s.parentSpanId === attempt.spanId)
             assert.equal(lease?.parentSpanId, attempt.spanId)
             assert.equal(lease?.links?.[0]?.spanId, host?.spanId)
             assert.equal(lease?.attributes['host.id'], on['host.id'])
