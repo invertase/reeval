@@ -45,8 +45,13 @@ export function logGateway(
 
 /** A machine that's up, with its user and directories made, before the gateway starts. */
 export type BootedMachine = {
-  /** The VM as its provider names it, for the record: Boat's or Daytona's sandbox, Tart's VM. */
-  vm?: { id: string; name?: string }
+  /**
+   * The VM as its provider names it, for the record: Boat's or Daytona's sandbox, Tart's VM, and
+   * its size when the provider chose another than the eval asked for.
+   */
+  vm?: { id: string; name?: string; size?: string }
+  /** Other attempts run on the machine at the same time, as its pool laid it out. */
+  shared?: boolean
   /** Runs the gateway's forwarder as root. */
   root: ExecTransport
   /** Runs once the gateway has started, before the session: trusting its CA where the gateway can't. */
@@ -188,7 +193,7 @@ export async function startSandbox(
       resources: {
         mode: start.darwin ? 'darwin' : 'machine',
         machine: { ...start.machine, ...machine.vm },
-        ...(start.shared && { shared: true }),
+        ...((start.shared || machine.shared) && { shared: true }),
       },
     })
   } catch (error) {

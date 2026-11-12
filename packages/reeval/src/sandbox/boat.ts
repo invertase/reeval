@@ -25,7 +25,7 @@ import {
   type PooledSshMachine,
   TTL_MARGIN_S,
 } from './ssh-pool.ts'
-import { InfraError, type NetworkSandbox, RunStopped } from './types.ts'
+import { InfraError, MachineReclaimed, type NetworkSandbox, RunStopped } from './types.ts'
 
 export const BOAT_SDK = '@boatdev/sdk'
 export const BOAT_BASE_URL = 'BOAT_BASE_URL'
@@ -63,6 +63,17 @@ export type VmService = {
    * these codes, which says the service ended the run, stops the run's attempts.
    */
   endsRun?: readonly string[]
+  /**
+   * The spec `spec` becomes under the layout the service's `/limits` names, which decides the
+   * machine type, reuse and attempts per machine in place of the eval's; null, for no layout or
+   * one it can't read, keeps `spec`.
+   */
+  laidOut?(spec: VmSpec, layout: unknown): VmSpec | null
+  /**
+   * The `409` code a keep-alive answers with when the service takes a reused machine back before
+   * its next attempt, which the pool gives up without counting it a failure.
+   */
+  reclaims?: string
 }
 
 /** What a pool of the service's machines is asked for. */
@@ -154,15 +165,19 @@ export type BoatClient = {
     p: { sandboxId: string; xAsciiConfirmDelete: string },
     init?: { signal?: AbortSignal },
   ): Promise<unknown>
-  limits(
-    p?: Record<string, never>,
+  /** `/limits` with its raw response: the client's model drops the fields it doesn't know. */
+  limitsRaw(
+    p: Record<string, never>,
     init?: { signal?: AbortSignal },
   ): Promise<{
-    canStart: boolean
-    startBlockedReason?: string
-    activeSandboxes: number
-    maxActiveSandboxes: number
-    machineTypes?: Array<{ type: string; available: boolean; reason: string | null }>
+    raw: Response
+    value(): Promise<{
+      canStart: boolean
+      startBlockedReason?: string
+      activeSandboxes: number
+      maxActiveSandboxes: number
+      machineTypes?: Array<{ type: string; available: boolean; reason: string | null }>
+    }>
   }>
 }
 
@@ -516,14 +531,18 @@ export const openBoatPool: OpenPool<BoatSandboxDescriptor> = async (sandbox, o) 
     o.runId,
   )
 
-/** The pool of `spec`'s machines on `api`, within the start caps and machines its limits allow. */
+/**
+ * The pool of `asked`'s machines on `api`, laid out as the service's limits say where it lays them
+ * out, within the start caps and machines its limits allow.
+ */
 export async function openVmPool(
   service: VmService,
-  spec: VmSpec,
+  asked: VmSpec,
   api: BoatClient,
   runId: string,
 ): ReturnType<OpenPool<BoatSandboxDescriptor>> {
   const limits = await readLimits(service, api)
+  const spec = laidOut(service, asked, limits)
   const k = spec.attemptsPerMachine ?? 1
   const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
   const caps = limits?.startLimitsWithWallet ?? limits?.startLimits
@@ -547,6 +566,18 @@ export async function openVmPool(
   }
 }
 
+/** `spec` under the layout `limits` names, for a service that lays its machines out. */
+function laidOut(service: VmService, spec: VmSpec, limits: { layout?: unknown } | null): VmSpec {
+  return (limits?.layout !== undefined && service.laidOut?.(spec, limits.layout)) || spec
+}
+
+/** The account's `/limits`, with the `layout` the client's model leaves out. */
+async function limitsOf(api: BoatClient) {
+  const got = await api.limitsRaw({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
+  const body = (await got.raw.clone().json()) as { layout?: unknown } | null
+  return { ...(await got.value()), layout: body?.layout }
+}
+
 const limitsWarned = new Set<string>()
 
 /**
@@ -556,7 +587,7 @@ const limitsWarned = new Set<string>()
 async function readLimits(service: VmService, api: BoatClient | null): Promise<BoatLimits | null> {
   try {
     if (!api) throw new Error(`no ${service.name} client`)
-    return (await api.limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })) as BoatLimits
+    return (await limitsOf(api)) as BoatLimits
   } catch (error) {
     if (!limitsWarned.has(service.kind)) {
       limitsWarned.add(service.kind)
@@ -575,6 +606,8 @@ type BoatLimits = {
   startLimits?: { perMinute?: number; perHour?: number } | null
   startLimitsWithWallet?: { perMinute?: number; perHour?: number } | null
   starts?: { hour?: { used?: number } | null } | null
+  /** How the service lays the pool's machines out, which {@link VmService.laidOut} reads. */
+  layout?: unknown
 }
 
 /** Starting, keeping and removing `spec`'s machines for the run's pool, in the main process. */
@@ -592,7 +625,20 @@ export function vmPoolProvider(
     rateLimited: (error) =>
       error instanceof BoatRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
     async keepAlive(id, ttlSeconds) {
-      const updated = await api.update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+      const updated = await api
+        .update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
+        .catch(async (error: unknown) => {
+          const { why, code } = await boatAnswer(error)
+          if (status(error) === 409 && code && code === service.reclaims) {
+            throw new MachineReclaimed(`${service.name} took sandbox ${id} back: ${why}`)
+          }
+          if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+            throw new RunStopped(
+              `${service.name} ended the run, so its machines take no more attempts: ${why}`,
+            )
+          }
+          throw error
+        })
       const short = tooShort(service, id, ttlSeconds, updated?.sandbox?.ttlSeconds)
       if (short) throw short
     },
@@ -615,7 +661,14 @@ export function vmPoolProvider(
         signal,
       })
       dirs.set(vm.id, vm.dir)
-      return { id: vm.id, info: vm.info }
+      return {
+        id: vm.id,
+        info: {
+          ...vm.info,
+          attemptsPerMachine: spec.attemptsPerMachine ?? 1,
+          reuse: spec.reuse ?? false,
+        },
+      }
     },
   }
 }
@@ -811,10 +864,11 @@ export const boatCapacity = async (sandbox: BoatSandboxDescriptor) =>
  */
 export async function vmCapacity(
   service: VmService,
-  spec: VmSpec,
+  asked: VmSpec,
   api: BoatClient | null,
 ): Promise<{ machines: number; attempts: number }> {
   const limits = await readLimits(service, api)
+  const spec = laidOut(service, asked, limits)
   const k = spec.attemptsPerMachine ?? 1
   if (!limits) return { machines: 1, attempts: Math.min(k, spec.maxConcurrent ?? k) }
   const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
@@ -879,29 +933,25 @@ export async function checkVmService(
     )
   }
   const api = await client()
-  const limits = await api
-    .limits({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
-    .catch(async (error: unknown) => {
-      const code = status(error)
-      if (code === 401 || code === 403) {
-        throw refuse(
-          `${service.name} refused ${service.credential}: ${await boatError(error)}`,
-          true,
-        )
-      }
-      throw new PrepareError({
-        class: 'transient',
-        stage: service.kind,
-        ref: null,
-        cause: null,
-        log: null,
-        message: `Couldn't reach ${service.name}: ${await boatError(error)}`,
-      })
+  const limits = await limitsOf(api).catch(async (error: unknown) => {
+    const code = status(error)
+    if (code === 401 || code === 403) {
+      throw refuse(`${service.name} refused ${service.credential}: ${await boatError(error)}`, true)
+    }
+    throw new PrepareError({
+      class: 'transient',
+      stage: service.kind,
+      ref: null,
+      cause: null,
+      log: null,
+      message: `Couldn't reach ${service.name}: ${await boatError(error)}`,
     })
-  const machine = limits.machineTypes?.find((m) => m.type === spec.type)
+  })
+  const laid = laidOut(service, spec, limits)
+  const machine = limits.machineTypes?.find((m) => m.type === laid.type)
   if (machine && !machine.available) {
     throw refuse(
-      `${service.name} won't start a ${spec.size} machine on this ${service.scope}: ${machine.reason ?? 'unavailable'}`,
+      `${service.name} won't start a ${laid.size} machine on this ${service.scope}: ${machine.reason ?? 'unavailable'}`,
       true,
     )
   }

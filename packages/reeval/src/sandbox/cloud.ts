@@ -28,6 +28,42 @@ export const VM_TOKEN = 'REEVAL_VM_TOKEN'
 /** The start of every cloud VM's name: hex follows it, never `run-`. */
 export const CLOUD_PREFIX = 'reeval'
 
+/** The machine type the service takes for each size. */
+const TYPES: Record<CloudMachineSize, string> = {
+  small: 'small',
+  medium: 'default',
+  large: 'large',
+  xlarge: 'xlarge',
+}
+
+/**
+ * The spec under the service's layout: its machine type, reuse and attempts per machine, in place
+ * of the eval's `size`, `reuse` and `attemptsPerMachine`. Null for a layout it can't read.
+ */
+function cloudLayout(spec: VmSpec, layout: unknown): VmSpec | null {
+  const l = layout as { reuse?: unknown; attemptsPerMachine?: unknown; machineType?: unknown }
+  if (
+    !l ||
+    typeof l !== 'object' ||
+    typeof l.reuse !== 'boolean' ||
+    !Number.isInteger(l.attemptsPerMachine) ||
+    (l.attemptsPerMachine as number) < 1 ||
+    typeof l.machineType !== 'string' ||
+    !l.machineType
+  ) {
+    return null
+  }
+  const type = l.machineType
+  const size = Object.entries(TYPES).find(([, t]) => t === type)?.[0] ?? type
+  return {
+    ...spec,
+    type,
+    size,
+    reuse: l.reuse,
+    attemptsPerMachine: l.attemptsPerMachine as number,
+  }
+}
+
 export const CLOUD: VmService = {
   helper: 'cloud()',
   kind: 'cloud',
@@ -40,14 +76,8 @@ export const CLOUD: VmService = {
   expiry: ', which is no longer valid',
   ttlLimit: ': the VM service grants no more, so give the eval a shorter timeout',
   endsRun: ['run_cancelled', 'run_deadline'],
-}
-
-/** The machine type the service takes for each size. */
-const TYPES: Record<CloudMachineSize, string> = {
-  small: 'small',
-  medium: 'default',
-  large: 'large',
-  xlarge: 'xlarge',
+  laidOut: cloudLayout,
+  reclaims: 'vm_released',
 }
 
 export const cloudSpec = (sandbox: CloudSandboxDescriptor): VmSpec => {

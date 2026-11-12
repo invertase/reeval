@@ -39,6 +39,12 @@ export type PooledSshMachine = {
   loginRoot?: true
   /** The machine's image has the harness installed in the sandbox user's home. */
   harnessBaked?: true
+  /**
+   * Attempts the machine's pool runs on it at once, and whether its slots take another attempt,
+   * as the pool laid them out; the descriptor's when the provider doesn't say.
+   */
+  attemptsPerMachine?: number
+  reuse?: boolean
 }
 
 /** Past the attempt's timeout, so a machine whose worker was killed still goes away by itself. */
@@ -129,13 +135,9 @@ export async function createPooledSshSandbox(
   o: PooledSshOptions,
 ): Promise<NetworkSandbox> {
   const debug = attemptDebug()
-  const shared = (descriptor.attemptsPerMachine ?? 1) > 1
-  // A machine of its own that's never reused installs once anyway, so it keeps no copy.
-  const label = shared || descriptor.reuse ? homeLabel(options) : undefined
   return startSandbox(options, {
     helper: o.helper,
     machine: { sandbox: o.sandbox, size: o.size },
-    shared,
     install: true,
     networkNote: `network policy ${egressLabel(options.egress) || 'allow-all'} · the VM keeps its own network, so traffic that ignores the proxy goes out directly, unrecorded`,
     async boot() {
@@ -156,6 +158,9 @@ export async function createPooledSshSandbox(
         })
         const info = lease.info as PooledSshMachine
         if (info.secretUser) registerSecret(info.user)
+        const shared = (info.attemptsPerMachine ?? descriptor.attemptsPerMachine ?? 1) > 1
+        // A machine of its own that's never reused installs once anyway, so it keeps no copy.
+        const label = shared || (info.reuse ?? descriptor.reuse) ? homeLabel(options) : undefined
         debug?.log(
           'container',
           lease.start
@@ -163,7 +168,12 @@ export async function createPooledSshSandbox(
             : `${lease.reused ? 'reused' : 'shared'} ${info.id} (${info.name}, ${info.size}); slot ${lease.slot}${lease.reused ? `, its attempt ${lease.reused + 1}` : ''}`,
         )
         for (const lost of lease.lost) {
-          debug?.log('container', `dropped ${lost.machine}: keeping it alive failed: ${lost.error}`)
+          debug?.log(
+            'container',
+            lost.reclaimed
+              ? `gave ${lost.machine} back: ${lost.error}`
+              : `dropped ${lost.machine}: keeping it alive failed: ${lost.error}`,
+          )
         }
         const layout = slotLayout(lease.slot)
         const dir = await mkdtemp(join(tmpdir(), `reeval-${o.sandbox}-ssh-`))
@@ -202,7 +212,8 @@ export async function createPooledSshSandbox(
         debug?.log('container', `ssh to ${info.id} over ${info.route}`)
         let healthy = true
         return {
-          vm: { id: info.id, name: info.name },
+          vm: { id: info.id, name: info.name, size: info.size },
+          ...(shared && { shared: true }),
           // Its own slot of an image with the harness has it already; a shared or reused one restores the image's copy.
           ...(info.harnessBaked && !label && { installed: true }),
           root: machine.root,
