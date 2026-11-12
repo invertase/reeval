@@ -11,8 +11,8 @@ const NO_USAGE = {
 }
 
 /**
- * How Goose words a failed model call (a refused key, a 5xx) when it reports it as the turn's
- * message and ends the turn normally, in its own template rather than the model's words.
+ * How Goose words a failed model call (a refused key, a 5xx) in the message it streams before it
+ * fails the prompt with `turn_failed`, in its own template rather than the model's words.
  */
 const GOOSE_ERROR =
   /^Ran into this error: ([\s\S]*?)\.?\n\nPlease retry if you think this is a transient or recoverable error\.$/
