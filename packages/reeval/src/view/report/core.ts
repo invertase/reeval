@@ -45,7 +45,6 @@ export {
   withBase,
   worktreePatchLink,
 } from './links.ts'
-export { blockMarkdown, FORBIDDEN_OUTPUT, runReportMarkdown } from './markdown.ts'
 export { REPORT_POLICY, type ReportPolicy } from './policy.ts'
 export { provenanceState, stateRows, warnings } from './provenance.ts'
 export type * from './types.ts'

@@ -369,6 +369,8 @@ test('the packed package installs into a clean project and runs reeval', {
     'judge',
     'view/index',
     'view/report/index',
+    'renderer/markdown',
+    'renderer/ascii',
   ]) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))

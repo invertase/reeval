@@ -24,9 +24,6 @@ async function loadExport(subpath: string): Promise<Record<string, unknown>> {
 const CONSUMER_RUNTIME = [
   'buildRunReport',
   'runReportSchema',
-  'blockMarkdown',
-  'runReportMarkdown',
-  'FORBIDDEN_OUTPUT',
   'tokensText',
   'tokensFigure',
   'durationFigure',
@@ -40,6 +37,9 @@ const CONSUMER_RUNTIME = [
 ] as const
 
 /** On `reeval/view/report` only, so the `reeval/view` root stays free of zod. */
+/** On `reeval/renderer/markdown` only. */
+const MARKDOWN_EXPORTS = ['blockMarkdown', 'runReportMarkdown', 'FORBIDDEN_OUTPUT'] as const
+
 const SCHEMA_EXPORTS: readonly string[] = [
   'runReportSchema',
   'attemptRefSchema',
@@ -53,15 +53,20 @@ const SCHEMA_EXPORTS: readonly string[] = [
   'spreadSchema',
 ]
 
-describe('reeval/view/report public export', () => {
-  test('package.json exposes ./view/report beside ./view', () => {
+describe('reeval/view/report and reeval/renderer/* public exports', () => {
+  test('package.json exposes ./view/report and the renderers beside ./view', () => {
     assert.equal(pkg.name, 'reeval')
     assert.ok(pkg.exports['./view'], './view')
-    assert.ok(pkg.exports['./view/report'], './view/report')
-    const report = pkg.exports['./view/report']
-    assert.ok(typeof report === 'object')
-    assert.equal(report.default, './dist/view/report/index.js')
-    assert.equal(report.types, './dist/view/report/index.d.ts')
+    for (const [subpath, file] of [
+      ['./view/report', 'view/report/index'],
+      ['./renderer/markdown', 'renderer/markdown'],
+      ['./renderer/ascii', 'renderer/ascii'],
+    ] as const) {
+      const target = pkg.exports[subpath]
+      assert.ok(typeof target === 'object', subpath)
+      assert.equal(target.default, `./dist/${file}.js`)
+      assert.equal(target.types, `./dist/${file}.d.ts`)
+    }
   })
 
   test('reeval/view/report ships the consumer runtime surface', async () => {
@@ -69,15 +74,33 @@ describe('reeval/view/report public export', () => {
     for (const name of CONSUMER_RUNTIME) {
       assert.notEqual(mod[name], undefined, name)
     }
-    assert.ok(Array.isArray(mod.FORBIDDEN_OUTPUT))
     assert.equal(typeof mod.buildRunReport, 'function')
-    assert.equal(typeof mod.runReportMarkdown, 'function')
-    assert.equal(typeof mod.blockMarkdown, 'object')
-    assert.ok(
-      mod.blockMarkdown &&
-        typeof (mod.blockMarkdown as { runHeader?: unknown }).runHeader === 'function',
-    )
     assert.ok(mod.runReportSchema && typeof mod.runReportSchema === 'object')
+  })
+
+  test('reeval/renderer/markdown is the one home of the Markdown renderer', async () => {
+    const markdown = await loadExport('./renderer/markdown')
+    assert.ok(Array.isArray(markdown.FORBIDDEN_OUTPUT))
+    assert.equal(typeof markdown.runReportMarkdown, 'function')
+    assert.equal(typeof markdown.blockMarkdown, 'object')
+    assert.equal(
+      typeof (markdown.blockMarkdown as { runHeader?: unknown }).runHeader,
+      'function',
+      'blockMarkdown.runHeader',
+    )
+    const view = await loadExport('./view')
+    const report = await loadExport('./view/report')
+    for (const name of MARKDOWN_EXPORTS) {
+      assert.equal(view[name], undefined, `reeval/view must not export ${name}`)
+      assert.equal(report[name], undefined, `reeval/view/report must not export ${name}`)
+    }
+  })
+
+  test('reeval/renderer/ascii exports runReportText, which is not implemented yet', async () => {
+    const ascii = await loadExport('./renderer/ascii')
+    assert.equal(typeof ascii.runReportText, 'function')
+    const runReportText = ascii.runReportText as (r: unknown, o?: { width?: number }) => string
+    assert.throws(() => runReportText({}, { width: 80 }), /not implemented yet/)
   })
 
   test('reeval/view re-exports the zod-free surface, not the schema', async () => {

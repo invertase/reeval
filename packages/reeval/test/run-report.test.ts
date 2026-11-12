@@ -5,12 +5,8 @@ import { corpusEntries } from '../scripts/schema/corpus.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import type { CompareRow } from '../src/view/compare.ts'
 import { readableRecord } from '../src/view/record.ts'
-import {
-  buildRunReport,
-  FORBIDDEN_OUTPUT,
-  runReportMarkdown,
-  runReportSchema,
-} from '../src/view/report/index.ts'
+import { FORBIDDEN_OUTPUT, runReportMarkdown } from '../src/renderer/markdown.ts'
+import { buildRunReport, runReportSchema } from '../src/view/report/index.ts'
 
 function loadCorpusRun(name: string): RunRecord {
   const file = corpusEntries()

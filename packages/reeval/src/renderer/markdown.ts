@@ -1,4 +1,7 @@
-import { medianWithDelta } from './format.ts'
+// `reeval/renderer/markdown`: a `RunReport` as Markdown, the one renderer behind summary.md,
+// `reeval show --md`, `reeval compare --md`, the MCP server's `md` and `reeval analyze --save`.
+
+import { medianWithDelta } from '../view/report/format.ts'
 import {
   COMPARE_STATUS_LABEL,
   contrastMeasureLabel,
@@ -6,7 +9,7 @@ import {
   MEASURE_LABEL,
   PASS_RATE_OUTCOME_LABEL,
   verdictLabel,
-} from './labels.ts'
+} from '../view/report/labels.ts'
 import type {
   ArmRow,
   AssertionRow,
@@ -35,7 +38,9 @@ import type {
   RunReport,
   TaskResults,
   VariantComparison,
-} from './types.ts'
+} from '../view/report/types.ts'
+
+export type { BlockMarkdown } from '../view/report/types.ts'
 
 /** Shared by summary tests and reeval-components check-text. */
 export const FORBIDDEN_OUTPUT = [

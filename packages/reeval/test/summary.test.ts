@@ -8,12 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { corpusEntries } from '../scripts/schema/corpus.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { readableRecord } from '../src/view/record.ts'
-import {
-  buildRunReport,
-  FORBIDDEN_OUTPUT,
-  runReportMarkdown,
-  runReportSchema,
-} from '../src/view/report/index.ts'
+import { FORBIDDEN_OUTPUT, runReportMarkdown } from '../src/renderer/markdown.ts'
+import { buildRunReport, runReportSchema } from '../src/view/report/index.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
