@@ -11,8 +11,8 @@ export const OPENCODE_PACKAGE_JSON = `{
   "private": true,
   "type": "module",
   "dependencies": {
-    "@agentclientprotocol/sdk": "1.7.0",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@agentclientprotocol/sdk": "1.9.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@opencode/cli": "2.2.5",
     "ws": "8.21.0",
     "zod": "4.4.3"
@@ -39,11 +39,11 @@ importers:
   .:
     dependencies:
       '@agentclientprotocol/sdk':
-        specifier: 1.7.0
-        version: 1.7.0(zod@4.4.3)
+        specifier: 1.9.0
+        version: 1.9.0(zod@4.4.3)
       '@modelcontextprotocol/sdk':
-        specifier: 1.32.1
-        version: 1.32.1(zod@4.4.3)
+        specifier: 1.32.2
+        version: 1.32.2(zod@4.4.3)
       '@opencode/cli':
         specifier: 2.2.5
         version: 2.2.5
@@ -56,8 +56,8 @@ importers:
 
 packages:
 
-  '@agentclientprotocol/sdk@1.7.0':
-    resolution: {integrity: sha512-ZORuxsuEnLjRly7t6Ad7zAsWitjWsyprswyPUHz/yycPb+tTm3DGa8XheaHhRXqX8LS9snuxaYavXSRA50TlHw==}
+  '@agentclientprotocol/sdk@1.9.0':
+    resolution: {integrity: sha512-saCOTPYBK1iqWqJFAYHXbg3+zCoFXyZZFoqQAwdTWkbrZZPpAETr80QOnYr2l+dzPwL0jpNhn3eDY8MoEIDbUA==}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
@@ -67,8 +67,8 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
-  '@modelcontextprotocol/sdk@1.32.1':
-    resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
+  '@modelcontextprotocol/sdk@1.32.2':
+    resolution: {integrity: sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -501,7 +501,7 @@ ignoredOptionalDependencies:
 
 snapshots:
 
-  '@agentclientprotocol/sdk@1.7.0(zod@4.4.3)':
+  '@agentclientprotocol/sdk@1.9.0(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
@@ -509,7 +509,7 @@ snapshots:
     dependencies:
       hono: 4.13.14
 
-  '@modelcontextprotocol/sdk@1.32.1(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.32.2(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.14)
       ajv: 8.20.0

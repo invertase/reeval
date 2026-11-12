@@ -10,6 +10,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { createBridgeAuthKeyPair, createBridgeWebSocketConnect } from '@ai-sdk/harness/utils'
 import WebSocket from 'ws'
 
 export type BridgePart = { type: string; [key: string]: unknown }
@@ -75,7 +76,7 @@ export async function replayBridge(options: {
     writeFileSync(messages, options.messages)
     mkdirSync(join(dir, 'work'))
 
-    const token = 'replay-token'
+    const { privateKey, publicKey } = createBridgeAuthKeyPair()
     const child = spawn(
       process.execPath,
       ['bridge.mjs', '--workdir', join(dir, 'work'), '--bridge-state-dir', join(dir, 'state')],
@@ -83,7 +84,7 @@ export async function replayBridge(options: {
         cwd: dir,
         env: {
           PATH: process.env.PATH,
-          BRIDGE_CHANNEL_TOKEN: token,
+          BRIDGE_AUTH_PUBLIC_KEY: publicKey,
           BRIDGE_WS_PORT: '0',
           REEVAL_REPLAY_SDK_MESSAGES: messages,
         },
@@ -115,24 +116,27 @@ export async function replayBridge(options: {
           })()
           if (ready.type === 'bridge-fatal') fail(new Error(`bridge-fatal: ${ready.message}`))
           if (ready.type !== 'bridge-ready') return
-          const ws = new WebSocket(`ws://127.0.0.1:${ready.port}/?agent_bridge_token=${token}`)
-          const parts: BridgePart[] = []
-          ws.on('error', fail)
-          ws.on('message', (data) => {
-            const part = JSON.parse(String(data)) as BridgePart
-            if (part.type === 'bridge-hello') {
-              ws.send(JSON.stringify({ ...options.start, type: 'start' }))
-              return
-            }
-            if (typeof part.seq !== 'number') return
-            const { seq: _, ...rest } = part
-            parts.push(rest)
-            if (part.type === 'finish' || part.type === 'error') {
-              clearTimeout(timer)
-              ws.close()
-              resolve(parts)
-            }
+          const connect = createBridgeWebSocketConnect({
+            endpoint: { url: `ws://127.0.0.1:${ready.port}/` },
+            privateKey,
+            webSocketConstructor: WebSocket,
           })
+          const parts: BridgePart[] = []
+          connect({ abortSignal: new AbortController().signal, reason: 'open' }).then((ws) => {
+            ws.on('error', fail)
+            ws.on('message', (data) => {
+              const part = JSON.parse(String(data)) as BridgePart
+              if (typeof part.seq !== 'number') return
+              const { seq: _, ...rest } = part
+              parts.push(rest)
+              if (part.type === 'finish' || part.type === 'error') {
+                clearTimeout(timer)
+                ws.close()
+                resolve(parts)
+              }
+            })
+            ws.send(JSON.stringify({ ...options.start, type: 'start' }))
+          }, fail)
         })
       })
     } finally {

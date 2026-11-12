@@ -228,7 +228,7 @@ from its repository under `scripts/third-party-licenses/`. A file copied from sh
 with a `Modified from shadcn/ui` line, which is how the notices find it
 (`studio-web/src/components/ui/LICENSE` has shadcn/ui's license).
 
-**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.176 carries a pnpm patch
+**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.185 carries a pnpm patch
 (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model
 when a plugin's `SessionStart` hook reports before `system/init`, and counts Anthropic's
 `output_tokens_details.thinking_tokens` as text, where the patch makes them `reasoning`.
@@ -568,8 +568,8 @@ pnpm reeval run --dry-run          # the plan, without running
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
-   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.9`, `claude-code-1.0.176-patch.a9d56a8c`,
-   `antigravity-0.1.16`, `opencode-0.2.16`, `goose-0.1.16`, `pi-0.2.9`, `codex-0.1.13`, `fx-0.1.11`, `grok-build-0.1.12`), so
+   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.9`, `claude-code-1.0.185-patch.b20bd1c9`,
+   `antigravity-0.1.16`, `opencode-0.2.17`, `goose-0.1.17`, `pi-0.2.9`, `codex-0.1.13`, `fx-0.1.12`, `grok-build-0.1.13`), so
    the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
    (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).
 
