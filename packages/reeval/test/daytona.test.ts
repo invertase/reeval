@@ -3,10 +3,10 @@
 // (support/daytona.ts) through the real SDK.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
+import type { Daytona } from '@daytona/sdk'
 import { runLabels } from '../src/sandbox/boat.ts'
 import {
   checkDaytona,
-  type DaytonaClient,
   DaytonaRateLimited,
   daytonaCapacity,
   daytonaClient,
@@ -138,7 +138,7 @@ describe("the pool's starts", () => {
     const before = api.created().length
     const provider = daytonaPoolProvider(
       daytona({ size: 'large' }),
-      (await client()) as DaytonaClient,
+      (await client()) as Daytona,
       'run-x',
     )
     await assert.rejects(provider.start(new AbortController().signal, 1800), {

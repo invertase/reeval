@@ -7,13 +7,9 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import type { Daytona } from '@daytona/sdk'
 import { NODE_IMAGE } from '../../sandbox-docker/src/build-image.ts'
-import {
-  type DaytonaClient,
-  daytonaClient,
-  ensureSnapshot,
-  prepareDaytona,
-} from '../src/sandbox/daytona.ts'
+import { daytonaClient, ensureSnapshot, prepareDaytona } from '../src/sandbox/daytona.ts'
 import { daytonaImage, harnessScript } from '../src/sandbox/daytona-image.ts'
 import { PrepareError } from '../src/sandbox/provider.ts'
 import { daytona } from '../src/sandbox-daytona.ts'
@@ -169,7 +165,7 @@ describe("preflight's snapshot", () => {
   const waits = { pollMs: 20, waitMs: 2_000, buildMs: 5_000 }
   const ensure = async (name: string, o: { waits?: typeof waits } = {}) => {
     const log: string[] = []
-    const got = await ensureSnapshot((await client()) as DaytonaClient, {
+    const got = await ensureSnapshot((await client()) as Daytona, {
       name,
       image: async () => {
         const { Image } = await import('@daytona/sdk')
