@@ -2243,6 +2243,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/analysis.test.ts'],
   },
   {
+    id: 'summary.run-report',
+    area: 'Records and studio',
+    name: 'The `RunReport` behind `summary.md`, written beside it as `report.json` and read back by `readableRunReport` (`reeval/view/report`), its attempts cited by their stable key, and rendered by `reeval/renderer/markdown`',
+    unit: [
+      'reeval/test/run-report.test.ts',
+      'reeval/test/summary.test.ts',
+      'reeval/test/view-report-api.test.ts',
+      'reeval/test/history.test.ts',
+    ],
+  },
+  {
     id: 'query.context-use',
     area: 'Records and studio',
     name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',
