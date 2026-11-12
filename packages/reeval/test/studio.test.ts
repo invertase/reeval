@@ -1208,6 +1208,15 @@ describe('studio data server', () => {
       'wide.jsonl': `${JSON.stringify({ type: 'text', turn: 1, text: 'x'.repeat(256 * 1024) })}\n${line(1)}\n`,
       'mixed.jsonl': `not json\n\n${line(0)}\n{"no":"type"}\n${line(1)}\n`,
       'crlf.jsonl': `${line(0)}\r\n${line(1)}\r\n\r\n`,
+      'separators.jsonl': [
+        line(0),
+        JSON.stringify({ type: 'text', turn: 1, text: 'a\u2028b' }),
+        JSON.stringify({ type: 'text', turn: 1, text: 'c\u2029d' }),
+        line(3),
+      ].join('\n'),
+      'bom.jsonl': `\ufeff${line(0)}\n${line(1)}\n`,
+      'lone-cr.jsonl': `${line(0)}\r${line(1)}\n${line(2)}\n`,
+      'straddle.jsonl': `${JSON.stringify({ type: 'text', turn: 1, text: `${'x'.repeat(65_500)}é€😀` })}\n${line(1)}\n`,
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(runDir, name), text)
     const api = await paired({ root, historyDir: join(root, 'evals/.history'), scratch: false })
@@ -1217,7 +1226,11 @@ describe('studio data server', () => {
     for (const [name, text] of Object.entries(files)) {
       const res = await api.get(studioPaths.artifact(runId, name))
       assert.equal(res.status, 200, name)
-      assert.equal(await res.text(), text, `${name}: the bytes without a cursor or limit`)
+      assert.deepEqual(
+        Buffer.from(await res.arrayBuffer()),
+        Buffer.from(text),
+        `${name}: the bytes without a cursor or limit`,
+      )
       assert.equal(res.headers.get('content-security-policy'), 'sandbox')
       assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8')
       assert.equal(res.headers.get('x-content-type-options'), 'nosniff')
@@ -1282,9 +1295,21 @@ describe('studio data server', () => {
       ['line 0', 'line 1'],
       'lines that are not transcript lines are skipped',
     )
+    const separators = await page('separators.jsonl', 'cursor=1&limit=2')
+    assert.deepEqual(
+      separators.items.map((l) => (l as { text: string }).text),
+      ['a\u2028b', 'c\u2029d'],
+      'U+2028 and U+2029 inside a string do not end its line',
+    )
+    assert.equal(separators.totalLines, 4)
 
     for (const [name, text] of Object.entries(files)) {
-      for (const query of ['cursor=0', 'limit=1', `cursor=${TRANSCRIPT_LIMIT.max}&limit=7`]) {
+      for (const query of [
+        'cursor=0',
+        'limit=1',
+        'cursor=1&limit=1',
+        `cursor=${TRANSCRIPT_LIMIT.max}&limit=7`,
+      ]) {
         const range = transcriptQuery(Object.fromEntries(new URLSearchParams(query)))
         assert.ok(typeof range !== 'string')
         assert.deepEqual(
