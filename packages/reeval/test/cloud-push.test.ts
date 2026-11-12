@@ -2,15 +2,16 @@
 // reading it stands, as the platform's studio routes do, and refuses as they do.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { brotliCompressSync, gzipSync } from 'node:zlib'
 import { MANIFEST_FILE, openArchive } from '../src/archive/index.ts'
-import { bufferSource } from '../src/archive/zip.ts'
+import { bufferSource, ZipWriter } from '../src/archive/zip.ts'
+import { scanPush } from '../src/cloud-push-scan.ts'
 import { baseEnv, fakeConfig, project, runCli, tempDir } from './helpers.ts'
 import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
 
@@ -419,8 +420,28 @@ describe('reeval cloud push', () => {
       ),
     ))
 
-  test("a file's name is scanned, and only its folder is shown", () =>
-    refused(`${SECRET}.bin`, 'harmless', new RegExp(`  a file name in ${runId}: GitHub token`)))
+  test("a file's name is scanned, and masked where it's shown", () =>
+    refused(
+      `${SECRET}.bin`,
+      'harmless',
+      new RegExp(`  ${runId}/\\[REDACTED\\]: name: GitHub token`),
+    ))
+
+  test("a folder's name is scanned, and masked in every path shown", async () => {
+    const folder = join(dir, HISTORY, runId, SECRET)
+    mkdirSync(folder)
+    try {
+      await refused(
+        `${SECRET}/notes.txt`,
+        `GITHUB_TOKEN=${SECRET}\n`,
+        new RegExp(
+          `  ${runId}/\\[REDACTED\\]: name: GitHub token\\n  ${runId}/\\[REDACTED\\]/notes\\.txt: line 1: GitHub token`,
+        ),
+      )
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
 
   test('--skip-secret-scan uploads anyway, printing what the scan found', async () => {
     const p = await platform({ status: 'ready' })
@@ -546,5 +567,90 @@ describe('reeval cloud push from a remote history store', () => {
     } finally {
       await p.close()
     }
+  })
+})
+
+describe('the push scan', () => {
+  const zipOf = async (files: Record<string, string | Buffer>) => {
+    const chunks: Buffer[] = []
+    const zip = new ZipWriter((b) => void chunks.push(Buffer.from(b)), { mtime: new Date(0) })
+    for (const [path, data] of Object.entries(files)) await zip.add(path, Buffer.from(data))
+    await zip.finish()
+    return Buffer.concat(chunks)
+  }
+
+  test('a file larger than one string can hold is scanned in windows, across their seams', async () => {
+    const line = 'ordinary log output of a moderate length, nothing to see here\n'
+    const size = 600 * 2 ** 20
+    const big = Buffer.alloc(size, line)
+    // Across the first window's seam (4 MiB, less the 64 KiB the next one repeats), and at the end.
+    const seam = 4 * 2 ** 20 - 64 * 2 ** 10 - 10
+    big.write(`\nX ${SECRET}\n`, seam)
+    big.write(`\nGITHUB_TOKEN=${SECRET}\n`, size - 100)
+    const lineOf = (at: number) => {
+      let n = 2
+      for (let i = big.indexOf(10); i !== -1 && i < at; i = big.indexOf(10, i + 1)) n++
+      return n
+    }
+    const scan = await scanPush([{ path: 'run/big.log', data: big }])
+    assert.deepEqual(scan.unread, [])
+    assert.deepEqual(scan.findings, [
+      `run/big.log: line ${lineOf(seam)}: GitHub token; line ${lineOf(size - 100)}: GitHub token`,
+    ])
+  })
+
+  test('a secret a window cuts through, with no line break to cut at, is found once', async () => {
+    const flat = Buffer.alloc(9 * 2 ** 20, ' ')
+    // One across where the window's own part ends, one across the window's end.
+    flat.write(SECRET, 4 * 2 ** 20 - 64 * 2 ** 10 - 10)
+    flat.write(SECRET, 4 * 2 ** 20 - 10)
+    const scan = await scanPush([{ path: 'run/flat.txt', data: flat }])
+    assert.deepEqual(scan.findings, ['run/flat.txt: line 1: GitHub token; line 1: GitHub token'])
+  })
+
+  test('a gzip bomb stops at the unpack limit and is named unread', async () => {
+    const bomb = gzipSync(Buffer.alloc(300 * 2 ** 20, 'a'), { level: 9 })
+    assert.ok(bomb.length < 2 ** 20)
+    const scan = await scanPush([
+      { path: 'run/bomb.gz', data: bomb },
+      { path: 'run/after.gz', data: gzipSync(`GITHUB_TOKEN=${SECRET}`) },
+    ])
+    assert.deepEqual(scan.unread, [
+      'run/bomb.gz (too large to unpack and scan)',
+      'run/after.gz (too large to unpack and scan)',
+    ])
+    assert.deepEqual(scan.findings, [])
+  })
+
+  test('nested gzip, brotli and zip are unpacked, each labeled once', async () => {
+    const scan = await scanPush([
+      { path: 'run/twice.gz', data: gzipSync(gzipSync(`GITHUB_TOKEN=${SECRET}`)) },
+      { path: 'run/out.br', data: brotliCompressSync(`GITHUB_TOKEN=${SECRET}`) },
+      { path: 'run/plain.br', data: Buffer.from(`GITHUB_TOKEN=${SECRET}`) },
+      {
+        path: 'run/art.zip',
+        data: await zipOf({ 'a/inner.zip': await zipOf({ 'b/x.txt': `GITHUB_TOKEN=${SECRET}` }) }),
+      },
+    ])
+    assert.deepEqual(scan.unread, [])
+    assert.deepEqual(scan.findings, [
+      'run/twice.gz!: line 1: GitHub token',
+      'run/out.br!: line 1: GitHub token',
+      'run/plain.br: line 1: GitHub token',
+      'run/art.zip!/a/inner.zip!/b/x.txt: line 1: GitHub token',
+    ])
+  })
+
+  test("a zip entry's folders are scanned and masked", async () => {
+    const scan = await scanPush([
+      {
+        path: 'run/art.zip',
+        data: await zipOf({ [`d/${SECRET}/ok.txt`]: 'fine', 'd/ok.txt': 'fine' }),
+      },
+    ])
+    assert.deepEqual(scan.unread, [])
+    assert.deepEqual(scan.findings, ['run/art.zip!/d/[REDACTED]: name: GitHub token'])
+    assert.equal(scan.mask(`run/art.zip!/d/${SECRET}/ok.txt`), 'run/art.zip!/d/[REDACTED]/ok.txt')
+    noSecret(JSON.stringify(scan.findings))
   })
 })

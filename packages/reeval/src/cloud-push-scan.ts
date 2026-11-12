@@ -1,18 +1,36 @@
-// The secret scan over every file `reeval cloud push` uploads, binary ones included. The secret
-// shapes are ASCII, so a file that isn't UTF-8 text is read as UTF-16 when it looks like it, else
-// byte for byte with its NULs dropped. gzip, brotli and zip files are scanned inside, entry by
-// entry; a file compressed in any other format can't be scanned, and is named as unread.
-import { dirname } from 'node:path'
-import { brotliDecompressSync, gunzipSync } from 'node:zlib'
+// The secret scan over every file `reeval cloud push` uploads, binary ones included, and over every
+// segment of every path. The secret shapes are ASCII, so a file that isn't UTF-8 text is read as
+// UTF-16 when it looks like it, else byte for byte, its NULs dropped either way. Text is scanned in
+// overlapping windows, so no file or unpacked stream is ever one string. gzip and brotli are
+// inflated as streams into those windows and zip files are scanned entry by entry; a file
+// compressed in any other format, or one the scan can't finish, is named as unread.
+import { pipeline, Readable } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
+import { createBrotliDecompress, createGunzip } from 'node:zlib'
 import { bufferSource, readZip } from './archive/zip.ts'
 import { type Finding, scanText } from './history/secret-scan.ts'
+import { findSecrets, findSecretsInJson } from './redact.ts'
 
+/** The characters scanned at once. */
+const WINDOW = 4 * 2 ** 20
+/**
+ * What each window carries over from the next. Every secret shape matches within its first
+ * 64 KiB, so a match that starts in a window is found there whole or by its first 64 KiB.
+ */
+const OVERLAP = 64 * 2 ** 10
+/** Bytes handed to the decoder at once. */
+const PIECE = 2 ** 20
 /** What the scan unpacks of compressed files, across one push, before it stops reading them. */
-const UNPACK_BUDGET = 1024 * 2 ** 20
+const UNPACK_BUDGET = 256 * 2 ** 20
 /** Compressed files inside compressed files it follows, at most. */
 const MAX_DEPTH = 3
 /** Findings named per file; the rest are counted. */
 const SHOWN = 3
+/** Bytes read before deciding what a stream holds: its magic number, or UTF-16. */
+const PEEK = 512
+
+const MASK = '[REDACTED]'
+const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
 
 const UNREADABLE: Array<[RegExp, string]> = [
   [/\.(?:zst|zstd)$/i, 'zstd'],
@@ -28,7 +46,12 @@ export type PushScan = {
   findings: string[]
   /** `<path> (<why>)`, a line per file the scan couldn't read. */
   unread: string[]
+  /** `path` as these lines show it: every segment that looks like a secret reads `[REDACTED]`. */
+  mask: (path: string) => string
 }
+
+/** Why the scan stopped reading a file, said in place of what it found there. */
+class Unread extends Error {}
 
 const isGzip = (b: Buffer) => b[0] === 0x1f && b[1] === 0x8b
 const isZip = (b: Buffer) =>
@@ -38,7 +61,7 @@ const isZip = (b: Buffer) =>
 function utf16(b: Buffer): 'le' | 'be' | null {
   if (b[0] === 0xff && b[1] === 0xfe) return 'le'
   if (b[0] === 0xfe && b[1] === 0xff) return 'be'
-  const n = Math.min(b.length, 512) & ~1
+  const n = Math.min(b.length, PEEK) & ~1
   if (n < 8) return null
   let even = 0
   let odd = 0
@@ -52,13 +75,232 @@ function utf16(b: Buffer): 'le' | 'be' | null {
   return null
 }
 
-/** The text the scan reads of `b`. */
-export function scanTextOf(b: Buffer): string {
-  const wide = utf16(b)
-  if (wide === 'le') return b.toString('utf16le').replaceAll('\0', '')
-  if (wide === 'be') return Buffer.from(b).swap16().toString('utf16le').replaceAll('\0', '')
-  if (!b.includes(0)) return b.toString('utf8')
-  return b.toString('latin1').replaceAll('\0', '')
+/** A decoder for a stream that starts with `start`, carrying split characters between pieces. */
+function decoderFor(start: Buffer): (piece: Buffer) => string {
+  const wide = utf16(start)
+  const strip = (s: string) => (s.includes('\0') ? s.replaceAll('\0', '') : s)
+  if (wide === 'le') {
+    const d = new StringDecoder('utf16le')
+    return (piece) => strip(d.write(piece))
+  }
+  if (wide === 'be') {
+    const d = new StringDecoder('utf16le')
+    let odd: Buffer = Buffer.alloc(0)
+    return (piece) => {
+      const all = odd.length ? Buffer.concat([odd, piece]) : piece
+      const even = all.length & ~1
+      odd = Buffer.from(all.subarray(even))
+      return strip(d.write(Buffer.from(all.subarray(0, even)).swap16()))
+    }
+  }
+  if (start.includes(0)) return (piece) => strip(piece.toString('latin1'))
+  const d = new StringDecoder('utf8')
+  return (piece) => strip(d.write(piece))
+}
+
+const newlines = (text: string, from: number, to: number) => {
+  let n = 0
+  for (let i = text.indexOf('\n', from); i !== -1 && i < to; i = text.indexOf('\n', i + 1)) n++
+  return n
+}
+
+/**
+ * One file's text, scanned in windows of `WINDOW` characters that overlap by `OVERLAP`. A match
+ * counts in the window it starts in, before the part the next window repeats, so it counts once.
+ * Text that fits one window is scanned as `scanText` scans a file, a patch placed by its files.
+ */
+class TextScan {
+  #buf = ''
+  #line = 1
+  #whole = true
+  readonly #found: Finding[] = []
+  readonly path: string
+  constructor(path: string) {
+    this.path = path
+  }
+
+  push(text: string): void {
+    this.#buf += text
+    while (this.#buf.length >= WINDOW) this.#window(false)
+  }
+
+  end(): Finding[] {
+    if (this.#whole) return scanText(this.path, this.#buf)
+    this.#window(true)
+    return this.#found
+  }
+
+  #window(last: boolean): void {
+    const text = this.#buf
+    let owned = text.length
+    if (!last) {
+      owned -= OVERLAP
+      const cut = text.lastIndexOf('\n', owned - 1)
+      if (cut >= owned / 2) owned = cut + 1
+    }
+    const matches = (JSON_FILE.test(this.path) ? findSecretsInJson : findSecrets)(text)
+      .filter((m) => m.start < owned)
+      .sort((a, b) => a.start - b.start)
+    let line = this.#line
+    let at = 0
+    for (const m of matches) {
+      line += newlines(text, at, m.start)
+      at = m.start
+      this.#found.push({ file: null, line, what: m.rule, rule: m.rule })
+    }
+    this.#line += newlines(text, 0, owned)
+    this.#buf = text.slice(owned)
+    this.#whole = false
+  }
+}
+
+async function* pieces(data: Buffer): AsyncGenerator<Buffer> {
+  for (let at = 0; at < data.length; at += PIECE) yield data.subarray(at, at + PIECE)
+}
+
+/** The first `PEEK` bytes of `source` (fewer only at its end), and all of it from the start. */
+async function peek(
+  source: AsyncIterable<Buffer>,
+): Promise<{ start: Buffer; all: AsyncGenerator<Buffer> }> {
+  const it = source[Symbol.asyncIterator]()
+  const head: Buffer[] = []
+  let size = 0
+  let done = false
+  while (size < PEEK) {
+    const next = await it.next()
+    if (next.done) {
+      done = true
+      break
+    }
+    head.push(next.value)
+    size += next.value.length
+  }
+  const start = Buffer.concat(head)
+  async function* all(): AsyncGenerator<Buffer> {
+    if (start.length) yield start
+    if (done) return
+    for (let next = await it.next(); !next.done; next = await it.next()) yield next.value
+  }
+  return { start, all: all() }
+}
+
+type Scan = {
+  out: Omit<PushScan, 'mask'>
+  budget: { left: number }
+  mask: (path: string) => string
+}
+
+/** `stream` inflated, counted against the push's unpack budget. */
+async function* inflated(
+  stream: AsyncIterable<Buffer>,
+  inflate: NodeJS.ReadWriteStream,
+  scan: Scan,
+  progress = { bytes: 0 },
+): AsyncGenerator<Buffer> {
+  const out = pipeline(Readable.from(stream), inflate, () => {}) as unknown as AsyncIterable<Buffer>
+  for await (const chunk of out) {
+    progress.bytes += chunk.length
+    scan.budget.left -= chunk.length
+    if (scan.budget.left < 0) throw new Unread('too large to unpack and scan')
+    yield chunk
+  }
+}
+
+/** Scans one stream's contents, unpacking what it can; `name` is the file name it came under. */
+async function scanStream(
+  path: string,
+  name: string | null,
+  source: AsyncIterable<Buffer>,
+  depth: number,
+  scan: Scan,
+): Promise<void> {
+  const { start, all } = await peek(source)
+  const gzip = isGzip(start)
+  const zip = !gzip && isZip(start)
+  const brotli = !gzip && !zip && name !== null && /\.br$/i.test(name)
+  if ((gzip || zip || brotli) && depth >= MAX_DEPTH) {
+    throw new Unread(`compressed more than ${MAX_DEPTH} levels deep`)
+  }
+  const unpacked = path.endsWith('!') ? path : `${path}!`
+  if (gzip) return scanStream(unpacked, null, inflated(all, createGunzip(), scan), depth + 1, scan)
+  if (zip) {
+    const chunks: Buffer[] = []
+    for await (const chunk of all) chunks.push(chunk)
+    return scanZip(path.replace(/!$/, ''), Buffer.concat(chunks), depth + 1, scan)
+  }
+  if (brotli) {
+    const chunks: Buffer[] = []
+    for await (const chunk of all) chunks.push(chunk)
+    const raw = Buffer.concat(chunks)
+    const progress = { bytes: 0 }
+    try {
+      return await scanStream(
+        unpacked,
+        null,
+        inflated(pieces(raw), createBrotliDecompress(), scan, progress),
+        depth + 1,
+        scan,
+      )
+    } catch (error) {
+      // A `.br` name over data that isn't brotli: read it as it is.
+      if (error instanceof Unread || progress.bytes > 0 || raw.length === 0) throw error
+      return scanStream(path, null, pieces(raw), depth, scan)
+    }
+  }
+  const decode = decoderFor(start)
+  const text = new TextScan(path)
+  for await (const chunk of all) {
+    for (let at = 0; at < chunk.length; at += PIECE) {
+      text.push(decode(chunk.subarray(at, at + PIECE)))
+    }
+  }
+  const findings = text.end()
+  if (findings.length) scan.out.findings.push(findingText(scan.mask(path), findings))
+}
+
+async function scanZip(path: string, data: Buffer, depth: number, scan: Scan): Promise<void> {
+  let zip: Awaited<ReturnType<typeof readZip>>
+  try {
+    zip = await readZip(bufferSource(data))
+  } catch {
+    // The reader's message can quote an entry's name, which may itself be the secret.
+    throw new Unread("a zip the scan can't read")
+  }
+  for (const entry of zip.entries) {
+    await scanFile(`${path}!/${entry.path}`, depth, scan, async () => {
+      if (entry.method !== 'store') {
+        if (entry.size > scan.budget.left) throw new Unread('too large to unpack and scan')
+        scan.budget.left -= entry.size
+      }
+      try {
+        return await zip.read(entry)
+      } catch {
+        throw new Unread("a zip the scan can't read")
+      }
+    })
+  }
+}
+
+/** Scans one file's path and contents, saying it unread where the scan can't finish. */
+async function scanFile(
+  path: string,
+  depth: number,
+  scan: Scan,
+  data: () => Promise<Buffer>,
+): Promise<void> {
+  const shown = scan.mask(path)
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  const unreadable = UNREADABLE.find(([test]) => test.test(name))
+  if (unreadable) {
+    scan.out.unread.push(`${shown} (${unreadable[1]}-compressed)`)
+    return
+  }
+  try {
+    await scanStream(path, name, pieces(await data()), depth, scan)
+  } catch (error) {
+    const why = error instanceof Unread ? error.message : "the scan couldn't finish reading it"
+    scan.out.unread.push(`${shown} (${why})`)
+  }
 }
 
 function findingText(path: string, findings: Finding[]): string {
@@ -70,98 +312,46 @@ function findingText(path: string, findings: Finding[]): string {
   return `${path}: ${shown.join('; ')}${more}`
 }
 
-/** Scans every file's name and contents. */
+/** Scans every file's contents and every segment of its path, nested zips' entries included. */
 export async function scanPush(
   files: ReadonlyArray<{ path: string; data: Uint8Array }>,
 ): Promise<PushScan> {
-  const out: PushScan = { findings: [], unread: [] }
-  const budget = { left: UNPACK_BUDGET }
-  for (const { path, data } of files) {
-    await scanFile(path, Buffer.from(data), { depth: 0, name: true }, budget, out)
+  const out: Omit<PushScan, 'mask'> = { findings: [], unread: [] }
+  const segments = new Map<string, string[]>()
+  const flagged = new Set<string>()
+  const rulesOf = (segment: string) => {
+    let rules = segments.get(segment)
+    if (!rules) {
+      rules = [...new Set(findSecrets(segment).map((m) => m.rule))]
+      segments.set(segment, rules)
+    }
+    return rules
   }
-  return out
-}
-
-async function scanFile(
-  path: string,
-  data: Buffer,
-  at: { depth: number; name: boolean },
-  budget: { left: number },
-  out: PushScan,
-): Promise<void> {
-  const { depth } = at
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  const named = at.name ? scanText(name, name) : []
-  if (named.length) {
-    // The name itself may be the secret, so only its folder is shown.
-    out.findings.push(
-      `a file name in ${dirname(path)}: ${[...new Set(named.map((f) => f.rule))].join('; ')}`,
+  const mask = (path: string) =>
+    path
+      .split('/')
+      .map((s) => (rulesOf(s).length ? MASK : s))
+      .join('/')
+  const scan: Scan = {
+    out,
+    budget: { left: UNPACK_BUDGET },
+    mask: (path) => {
+      const parts = path.split('/')
+      for (let i = 0; i < parts.length; i++) {
+        const rules = rulesOf(parts[i] as string)
+        const prefix = parts.slice(0, i + 1).join('/')
+        if (rules.length && !flagged.has(prefix)) {
+          flagged.add(prefix)
+          out.findings.push(`${mask(prefix)}: name: ${rules.join('; ')}`)
+        }
+      }
+      return mask(path)
+    },
+  }
+  for (const { path, data } of files) {
+    await scanFile(path, 0, scan, async () =>
+      Buffer.from(data.buffer, data.byteOffset, data.length),
     )
   }
-  const unreadable = UNREADABLE.find(([test]) => test.test(name))
-  if (unreadable) {
-    out.unread.push(`${path} (${unreadable[1]}-compressed)`)
-    return
-  }
-  if (isGzip(data) || isZip(data) || /\.br$/i.test(name)) {
-    if (depth >= MAX_DEPTH) {
-      out.unread.push(`${path} (compressed more than ${MAX_DEPTH} levels deep)`)
-      return
-    }
-    await scanCompressed(path, data, depth, budget, out)
-    return
-  }
-  const findings = scanText(path, scanTextOf(data))
-  if (findings.length) out.findings.push(findingText(path, findings))
-}
-
-async function scanCompressed(
-  path: string,
-  data: Buffer,
-  depth: number,
-  budget: { left: number },
-  out: PushScan,
-): Promise<void> {
-  const tooLarge = () => out.unread.push(`${path} (too large to unpack and scan)`)
-  if (isZip(data)) {
-    let zip: Awaited<ReturnType<typeof readZip>>
-    try {
-      zip = await readZip(bufferSource(data))
-    } catch {
-      // The reader's message can quote an entry's name, which may itself be the secret.
-      out.unread.push(`${path} (a zip the scan can't read)`)
-      return
-    }
-    for (const entry of zip.entries) {
-      if (entry.size > budget.left) return void tooLarge()
-      let inner: Buffer
-      try {
-        inner = await zip.read(entry)
-      } catch {
-        out.unread.push(`${path} (a zip the scan can't read)`)
-        return
-      }
-      budget.left -= inner.length
-      await scanFile(`${path}!/${entry.path}`, inner, { depth: depth + 1, name: true }, budget, out)
-    }
-    return
-  }
-  const gzip = isGzip(data)
-  let inner: Buffer
-  try {
-    const options = { maxOutputLength: Math.max(1, budget.left) }
-    inner = gzip ? gunzipSync(data, options) : brotliDecompressSync(data, options)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') return void tooLarge()
-    if (!gzip) {
-      // A `.br` name over data that isn't brotli: read it as it is.
-      const findings = scanText(path, scanTextOf(data))
-      if (findings.length) out.findings.push(findingText(path, findings))
-      return
-    }
-    out.unread.push(`${path} (gzip the scan can't read: ${(error as Error).message})`)
-    return
-  }
-  budget.left -= inner.length
-  await scanFile(`${path}!`, inner, { depth: depth + 1, name: false }, budget, out)
+  return { ...out, mask }
 }

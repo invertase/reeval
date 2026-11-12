@@ -72,7 +72,7 @@ const redirected = (what: string) =>
 async function archiveBytes(
   runId: string,
   files: Array<{ path: string; data: Uint8Array }>,
-): Promise<Buffer> {
+): Promise<Buffer<ArrayBuffer>> {
   const tmp = await mkdtemp(join(tmpdir(), 'reeval-push-'))
   const onSignal = (signal: NodeJS.Signals) => {
     rmSync(tmp, { recursive: true, force: true })
@@ -111,7 +111,7 @@ export async function pushCommand(
   }
   const { runId } = await recordedRun(config, args[0] ?? 'latest')
   const files = await readRunArchiveFiles(config.history.dir, runId)
-  const { findings, unread } = await scanPush(files)
+  const { findings, unread, mask } = await scanPush(files)
   const listed = (lines: string[]) => lines.map((l) => `  ${l}`).join('\n')
   if (flags['skip-secret-scan']) {
     if (findings.length) {
@@ -137,7 +137,7 @@ export async function pushCommand(
   const unsafe = files.find((f) => safeZipPath(f.path) !== f.path)
   if (unsafe) {
     throw new CommandError(
-      `${runId} has a file whose name can't go in an archive: ${JSON.stringify(unsafe.path)} (a backslash, an empty, . or .. part, or a NUL). Rename or remove it, then push again.`,
+      `${runId} has a file whose name can't go in an archive: ${JSON.stringify(mask(unsafe.path))} (a backslash, an empty, . or .. part, or a NUL). Rename or remove it, then push again.`,
     )
   }
   const runPath = `api/orgs/${seg(t.orgId)}/projects/${seg(t.projectId ?? '')}/studio/runs/${seg(runId)}`
@@ -155,7 +155,7 @@ export async function pushCommand(
       // A redirect would resend the archive, and the token, to wherever it points.
       redirect: 'manual',
       headers: { 'content-type': 'application/zip', 'content-length': String(body.length) },
-      body: new Uint8Array(body),
+      body,
       timeoutMs: UPLOAD_BASE_MS + Math.ceil(body.length / UPLOAD_BYTES_PER_SECOND) * 1000,
     },
     t.auth.headers,
