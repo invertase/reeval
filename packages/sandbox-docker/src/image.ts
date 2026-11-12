@@ -60,7 +60,7 @@ export const HARNESS_PACKAGES: Record<
   },
   antigravity: {
     name: '@reeval/harness-antigravity',
-    version: '0.1.16',
+    version: '0.1.17',
     bootstrap: {
       name: 'Antigravity',
       cli: 'agy',

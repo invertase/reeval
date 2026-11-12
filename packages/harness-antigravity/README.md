@@ -35,7 +35,7 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   durations need `node:sqlite` (Node 22.13 or later in the sandbox); without it they're null.
   A step can bill `thinking_tokens` with no summary stored, and `gemini-3.8-flash-low` doesn't
   think at all, so a turn can have thinking tokens and no reasoning.
-- **Bootstrap.** Downloads the pinned CLI release (1.4.7) for x64 or arm64 Linux and checks its
+- **Bootstrap.** Downloads the pinned CLI release (1.5.7) for x64 or arm64 Linux and checks its
   sha256. The binary needs glibc.
 - **Auth.** A Gemini API key only (`GEMINI_API_KEY`), with `modelProvider: "gemini"` pinned in
   the CLI's settings. Google-account sign-in is never used: automating it from other tools
@@ -45,7 +45,7 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   host of `GOOGLE_GEMINI_BASE_URL`). `antigravityEndpoints()` is the only endpoint the key is
   needed on, `POST /v1beta/models/<model>:streamGenerateContent`, as an allowlist for gateways
   that enforce one. `requireCredentialBrokering: true` refuses sandboxes that can't broker.
-- **Placement.** Skills go to `~/.gemini/config/skills/` (the path CLI 1.4.7 reads, not the
+- **Placement.** Skills go to `~/.gemini/config/skills/` (the path CLI 1.5.7 reads, not the
   documented `~/.gemini/antigravity-cli/skills/`) and instructions to `~/.gemini/GEMINI.md`.
   `mcpServers` are written to `~/.gemini/config/mcp_config.json`, in the CLI's shape (remote
   servers take `serverUrl`). Workspace rules (`AGENTS.md`) and skills (`.agents/skills/`) are

@@ -40,7 +40,7 @@
     "@ai-sdk/harness": "1.0.172",
     "@ai-sdk/harness-claude-code": "1.0.176",
     "@balena/dockerignore": "1.0.2",
-    "@reeval/harness-antigravity": "workspace:0.1.16",
+    "@reeval/harness-antigravity": "workspace:0.1.17",
     "@reeval/harness-codex": "workspace:0.1.14",
     "@reeval/harness-cursor-sdk": "workspace:0.1.9",
     "@reeval/harness-fx": "workspace:0.1.11",
