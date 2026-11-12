@@ -1595,15 +1595,6 @@ async function prepareRun(
   if (recording && !flags['dry-run'] && !wantsCloud(flags, config, profile)) {
     storeCredentials(config.history)
   }
-  if (flags.artifacts !== undefined) {
-    const { parseLevel } = await import('./commands.ts')
-    parseLevel(flags.artifacts, config.history.artifacts)
-    if (!recording && !flags['dry-run']) {
-      console.error(
-        yellow('reeval: --artifacts applies when the run is recorded: pass --record to record it'),
-      )
-    }
-  }
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)

@@ -286,7 +286,7 @@ describe('reeval studio share', () => {
       assert.match(full.stdout, /^This share includes the run's transcripts and artifacts\.$/m)
       assert.match(
         full.stderr,
-        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: reeval run --artifacts all/,
+        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: history\.artifacts: 'all' or reeval record --artifacts all/,
       )
       assert.doesNotMatch(full.stdout, /without signing in/)
       assert.match(full.stdout, /\(full, team\)/)
@@ -903,21 +903,23 @@ describe('reeval cloud push --out and --json', () => {
     }
   })
 
-  test("a run recorded with --artifacts all carries every attempt's transcript", async () => {
+  test("a run recorded with reeval record --artifacts all carries every attempt's transcript", async () => {
     const all = await linkedProject('cloud-push-artifacts')
-    const bad = await runCli(all, ['run', '--record', '--artifacts', 'some'])
-    assert.equal(bad.code, 2, bad.stdout + bad.stderr)
-    assert.match(bad.stderr, /--artifacts is all, failures or none \(got some\)/)
-    assert.throws(() => readdirSync(join(all, HISTORY)))
-    const run = await runCli(all, ['run', '--record', '--artifacts', 'all'])
+    const flag = await runCli(all, ['run', '--artifacts', 'all'])
+    assert.equal(flag.code, 2, flag.stdout + flag.stderr)
+    assert.match(flag.stderr, /--artifacts/)
+    const run = await runCli(all, ['run'])
     assert.equal(run.code, 0, run.stdout + run.stderr)
+    const id = (
+      readdirSync(join(all, '.reeval', 'runs')).find((f) => f.endsWith('.json')) as string
+    ).replace(/\.json$/, '')
+    const recorded = await runCli(all, ['record', id, '--artifacts', 'all'])
+    assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
     const r = await runCli(all, ['cloud', 'push', '--out', 'run.zip'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.ok((await transcripts(join(all, 'run.zip'))).length > 0, 'the passing attempt keeps it')
     const failures = await runCli(dir, ['cloud', 'push', '--out', 'out/run.zip'])
     assert.equal(failures.code, 0, failures.stdout + failures.stderr)
     assert.deepEqual(await transcripts(out()), [], "'failures' leaves a passing attempt's out")
-    const unrecorded = await runCli(all, ['run', '--artifacts', 'all'])
-    assert.match(unrecorded.stderr, /--artifacts applies when the run is recorded: pass --record/)
   })
 })

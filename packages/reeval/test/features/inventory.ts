@@ -2039,12 +2039,6 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts'],
   },
   {
-    id: 'history.run-artifacts',
-    area: 'Records and studio',
-    name: '`reeval run --artifacts all|failures|none`: the level the run is recorded at (auto-record or `--record`), over `history.artifacts`; a re-recorded run (`--retry-errors`, `--resume`) keeps the level it was recorded at, and an unrecorded run warns that the flag applies only when recording',
-    unit: ['reeval/test/history.test.ts', 'reeval/test/cli.test.ts'],
-  },
-  {
     id: 'history.archive',
     area: 'Records and studio',
     name: '`history.archive`: each recorded run also as `<runId>.zip` beside its record, `reeval record` on a run still in `.reeval/runs` rebuilding a missing or stale one, refused on `s3()`',

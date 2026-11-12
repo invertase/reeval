@@ -126,7 +126,6 @@ export const RUN_FLAGS: FlagName[] = [
   'tag',
   'trait',
   'record',
-  'artifacts',
   'ui',
   'log-order',
   'log-prefix',
@@ -198,8 +197,6 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --trait <key=value>         Only cells whose environment's trait is value, or lists it (with
                                 compare, the control's); repeat to combine (AND)
     --record                    Also record the run into the history folder (see config.record)
-    --artifacts <level>         all, failures or none: which attempts' artifacts and transcripts
-                                the run keeps when it's recorded (default history.artifacts)
     --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
                                 an eval list you browse with the arrow keys on a terminal outside CI)
     --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
