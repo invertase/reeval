@@ -1,16 +1,16 @@
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The CLI build the bootstrap installs. Bump it with every checksum from the release. */
-export const ANTIGRAVITY_CLI_VERSION = '1.4.7'
+export const ANTIGRAVITY_CLI_VERSION = '1.5.7'
 
 /**
  * The sha256 of each release asset the bootstrap installs: Linux's for each arch, and macOS's
  * for Apple Silicon (a Tart VM), from the release assets' `digest`.
  */
 export const ANTIGRAVITY_CLI_SHA256 = {
-  x64: '67fd4e70be739b1f8b18f90b511da8cd2a7aef24e888e5837402e025bf7fdbfc',
-  arm64: 'b273c791b7647f680598fa1dbdf9c8086bdc42374b2276fa70e900bf8120e1d5',
-  'darwin-arm64': '9fed7bfe90cb158ac00b5b2da64dd54af732f7c062259e68ebd060b827fd0d88',
+  x64: 'd6150a8d2a9e29a3d171b2325d6f66b6e7059628f4799a20c069b8ed8f78fdbb',
+  arm64: '8c5a378a7f0170db9c6417546c7cf011265e0eff2a10571401c0d90db0641cda',
+  'darwin-arm64': '4a9e98bd6f354f762f67b8dd0595eec2a50bb842fcd35e7c7777b67f48c3dea5',
 } as const
 
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
