@@ -345,8 +345,9 @@ reeval cloud push [run]       Upload a recorded run (default: latest) to the stu
                               (no sign-in needed)
   --artifacts <level>         all, failures or none: archive the attempts' artifacts and
                               transcripts at this level, from the run's copy in .reeval/runs
-                              (recorded or not; nothing is recorded), else only narrowing a
-                              recorded run's
+                              (an unrecorded run, or a recorded one it matches; nothing is
+                              recorded), else only narrowing a recorded run's
+  --allow-incomplete          With --artifacts, take an unrecorded run that didn't complete
   --json                      The run's last state, or what --out wrote, as JSON
   --skip-secret-scan          Upload even then, printing what the scan found as a warning
   --org <slug>                The org, by slug or id, instead of the linked one

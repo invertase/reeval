@@ -731,6 +731,41 @@ async function stageDebug(
 /** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
 export const SECRET_NOTE = 'not kept: it looked like it held a secret'
 
+/** A file the run's record names, which must be there. */
+const runFile = (source: string, runId: string, path: string) =>
+  readFile(join(source, runId, ...path.split('/'))).catch((error) => {
+    if (isMissing(error)) throw new HistoryError(`${runId}/${path} is missing`)
+    throw error
+  })
+
+/** A record as compared for "already recorded with different content": its debug data aside. */
+const comparable = (record: RunRecord) => {
+  const { debug: _, ...rest } = JSON.parse(encodeRecord(record).toString()) as RunRecord
+  return rest
+}
+
+/** Why `dir`'s copy `run` isn't the run `recorded` is, rebuilt at its level; null when it is. */
+async function differs(
+  dir: string,
+  run: RunRecord,
+  recorded: RunRecord,
+  options: { skipSecretScan?: boolean },
+): Promise<string | null> {
+  if (run.status !== recorded.status) {
+    return `it's ${run.status}, the recorded run ${recorded.status}`
+  }
+  let rebuilt: RunRecord
+  try {
+    rebuilt = (await leveled(dir, run, recorded.artifacts, options)).record
+  } catch (error) {
+    if (error instanceof HistoryError) return error.message
+    throw error
+  }
+  return isDeepStrictEqual(comparable(rebuilt), comparable(recorded))
+    ? null
+    : 'its record differs from the recorded one'
+}
+
 /**
  * The record and files a run in `source` keeps at `level`, as `recordRun` records them: each
  * file checked against its hash, the worktree patch left out when it looks like it holds a
@@ -747,7 +782,7 @@ async function leveled(
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
   const keep = async (ref: FileRef) => {
-    const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
+    const bytes = await runFile(source, runId, ref.path)
     if (sha256(bytes) !== ref.sha256) {
       throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
     }
@@ -804,7 +839,7 @@ async function leveled(
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []
   if (patch && record.git && level !== 'none') {
-    const bytes = await readFile(join(source, runId, patch.path))
+    const bytes = await runFile(source, runId, patch.path)
     if (sha256(bytes) !== patch.sha256) {
       throw new HistoryError(`${runId}/${patch.path} changed since the run wrote it`)
     }
@@ -854,13 +889,32 @@ export async function leveledArchiveFiles(
   dir: string,
   runId: string,
   level: ArtifactLevel,
-  options: { skipSecretScan?: boolean; check?: (run: RunRecord) => void },
-): Promise<{ files: Array<{ path: string; data: Uint8Array }>; droppedPatch: string[] }> {
+  options: {
+    skipSecretScan?: boolean
+    check?: (run: RunRecord) => void
+    /** The recorded run `dir`'s copy must be, rebuilt at its level; else `mismatch` says why. */
+    recorded?: RunRecord
+  },
+): Promise<
+  | { files: Array<{ path: string; data: Uint8Array }>; droppedPatch: string[] }
+  | { mismatch: string }
+> {
   const release = await claimRun(dir, runId)
   try {
     const run = await readRecord(recordFile(dir, runId))
     options.check?.(run)
-    const { record, files, droppedPatch } = await leveled(dir, run, level, options)
+    if (options.recorded) {
+      const mismatch = await differs(dir, run, options.recorded, options)
+      if (mismatch) return { mismatch }
+    }
+    let made: Awaited<ReturnType<typeof leveled>>
+    try {
+      made = await leveled(dir, run, level, options)
+    } catch (error) {
+      if (options.recorded && error instanceof HistoryError) return { mismatch: error.message }
+      throw error
+    }
+    const { record, files, droppedPatch } = made
     return {
       files: [
         { path: `${runId}.json`, data: encodeRecord(record) },

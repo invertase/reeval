@@ -18,6 +18,7 @@ import { CommandError, parseLevel, pick, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
 import {
   leveledArchiveFiles,
+  readRecord,
   readRunArchiveFiles,
   recordFile,
   scratchDir,
@@ -117,19 +118,39 @@ async function archiveFiles(
   const entry = await pick(config, ref ?? 'latest')
   const { runId } = entry
   await refuseRunning(config, runId)
+  const skip = flags['skip-secret-scan'] ? { skipSecretScan: true } : {}
   // `.reeval/runs` keeps every attempt's files whatever the run was recorded at, so its copy
-  // gives any level; only the history folder's is limited to the recorded one.
-  const scratch = existsSync(recordFile(scratchDir(config.root), runId))
-  const recorded = entry.recorded && !scratch
-  let same = false
-  const built = await leveledArchiveFiles(
-    recorded ? config.history.dir : scratchDir(config.root),
-    runId,
-    level,
-    {
-      ...(flags['skip-secret-scan'] && { skipSecretScan: true }),
+  // gives any level, but only while it's the run history has: a retry or resume can leave it
+  // otherwise. The history folder's copy is limited to the recorded level.
+  let built: Exclude<Awaited<ReturnType<typeof leveledArchiveFiles>>, { mismatch: string }> | null =
+    null
+  const scratch = scratchDir(config.root)
+  if (existsSync(recordFile(scratch, runId))) {
+    const recorded = entry.recorded
+      ? await readRecord(recordFile(config.history.dir, runId))
+      : undefined
+    const local = await leveledArchiveFiles(scratch, runId, level, {
+      ...skip,
+      ...(recorded && { recorded }),
       check: (run) => {
-        if (!recorded) return
+        if (!recorded && run.status !== 'complete' && !flags['allow-incomplete']) {
+          throw new CommandError(
+            `Run ${runId} was ${run.status}; pass --allow-incomplete to push it`,
+          )
+        }
+      },
+    })
+    if ('mismatch' in local) {
+      warn(
+        `Pushing ${runId} from the history folder: its copy in .reeval/runs isn't the recorded run (${local.mismatch})`,
+      )
+    } else built = local
+  }
+  if (!built) {
+    let same = false
+    const history = await leveledArchiveFiles(config.history.dir, runId, level, {
+      ...skip,
+      check: (run) => {
         const was = run.artifacts
         if (LEVELS.indexOf(level) < LEVELS.indexOf(was)) {
           throw new CommandError(
@@ -138,9 +159,12 @@ async function archiveFiles(
         }
         same = level === was
       },
-    },
-  )
-  if (same) return { runId, files: await readRunArchiveFiles(config.history.dir, runId) }
+    })
+    if (same || 'mismatch' in history) {
+      return { runId, files: await readRunArchiveFiles(config.history.dir, runId) }
+    }
+    built = history
+  }
   if (built.droppedPatch.length) {
     warn(
       `Left ${runId}'s worktree patch out of the archive: it looks like it holds a secret:\n${built.droppedPatch.map((l) => `  ${l}`).join('\n')}`,

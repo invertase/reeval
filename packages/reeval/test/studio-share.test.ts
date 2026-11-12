@@ -16,7 +16,7 @@ import {
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { openArchive } from '../src/archive/index.ts'
 import { baseEnv, fakeConfig, project, runCli, tempDir } from './helpers.ts'
@@ -862,6 +862,120 @@ describe('reeval cloud push --out and --json', () => {
       record,
       'history is untouched',
     )
+  })
+
+  test("a recorded run whose .reeval/runs copy isn't it pushes the history copy", async () => {
+    const local = join(dir, '.reeval', 'runs', `${runId}.json`)
+    const before = readFileSync(local)
+    writeFileSync(
+      local,
+      JSON.stringify({ ...JSON.parse(before.toString()), status: 'interrupted' }),
+    )
+    try {
+      const r = await runCli(dir, [
+        'cloud',
+        'push',
+        runId,
+        '--artifacts',
+        'none',
+        '--out',
+        'out/int.zip',
+      ])
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        new RegExp(
+          `Pushing ${runId} from the history folder: its copy in \\.reeval/runs isn't the recorded run \\(it's interrupted, the recorded run complete\\)`,
+        ),
+      )
+      const archive = await openArchive(join(dir, 'out', 'int.zip'))
+      try {
+        await archive.verify()
+        const record = JSON.parse((await archive.read(`${runId}.json`)).toString())
+        assert.equal(record.status, 'complete')
+        assert.equal(record.artifacts, 'none')
+      } finally {
+        await archive.close()
+      }
+      const wider = await runCli(dir, [
+        'cloud',
+        'push',
+        runId,
+        '--artifacts',
+        'all',
+        '--out',
+        'out/w.zip',
+      ])
+      assert.equal(wider.code, 2, wider.stdout + wider.stderr)
+      assert.match(wider.stderr, /isn't the recorded run/)
+      assert.match(wider.stderr, /can't add what recording left out/)
+    } finally {
+      writeFileSync(local, before)
+    }
+  })
+
+  test('a recorded run whose .reeval/runs copy lost a transcript falls back to the history copy, then the narrowing rule', async () => {
+    const copy = join(dir, '.reeval', 'runs', runId)
+    const transcript = readdirSync(copy, { recursive: true })
+      .map(String)
+      .find((f) => f.endsWith('transcript.jsonl')) as string
+    assert.ok(transcript, 'the local copy has a transcript')
+    const file = join(copy, transcript)
+    renameSync(file, `${file}.aside`)
+    try {
+      const r = await runCli(dir, [
+        'cloud',
+        'push',
+        runId,
+        '--artifacts',
+        'all',
+        '--out',
+        'out/lost.zip',
+      ])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.ok(
+        r.stderr.includes(
+          `Pushing ${runId} from the history folder: its copy in .reeval/runs isn't the recorded run (${runId}/${transcript.split(sep).join('/')} is missing)`,
+        ),
+        r.stderr,
+      )
+      assert.match(r.stderr, /can't add what recording left out/)
+      assert.doesNotMatch(r.stderr, /ENOENT/)
+      assert.ok(!existsSync(join(dir, 'out', 'lost.zip')))
+    } finally {
+      renameSync(`${file}.aside`, file)
+    }
+  })
+
+  test('an unrecorded run that did not complete needs --allow-incomplete', async () => {
+    const p = await linkedProject('cloud-push-incomplete')
+    assert.equal((await runCli(p, ['run'])).code, 0)
+    const runs = join(p, '.reeval', 'runs')
+    const id = (readdirSync(runs).find((f) => f.endsWith('.json')) as string).replace(/\.json$/, '')
+    const local = join(runs, `${id}.json`)
+    writeFileSync(
+      local,
+      JSON.stringify({ ...JSON.parse(readFileSync(local).toString()), status: 'interrupted' }),
+    )
+    const refused = await runCli(p, ['cloud', 'push', id, '--artifacts', 'all', '--out', 'run.zip'])
+    assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+    assert.equal(
+      refused.stderr.trim(),
+      `reeval: Run ${id} was interrupted; pass --allow-incomplete to push it`,
+    )
+    assert.ok(!existsSync(join(p, 'run.zip')))
+    const allowed = await runCli(p, [
+      'cloud',
+      'push',
+      id,
+      '--artifacts',
+      'all',
+      '--allow-incomplete',
+      '--out',
+      'run.zip',
+    ])
+    assert.equal(allowed.code, 0, allowed.stdout + allowed.stderr)
+    assert.ok(!existsSync(join(p, HISTORY)))
   })
 
   test('without its .reeval/runs copy, --artifacts only narrows a recorded run', async () => {
