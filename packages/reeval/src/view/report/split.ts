@@ -35,13 +35,17 @@ const inIdOrder = (a: AttemptIndexRow, b: AttemptIndexRow) =>
 
 /**
  * `report` as its index and one detail per eval, which `joinRunReport` puts back together exactly.
- * Each attempt index row names its eval (`AttemptIndexRow.evalId`, the section's `id`) and the
- * rows are in their display ids' order, as `buildRunReport` writes them; a report that isn't
- * throws.
+ * Each eval's `id` is its own, each attempt index row names its eval (`AttemptIndexRow.evalId`,
+ * the section's `id`) and the rows are in their display ids' order, as `buildRunReport` writes
+ * them; a report that isn't throws.
  */
 export function splitRunReport(report: RunReport): SplitRunReport {
   const { evals, attempts, ...top } = report
-  const rows = new Map<string, AttemptIndexRow[]>(evals.map((e) => [e.id, []]))
+  const rows = new Map<string, AttemptIndexRow[]>()
+  for (const e of evals) {
+    if (rows.has(e.id)) throw new Error(`Eval ${e.id} is in the report twice`)
+    rows.set(e.id, [])
+  }
   attempts.forEach((row, i) => {
     const of = rows.get(row.evalId)
     if (!of) throw new Error(`Attempt ${row.key} names eval ${row.evalId}, which the report lacks`)

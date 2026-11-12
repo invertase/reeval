@@ -91,11 +91,17 @@ describe('splitRunReport', () => {
     roundTrips(buildRunReport(record, { evals: [key] }), 'one eval')
   })
 
-  test('refuses an attempt row naming no eval, or out of the index order', () => {
+  test('refuses an eval id used twice, an attempt row naming no eval, or rows out of order', () => {
     const report = golden()
     const orphan = structuredClone(report)
     ;(orphan.attempts[0] as RunReport['attempts'][number]).evalId = 'no such eval'
     assert.throws(() => splitRunReport(orphan), /names eval no such eval/)
+    const twice = structuredClone(report)
+    twice.evals[1] = {
+      ...(twice.evals[1] as RunReport['evals'][number]),
+      id: twice.evals[0]?.id as string,
+    }
+    assert.throws(() => splitRunReport(twice), /is in the report twice/)
     const shuffled = structuredClone(report)
     shuffled.attempts.reverse()
     assert.throws(() => splitRunReport(shuffled), /out of the index's order/)
