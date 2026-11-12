@@ -134,6 +134,7 @@ const PULLS = {
   analyze: 1,
   mcp: 1,
   'cloud push': 1,
+  'studio share': 1,
 }
 
 const EXPECTED_ERRORS = [
@@ -303,6 +304,7 @@ async function run(argv: string[]): Promise<number> {
       return pushCommand(config, values, args, {
         out: (s: string) => console.log(s),
         err: (s: string) => console.error(yellow(s)),
+        note: (s: string) => console.error(s),
         projectDir: projectDirFor(configPath),
       })
     }
@@ -327,6 +329,19 @@ async function run(argv: string[]): Promise<number> {
       )
     }
     return imageBuildCommand(values, configPath, filters.slice(1))
+  }
+  if (command === 'studio' && filters[0] === 'share') {
+    const config = await historyConfig(configPath, 'studio share', values.profile, values)
+    const [{ shareCommand }, { projectDirFor }] = await Promise.all([
+      import('./studio-share.ts'),
+      import('./cloud-project.ts'),
+    ])
+    return shareCommand(config, values, filters.slice(1), {
+      out: (s: string) => console.log(s),
+      err: (s: string) => console.error(yellow(s)),
+      note: (s: string) => console.error(s),
+      projectDir: projectDirFor(configPath),
+    })
   }
   if (command === 'studio') {
     const config = await historyConfig(configPath, 'studio', values.profile)
@@ -1579,6 +1594,10 @@ async function prepareRun(
   // A cloud run's credentials are checked once it's known to run here.
   if (recording && !flags['dry-run'] && !wantsCloud(flags, config, profile)) {
     storeCredentials(config.history)
+  }
+  if (flags.artifacts !== undefined) {
+    const { parseLevel } = await import('./commands.ts')
+    parseLevel(flags.artifacts, config.history.artifacts)
   }
   let runs: number | undefined
   if (flags.runs !== undefined) {
