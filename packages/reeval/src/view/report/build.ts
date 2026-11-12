@@ -926,7 +926,7 @@ function chooseHeadline(
     if (leadAnswer) {
       const attempt = e.attempts.find((a) => a.id === leadAnswer.attempt)
       if (attempt) {
-        // Citation filled later when we have ids; placeholder href for structure.
+        // fillTextLeadCites replaces the citation, or drops the lead when the attempt has no id.
         lead = {
           text: leadAnswer.text.slice(0, 200),
           attempt: { id: 'A?', key: attempt.key, href: '#' },
@@ -1578,11 +1578,10 @@ function fillTextLeadCites(
   if (primary.kind !== 'text' || !primary.lead) return primary
   const answers = attemptAnswerRows(e).find((r) => r.question === primary.question)
   const first = answers?.answers.find((a) => a.text.trim())
-  if (!first) return primary
-  const attempt = e.attempts.find((a) => a.id === first.attempt)
-  if (!attempt) return primary
-  const ref = attemptRef(ids, e, attempt, linkBase, hrefs, hrefByKey)
-  if (!ref) return primary
+  const attempt = first && e.attempts.find((a) => a.id === first.attempt)
+  const ref = attempt && attemptRef(ids, e, attempt, linkBase, hrefs, hrefByKey)
+  // A quote is shown only with a citation it can link to.
+  if (!ref) return { ...primary, lead: null, leadRole: null }
   return { ...primary, lead: { ...primary.lead, attempt: ref } }
 }
 

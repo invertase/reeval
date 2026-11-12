@@ -328,6 +328,38 @@ describe('buildRunReport', () => {
     }
     assert.match(runReportMarkdown(report), /Showing 1 of \d+ answers as representative/)
   })
+
+  test("a text headline's quote cites a real attempt, or is left out when it has none", () => {
+    const textReport = (unnumbered: boolean) => {
+      const record = cloneRecord('with-layouts')
+      const e = record.evals.find((ev) => !ev.compare) ?? record.evals[0]!
+      e.attempts = e.attempts.slice(0, 1).map((a) => ({
+        ...a,
+        seq: unnumbered ? null : a.seq,
+        assertions: [],
+        judgments: [],
+        observations: [],
+        answers: [{ question: 'What stood out?', text: 'The tests', choice: null, input: null }],
+      }))
+      e.answers = undefined
+      return buildRunReport(record, { evals: [e.key], links: { base: './' } })
+    }
+    const cited = textReport(false).evals[0]!.headline.primary
+    assert.equal(cited.kind, 'text')
+    if (cited.kind === 'text') {
+      assert.match(cited.lead?.attempt.id ?? '', /^A\d+$/)
+      assert.notEqual(cited.lead?.attempt.href, '#')
+    }
+    const report = textReport(true)
+    const uncited = report.evals[0]!.headline.primary
+    assert.equal(uncited.kind, 'text')
+    if (uncited.kind === 'text') {
+      assert.equal(uncited.lead, null)
+      assert.equal(uncited.leadRole, null)
+    }
+    assert.doesNotMatch(JSON.stringify(report), /"A\?"/)
+    assert.doesNotMatch(runReportMarkdown(report), /\]\(#\)/)
+  })
 })
 
 describe('readableRunReport', () => {
