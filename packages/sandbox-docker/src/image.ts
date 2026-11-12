@@ -51,7 +51,7 @@ export const HARNESS_PACKAGES: Record<
   'claude-code': {
     name: '@ai-sdk/harness-claude-code',
     version: '1.0.185',
-    patch: 'b20bd1c9',
+    patch: '37fa4e82',
     bootstrap: {
       name: 'Claude Code',
       cli: 'claude',

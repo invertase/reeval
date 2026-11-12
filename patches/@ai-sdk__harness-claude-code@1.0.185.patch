@@ -1,5 +1,5 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index df4d5c1c047905bc6b483a5a9e0482dc0080abe3..b487e09c140c0d7d6e709aed18b5f03247da055e 100644
+index df4d5c1c047905bc6b483a5a9e0482dc0080abe3..9d25b397adef6a7e5ecf4acc9ce3bf835a678737 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
 @@ -823,7 +823,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
@@ -32,6 +32,19 @@ index df4d5c1c047905bc6b483a5a9e0482dc0080abe3..b487e09c140c0d7d6e709aed18b5f032
 +		} : {
  			total: u.output_tokens ?? 0,
  			text: u.output_tokens ?? 0
+ 		}
+@@ -2117,7 +2123,11 @@ async function runTurn(start, turn) {
+ 			...permissionOptions,
+ 			...Object.keys(settings).length > 0 ? { settings } : {},
+ 			mcpServers,
+-			settingSources: ["user"],
++			settingSources: [
++				"user",
++				"project",
++				"local"
++			],
+ 			cwd: workdir,
+ 			abortController: abortCtl
  		}
 diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
 index e55b21e829cfd7e2ef00f25b374720bd83ae6c7d..9380abf161bf594afc4c8611283fd3c15d96240f 100644
@@ -93,3 +106,18 @@ index e55b21e829cfd7e2ef00f25b374720bd83ae6c7d..9380abf161bf594afc4c8611283fd3c1
    };
  }
  
+diff --git a/src/bridge/index.ts b/src/bridge/index.ts
+index f84ca60dbdfccea387f841bcc1acf504b704e1ce..1ec653610d42ca2884b311e77a5b1a74cefee738 100644
+--- a/src/bridge/index.ts
++++ b/src/bridge/index.ts
+@@ -949,7 +949,9 @@ async function runTurn(start: StartMessage, turn: BridgeTurn): Promise<void> {
+       ...permissionOptions,
+       ...(Object.keys(settings).length > 0 ? { settings } : {}),
+       mcpServers,
+-      settingSources: ['user'],
++      // The workspace's CLAUDE.md, .claude/skills and settings are the
++      // project's own, as Claude Code itself loads them.
++      settingSources: ['user', 'project', 'local'],
+       cwd: workdir,
+       abortController: abortCtl,
+     },

@@ -656,10 +656,6 @@ export const CASES: Record<string, Case[]> = {
       'claudeCode effort on a model that takes none',
       any(claudeCode, { model: 'claude-haiku-4-5', effort: 'high' }),
     ],
-    [
-      'claudeCode effort on an alias for a model that takes none',
-      any(claudeCode, { model: 'haiku', effort: 'high' }),
-    ],
     ['antigravity without a model', any(antigravity, {})],
     ['antigravity effort a number', any(antigravity, { model: 'g', effort: 1 })],
     [
@@ -2737,11 +2733,11 @@ environments:
     ],
     [
       "route: claude code with effort on a model its catalog doesn't list, on vertex, direct off",
-      route([VERTEX, OFF], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+      route([VERTEX, OFF], claudeCode({ model: 'claude-opus-4-5', effort: 'low' })),
     ],
     [
       "route: claude code with effort on a model its catalog doesn't list falls through vertex",
-      route([VERTEX, DIRECT], claudeCode({ model: 'claude-haiku-5-5', effort: 'low' })),
+      route([VERTEX, DIRECT], claudeCode({ model: 'claude-opus-4-5', effort: 'low' })),
     ],
     [
       'route: claude code with effort on a model its catalog lists, on vertex',

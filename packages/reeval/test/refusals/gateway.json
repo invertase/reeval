@@ -115,7 +115,7 @@
   "vertex: no project": "UsageError: vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT",
   "vertex: the project from GOOGLE_CLOUD_PROJECT": null,
   "route: claude code on vertex then direct": null,
-  "route: claude code with effort on a model its catalog doesn't list, on vertex, direct off": "UsageError: evals/a.eval.ts › e on claude-code:claude-haiku-5-5[effort=low]: no gateway in the list can serve it (vertex: Claude Code sends no effort to claude-haiku-5-5 on Vertex AI, where it sends one only to the models its catalog lists: drop effort, or run one of them, e.g. claude-sonnet-5-5). Drop direct({ enabled: false }) from gateway to fall back to Claude Code's own key.",
+  "route: claude code with effort on a model its catalog doesn't list, on vertex, direct off": "UsageError: evals/a.eval.ts › e on claude-code:claude-opus-4-5[effort=low]: no gateway in the list can serve it (vertex: Claude Code sends no effort to claude-opus-4-5 on Vertex AI, where it sends one only to the models its catalog lists: drop effort, or run one of them, e.g. claude-sonnet-5-5). Drop direct({ enabled: false }) from gateway to fall back to Claude Code's own key.",
   "route: claude code with effort on a model its catalog doesn't list falls through vertex": null,
   "route: claude code with effort on a model its catalog lists, on vertex": null,
   "route: claude code with effort on an alias its catalog resolves to one it lists, on vertex": null,

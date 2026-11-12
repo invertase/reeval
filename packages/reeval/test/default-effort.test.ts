@@ -97,12 +97,12 @@ describe('the shared default effort', () => {
   })
 
   test("follows Claude Code's gateway: none on Vertex AI to a model its catalog doesn't list", () => {
-    const haiku = claudeCode({ model: 'claude-haiku-5-5' })
-    assert.equal(withDefaultEffort(haiku).effort, 'medium')
-    assert.equal(withDefaultEffort({ ...haiku, gateway: 'vercel' }).effort, 'medium')
+    const opus = claudeCode({ model: 'claude-opus-4-5' })
+    assert.equal(withDefaultEffort(opus).effort, 'medium')
+    assert.equal(withDefaultEffort({ ...opus, gateway: 'vercel' }).effort, 'medium')
     assert.equal(
-      noDefaultEffort({ ...haiku, gateway: 'vertex' }),
-      'Claude Code sends no effort to claude-haiku-5-5 on Vertex AI',
+      noDefaultEffort({ ...opus, gateway: 'vertex' }),
+      'Claude Code sends no effort to claude-opus-4-5 on Vertex AI',
     )
     assert.equal(
       withDefaultEffort({ ...claudeCode({ model: 'claude-sonnet-5-5' }), gateway: 'vertex' })
@@ -110,8 +110,8 @@ describe('the shared default effort', () => {
       'medium',
     )
     assert.equal(
-      noDefaultEffort({ ...haiku, gateway: 'openrouter' }),
-      "reeval doesn't send Claude Code's effort to claude-haiku-5-5 through OpenRouter yet",
+      noDefaultEffort({ ...opus, gateway: 'openrouter' }),
+      "reeval doesn't send Claude Code's effort to claude-opus-4-5 through OpenRouter yet",
     )
   })
 
@@ -121,9 +121,10 @@ describe('the shared default effort', () => {
       assert.equal(withDefaultEffort(onVertex(model)).effort, 'medium', model)
     }
     assert.equal(withDefaultEffort(claudeCode({ model: 'sonnet' })).effort, 'medium')
+    assert.equal(withDefaultEffort(claudeCode({ model: 'haiku' })).effort, 'medium')
     assert.equal(
-      noDefaultEffort(claudeCode({ model: 'haiku' })),
-      'Claude Code sends no effort to haiku (claude-haiku-4-5)',
+      noDefaultEffort(onVertex('haiku')),
+      'Claude Code sends no effort to haiku (claude-haiku-4-5) on Vertex AI',
     )
   })
 

@@ -8,7 +8,7 @@ pnpmfileChecksum: sha256-tz2V/eHX+Q8WGNFcAFXFn2GNH3+HQJF86vVSLAPPwqA=
 
 patchedDependencies:
   '@ai-sdk/harness-claude-code@1.0.185':
-    hash: b20bd1c9432c46b884e70e8025cfcd193ea415f65b36cff362b7607187045cac
+    hash: 37fa4e8265c59d579fc4a6704ec8e39e78279894ae4825fe747acd346d11b609
     path: patches/@ai-sdk__harness-claude-code@1.0.185.patch
 
 importers:
@@ -786,7 +786,7 @@ importers:
     devDependencies:
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.185
-        version: 1.0.185(patch_hash=b20bd1c9432c46b884e70e8025cfcd193ea415f65b36cff362b7607187045cac)(zod@4.6.7)
+        version: 1.0.185(patch_hash=37fa4e8265c59d579fc4a6704ec8e39e78279894ae4825fe747acd346d11b609)(zod@4.6.7)
       '@boatdev/sdk':
         specifier: 1.13.0
         version: 1.13.0
@@ -848,7 +848,7 @@ importers:
         version: 1.0.181(ws@8.22.1)(zod@4.6.7)
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.185
-        version: 1.0.185(patch_hash=b20bd1c9432c46b884e70e8025cfcd193ea415f65b36cff362b7607187045cac)(zod@4.6.7)
+        version: 1.0.185(patch_hash=37fa4e8265c59d579fc4a6704ec8e39e78279894ae4825fe747acd346d11b609)(zod@4.6.7)
       '@balena/dockerignore':
         specifier: 1.0.2
         version: 1.0.2
@@ -4570,7 +4570,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@ai-sdk/harness-claude-code@1.0.185(patch_hash=b20bd1c9432c46b884e70e8025cfcd193ea415f65b36cff362b7607187045cac)(zod@4.6.7)':
+  '@ai-sdk/harness-claude-code@1.0.185(patch_hash=37fa4e8265c59d579fc4a6704ec8e39e78279894ae4825fe747acd346d11b609)(zod@4.6.7)':
     dependencies:
       '@ai-sdk/harness': 1.0.181(ws@8.22.1)(zod@4.6.7)
       '@ai-sdk/provider': 4.0.37
