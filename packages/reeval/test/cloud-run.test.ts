@@ -385,7 +385,7 @@ describe('reeval run on the cloud platform', () => {
         JSON.stringify({
           schemaVersion: 1,
           logins: {
-            [`${p.base}/`]: {
+            [p.base]: {
               store: 'file',
               token: 'stored-login-token',
               user: { email: 'ada@example.com' },
