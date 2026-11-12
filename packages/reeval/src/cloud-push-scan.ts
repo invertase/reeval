@@ -2,10 +2,11 @@
 // segment of every path. The secret shapes are ASCII, so a file that isn't UTF-8 text is read as
 // UTF-16 when it looks like it, else byte for byte, its NULs dropped either way. Text is scanned in
 // overlapping windows, so no file or unpacked stream is ever one string. gzip, zlib and zstd
-// streams, found by their magic numbers, and brotli ones, found by a `.br` name, are inflated
-// into those windows, and zip files are scanned entry by entry. xz, bzip2, lzip, 7z and rar files,
-// found by their magic numbers or names, zstd where this Node can't inflate it, and files the scan
-// can't finish are named as unread. Raw deflate has no magic number, so it reads as binary.
+// streams, found by their magic numbers, and brotli ones, found by a `.br` name, are inflated into
+// those windows, and whatever follows the end of such a stream is scanned too; zip files are
+// scanned entry by entry. xz, bzip2, lzip, 7z and rar files, found by their magic numbers or
+// names, zstd where this Node can't inflate it, and files the scan can't finish are named as
+// unread. Raw deflate has no magic number, so it reads as binary.
 import { pipeline, Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import * as zlib from 'node:zlib'
@@ -261,34 +262,40 @@ async function scanStream(
     throw new Unread(`compressed more than ${MAX_DEPTH} levels deep`)
   }
   const unpacked = path.endsWith('!') ? path : `${path}!`
+  // gunzip reads every member and fails on anything after them, so nothing it skips goes unread.
   if (gzip) return scanStream(unpacked, null, inflated(all, createGunzip(), scan), depth + 1, scan)
-  if (zstd) {
-    if (!zstdDecompress) throw new Unread('zstd-compressed')
-    return scanStream(unpacked, null, inflated(all, zstdDecompress(), scan), depth + 1, scan)
-  }
+  if (zstd && !zstdDecompress) throw new Unread('zstd-compressed')
   if (zip) {
     const chunks: Buffer[] = []
     for await (const chunk of all) chunks.push(chunk)
     return scanZip(path.replace(/!$/, ''), Buffer.concat(chunks), depth + 1, scan)
   }
-  if (maybe) {
+  const inflater = zstd ? zstdDecompress : maybe
+  if (inflater) {
     const chunks: Buffer[] = []
     for await (const chunk of all) chunks.push(chunk)
     const raw = Buffer.concat(chunks)
     const progress = { bytes: 0 }
+    const stream = inflater()
     try {
-      return await scanStream(
+      await scanStream(
         unpacked,
         null,
-        inflated(pieces(raw), maybe(), scan, progress),
+        inflated(pieces(raw), stream, scan, progress),
         depth + 1,
         scan,
       )
     } catch (error) {
       // Data that only looked compressed and gave nothing when inflated: read it as it is.
-      if (error instanceof Unread || progress.bytes > 0 || raw.length === 0) throw error
+      if (zstd || error instanceof Unread || progress.bytes > 0 || raw.length === 0) throw error
       return scanPlain(path, raw, pieces(raw), scan)
     }
+    // The zlib, brotli and zstd decoders stop at the end of one stream and drop what follows it,
+    // which may be another stream or plain text: it is scanned as a file of its own would be.
+    const used = (stream as NodeJS.ReadWriteStream & { bytesWritten: number }).bytesWritten
+    if (used >= raw.length) return
+    if (used <= 0) throw new Unread("the scan couldn't finish reading it")
+    return scanStream(path, null, pieces(raw.subarray(used)), depth, scan)
   }
   return scanPlain(path, start, all, scan)
 }

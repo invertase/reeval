@@ -675,6 +675,25 @@ describe('the push scan', () => {
     ])
   })
 
+  test('what follows the end of a compressed stream is scanned too', async () => {
+    const token = Buffer.from(`GITHUB_TOKEN=${SECRET}`)
+    const zstd = (zlib as { zstdCompressSync?: (b: string) => Buffer }).zstdCompressSync
+    const scan = await scanPush([
+      { path: 'run/a.bin', data: Buffer.concat([deflateSync('short'), token]) },
+      { path: 'run/b.bin', data: Buffer.concat([deflateSync('short'), deflateSync(token)]) },
+      { path: 'run/c.br', data: Buffer.concat([brotliCompressSync('short'), token]) },
+      ...(zstd ? [{ path: 'run/d.bin', data: Buffer.concat([zstd('short'), token]) }] : []),
+      { path: 'run/e.gz', data: Buffer.concat([gzipSync('short'), token]) },
+    ])
+    assert.deepEqual(scan.findings, [
+      'run/a.bin: line 1: GitHub token',
+      'run/b.bin!: line 1: GitHub token',
+      'run/c.br: line 1: GitHub token',
+      ...(zstd ? ['run/d.bin: line 1: GitHub token'] : []),
+    ])
+    assert.deepEqual(scan.unread, ["run/e.gz (the scan couldn't finish reading it)"])
+  })
+
   test('a percent-encoded secret in a path segment is found and masked', async () => {
     const encoded = SECRET.replace('_', '%5F')
     const scan = await scanPush([
