@@ -471,6 +471,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/cloud-push.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.push-analyses',
+    area: 'Config and selection',
+    name: "`reeval cloud push` and `reeval studio share` carry the run's saved analyses (`<run>/analysis/*.json`, which a history archive leaves out); one over 1 MiB, that isn't JSON, from a newer reeval, that doesn't fit the analysis schema or that analyzes another run is refused with exit 2, naming it, before anything is sent",
+    unit: ['reeval/test/cloud-push.test.ts'],
+  },
+  {
     id: 'cloud.push-out',
     area: 'Config and selection',
     name: "`reeval cloud push --out <file>`: the recorded run's secret-scanned history archive written to the file, with nothing sent and no sign-in needed (a file already there must be a reeval archive); `--json` prints what it wrote, or on an upload the run's last state",
@@ -2409,6 +2415,12 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: '`reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them',
     unit: ['reeval/test/analysis.test.ts'],
+  },
+  {
+    id: 'analyze.push',
+    area: 'Records and studio',
+    name: '`reeval analyze --save --push`: after saving, uploads the saved analysis as it was saved to `PUT /api/v1/runs/:runId/analysis` with the stored sign-in (or `REEVAL_TOKEN`); a run the cloud lacks exits 2 with how to push it, the analysis kept saved; `--push` without `--save`, or signed out, is refused before any model call',
+    unit: ['reeval/test/cloud-push.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'analysis.notes',

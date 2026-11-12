@@ -156,12 +156,14 @@ Usage:
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON
   reeval cloud push [run]       Upload a recorded run (default: latest) to the studio of the cloud
-                                project reeval link linked, as its history archive, then wait until
-                                the platform has read it and print the studio URL; exit 2 when a
-                                file in it, or a file's name, looks like it holds a secret, or is
-                                compressed in a format the scan can't read (it unpacks gzip, zlib,
-                                brotli, zip and, on a Node that has it, zstd; raw deflate, which
-                                has no magic number, it scans as binary)
+                                project reeval link linked, as its history archive with its saved
+                                analyses, then wait until the platform has read it and print the
+                                studio URL; exit 2 when a file in it, or a file's name, looks like
+                                it holds a secret, or is compressed in a format the scan can't
+                                read (it unpacks gzip, zlib, brotli, zip and, on a Node that has
+                                it, zstd; raw deflate, which has no magic number, it scans as
+                                binary), or a saved analysis is over 1 MiB or isn't one this
+                                reeval reads
     --no-wait                   Return once it's uploaded
     --out <file>                Write the scanned archive to this file instead, uploading nothing
                                 (no sign-in needed); a file already there must be a reeval archive
@@ -247,6 +249,8 @@ Usage:
     --vs <run>                  The run to compare with; none for this run only;
                                 --eval <filter> only matching evals
     --save                      Also write it into the run's history folder: <run>/analysis/
+    --push                      With --save, also upload it to the run in the cloud studio (signed
+                                in; reeval cloud push uploads the run first)
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again

@@ -1,5 +1,6 @@
 // `reeval cloud push`: one recorded run into the cloud project's studio. It zips the run as
-// `history.archive` does (the record and its files, with the manifest hashing each), refuses on
+// `history.archive` does (the record and its files, with the manifest hashing each), plus the
+// run's saved analyses, which a history archive leaves out (`analysis/push.ts`), refuses on
 // anything the secret scan finds in them, uploads the zip with the stored sign-in and waits until
 // the platform has read it, then prints where the studio shows it. With `--out` it writes the zip
 // to a file instead and uploads nothing.
@@ -8,6 +9,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
+import { savedAnalysisFiles } from './analysis/push.ts'
 import { ArchiveError, openArchive, writeArchive } from './archive/index.ts'
 import { safeZipPath } from './archive/zip.ts'
 import type { Flags } from './cli-spec.ts'
@@ -245,7 +247,8 @@ export async function scannedRun(
   ref: string | undefined,
   warn: (line: string) => void,
 ): Promise<ScannedRun> {
-  const { runId, files } = await archiveFiles(config, flags, ref, warn)
+  const { runId, files: runFiles } = await archiveFiles(config, flags, ref, warn)
+  const files = [...runFiles, ...(await savedAnalysisFiles(config.history.dir, runId))]
   const { findings, unread, mask } = await scanPush(files)
   const listed = (lines: string[]) => lines.map((l) => `  ${l}`).join('\n')
   if (flags['skip-secret-scan']) {
@@ -284,7 +287,7 @@ export async function scannedRun(
 const runUrl = (t: Target, runId: string) => projectUrl(t, `studio/runs/${seg(runId)}`)
 
 /** Where the cloud studio shows `runId`. */
-export function studioUrl(t: Target, runId: string): URL {
+export function studioUrl(t: Pick<Target, 'base'>, runId: string): URL {
   const studio = new URL('studio', t.base)
   studio.searchParams.set('run', runId)
   return studio
