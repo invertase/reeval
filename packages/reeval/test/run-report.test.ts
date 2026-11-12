@@ -406,6 +406,11 @@ describe('readableRunReport', () => {
     assert.throws(() => readableRunReport(empty), {
       message: "This report's evals must hold at least one eval (got [])",
     })
+    for (const root of [42, null, []]) {
+      assert.throws(() => readableRunReport(root), {
+        message: `This report must be an object (got ${JSON.stringify(root)})`,
+      })
+    }
     const variant = golden()
     const section = (variant.evals as Array<Record<string, unknown>>)[0]!
     section.primary = { kind: 'future-kind' }
