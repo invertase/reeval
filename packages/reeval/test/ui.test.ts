@@ -156,6 +156,7 @@ const interleaved: ReevalEvent[] = [
   },
   progress(GREET, s(1), { kind: 'sandbox' }),
   progress(DEFAULT, s(2), { kind: 'sandbox' }),
+  progress(GREET, s(3), { kind: 'sandbox-up' }),
   progress(GREET, s(5), { kind: 'sandbox-ready', ms: 4100 }),
   progress(GREET, s(5), { kind: 'turn-start', turn: 1 }),
   progress(DEFAULT, s(6), { kind: 'sandbox-ready', ms: 4200 }),
@@ -397,11 +398,12 @@ describe('plain renderer', () => {
 
   test('stream: every prefixed line prints as it happens, interleaved', () => {
     const out = render(interleaved, options({ logOrder: 'stream' })).split('\n')
-    assert.deepEqual(out.slice(2, 17), [
+    assert.deepEqual(out.slice(2, 18), [
       '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
       '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
       '[creates#1 cursor]  +0:01 sandbox starting',
       '[adds#1 cursor]  +0:01 sandbox starting',
+      '[creates#1 cursor]  +0:03 sandbox up, preparing it',
       '[creates#1 cursor]  +0:05 sandbox ready 4s',
       '[creates#1 cursor]  +0:05 turn 1 started',
       '[adds#1 cursor]  +0:05 sandbox ready 4s',
@@ -733,6 +735,11 @@ test("an attempt's failure in a line: the message without a plain Error's class,
     meta: { outcome: 'fail', errorKind: 'aborted', judgements: [], recordPath: '' },
   }
   assert.equal(failureReason(aborted), 'canceled')
+})
+
+test("a sandbox that's up but still being prepared has its own line and phase", () => {
+  assert.equal(progressLine(colors(false), { kind: 'sandbox-up' }), 'sandbox up, preparing it')
+  assert.equal(phaseOf({ at: s(3), kind: 'sandbox-up' }), 'setting up sandbox')
 })
 
 test('a check with retries says which try it ended on', () => {

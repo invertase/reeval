@@ -5642,6 +5642,18 @@
               "type": "number"
             },
             "kind": {
+              "const": "sandbox-up"
+            }
+          },
+          "required": ["at", "kind"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
               "const": "sandbox"
             }
           },

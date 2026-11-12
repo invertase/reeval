@@ -969,6 +969,7 @@ evaluate('copy', async (c) => {
       detail.map((l) => l.replace(/ \d+m?s\b/g, '')),
       [
         'sandbox starting',
+        'sandbox up, preparing it',
         'sandbox ready',
         'turn 1 started',
         'turn 1 done · 0 tool calls, 1 file changed',

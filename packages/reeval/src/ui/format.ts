@@ -57,6 +57,8 @@ export function progressLine(c: Colors, p: Progress): string {
   switch (p.kind) {
     case 'sandbox':
       return c.dim('sandbox starting')
+    case 'sandbox-up':
+      return c.dim('sandbox up, preparing it')
     case 'sandbox-ready':
       return `sandbox ready ${c.dim(formatDuration(p.ms))}`
     case 'turn-start':
@@ -122,6 +124,8 @@ export function phaseOf(p: Progress | undefined): string {
       return 'starting'
     case 'sandbox':
       return 'preparing sandbox'
+    case 'sandbox-up':
+      return 'setting up sandbox'
     case 'sandbox-ready':
       return 'sandbox ready'
     case 'turn-start':

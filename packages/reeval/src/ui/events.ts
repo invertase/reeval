@@ -37,6 +37,8 @@ export type EvalResult = {
 /** What the worker reports while an eval runs. */
 export type ProgressUpdate =
   | { kind: 'sandbox' }
+  /** The sandbox is running; its files, setup steps and harness start come next. */
+  | { kind: 'sandbox-up' }
   | { kind: 'sandbox-ready'; ms: number }
   | { kind: 'turn-start'; turn: number }
   | {
