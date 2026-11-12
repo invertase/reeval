@@ -839,8 +839,15 @@ function studioApi(src: StudioSource = source, focus: string | null = null) {
     focus,
     onPair: () => pairs++,
   })
-  const call = (path: string, init: { method?: string; headers?: Headers; body?: string } = {}) =>
-    app.request(`http://${HOST}${path}`, { ...init, headers: { host: HOST, ...init.headers } })
+  const call = (
+    path: string,
+    init: {
+      method?: string
+      headers?: Headers
+      body?: string | ReadableStream<Uint8Array>
+      duplex?: 'half'
+    } = {},
+  ) => app.request(`http://${HOST}${path}`, { ...init, headers: { host: HOST, ...init.headers } })
   const pair = (token: string, headers: Headers = { origin: ORIGIN }) =>
     call(studioPaths.pair(), {
       method: 'POST',
@@ -1044,6 +1051,33 @@ describe('studio data server', () => {
     })
     assert.equal((await api.pair(PAIRING)).status, 409, 'the token is spent')
     assert.equal(api.pairs(), 1)
+  })
+
+  test('a pairing body past 1 KB is refused without reading the rest of it', async () => {
+    const api = studioApi()
+    let pulled = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++
+        if (pulled > 1000) controller.close()
+        else controller.enqueue(new Uint8Array(512).fill(0x20))
+      },
+    })
+    const res = await api.call(studioPaths.pair(), {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body,
+      duplex: 'half',
+    })
+    assert.equal(res.status, 413)
+    assert.ok(pulled <= 4, `read ${pulled} chunks of 512 bytes`)
+    const declared = await api.call(studioPaths.pair(), {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-length': '1025' },
+      body: ' '.repeat(1025),
+    })
+    assert.equal(declared.status, 413)
+    assert.equal((await api.pair(PAIRING)).status, 200, 'the token is still unspent')
   })
 
   test('every route but pair needs the session; the pairing token is not one', async () => {

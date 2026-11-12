@@ -51,6 +51,26 @@ const sameToken = (a: string, b: string) => {
 
 const MAX_PAIR_BODY = 1024
 
+/** The request's body as text, or null once it passes `max` bytes, reading no further. */
+async function cappedText(req: Request, max: number): Promise<string | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) return null
+  if (!req.body) return ''
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > max) {
+      await reader.cancel()
+      return null
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 /**
  * `reeval studio`'s data server: the studio API over local run files. It answers a browser only
  * from `origin`, and every route but `pair` only with the session that the one-time pairing token
@@ -108,8 +128,8 @@ export function createStudioApi(options: StudioApiOptions) {
   })
 
   app.post('/api/v1/pair', async (c) => {
-    const text = await c.req.text()
-    if (text.length > MAX_PAIR_BODY) return c.text('Pairing request too large', 413)
+    const text = await cappedText(c.req.raw, MAX_PAIR_BODY)
+    if (text === null) return c.text('Pairing request too large', 413)
     let token: unknown
     try {
       token = (JSON.parse(text) as { token?: unknown }).token
