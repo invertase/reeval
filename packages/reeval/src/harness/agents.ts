@@ -1385,7 +1385,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     // The model's provider's: the requests Goose sends its key on, with session naming off.
     forModel: gooseForModel,
     modelId: withoutProvider,
-    // Goose 1.56.0 refreshes its model catalog from models.dev/api.json in every session, and
+    // Goose 1.59.0 refreshes its model catalog from models.dev/api.json in every session, and
     // falls back to the one it bundles when that's refused.
     expectedBlocked: {
       hosts: ['models.dev'],
