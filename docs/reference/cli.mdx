@@ -328,6 +328,25 @@ reeval cloud provider list    The org's provider keys and each project's overrid
 
 [//]: # (/generated:cli-help:cloud-provider)
 
+## `reeval cloud push`
+
+[//]: # (generated:cli-help:cloud-push)
+
+```text
+reeval cloud push [run]       Upload a recorded run (default: latest) to the studio of the cloud
+                              project reeval link linked, as its history archive, then wait until
+                              the platform has read it and print the studio URL; exit 2 when a
+                              file in it looks like it holds a secret
+  --no-wait                   Return once it's uploaded
+  --skip-secret-scan          Upload even when the secret scan finds something
+  --org <slug>                The org, by slug or id, instead of the linked one
+  --project <slug>            The project, by slug or id, instead of the linked one; required
+                              when nothing is linked
+  --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)
+```
+
+[//]: # (/generated:cli-help:cloud-push)
+
 ## `reeval bundle`
 
 [//]: # (generated:cli-help:bundle)

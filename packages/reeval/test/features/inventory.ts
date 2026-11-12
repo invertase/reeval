@@ -465,6 +465,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/link.test.ts', 'reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.push',
+    area: 'Config and selection',
+    name: "`reeval cloud push [run]` with the stored sign-in (or `REEVAL_TOKEN`): the recorded run (default the newest; one only in `.reeval/runs` is refused with how to record it) as its history archive, uploaded to the studio of the project in `.reeval/project.json` or `--org` and `--project`; refused with exit 2 before anything is sent when the secret scan finds something in a file of it (named by file, line and rule, never any part of the value) unless `--skip-secret-scan`, or when signed out; waits until the platform has read it and prints the studio URL (`--no-wait` returns once uploaded), exit 3 with the platform's error when it can't read it, exit 2 with its message when it refuses the upload",
+    unit: ['reeval/test/cloud-push.test.ts', 'reeval/test/cli.test.ts'],
+  },
+  {
     id: 'cloud.download',
     area: 'Config and selection',
     name: "`reeval attach --download <url>` and `reeval run --cloud --download`: once a cloud run ends, its files (records, attempt files and debug data) are downloaded with the bearer token and unpacked as a run here leaves them, from the project root: `.reeval/runs`, `.reeval/debug` and, for a recorded run, the project's own history folder (from its config and the profile, `--profile` on attach), where `reeval show`, `history`, `compare`, `query` and the studio read them; a file already there with other content stops it with exit 2 before anything is written, an entry anywhere else (another history folder included) or a link outside a snapshot with exit 3, a run with no files or no debug data says so; any other stream, a run on this machine, or `--profile` without `--download` is exit 2",

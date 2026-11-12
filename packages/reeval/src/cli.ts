@@ -280,10 +280,21 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'cloud') {
     const [area, ...args] = filters
-    if (area !== 'secrets' && area !== 'provider') {
+    if (area !== 'secrets' && area !== 'provider' && area !== 'push') {
       throw new UsageError(
-        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets or reeval cloud provider?`,
+        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider or push?`,
       )
+    }
+    if (area === 'push') {
+      const config = await historyConfig(configPath, 'cloud push', values.profile)
+      const [{ pushCommand }, { projectDirFor }] = await Promise.all([
+        import('./cloud-push.ts'),
+        import('./cloud-project.ts'),
+      ])
+      return pushCommand(config, values, args, {
+        out: (s: string) => console.log(s),
+        projectDir: projectDirFor(configPath),
+      })
     }
     loadEnvFiles(configPath)
     const cloud = await import('./cloud-secrets.ts')
