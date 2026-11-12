@@ -479,7 +479,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.push-artifacts',
     area: 'Config and selection',
-    name: "`reeval cloud push [run] --artifacts all|failures|none`: the archive at that level, built under the run's claim from a run only in `.reeval/runs` (which stays unrecorded; a run still running is refused) or from a recorded run, whose level it only narrows (a wider one is refused); scanned as any push is. Without it an unrecorded run is refused with how to record it",
+    name: "`reeval cloud push [run] --artifacts all|failures|none`: the archive at that level, built under the run's claim from the run's copy in `.reeval/runs`, recorded or not (nothing is recorded; a run still running is refused), else from a recorded run's history copy, whose level it only narrows (a wider one is refused); scanned as any push is. Without it an unrecorded run is refused with how to record it",
     unit: ['reeval/test/studio-share.test.ts', 'reeval/test/cli.test.ts'],
   },
   {

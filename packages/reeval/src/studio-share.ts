@@ -150,7 +150,7 @@ function missingTranscripts(run: ScannedRun): string | null {
     run.artifacts === 'none'
       ? 'no attempt keeps its transcript'
       : "passing attempts' transcripts weren't kept"
-  return `Run ${run.runId} was recorded with artifacts ${run.artifacts}, so ${which}: history.artifacts: 'all' or reeval record --artifacts all records every attempt's.`
+  return `Run ${run.runId} was recorded with artifacts ${run.artifacts}, so ${which}: for future runs, history.artifacts: 'all' or reeval record --artifacts all records every attempt's.`
 }
 
 /**

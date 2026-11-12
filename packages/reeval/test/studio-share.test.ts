@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -286,7 +287,7 @@ describe('reeval studio share', () => {
       assert.match(full.stdout, /^This share includes the run's transcripts and artifacts\.$/m)
       assert.match(
         full.stderr,
-        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: history\.artifacts: 'all' or reeval record --artifacts all/,
+        /recorded with artifacts failures, so passing attempts' transcripts weren't kept: for future runs, history\.artifacts: 'all' or reeval record --artifacts all/,
       )
       assert.doesNotMatch(full.stdout, /without signing in/)
       assert.match(full.stdout, /\(full, team\)/)
@@ -835,7 +836,45 @@ describe('reeval cloud push --out and --json', () => {
     }
   })
 
-  test('--artifacts only narrows a recorded run', async () => {
+  test("--artifacts builds from .reeval/runs' copy of a recorded run, so it can widen it", async () => {
+    const record = readFileSync(join(dir, HISTORY, `${runId}.json`))
+    const r = await runCli(dir, [
+      'cloud',
+      'push',
+      runId,
+      '--artifacts',
+      'all',
+      '--out',
+      'out/all.zip',
+    ])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const file = join(dir, 'out', 'all.zip')
+    assert.ok((await transcripts(file)).length > 0, "the passing attempt's transcript")
+    const archive = await openArchive(file)
+    try {
+      await archive.verify()
+      assert.equal(JSON.parse((await archive.read(`${runId}.json`)).toString()).artifacts, 'all')
+    } finally {
+      await archive.close()
+    }
+    assert.deepEqual(
+      readFileSync(join(dir, HISTORY, `${runId}.json`)),
+      record,
+      'history is untouched',
+    )
+  })
+
+  test('without its .reeval/runs copy, --artifacts only narrows a recorded run', async () => {
+    const runs = join(dir, '.reeval', 'runs')
+    renameSync(runs, `${runs}-aside`)
+    try {
+      await narrows()
+    } finally {
+      renameSync(`${runs}-aside`, runs)
+    }
+  })
+
+  async function narrows() {
     const wider = await runCli(dir, [
       'cloud',
       'push',
@@ -846,11 +885,9 @@ describe('reeval cloud push --out and --json', () => {
       'w.zip',
     ])
     assert.equal(wider.code, 2, wider.stdout + wider.stderr)
-    assert.match(
-      wider.stderr,
-      new RegExp(
-        `Run ${runId} was recorded with artifacts failures, so --artifacts all can't add what recording left out: push it at failures or none`,
-      ),
+    assert.equal(
+      wider.stderr.trim(),
+      `reeval: Run ${runId} was recorded with artifacts failures, so --artifacts all can't add what recording left out: push it at failures or none`,
     )
     assert.ok(!existsSync(join(dir, 'w.zip')))
     const same = await runCli(dir, [
@@ -901,7 +938,7 @@ describe('reeval cloud push --out and --json', () => {
     } finally {
       await archive.close()
     }
-  })
+  }
 
   test("a run recorded with reeval record --artifacts all carries every attempt's transcript", async () => {
     const all = await linkedProject('cloud-push-artifacts')

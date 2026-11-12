@@ -3,7 +3,7 @@
 // anything the secret scan finds in them, uploads the zip with the stored sign-in and waits until
 // the platform has read it, then prints where the studio shows it. With `--out` it writes the zip
 // to a file instead and uploads nothing.
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -16,7 +16,12 @@ import { CloudError, platformError, printable, request } from './cloud-run.ts'
 import { type Target, target } from './cloud-secrets.ts'
 import { CommandError, parseLevel, pick, recordedRun } from './commands.ts'
 import { UsageError } from './errors.ts'
-import { leveledArchiveFiles, readRunArchiveFiles, scratchDir } from './history/files.ts'
+import {
+  leveledArchiveFiles,
+  readRunArchiveFiles,
+  recordFile,
+  scratchDir,
+} from './history/files.ts'
 import type { ArtifactLevel } from './history/types.ts'
 import { RUN_ID } from './ids.ts'
 import { plural } from './text.ts'
@@ -112,15 +117,19 @@ async function archiveFiles(
   const entry = await pick(config, ref ?? 'latest')
   const { runId } = entry
   await refuseRunning(config, runId)
+  // `.reeval/runs` keeps every attempt's files whatever the run was recorded at, so its copy
+  // gives any level; only the history folder's is limited to the recorded one.
+  const scratch = existsSync(recordFile(scratchDir(config.root), runId))
+  const recorded = entry.recorded && !scratch
   let same = false
   const built = await leveledArchiveFiles(
-    entry.recorded ? config.history.dir : scratchDir(config.root),
+    recorded ? config.history.dir : scratchDir(config.root),
     runId,
     level,
     {
       ...(flags['skip-secret-scan'] && { skipSecretScan: true }),
       check: (run) => {
-        if (!entry.recorded) return
+        if (!recorded) return
         const was = run.artifacts
         if (LEVELS.indexOf(level) < LEVELS.indexOf(was)) {
           throw new CommandError(
