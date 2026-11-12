@@ -32,6 +32,8 @@ const POST_TIMEOUT_MS = 10_000
 
 /** A run writes a heartbeat line in each interval this long that it wrote nothing else in. */
 export const HEARTBEAT_MS = 5_000
+/** How often, while the eval files run, a heartbeat line names the attempts in progress. */
+export const ATTEMPTS_HEARTBEAT_MS = 30_000
 /** How long `reeval attach` hears nothing from a run that writes heartbeats before it says so. */
 export const STALL_MS = 20_000
 /** How long it hears nothing before it stops following the run as lost. */
@@ -98,6 +100,8 @@ export function notEventStream(file: string): string | null {
 
 export type EventStream = {
   write(event: ReevalEvent): void
+  /** Writes a heartbeat line naming the attempts in progress; no renderer draws it. */
+  heartbeat(attempts: string[]): void
   /** Writes the exit line; resolves once the last POST is sent (or gives up). */
   end(code: number): Promise<void>
 }
@@ -204,6 +208,9 @@ export function openEventStream(options: {
   return {
     write: (event) => {
       if (!ended) emit(wire(event))
+    },
+    heartbeat: (attempts) => {
+      if (!ended) emit({ type: 'heartbeat', at: Date.now(), attempts })
     },
     async end(code) {
       if (ended) return

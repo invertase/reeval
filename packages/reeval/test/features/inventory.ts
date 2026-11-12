@@ -2624,7 +2624,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'run.events',
     area: 'CLI and runner',
-    name: "`reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host), with heartbeat lines that show a quiet run as stalled, then lost, and a `run-end` that names where a recorded run's record, files and archive landed (a remote store's local copy included); `reeval clean` prunes the streams",
+    name: "`reeval run --events`, `--events-file <file>` and `--events-url <url>`, followed by `reeval attach [run|file|url]` (on a terminal, the interactive list: q detaches, x twice cancels a run on this host), with heartbeat lines that show a quiet run as stalled, then lost, and, every `REEVAL_EVENTS_HEARTBEAT` (30s), name the attempts in progress, and a `run-end` that names where a recorded run's record, files and archive landed (a remote store's local copy included); `reeval clean` prunes the streams",
     fixtures: ['output/events'],
     unit: [
       'reeval/test/events.test.ts',
@@ -2632,6 +2632,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/ui.test.ts',
       'reeval/test/ink-list.test.ts',
       'reeval/test/corpus.test.ts',
+      'reeval/test/engine-node.test.ts',
     ],
   },
   {

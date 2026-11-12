@@ -70,13 +70,12 @@ function pick<T extends string>(
   throw new UsageError(`${name} is one of ${[...allowed, 'auto'].join(', ')} (got ${value})`)
 }
 
-function parseHeartbeat(value: string | undefined): number {
-  if (!value) return 60_000
+/** A heartbeat variable's interval in ms: a bare number is seconds; unset or empty is `fallback`. */
+export function parseHeartbeat(name: string, value: string | undefined, fallback: number): number {
+  if (!value) return fallback
   const match = /^(\d+(?:\.\d+)?)(ms|s|m)?$/.exec(value)
   if (!match)
-    throw new UsageError(
-      `REEVAL_HEARTBEAT must be a duration like 30s, or 0 for none (got ${value})`,
-    )
+    throw new UsageError(`${name} must be a duration like 30s, or 0 for none (got ${value})`)
   const unit = { ms: 1, s: 1000, m: 60_000 }[match[2] ?? 's'] ?? 1000
   return Number(match[1]) * unit
 }
@@ -139,6 +138,7 @@ export function resolveOutput(input: {
     outputLogs,
     color,
     githubActions,
-    heartbeatMs: mode === 'agent' ? 0 : parseHeartbeat(env.REEVAL_HEARTBEAT),
+    heartbeatMs:
+      mode === 'agent' ? 0 : parseHeartbeat('REEVAL_HEARTBEAT', env.REEVAL_HEARTBEAT, 60_000),
   }
 }

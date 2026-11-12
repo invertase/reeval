@@ -45,11 +45,18 @@ export type RunEventsExit = {
 
 /**
  * Written while the stream is otherwise quiet, so a reader can tell a run that's still going from
- * one that stalled or was lost. Streams from before it have none.
+ * one that stalled or was lost, and, with `attempts`, on the run's own interval while its eval
+ * files run. Streams from before it have none.
  */
 export type RunEventsHeartbeat = {
   type: 'heartbeat'
   at: number
+  /**
+   * The keys of the attempts in progress, in the order they started: each started (its lease
+   * granted, its sandbox setup, turns and judging under way) and not yet ended, in a worker
+   * process that hasn't exited. Absent from the heartbeats a quiet stream gets.
+   */
+  attempts?: string[]
 }
 
 /** One line of a run's event stream. */

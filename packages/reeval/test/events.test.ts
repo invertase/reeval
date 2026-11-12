@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   truncateSync,
   writeFileSync,
 } from 'node:fs'
@@ -136,6 +137,8 @@ async function relay(
   }
 }
 
+/** An attempt key's eval name: `quick` for `evals/both.eval.ts › quick # fake/-/fake#1`. */
+const nameOf = (key: string) => (key.split(' › ').at(-1) ?? '').split(' # ')[0] ?? ''
 const readLines = (file: string) =>
   readFileSync(file, 'utf8')
     .trim()
@@ -960,6 +963,20 @@ describe('heartbeats', () => {
     assert.equal('heartbeatMs' in (readLines(none)[0] as RunEventsHeader), false)
   })
 
+  test('a heartbeat with the attempts in progress is written as given, and none after the exit line', async () => {
+    const file = join(tempDir('events'), 'attempts.ndjson')
+    const stream = openEventStream({ file, header: header(), warn: assert.fail, heartbeatMs: 0 })
+    stream.heartbeat(['evals/a.eval.ts › one # fake/-/fake#1'])
+    stream.heartbeat([])
+    await stream.end(0)
+    stream.heartbeat(['late'])
+    const lines = readLines(file)
+    assert.deepEqual(
+      lines.map((l) => (l.type === 'heartbeat' ? l.attempts : l.type)),
+      ['header', ['evals/a.eval.ts › one # fake/-/fake#1'], [], 'exit'],
+    )
+  })
+
   test('a URL sink gets the heartbeats too', async () => {
     const bodies: string[] = []
     const stream = openEventStream({
@@ -1181,6 +1198,53 @@ evaluate('slow', { environments: slow }, async (c) => {
     assert.deepEqual(kinds, ['sandbox', 'sandbox-up', 'sandbox-ready'])
     const at = (kind: string) => progress.find((u) => u.kind === kind)?.at ?? Number.NaN
     assert.ok(at('sandbox-ready') - at('sandbox-up') >= 1000, 'the setup step runs in between')
+  })
+
+  test('a heartbeat names the attempts in progress on REEVAL_EVENTS_HEARTBEAT, stops with the run, and draws nothing', async () => {
+    const p = await project('events-attempts-heartbeat', {
+      'reeval.config.ts': config,
+      'evals/both.eval.ts': `import { evaluate, expect } from 'reeval'
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+evaluate('quick', async (c) => {
+  await wait(600)
+  expect(c.attempt.n).toBe(1)
+})
+evaluate('slow', async (c) => {
+  await wait(1800)
+  expect(c.attempt.n).toBe(1)
+})
+`,
+    })
+    const stream = join(tempDir('events-attempts-heartbeat'), 'run.ndjson')
+    const ran = await runCli(p.dir, ['run', '--events-file', stream], {
+      env: { REEVAL_EVENTS_HEARTBEAT: '100ms' },
+    })
+    assert.equal(ran.code, 0, ran.stderr)
+    const lines = readLines(stream)
+    const beats = lines.flatMap((l, i) =>
+      l.type === 'heartbeat' && l.attempts ? [{ i, names: l.attempts.map(nameOf) }] : [],
+    )
+    const states = beats
+      .map((b) => b.names.join(','))
+      .filter((s, i, all) => s !== all[i - 1] && s !== '')
+    assert.deepEqual(states, ['quick,slow', 'slow'])
+    const end = lines.findIndex((l) => l.type === 'run-end')
+    assert.ok(end > 0 && beats.every((b) => b.i < end), 'none after the run ends')
+    const { dir } = readRun(p.dir)
+    for (const file of [`${dir}.json`, ...readdirSync(dir, { recursive: true }).map(String)]) {
+      const path = file.startsWith(dir) ? file : join(dir, file)
+      if (statSync(path).isFile())
+        assert.doesNotMatch(readFileSync(path, 'utf8'), /"type":"heartbeat"/, file)
+    }
+    const attached = await runCli(p.dir, ['attach', stream])
+    assert.equal(attached.code, 0, attached.stderr)
+    assert.equal(attached.stdout, ran.stdout)
+
+    const refused = await runCli(p.dir, ['run', '--events-file', stream], {
+      env: { REEVAL_EVENTS_HEARTBEAT: 'often' },
+    })
+    assert.equal(refused.code, 2)
+    assert.match(refused.stderr, /REEVAL_EVENTS_HEARTBEAT must be a duration like 30s/)
   })
 
   test("run-end names the record, files and archive --record wrote; an unrecorded run's names none", async () => {
