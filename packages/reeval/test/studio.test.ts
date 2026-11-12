@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
+import { handshakeTimeoutLines } from '../src/studio/command.ts'
 import { createStudioApi } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
@@ -1295,6 +1296,18 @@ describe('a record landing while the studio lists runs', () => {
 })
 
 describe('reeval studio', () => {
+  test("says why the page may not have paired and where the run's report is", () => {
+    const lines = handshakeTimeoutLines('http://localhost:4984', '.reeval/runs/r1/summary.md')
+    assert.match(lines[0] as string, /hasn't connected yet: .* reaching http:\/\/localhost:4984\./)
+    assert.ok(lines.some((l) => /Chrome asks first .*choose Allow/.test(l)))
+    assert.ok(lines.some((l) => /Safari can't reach a local server from a secure page/.test(l)))
+    assert.equal(lines.at(-1), "The run's Markdown report is at .reeval/runs/r1/summary.md")
+    assert.ok(
+      handshakeTimeoutLines('http://localhost:4984', null).every((l) => !/report/.test(l)),
+      'no report line when the run has no summary.md',
+    )
+  })
+
   test('opens the hosted page with its server and a one-time token, and says when it never pairs', async () => {
     assert.ok(existsSync(join(pkgRoot, 'dist/cli.js')), 'run pnpm build first')
     const child = spawn(
@@ -1324,7 +1337,12 @@ describe('reeval studio', () => {
       assert.doesNotMatch(url.search, new RegExp(token), 'the token is only in the fragment')
 
       await until(/hasn't connected yet/, 15_000)
-      assert.match(out, new RegExp(`\\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`))
+      await until(/Markdown report is at/, 5_000)
+      assert.match(out, /Chrome asks first whether the page may reach apps on your device/)
+      assert.match(
+        out,
+        new RegExp(`Markdown report is at \\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`),
+      )
 
       const local = server.replace('localhost', '127.0.0.1')
       const pair = await fetch(`${local}${studioPaths.pair()}`, {

@@ -33,6 +33,16 @@ function summaryPath(source: StudioSource, runId: string): string | null {
   return null
 }
 
+/** What `reeval studio` prints when the hosted page hasn't paired in time: why, and what to open instead. */
+export function handshakeTimeoutLines(server: string, report: string | null): string[] {
+  return [
+    `The studio page hasn't connected yet: your browser may block it from reaching ${server}.`,
+    '  Chrome asks first whether the page may reach apps on your device: choose Allow.',
+    "  Safari can't reach a local server from a secure page: open the address in Chrome.",
+    ...(report ? [`The run's Markdown report is at ${report}`] : []),
+  ]
+}
+
 export async function studioCommand({ config, flags, version, run, handshakeMs = 8000 }: Args) {
   const port = flags.port === undefined ? 4984 : Number(flags.port)
   if (!(Number.isInteger(port) && port > 0 && port < 65536)) {
@@ -65,10 +75,8 @@ export async function studioCommand({ config, flags, version, run, handshakeMs =
   const waiting = setTimeout(() => {
     if (paired) return
     const summary = focus ? summaryPath(source, focus) : null
-    console.log(
-      `The studio page hasn't connected yet: your browser may block it from reaching ${studio.server}.`,
-    )
-    if (summary) console.log(`The run's report is at ${fromCwd(summary) || summary}`)
+    const report = summary ? fromCwd(summary) || summary : null
+    for (const line of handshakeTimeoutLines(studio.server, report)) console.log(line)
   }, handshakeMs)
   await new Promise<void>((resolveStop) => {
     process.once('SIGINT', resolveStop)
