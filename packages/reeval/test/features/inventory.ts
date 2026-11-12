@@ -1422,6 +1422,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/gateway.test.ts'],
   },
   {
+    id: 'harness.unread-turn-error',
+    area: 'Harnesses',
+    name: 'A turn that ends with an error the body never reads (`turn.status`) makes the attempt an infra error, even when its checks pass, and leaves it out of compare questions',
+    fixtures: ['harness/unread-turn-error-is-infra'],
+    unit: ['reeval/test/turn-status.test.ts', 'reeval/test/results.test.ts'],
+  },
+  {
     id: 'ports',
     area: 'Sandbox',
     name: 'Ports: through the tunnel, or published without the gateway',

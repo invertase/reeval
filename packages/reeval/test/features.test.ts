@@ -3438,6 +3438,28 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/unread-turn-error-is-infra',
+    tiers: ['fake'],
+    env: 'plain',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message: /^Turn 0 ended with an error: 503 Service Unavailable: overloaded/,
+      },
+    },
+    canary: /expected 'error' to be 'completed'/,
+    async record({ run, project, tier }) {
+      assert.equal(landed(run)?.turnStatusRead, false)
+      assert.equal(run.evals.find((e) => e.name === 'canary')?.attempts[0]?.turnStatusRead, true)
+      // The canary's assertion failure outranks an infra error in the whole run's exit code.
+      const env = { REEVAL_FIXTURE_SANDBOX: tier }
+      const alone = await runCli(project, ['run', 'evals/lands.eval.ts'], { env })
+      assert.equal(alone.code, 3, alone.stdout + alone.stderr)
+      assert.equal(landed(readRun(project).run)?.outcome, 'infra_error')
+    },
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',
