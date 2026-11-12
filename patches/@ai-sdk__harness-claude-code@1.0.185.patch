@@ -1,8 +1,8 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..f4287bd2147fd406e6bd12f5a86e9369736ba08d 100644
+index df4d5c1c047905bc6b483a5a9e0482dc0080abe3..b487e09c140c0d7d6e709aed18b5f03247da055e 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
-@@ -732,7 +732,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
+@@ -823,7 +823,8 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
  	let streamStarted = false;
  	return (msg) => {
  		const type = msg.type;
@@ -12,7 +12,7 @@ index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..f4287bd2147fd406e6bd12f5a86e9369
  			const initModel = type === "system" && msg.subtype === "init" && typeof msg.model === "string" ? msg.model : void 0;
  			emit({
  				type: "stream-start",
-@@ -1195,6 +1196,7 @@ function parseMcpToolResult(content) {
+@@ -1297,6 +1298,7 @@ function parseMcpToolResult(content) {
  function mapUsage(usage) {
  	if (!usage || typeof usage !== "object") return void 0;
  	const u = usage;
@@ -20,7 +20,7 @@ index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..f4287bd2147fd406e6bd12f5a86e9369
  	return {
  		inputTokens: {
  			total: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
-@@ -1202,7 +1204,11 @@ function mapUsage(usage) {
+@@ -1304,7 +1306,11 @@ function mapUsage(usage) {
  			cacheRead: u.cache_read_input_tokens ?? 0,
  			cacheWrite: u.cache_creation_input_tokens ?? 0
  		},
@@ -34,10 +34,10 @@ index 2aceefb94d9f7b05454bdcaed8cbe1c583a032c1..f4287bd2147fd406e6bd12f5a86e9369
  			text: u.output_tokens ?? 0
  		}
 diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
-index b9d020f904e691b72cbc62786822a6772d213174..d629e47b02daf468b3aacd79154532a6b949a7c6 100644
+index e55b21e829cfd7e2ef00f25b374720bd83ae6c7d..9380abf161bf594afc4c8611283fd3c15d96240f 100644
 --- a/src/bridge/create-emit-stream-event.ts
 +++ b/src/bridge/create-emit-stream-event.ts
-@@ -205,9 +205,16 @@ export function createEmitStreamEvent({
+@@ -206,9 +206,16 @@ export function createEmitStreamEvent({
       * forwards them (e.g. `queued` and `started` for the prompt) straight to
       * the output stream, independently of the engine that yields
       * `system`/`init` at the start of each turn, so they can arrive before
@@ -56,7 +56,7 @@ index b9d020f904e691b72cbc62786822a6772d213174..d629e47b02daf468b3aacd79154532a6
        const initModel =
          type === 'system' &&
          msg.subtype === 'init' &&
-@@ -923,7 +930,14 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
+@@ -943,7 +950,14 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
      cache_creation_input_tokens?: number;
      cache_read_input_tokens?: number;
      output_tokens?: number;
@@ -71,7 +71,7 @@ index b9d020f904e691b72cbc62786822a6772d213174..d629e47b02daf468b3aacd79154532a6
    return {
      inputTokens: {
        total:
-@@ -934,10 +948,17 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
+@@ -954,10 +968,17 @@ export function mapUsage(usage: unknown): Record<string, unknown> | undefined {
        cacheRead: u.cache_read_input_tokens ?? 0,
        cacheWrite: u.cache_creation_input_tokens ?? 0,
      },

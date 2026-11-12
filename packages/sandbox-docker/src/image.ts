@@ -50,8 +50,8 @@ export const HARNESS_PACKAGES: Record<
   },
   'claude-code': {
     name: '@ai-sdk/harness-claude-code',
-    version: '1.0.176',
-    patch: 'a9d56a8c',
+    version: '1.0.185',
+    patch: 'b20bd1c9',
     bootstrap: {
       name: 'Claude Code',
       cli: 'claude',
@@ -69,7 +69,7 @@ export const HARNESS_PACKAGES: Record<
   },
   opencode: {
     name: '@reeval/harness-opencode',
-    version: '0.2.16',
+    version: '0.2.17',
     bootstrap: {
       name: 'OpenCode',
       cli: 'opencode',
@@ -82,7 +82,7 @@ export const HARNESS_PACKAGES: Record<
   },
   goose: {
     name: '@reeval/harness-goose',
-    version: '0.1.16',
+    version: '0.1.17',
     bootstrap: {
       name: 'Goose',
       cli: 'goose',
@@ -122,7 +122,7 @@ export const HARNESS_PACKAGES: Record<
   },
   fx: {
     name: '@reeval/harness-fx',
-    version: '0.1.11',
+    version: '0.1.12',
     bootstrap: {
       name: 'fx',
       cli: 'fx',
@@ -135,7 +135,7 @@ export const HARNESS_PACKAGES: Record<
   },
   'grok-build': {
     name: '@reeval/harness-grok-build',
-    version: '0.1.12',
+    version: '0.1.13',
     bootstrap: {
       name: 'Grok Build',
       cli: 'grok',
