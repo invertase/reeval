@@ -582,6 +582,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   a.phases = brokerPhases(box, env.substitutions, spec.egress)
   if (a.signal.aborted) void box.destroy()
   a.signal.throwIfAborted()
+  a.report({ kind: 'sandbox-up' })
   await a.phases.start()
   if (env.substitutions.length) {
     const agent = env.substitutions.filter((s) => s.phase === 'agent').map((s) => s.name)

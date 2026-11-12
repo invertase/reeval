@@ -49,13 +49,14 @@ export type RendererOptions = {
 /** `debug` lines carry their own timestamp instead of an offset. */
 type Line = { at: number; text: string; kind?: Progress['kind']; debug?: boolean }
 
-/** In a grouped block, an end line replaces its start line and keeps its start time. */
-const STARTS: Partial<Record<Progress['kind'], Progress['kind']>> = {
-  'sandbox-ready': 'sandbox',
-  'turn-end': 'turn-start',
-  'check-end': 'check-start',
-  'judge-end': 'judge-start',
-  'browser-download': 'browser-download',
+/** In a grouped block, an end line replaces its latest start line and keeps its start time. */
+const STARTS: Partial<Record<Progress['kind'], Progress['kind'][]>> = {
+  'sandbox-up': ['sandbox'],
+  'sandbox-ready': ['sandbox-up', 'sandbox'],
+  'turn-end': ['turn-start'],
+  'check-end': ['check-start'],
+  'judge-end': ['judge-start'],
+  'browser-download': ['browser-download'],
 }
 
 type Attempt = {
@@ -236,7 +237,7 @@ export class PlainRenderer implements Renderer {
           kind: progress.kind,
         }
         const start = STARTS[progress.kind]
-        const open = start && a.lines.findLastIndex((l) => l.kind === start)
+        const open = start && a.lines.findLastIndex((l) => !!l.kind && start.includes(l.kind))
         if (!this.#streaming && open !== undefined && open >= 0) {
           line.at = a.lines[open]?.at ?? line.at
           a.lines.splice(open, 1)

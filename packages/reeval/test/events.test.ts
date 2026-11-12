@@ -1161,6 +1161,28 @@ evaluate('passes', async (c) => {
     assert.match(below.stdout, /summary \.\.\/\.\.\/\.reeval\/runs\/\S+\/summary\.md/)
   })
 
+  test('an attempt reports its sandbox up before its setup steps run, and ready after', async () => {
+    const p = await project('events-sandbox-up', {
+      'reeval.config.ts': config,
+      'evals/slow.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const slow = defineEnvironment('slow', { setup: [{ run: 'sleep 1 && touch set-up' }] })
+evaluate('slow', { environments: slow }, async (c) => {
+  expect(await c.readFile('set-up')).toBe('')
+})
+`,
+    })
+    const stream = join(tempDir('events-sandbox-up'), 'run.ndjson')
+    const ran = await runCli(p.dir, ['run', '--events-file', stream])
+    assert.equal(ran.code, 0, ran.stderr)
+    const progress = readLines(stream).flatMap((l) =>
+      l.type === 'eval-progress' ? [l.progress] : [],
+    )
+    const kinds = progress.map((u) => u.kind).filter((k) => k.startsWith('sandbox'))
+    assert.deepEqual(kinds, ['sandbox', 'sandbox-up', 'sandbox-ready'])
+    const at = (kind: string) => progress.find((u) => u.kind === kind)?.at ?? Number.NaN
+    assert.ok(at('sandbox-ready') - at('sandbox-up') >= 1000, 'the setup step runs in between')
+  })
+
   test("run-end names the record, files and archive --record wrote; an unrecorded run's names none", async () => {
     const p = await project('events-recorded', {
       'reeval.config.ts': config.replace(
