@@ -1,3 +1,4 @@
+import { parseDuration } from '../duration.ts'
 import type { RunRecord, RunScope } from '../history/types.ts'
 import { sha256Hex } from './sha256.ts'
 
@@ -14,13 +15,28 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)
 }
 
+/** A duration as milliseconds, so `'10m'` and `600000` hash equal; a value it can't read, as written. */
+function durationMs(value: string | number | undefined): string | number | undefined {
+  if (value === undefined) return undefined
+  try {
+    return parseDuration(value)
+  } catch {
+    return value
+  }
+}
+
 const sorted = (list: readonly string[] | undefined) => (list ? [...list].sort() : undefined)
 
 function profileKey(profile: NonNullable<RunRecord['profile']>) {
   const { defaults, limit } = profile
   return {
     name: profile.name,
-    defaults: { ...defaults, harness: sorted(defaults.harness), env: sorted(defaults.env) },
+    defaults: {
+      ...defaults,
+      harness: sorted(defaults.harness),
+      env: sorted(defaults.env),
+      timeout: durationMs(defaults.timeout),
+    },
     limit: {
       ...limit,
       harness: sorted(limit.harness),
@@ -57,6 +73,7 @@ export function runScope(record: RunRecord): RunScope {
       bestOf: config.bestOf,
       judgeModel: config.judgeModel,
       threshold: config.threshold,
+      timeoutMs: config.timeoutMs,
     },
     fingerprintScope: sorted(record.stack.fingerprintScope),
   }

@@ -101,6 +101,8 @@ describe('runScope', () => {
       ['trait', (r) => (r.invocation.traits = ['os=linux'])],
       ['judge model', (r) => (r.config.judgeModel = 'other')],
       ['threshold', (r) => (r.config.threshold = 0.5)],
+      ['timeout', (r) => (r.config.timeoutMs = 60_000)],
+      ['profile timeout', (r) => (r.profile.defaults.timeout = '10m')],
       ['config runs', (r) => (r.config.runs = 3)],
       ['bestOf', (r) => (r.config.bestOf = 3)],
       ['environment', (r) => (r.config.environment = 'skill')],
@@ -144,6 +146,13 @@ describe('runScope', () => {
       r.stack.fingerprintScope.reverse()
     })
     assert.equal(key(a), key(b))
+  })
+
+  test("a profile timeout hashes as its milliseconds, however it's written", () => {
+    const minutes = key(edited((r) => (r.profile.defaults.timeout = '10m')))
+    assert.equal(key(edited((r) => (r.profile.defaults.timeout = 600_000))), minutes)
+    assert.equal(key(edited((r) => (r.profile.defaults.timeout = '600s'))), minutes)
+    assert.notEqual(key(edited((r) => (r.profile.defaults.timeout = '11m'))), minutes)
   })
 
   test('subset: each narrowing argument sets it; none leaves it unset', () => {

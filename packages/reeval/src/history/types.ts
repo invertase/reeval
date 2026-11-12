@@ -1173,9 +1173,10 @@ export type RunScope = {
    */
   subset: boolean
   /**
-   * The hex `sha256` of the profile's `name`, `defaults` and `limit`, the invocation's `runs`,
-   * `filters`, `tags` and `traits`, the config's `environment`, `runs`, `bestOf`, `judgeModel` and
-   * `threshold`, and `stack.fingerprintScope`, as canonical JSON. Nothing that follows the evals
+   * The hex `sha256` of the profile's `name`, `defaults` (its `timeout` in milliseconds) and
+   * `limit`, the invocation's `runs`, `filters`, `tags` and `traits`, the config's `environment`,
+   * `runs`, `bestOf`, `judgeModel`, `threshold` and `timeoutMs`, and `stack.fingerprintScope`, as
+   * canonical JSON. Nothing that follows the evals
    * that ran: not `config.sandbox`, the harnesses or the environments' contents (which a
    * `--retry-errors`, a renamed file or a new eval change), nor the author, git, time or
    * concurrency. So adding an eval keeps the key, runs on other harnesses can share it, and each
