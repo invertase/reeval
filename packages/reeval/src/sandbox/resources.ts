@@ -205,11 +205,18 @@ export function summarize(
   if (!first || !last || first === last || !perSecond || last.at <= first.at) return resources
   const durationMs = last.at - first.at
   const cpuSeconds = Math.max(0, last.cpu - first.cpu) / perSecond
+  // A reading less than half an interval after the last kept one (teardown's, right after one) says
+  // little alone, so its sample runs on to the next kept reading, or the last sample ends at it.
+  // The samples cover the first reading to the last, so the average, a duration-weighted mean of
+  // them, is never above the peak.
+  const bounds = [first]
+  for (const r of readings.slice(1)) {
+    if (r.at - (bounds.at(-1) as Reading).at >= o.sampleMs / 2) bounds.push(r)
+  }
+  if (bounds.at(-1) !== last && bounds.length > 1) bounds[bounds.length - 1] = last
   const cores: number[] = []
-  // A pair closer than half an interval (teardown's reading right after one) says little.
-  for (let i = 1; i < readings.length; i++) {
-    const [a, b] = [readings[i - 1] as Reading, readings[i] as Reading]
-    if (b.at - a.at < o.sampleMs / 2) continue
+  for (let i = 1; i < bounds.length; i++) {
+    const [a, b] = [bounds[i - 1] as Reading, bounds[i] as Reading]
     cores.push(Math.max(0, b.cpu - a.cpu) / perSecond / ((b.at - a.at) / 1000))
   }
   const memory = readings.flatMap((r) => (r.memory === null ? [] : [r.memory]))
