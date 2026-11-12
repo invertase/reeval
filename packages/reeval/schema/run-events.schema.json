@@ -1146,7 +1146,7 @@
               "const": true
             },
             "peakCores": {
-              "description": "The most CPUs it kept busy between two readings; absent with fewer than two.",
+              "description": "The most CPUs it kept busy over one sample, a reading interval (a reading less than half an interval on joins it); never below `avgCores`, and absent with no sample.",
               "type": "number"
             },
             "peakMemoryBytes": {

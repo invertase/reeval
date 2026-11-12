@@ -3385,7 +3385,10 @@ export type AttemptResources = {
     cpuSeconds: number
     /** `cpuSeconds` over `durationMs`: how many CPUs it kept busy on average. */
     avgCores: number
-    /** The most CPUs it kept busy between two readings; absent with fewer than two. */
+    /**
+     * The most CPUs it kept busy over one sample, a reading interval (a reading less than half an
+     * interval on joins it); never below `avgCores`, and absent with no sample.
+     */
     peakCores?: number
     /**
      * The 95th percentile of the CPUs it kept busy between two readings, a second apart: what it

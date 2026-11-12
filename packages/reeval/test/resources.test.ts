@@ -80,12 +80,35 @@ describe('resources', () => {
         sampleMs: 1000,
         cpuSeconds: 2.1,
         avgCores: 1,
-        // The last pair is a tenth of an interval apart, too close to count.
-        peakCores: 1.5,
-        p95Cores: 1.5,
+        // The last reading is a tenth of an interval on, so it joins the second before it.
+        peakCores: 1.455,
+        p95Cores: 1.455,
         peakMemoryBytes: 300,
       },
     })
+  })
+
+  test('the average is never above the peak, however close the last reading comes', () => {
+    // Three seconds at 2.2 cores, then a fifth of a second at 2.3 as the attempt ends.
+    const readings = [0, 1, 2, 3].map((s) => at(s, s * 2_200_000))
+    readings.push(at(3.21, 6_600_000 + 483_000))
+    const u = summarize('container', { sandbox: 'docker' }, containerLimits, readings, {
+      sampleMs: 1000,
+      partial: false,
+    }).usage
+    assert.equal(u?.avgCores, 2.207)
+    assert.equal(u?.peakCores, 2.217)
+    assert.ok((u?.avgCores ?? 0) <= (u?.peakCores ?? 0), JSON.stringify(u))
+    // Every reading within half an interval of the first: no sample to have a peak of.
+    const short = summarize(
+      'container',
+      { sandbox: 'docker' },
+      containerLimits,
+      [at(0, 0), at(0.2, 100_000), at(0.4, 300_000)],
+      { sampleMs: 1000, partial: false },
+    ).usage
+    assert.equal(short?.avgCores, 0.75)
+    assert.equal(short?.peakCores, undefined)
   })
 
   test('no quota falls back to the CPUs it sees; one reading has no usage; a cut-short one is partial', () => {
