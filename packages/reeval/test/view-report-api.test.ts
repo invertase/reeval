@@ -36,10 +36,10 @@ const CONSUMER_RUNTIME = [
   'ptsDelta',
 ] as const
 
-/** On `reeval/view/report` only, so the `reeval/view` root stays free of zod. */
 /** On `reeval/renderer/markdown` only. */
 const MARKDOWN_EXPORTS = ['blockMarkdown', 'runReportMarkdown', 'FORBIDDEN_OUTPUT'] as const
 
+/** On `reeval/view/report` only, so the `reeval/view` root stays free of zod. */
 const SCHEMA_EXPORTS: readonly string[] = [
   'runReportSchema',
   'looseRunReportSchema',
