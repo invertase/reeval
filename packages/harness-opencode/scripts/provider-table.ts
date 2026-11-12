@@ -22,6 +22,8 @@ type Variant = {
   exit: number | null
   error: string
   requests: Request[]
+  /** Another upstream's model, probed only for where its key went. */
+  also?: boolean
 }
 type Probed = { name?: string; env?: string[]; variants?: Variant[]; skipped?: string }
 export type Probe = Record<string, Probed | Request[]>
@@ -43,15 +45,16 @@ const REASONS: Record<string, string> = {
 /** The reason for a provider the probe saw fail, from what it said or where it sent the key. */
 function reasonFor(id: string, p: Probed, catalog: Catalog): string | undefined {
   if (REASONS[id]) return REASONS[id]
-  const errors = (p.variants ?? []).map((v) => v.error).join('\n')
-  const requests = (p.variants ?? []).flatMap((v) => v.requests)
+  const variants = (p.variants ?? []).filter((v) => !v.also)
+  const errors = variants.map((v) => v.error).join('\n')
+  const requests = variants.flatMap((v) => v.requests)
   if (/registry\.npmjs\.org/.test(errors)) {
     return 'OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown'
   }
   if (requests.some((r) => /^(127\.|localhost$|0\.0\.0\.0$|\[?::1)/.test(r.host))) {
     return "it runs on your machine, and the sandbox can't reach the host's localhost"
   }
-  if (/localhost|127\.0\.0\.1/.test(p.variants?.map((v) => v.variant).join(' ') ?? '')) {
+  if (/localhost|127\.0\.0\.1/.test(variants.map((v) => v.variant).join(' '))) {
     return "it runs on your machine, and the sandbox can't reach the host's localhost"
   }
   if (
@@ -108,6 +111,17 @@ function templated(id: string, host: string) {
   return out
 }
 
+/**
+ * Whether another upstream's request adds an endpoint: the key in a header only, on a fixed path,
+ * and on a host the provider's own probes sent it to, so a new host never gets the key brokered.
+ */
+const inHeaders = (r: Request, hosts: ReadonlySet<string>) =>
+  hosts.has(r.host) &&
+  r.key.length > 0 &&
+  !r.key.some((k) => k === 'query' || k === 'body' || k === 'host') &&
+  !r.path.includes('<key>') &&
+  !/^(127\.|localhost$|0\.0\.0\.0$|\[?::1)/.test(r.host)
+
 const byEndpoint = (a: OpenCodeProvider['endpoints'][number], b: typeof a) =>
   `${a.host} ${a.method} ${JSON.stringify(a.path)}`.localeCompare(
     `${b.host} ${b.method} ${JSON.stringify(b.path)}`,
@@ -148,8 +162,12 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
     }
     const endpoints = new Map<string, OpenCodeProvider['endpoints'][number]>()
     const headers = new Map<string, OpenCodeProvider['headers'][number]>()
+    const hosts = new Set(
+      (p.variants ?? []).filter((v) => !v.also).flatMap((v) => v.requests.map((r) => r.host)),
+    )
     for (const v of p.variants ?? []) {
       for (const r of v.requests) {
+        if (v.also && !inHeaders(r, hosts)) continue
         const e = {
           host: templated(id, r.host),
           method: [r.method],

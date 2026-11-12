@@ -112,7 +112,11 @@ test("the main providers' keys go where OpenCode sends them", () => {
     vercel: {
       env: 'AI_GATEWAY_API_KEY',
       headers: bearer,
-      posts: ['ai-gateway.vercel.sh/v1/messages'],
+      posts: [
+        'ai-gateway.vercel.sh/v1/chat/completions',
+        'ai-gateway.vercel.sh/v1/messages',
+        'ai-gateway.vercel.sh/v1/responses',
+      ],
     },
     agentrouter: {
       env: 'AGENTROUTER_API_KEY',
@@ -256,6 +260,47 @@ test("a provider's headers are in name order, whatever order the probe saw them 
         { name: 'x-api-key', scheme: 'raw' },
       ],
     ],
+  )
+})
+
+test("another upstream's model adds only header-keyed endpoints on the provider's own hosts", () => {
+  const call = (path: string, key: string) => ({
+    method: 'POST',
+    host: 'gw.test',
+    path,
+    key: [key],
+  })
+  const variant = (model: string, requests: object[], extra = {}) => ({
+    variant: 'catalog',
+    model,
+    exit: 1,
+    error: '',
+    requests: requests.map((r) => ({ format: 'bearer', ...r })),
+    ...extra,
+  })
+  const probe = {
+    gw: {
+      name: 'Gateway',
+      env: ['GW_API_KEY'],
+      variants: [
+        variant('google/m', [call('/v1/messages', 'authorization')]),
+        variant('openai/m', [call('/v1/responses', 'authorization')], {
+          also: true,
+          error: 'Model unavailable',
+        }),
+        variant('meta/m', [call('/v1/chat?key=<key>', 'query')], { also: true }),
+        variant('xai/m', [{ ...call('/v1/responses', 'authorization'), host: 'xai.gw.test' }], {
+          also: true,
+        }),
+      ],
+    },
+  }
+  const models = { 'google/m': {}, 'openai/m': {}, 'meta/m': {}, 'xai/m': {} }
+  const { supported, refused } = buildTable(probe, { gw: { models } })
+  assert.deepEqual(refused, [])
+  assert.deepEqual(
+    supported.flatMap((p) => p.endpoints.map((e) => e.path)),
+    [{ exact: '/v1/messages' }, { exact: '/v1/responses' }],
   )
 })
 

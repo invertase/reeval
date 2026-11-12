@@ -18,6 +18,7 @@ import {
   issueServerCertificate,
 } from '../../sandbox-docker/src/egress/cert.ts'
 import { openCodeConfig } from '../src/opencode-harness.ts'
+import { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } from '../src/opencode-provider-table.ts'
 import { PROVIDER_VARS } from './provider-vars.ts'
 
 const [opencode, catalogFile, outFile, ...only] = process.argv.slice(2)
@@ -146,10 +147,69 @@ const port = (proxy.address() as { port: number }).port
 
 type Integration = { id: string; name: string; methods: { type: string; names?: string[] }[] }
 
+/**
+ * OpenCode's integrations, from a private `opencode serve`. `/api/integration` answers with the
+ * ones loaded so far, and plugins add the providers' as they load, so it's asked only once
+ * `/api/provider`, which waits for the plugins, has answered: one server for both requests.
+ */
 async function integrations(): Promise<Integration[]> {
   const home = mkdtempSync(join(dir, 'home-'))
-  const out = await run(['api', '--standalone', 'GET', '/api/integration'], { HOME: home }, 30_000)
-  return (JSON.parse(out.stdout) as { data: Integration[] }).data
+  const password = 'reeval-probe'
+  const child = spawn(opencode as string, ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
+    env: {
+      PATH: process.env.PATH ?? '',
+      OPENCODE_DISABLE_AUTOUPDATE: '1',
+      OPENCODE_DISABLE_MODELS_FETCH: '1',
+      OPENCODE_SERVER_PASSWORD: password,
+      HOME: home,
+    },
+    cwd: home,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  try {
+    const url = await new Promise<string>((resolve, reject) => {
+      let out = ''
+      const timer = setTimeout(
+        () => reject(new Error(`opencode serve didn't start: ${out}`)),
+        30_000,
+      )
+      const listen = (c: Buffer) => {
+        out += c
+        const m = /server listening on (http:\/\/\S+)/.exec(out)
+        if (m?.[1]) {
+          clearTimeout(timer)
+          resolve(m[1])
+        }
+      }
+      child.stdout.on('data', listen)
+      child.stderr.on('data', listen)
+      child.on('exit', (code) => reject(new Error(`opencode serve exited ${code}: ${out}`)))
+    })
+    const get = async (path: string) => {
+      const res = await fetch(`${url}${path}`, {
+        headers: {
+          authorization: `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`,
+        },
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!res.ok) throw new Error(`opencode serve: GET ${path}: HTTP ${res.status}`)
+      return res.json() as Promise<{ data: Integration[] }>
+    }
+    await get('/api/provider')
+    const { data } = await get('/api/integration')
+    // Plugins that hadn't loaded would show as providers gone: a few can go in a release, not most.
+    const listed = new Set(data.map((i) => i.id))
+    const known = [...OPENCODE_PROVIDERS, ...REFUSED_OPENCODE_PROVIDERS].map((p) => p.id)
+    const missing = known.filter((id) => !listed.has(id))
+    if (missing.length > known.length / 4) {
+      throw new Error(
+        `opencode serve listed ${data.length} integrations, without ${missing.length} of the table's ${known.length}`,
+      )
+    }
+    return data
+  } finally {
+    child.kill('SIGKILL')
+  }
 }
 
 function run(args: string[], env: Record<string, string>, timeout: number) {
@@ -198,6 +258,14 @@ function variants(id: string) {
   }
   return [...groups].map(([key, list]) => ({ key, models: list }))
 }
+
+/**
+ * The packages that pick each model's API by its upstream, as OpenCode's Vercel AI Gateway sends
+ * `openai/…` models to /v1/responses and `anthropic/…` ones to /v1/messages. A group on one of
+ * them probes one model per upstream too. Every other package sends all its models one way,
+ * however many upstreams their ids name, so one model shows where the key goes.
+ */
+const PER_UPSTREAM_PACKAGES = new Set(['@ai-sdk/gateway'])
 
 const clean = (text: string) =>
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colors
@@ -265,6 +333,21 @@ async function worker() {
         })
       }
       probed.push(last)
+      // Only where the extra models' key went is kept (`also`): their failures aren't the provider's.
+      if (!PER_UPSTREAM_PACKAGES.has(group.key.split(' ')[0] ?? '')) continue
+      const upstream = (model: string) => (model.includes('/') ? model.split('/')[0] : undefined)
+      const others = new Map<string, string>()
+      for (const model of group.models) {
+        const u = upstream(model)
+        if (u && u !== upstream(last?.model ?? '') && !others.has(u)) others.set(u, model)
+      }
+      for (const model of others.values()) {
+        let also = await probe(group.key, model)
+        if (/Model unavailable/.test(also.error)) {
+          also = await probe(group.key, model, { OPENCODE_MODELS_PATH: catalogFile })
+        }
+        if (also.requests.length) probed.push({ ...also, also: true })
+      }
     }
     results[i.id] = { name: i.name, env: names, variants: probed }
     process.stderr.write(`${i.id} ${probed.map((p) => p.exit).join(',')}\n`)
