@@ -7,19 +7,26 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import type { Daytona } from '@daytona/sdk'
 import { NODE_IMAGE } from '../../sandbox-docker/src/build-image.ts'
-import {
-  type DaytonaClient,
-  daytonaClient,
-  ensureSnapshot,
-  prepareDaytona,
-} from '../src/sandbox/daytona.ts'
+import { daytonaClient, ensureSnapshot, prepareDaytona, sdkImage } from '../src/sandbox/daytona.ts'
 import { daytonaImage, harnessScript } from '../src/sandbox/daytona-image.ts'
 import { PrepareError } from '../src/sandbox/provider.ts'
 import { daytona } from '../src/sandbox-daytona.ts'
 import type { HarnessDescriptor } from '../src/types.ts'
 import { type FakeDaytona, fakeDaytona } from './support/daytona.ts'
 import type { SshVm } from './support/ssh-vm.ts'
+
+// reeval builds its `Image` through the SDK's private constructor (see sdkImage), so an SDK whose
+// empty image or `dockerfileCommands` changes fails here rather than in a user's build.
+test("the SDK's Image takes a whole Dockerfile and the files its COPY lines name", async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-sdk-image-'))
+  writeFileSync(join(dir, 'a.txt'), 'a')
+  const dockerfile = 'FROM debian:bookworm-slim\nCOPY a.txt /a.txt\n'
+  const image = await sdkImage({ dockerfile, contextDir: dir }, dir)
+  assert.equal(image.dockerfile, dockerfile)
+  assert.deepEqual(image.contextList, [{ sourcePath: join(dir, 'a.txt'), archivePath: 'a.txt' }])
+})
 
 const DIGEST = `sha256:${'a'.repeat(64)}`
 const resolve = async (ref: string) =>
@@ -169,7 +176,7 @@ describe("preflight's snapshot", () => {
   const waits = { pollMs: 20, waitMs: 2_000, buildMs: 5_000 }
   const ensure = async (name: string, o: { waits?: typeof waits } = {}) => {
     const log: string[] = []
-    const got = await ensureSnapshot((await client()) as DaytonaClient, {
+    const got = await ensureSnapshot((await client()) as Daytona, {
       name,
       image: async () => {
         const { Image } = await import('@daytona/sdk')

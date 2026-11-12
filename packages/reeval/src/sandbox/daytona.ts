@@ -7,6 +7,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import type * as DaytonaSdkModule from '@daytona/sdk'
+import type { Daytona, Image, Resources, Sandbox, Snapshot } from '@daytona/sdk'
 import { run } from '@reeval/sandbox-docker/process'
 import { retryAtOf } from '@reeval/vm-api'
 import type { Check } from '../doctor.ts'
@@ -37,78 +39,8 @@ export const DAYTONA_API_URL = 'DAYTONA_API_URL'
 /** The fix for a project without the SDK. */
 export const INSTALL_DAYTONA_SDK = `Install Daytona's SDK in this project: npm i ${DAYTONA_SDK}`
 
-/** What reeval reads of a sandbox, typed here so no SDK type reaches reeval's own. */
-export type DaytonaSandboxInfo = {
-  id: string
-  name: string
-  state?: string
-  createSshAccess(expiresInMinutes?: number): Promise<{ token: string; sshCommand: string }>
-  setTtl(ttlMinutes: number): Promise<void>
-  delete(timeout?: number): Promise<void>
-}
-
-/** What reeval reads of a snapshot. */
-export type DaytonaSnapshotInfo = {
-  id: string
-  name: string
-  state?: string
-  errorReason?: string | null
-  /** In GB. */
-  size?: number | null
-  createdAt?: string | Date
-  lastUsedAt?: string | Date | null
-}
-
-/** A sandbox's (or snapshot's) vCPUs, and memory and disk in GiB. */
-export type DaytonaResources = { cpu: number; memory: number; disk: number }
-
-/** The SDK calls reeval makes. */
-export type DaytonaClient = {
-  create(
-    params: {
-      name: string
-      snapshot?: string
-      /** An SDK `Image`, built for this sandbox (or found in Daytona's build cache). */
-      image?: unknown
-      resources?: DaytonaResources
-      labels: Record<string, string>
-      autoStopInterval: number
-      autoDeleteInterval?: number
-      ephemeral?: boolean
-      ttlMinutes?: number
-    },
-    options: { timeout: number },
-  ): Promise<DaytonaSandboxInfo>
-  get(idOrName: string): Promise<DaytonaSandboxInfo>
-  list(query: { labels: Record<string, string>; limit?: number }): AsyncIterable<DaytonaSandboxInfo>
-  snapshot: {
-    get(idOrName: string): Promise<DaytonaSnapshotInfo>
-    create(
-      params: { name: string; image: unknown; resources?: DaytonaResources },
-      options: { timeout?: number },
-    ): Promise<DaytonaSnapshotInfo>
-    delete(snapshot: DaytonaSnapshotInfo): Promise<void>
-    activate(snapshot: DaytonaSnapshotInfo): Promise<DaytonaSnapshotInfo>
-    list(query: {
-      page: number
-      limit: number
-    }): Promise<{ items: DaytonaSnapshotInfo[]; totalPages?: number }>
-  }
-}
-
-/** The SDK's `Image`: a Dockerfile, and the files its `COPY` lines name, from `contextDir`. */
-type DaytonaImageClass = new () => {
-  dockerfileCommands(commands: string[], contextDir?: string): unknown
-}
-
-type DaytonaSdk = {
-  Daytona: new (config: {
-    apiKey?: string
-    apiUrl?: string
-    useDeprecatedPolling?: boolean
-  }) => DaytonaClient
-  Image: DaytonaImageClass
-}
+/** The part of Daytona's SDK reeval constructs. */
+type DaytonaSdk = Pick<typeof DaytonaSdkModule, 'Daytona' | 'Image'>
 
 /** Daytona's SDK, from beside reeval or else from the project. */
 export const loadDaytonaSdk = optionalPeer<DaytonaSdk>(DAYTONA_SDK, {
@@ -144,7 +76,7 @@ const usage = (message: string) =>
 export async function daytonaClient(
   sandbox: Pick<DaytonaSandboxDescriptor, 'apiKey'>,
   projectRoot?: string,
-): Promise<DaytonaClient> {
+): Promise<Daytona> {
   const problem = daytonaKeyProblem(sandbox)
   if (problem) throw usage(`${problem}. Set it in the environment or the project's .env.local.`)
   const { Daytona } = await loadDaytonaSdk(projectRoot)
@@ -243,7 +175,7 @@ export const snapshotOf = (sandbox: Pick<DaytonaSandboxDescriptor, 'size'>) =>
   `daytona-${sandbox.size ?? 'medium'}`
 
 /** Each size's resources, as Daytona's default snapshot of that size has them. */
-const RESOURCES: Record<DaytonaSize, DaytonaResources> = {
+const RESOURCES: Record<DaytonaSize, Resources> = {
   small: { cpu: 1, memory: 1, disk: 3 },
   medium: { cpu: 2, memory: 4, disk: 8 },
   large: { cpu: 4, memory: 8, disk: 10 },
@@ -271,14 +203,15 @@ const spell = (ms: number) =>
 export const SNAPSHOT_WAITS = { pollMs: 2_000, waitMs: 15 * 60_000, buildMs: 30 * 60_000 }
 
 /** The SDK's `Image` of a Dockerfile, with the files its `COPY` lines name. */
-async function sdkImage(
+export async function sdkImage(
   image: { dockerfile?: string; contextDir?: string },
   root: string,
-): Promise<unknown> {
+): Promise<Image> {
   const { Image } = await loadDaytonaSdk(root)
-  const built = new Image()
-  built.dockerfileCommands([(image.dockerfile ?? '').trimEnd()], image.contextDir)
-  return built
+  // The SDK's factories take a base image or a Dockerfile on disk beside its context; an empty
+  // image (its private constructor) is the one that takes a whole Dockerfile and a context directory.
+  const empty = new (Image as unknown as new () => Image)()
+  return empty.dockerfileCommands([(image.dockerfile ?? '').trimEnd()], image.contextDir)
 }
 
 const failed = (o: {
@@ -315,11 +248,11 @@ const buildFailure = (error: unknown): string | null => {
  * fails is a config failure with Daytona's reason.
  */
 export async function ensureSnapshot(
-  api: DaytonaClient,
+  api: Daytona,
   o: {
     name: string
-    image: () => Promise<unknown>
-    resources: DaytonaResources
+    image: () => Promise<Image>
+    resources: Resources
     signal: AbortSignal
     log: (line: string) => void
     /** The generated Dockerfile, which a build failure names. */
@@ -348,7 +281,7 @@ export async function ensureSnapshot(
   }
   for (;;) {
     signal.throwIfAborted()
-    let found: DaytonaSnapshotInfo | null
+    let found: Snapshot | null
     try {
       found = await call(() => api.snapshot.get(name))
     } catch (error) {
@@ -447,18 +380,18 @@ export async function ensureSnapshot(
  * so the run's creates find it in Daytona's build cache, and deletes it.
  */
 export async function warmImage(
-  api: DaytonaClient,
+  api: Daytona,
   sandbox: DaytonaSandboxDescriptor,
   o: {
     name: string
-    image: () => Promise<unknown>
-    resources: DaytonaResources
+    image: () => Promise<Image>
+    resources: Resources
     signal: AbortSignal
     dockerfileLog: string | null
   },
 ): Promise<void> {
   const name = `${sandbox.prefix}-warm-${o.name.slice(-12)}-${randomBytes(2).toString('hex')}`
-  const remove = (s: DaytonaSandboxInfo) => s.delete().catch(() => {})
+  const remove = (s: Sandbox) => s.delete().catch(() => {})
   const creating = whileLimited(
     'starts',
     async () =>
@@ -636,9 +569,9 @@ export const openDaytonaPool: OpenPool<DaytonaSandboxDescriptor> = async (sandbo
 /** Starting, keeping and removing `descriptor`'s sandboxes for the run's pool, in the main process. */
 export function daytonaPoolProvider(
   descriptor: DaytonaSandboxDescriptor,
-  api: DaytonaClient,
+  api: Daytona,
   runId: string,
-  start?: DaytonaStart & { image?: unknown },
+  start?: DaytonaStart & { image?: Image },
 ): PoolProvider<PooledSshMachine> {
   const size = descriptor.size ?? 'medium'
   const snapshot = start ? start.snapshot : snapshotOf(descriptor)
@@ -646,8 +579,8 @@ export function daytonaPoolProvider(
   const loginRoot = start !== undefined
   const labels = runLabels(descriptor, runId)
   const extra = sandboxLabels()
-  const made = new Map<string, { sandbox: DaytonaSandboxInfo; dir: string }>()
-  const remove = async (sandbox: DaytonaSandboxInfo) => {
+  const made = new Map<string, { sandbox: Sandbox; dir: string }>()
+  const remove = async (sandbox: Sandbox) => {
     await sandbox.delete().catch((error: unknown) => {
       if (statusOf(error) !== 404) throw error
     })
@@ -671,7 +604,7 @@ export function daytonaPoolProvider(
     async start(signal, ttlSeconds) {
       const name = `${descriptor.prefix}-${labels['reeval-run']}-${randomBytes(3).toString('hex')}`
       const dir = await mkdtemp(join(tmpdir(), 'reeval-daytona-'))
-      let sandbox: DaytonaSandboxInfo | undefined
+      let sandbox: Sandbox | undefined
       try {
         const creating = api.create(
           {
@@ -687,7 +620,7 @@ export function daytonaPoolProvider(
         )
         // The SDK's create takes no signal: a cancel stops the wait, and a sandbox it makes after
         // that is deleted.
-        const created: DaytonaSandboxInfo = await abortable(creating, signal, (late) =>
+        const created: Sandbox = await abortable(creating, signal, (late) =>
           remove(late).catch(() => {}),
         ).catch(async (error: unknown) => {
           if (signal.aborted) throw error
@@ -796,7 +729,7 @@ export async function removeRunSandboxes(
     if (!api) continue
     const deadline = AbortSignal.timeout(CLEANUP_TIMEOUT_MS)
     const work = (async () => {
-      const left: DaytonaSandboxInfo[] = []
+      const left: Sandbox[] = []
       for await (const s of api.list({ labels: runLabels(sandbox, runId), limit: 100 })) {
         left.push(s)
       }
