@@ -640,8 +640,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     res.once('close', () => {
       if (emitted) return
       emitted = true
-      // `statusCode` reads 200 before anything is sent: a request the sandbox gave up on before
-      // its response came has no status.
+      // `statusCode` reads 200 before anything is sent: a request whose response never started
+      // (the sandbox gave up on it, or the gateway closed) has no status.
       const status = event.status ?? (res.headersSent ? res.statusCode : undefined)
       emit({ ...event, ...(status !== undefined && { status }), ms: Date.now() - startedAt })
     })

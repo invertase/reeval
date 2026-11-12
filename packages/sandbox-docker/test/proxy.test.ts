@@ -1943,7 +1943,17 @@ describe('brokered secrets through the proxy', () => {
       }
     }
     try {
-      gw.proxy.setSubstitutions([sub()])
+      gw.proxy.addTransformations([
+        {
+          match: {
+            host: HOST,
+            path: { exact: '/hang' },
+            method: ['POST'],
+            headers: [{ key: { exact: 'x-goog-api-key' }, value: { exact: PLACEHOLDER } }],
+          },
+          transform: { headers: { 'x-goog-api-key': REAL } },
+        },
+      ])
       seen.length = 0
       const h1Tunnel = await connect(gw, HOST, h1.port)
       assert.ok(h1Tunnel.ok)
@@ -1952,7 +1962,7 @@ describe('brokered secrets through the proxy', () => {
         port: h1.port,
         method: 'POST',
         path: '/hang',
-        headers: { 'x-goog-api-key': HOLDER },
+        headers: { 'x-goog-api-key': PLACEHOLDER },
         createConnection: () =>
           tls.connect({ socket: h1Tunnel.socket, servername: HOST, ca: gw.ca.cert }),
       })
@@ -1977,7 +1987,7 @@ describe('brokered secrets through the proxy', () => {
       const stream = session.request({
         ':method': 'POST',
         ':path': '/hang',
-        'x-goog-api-key': HOLDER,
+        'x-goog-api-key': PLACEHOLDER,
       })
       stream.on('error', () => {})
       stream.end('{}')
@@ -1988,11 +1998,11 @@ describe('brokered secrets through the proxy', () => {
       const hung = await requests(2)
       assert.equal(hung.length, 2, JSON.stringify(events))
       for (const e of hung) {
-        assert.deepEqual(e.substituted, ['GEMINI_API_KEY'])
+        assert.deepEqual(e.credentials, ['x-goog-api-key'])
         assert.equal(e.status, undefined, JSON.stringify(e))
       }
       // Twin: a request that got its response has its status.
-      const r = await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${HOLDER}`)
+      const r = await viaProxyH2(gw, HOST, h2.port, '/echo')
       assert.equal(r.status, 200)
       const answered = (await requests(3)).at(-1)
       assert.equal(answered?.status, 200)
