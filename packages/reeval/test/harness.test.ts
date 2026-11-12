@@ -861,9 +861,9 @@ describe('the fx harness', () => {
     assert.deepEqual(missingCredentials(openai, { OPENAI_API_KEY: 'x' }), [])
   })
 
-  test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
+  test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup, and no SSE server", () => {
     assert.deepEqual(
-      acpMcpServers({
+      AGENTS.fx.mcpServers({
         files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
         local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'], env: {} },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
@@ -881,6 +881,13 @@ describe('the fx harness', () => {
           headers: [{ name: 'A', value: 'b' }],
         },
       },
+    )
+    assert.throws(
+      () =>
+        AGENTS.fx.mcpServers({
+          old: { transport: 'sse', url: 'https://x.example/sse', headers: {} },
+        }),
+      /fx has no SSE MCP transport, so it can't use the old server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
     )
   })
 })
@@ -909,7 +916,7 @@ describe('the Grok Build harness', () => {
     assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
   })
 
-  test("gets MCP servers in ACP's McpServer shape, as fx does", () => {
+  test("gets MCP servers in ACP's McpServer shape", () => {
     assert.equal(AGENTS['grok-build'].mcpServers, acpMcpServers)
   })
 
@@ -957,13 +964,7 @@ describe('mcp.sse', () => {
           headers: [{ name: 'A', value: 'b' }],
         },
       },
-      fx: {
-        events: {
-          type: 'sse',
-          url: 'http://events.example/sse',
-          headers: [{ name: 'A', value: 'b' }],
-        },
-      },
+      fx: /^InfraError: fx has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
     }
     for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
       const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
