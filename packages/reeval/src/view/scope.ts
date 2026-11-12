@@ -26,6 +26,9 @@ function durationMs(value: string | number | undefined): string | number | undef
   }
 }
 
+/** In the hashed input; bumped by any change to what `configKey` hashes or how. */
+const CONFIG_KEY_VERSION = 1
+
 const sorted = (list: readonly string[] | undefined) => (list ? [...list].sort() : undefined)
 
 function profileKey(profile: NonNullable<RunRecord['profile']>) {
@@ -61,6 +64,7 @@ export function runScope(record: RunRecord): RunScope {
   const traits = invocation?.traits ?? []
   const { config } = record
   const key = {
+    v: CONFIG_KEY_VERSION,
     profile: record.profile ? profileKey(record.profile) : null,
     invocation: {
       runs: invocation?.runs,

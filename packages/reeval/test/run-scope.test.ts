@@ -70,6 +70,10 @@ describe('sha256Hex', () => {
 })
 
 describe('runScope', () => {
+  test('the key is pinned: a change to its inputs bumps CONFIG_KEY_VERSION and this value', () => {
+    assert.equal(key(base()), 'c70e242930c0aa8152a621622d1ffc84e6123c5886429870db81c37ba1481985')
+  })
+
   test('the same config with other evals, author, git, time or concurrency keeps the key', () => {
     const k = key(base())
     assert.match(k, /^[0-9a-f]{64}$/)
