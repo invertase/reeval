@@ -2367,6 +2367,7 @@ async function executeRun(
   const { exportSpans, otlpTarget } = await import('./trace/otlp.ts')
   const exporting = otlpTarget(process.env)
   let exported: Promise<string | null> = Promise.resolve(null)
+  let runStarted = false
   const trace = setup.dryRun
     ? undefined
     : new RunTrace({
@@ -2398,6 +2399,7 @@ async function executeRun(
         released: (owner) => machines.released(owner),
       },
       onRunStart: (files) => {
+        runStarted = true
         writeCurrent(setup.config.root, runId)
         live = writeLiveProgress({
           dir: stagingDir,
@@ -2518,6 +2520,7 @@ async function executeRun(
     if (trace) {
       const spans = trace.close({
         status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
+        started: runStarted,
       })
       // Awaited only once the run's record is written: a slow collector never holds it up.
       exported = exportSpans(spans, process.env, version)

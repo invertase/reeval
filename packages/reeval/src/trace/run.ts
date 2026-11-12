@@ -23,6 +23,7 @@ export class RunTrace {
   readonly #images = new Map<string, { name: string; cached: boolean }>()
   #closed: RunSpan[] | undefined
   #dirMade = false
+  #written = 0
 
   /** `keep` holds every span in memory too, for an exporter to send once the run ends. */
   constructor(o: { dir: string; runId: string; attributes?: SpanAttributes; keep?: boolean }) {
@@ -83,18 +84,22 @@ export class RunTrace {
     })
   }
 
-  /** Ends the run's span and stops taking spans; returns the spans it kept, for an exporter. */
-  close(o: { status?: string; error?: string } = {}): RunSpan[] {
+  /**
+   * Ends the run's span and stops taking spans; returns the spans it kept, for an exporter. A run
+   * that never `started` and has no other span writes no trace.
+   */
+  close(o: { status?: string; error?: string; started?: boolean } = {}): RunSpan[] {
     if (this.#closed) return this.#closed
-    this.#write({
-      traceId: this.traceId,
-      spanId: this.spanId,
-      name: 'reeval.run',
-      startMs: this.#startMs,
-      endMs: Date.now(),
-      attributes: { ...this.#attributes, ...(o.status && { 'reeval.run.status': o.status }) },
-      ...(o.error && { status: { code: 'error' as const, message: o.error } }),
-    })
+    if (o.started !== false || this.#written > 0)
+      this.#write({
+        traceId: this.traceId,
+        spanId: this.spanId,
+        name: 'reeval.run',
+        startMs: this.#startMs,
+        endMs: Date.now(),
+        attributes: { ...this.#attributes, ...(o.status && { 'reeval.run.status': o.status }) },
+        ...(o.error && { status: { code: 'error' as const, message: o.error } }),
+      })
     setLocalSpanSink(undefined)
     this.#closed = this.#spans ?? []
     return this.#closed
@@ -108,6 +113,7 @@ export class RunTrace {
         }
       : written
     this.#spans?.push(span)
+    this.#written++
     try {
       if (!this.#dirMade) mkdirSync(join(this.#file, '..'), { recursive: true })
       this.#dirMade = true
