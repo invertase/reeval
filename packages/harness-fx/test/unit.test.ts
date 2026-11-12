@@ -21,6 +21,7 @@ import {
   fxSession,
   fxSettings,
   fxVertexBaseUrl,
+  withSandboxEnv,
 } from '../src/fx-harness.ts'
 import { FxStreamTranslator, fxCallsSplit, fxMcpSegment, withUsageSplit } from '../src/fx-stream.ts'
 import { VERSION } from '../src/version.ts'
@@ -445,6 +446,86 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
     harness.doStart({ sandboxSession: { run: async () => ({}) } } as never),
     /The sandbox can't broker AI_GATEWAY_API_KEY .* so the key stays out of it/,
   )
+})
+
+test("a stdio MCP server's env lists the sandbox's variables under its own, and an HTTP one is as it was", () => {
+  const sandbox = {
+    PATH: '/usr/bin',
+    HOME: '/home/reeval',
+    USER: 'reeval',
+    PWD: '/workspace',
+    SHLVL: '1',
+    _: '/usr/bin/node',
+    REEVAL_EXEC_ID: 'abc-1',
+    HTTPS_PROXY: 'http://127.0.0.1:41000',
+    https_proxy: 'http://127.0.0.1:41000',
+    NODE_EXTRA_CA_CERTS: '/reeval/ca.pem',
+    NODE_USE_ENV_PROXY: '1',
+    SSL_CERT_FILE: '/etc/ssl/certs/ca-certificates.crt',
+    PROBE_WORD: 'eval-value',
+    API_TOKEN: 'reeval-placeholder-1',
+  }
+  const http = { type: 'http', url: 'https://mcp.example/', headers: [] }
+  const servers = withSandboxEnv(
+    {
+      probe: {
+        command: '/usr/bin/env',
+        args: ['node', 'probe.mjs'],
+        env: [{ name: 'PROBE_WORD', value: 'own-value' }],
+      },
+      bare: { command: '/usr/bin/node', args: [] },
+      http,
+    },
+    sandbox,
+  )
+  const inherited = [
+    { name: 'HTTPS_PROXY', value: 'http://127.0.0.1:41000' },
+    { name: 'https_proxy', value: 'http://127.0.0.1:41000' },
+    { name: 'NODE_EXTRA_CA_CERTS', value: '/reeval/ca.pem' },
+    { name: 'NODE_USE_ENV_PROXY', value: '1' },
+    { name: 'SSL_CERT_FILE', value: '/etc/ssl/certs/ca-certificates.crt' },
+  ]
+  assert.deepEqual(servers.probe, {
+    command: '/usr/bin/env',
+    args: ['node', 'probe.mjs'],
+    env: [
+      ...inherited,
+      { name: 'API_TOKEN', value: 'reeval-placeholder-1' },
+      { name: 'PROBE_WORD', value: 'own-value' },
+    ],
+  })
+  assert.deepEqual(servers.bare, {
+    command: '/usr/bin/node',
+    args: [],
+    env: [
+      ...inherited,
+      { name: 'PROBE_WORD', value: 'eval-value' },
+      { name: 'API_TOKEN', value: 'reeval-placeholder-1' },
+    ],
+  })
+  assert.equal(servers.http, http)
+})
+
+test("doStart reads the sandbox's environment for a stdio MCP server, and only then", async () => {
+  const commands: string[] = []
+  const sandbox = {
+    run: async ({ command }: { command: string }) => {
+      commands.push(command)
+      return { exitCode: 1, stdout: '', stderr: 'no node' }
+    },
+  }
+  const start = (mcpServers: Record<string, Record<string, unknown>>) =>
+    createFx({ auth: { OPENAI_API_KEY: 'k' }, model: 'gpt-4.1', mcpServers }).doStart({
+      sandboxSession: sandbox,
+    } as never)
+  await assert.rejects(
+    start({ probe: { command: '/usr/bin/node', args: [], env: [] } }),
+    /Couldn't read the sandbox's environment for fx's stdio MCP servers \(exit 1\): no node/,
+  )
+  assert.deepEqual(commands, [`node -e 'process.stdout.write(JSON.stringify(process.env))'`])
+  commands.length = 0
+  await start({ http: { type: 'http', url: 'https://mcp.example/', headers: [] } }).catch(() => {})
+  assert.ok(!commands.some((c) => c.includes('process.env')), JSON.stringify(commands))
 })
 
 test("MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first", () => {

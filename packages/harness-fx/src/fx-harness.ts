@@ -342,44 +342,46 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     ...(settings.effort ? { effort: settings.effort } : {}),
   }
   const mcpServers = Object.keys(settings.mcpServers ?? {})
-  const acp = createACP({
-    version: 'v1',
-    harnessId: FX_HARNESS_ID,
-    builtinTools: FX_BUILTIN_TOOLS,
-    // reeval gives the agent no host tools, and the stream translator names its MCP calls.
-    resolveHostToolCall: () => undefined,
-    isMcpToolCall: () => false,
-    source: { type: 'install-command', command: FX_INSTALL_COMMAND },
-    executable: 'fx-acp',
-    args: [],
-    auth: settings.auth,
-    env: fxEnv(settings.model, route),
-    credentialEnv: Object.values(FX_PROVIDERS).map((each) => each.credential),
-    credentialBrokering: ({ env, sandboxEnv, headers }) => {
-      if (!provider) return []
-      const key = env[provider.credential]
-      const placeholder = sandboxEnv?.[provider.credential]
-      if (!key || !placeholder) return []
-      return [
-        createCredentialRequestTransformation({
-          matchUrl: providerUrl(providerName, settings.gatewayUrl),
-          matchHeaders: { Authorization: `Bearer ${placeholder}` },
-          transformHeaders: { ...headers, Authorization: `Bearer ${key}` },
-        }),
-      ]
-    },
-    ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
-    modelMapping: { type: 'session-config-option', path: 'model' },
-    // fx's `auto` mode runs a reviewer model on each action; `full-access` runs none.
-    permissionModeMapping: {
-      'allow-reads': { type: 'session-mode', modeId: 'ask' },
-      'allow-edits': { type: 'session-mode', modeId: 'ask' },
-      'allow-all': { type: 'session-mode', modeId: 'full-access' },
-    },
-    skillsDirectory: FX_HOME_SKILLS_DIR,
-    // Not authentication: the hook that writes into fx's private home before it starts.
-    authenticationFiles: () => fxSettings(settings.model, route),
-  })
+  const acpWith = (servers: FxHarnessSettings['mcpServers']) =>
+    createACP({
+      version: 'v1',
+      harnessId: FX_HARNESS_ID,
+      builtinTools: FX_BUILTIN_TOOLS,
+      // reeval gives the agent no host tools, and the stream translator names its MCP calls.
+      resolveHostToolCall: () => undefined,
+      isMcpToolCall: () => false,
+      source: { type: 'install-command', command: FX_INSTALL_COMMAND },
+      executable: 'fx-acp',
+      args: [],
+      auth: settings.auth,
+      env: fxEnv(settings.model, route),
+      credentialEnv: Object.values(FX_PROVIDERS).map((each) => each.credential),
+      credentialBrokering: ({ env, sandboxEnv, headers }) => {
+        if (!provider) return []
+        const key = env[provider.credential]
+        const placeholder = sandboxEnv?.[provider.credential]
+        if (!key || !placeholder) return []
+        return [
+          createCredentialRequestTransformation({
+            matchUrl: providerUrl(providerName, settings.gatewayUrl),
+            matchHeaders: { Authorization: `Bearer ${placeholder}` },
+            transformHeaders: { ...headers, Authorization: `Bearer ${key}` },
+          }),
+        ]
+      },
+      ...(servers ? { mcpServers: servers } : {}),
+      modelMapping: { type: 'session-config-option', path: 'model' },
+      // fx's `auto` mode runs a reviewer model on each action; `full-access` runs none.
+      permissionModeMapping: {
+        'allow-reads': { type: 'session-mode', modeId: 'ask' },
+        'allow-edits': { type: 'session-mode', modeId: 'ask' },
+        'allow-all': { type: 'session-mode', modeId: 'full-access' },
+      },
+      skillsDirectory: FX_HOME_SKILLS_DIR,
+      // Not authentication: the hook that writes into fx's private home before it starts.
+      authenticationFiles: () => fxSettings(settings.model, route),
+    })
+  const acp = acpWith(settings.mcpServers)
   return {
     ...acp,
     doStart: async (options) => {
@@ -393,10 +395,89 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
           `The sandbox can't broker ${provider.credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
         )
       }
+      const servers = settings.mcpServers
+      const stdio = servers && Object.values(servers).some((s) => typeof s.command === 'string')
+      const started = stdio
+        ? acpWith(
+            withSandboxEnv(
+              servers,
+              await sandboxEnv(
+                options.sandboxSession as unknown as EnvSandbox,
+                options.abortSignal,
+              ),
+            ),
+          )
+        : acp
       const ledger = await FxUsageLedger.open(options.sandboxSession as unknown as LedgerSandbox)
-      return fxSession(await acp.doStart(options), mcpServers, ledger)
+      return fxSession(await started.doStart(options), mcpServers, ledger)
     },
   }
+}
+
+/**
+ * fx starts a stdio MCP server with only `PATH`, `HOME`, `USER` and the server's own `env`, so
+ * without these it has no egress gateway (the proxy and CA variables) and none of the
+ * environment's variables or secret placeholders. Of the sandbox's variables, these are fx's own
+ * or the reading shell's, or name the exec that read them.
+ */
+const FX_MCP_ENV_SKIPPED = new Set([
+  'PATH',
+  'HOME',
+  'USER',
+  'PWD',
+  'OLDPWD',
+  'SHLVL',
+  '_',
+  'REEVAL_EXEC_ID',
+])
+
+type EnvSandbox = {
+  run: (options: {
+    command: string
+    abortSignal?: AbortSignal
+  }) => PromiseLike<{ exitCode: number; stdout: string; stderr?: unknown }>
+}
+
+/**
+ * The variables a command in the sandbox sees: its egress gateway's and the environment's, with
+ * a secret's placeholder, never its value. The agent's own (its key) are added only to fx's
+ * process, so they aren't here.
+ */
+async function sandboxEnv(
+  sandbox: EnvSandbox,
+  abortSignal?: AbortSignal,
+): Promise<Record<string, string>> {
+  const read = await sandbox.run({
+    command: `node -e 'process.stdout.write(JSON.stringify(process.env))'`,
+    ...(abortSignal ? { abortSignal } : {}),
+  })
+  if (read.exitCode !== 0) {
+    throw new Error(
+      `Couldn't read the sandbox's environment for fx's stdio MCP servers (exit ${read.exitCode}): ${String(read.stderr ?? '').trim()}`,
+    )
+  }
+  return JSON.parse(read.stdout) as Record<string, string>
+}
+
+/**
+ * Each stdio server (ACP's `McpServer` with a `command`) with `env`, its list of name-value
+ * pairs, after the sandbox's variables; a name the server sets keeps its own value.
+ */
+export function withSandboxEnv(
+  servers: Record<string, Record<string, unknown>>,
+  env: Record<string, string>,
+): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, server]) => {
+      if (typeof server.command !== 'string') return [name, server]
+      const own = (server.env ?? []) as { name: string; value: string }[]
+      const set = new Set(own.map((each) => each.name))
+      const inherited = Object.entries(env)
+        .filter(([key]) => !FX_MCP_ENV_SKIPPED.has(key) && !set.has(key))
+        .map(([key, value]) => ({ name: key, value }))
+      return [name, { ...server, env: [...inherited, ...own] }]
+    }),
+  )
 }
 
 type Session = Awaited<ReturnType<HarnessV1['doStart']>>

@@ -142,7 +142,7 @@ export function fxCallsSplit(
  * Fixes up one fx turn's parts from `@ai-sdk/harness-acp`'s bridge:
  *
  * - A command's output streams in its `in_progress` updates; the `completed` update's `content`
- *   is a clipped JSON summary, and its `command_result` has the exit code. A shell result
+ *   is the output clipped, ending in `... output truncated ...`, and its `command_result` has the exit code. A shell result
  *   becomes `{ output, exitCode }` from those.
  * - MCP calls are renamed from fx's `mcp_<server>_<tool>` to `mcp__<server>__<tool>`, as Claude
  *   Code names them, for the servers the session was given. The longest matching server wins,
