@@ -509,8 +509,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 to the studio page at REEVAL_CLOUD_URL, which pairs with a one-time
                                 token (default run: the newest)
     --port <n>                  First port to try (default 4984)
-    --no-open                   Print the studio URL without opening the browser; --no-scratch hides
-                                unrecorded runs from .reeval/runs
+    --no-open                   Print the studio URL without opening the browser
+    --no-scratch                Hide the unrecorded runs in .reeval/runs
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
   },
   report: {
