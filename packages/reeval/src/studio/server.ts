@@ -19,7 +19,7 @@ import {
 import { buildRunReport } from '../view/report/build.ts'
 import { REPORT_VERSION, splitRunReport } from '../view/report/split.ts'
 import { pageJsonl } from './jsonl.ts'
-import { listHeaders, readRun, resolveFile, type StudioSource } from './source.ts'
+import { listHeaders, readRun, resolveFile, runDirIsReal, type StudioSource } from './source.ts'
 
 export type StudioApiOptions = {
   source: StudioSource
@@ -171,7 +171,9 @@ export function createStudioApi(options: StudioApiOptions) {
       return sendFile(c, file, artifactType(file))
     }
     const run = await readRun(source, target.runId)
-    if (!run) return c.text(`No run ${target.runId}`, 404)
+    if (!run || !(await runDirIsReal(run.dir, target.runId))) {
+      return c.text(`No run ${target.runId}`, 404)
+    }
     if (run.record.evals.length === 0) return c.text(`Run ${target.runId} has no evals`, 404)
     const report = buildRunReport(run.record, {
       ...(await readReportInputs(join(run.dir, target.runId))),

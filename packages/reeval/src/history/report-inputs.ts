@@ -1,5 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, realpath } from 'node:fs/promises'
+import { basename, dirname, join, sep } from 'node:path'
 import type { CapturePageFile } from '../types.ts'
 import type { AnalysisDoc } from '../view/analysis.ts'
 import { type AnalysisEntry, pinnedAnalysis, sortAnalyses } from '../view/analysis.ts'
@@ -9,12 +9,20 @@ import type { RunReportOptions } from '../view/report/index.ts'
 
 /**
  * Sidecars beside a recorded run directory for `buildRunReport`: remarks, the
- * pinned analysis, and `.capture.json` page facts keyed by path.
+ * pinned analysis, and `.capture.json` page facts keyed by path. Only files whose real path is
+ * inside the run directory count: a symlinked run directory has none, and a symlink inside it is
+ * skipped, as the studio's artifacts route refuses both.
  */
 export async function readReportInputs(runDir: string): Promise<RunReportOptions> {
-  const remarks = await loadRemarks(join(runDir, REMARKS_FILE))
-  const analysis = await loadPinnedAnalysis(join(runDir, 'analysis'))
-  const pages = await loadCapturePages(runDir)
+  const root = await realRunDir(runDir)
+  if (!root) return { remarks: null, analysis: null }
+  const read = async (path: string) => {
+    const real = await realpath(path).catch(() => null)
+    return real?.startsWith(root + sep) ? readFile(real, 'utf8').catch(() => null) : null
+  }
+  const remarks = await loadRemarks(read, join(runDir, REMARKS_FILE))
+  const analysis = await loadPinnedAnalysis(read, join(runDir, 'analysis'))
+  const pages = await loadCapturePages(read, runDir)
   return {
     remarks,
     analysis,
@@ -22,8 +30,24 @@ export async function readReportInputs(runDir: string): Promise<RunReportOptions
   }
 }
 
-async function loadRemarks(file: string): Promise<RunRemarks | null> {
-  const text = await readFile(file, 'utf8').catch(() => null)
+type Read = (path: string) => Promise<string | null>
+
+/**
+ * The run directory's path under its folder's real path; null when the directory itself is a
+ * symlink (or its folder can't be read).
+ */
+async function realRunDir(runDir: string): Promise<string | null> {
+  const folder = await realpath(dirname(runDir)).catch(() => null)
+  if (!folder) return null
+  const root = join(folder, basename(runDir))
+  const real = await realpath(runDir).catch((e: NodeJS.ErrnoException) =>
+    e.code === 'ENOENT' ? root : null,
+  )
+  return real === root ? root : null
+}
+
+async function loadRemarks(read: Read, file: string): Promise<RunRemarks | null> {
+  const text = await read(file)
   if (text === null) return null
   try {
     return readableRemarks(JSON.parse(text) as RunRemarks)
@@ -32,14 +56,14 @@ async function loadRemarks(file: string): Promise<RunRemarks | null> {
   }
 }
 
-async function loadPinnedAnalysis(dir: string): Promise<AnalysisDoc | null> {
+async function loadPinnedAnalysis(read: Read, dir: string): Promise<AnalysisDoc | null> {
   const names = await readdir(dir).catch((): string[] => [])
   const entries: AnalysisEntry[] = []
   for (const name of names
     .filter((n) => n.endsWith('.json'))
     .sort()
     .reverse()) {
-    const text = await readFile(join(dir, name), 'utf8').catch(() => null)
+    const text = await read(join(dir, name))
     if (text === null) continue
     try {
       const doc = readableAnalysis(JSON.parse(text) as AnalysisDoc)
@@ -52,7 +76,7 @@ async function loadPinnedAnalysis(dir: string): Promise<AnalysisDoc | null> {
   return pinnedAnalysis(sortAnalyses(entries))?.doc ?? entries[0]?.doc ?? null
 }
 
-async function loadCapturePages(runDir: string): Promise<Map<string, CapturePageFile>> {
+async function loadCapturePages(read: Read, runDir: string): Promise<Map<string, CapturePageFile>> {
   const pages = new Map<string, CapturePageFile>()
   const stack: string[] = [runDir]
   while (stack.length) {
@@ -64,8 +88,8 @@ async function loadCapturePages(runDir: string): Promise<Map<string, CapturePage
         stack.push(path)
         continue
       }
-      if (!entry.name.endsWith('.capture.json')) continue
-      const text = await readFile(path, 'utf8').catch(() => null)
+      if (!entry.isFile() || !entry.name.endsWith('.capture.json')) continue
+      const text = await read(path)
       if (text === null) continue
       try {
         const page = readableCapturePage(JSON.parse(text) as CapturePageFile)

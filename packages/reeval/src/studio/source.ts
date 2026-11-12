@@ -69,6 +69,19 @@ export async function resolveFile(
 }
 
 /**
+ * Whether a run's directory in `dir` is a real directory there, or missing (a run with no files):
+ * a symlinked run directory isn't, as `fileInside` refuses every file through it.
+ */
+export async function runDirIsReal(dir: string, runId: string): Promise<boolean> {
+  try {
+    const [base, real] = await Promise.all([realpath(dir), realpath(join(dir, runId))])
+    return real === join(base, runId)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+}
+
+/**
  * A run's record, the folder that holds it and whether that's the history folder; null when
  * neither folder has it.
  */

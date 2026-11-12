@@ -1341,6 +1341,8 @@ describe('studio data server', () => {
       studioPaths.artifact(runId, 'leak.jsonl'),
       `${studioPaths.artifact(runId, 'leak.jsonl')}?limit=1`,
       studioPaths.artifact(linked, 'summary.md'),
+      studioPaths.report(linked),
+      studioPaths.eval(linked, records.get(runId)?.evals[0]?.key as string),
       studioPaths.artifact(runId, `${linked}.json`),
       `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/..%2f..%2fsecret.txt`,
       `${STUDIO_API_PREFIX}/runs/${runId}/artifacts/%2e%2e/%2e%2e/secret.txt`,
@@ -1358,6 +1360,77 @@ describe('studio data server', () => {
     assert.equal(climbing.status, 404, 'an eval id is a key, never a path')
     assert.equal(await climbing.text(), `No eval ../secret.txt in ${runId}`)
     assert.equal((await api.get(studioPaths.artifact(runId, 'summary.md'))).status, 200)
+  })
+
+  test('the report reads no sidecar through a symlink, as the artifacts route serves none', async () => {
+    const corpusRun = (entry: string, run: string) =>
+      join(pkgRoot, 'test/fixtures/records', entry, 'evals/.history', run)
+    const root = await mkdtemp(join(tmpdir(), 'reeval-studio-inputs-'))
+    const history = join(root, 'evals/.history')
+    const runDir = join(history, 'run')
+    await cp(corpusRun('with-capture-page', '20261029T001335Z_nogit_cursor-agent_y6rf'), runDir, {
+      recursive: true,
+    })
+    const outside = join(root, 'outside')
+    mkdirSync(join(outside, 'analysis'), { recursive: true })
+    await cp(
+      join(
+        corpusRun('with-observations', '20261030T183503Z_7e9208f_cursor-agent_c479'),
+        'remarks.json',
+      ),
+      join(outside, 'remarks.json'),
+    )
+    const analysis = '20260928T070751Z_cursor-agent_8d27d0ce.json'
+    await cp(
+      join(
+        corpusRun('before-workspace', '20260928T070748Z_37aef1d_cursor-agent_h9qy'),
+        'analysis',
+        analysis,
+      ),
+      join(outside, 'analysis', analysis),
+    )
+    const captures = readdirSync(runDir, { recursive: true, encoding: 'utf8' }).filter((f) =>
+      f.endsWith('.capture.json'),
+    )
+    assert.ok(captures.length >= 2, `${captures.length} capture pages`)
+    const [linkedCapture] = captures as [string]
+
+    const inside = await readReportInputs(runDir)
+    assert.equal(inside.pages?.size, captures.length)
+    await cp(join(outside, 'remarks.json'), join(runDir, 'remarks.json'))
+    await cp(join(outside, 'analysis'), join(runDir, 'analysis'), { recursive: true })
+    const real = await readReportInputs(runDir)
+    assert.ok(real.remarks, 'remarks in the run are read')
+    assert.ok(real.analysis, 'an analysis in the run is read')
+
+    rmSync(join(runDir, 'remarks.json'))
+    rmSync(join(runDir, 'analysis'), { recursive: true })
+    await symlink(join(outside, 'remarks.json'), join(runDir, 'remarks.json'))
+    await symlink(join(outside, 'analysis'), join(runDir, 'analysis'))
+    await cp(join(runDir, linkedCapture), join(outside, 'page.capture.json'))
+    rmSync(join(runDir, linkedCapture))
+    await symlink(join(outside, 'page.capture.json'), join(runDir, linkedCapture))
+    const linked = await readReportInputs(runDir)
+    assert.equal(linked.remarks, null, 'remarks through a symlink')
+    assert.equal(linked.analysis, null, 'an analysis folder through a symlink')
+    assert.equal(linked.pages?.size, captures.length - 1, 'a capture page through a symlink')
+    assert.equal(linked.pages?.has(linkedCapture.split('\\').join('/')), false)
+
+    rmSync(join(runDir, 'analysis'))
+    mkdirSync(join(runDir, 'analysis'))
+    await symlink(join(outside, 'analysis', analysis), join(runDir, 'analysis', analysis))
+    assert.equal(
+      (await readReportInputs(runDir)).analysis,
+      null,
+      'an analysis file through a symlink',
+    )
+
+    const linkedRun = join(history, 'linked')
+    await symlink(runDir, linkedRun)
+    const throughLink = await readReportInputs(linkedRun)
+    assert.equal(throughLink.remarks, null)
+    assert.equal(throughLink.pages, undefined, 'nothing through a symlinked run directory')
+    assert.equal((await readReportInputs(join(history, 'missing'))).pages, undefined)
   })
 
   test("a run recorded at evidence links only the transcripts it kept: a passing attempt's is null", async () => {
