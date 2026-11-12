@@ -90,6 +90,7 @@ export function stateRows(run: RunRecord): Array<{ field: string; value: string 
  */
 export function warnings(run: RunRecord): string[] {
   const out: string[] = []
+  for (const w of run.plan.sandboxWarnings) out.push(w.message)
   for (const image of run.stack.images.filter((i) => i.repoDigests.length === 0)) {
     out.push(
       `Image ${image.ref} isn't pushed, so an exact rerun needs this machine's image (id ${image.id.replace(/^sha256:/, '').slice(0, 12)}).`,
