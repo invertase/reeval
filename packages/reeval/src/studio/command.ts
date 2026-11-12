@@ -24,22 +24,20 @@ type Args = {
   handshakeMs?: number
 }
 
-/** The run's summary.md, from the history folder or `.reeval/runs`, and whether it is recorded. */
-function summaryPath(
-  source: StudioSource,
-  runId: string,
-): { file: string; recorded: boolean } | null {
-  for (const [dir, recorded] of [
-    [source.historyDir, true],
-    [scratchDir(source.root), false],
-  ] as const) {
-    const file = join(dir, runId, 'summary.md')
-    if (existsSync(file)) return { file, recorded }
-  }
-  return null
-}
-
 type TimeoutRun = { runId: string; report: string | null; recorded: boolean }
+
+/**
+ * What the timeout lines say about the run: its `summary.md`, from the history folder or
+ * `.reeval/runs`, and whether it is recorded, which is its record in the history folder (a run
+ * recorded with `artifacts: 'none'` has no `summary.md` there).
+ */
+export function timeoutRun(source: StudioSource, runId: string): TimeoutRun {
+  const recorded = existsSync(join(source.historyDir, `${runId}.json`))
+  const file = [source.historyDir, scratchDir(source.root)]
+    .map((dir) => join(dir, runId, 'summary.md'))
+    .find((f) => existsSync(f))
+  return { runId, report: file ? fromCwd(file) || file : null, recorded }
+}
 
 /** What `reeval studio` prints when the hosted page hasn't paired in time: why, and what to open instead. */
 export function handshakeTimeoutLines(server: string, run: TimeoutRun | null): string[] {
@@ -48,7 +46,7 @@ export function handshakeTimeoutLines(server: string, run: TimeoutRun | null): s
     : run.recorded
       ? [`Or run reeval studio share ${run.runId} to view it in the hosted studio.`]
       : [
-          `Or record it with reeval record ${run.runId}, then run reeval studio share to view it in the hosted studio.`,
+          `Or record it with reeval record ${run.runId}, then run reeval studio share ${run.runId} to view it in the hosted studio.`,
         ]
   return [
     `The studio page hasn't connected yet: your browser may block it from reaching ${server}.`,
@@ -90,10 +88,8 @@ export async function studioCommand({ config, flags, version, run, handshakeMs =
   if (!flags['no-open']) openBrowser(studio.url)
   const waiting = setTimeout(() => {
     if (paired) return
-    const summary = focus ? summaryPath(source, focus) : null
-    const report = summary ? fromCwd(summary.file) || summary.file : null
-    const timeoutRun = focus ? { runId: focus, report, recorded: summary?.recorded ?? false } : null
-    for (const line of handshakeTimeoutLines(studio.server, timeoutRun)) console.log(line)
+    const lines = handshakeTimeoutLines(studio.server, focus ? timeoutRun(source, focus) : null)
+    for (const line of lines) console.log(line)
   }, handshakeMs)
   await new Promise<void>((resolveStop) => {
     process.once('SIGINT', resolveStop)
