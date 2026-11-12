@@ -307,11 +307,12 @@ describe('recording runs into evals/.history', () => {
     const archived = was.files.map((f) => f.path)
     assert.equal(archived[0], `${runId}.json`)
     assert.ok(archived.includes(`${runId}/summary.md`), 'archive keeps summary.md')
+    assert.ok(archived.includes(`${runId}/report.json`), 'archive keeps report.json')
     assert.ok(
       archived.some((p) => p.endsWith('/diff.patch')),
       'evidence default keeps a passing attempt diff in the archive',
     )
-    assert.equal(archived.length, 3)
+    assert.equal(archived.length, 4)
     assert.equal(
       sh(p.dir, 'check-attr', 'binary', '--', `${HISTORY}/${runId}.zip`),
       `${HISTORY}/${runId}.zip: binary: set`,
