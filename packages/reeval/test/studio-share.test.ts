@@ -1257,7 +1257,8 @@ describe('reeval studio share from a remote history store', () => {
   test('--revoke and --list read no runs, so they never reach the store', async () => {
     const p = await platform()
     try {
-      const env = envFor(p.base)
+      const env = { ...envFor(p.base), ...keys() }
+      rmSync(join(dir, '.reeval/store'), { recursive: true, force: true })
       const before = s3.requests.length
       const listed = await runCli(dir, ['studio', 'share', '--profile', 'ci', '--list'], { env })
       assert.equal(listed.code, 0, listed.stdout + listed.stderr)
