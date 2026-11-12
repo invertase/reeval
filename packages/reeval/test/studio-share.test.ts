@@ -19,13 +19,15 @@ import { hostname } from 'node:os'
 import { join, sep } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { openArchive } from '../src/archive/index.ts'
+import { bufferSource } from '../src/archive/zip.ts'
 import { readableRunReport } from '../src/view/report/schema.ts'
 import { baseEnv, fakeConfig, project, runCli, tempDir } from './helpers.ts'
+import { type FakeS3, fakeS3 } from './support/fake-s3.ts'
 
 const TOKEN = 'cli-session-token-0123'
 const HISTORY = 'evals/.history'
 const SECRET = `ghp_${'a1B2c3D4e5'.repeat(4)}`
-const LIMIT_MESSAGE = "This org has reached its plan's share limit. Revoke a share or upgrade."
+const LIMIT_MESSAGE = 'The cloud platform refused to make another share for this project.'
 
 type Seen = { method: string; path: string; query: string; auth?: string; body: Buffer }
 
@@ -55,6 +57,8 @@ type Options = {
   readError?: string
   /** Changes each share the list answers with. */
   listed?: (s: Share) => unknown
+  /** The share routes answer with a redirect elsewhere. */
+  redirectShares?: boolean
 }
 
 async function platform(options: Options = {}) {
@@ -108,6 +112,10 @@ async function platform(options: Options = {}) {
         const error = options.readError ?? null
         return json(res, 200, { runId, revision: there.revision, status, error })
       }
+    }
+    if (options.redirectShares && url.pathname.startsWith(`${prefix}/shares`)) {
+      res.writeHead(307, { location: `${base}/elsewhere` })
+      return res.end()
     }
     if (url.pathname === `${prefix}/shares` && req.method === 'POST') {
       const { runId, type, scope } = JSON.parse(body.toString()) as Share
@@ -185,10 +193,10 @@ evaluate('agent', async (c) => {
 })
 `
 
-async function linkedProject(name: string) {
+async function linkedProject(name: string, extra = '') {
   const p = await project(name, {
     '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
-    'reeval.config.ts': fakeConfig({ harness: `{ files: { 'hello.txt': 'hi\\n' } }` }),
+    'reeval.config.ts': fakeConfig({ harness: `{ files: { 'hello.txt': 'hi\\n' } }`, extra }),
     'evals/agent.eval.ts': EVAL,
     '.reeval/project.json': JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
   })
@@ -207,6 +215,11 @@ const envFor = (base: string, token: string | null = TOKEN) =>
   }) as NodeJS.ProcessEnv
 
 const never = (text: string) => assert.ok(!text.includes(TOKEN), `no token printed: ${text}`)
+const noSecret = (text: string) => {
+  for (const part of [SECRET, SECRET.slice(0, 8), SECRET.slice(4, 14), SECRET.slice(-4)]) {
+    assert.ok(!text.includes(part), `no part of the secret printed: ${text}`)
+  }
+}
 
 const recordedRunId = (dir: string) =>
   (readdirSync(join(dir, HISTORY)).find((f) => f.endsWith('.json')) as string).replace(
@@ -286,9 +299,10 @@ describe('reeval studio share', () => {
       const full = await runCli(dir, ['studio', 'share', '--full'], { env: envFor(p.base) })
       assert.equal(full.code, 0, full.stdout + full.stderr)
       assert.match(full.stdout, /^This share includes the run's transcripts and artifacts\.$/m)
-      assert.match(
+      assert.doesNotMatch(
         full.stderr,
-        /recorded with artifacts evidence, so passing attempts' transcripts weren't kept: for future runs, history\.artifacts: 'all' or reeval record --artifacts all/,
+        /recorded with artifacts/,
+        "the cloud copy's level is unknown",
       )
       assert.doesNotMatch(full.stdout, /without signing in/)
       assert.match(full.stdout, /\(full, team\)/)
@@ -304,6 +318,71 @@ describe('reeval studio share', () => {
         { runId, type: 'full', scope: 'team' },
         { runId, type: 'report', scope: 'public' },
       ])
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--full says which transcripts are missing from a copy it pushed', async () => {
+    const p = await platform()
+    try {
+      const r = await runCli(dir, ['studio', 'share', '--full'], { env: envFor(p.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(r.stdout, /^Pushing /m)
+      assert.match(
+        r.stderr,
+        /recorded with artifacts evidence, so passing attempts' transcripts weren't kept: for future runs, history\.artifacts: 'all' or reeval record --artifacts all/,
+      )
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--public pushes the copy scanned here even when the cloud project has the run', async () => {
+    const p = await platform({ ready: [runId] })
+    try {
+      const r = await runCli(dir, ['studio', 'share', '--public', '--json'], {
+        env: envFor(p.base),
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(p.calls(), [`PUT /runs/${runId}`, `GET /runs/${runId}`, 'POST /shares'])
+      const archive = await openArchive(bufferSource((p.seen[0] as Seen).body))
+      assert.equal(archive.manifest.runId, runId)
+      await archive.verify()
+      await archive.close()
+      const share = JSON.parse(r.stdout)
+      assert.equal(share.scope, 'public')
+      assert.equal(share.pushed, true)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a redirected share request is refused and followed nowhere', async () => {
+    const p = await platform({ ready: [runId], redirectShares: true })
+    try {
+      for (const args of [[], ['--list'], ['--revoke', 'sh1xxxxxxxx']]) {
+        const r = await runCli(dir, ['studio', 'share', ...args], { env: envFor(p.base) })
+        assert.equal(r.code, 3, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, /redirected the request to .* elsewhere, and reeval doesn't send/)
+      }
+      assert.ok(!p.seen.some((s) => s.path === '/elsewhere'), p.calls().join('\n'))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a refused token names the fix, never the token', async () => {
+    const p = await platform({ ready: [runId] })
+    const token = 'refused-token-9876543210'
+    try {
+      for (const args of [[], ['--list'], ['--revoke', 'sh1xxxxxxxx']]) {
+        const r = await runCli(dir, ['studio', 'share', ...args], { env: envFor(p.base, token) })
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, /refused to .*: Sign in first\. \(check REEVAL_TOKEN\)/)
+        assert.ok(!(r.stdout + r.stderr).includes(token), r.stdout + r.stderr)
+        assert.ok(!(r.stdout + r.stderr).includes(token.slice(-6)), r.stdout + r.stderr)
+      }
     } finally {
       await p.close()
     }
@@ -711,6 +790,45 @@ describe('reeval cloud push --out and --json', () => {
     assert.ok(!existsSync(join(dir, '.reeval', 'run.zip')))
   })
 
+  test('--out refuses a file that is there and is not a reeval archive', async () => {
+    const keep = join(dir, 'keep.txt')
+    writeFileSync(keep, 'mine\n')
+    try {
+      const r = await runCli(dir, ['cloud', 'push', '--out', 'keep.txt'])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, /--out keep\.txt is there already and isn't a reeval archive/)
+      assert.equal(readFileSync(keep, 'utf8'), 'mine\n')
+    } finally {
+      rmSync(keep)
+    }
+  })
+
+  test('--allow-incomplete without --artifacts is refused', async () => {
+    const r = await runCli(dir, ['cloud', 'push', '--allow-incomplete', '--out', 'x.zip'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /--allow-incomplete goes with --artifacts/)
+    assert.ok(!existsSync(join(dir, 'x.zip')))
+  })
+
+  test('--artifacts names a worktree patch it leaves out, never any part of the secret', async () => {
+    const dirty = await linkedProject('cloud-push-patch')
+    writeFileSync(join(dirty, 'notes.txt'), 'notes\n')
+    sh(dirty, 'add', 'notes.txt')
+    sh(dirty, 'commit', '-q', '-m', 'notes')
+    writeFileSync(join(dirty, 'notes.txt'), `notes\nGITHUB_TOKEN=${SECRET}\n`)
+    const ran = await runCli(dirty, ['run'])
+    assert.equal(ran.code, 0, ran.stdout + ran.stderr)
+    const runs = join(dirty, '.reeval', 'runs')
+    const id = (readdirSync(runs).find((f) => f.endsWith('.json')) as string).replace(/\.json$/, '')
+    const r = await runCli(dirty, ['cloud', 'push', id, '--artifacts', 'all', '--out', 'run.zip'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /Left .*'s worktree patch out of the archive: it looks like it holds a secret:\n {2}worktree\.patch: notes\.txt line 2: GitHub token\n/,
+    )
+    noSecret(r.stdout + r.stderr)
+  })
+
   test('--out with an upload flag is refused', async () => {
     const r = await runCli(dir, ['cloud', 'push', '--out', 'x.zip', '--no-wait'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -1085,5 +1203,77 @@ describe('reeval cloud push --out and --json', () => {
     const evidence = await runCli(dir, ['cloud', 'push', '--out', 'out/run.zip'])
     assert.equal(evidence.code, 0, evidence.stdout + evidence.stderr)
     assert.deepEqual(await transcripts(out()), [], "'evidence' leaves a passing attempt's out")
+  })
+})
+
+describe('reeval studio share from a remote history store', () => {
+  let s3: FakeS3
+  let dir = ''
+  let runId = ''
+  const keys = () => ({
+    AWS_ACCESS_KEY_ID: s3.accessKey,
+    AWS_SECRET_ACCESS_KEY: s3.secretKey,
+    CI: 'false',
+    GITHUB_ACTIONS: 'false',
+  })
+  before(async () => {
+    s3 = await fakeS3()
+    dir = await linkedProject(
+      'studio-share-store',
+      `profiles: {
+    ci: { history: { store: { kind: 's3', bucket: '${s3.bucket}', endpoint: '${s3.url}', prefix: 'ci' } } },
+  },`,
+    )
+    const run = await runCli(dir, ['run', '--profile', 'ci', '--record'], { env: keys() })
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    runId = readdirSync(join(dir, '.reeval', 'runs'))
+      .find((f) => f.endsWith('.json'))
+      ?.replace(/\.json$/, '') as string
+    rmSync(join(dir, '.reeval/store'), { recursive: true, force: true })
+    rmSync(join(dir, '.reeval/runs'), { recursive: true, force: true })
+  })
+  after(() => s3.close())
+
+  test('pulls the store before reading it, unless --offline', async () => {
+    const p = await platform()
+    try {
+      const env = { ...envFor(p.base), ...keys() }
+      const pulled = s3.requests.length
+      const offline = await runCli(dir, ['studio', 'share', '--profile', 'ci', '--offline'], {
+        env,
+      })
+      assert.equal(offline.code, 2, offline.stdout + offline.stderr)
+      assert.equal(s3.requests.length, pulled, 'no request to the store')
+      assert.deepEqual(p.seen, [])
+      const r = await runCli(dir, ['studio', 'share', '--profile', 'ci'], { env })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.ok(s3.requests.length > pulled)
+      assert.match(r.stdout, new RegExp(`Shared ${runId} \\(report, team\\)`))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--revoke and --list read no runs, so they never reach the store', async () => {
+    const p = await platform()
+    try {
+      const env = envFor(p.base)
+      const before = s3.requests.length
+      const listed = await runCli(dir, ['studio', 'share', '--profile', 'ci', '--list'], { env })
+      assert.equal(listed.code, 0, listed.stdout + listed.stderr)
+      const revoked = await runCli(
+        dir,
+        ['studio', 'share', '--profile', 'ci', '--revoke', 'nope'],
+        {
+          env,
+        },
+      )
+      assert.equal(revoked.code, 2, revoked.stdout + revoked.stderr)
+      assert.match(revoked.stderr, /refused to revoke share nope: No such share\./)
+      assert.equal(s3.requests.length, before)
+      assert.deepEqual(p.calls(), ['GET /shares', 'DELETE /shares/nope'])
+    } finally {
+      await p.close()
+    }
   })
 })
