@@ -121,6 +121,12 @@ export type SandboxKind<D extends SandboxDescriptor = SandboxDescriptor> = Sandb
    * for `sandboxes`, or for every provider of the kind when unset.
    */
   cleanupRun?(runId: string, sandboxes?: readonly D[]): Promise<void>
+  /**
+   * Removes the sandboxes any run on this host left behind when its process was killed outright,
+   * whose owner process has exited: for `sandboxes`, or for every provider of the kind that
+   * answers when unset. Returns how many it removed.
+   */
+  removeOrphans?(sandboxes?: readonly D[]): Promise<number>
 }
 
 const engineOf = (s: DockerSandboxDescriptor) => s.engine ?? 'docker'
@@ -159,6 +165,18 @@ const DOCKER: SandboxKind<DockerSandboxDescriptor> = {
     if (!engines.length) return
     const { removeRunContainers } = await import('./docker.ts')
     await removeRunContainers(runId, engines)
+  },
+  async removeOrphans(sandboxes) {
+    const { dockerAvailable, removeOrphans } = await import('@reeval/sandbox-docker')
+    const engines = sandboxes
+      ? [...new Set(sandboxes.map(engineOf))]
+      : (['docker', 'podman'] as const)
+    let removed = 0
+    for (const engine of engines) {
+      if (!sandboxes && !(await dockerAvailable(engine))) continue
+      removed += (await removeOrphans(engine).catch(() => [])).length
+    }
+    return removed
   },
 }
 
@@ -273,4 +291,21 @@ export async function cleanupRun(runId: string, sandboxes?: readonly SandboxDesc
     if (own && !own.length) continue
     await kind.cleanupRun(runId, own)
   }
+}
+
+/**
+ * Removes what runs on this host left behind when their process was killed: for `sandboxes`, or
+ * every kind that can tell when unset. Returns how many sandboxes it removed.
+ */
+export async function removeOrphans(sandboxes?: readonly SandboxDescriptor[]): Promise<number> {
+  let removed = 0
+  for (const [name, kind] of Object.entries(SANDBOX_KINDS) as Array<
+    [SandboxKindName, SandboxKind]
+  >) {
+    if (!kind.removeOrphans) continue
+    const own = sandboxes?.filter((s) => s.kind === name)
+    if (own && !own.length) continue
+    removed += await kind.removeOrphans(own)
+  }
+  return removed
 }

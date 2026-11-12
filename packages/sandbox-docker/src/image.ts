@@ -176,6 +176,11 @@ export const LABEL = {
   run: 'ai.reeval.run',
   /** Unique per session, so a create cut short can find what it made. */
   session: 'ai.reeval.session',
+  /**
+   * On every session's containers: `<pid>@<host>` of the process that created them, so a later
+   * reeval on that host can remove the ones a killed process left behind.
+   */
+  owner: 'ai.reeval.owner',
   agentVersion: 'ai.reeval.agent-version',
   harness: 'ai.reeval.harness',
   /** On reeval's own images: the hash of the base image's build context, to tell a stale one. */

@@ -84,7 +84,13 @@ import {
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
-import { capabilitiesOf, cleanupRun, sandboxCapacity, sandboxKind } from './sandbox/kinds.ts'
+import {
+  capabilitiesOf,
+  cleanupRun,
+  removeOrphans,
+  sandboxCapacity,
+  sandboxKind,
+} from './sandbox/kinds.ts'
 import { heldSecrets, readSecretsFile, SECRETS_SERVICE } from './secrets-file.ts'
 import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
@@ -181,6 +187,16 @@ async function sweep(root: string, keep?: string): Promise<void> {
   for (const runId of await sweepStaging(root, keep)) {
     process.stderr.write(
       `reeval: run ${runId} stopped over a day ago and can still be resumed: reeval run --resume ${runId} finishes it, reeval clean --staging deletes it.\n`,
+    )
+  }
+}
+
+/** Removes the sandboxes runs on this host left behind when their process was killed, saying so. */
+async function reapOrphans(sandboxes: readonly SandboxDescriptor[]): Promise<void> {
+  const removed = await removeOrphans(sandboxes).catch(() => 0)
+  if (removed) {
+    process.stderr.write(
+      `reeval: removed ${removed} sandbox${removed === 1 ? '' : 'es'} a killed reeval left running\n`,
     )
   }
 }
@@ -430,8 +446,9 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `reeval clean`: removes local debug data and snapshots, all of them or all but the newest
- * `--keep` runs', with `--staging` every stopped run's staging, and with `--bundles` every copy
- * `run --bundle` extracted whose process has ended.
+ * `--keep` runs', and the sandboxes a killed reeval on this host left running; with `--staging`
+ * every stopped run's staging, and with `--bundles` every copy `run --bundle` extracted whose
+ * process has ended.
  */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
@@ -463,6 +480,12 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   if (streams.length) {
     console.log(
       `Removed the event streams of ${streams.length} finished run${streams.length === 1 ? '' : 's'} from .reeval/events`,
+    )
+  }
+  const orphans = await removeOrphans()
+  if (orphans) {
+    console.log(
+      `Removed ${orphans} sandbox${orphans === 1 ? '' : 'es'} that a killed reeval left running`,
     )
   }
   if (flags.bundles) {
@@ -1225,6 +1248,8 @@ async function runCommand(
   if ((interrupted || engineRun.canceled) && plan) {
     await cleanupRun(ctx.runId, plan.sandboxes)
   }
+  // Every worker has exited, so this catches the sandboxes of one that was killed mid-attempt.
+  if (plan) await reapOrphans(plan.sandboxes)
   if (engineRun.stopped || !plan) {
     live?.remove()
     renderer.close()
@@ -2100,6 +2125,7 @@ async function executeRun(
       sandboxWarnings: plan.sandboxWarnings,
     })
     if (setup.dryRun) return false
+    await reapOrphans(plan.sandboxes)
     if (continuing) {
       // startRun cleared this machine and the config's Boat accounts before the plan named the
       // Macs and the evals' own Boat accounts the run's VMs were on.
