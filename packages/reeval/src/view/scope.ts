@@ -1,5 +1,6 @@
 import { parseDuration } from '../duration.ts'
 import type { RunRecord, RunScope } from '../history/types.ts'
+import type { Duration } from '../types.ts'
 import { sha256Hex } from './sha256.ts'
 
 /** JSON with every object's keys sorted and `undefined` members left out, so equal data hashes equal. */
@@ -19,7 +20,7 @@ function canonical(value: unknown): string {
 function durationMs(value: string | number | undefined): string | number | undefined {
   if (value === undefined) return undefined
   try {
-    return parseDuration(value)
+    return parseDuration(value as Duration)
   } catch {
     return value
   }
