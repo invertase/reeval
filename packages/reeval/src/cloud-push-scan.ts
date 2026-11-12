@@ -322,7 +322,14 @@ export async function scanPush(
   const rulesOf = (segment: string) => {
     let rules = segments.get(segment)
     if (!rules) {
-      rules = [...new Set(findSecrets(segment).map((m) => m.rule))]
+      // A name can carry a secret percent-encoded (`ghp%5F…`), as a URL path or a saved URL does.
+      let decoded = segment
+      try {
+        decoded = decodeURIComponent(segment)
+      } catch {}
+      const found = findSecrets(segment)
+      if (decoded !== segment) found.push(...findSecrets(decoded))
+      rules = [...new Set(found.map((m) => m.rule))]
       segments.set(segment, rules)
     }
     return rules

@@ -641,6 +641,24 @@ describe('the push scan', () => {
     ])
   })
 
+  test('a percent-encoded secret in a path segment is found and masked', async () => {
+    const encoded = SECRET.replace('_', '%5F')
+    const scan = await scanPush([
+      { path: `run/${encoded}.html`, data: Buffer.from('fine') },
+      { path: 'run/art.zip', data: await zipOf({ [`d/${encoded}/ok.txt`]: 'fine' }) },
+      { path: 'run/100%off.txt', data: Buffer.from('fine') },
+    ])
+    assert.deepEqual(scan.unread, [])
+    assert.deepEqual(scan.findings, [
+      'run/[REDACTED]: name: GitHub token',
+      'run/art.zip!/d/[REDACTED]: name: GitHub token',
+    ])
+    assert.equal(scan.mask('run/100%off.txt'), 'run/100%off.txt')
+    const shown = JSON.stringify(scan.findings)
+    noSecret(shown)
+    assert.ok(!shown.includes(encoded.slice(0, 12)), shown)
+  })
+
   test("a zip entry's folders are scanned and masked", async () => {
     const scan = await scanPush([
       {
