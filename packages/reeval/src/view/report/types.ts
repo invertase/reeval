@@ -405,9 +405,10 @@ export type DiscoveryRate = {
   found: Count
   rows: Array<{ keys: string[]; found: Count }>
   /**
-   * For a skill, the attempts that found it whose skill uses came from each source, from the
-   * report's `facts`: an attempt counts once per source, and one with no facts in none. Empty
-   * without facts.
+   * For a skill, the attempts that found it by where the skill they checked came from, its first
+   * use in the report's `facts`: one source an attempt, so the counts sum to `found` when every
+   * one has facts. An attempt with no facts, or whose `toHaveCalledSkill` had a label of its own
+   * (which doesn't name the skill), counts in none. Empty without facts.
    */
   sources: Array<{ source: 'placed' | 'skill-dir' | 'elsewhere' | 'mcp' | 'web'; count: number }>
 }

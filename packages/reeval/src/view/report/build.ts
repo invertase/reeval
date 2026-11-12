@@ -1302,16 +1302,47 @@ function buildChoices(e: EvalEntry): ChoiceBreakdown[] {
 
 const SKILL_SOURCES = ['placed', 'skill-dir', 'elsewhere'] as const
 
-/** How many of `attempts` used a skill from each source, by their facts. */
+/** An unlabelled `toHaveCalledSkill` record's label: the skill, then any ` #n` that keeps it unique. */
+const CHECKED_SKILL = /^toHaveCalledSkill (.+?)(?: #\d+)*$/
+
+/**
+ * The skill an attempt's first passing `toHaveCalledSkill` checked, read from its default label;
+ * undefined when every such call had a label of its own, which doesn't name the skill.
+ */
+function checkedSkill(a: AttemptRecord): string | undefined {
+  for (const x of a.assertions ?? []) {
+    const parts = x.matcher.split('.')
+    if (parts.at(-1) !== 'toHaveCalledSkill' || parts.includes('not')) continue
+    if (x.status !== 'pass' || x.labelled) continue
+    const m = CHECKED_SKILL.exec(x.label)
+    if (m) return m[1]
+  }
+  return undefined
+}
+
+/**
+ * How many of `attempts` (each found the skill) used the skill it checked from each source, by its
+ * first use in their facts: one source an attempt, so the counts sum to the attempts counted.
+ */
 function skillSources(
   attempts: AttemptRecord[],
   facts: ReadonlyMap<string, AttemptFacts> | undefined,
 ): DiscoveryRate['sources'] {
   if (!facts) return []
-  return SKILL_SOURCES.map((source) => ({
-    source,
-    count: attempts.filter((a) => facts.get(a.key)?.skills.some((s) => s.source === source)).length,
-  })).filter((s) => s.count > 0)
+  const counts = new Map<string, number>()
+  for (const a of attempts) {
+    const name = checkedSkill(a)
+    if (name === undefined) continue
+    const first = facts
+      .get(a.key)
+      ?.skills.filter((s) => s.skill === name || s.skill.endsWith(`:${name}`))
+      .sort((x, y) => x.firstLine - y.firstLine)[0]
+    if (first) counts.set(first.source, (counts.get(first.source) ?? 0) + 1)
+  }
+  return SKILL_SOURCES.flatMap((source) => {
+    const count = counts.get(source) ?? 0
+    return count > 0 ? [{ source, count }] : []
+  })
 }
 
 function buildDiscovery(

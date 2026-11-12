@@ -226,37 +226,35 @@ describe("the report's facts", () => {
     assert.ok(passing > 0 && failing > 0)
   })
 
-  test("count a skill discovery's sources over the attempts that found it", () => {
+  test('count the source of the checked skill, once for each attempt that found it', () => {
     const record = entries
       .flatMap((entry) => entry.runs.map((r) => recordOf(r.raw)))
-      .find((r) => r.evals.some((e) => e.attempts.length >= 3))
-    assert.ok(record, 'a corpus eval has three attempts')
-    const e = record.evals.find((x) => x.attempts.length >= 3)
+      .find((r) => r.evals.some((e) => e.attempts.length >= 4))
+    assert.ok(record, 'a corpus eval has four attempts')
+    const e = record.evals.find((x) => x.attempts.length >= 4)
     assert.ok(e)
-    const [one, two, three] = e.attempts
-    assert.ok(one && two && three)
+    const [one, two, three, four] = e.attempts
+    assert.ok(one && two && three && four)
     e.compare = undefined
-    for (const a of [one, two, three]) {
-      a.outcome = 'pass'
-      a.assertions = [
+    const check = (status: 'pass' | 'fail', label = 'toHaveCalledSkill x') =>
+      [
         {
-          label: 'skill',
-          labelled: true,
+          label,
+          labelled: label !== 'toHaveCalledSkill x',
           matcher: 'toHaveCalledSkill',
-          status: a === three ? 'fail' : 'pass',
-        } as NonNullable<AttemptRecord['assertions']>[number],
-      ]
-    }
-    const skill = (source: AttemptFacts['skills'][number]['source']) => ({
-      skill: 'x',
-      source,
-      reads: 1,
-      firstLine: 1,
-    })
-    const facts = (...sources: Array<AttemptFacts['skills'][number]['source']>): AttemptFacts => ({
-      toolCalls: sources.length,
-      byClass: { context: sources.length, dependency: 0, web: 0, verify: 0, workspace: 0 },
-      skills: sources.map(skill),
+          status,
+        },
+      ] as NonNullable<AttemptRecord['assertions']>
+    for (const a of [one, two, three, four]) a.outcome = 'pass'
+    one.assertions = check('pass')
+    two.assertions = check('pass')
+    three.assertions = check('fail')
+    four.assertions = check('pass', 'found the skill')
+    type Use = [skill: string, source: AttemptFacts['skills'][number]['source'], line: number]
+    const facts = (...uses: Use[]): AttemptFacts => ({
+      toolCalls: uses.length,
+      byClass: { context: uses.length, dependency: 0, web: 0, verify: 0, workspace: 0 },
+      skills: uses.map(([skill, source, firstLine]) => ({ skill, source, reads: 1, firstLine })),
       contextFiles: [],
     })
     const evals = [e.key]
@@ -265,17 +263,35 @@ describe("the report's facts", () => {
         (d) => d.what === 'skill',
       )
     assert.deepEqual(discovery()?.sources, [])
-    const found = discovery(
-      new Map([
-        [one.key, facts('placed', 'elsewhere')],
-        [two.key, facts('placed')],
-        [three.key, facts('skill-dir')],
-      ]),
+    const uses = new Map([
+      // Two skills: only the checked one, x, counts.
+      [one.key, facts(['y', 'placed', 1], ['x', 'elsewhere', 3])],
+      // x from two sources: its first use counts.
+      [two.key, facts(['x', 'elsewhere', 9], ['x', 'skill-dir', 4])],
+      [three.key, facts(['x', 'skill-dir', 2])],
+      [four.key, facts(['plugin:x', 'placed', 2])],
+    ])
+    const labelled = discovery(uses)
+    assert.equal(labelled?.found.text, '3 of 4')
+    assert.deepEqual(
+      labelled?.sources,
+      [
+        { source: 'skill-dir', count: 1 },
+        { source: 'elsewhere', count: 1 },
+      ],
+      "a check with a label of its own doesn't name the skill, so its attempt counts in none",
     )
-    assert.equal(found?.found.text, '2 of 3')
-    assert.deepEqual(found?.sources, [
-      { source: 'placed', count: 2 },
+    four.assertions = check('pass')
+    const all = discovery(uses)
+    assert.deepEqual(all?.sources, [
+      { source: 'placed', count: 1 },
+      { source: 'skill-dir', count: 1 },
       { source: 'elsewhere', count: 1 },
     ])
+    assert.equal(
+      all?.sources.reduce((n, s) => n + s.count, 0),
+      all?.found.k,
+      'the sources sum to found',
+    )
   })
 })
