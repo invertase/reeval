@@ -375,7 +375,7 @@ export function claudeCodeCost(harnessMetadata: unknown) {
   return { usd, session: typeof meta?.sessionId === 'string' ? meta.sessionId : '' }
 }
 
-/** The sum of the turn's model calls' `cost.total`, which pi prices itself. */
+/** The sum of the turn's model calls' `cost.total`, priced by pi or billed by OpenRouter. */
 export function piCost(harnessMetadata: unknown) {
   const usd = usdIn((harnessMetadata as { pi?: { costUsd?: unknown } })?.pi?.costUsd)
   return usd === undefined ? undefined : { usd }

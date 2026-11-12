@@ -10,7 +10,11 @@ export type PiUsage = {
   cacheRead?: number
   cacheWrite?: number
   reasoning?: number
-  /** US dollars, from pi's own model prices. */
+  /**
+   * US dollars: pi's own model prices, or the provider's bill where it reports one (OpenRouter),
+   * which pi marks with `totalFromProvider`. Either is what pi says the call cost, so only
+   * `total` is read.
+   */
   cost?: { total?: number }
 }
 

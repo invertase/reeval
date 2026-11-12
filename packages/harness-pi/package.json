@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-pi",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": true,
   "description": "An AI SDK harness adapter for pi on its providers' API keys or a gateway, running pi --mode json in the sandbox",
   "license": "Apache-2.0",
