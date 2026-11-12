@@ -117,7 +117,7 @@ export function gatewayGlue(options: SandboxOptions) {
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
     if (event.type === 'dns') return
-    const ok = event.status === undefined || (event.status >= 200 && event.status <= 299)
+    const ok = event.status !== undefined && event.status >= 200 && event.status <= 299
     const request = {
       method: event.method,
       host: event.host,
