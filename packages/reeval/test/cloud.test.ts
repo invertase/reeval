@@ -220,6 +220,47 @@ describe("the run's pool", () => {
   })
 })
 
+describe('a run the service ended', () => {
+  for (const code of ['run_cancelled', 'run_deadline']) {
+    test(`a 409 ${code} stops the start for good, not as infra or a rate limit`, async () => {
+      const p = await service()
+      const { provider } = await inRun(on(p), () =>
+        openCloudPool(cloud(), { runId: `run-${code}`, root: process.cwd() }),
+      )
+      p.stopRun(code, 'The run starts no more VMs.')
+      const error = (await inRun(on(p), () =>
+        provider.start(new AbortController().signal, 600),
+      ).catch((e: Error) => e)) as Error
+      assert.equal(error.name, 'RunStopped')
+      assert.equal(provider.rateLimited(error), null)
+      assert.equal(
+        error.message,
+        `reeval ended the run, so it starts no more machines: 409 ${code}: The run starts no more VMs.`,
+      )
+    })
+  }
+
+  test('any other 409 fails the start as infra', async () => {
+    const p = await service()
+    const { provider } = await inRun(on(p), () =>
+      openCloudPool(cloud(), { runId: 'run-conflict', root: process.cwd() }),
+    )
+    p.stopRun('conflict', 'Something else.')
+    const error = (await inRun(on(p), () =>
+      provider.start(new AbortController().signal, 600),
+    ).catch((e: Error) => e)) as Error
+    assert.equal(error.name, 'InfraError')
+  })
+
+  test('waits out its refusals with no limit of its own', async () => {
+    const p = await service()
+    const { options } = await inRun(on(p), () =>
+      openCloudPool(cloud(), { runId: 'run-waits', root: process.cwd() }),
+    )
+    assert.equal(options.maxRateWaitMs, Number.POSITIVE_INFINITY)
+  })
+})
+
 describe('a token refused mid-run', () => {
   test('fails the start as infra, not as a rate limit', async () => {
     const p = await service()
@@ -376,6 +417,35 @@ evaluate('reaches', async (c) => {
       'reeval-run': name.split('-')[1],
       [VM_RUN_LABEL]: p.runId,
     })
+  })
+
+  test('waits on refused starts until the service ends the run, then records the attempt canceled', async () => {
+    const p = await service({ maxLive: 0 })
+    const dir = (await project('cloud-ended', files(''))).dir
+    const env = { [VM_URL]: p.url, [VM_TOKEN]: p.token }
+    // The service ends the run once it has refused a create, however long the attempt took to ask.
+    const stopping = setInterval(() => {
+      if (p.requests.some((q) => q.call === 'POST /vm/sandboxes' && q.status === 429)) {
+        p.stopRun('run_deadline', 'The run waited past its start deadline.')
+        clearInterval(stopping)
+      }
+    }, 20)
+    const run = await runCli(dir, ['run'], { env, timeoutMs: 90_000 }).finally(() =>
+      clearInterval(stopping),
+    )
+    const out = run.stdout + run.stderr
+    const { evals } = readRun(dir)
+    assert.equal(evals[0]?.error?.kind, 'aborted', JSON.stringify(evals[0]?.error))
+    assert.match(String(evals[0]?.error?.message), /409 run_deadline/)
+    const creates = p.requests.filter((q) => q.call === 'POST /vm/sandboxes')
+    assert.deepEqual(
+      [...new Set(creates.map((q) => q.status))],
+      [429, 409],
+      JSON.stringify(p.requests),
+    )
+    assert.equal(creates.filter((q) => q.status === 409).length, 1, 'no create after the 409')
+    assert.equal(p.starts(), 0)
+    assert.doesNotMatch(out, /boat/i)
   })
 
   test('stops the run with exit 2 without REEVAL_VM_URL and REEVAL_VM_TOKEN, naming both', async () => {

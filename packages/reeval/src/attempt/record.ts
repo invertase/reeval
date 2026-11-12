@@ -10,7 +10,7 @@ import { attemptKey, recordFileName } from '../ids.ts'
 import { modelCallEvents } from '../model-calls.ts'
 import { sandboxProvider } from '../options.ts'
 import { redactJson, redactSecrets, redactSplitSecrets } from '../redact.ts'
-import { InfraError, type Sandbox } from '../sandbox/index.ts'
+import { InfraError, RunStopped, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
@@ -27,6 +27,7 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
       ? { kind: 'timeout', message: 'The eval timed out' }
       : { kind: 'aborted', message: 'The run was canceled' }
   }
+  if (error instanceof RunStopped) return { kind: 'aborted', message }
   if (error instanceof InfraError) return { kind: 'infra', message }
   return { kind: 'assertion', message }
 }

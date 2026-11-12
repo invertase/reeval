@@ -4,7 +4,7 @@ import type { SecretWarning } from '../history/types.ts'
 import type { HarnessDescriptor, PlannedEgress, SandboxBase, SandboxDescriptor } from '../types.ts'
 import { sandboxKind } from './kinds.ts'
 import type { PreparedHost } from './tart-hosts.ts'
-import { InfraError, type Sandbox } from './types.ts'
+import { InfraError, RunStopped, type Sandbox } from './types.ts'
 
 export type SandboxOptions = {
   runId: string
@@ -47,11 +47,13 @@ export async function createSandbox(
   try {
     return await kind.create(descriptor, options)
   } catch (error) {
-    if (error instanceof InfraError || options.signal.aborted) throw error
+    if (error instanceof InfraError || error instanceof RunStopped || options.signal.aborted) {
+      throw error
+    }
     throw new InfraError(
       `Failed to create ${kind.provider(descriptor)} sandbox: ${(error as Error).message}`,
     )
   }
 }
 
-export { InfraError, type Sandbox }
+export { InfraError, RunStopped, type Sandbox }

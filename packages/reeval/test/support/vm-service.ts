@@ -34,6 +34,8 @@ export type FakeVmService = {
   starts(): number
   /** Ends the run, or its token expires: the token stops working. */
   end(): void
+  /** The service ends the run: every create after it is a final `409 code`. */
+  stopRun(code: string, message: string): void
   close(): Promise<void>
 }
 
@@ -81,6 +83,7 @@ export async function fakeVmService(
   let starts = 0
   let inFlight = 0
   let ended = false
+  let stopped: Answer | undefined
 
   const upstream = async (method: string, path: string, body?: unknown, headers = {}) => {
     const res = await fetch(`${boat.url}${path}`, {
@@ -156,6 +159,7 @@ export async function fakeVmService(
           .toLowerCase()
           .startsWith('reeval-run-')
       if (bad) return error(400, 'invalid_request', `Not a create body: ${JSON.stringify(b)}`)
+      if (stopped) return stopped
       const type = String(b.type ?? 'small')
       if (TYPES.indexOf(type) > TYPES.indexOf(c.maxType)) {
         return error(403, 'forbidden', `A run's VMs may be at most ${c.maxType}.`)
@@ -251,6 +255,9 @@ export async function fakeVmService(
     starts: () => starts,
     end() {
       ended = true
+    },
+    stopRun(code, message) {
+      stopped = error(409, code, message)
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   }

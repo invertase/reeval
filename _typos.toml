@@ -21,6 +21,8 @@ extend-ignore-re = [
   "\\bcancelled:",
   "\\bcancelled\\.ndjson\\b",
   "Web search cancelled",
+  # The VM service's error code for a run it ended.
+  "\\brun_cancelled\\b",
   # Not words: hashes, tokens, llhttp's error codes, and text cut short on purpose.
   "\\b[0-9a-f]{7,}\\b",
   "pypi-AgE\\S*",

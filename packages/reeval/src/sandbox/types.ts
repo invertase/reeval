@@ -98,3 +98,11 @@ export class InfraError extends Error {
     this.transient = options.transient ?? false
   }
 }
+
+/**
+ * The machine service ended the run: it starts no more machines for it, so an attempt waiting
+ * for one stops as a canceled run's does, rather than failing.
+ */
+export class RunStopped extends Error {
+  override name = 'RunStopped'
+}
