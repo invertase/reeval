@@ -6,6 +6,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net'
 import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { platformKey } from '../src/login/credentials.ts'
 import { runCli, tempDir } from './helpers.ts'
 
 const TOKEN = 'session-token-from-the-device-flow'
@@ -152,9 +153,9 @@ describe('reeval login, whoami and logout', () => {
       assert.equal(p.seen.filter((s) => s.path === '/api/auth/device/token').length, 3)
       const saved = JSON.parse(readFileSync(m.file, 'utf8'))
       assert.equal(saved.schemaVersion, 1)
-      assert.deepEqual(saved.logins[`${p.base}/`].user, USER)
-      assert.equal(saved.logins[`${p.base}/`].store, 'file')
-      assert.equal(saved.logins[`${p.base}/`].token, TOKEN)
+      assert.deepEqual(saved.logins[p.base].user, USER)
+      assert.equal(saved.logins[p.base].store, 'file')
+      assert.equal(saved.logins[p.base].token, TOKEN)
       if (process.platform !== 'win32') assert.equal(statSync(m.file).mode & 0o777, 0o600)
 
       const who = await runCli(dir, ['whoami'], { env: m.env })
@@ -207,7 +208,7 @@ describe('reeval login, whoami and logout', () => {
       assert.ok(!p.live.has(TOKEN), 'the first sign-in is revoked')
       assert.ok(p.live.has(`${TOKEN}-2`))
       const saved = JSON.parse(readFileSync(m.file, 'utf8'))
-      assert.equal(saved.logins[`${p.base}/`].token, `${TOKEN}-2`)
+      assert.equal(saved.logins[p.base].token, `${TOKEN}-2`)
     } finally {
       await p.close()
     }
@@ -246,8 +247,8 @@ esac
       assert.equal(login.code, 0, login.stdout + login.stderr)
       assert.match(login.stdout, /the token is in the Secret Service keyring/)
       const saved = JSON.parse(readFileSync(m.file, 'utf8'))
-      assert.equal(saved.logins[`${p.base}/`].store, 'keychain')
-      assert.equal(saved.logins[`${p.base}/`].token, undefined, 'no token in the file')
+      assert.equal(saved.logins[p.base].store, 'keychain')
+      assert.equal(saved.logins[p.base].token, undefined, 'no token in the file')
       assert.ok(!readFileSync(m.file, 'utf8').includes(TOKEN))
       const who = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(who.code, 0, who.stdout + who.stderr)
@@ -258,6 +259,9 @@ esac
       const argv = readFileSync(log, 'utf8')
       assert.match(argv, /^store /m)
       assert.match(argv, /^clear /m)
+      for (const line of argv.trim().split('\n')) {
+        assert.ok(line.endsWith(`account ${p.base}`), `keyed by the bare origin: ${line}`)
+      }
       assert.ok(!argv.includes(TOKEN), 'the token never reaches a command line')
       const lookup = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(lookup.code, 2)
@@ -280,6 +284,40 @@ esac
     }
   })
 
+  test('every spelling of REEVAL_CLOUD_URL is one sign-in, keyed by the bare origin', async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(`${p.base}/`)
+      const dir = tempDir('login-cwd')
+      const login = await runCli(dir, ['login'], { env: m.env })
+      assert.equal(login.code, 0, login.stdout + login.stderr)
+      assert.deepEqual(Object.keys(JSON.parse(readFileSync(m.file, 'utf8')).logins), [p.base])
+      const upper = p.base.replace('http://', 'HTTP://')
+      for (const url of [p.base, upper, `${upper}/`]) {
+        const who = await runCli(dir, ['whoami'], { env: { ...m.env, REEVAL_CLOUD_URL: url } })
+        assert.equal(who.code, 0, `${url}: ${who.stdout}${who.stderr}`)
+      }
+      const out = await runCli(dir, ['logout'], { env: { ...m.env, REEVAL_CLOUD_URL: upper } })
+      assert.match(out.stdout, /Signed out of /)
+      assert.ok(!existsSync(m.file), 'logout under another spelling removes the sign-in')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('platformKey is the bare origin of any spelling of the URL', () => {
+    for (const url of [
+      'https://cloud.reeval.ai',
+      'https://cloud.reeval.ai/',
+      'HTTPS://Cloud.Reeval.AI:443/',
+      'https://cloud.reeval.ai/some/path?q=1#x',
+      new URL('https://cloud.reeval.ai/'),
+    ]) {
+      assert.equal(platformKey(url), 'https://cloud.reeval.ai', String(url))
+    }
+    assert.equal(platformKey('http://127.0.0.1:8787/'), 'http://127.0.0.1:8787')
+  })
+
   test('falls back to the file when the keychain refuses the token', async () => {
     const p = await platform({ pending: 0 })
     try {
@@ -296,7 +334,7 @@ esac
       const login = await runCli(tempDir('login-cwd'), ['login'], { env: m.env })
       assert.equal(login.code, 0, login.stdout + login.stderr)
       assert.match(login.stdout, /the token is in .*credentials\.json/)
-      assert.equal(JSON.parse(readFileSync(m.file, 'utf8')).logins[`${p.base}/`].token, TOKEN)
+      assert.equal(JSON.parse(readFileSync(m.file, 'utf8')).logins[p.base].token, TOKEN)
     } finally {
       await p.close()
     }

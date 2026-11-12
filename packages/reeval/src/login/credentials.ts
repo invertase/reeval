@@ -64,18 +64,21 @@ async function writeCredentials(doc: CredentialsFile, env: NodeJS.ProcessEnv): P
   await rename(partial, file)
 }
 
-/** The platform's key in the file and the keychain: its URL with a trailing `/`. */
-const keyOf = (base: URL) => base.href
+/**
+ * The platform's key in the file and the keychain: its URL's bare origin (`https://cloud.reeval.ai`),
+ * so every spelling of the URL (a trailing `/`, a path, upper case, a default port) is one sign-in.
+ */
+export const platformKey = (base: URL | string) => new URL(base).origin
 
 /** The sign-in `reeval login` stored for the platform, with its token (null when it's gone). */
 export async function storedLogin(
   base: URL,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ login: StoredLogin; token: string | null } | null> {
-  const login = (await readCredentials(env)).logins[keyOf(base)]
+  const login = (await readCredentials(env)).logins[platformKey(base)]
   if (!login) return null
   if (login.store === 'file') return { login, token: login.token || null }
-  return { login, token: (await keychain(env)?.get(keyOf(base))) ?? null }
+  return { login, token: (await keychain(env)?.get(platformKey(base))) ?? null }
 }
 
 /**
@@ -89,7 +92,7 @@ export async function saveLogin(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string> {
   const doc = await readCredentials(env)
-  const key = keyOf(base)
+  const key = platformKey(base)
   const chain = keychain(env)
   const kept = chain && (await chain.set(key, token)) && (await chain.get(key)) === token
   if (chain && !kept) await chain.delete(key)
@@ -106,7 +109,7 @@ export async function saveLogin(
 /** Removes the platform's sign-in from the file and the keychain. */
 export async function removeLogin(base: URL, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const doc = await readCredentials(env)
-  const key = keyOf(base)
+  const key = platformKey(base)
   const login = doc.logins[key]
   if (login?.store === 'keychain') await keychain(env)?.delete(key)
   delete doc.logins[key]
@@ -139,6 +142,6 @@ export async function cloudToken(
   }
   const stored = await storedLogin(base, env)
   if (!stored?.token) return null
-  checkToken(stored.token, `The token reeval login stored for ${base.href}`)
+  checkToken(stored.token, `The token reeval login stored for ${platformKey(base)}`)
   return { token: stored.token, from: stored.login.store }
 }
