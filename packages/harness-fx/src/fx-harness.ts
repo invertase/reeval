@@ -9,12 +9,12 @@ import { FX_BUILTIN_TOOLS, type FxBuiltinTools } from './fx-tools.ts'
 
 export const FX_HARNESS_ID = 'fx'
 /** The fx release the bootstrap installs, checked against its published sha256s. */
-export const FX_CLI_VERSION = '0.0.14'
+export const FX_CLI_VERSION = '0.0.16'
 /** Linux's build for each arch, and macOS's for Apple Silicon (a Tart VM). */
 export const FX_CLI_SHA256 = {
-  x86_64: '731c1914fc2d497a10583f4416f8382c192e4897d6a0b4f713d6194455a8548b',
-  aarch64: '9f5cfbac1728fffddc2d5d874d1f7fe8d34f179e1bc86fb2e67a6e75074e53f3',
-  'darwin-aarch64': '619c6dccf4e8cd6290ec4a052d29c8724b2a4b150d893435b3de9086c21fb7b1',
+  x86_64: 'f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599',
+  aarch64: 'ca9441b104357e2105039dbfd4c2eaf0d6ee65a84085f23f51e880c95cbf46af',
+  'darwin-aarch64': '2158a8d42e77457a774400d225d9802bb6c0e60a0bb0674a1116bc31252490d6',
 } as const
 
 /**
@@ -208,7 +208,7 @@ ${FX_LAUNCH}FX_LAUNCH
 chmod +x "$HOME/.local/bin/fx-acp"`
 
 const relayUrl = `http://127.0.0.1:${FX_RELAY_PORT}`
-/** AI Gateway's language-model path, where fx 0.0.14 sends each model call. */
+/** AI Gateway's language-model path, where fx 0.0.16 sends each model call. */
 export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 
 export type FxHarnessSettings = {

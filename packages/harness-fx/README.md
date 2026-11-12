@@ -22,7 +22,7 @@ const agent = new HarnessAgent({
 
 ## How it works
 
-- **Bootstrap.** Downloads the fx 0.0.14 release for x86_64 or aarch64 Linux, checks its sha256,
+- **Bootstrap.** Downloads the fx 0.0.16 release for x86_64 or aarch64 Linux, checks its sha256,
   and puts `fx` in a private home under the bootstrap directory.
 - **Model.** A gateway id (`anthropic/claude-sonnet-5`) runs on fx's `gateway` provider with
   `AI_GATEWAY_API_KEY`. A bare OpenAI id (`gpt-5.5`) runs on an fx configured provider,

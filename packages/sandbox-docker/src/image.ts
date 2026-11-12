@@ -122,7 +122,7 @@ export const HARNESS_PACKAGES: Record<
   },
   fx: {
     name: '@reeval/harness-fx',
-    version: '0.1.11',
+    version: '0.1.12',
     bootstrap: {
       name: 'fx',
       cli: 'fx',
