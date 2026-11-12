@@ -8,11 +8,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { run } from '@reeval/sandbox-docker/process'
+import { retryAtOf } from '@reeval/vm-api'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import { hostEnv } from '../secrets-file.ts'
 import type { DaytonaSandboxDescriptor, DaytonaSize, HarnessDescriptor } from '../types.ts'
-import { retryAfterMs, runLabels } from './boat.ts'
+import { runLabels } from './boat.ts'
 import { daytonaImage } from './daytona-image.ts'
 import type { SandboxOptions } from './index.ts'
 import type { DoctorContext } from './kinds.ts'
@@ -172,6 +173,13 @@ export class DaytonaRateLimited extends Error {
     this.name = 'DaytonaRateLimited'
     this.retryAfterMs = retryAfterMs
   }
+}
+
+/** How long a 429 asks to wait, from its `Retry-After` or the time its message names, else null. */
+function retryAfterMs(header: string | null, message: string): number | null {
+  const now = Date.now()
+  const at = retryAtOf(undefined, header, message, now)
+  return at === undefined ? null : at - now
 }
 
 const rateLimited = (error: unknown, what: string) =>

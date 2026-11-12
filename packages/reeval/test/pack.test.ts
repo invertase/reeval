@@ -514,11 +514,30 @@ test('the packed package installs into a clean project and runs reeval', {
     appPaths.some((f) => /^assets\/.+\.js$/.test(f)),
     appPaths.join(', '),
   )
+  // Each adapter's declarations take its SDK's types; nothing else names either SDK.
   for (const file of code) {
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
-    assert.doesNotMatch(source(file), /\bfrom\s*['"]@boatdev\//, `${file} imports the Boat SDK`)
-    assert.doesNotMatch(source(file), /\bfrom\s*['"]@daytona\//, `${file} imports Daytona's SDK`)
+    if (file !== 'internal/vm-api/boat.d.ts')
+      assert.doesNotMatch(
+        source(file),
+        /(?:\bfrom\s*|\bimport\(\s*)['"]@boatdev\//,
+        `${file} imports the Boat SDK`,
+      )
+    if (file !== 'internal/vm-api/daytona.d.ts')
+      assert.doesNotMatch(
+        source(file),
+        /(?:\bfrom\s*|\bimport\(\s*)['"]@daytona\//,
+        `${file} imports Daytona's SDK`,
+      )
   }
+  assert.match(
+    source('internal/vm-api/boat.d.ts'),
+    /^import (?:type )?\{[^}]*\} from "@boatdev\/sdk";$/m,
+  )
+  assert.match(
+    source('internal/vm-api/daytona.d.ts'),
+    /^import (?:type )?\{[^}]*\} from "@daytona\/sdk";$/m,
+  )
   const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
     (m) => m[1] as string,
   )

@@ -188,22 +188,15 @@ const time = (value: unknown): number | null => {
   return Number.isFinite(t) && t > 0 ? t : null
 }
 
-type BoatListing = {
-  listSavedSnapshots(): Promise<{
-    snapshots: Array<{ name: string; status: string; sizeBytes?: number; createdAt?: unknown }>
-  }>
-  deleteSavedSnapshot(p: { name: string }): Promise<unknown>
-}
-
 /** The snapshots under `account`'s image prefix. */
 export async function listVmSnapshots(account: VmAccount, root: string): Promise<VmSnapshot[]> {
   const { sandbox } = account
   const base = { provider: account.provider, account: sandbox.apiKey.from, prefix: sandbox.prefix }
   if (account.provider === 'boat') {
     const boat = await import('./boat.ts')
-    const api = (await boat.boatClient(sandbox, root)) as unknown as BoatListing
-    const { snapshots } = await api.listSavedSnapshots().catch(async (error: unknown) => {
-      throw new InfraError(`Boat didn't list its saved snapshots: ${await boat.boatError(error)}`)
+    const api = await boat.boatClient(sandbox, root)
+    const snapshots = await api.savedSnapshots.list().catch((error: unknown) => {
+      throw new InfraError(`Boat didn't list its saved snapshots: ${boat.boatError(error)}`)
     })
     return snapshots
       .filter((s) => isImageName(sandbox.prefix, s.name))
@@ -247,12 +240,9 @@ export async function deleteVmSnapshot(
 ): Promise<void> {
   if (account.provider === 'boat') {
     const boat = await import('./boat.ts')
-    const api = (await boat.boatClient(account.sandbox, root)) as unknown as BoatListing
-    await api.deleteSavedSnapshot({ name: snapshot.name }).catch(async (error: unknown) => {
-      if ((error as { response?: Response }).response?.status === 404) return
-      throw new InfraError(
-        `Boat didn't delete snapshot ${snapshot.name}: ${await boat.boatError(error)}`,
-      )
+    const api = await boat.boatClient(account.sandbox, root)
+    await api.savedSnapshots.remove(snapshot.name).catch((error: unknown) => {
+      throw new InfraError(`Boat didn't delete snapshot ${snapshot.name}: ${boat.boatError(error)}`)
     })
   } else {
     const { daytonaClient } = await import('./daytona.ts')

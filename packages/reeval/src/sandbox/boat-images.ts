@@ -6,6 +6,8 @@ import { createHash, randomBytes } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { docker, dockerfileTag, isTransient, type RemoteEngine } from '@reeval/sandbox-docker'
+import { VmApiError } from '@reeval/vm-api'
+import type { BoatSavedSnapshot } from '@reeval/vm-api/boat'
 import { pluginBuildId } from '../environment/plugins.ts'
 import type {
   BoatSandboxDescriptor,
@@ -13,14 +15,7 @@ import type {
   HarnessDescriptor,
   PluginSource,
 } from '../types.ts'
-import {
-  type BoatClient,
-  boatError,
-  deleteSandbox,
-  deleteUntilGone,
-  startVm,
-  type VmService,
-} from './boat.ts'
+import { type BoatClient, boatError, deleteUntilGone, startVm, type VmService } from './boat.ts'
 import { sandboxLabels } from './labels.ts'
 import { createBuilds, imageHarness, pluginBuildSpec, prepareImage } from './prepare.ts'
 import { type PrepareContext, PrepareError } from './provider.ts'
@@ -64,18 +59,9 @@ const SAVE_TIMEOUT_MS = 10 * 60_000
 /** How long to wait on a snapshot another run is saving. */
 const SETTLE_TIMEOUT_MS = 15 * 60_000
 
-type Saved = { name: string; status: string; error?: string; sizeBytes?: number }
+type Saved = BoatSavedSnapshot
 
-/** The saved-snapshot calls reeval makes, beside {@link BoatClient}'s. */
-export type BoatSnapshotClient = BoatClient & {
-  getSavedSnapshot(p: { name: string }): Promise<{ snapshot: Saved }>
-  saveSavedSnapshot(p: {
-    savedSnapshotSaveRequest: { sandboxId: string; name: string }
-  }): Promise<{ snapshot: Saved }>
-  deleteSavedSnapshot(p: { name: string }): Promise<unknown>
-}
-
-const status = (error: unknown) => (error as { response?: Response }).response?.status
+const status = (error: unknown) => (error instanceof VmApiError ? error.status : undefined)
 
 const refusal = (message: string, ref: string | null, usage = true) =>
   new PrepareError({
@@ -154,12 +140,11 @@ export async function vmImageKey(
   return { key, pinned }
 }
 
-async function savedSnapshot(api: BoatSnapshotClient, name: string): Promise<Saved | null> {
+async function savedSnapshot(api: BoatClient, name: string): Promise<Saved | null> {
   try {
-    return (await api.getSavedSnapshot({ name })).snapshot
+    return await api.savedSnapshots.get(name)
   } catch (error) {
-    if (status(error) === 404) return null
-    throw new InfraError(`Boat didn't report snapshot ${name}: ${await boatError(error)}`)
+    throw new InfraError(`Boat didn't report snapshot ${name}: ${boatError(error)}`)
   }
 }
 
@@ -177,7 +162,7 @@ const sleep = (ms: number, signal: AbortSignal) =>
 
 /** The snapshot named `name` once it isn't `saving`, or null when there's none. */
 async function settled(
-  api: BoatSnapshotClient,
+  api: BoatClient,
   name: string,
   signal: AbortSignal,
   o: { timeoutMs: number; pollMs: number },
@@ -231,7 +216,7 @@ export type BoatImageTimings = { pollMs?: number; saveTimeoutMs?: number; settle
  */
 export async function boatImage(
   service: VmService,
-  api: BoatSnapshotClient,
+  api: BoatClient,
   sandbox: BoatSandboxDescriptor,
   recipe: ImageRecipe,
   harness: HarnessDescriptor,
@@ -387,7 +372,7 @@ export async function boatImage(
     }
   } finally {
     if (
-      !(await deleteSandbox(api, vm.id).then(
+      !(await api.remove(vm.id).then(
         () => true,
         () => false,
       ))
@@ -405,12 +390,11 @@ const KEY_LABEL = 'reeval.vm-image.key'
 const keepContainer = (key: string) => `reeval-keep-${key.slice(0, 12)}`
 
 /** Deletes the saved snapshot `name`; one that's already gone is fine. */
-async function deleteSnapshot(api: BoatSnapshotClient, name: string): Promise<void> {
+async function deleteSnapshot(api: BoatClient, name: string): Promise<void> {
   try {
-    await api.deleteSavedSnapshot({ name })
+    await api.savedSnapshots.remove(name)
   } catch (error) {
-    if (status(error) === 404) return
-    throw new InfraError(`Boat didn't delete snapshot ${name}: ${await boatError(error)}`)
+    throw new InfraError(`Boat didn't delete snapshot ${name}: ${boatError(error)}`)
   }
 }
 
@@ -420,17 +404,17 @@ async function deleteSnapshot(api: BoatSnapshotClient, name: string): Promise<vo
  * then `taken`, with that save once it's ready.
  */
 async function save(
-  api: BoatSnapshotClient,
+  api: BoatClient,
   sandboxId: string,
   name: string,
   signal: AbortSignal,
   o: { pollMs: number; timeoutMs: number },
 ): Promise<{ saved: Saved } | { taken: Saved }> {
   try {
-    await api.saveSavedSnapshot({ savedSnapshotSaveRequest: { sandboxId, name } })
+    await api.savedSnapshots.save(sandboxId, name)
   } catch (error) {
-    const why = await boatError(error)
-    if (status(error) === 409 && why.startsWith('409 save_in_progress')) {
+    const why = boatError(error)
+    if (error instanceof VmApiError && error.code === 'save_in_progress') {
       const other = await settled(api, name, signal, o)
       if (other?.status === 'ready') return { taken: other }
       if (other) await deleteSnapshot(api, name)

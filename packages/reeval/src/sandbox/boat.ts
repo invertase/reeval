@@ -1,11 +1,22 @@
-// boat.dev VMs as sandboxes: the Boat SDK (an optional peer, imported only here) creates and deletes
-// them, and every process runs over SSH with a per-attempt key, the egress gateway's forwarder
-// included, so credentials stay on the host as they do for Docker.
+// boat.dev VMs as sandboxes: Boat's API (@reeval/vm-api, over @boatdev/sdk) creates and deletes them, and
+// every process runs over SSH with a per-attempt key, the egress gateway's forwarder included, so
+// credentials stay on the host as they do for Docker.
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { connect, isIPv6 } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as BoatSdkModule from '@boatdev/sdk'
+import {
+  removeUntilGone,
+  type SshRoute,
+  VmApiError,
+  type VmInfo,
+  type VmLimits,
+  VmNotReady,
+  waitReady,
+} from '@reeval/vm-api'
+import { type BoatVmApi, boatApi } from '@reeval/vm-api/boat'
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import { hostEnv } from '../secrets-file.ts'
@@ -27,7 +38,6 @@ import {
 } from './ssh-pool.ts'
 import { InfraError, MachineReclaimed, type NetworkSandbox, RunStopped } from './types.ts'
 
-export const BOAT_SDK = '@boatdev/sdk'
 export const BOAT_BASE_URL = 'BOAT_BASE_URL'
 
 /**
@@ -112,79 +122,13 @@ const boatSpec = (sandbox: BoatSandboxDescriptor): VmSpec => ({
   }),
 })
 
-/** What reeval reads of a sandbox, typed here so no SDK type reaches reeval's own. */
-type BoatSandboxInfo = {
-  id: string
-  name: string
-  state: string
-  error?: string | null
-  /** How long it lives from its last create or PATCH, as the service granted it. */
-  ttlSeconds?: number | null
-}
+/** The Boat calls reeval makes: {@link boatApi}'s. */
+export type BoatClient = BoatVmApi
 
-/** What Boat answers when it authorizes a key: the user, the host key and where sshd answers. */
-type BoatSshReply = {
-  sshUser?: string
-  /** The VM's own address, whose sshd is on port 22: IPv6 on Boat's hosts. */
-  machineIp?: string | null
-  /** `<public IPv4>:<port>`, forwarded to the VM's sshd, when it has no public IPv4 of its own. */
-  sshEndpoint?: string | null
-  hostKey?: string
-}
+export const BOAT_SDK = '@boatdev/sdk'
 
-/** The SDK calls reeval makes. */
-export type BoatClient = {
-  create(p: {
-    idempotencyKey?: string
-    createSandboxRequest: {
-      type: string
-      name: string
-      ttlSeconds: number
-      noEnv: boolean
-      snapshots: boolean
-      monitoring: boolean
-      labels: Record<string, string>
-      /** A saved snapshot to start from. */
-      from?: string
-    }
-  }): Promise<{ sandbox: BoatSandboxInfo; ttlSeconds?: number | null }>
-  get(p: { sandboxId: string }): Promise<{ sandbox: BoatSandboxInfo }>
-  sshKey(p: { sandboxId: string; sshKeyRequest: { key: string } }): Promise<BoatSshReply>
-  sandboxes(
-    p: { namePrefix?: string; limit?: number; cursor?: string },
-    init?: { signal?: AbortSignal },
-  ): Promise<{
-    sandboxes: BoatSandboxInfo[]
-    pageInfo?: { nextCursor: string | null; hasMore: boolean }
-  }>
-  update(p: {
-    sandboxId: string
-    updateSandboxRequest: { ttlSeconds: number }
-  }): Promise<{ sandbox?: BoatSandboxInfo }>
-  deleteSandbox(
-    p: { sandboxId: string; xAsciiConfirmDelete: string },
-    init?: { signal?: AbortSignal },
-  ): Promise<unknown>
-  /** `/limits` with its raw response: the client's model drops the fields it doesn't know. */
-  limitsRaw(
-    p: Record<string, never>,
-    init?: { signal?: AbortSignal },
-  ): Promise<{
-    raw: Response
-    value(): Promise<{
-      canStart: boolean
-      startBlockedReason?: string
-      activeSandboxes: number
-      maxActiveSandboxes: number
-      machineTypes?: Array<{ type: string; available: boolean; reason: string | null }>
-    }>
-  }>
-}
-
-export type BoatSdk = {
-  BoatApi: new (configuration: unknown) => BoatClient
-  Configuration: new (p: { basePath?: string; accessToken?: string }) => unknown
-}
+/** The part of the Boat SDK reeval constructs; {@link boatApi} makes the calls. */
+export type BoatSdk = Pick<typeof BoatSdkModule, 'BoatApi' | 'Configuration'>
 
 /** The fix for a project without the SDK. */
 export const INSTALL_SDK = `Install the Boat SDK in this project: npm i ${BOAT_SDK}`
@@ -197,6 +141,15 @@ export const loadBoatSdk = optionalPeer<BoatSdk>(BOAT_SDK, {
   stage: 'boat',
   message: `boat() needs the Boat SDK, which isn't installed. ${INSTALL_SDK}`,
 })
+
+/** `sdk`'s client at `basePath` (the SDK's own unless set) as reeval's {@link BoatClient}. */
+export const boatClientOf = (sdk: BoatSdk, accessToken: string, basePath?: string): BoatClient =>
+  boatApi(
+    new sdk.BoatApi(new sdk.Configuration({ accessToken, ...(basePath ? { basePath } : {}) })),
+  )
+
+const boatClientOrNull = (sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>) =>
+  boatClient(sandbox).catch(() => null)
 
 /** Why `sandbox`'s key can't be read from this process's environment, or null. */
 export function boatKeyProblem(sandbox: Pick<BoatSandboxDescriptor, 'apiKey'>): string | null {
@@ -226,44 +179,20 @@ export async function boatClient(
       message: `${problem}. Set it in the environment or the project's .env.local.`,
     })
   }
-  const { BoatApi, Configuration } = await loadBoatSdk(projectRoot)
-  const basePath = process.env[BOAT_BASE_URL]
-  const accessToken = hostEnv()[sandbox.apiKey.from]
+  const sdk = await loadBoatSdk(projectRoot)
+  const accessToken = hostEnv()[sandbox.apiKey.from] as string
   // A variable whose name doesn't look secret (`BOAT_PROD`) isn't masked by name.
   registerSecret(accessToken)
-  return new BoatApi(
-    new Configuration({
-      accessToken,
-      ...(basePath ? { basePath } : {}),
-    }),
-  )
+  return boatClientOf(sdk, accessToken, process.env[BOAT_BASE_URL])
 }
 
 /** What Boat said about a failed call: `404 not_found: …`, or the error's own message. */
-export async function boatError(error: unknown): Promise<string> {
-  return (await boatAnswer(error)).why
+export function boatError(error: unknown): string {
+  if (error instanceof VmApiError) return error.detail
+  return error instanceof Error ? error.message : String(error)
 }
 
-/** {@link boatError}'s text, and the error code the body named, if it named one. */
-async function boatAnswer(error: unknown): Promise<{ why: string; code: string | null }> {
-  const response = (error as { response?: Response }).response
-  if (!response) return { why: error instanceof Error ? error.message : String(error), code: null }
-  const body = await response.text().catch(() => '')
-  let detail = body.slice(0, 300)
-  let code: string | null = null
-  try {
-    const parsed = JSON.parse(body) as { error?: { code?: string; message?: string } | string }
-    const e = parsed.error
-    if (typeof e === 'string') detail = e
-    else if (e) {
-      detail = [e.code, e.message].filter(Boolean).join(': ')
-      code = typeof e.code === 'string' ? e.code : null
-    }
-  } catch {}
-  return { why: `${response.status}${detail ? ` ${detail}` : ''}`, code }
-}
-
-const status = (error: unknown) => (error as { response?: Response }).response?.status
+const status = (error: unknown) => (error instanceof VmApiError ? error.status : undefined)
 
 /**
  * The attempt can't finish on a machine granted `granted` seconds of the `asked` it asked for,
@@ -279,8 +208,8 @@ function tooShort(service: VmService, id: string, asked: number, granted?: numbe
 }
 
 /** `error` from `doing` as an attempt's infra error, a refused credential saying so. */
-async function serviceFailed(service: VmService, error: unknown, doing: string, why?: string) {
-  why ??= await boatError(error)
+function serviceFailed(service: VmService, error: unknown, doing: string, why?: string) {
+  why ??= boatError(error)
   if (status(error) === 401) {
     return new InfraError(
       `${service.name} refused ${service.credential}${service.expiry ?? ''}: ${why}`,
@@ -309,111 +238,33 @@ const READY_TIMEOUT_MS = 120_000
 const LIMITS_TIMEOUT_MS = 15_000
 /** How long a run's cleanup may wait on one account, so an unreachable API can't stall a resume. */
 const CLEANUP_TIMEOUT_MS = 15_000
-/** Boat's states a sandbox never leaves for `ready`; 'cancelled' answers 404 after it's reported. */
-export const DEAD_STATES = ['archived', 'archiving', 'error', 'cancelled']
 /**
  * How long reeval keeps deleting a sandbox that never got ready: Boat can drop a delete sent while
  * it provisions and bring the VM up idle minutes later.
  */
 const UNREADY_DELETE_MS = 10 * 60_000
 
-async function untilReady(
-  service: VmService,
-  api: BoatClient,
-  id: string,
-  signal: AbortSignal,
-): Promise<BoatSandboxInfo> {
-  const deadline = Date.now() + READY_TIMEOUT_MS
-  for (;;) {
-    const { sandbox } = await api.get({ sandboxId: id }).catch(async (error: unknown) => {
-      throw await serviceFailed(service, error, `didn't report sandbox ${id}`)
-    })
-    if (['ready', 'idle', 'running'].includes(sandbox.state)) return sandbox
-    if (DEAD_STATES.includes(sandbox.state)) {
-      throw new InfraError(
-        `${service.name} sandbox ${id} stopped starting: ${sandbox.state}${sandbox.error ? ` (${sandbox.error})` : ''}`,
-      )
-    }
-    if (Date.now() > deadline) {
-      throw new InfraError(
-        `${service.name} sandbox ${id} wasn't ready after ${READY_TIMEOUT_MS / 1000}s (still ${sandbox.state})`,
-      )
-    }
-    if (signal.aborted) throw signal.reason
-    await new Promise((resolve) => setTimeout(resolve, 300))
-  }
-}
-
-/** Deletes a sandbox; one already gone is deleted. */
-export async function deleteSandbox(
-  api: BoatClient,
-  id: string,
-  signal?: AbortSignal,
-): Promise<void> {
+async function untilReady(service: VmService, api: BoatClient, id: string, signal: AbortSignal) {
   try {
-    await api.deleteSandbox({ sandboxId: id, xAsciiConfirmDelete: id }, { signal })
+    return await waitReady(api, id, { timeoutMs: READY_TIMEOUT_MS, signal })
   } catch (error) {
-    if (status(error) !== 404) throw error
+    if (error instanceof VmNotReady) throw new InfraError(`${service.name} ${error.message}`)
+    if (signal.aborted) throw error
+    throw serviceFailed(service, error, `didn't report sandbox ${id}`)
   }
 }
 
 /**
- * Deletes a sandbox that never got ready, sending the delete again every `redeleteMs` until Boat
- * answers 404 or reports one of {@link DEAD_STATES}, for at most `deadlineMs`. Once `signal` is
- * aborted it sends the delete once and stops: a canceled run's `cleanupRun` and the sandbox's TTL
- * take it from there, so the cancel doesn't wait on Boat. Whether it went.
+ * Deletes a sandbox that never got ready, sending the delete again until Boat answers 404 or
+ * reports a dead state, for at most 10 minutes. Once `signal` is aborted it sends the delete once
+ * and stops: a canceled run's `cleanupRun` and the sandbox's TTL take it from there, so the cancel
+ * doesn't wait on Boat. Whether it went.
  */
-export async function deleteUntilGone(
+export const deleteUntilGone = (
   api: BoatClient,
   id: string,
-  o: { deadlineMs?: number; pollMs?: number; redeleteMs?: number; signal?: AbortSignal } = {},
-): Promise<boolean> {
-  const until = Date.now() + (o.deadlineMs ?? UNREADY_DELETE_MS)
-  const pollMs = o.pollMs ?? 5_000
-  const redeleteMs = o.redeleteMs ?? 30_000
-  let deletedAt = Number.NEGATIVE_INFINITY
-  for (;;) {
-    if (Date.now() - deletedAt >= redeleteMs) {
-      await deleteSandbox(api, id).catch(() => {})
-      deletedAt = Date.now()
-    }
-    if (o.signal?.aborted) return false
-    const state = await api.get({ sandboxId: id }).then(
-      ({ sandbox }) => sandbox.state,
-      (error: unknown) => (status(error) === 404 ? null : 'unknown'),
-    )
-    if (state === null || DEAD_STATES.includes(state)) return true
-    if (Date.now() >= until || o.signal?.aborted) return false
-    await new Promise<void>((resolve) => {
-      const done = () => {
-        clearTimeout(timer)
-        o.signal?.removeEventListener('abort', done)
-        resolve()
-      }
-      const timer = setTimeout(done, pollMs)
-      o.signal?.addEventListener('abort', done, { once: true })
-    })
-  }
-}
-
-/** A host and port the attempt's SSH connection can take to the VM's sshd. */
-type SshRoute = { host: string; port: number; via: 'machine address' | 'public endpoint' }
-
-/**
- * Where a sandbox's sshd answers, best first: the VM's own address on port 22, then the public
- * endpoint Boat forwards. The address is IPv6, which a host without IPv6 can't reach; the endpoint
- * is NAT'd, which another VM on the same Boat host can't reach.
- */
-export function sshRoutes(reply: BoatSshReply): SshRoute[] {
-  const routes: SshRoute[] = []
-  if (reply.machineIp) routes.push({ host: reply.machineIp, port: 22, via: 'machine address' })
-  const endpoint = /^(.+):(\d+)$/.exec(reply.sshEndpoint ?? '')
-  if (endpoint) {
-    const host = (endpoint[1] as string).replace(/^\[(.*)\]$/, '$1')
-    routes.push({ host, port: Number(endpoint[2]), via: 'public endpoint' })
-  }
-  return routes
-}
+  o: { signal?: AbortSignal } = {},
+): Promise<boolean> => removeUntilGone(api, id, { deadlineMs: UNREADY_DELETE_MS, ...o })
 
 const routeLabel = (r: SshRoute) =>
   `${isIPv6(r.host) ? `[${r.host}]` : r.host}:${r.port} (${r.via})`
@@ -487,38 +338,6 @@ export class BoatRateLimited extends Error {
 }
 
 /**
- * How long a 429 asks to wait: its `Retry-After` (seconds, or an HTTP date), else the time its
- * message names (`… again at 14:05 UTC`), else null.
- */
-export function retryAfterMs(
-  header: string | null,
-  message: string,
-  now = Date.now(),
-): number | null {
-  if (header) {
-    const seconds = Number(header)
-    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000)
-    const at = Date.parse(header)
-    if (Number.isFinite(at)) return Math.max(0, at - now)
-  }
-  const named = /\b(\d{1,2}):(\d{2})(?::(\d{2}))? ?UTC\b/.exec(message)
-  if (named) {
-    const day = new Date(now)
-    let at = Date.UTC(
-      day.getUTCFullYear(),
-      day.getUTCMonth(),
-      day.getUTCDate(),
-      Number(named[1]),
-      Number(named[2]),
-      Number(named[3] ?? 0),
-    )
-    if (at < now) at += 86_400_000
-    return at - now
-  }
-  return null
-}
-
-/**
  * A pool on the account: Boat's start caps (the paid ceilings when the account pays for starts
  * past its plan), less the hour's starts already made, and the machines it would still run, are
  * the account's limits; `maxConcurrent` caps the pool's own machines.
@@ -544,16 +363,15 @@ export async function openVmPool(
   const limits = await readLimits(service, api)
   const spec = laidOut(service, asked, limits)
   const k = spec.attemptsPerMachine ?? 1
-  const free = limits ? Math.max(1, limits.maxActiveSandboxes - limits.activeSandboxes) : 1
-  const caps = limits?.startLimitsWithWallet ?? limits?.startLimits
-  const hourUsed = limits?.starts?.hour?.used ?? 0
-  const left = caps?.perHour === undefined ? null : caps.perHour - hourUsed
+  const free = limits ? Math.max(1, limits.maxLive - limits.live) : 1
+  const hourUsed = limits?.startsThisHour ?? 0
+  const left = limits?.startsPerHour === undefined ? null : limits.startsPerHour - hourUsed
   return {
     provider: vmPoolProvider(service, spec, api, runId),
     options: {
       limits: {
         machines: free,
-        startsPerMinute: caps?.perMinute ?? null,
+        startsPerMinute: limits?.startsPerMinute ?? null,
         ...(service.starts === 'per run'
           ? { startsPerHour: null, starts: left === null ? null : Math.max(0, left) }
           : { startsPerHour: left === null ? null : Math.max(1, left) }),
@@ -571,23 +389,16 @@ function laidOut(service: VmService, spec: VmSpec, limits: { layout?: unknown } 
   return (limits?.layout !== undefined && service.laidOut?.(spec, limits.layout)) || spec
 }
 
-/** The account's `/limits`, with the `layout` the client's model leaves out. */
-async function limitsOf(api: BoatClient) {
-  const got = await api.limitsRaw({}, { signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
-  const body = (await got.raw.clone().json()) as { layout?: unknown } | null
-  return { ...(await got.value()), layout: body?.layout }
-}
-
 const limitsWarned = new Set<string>()
 
 /**
  * The account's limits, or null, warning once, when the service doesn't answer: the pool then
  * runs one machine with no start caps of its own, holding back only when a start is refused.
  */
-async function readLimits(service: VmService, api: BoatClient | null): Promise<BoatLimits | null> {
+async function readLimits(service: VmService, api: BoatClient | null): Promise<VmLimits | null> {
   try {
     if (!api) throw new Error(`no ${service.name} client`)
-    return (await limitsOf(api)) as BoatLimits
+    return await api.limits({ signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
   } catch (error) {
     if (!limitsWarned.has(service.kind)) {
       limitsWarned.add(service.kind)
@@ -597,17 +408,6 @@ async function readLimits(service: VmService, api: BoatClient | null): Promise<B
     }
     return null
   }
-}
-
-/** The part of Boat's limits the pool reads. */
-type BoatLimits = {
-  activeSandboxes: number
-  maxActiveSandboxes: number
-  startLimits?: { perMinute?: number; perHour?: number } | null
-  startLimitsWithWallet?: { perMinute?: number; perHour?: number } | null
-  starts?: { hour?: { used?: number } | null } | null
-  /** How the service lays the pool's machines out, which {@link VmService.laidOut} reads. */
-  layout?: unknown
 }
 
 /** Starting, keeping and removing `spec`'s machines for the run's pool, in the main process. */
@@ -625,25 +425,23 @@ export function vmPoolProvider(
     rateLimited: (error) =>
       error instanceof BoatRateLimited ? { retryAfterMs: error.retryAfterMs } : null,
     async keepAlive(id, ttlSeconds) {
-      const updated = await api
-        .update({ sandboxId: id, updateSandboxRequest: { ttlSeconds } })
-        .catch(async (error: unknown) => {
-          const { why, code } = await boatAnswer(error)
-          if (status(error) === 409 && code && code === service.reclaims) {
-            throw new MachineReclaimed(`${service.name} took sandbox ${id} back: ${why}`)
-          }
-          if (status(error) === 409 && code && service.endsRun?.includes(code)) {
-            throw new RunStopped(
-              `${service.name} ended the run, so its machines take no more attempts: ${why}`,
-            )
-          }
-          throw error
-        })
-      const short = tooShort(service, id, ttlSeconds, updated?.sandbox?.ttlSeconds)
+      const updated = await api.setTtl(id, ttlSeconds).catch((error: unknown) => {
+        const code = error instanceof VmApiError ? error.code : null
+        if (status(error) === 409 && code && code === service.reclaims) {
+          throw new MachineReclaimed(`${service.name} took sandbox ${id} back: ${boatError(error)}`)
+        }
+        if (status(error) === 409 && code && service.endsRun?.includes(code)) {
+          throw new RunStopped(
+            `${service.name} ended the run, so its machines take no more attempts: ${boatError(error)}`,
+          )
+        }
+        throw error
+      })
+      const short = tooShort(service, id, ttlSeconds, updated.ttlSeconds)
       if (short) throw short
     },
     async remove(id) {
-      await deleteSandbox(api, id).catch(() => {})
+      await api.remove(id).catch(() => {})
       const dir = dirs.get(id)
       dirs.delete(id)
       if (dir) await rm(dir, { recursive: true, force: true })
@@ -705,29 +503,26 @@ export async function startVm(
     const made = await api
       .create({
         idempotencyKey: name,
-        createSandboxRequest: {
-          type,
-          name,
-          ttlSeconds,
-          noEnv: true,
-          snapshots: o.snapshots,
-          ...(o.from !== undefined && { from: o.from }),
-          monitoring: false,
-          labels: o.labels,
-        },
+        size: type,
+        name,
+        ttlSeconds,
+        saveable: o.snapshots,
+        ...(o.from !== undefined && { from: o.from }),
+        labels: o.labels,
       })
-      .catch(async (error: unknown) => {
-        const { why, code } = await boatAnswer(error)
+      .catch((error: unknown) => {
+        const why = boatError(error)
+        const code = error instanceof VmApiError ? error.code : null
         if (status(error) === 409 && code && service.endsRun?.includes(code)) {
           throw new RunStopped(
             `${service.name} ended the run, so it starts no more machines: ${why}`,
           )
         }
         if (status(error) === 429) {
-          const response = (error as { response?: Response }).response
+          const at = error instanceof VmApiError ? error.retryAt : undefined
           throw new BoatRateLimited(
             `${service.name} is limiting starts: ${why}`,
-            retryAfterMs(response?.headers.get('retry-after') ?? null, why),
+            at === undefined ? null : Math.max(0, at - Date.now()),
           )
         }
         if (status(error) === 403) {
@@ -735,26 +530,26 @@ export async function startVm(
             `${service.name} won't start another sandbox for this ${service.scope}: ${why}`,
           )
         }
-        throw await serviceFailed(service, error, "didn't create a sandbox", why)
+        throw serviceFailed(service, error, "didn't create a sandbox", why)
       })
-    id = made.sandbox.id
-    const short = tooShort(service, id, ttlSeconds, made.ttlSeconds ?? made.sandbox.ttlSeconds)
+    id = made.id
+    const short = tooShort(service, id, ttlSeconds, made.ttlSeconds)
     if (short) throw short
     await untilReady(service, api, id, signal)
     ready = true
     const ssh = await api
-      .sshKey({ sandboxId: id, sshKeyRequest: { key: key.pub } })
-      .catch(async (error: unknown) => {
-        throw await serviceFailed(service, error, "didn't authorize the machine's SSH key")
+      .sshAccess(id, { publicKey: key.pub, minutes: Math.ceil(ttlSeconds / 60) })
+      .catch((error: unknown) => {
+        throw serviceFailed(service, error, "didn't authorize the machine's SSH key")
       })
-    const routes = sshRoutes(ssh)
+    const { routes } = ssh
     if (!routes.length || !ssh.hostKey) {
       throw new InfraError(
         `${service.name} gave sandbox ${id} no SSH address and host key to connect with`,
       )
     }
     const knownHostsFile = join(dir, 'known_hosts')
-    await writeFile(knownHostsFile, `${id} ${ssh.hostKey.trim()}\n`)
+    await writeFile(knownHostsFile, `${id} ${ssh.hostKey}\n`)
     const reached = await firstReachable(routes, { signal })
     signal.throwIfAborted()
     if ('why' in reached) {
@@ -772,13 +567,13 @@ export async function startVm(
         host: reached.route.host,
         port: reached.route.port,
         route: routeLabel(reached.route),
-        user: ssh.sshUser ?? 'user',
+        user: ssh.user,
         identityFile: key.file,
         knownHostsFile,
       },
     }
   } catch (error) {
-    if (id && ready) await deleteSandbox(api, id).catch(() => {})
+    if (id && ready) await api.remove(id).catch(() => {})
     else if (id) await deleteUntilGone(api, id, { signal }).catch(() => {})
     await rm(dir, { recursive: true, force: true })
     throw error
@@ -814,17 +609,11 @@ async function sandboxesNamed(
   api: BoatClient,
   prefix: string,
   signal: AbortSignal,
-): Promise<BoatSandboxInfo[]> {
-  const found: BoatSandboxInfo[] = []
-  let cursor: string | undefined
-  do {
-    const page = await api.sandboxes(
-      { namePrefix: prefix, limit: 100, ...(cursor && { cursor }) },
-      { signal },
-    )
-    found.push(...page.sandboxes.filter((s) => s.name.startsWith(prefix)))
-    cursor = page.pageInfo?.hasMore ? (page.pageInfo.nextCursor ?? undefined) : undefined
-  } while (cursor)
+): Promise<VmInfo[]> {
+  const found: VmInfo[] = []
+  for await (const vm of api.list({ namePrefix: prefix }, { signal })) {
+    if (vm.name.startsWith(prefix)) found.push(vm)
+  }
   return found
 }
 
@@ -832,7 +621,7 @@ async function sandboxesNamed(
 export async function removeNamed(api: BoatClient, prefix: string): Promise<void> {
   const signal = AbortSignal.timeout(CLEANUP_TIMEOUT_MS)
   const left = await sandboxesNamed(api, prefix, signal).catch(() => [])
-  await Promise.all(left.map((s) => deleteSandbox(api, s.id, signal).catch(() => {})))
+  await Promise.all(left.map((s) => api.remove(s.id, { signal }).catch(() => {})))
 }
 
 /**
@@ -849,13 +638,13 @@ export async function removeRunSandboxes(
     const key = `${sandbox.apiKey.from}\0${prefix}`
     if (seen.has(key) || boatKeyProblem(sandbox)) continue
     seen.add(key)
-    const api = await boatClient(sandbox).catch(() => null)
+    const api = await boatClientOrNull(sandbox)
     if (api) await removeNamed(api, prefix)
   }
 }
 
 export const boatCapacity = async (sandbox: BoatSandboxDescriptor) =>
-  vmCapacity(boatService(sandbox), boatSpec(sandbox), await boatClient(sandbox).catch(() => null))
+  vmCapacity(boatService(sandbox), boatSpec(sandbox), await boatClientOrNull(sandbox))
 
 /**
  * Machines the service would still start for the account (its cap on sandboxes at once, less
@@ -871,8 +660,8 @@ export async function vmCapacity(
   const spec = laidOut(service, asked, limits)
   const k = spec.attemptsPerMachine ?? 1
   if (!limits) return { machines: 1, attempts: Math.min(k, spec.maxConcurrent ?? k) }
-  const machines = Math.max(0, limits.maxActiveSandboxes - limits.activeSandboxes)
-  const perMinute = (limits.startLimitsWithWallet ?? limits.startLimits)?.perMinute
+  const machines = Math.max(0, limits.maxLive - limits.live)
+  const perMinute = limits.startsPerMinute
   const attempts = Math.min(machines, perMinute ?? machines) * k
   return { machines, attempts: Math.max(1, Math.min(attempts, spec.maxConcurrent ?? attempts)) }
 }
@@ -891,7 +680,7 @@ export const checkBoat = (sandbox: BoatSandboxDescriptor, projectRoot: string) =
 export async function checkVmService(
   service: VmService,
   spec: VmSpec,
-  client: () => Promise<BoatClient>,
+  client: () => BoatClient | Promise<BoatClient>,
 ): Promise<void> {
   const refuse = (message: string, usage: boolean) =>
     new PrepareError({
@@ -933,22 +722,24 @@ export async function checkVmService(
     )
   }
   const api = await client()
-  const limits = await limitsOf(api).catch(async (error: unknown) => {
-    const code = status(error)
-    if (code === 401 || code === 403) {
-      throw refuse(`${service.name} refused ${service.credential}: ${await boatError(error)}`, true)
-    }
-    throw new PrepareError({
-      class: 'transient',
-      stage: service.kind,
-      ref: null,
-      cause: null,
-      log: null,
-      message: `Couldn't reach ${service.name}: ${await boatError(error)}`,
+  const limits = await api
+    .limits({ signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS) })
+    .catch((error: unknown) => {
+      const code = status(error)
+      if (code === 401 || code === 403) {
+        throw refuse(`${service.name} refused ${service.credential}: ${boatError(error)}`, true)
+      }
+      throw new PrepareError({
+        class: 'transient',
+        stage: service.kind,
+        ref: null,
+        cause: null,
+        log: null,
+        message: `Couldn't reach ${service.name}: ${boatError(error)}`,
+      })
     })
-  })
   const laid = laidOut(service, spec, limits)
-  const machine = limits.machineTypes?.find((m) => m.type === laid.type)
+  const machine = limits.sizes?.find((m) => m.size === laid.type)
   if (machine && !machine.available) {
     throw refuse(
       `${service.name} won't start a ${laid.size} machine on this ${service.scope}: ${machine.reason ?? 'unavailable'}`,
@@ -957,7 +748,7 @@ export async function checkVmService(
   }
   if (!limits.canStart) {
     throw refuse(
-      `${service.name} won't start sandboxes on this ${service.scope}: ${limits.startBlockedReason ?? 'no reason given'}`,
+      `${service.name} won't start sandboxes on this ${service.scope}: ${limits.blockedReason ?? 'no reason given'}`,
       false,
     )
   }

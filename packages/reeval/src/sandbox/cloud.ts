@@ -1,5 +1,6 @@
-// cloud()'s VMs: boat.ts's client and pool under another name, with the service's URL and token
-// from the environment.
+// cloud()'s VMs: boat.ts's pool on the VM service's API, under another name, with the service's
+// URL and token from the environment.
+
 import type { Check } from '../doctor.ts'
 import { redactSecrets, registerSecret } from '../redact.ts'
 import type { CloudMachineSize, CloudSandboxDescriptor } from '../types.ts'
@@ -7,6 +8,7 @@ import {
   BOAT_SDK,
   type BoatClient,
   type BoatSdk,
+  boatClientOf,
   checkVmService,
   openVmPool,
   removeNamed,
@@ -123,10 +125,10 @@ export async function cloudClient(projectRoot?: string): Promise<BoatClient> {
       message: `${problem}.`,
     })
   }
-  const { BoatApi, Configuration } = await loadClient(projectRoot)
-  const accessToken = process.env[VM_TOKEN]
+  const sdk = await loadClient(projectRoot)
+  const accessToken = process.env[VM_TOKEN] ?? ''
   registerSecret(accessToken)
-  return new BoatApi(new Configuration({ accessToken, basePath: process.env[VM_URL] }))
+  return boatClientOf(sdk, accessToken, process.env[VM_URL])
 }
 
 export const openCloudPool: OpenPool<CloudSandboxDescriptor> = async (sandbox, o) =>
@@ -145,7 +147,11 @@ export function createCloudSandbox(
 }
 
 export const cloudCapacity = async (sandbox: CloudSandboxDescriptor) =>
-  vmCapacity(CLOUD, cloudSpec(sandbox), await cloudClient().catch(() => null))
+  vmCapacity(
+    CLOUD,
+    cloudSpec(sandbox),
+    cloudProblem() ? null : await cloudClient().catch(() => null),
+  )
 
 export const checkCloud = (sandbox: CloudSandboxDescriptor, projectRoot: string) =>
   checkVmService(CLOUD, cloudSpec(sandbox), () => cloudClient(projectRoot))
@@ -153,6 +159,7 @@ export const checkCloud = (sandbox: CloudSandboxDescriptor, projectRoot: string)
 /** Deletes the VMs the run left. */
 export async function removeRunVms(runId: string): Promise<void> {
   if (cloudProblem()) return
+  // Without the SDK there's nothing to clean up with, and the other kinds' cleanup still runs.
   const api = await cloudClient().catch(() => null)
   if (api) await removeNamed(api, runPrefix({ prefix: CLOUD_PREFIX }, runId))
 }

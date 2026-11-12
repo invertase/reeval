@@ -1110,6 +1110,9 @@ export const inventory: InventoryFeature[] = [
       'sandbox-docker/test/transport-session.test.ts',
       'reeval/test/boat.test.ts',
       'reeval/test/boat-images.test.ts',
+      'reeval/test/vm-api.test.ts',
+      'vm-api/test/boat.test.ts',
+      'vm-api/test/wait.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/doctor.test.ts',
       'reeval/test/refusals.test.ts',
@@ -1162,6 +1165,8 @@ export const inventory: InventoryFeature[] = [
     plan: ['environments/daytona'],
     unit: [
       'reeval/test/daytona.test.ts',
+      'reeval/test/vm-api.test.ts',
+      'vm-api/test/daytona.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/doctor.test.ts',
       'reeval/test/refusals.test.ts',
@@ -1183,6 +1188,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['environments/cloud'],
     unit: [
       'reeval/test/cloud.test.ts',
+      'reeval/test/vm-api.test.ts',
       'reeval/test/sandbox-kinds.test.ts',
       'reeval/test/refusals.test.ts',
     ],

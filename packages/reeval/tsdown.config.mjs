@@ -68,6 +68,11 @@ for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('
  */
 const patched = ['@ai-sdk/harness-claude-code']
 const BRIDGE_FILES = ['index.mjs', 'package.json', 'pnpm-lockfile.yaml', 'pnpm-workspace.yaml']
+/** The declarations that may import an optional peer: each adapter's, its SDK's types. */
+const SDK_TYPES = {
+  'internal/vm-api/boat.d.ts': '@boatdev/sdk',
+  'internal/vm-api/daytona.d.ts': '@daytona/sdk',
+}
 /** What the adapters' own build inlined into `bridge/index.mjs`, resolved from the adapter. */
 const BRIDGE_BUNDLES = ['@ai-sdk/harness']
 for (const name of patched) {
@@ -164,6 +169,9 @@ export default defineConfig({
     'store/s3': 'src/store-s3.ts',
     judge: 'src/judge.ts',
     'internal/vm': 'src/internal-vm.ts',
+    'internal/vm-api': 'src/internal-vm-api.ts',
+    'internal/vm-api/boat': 'src/internal-vm-api-boat.ts',
+    'internal/vm-api/daytona': 'src/internal-vm-api-daytona.ts',
     gateway: 'src/gateway.ts',
     'view/index': 'src/view/index.ts',
     'view/report/index': 'src/view/report/index.ts',
@@ -231,14 +239,19 @@ export default defineConfig({
         throw new Error(`The build never loaded ${appFiles}, so the studio app isn't in it`)
       }
       for (const chunk of chunks) {
-        const file = relative(dist, join(chunk.outDir, chunk.fileName))
+        const file = relative(dist, join(chunk.outDir, chunk.fileName)).split(sep).join(posix.sep)
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
         if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//.test(code))
           throw new Error(`dist/${file} imports an @reeval/* package`)
-        // A static import of an optional peer would fail to load wherever it isn't installed.
+        // A static import of an optional peer would fail to load wherever it isn't installed. A
+        // provider's adapter types are its SDK's, so its subpath's declarations import them.
         for (const peer of Object.keys(pkg.peerDependencies)) {
+          if (SDK_TYPES[file] === peer) continue
           const name = peer.replace(/[/.]/g, '\\$&')
-          if (new RegExp(`(?:\\bfrom\\s*|\\bimport\\s+|require\\()['"]${name}['"]`).test(code))
+          // In declarations, a type's `import("…")` needs the package as much as a static import.
+          const typeImport = file.endsWith('.d.ts') ? '|\\bimport\\(\\s*' : ''
+          const statically = `(?:\\bfrom\\s*|\\bimport\\s+|require\\(${typeImport})`
+          if (new RegExp(`${statically}['"]${name}['"]`).test(code))
             throw new Error(`dist/${file} imports ${peer} statically: import() it where it's used`)
         }
       }
