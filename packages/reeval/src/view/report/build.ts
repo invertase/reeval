@@ -1302,27 +1302,26 @@ function buildChoices(e: EvalEntry): ChoiceBreakdown[] {
 
 const SKILL_SOURCES = ['placed', 'skill-dir', 'elsewhere'] as const
 
-/** An unlabeled `toHaveCalledSkill` record's label: the skill, then any ` #n` that keeps it unique. */
-const CHECKED_SKILL = /^toHaveCalledSkill (.+?)(?: #\d+)*$/
-
 /**
- * The skill an attempt's first passing `toHaveCalledSkill` checked, read from its default label;
- * undefined when every such call had a label of its own, which doesn't name the skill.
+ * The skill an attempt's first passing `toHaveCalledSkill` (or `poll.`, `resolves.` … but not a
+ * `not.`) checked, read from its default label: the matcher as recorded, the skill, then any ` #n`
+ * that keeps the label unique. Undefined when every such call had a label of its own, which
+ * doesn't name the skill.
  */
 function checkedSkill(a: AttemptRecord): string | undefined {
   for (const x of a.assertions ?? []) {
     const parts = x.matcher.split('.')
     if (parts.at(-1) !== 'toHaveCalledSkill' || parts.includes('not')) continue
-    if (x.status !== 'pass' || x.labelled) continue
-    const m = CHECKED_SKILL.exec(x.label)
-    if (m) return m[1]
+    if (x.status !== 'pass' || x.labelled || !x.label.startsWith(`${x.matcher} `)) continue
+    const name = x.label.slice(x.matcher.length + 1).replace(/(?: #\d+)+$/, '')
+    if (name) return name
   }
   return undefined
 }
 
 /**
  * How many of `attempts` (each found the skill) used the skill it checked from each source, by its
- * first use in their facts: one source an attempt, so the counts sum to the attempts counted.
+ * first use in their facts: one source an attempt, so the counts sum to at most the attempts.
  */
 function skillSources(
   attempts: AttemptRecord[],

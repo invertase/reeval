@@ -294,4 +294,84 @@ describe("the report's facts", () => {
       'the sources sum to found',
     )
   })
+
+  test('read the checked skill from a passing, unnegated check with its default label only', () => {
+    const record = entries
+      .flatMap((entry) => entry.runs.map((r) => recordOf(r.raw)))
+      .find((r) => r.evals.some((e) => e.attempts.length >= 1))
+    assert.ok(record)
+    const e = record.evals.find((x) => x.attempts.length >= 1)
+    assert.ok(e)
+    e.compare = undefined
+    const [a, ...rest] = e.attempts
+    assert.ok(a)
+    for (const b of rest) b.assertions = []
+    a.outcome = 'pass'
+    const facts = new Map<string, AttemptFacts>([
+      [
+        a.key,
+        {
+          toolCalls: 3,
+          byClass: { context: 3, dependency: 0, web: 0, verify: 0, workspace: 0 },
+          skills: [
+            { skill: 'x', source: 'placed', reads: 1, firstLine: 1 },
+            { skill: 'y', source: 'elsewhere', reads: 1, firstLine: 2 },
+            { skill: 'z', source: 'skill-dir', reads: 1, firstLine: 3 },
+          ],
+          contextFiles: [],
+        },
+      ],
+    ])
+    type Check = [matcher: string, label: string, status: 'pass' | 'fail', labelled?: boolean]
+    const sources = (...checks: Check[]) => {
+      a.assertions = checks.map(([matcher, label, status, labelled = false]) => ({
+        label,
+        labelled,
+        matcher,
+        status,
+      })) as NonNullable<AttemptRecord['assertions']>
+      const d = buildRunReport(record, { evals: [e.key], facts }).evals[0]?.discovery.find(
+        (x) => x.what === 'skill',
+      )
+      assert.equal(d?.found.text, '1 of 1', 'the attempt found the skill')
+      return d?.sources
+    }
+    const placed = [{ source: 'placed', count: 1 }]
+    assert.deepEqual(
+      sources(['toHaveCalledSkill', 'toHaveCalledSkill x #2', 'pass']),
+      placed,
+      'a repeated check',
+    )
+    assert.deepEqual(
+      sources(['poll.toHaveCalledSkill', 'poll.toHaveCalledSkill x', 'pass']),
+      placed,
+      'a prefixed matcher',
+    )
+    assert.deepEqual(
+      sources(['not.toHaveCalledSkill', 'not.toHaveCalledSkill z', 'pass']),
+      [],
+      'a negated check checks no skill it used',
+    )
+    assert.deepEqual(
+      sources(
+        ['toHaveCalledSkill', 'toHaveCalledSkill x', 'fail'],
+        ['not.toHaveCalledSkill', 'not.toHaveCalledSkill q', 'pass'],
+      ),
+      [],
+      'a failing check names no skill the attempt found',
+    )
+    assert.deepEqual(
+      sources(
+        ['toHaveCalledSkill', 'toHaveCalledSkill y', 'fail'],
+        ['toHaveCalledSkill', 'toHaveCalledSkill x', 'pass'],
+      ),
+      placed,
+      'an earlier failing check on another skill',
+    )
+    assert.deepEqual(
+      sources(['toHaveCalledSkill', 'toHaveCalledSkill y', 'pass', true]),
+      [],
+      "a label of the eval's own, whatever it reads like, doesn't name the skill",
+    )
+  })
 })
