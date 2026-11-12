@@ -193,6 +193,20 @@ describe('machine pool', () => {
     await p.close()
   })
 
+  test('with maxRateWaitMs Infinity, an aborted acquire stops its wait at once and asks no more', async () => {
+    const provider = fakeProvider(() => new RateLimitError(60_000))
+    const p = pool(provider, { maxRateWaitMs: Number.POSITIVE_INFINITY })
+    const stop = new AbortController()
+    const waiting = p.acquire({ signal: stop.signal })
+    await until(() => p.stats().rateLimited === 1)
+    const t0 = performance.now()
+    stop.abort(new Error('the attempt was canceled'))
+    await assert.rejects(waiting, /the attempt was canceled/)
+    assert.ok(performance.now() - t0 < 1_000)
+    assert.equal(provider.tries.length, 1)
+    await p.close()
+  })
+
   test('the provider ending the run fails its attempts, and the pool asks it for no more', async () => {
     let asked = 0
     const provider = fakeProvider((n) => {
@@ -483,6 +497,28 @@ describe('pools on one account', () => {
     )
     assert.equal(got, 'started')
     assert.ok(performance.now() - t0 >= 70)
+    shared.close()
+  })
+
+  test('a start with no bound on its wait stops waiting when aborted', async () => {
+    const shared = account({ limits: { machines: 1, startsPerMinute: 10 } })
+    shared.hold(60_000)
+    const stop = new AbortController()
+    let started = false
+    const gated = shared.gate(
+      async () => {
+        started = true
+        return 'started'
+      },
+      Number.POSITIVE_INFINITY,
+      stop.signal,
+      () => {},
+    )
+    const t0 = performance.now()
+    stop.abort(new Error('the attempt was canceled'))
+    await assert.rejects(gated, /the attempt was canceled/)
+    assert.ok(performance.now() - t0 < 1_000)
+    assert.equal(started, false)
     shared.close()
   })
 
