@@ -23,6 +23,7 @@ import { fakeSandbox } from '../src/sandbox.ts'
 import { templateName } from '../src/view/family.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
+import { readableRunReport } from '../src/view/report/schema.ts'
 import {
   baseEnv,
   fakeConfig,
@@ -152,9 +153,20 @@ describe('recording runs into evals/.history', () => {
     assert.ok(e)
     assert.equal(recorded.run.artifacts, 'all')
     const trial = e.attempts[0]
-    for (const file of ['summary.md', trial?.files.transcript?.path, trial?.files.diff?.path]) {
+    for (const file of [
+      'summary.md',
+      'report.json',
+      trial?.files.transcript?.path,
+      trial?.files.diff?.path,
+    ]) {
       assert.ok(file && existsSync(join(recorded.dir, file)), file)
     }
+    const report = readableRunReport(JSON.parse(recorded.read('report.json')))
+    assert.deepEqual(
+      report.attempts.map((a) => [a.id, a.key]),
+      [['A1', trial?.key]],
+      'report.json is the RunReport summary.md renders',
+    )
     const summary = recorded.read('summary.md')
     assert.match(summary, /^# agent$/m, 'passes get detail')
     assert.match(

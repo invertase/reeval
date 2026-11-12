@@ -31,6 +31,7 @@ export type ShapeName =
   | 'bundle-manifest'
   | 'archive-manifest'
   | 'credentials'
+  | 'run-report'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -74,6 +75,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'bundle-manifest': [],
   'archive-manifest': [],
   credentials: [],
+  'run-report': [],
 }
 
 /**

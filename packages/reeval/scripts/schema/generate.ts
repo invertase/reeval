@@ -6,7 +6,7 @@ import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import type { z } from 'zod'
 import { CONTRACT_REFS, CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
 import { PACKAGE_DIR, type PersistedShape, PLAN_SHAPES, type PlanShape, SHAPES } from './shapes.ts'
-import { checkContractCoverage, type TypeDocs, withZodDefs, zodDefs } from './zod.ts'
+import { checkContractCoverage, differences, type TypeDocs, withZodDefs, zodDefs } from './zod.ts'
 
 type SchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array' | 'object'
 
@@ -242,13 +242,16 @@ export function generate(
       if (plan) owned ??= zodDefs(CONTRACT_SCHEMAS, CONTRACT_REFS, contractDocs(project))
       const doc: ShapeSchema = {
         $schema: 'https://json-schema.org/draft/2020-12/schema',
-        $comment: `Generated from ${shape.type} in ${shape.file} by \`pnpm schema:update\`; don't edit. ${shape.where}.`,
+        $comment: `Generated from ${'zod' in shape && shape.zod ? `${shape.type}'s Zod schemas, held to its type` : shape.type} in ${shape.file} by \`pnpm schema:update\`; don't edit. ${shape.where}.`,
         title: shape.type,
         $ref: root.$ref ?? '',
-        // Persisted shapes stay generated from their types; plan shapes take the contract's defs.
+        // Persisted shapes stay generated from their types unless a Zod schema owns them; plan
+        // shapes take the contract's defs.
         $defs: plan
           ? withZodDefs(Object.fromEntries(gen.defs), owned)
-          : Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
+          : 'zod' in shape && shape.zod
+            ? persistedZodDefs(shape, shape.zod, Object.fromEntries(gen.defs))
+            : Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
       }
       const field = 'versionField' in shape ? shape.versionField : undefined
       const version = field && resolve(doc, root).properties?.[field]
@@ -263,6 +266,53 @@ export function generate(
     if (PLAN_SHAPES.every((shape) => shapes.includes(shape))) checkContractCoverage(typed)
     return out
   })
+}
+
+/**
+ * A persisted shape's defs from its Zod schemas (`z.toJSONSchema`), each held to the def generated
+ * from its type (the same properties and required ones) and described by that type's TSDoc. A
+ * closed object (`additionalProperties: false`) reads as an open one, since a reader passes the
+ * fields a newer reeval added.
+ */
+function persistedZodDefs(
+  shape: PersistedShape,
+  schemas: Record<string, z.ZodType>,
+  typed: Record<string, Schema>,
+): Record<string, Schema> {
+  const untyped = Object.keys(schemas).filter((name) => !typed[name])
+  if (untyped.length) {
+    throw new Error(
+      `${shape.type}'s Zod schemas name ${untyped.join(', ')}, which ${shape.file} has no def for: name each after the type it validates`,
+    )
+  }
+  const docs = Object.entries(schemas).map(([name, schema]) => ({
+    name,
+    schema,
+    typed: typed[name] as Schema,
+  }))
+  const defs = zodDefs(schemas, {}, docs)
+  const drift = Object.keys(schemas).flatMap((name) =>
+    differences(typed[name] as Schema, defs[name] as Schema).map((line) => `${name}: ${line}`),
+  )
+  if (drift.length) {
+    throw new Error(
+      `${shape.type}'s types in ${shape.file} and its Zod schemas disagree:\n  ${drift.join('\n  ')}`,
+    )
+  }
+  const open = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(open)
+    if (typeof value !== 'object' || value === null) return value
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([k, v]) => !(k === 'additionalProperties' && v === false))
+        .map(([k, v]) => [k, open(v)]),
+    )
+  }
+  return Object.fromEntries(
+    Object.entries(defs)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, def]) => [name, open(def) as Schema]),
+  )
 }
 
 /** Where the hand-written types whose TSDoc describes a Zod schema are exported. */

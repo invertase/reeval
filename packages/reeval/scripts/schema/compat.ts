@@ -38,8 +38,10 @@ export function describe(doc: Doc, schema: Schema): string {
   if ('const' in schema) return JSON.stringify(schema.const)
   if (schema.enum) return schema.enum.map((v) => JSON.stringify(v)).join(' | ')
   if (schema.anyOf) return schema.anyOf.map((s) => describe(doc, s)).join(' | ')
+  if (schema.oneOf) return schema.oneOf.map((s) => describe(doc, s)).join(' | ')
   if (schema.type === 'array') return `${describe(doc, schema.items ?? {})}[]`
   if (schema.type === 'object') return schema.additionalProperties ? 'Record<string, …>' : '{ … }'
+  if (Array.isArray(schema.type)) return schema.type.join(' | ')
   return schema.type ?? 'unknown'
 }
 
@@ -47,7 +49,9 @@ export function describe(doc: Doc, schema: Schema): string {
 function alternatives(doc: Doc, schema: Schema): Schema[] {
   const s = resolve(doc, schema)
   if (s.anyOf) return s.anyOf.flatMap((a) => alternatives(doc, a))
+  if (s.oneOf) return s.oneOf.flatMap((a) => alternatives(doc, a))
   if (s.enum) return s.enum.map((v) => ({ const: v }))
+  if (Array.isArray(s.type)) return s.type.map((type) => ({ ...s, type }))
   return [s]
 }
 

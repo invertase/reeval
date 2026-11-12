@@ -1,0 +1,2459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from RunReport's Zod schemas, held to its type in src/view/report/types.ts by `pnpm schema:update`; don't edit. The RunReport behind a run's summary.md: <run>/report.json in the history folder or .reeval/runs.",
+  "title": "RunReport",
+  "$ref": "#/$defs/RunReport",
+  "$defs": {
+    "Arm": {
+      "type": "object",
+      "properties": {
+        "change": {
+          "type": ["string", "null"]
+        },
+        "environment": {
+          "type": "string"
+        },
+        "environmentDigest": {
+          "type": ["string", "null"]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "prompts": {
+          "description": "Distinct first-turn prompt hashes over the arm's attempts.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "role": {
+          "type": "string",
+          "enum": ["baseline", "variant"]
+        }
+      },
+      "required": ["change", "environment", "environmentDigest", "id", "label", "prompts", "role"]
+    },
+    "ArmRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "label"]
+    },
+    "ArmRow": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lift": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Delta"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "measures": {
+          "type": "object",
+          "properties": {
+            "agentMs": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "costUsd": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "filesChanged": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "linesAdded": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "linesRemoved": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "tokens": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "toolCalls": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "turns": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            }
+          },
+          "required": [
+            "agentMs",
+            "costUsd",
+            "filesChanged",
+            "linesAdded",
+            "linesRemoved",
+            "tokens",
+            "toolCalls",
+            "turns"
+          ]
+        },
+        "rate": {
+          "$ref": "#/$defs/Rate"
+        },
+        "verdict": {
+          "description": "Pass-rate certainty only; measure direction lives in measure cells.",
+          "type": "string",
+          "enum": ["baseline", "helped", "made-worse", "within-noise", "too-few-runs"]
+        },
+        "verdictScope": {
+          "description": "Always `pass-rate` for this column today.",
+          "type": "string",
+          "const": "pass-rate"
+        }
+      },
+      "required": ["arm", "interval", "lift", "measures", "rate", "verdict", "verdictScope"]
+    },
+    "AssertionRow": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": ["string", "null"]
+        },
+        "cells": {
+          "description": "One entry per column key; every column present.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/CheckCell"
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "matcher": {
+          "type": "string"
+        },
+        "total": {
+          "$ref": "#/$defs/CheckCell"
+        }
+      },
+      "required": ["at", "cells", "label", "matcher", "total"]
+    },
+    "AttemptIndexRow": {
+      "type": "object",
+      "properties": {
+        "agentMs": {
+          "$ref": "#/$defs/Figure"
+        },
+        "arm": {
+          "type": ["string", "null"]
+        },
+        "case": {
+          "type": ["string", "null"]
+        },
+        "diff": {
+          "description": "Lines exclude lockfiles; null counts print `not recorded`.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "added": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "files": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "removed": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": ["added", "files", "removed", "text"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evalId": {
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "href": {
+          "description": "The target every `AttemptRef` to this attempt uses.",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "key": {
+          "description": "`AttemptRecord.key`.",
+          "type": "string"
+        },
+        "links": {
+          "type": "object",
+          "properties": {
+            "captures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "href": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["href", "name"]
+              }
+            },
+            "diff": {
+              "type": ["string", "null"]
+            },
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "transcript": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["captures", "diff", "questions", "transcript"]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "fail", "infra_error", "canceled"]
+        },
+        "reclassified": {
+          "type": "boolean"
+        },
+        "tokens": {
+          "$ref": "#/$defs/Figure"
+        },
+        "toolCalls": {
+          "$ref": "#/$defs/Figure"
+        },
+        "turnError": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "agentMs",
+        "arm",
+        "case",
+        "diff",
+        "evalId",
+        "harness",
+        "href",
+        "id",
+        "key",
+        "links",
+        "outcome",
+        "reclassified",
+        "tokens",
+        "toolCalls",
+        "turnError"
+      ]
+    },
+    "AttemptRef": {
+      "description": "`href` is the citation target (Section 2.10).",
+      "type": "object",
+      "properties": {
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "description": "The display label, `A1..AN`, numbered over the evals the report covers.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The attempt's `AttemptRecord.key`, the same in every report of its run.",
+          "type": "string"
+        }
+      },
+      "required": ["href", "id", "key"]
+    },
+    "BehaviorRow": {
+      "type": "object",
+      "properties": {
+        "cells": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Count"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "matcher": {
+          "type": "string"
+        }
+      },
+      "required": ["cells", "label", "matcher"]
+    },
+    "BreakdownRow": {
+      "type": "object",
+      "properties": {
+        "keys": {
+          "description": "One value per axis, repeated on every row.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "measures": {
+          "$ref": "#/$defs/MeasureCells"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["keys", "measures", "rate"]
+    },
+    "CaptureGallery": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arm": {
+                "type": ["string", "null"]
+              },
+              "case": {
+                "type": ["string", "null"]
+              },
+              "harness": {
+                "type": "string"
+              },
+              "shots": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/CaptureShot"
+                }
+              }
+            },
+            "required": ["arm", "case", "harness", "shots"]
+          }
+        }
+      },
+      "required": ["rows"]
+    },
+    "CaptureShot": {
+      "type": "object",
+      "properties": {
+        "attempt": {
+          "$ref": "#/$defs/AttemptRef"
+        },
+        "consoleErrors": {
+          "type": ["number", "null"]
+        },
+        "href": {
+          "description": "Null when not kept.",
+          "type": ["string", "null"]
+        },
+        "meta": {
+          "type": ["string", "null"]
+        },
+        "name": {
+          "type": "string"
+        },
+        "pageErrors": {
+          "type": ["number", "null"]
+        },
+        "status": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["attempt", "consoleErrors", "href", "meta", "name", "pageErrors", "status"]
+    },
+    "ChangeRow": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "string"
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Delta"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gate": {
+          "type": "boolean"
+        },
+        "harness": {
+          "type": ["string", "null"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["outcome", "assertion", "judgment", "choice", "measure", "observation"]
+        },
+        "prior": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["regressed", "fixed", "same", "gate", "drift", "added", "removed", "infra"]
+        }
+      },
+      "required": ["current", "delta", "gate", "harness", "kind", "prior", "signal", "status"]
+    },
+    "CheckCell": {
+      "type": "object",
+      "properties": {
+        "answered": {
+          "description": "Pass plus fail; never counts `notApplicable`.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "notApplicable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "preSatisfied": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "description": "Why the check was n/a when known (`expect.skip` reason); null otherwise.",
+          "type": ["string", "null"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "mixed", "na", "error", "not-run"]
+        },
+        "text": {
+          "description": "`12 of 12`, `0 of 4`, `n/a`, `12 of 12, 12 pre-satisfied`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "answered",
+        "notApplicable",
+        "passed",
+        "preSatisfied",
+        "reason",
+        "status",
+        "text"
+      ]
+    },
+    "ChoiceBreakdown": {
+      "type": "object",
+      "properties": {
+        "noPick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "options": {
+          "description": "Sorted by count, then by first appearance.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": ["count", "label"]
+          }
+        },
+        "passByPick": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "option": {
+                "type": "string"
+              },
+              "rate": {
+                "$ref": "#/$defs/Rate"
+              }
+            },
+            "required": ["option", "rate"]
+          }
+        },
+        "question": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arm": {
+                "type": ["string", "null"]
+              },
+              "attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "counts": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "harness": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": ["string", "null"]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["arm", "attempts", "counts", "harness", "prompt", "text"]
+          }
+        }
+      },
+      "required": ["noPick", "options", "passByPick", "question", "rows"]
+    },
+    "ContrastRow": {
+      "type": "object",
+      "properties": {
+        "delta": {
+          "$ref": "#/$defs/Delta"
+        },
+        "from": {
+          "type": "string"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "measure": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "pass-rate"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "tokens",
+                "toolCalls",
+                "turns",
+                "costUsd",
+                "agentMs",
+                "filesChanged",
+                "linesAdded",
+                "linesRemoved"
+              ]
+            }
+          ]
+        },
+        "to": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["helped", "made-worse", "within-noise", "too-few-runs", "fewer", "more"]
+        },
+        "verdictScope": {
+          "description": "`pass-rate` when the contrast is on pass rate; else the measure's own direction.",
+          "type": "string",
+          "enum": ["pass-rate", "measure"]
+        }
+      },
+      "required": ["delta", "from", "interval", "measure", "to", "verdict", "verdictScope"]
+    },
+    "Count": {
+      "description": "`text`: `12 of 12`.",
+      "type": "object",
+      "properties": {
+        "k": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["k", "n", "text"]
+    },
+    "Delta": {
+      "description": "`text`: `-42%`, `±0%`, `+50 pts`, `n/a`.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["pct", "pts"]
+        },
+        "value": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["text", "unit", "value"]
+    },
+    "DiscoveryRate": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "$ref": "#/$defs/Count"
+        },
+        "matcher": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "found": {
+                "$ref": "#/$defs/Count"
+              },
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["found", "keys"]
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "source": {
+                "type": "string",
+                "enum": ["placed", "skill-dir", "elsewhere", "mcp", "web"]
+              }
+            },
+            "required": ["count", "source"]
+          }
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": ["found", "matcher", "rows", "sources", "what"]
+    },
+    "EffortPivotRow": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string"
+        },
+        "harness": {
+          "description": "A harness label, or `Median` for the cross-harness row.",
+          "type": "string"
+        },
+        "measures": {
+          "type": "object",
+          "properties": {
+            "agentMs": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "costUsd": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "filesChanged": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "linesAdded": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "linesRemoved": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "tokens": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "toolCalls": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            },
+            "turns": {
+              "$ref": "#/$defs/MeasureVsBaseline"
+            }
+          },
+          "required": [
+            "agentMs",
+            "costUsd",
+            "filesChanged",
+            "linesAdded",
+            "linesRemoved",
+            "tokens",
+            "toolCalls",
+            "turns"
+          ]
+        },
+        "rate": {
+          "$ref": "#/$defs/Rate"
+        }
+      },
+      "required": ["arm", "harness", "measures", "rate"]
+    },
+    "EvalHeadline": {
+      "type": "object",
+      "properties": {
+        "fairness": {
+          "type": "string",
+          "enum": ["clear", "within-noise", "too-few-runs"]
+        },
+        "foot": {
+          "description": "Sample size, harness count, interval, and floor, as sentences.",
+          "type": "string"
+        },
+        "kicker": {
+          "description": "What differed (`Revised skill against the JS SDK baseline`); null on a task eval.",
+          "type": ["string", "null"]
+        },
+        "primary": {
+          "$ref": "#/$defs/HeadlinePrimary"
+        },
+        "task": {
+          "description": "The eval's name: the heading above the headline.",
+          "type": "string"
+        }
+      },
+      "required": ["fairness", "foot", "kicker", "primary", "task"]
+    },
+    "EvalSection": {
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "description": "GFM slug of the eval's heading.",
+          "type": "string"
+        },
+        "captures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureGallery"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChoiceBreakdown"
+          }
+        },
+        "design": {
+          "description": "`3 prompts, 4 coding harnesses, 3 arms, 36 attempts`.",
+          "type": "string"
+        },
+        "discovery": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryRate"
+          }
+        },
+        "failures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureClusters"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file": {
+          "type": "string"
+        },
+        "headline": {
+          "$ref": "#/$defs/EvalHeadline"
+        },
+        "id": {
+          "description": "`EvalEntry.key`.",
+          "type": "string"
+        },
+        "insights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportClaim"
+          }
+        },
+        "judgments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgmentBreakdown"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Unique in the report; `<name> (<file>)` when two evals share a name.",
+          "type": "string"
+        },
+        "primary": {
+          "description": "Null on a check-free eval, whose first choice, judge, or measure block leads.",
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TaskResults"
+                },
+                {
+                  "$ref": "#/$defs/VariantComparison"
+                },
+                {
+                  "$ref": "#/$defs/RegressionChanges"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "qualitative": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QualitativeAnswers"
+          }
+        },
+        "shapes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["task", "ab", "discoverability", "regression"]
+          }
+        }
+      },
+      "required": [
+        "anchor",
+        "captures",
+        "choices",
+        "design",
+        "discovery",
+        "failures",
+        "file",
+        "headline",
+        "id",
+        "insights",
+        "judgments",
+        "name",
+        "primary",
+        "qualitative",
+        "shapes"
+      ]
+    },
+    "ExecutiveRollup": {
+      "type": "object",
+      "properties": {
+        "findings": {
+          "description": "Run-level analysis claims (no `evalId`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportClaim"
+          }
+        },
+        "lead": {
+          "description": "`analysis.tldr`; null without an analysis.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportClaim"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "anchor": {
+                "type": "string"
+              },
+              "design": {
+                "description": "`3 arms × 4 coding harnesses`.",
+                "type": "string"
+              },
+              "evalId": {
+                "type": "string"
+              },
+              "medianTokens": {
+                "$ref": "#/$defs/Figure"
+              },
+              "name": {
+                "type": "string"
+              },
+              "primary": {
+                "description": "The eval's headline in one cell, in its native unit.",
+                "type": "string"
+              },
+              "shapes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["task", "ab", "discoverability", "regression"]
+                }
+              }
+            },
+            "required": ["anchor", "design", "evalId", "medianTokens", "name", "primary", "shapes"]
+          }
+        }
+      },
+      "required": ["findings", "lead", "rows"]
+    },
+    "FailureCluster": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": ["string", "null"]
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptRef"
+          }
+        },
+        "count": {
+          "description": "Members of the eval's counted attempts.",
+          "$ref": "#/$defs/Count"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["assertion", "turn-error", "infra-error", "capture-error", "error"]
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["at", "attempts", "count", "kind", "label"]
+    },
+    "FailureClusters": {
+      "type": "object",
+      "properties": {
+        "clusters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FailureCluster"
+          }
+        },
+        "remarks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fix": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "edit": {
+                    "type": "string"
+                  }
+                },
+                "required": ["at", "edit"]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "too-few-tries",
+                  "cant-tell-apart",
+                  "check-never-fails",
+                  "flaky-check",
+                  "slow-mcp-start",
+                  "proxy-only-egress",
+                  "setup-process-secret",
+                  "setup-tunnel-closed",
+                  "snapshot-too-large",
+                  "observe-throws"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["concern", "suggestion"]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["fix", "kind", "severity", "text"]
+          }
+        }
+      },
+      "required": ["clusters", "remarks"]
+    },
+    "Figure": {
+      "description": "A displayed number: `value` for charts, `text` as every surface prints it (`461k`, `1m 05s`, `not reported`).",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "value": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["text", "value"]
+    },
+    "HeadlinePrimary": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "assertions": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "harnesses": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "kind": {
+              "type": "string",
+              "const": "pass-rate"
+            },
+            "outcome": {
+              "description": "Product outcome noun: passed (default), found, or used.",
+              "type": "string",
+              "enum": ["passed", "found", "used"]
+            },
+            "rate": {
+              "$ref": "#/$defs/Rate"
+            }
+          },
+          "required": ["assertions", "harnesses", "kind", "outcome", "rate"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "baseline": {
+              "$ref": "#/$defs/ArmRef"
+            },
+            "baselineRate": {
+              "$ref": "#/$defs/Rate"
+            },
+            "interval": {
+              "$ref": "#/$defs/Interval"
+            },
+            "kind": {
+              "type": "string",
+              "const": "lift"
+            },
+            "others": {
+              "description": "Every other variant, with its own interval; never dropped.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "interval": {
+                    "$ref": "#/$defs/Interval"
+                  },
+                  "points": {
+                    "$ref": "#/$defs/Delta"
+                  },
+                  "rate": {
+                    "$ref": "#/$defs/Rate"
+                  },
+                  "variant": {
+                    "$ref": "#/$defs/ArmRef"
+                  }
+                },
+                "required": ["interval", "points", "rate", "variant"]
+              }
+            },
+            "points": {
+              "$ref": "#/$defs/Delta"
+            },
+            "variant": {
+              "$ref": "#/$defs/ArmRef"
+            },
+            "variantRate": {
+              "$ref": "#/$defs/Rate"
+            }
+          },
+          "required": [
+            "baseline",
+            "baselineRate",
+            "interval",
+            "kind",
+            "others",
+            "points",
+            "variant",
+            "variantRate"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "assertions": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "baseline": {
+              "$ref": "#/$defs/ArmRef"
+            },
+            "kind": {
+              "type": "string",
+              "const": "tied-ceiling"
+            },
+            "lead": {
+              "type": "object",
+              "properties": {
+                "baseline": {
+                  "$ref": "#/$defs/Figure"
+                },
+                "delta": {
+                  "$ref": "#/$defs/Delta"
+                },
+                "measure": {
+                  "type": "string",
+                  "enum": [
+                    "tokens",
+                    "toolCalls",
+                    "turns",
+                    "costUsd",
+                    "agentMs",
+                    "filesChanged",
+                    "linesAdded",
+                    "linesRemoved"
+                  ]
+                },
+                "variant": {
+                  "$ref": "#/$defs/Figure"
+                }
+              },
+              "required": ["baseline", "delta", "measure", "variant"]
+            },
+            "rate": {
+              "$ref": "#/$defs/Rate"
+            },
+            "variant": {
+              "$ref": "#/$defs/ArmRef"
+            }
+          },
+          "required": ["assertions", "baseline", "kind", "lead", "rate", "variant"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attempts": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "kind": {
+              "type": "string",
+              "const": "choice"
+            },
+            "noPick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "options": {
+              "minItems": 2,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": ["count", "label"]
+              }
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": ["attempts", "kind", "noPick", "options", "question"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "measure"
+            },
+            "label": {
+              "type": "string"
+            },
+            "spread": {
+              "$ref": "#/$defs/Spread"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["tokens", "ms", "usd", "count", "lines", "files"]
+            }
+          },
+          "required": ["kind", "label", "spread", "unit"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atOrAbove": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Count"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "judge"
+            },
+            "label": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "scale": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "spread": {
+              "$ref": "#/$defs/Spread"
+            },
+            "threshold": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["atOrAbove", "kind", "label", "question", "scale", "spread", "threshold"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "answered": {
+              "$ref": "#/$defs/Count"
+            },
+            "kind": {
+              "type": "string",
+              "const": "text"
+            },
+            "lead": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Quote"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "leadRole": {
+              "description": "When many answers collapse to one quote shown in the headline.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["sole", "representative"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": ["answered", "kind", "lead", "leadRole", "question"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "fixed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "kind": {
+              "type": "string",
+              "const": "regression"
+            },
+            "lead": {
+              "description": "First gated worse/fixed change, else first change row.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChangeRow"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "worse": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["fixed", "kind", "lead", "worse"]
+        }
+      ]
+    },
+    "IntegrityIssue": {
+      "type": "object",
+      "properties": {
+        "cites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptRef"
+          }
+        },
+        "evalId": {
+          "type": ["string", "null"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "run-incomplete",
+            "turn-error",
+            "pre-satisfied",
+            "fairness-floor",
+            "served-model-drift",
+            "unreported-usage",
+            "prompt-confounded",
+            "duplicate-environment",
+            "baseline-never-passes",
+            "dirty-worktree"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warn"]
+        },
+        "text": {
+          "description": "One plain sentence that names the metric it affects.",
+          "type": "string"
+        }
+      },
+      "required": ["cites", "evalId", "kind", "severity", "text"]
+    },
+    "Interval": {
+      "description": "A 95% interval in the parent's unit. `text`: `+66 pts to +100 pts`.",
+      "type": "object",
+      "properties": {
+        "hi": {
+          "type": "number"
+        },
+        "lo": {
+          "type": "number"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["hi", "lo", "text"]
+    },
+    "JudgeRow": {
+      "type": "object",
+      "properties": {
+        "assertion": {
+          "description": "The `expect(verdict).toPass()` label that gates on it; null for a diagnostic judgment.",
+          "type": ["string", "null"]
+        },
+        "atOrAbove": {
+          "description": "Null when `threshold` is null (diagnostic): omit from \"At or above\".",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "spread": {
+          "$ref": "#/$defs/Spread"
+        },
+        "threshold": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["assertion", "atOrAbove", "keys", "label", "question", "spread", "threshold"]
+    },
+    "JudgmentBreakdown": {
+      "type": "object",
+      "properties": {
+        "axes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pairwise": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PairwiseRow"
+          }
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeRow"
+          }
+        }
+      },
+      "required": ["axes", "pairwise", "scores"]
+    },
+    "MeasureCells": {
+      "type": "object",
+      "properties": {
+        "agentMs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "costUsd": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filesChanged": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linesAdded": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linesRemoved": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolCalls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turns": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "agentMs",
+        "costUsd",
+        "filesChanged",
+        "linesAdded",
+        "linesRemoved",
+        "tokens",
+        "toolCalls",
+        "turns"
+      ]
+    },
+    "MeasureVsBaseline": {
+      "type": "object",
+      "properties": {
+        "delta": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Delta"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lower": {
+          "description": "`3 of 4` harnesses lower than the baseline; null on the baseline.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spread"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["delta", "lower", "value"]
+    },
+    "PairwiseRow": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "aWins": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "b": {
+          "type": "string"
+        },
+        "bWins": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cut": {
+          "type": "string",
+          "enum": ["within", "across"]
+        },
+        "pairs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "question": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "$ref": "#/$defs/AttemptRef"
+                  },
+                  {
+                    "$ref": "#/$defs/AttemptRef"
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "input": {
+                "type": ["string", "null"]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "input", "text"]
+          }
+        },
+        "ties": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["a", "aWins", "b", "bWins", "cut", "pairs", "question", "reasons", "ties"]
+    },
+    "ProvenanceState": {
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "type": "string",
+          "enum": ["all", "evidence", "failures", "none"]
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  }
+                },
+                "required": ["path", "sha256"]
+              }
+            }
+          },
+          "required": ["count", "files"]
+        },
+        "record": {
+          "description": "`../<runId>.json`.",
+          "type": "string"
+        },
+        "rows": {
+          "description": "`stateRows` without its `Context` row.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": ["field", "value"]
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["artifacts", "context", "record", "rows", "warnings"]
+    },
+    "QualitativeAnswers": {
+      "type": "object",
+      "properties": {
+        "answered": {
+          "$ref": "#/$defs/Count"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Quote"
+          }
+        },
+        "question": {
+          "type": "string"
+        },
+        "themes": {
+          "description": "From the analysis; null without one.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quotes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Quote"
+                    }
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": ["quotes", "title"]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["answered", "entries", "question", "themes"]
+    },
+    "Quote": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": ["string", "null"]
+        },
+        "attempt": {
+          "$ref": "#/$defs/AttemptRef"
+        },
+        "case": {
+          "type": ["string", "null"]
+        },
+        "harness": {
+          "type": "string"
+        },
+        "input": {
+          "type": ["string", "null"]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["arm", "attempt", "case", "harness", "input", "text"]
+    },
+    "Rate": {
+      "description": "`text`: `75%`. `interval` is Wilson's; null at n = 0.",
+      "type": "object",
+      "properties": {
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "k": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rate": {
+          "type": ["number", "null"]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["interval", "k", "n", "rate", "text"]
+    },
+    "RegressionChanges": {
+      "type": "object",
+      "properties": {
+        "baseRunId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "const": "regression"
+        },
+        "prior": {
+          "description": "Prior-run identity for reproducible comparison.",
+          "type": "object",
+          "properties": {
+            "author": {
+              "type": "string"
+            },
+            "branch": {
+              "type": ["string", "null"]
+            },
+            "gitSha": {
+              "type": ["string", "null"]
+            },
+            "runId": {
+              "type": "string"
+            },
+            "startedAt": {
+              "type": "string"
+            }
+          },
+          "required": ["author", "branch", "gitSha", "runId", "startedAt"]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangeRow"
+          }
+        },
+        "unchanged": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangeRow"
+          }
+        },
+        "whatChanged": {
+          "description": "Experimental inputs that changed (`stackChanges` / config), not outcome rows.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["baseRunId", "kind", "prior", "rows", "unchanged", "whatChanged"]
+    },
+    "ReportClaim": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "change": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["skill", "docs", "eval", "judge", "reeval", "harness"]
+                },
+                "target": {
+                  "type": "string"
+                },
+                "verify": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["change", "kind", "target", "verify"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptRef"
+          }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "role": {
+          "type": "string",
+          "enum": ["finding", "caveat", "action"]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["action", "cites", "confidence", "role", "text"]
+    },
+    "RosterRow": {
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "effort": {
+          "type": ["string", "null"]
+        },
+        "gateway": {
+          "type": ["string", "null"]
+        },
+        "harness": {
+          "type": "string"
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "servedModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["attempts", "effort", "gateway", "harness", "model", "servedModels"]
+    },
+    "RunHeader": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "cost": {
+          "description": "Null when no attempt or judge call has a cost.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "agent": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Figure"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "basis": {
+                  "type": "string",
+                  "enum": ["reported", "estimated", "mixed"]
+                },
+                "judge": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Figure"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "total": {
+                  "description": "Labeled total when agent and judge are both present; else null.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Figure"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": ["agent", "basis", "judge", "total"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "git": {
+          "description": "`repo` is the basename of `git.remote`.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "dirty": {
+                  "type": "boolean"
+                },
+                "repo": {
+                  "type": ["string", "null"]
+                },
+                "sha": {
+                  "type": "string"
+                }
+              },
+              "required": ["branch", "dirty", "repo", "sha"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": ["string", "null"]
+        },
+        "reeval": {
+          "type": "string"
+        },
+        "runsPerCell": {
+          "description": "Null when cells ran different counts.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["complete", "interrupted", "budget"]
+        },
+        "tally": {
+          "$ref": "#/$defs/RunTally"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tokens": {
+          "description": "`input + output + cacheRead + cacheWrite` (`totalTokens`); null when no attempt reported usage.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cacheRead": {
+                  "$ref": "#/$defs/Figure"
+                },
+                "total": {
+                  "$ref": "#/$defs/Figure"
+                }
+              },
+              "required": ["cacheRead", "total"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wall": {
+          "$ref": "#/$defs/Figure"
+        }
+      },
+      "required": [
+        "author",
+        "cost",
+        "git",
+        "profile",
+        "reeval",
+        "runsPerCell",
+        "startedAt",
+        "status",
+        "tally",
+        "title",
+        "tokens",
+        "wall"
+      ]
+    },
+    "RunReport": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "description": "From the analysis; empty without one.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportClaim"
+          }
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptIndexRow"
+          }
+        },
+        "evals": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvalSection"
+          }
+        },
+        "header": {
+          "$ref": "#/$defs/RunHeader"
+        },
+        "integrity": {
+          "description": "Empty when clean; the block is then omitted.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IntegrityIssue"
+          }
+        },
+        "provenance": {
+          "$ref": "#/$defs/ProvenanceState"
+        },
+        "reportVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "rollup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutiveRollup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "roster": {
+          "description": "Empty unless `evals.length >= 2` and two or more harnesses ran.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RosterRow"
+          }
+        },
+        "runId": {
+          "type": "string"
+        },
+        "single": {
+          "description": "`evals.length === 1`: the eval is the `#` title and every block moves up one level.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "actions",
+        "attempts",
+        "evals",
+        "header",
+        "integrity",
+        "provenance",
+        "reportVersion",
+        "rollup",
+        "roster",
+        "runId",
+        "single"
+      ]
+    },
+    "RunTally": {
+      "type": "object",
+      "properties": {
+        "counted": {
+          "description": "Pass plus fail over gated cells: the pass-rate denominator.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "infraError": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reclassified": {
+          "description": "Of `infraError`: attempts an unhandled turn error moved out of pass or fail.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ungated": {
+          "description": "Ungated cells (baselines by default), never in `counted`.",
+          "type": "object",
+          "properties": {
+            "failed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "passed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["failed", "passed"]
+        }
+      },
+      "required": [
+        "counted",
+        "failed",
+        "infraError",
+        "passed",
+        "reclassified",
+        "skipped",
+        "ungated"
+      ]
+    },
+    "Spread": {
+      "type": "object",
+      "properties": {
+        "median": {
+          "$ref": "#/$defs/Figure"
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "q1": {
+          "$ref": "#/$defs/Figure"
+        },
+        "q3": {
+          "$ref": "#/$defs/Figure"
+        }
+      },
+      "required": ["median", "n", "q1", "q3"]
+    },
+    "TaskResults": {
+      "type": "object",
+      "properties": {
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AssertionRow"
+          }
+        },
+        "axes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "breakdown": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BreakdownRow"
+          }
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "const": "task"
+        },
+        "median": {
+          "description": "The cross-group median row; null with one group.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BreakdownRow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["assertions", "axes", "breakdown", "columns", "kind", "median"]
+    },
+    "VariantComparison": {
+      "type": "object",
+      "properties": {
+        "arms": {
+          "description": "Baseline first, then variants in declaration order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Arm"
+          }
+        },
+        "assertionsByArm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AssertionRow"
+          }
+        },
+        "behavior": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BehaviorRow"
+          }
+        },
+        "contrasts": {
+          "description": "From `contrastsOf`; empty with one variant.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContrastRow"
+          }
+        },
+        "effortByHarness": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EffortPivotRow"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "const": "comparison"
+        },
+        "summary": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArmRow"
+          }
+        },
+        "uniformLead": {
+          "description": "Set when every arm passed every applicable assertion; `assertionsByArm` is then empty.",
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "arms",
+        "assertionsByArm",
+        "behavior",
+        "contrasts",
+        "effortByHarness",
+        "kind",
+        "summary",
+        "uniformLead"
+      ]
+    }
+  },
+  "x-schemaVersion": 1
+}

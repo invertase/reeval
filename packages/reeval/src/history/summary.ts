@@ -107,3 +107,15 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 export function renderSummary(run: RunRecord, opts: RunReportOptions = {}): string {
   return runReportMarkdown(buildRunReport(run, { links: { base: './' }, ...opts }))
 }
+
+/** The `RunReport` behind summary.md, in the run's folder beside it. */
+export const REPORT_FILE = 'report.json'
+
+/** summary.md and report.json for a run's folder, from one `RunReport`. */
+export function summaryFiles(run: RunRecord, opts: RunReportOptions = {}): Map<string, Buffer> {
+  const report = buildRunReport(run, { links: { base: './' }, ...opts })
+  return new Map([
+    ['summary.md', Buffer.from(runReportMarkdown(report))],
+    [REPORT_FILE, Buffer.from(`${JSON.stringify(report, null, 2)}\n`)],
+  ])
+}

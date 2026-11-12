@@ -1737,12 +1737,13 @@ evaluate('greets', { runs: 1 }, async (c) => {
       ),
       analysisAdded.join(', '),
     )
-    // --save re-renders summary.md so analysis claims appear; other run files stay byte-identical.
+    // --save re-renders summary.md and report.json so analysis claims appear; other run files stay byte-identical.
     for (const [file, hash] of before) {
-      if (file.endsWith('/summary.md') || file === `${HEAD}/summary.md`) continue
+      if (file.endsWith('/summary.md') || file.endsWith('/report.json')) continue
       assert.equal(after.get(file), hash, `${file} is untouched`)
     }
     assert.ok(after.has(`${HEAD}/summary.md`), 'summary.md still present after re-render')
+    assert.ok(after.has(`${HEAD}/report.json`), 'report.json is rendered beside summary.md')
     assert.equal(readdirSync(join(p.dir, '.reeval/analysis')).length, 1, 'the cache has it too')
 
     const twice = await runCli(p.dir, ['analyze', '--save'])

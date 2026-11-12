@@ -151,6 +151,26 @@ describe('persisted shapes', () => {
     )
   })
 
+  test("Zod's shapes are walked too: a `type` list and a discriminated union's `oneOf`", () => {
+    const now = snapshot('run-report')
+    const wider = copy(now)
+    const change = def(wider, 'Arm').properties?.change as Schema
+    assert.deepEqual(change.type, ['string', 'null'])
+    change.type = ['string', 'null', 'number']
+    const ref = def(wider, 'AttemptRef')
+    ref.properties = { ...ref.properties, gone: { type: 'string' } }
+    const changes = compare(wider, now, none).filter((c) => c.breaking)
+    assert.ok(
+      changes.some(
+        (c) =>
+          c.kind === 'narrowed' && c.path === 'evals[].primary.<kind=comparison>.arms[].change',
+      ),
+      changes.map((c) => c.path).join('\n'),
+    )
+    assert.ok(changes.some((c) => c.kind === 'removed' && c.path === 'rollup.lead.cites[].gone'))
+    assert.deepEqual(compare(now, copy(now), none), [])
+  })
+
   test('widening passes: an older reeval reading the new file is the forward-direction test', () => {
     const now = snapshot('run-record')
     const wider = copy(now)

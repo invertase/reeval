@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Assert, Same } from '../../contract/shared.ts'
-import { NewerSchemaError } from '../record.ts'
+import { fillDefaults, MIGRATIONS, NewerSchemaError } from '../record.ts'
 import type {
   Arm,
   ArmRef,
@@ -698,6 +698,58 @@ export {
   spreadSchema,
 }
 
+/**
+ * Each named schema by the type in `./types.ts` it validates: the `$defs` of `report.json`'s JSON
+ * Schema snapshot (`pnpm schema:update`), which takes each def's descriptions from that type.
+ */
+export const REPORT_SCHEMAS: Record<string, z.ZodType> = {
+  Arm: armSchema,
+  ArmRef: armRefSchema,
+  ArmRow: armRowSchema,
+  AssertionRow: assertionRowSchema,
+  AttemptIndexRow: attemptIndexRowSchema,
+  AttemptRef: attemptRefSchema,
+  BehaviorRow: behaviorRowSchema,
+  BreakdownRow: breakdownRowSchema,
+  CaptureGallery: captureGallerySchema,
+  CaptureShot: captureShotSchema,
+  ChangeRow: changeRowSchema,
+  CheckCell: checkCellSchema,
+  ChoiceBreakdown: choiceBreakdownSchema,
+  ContrastRow: contrastRowSchema,
+  Count: countSchema,
+  Delta: deltaSchema,
+  DiscoveryRate: discoveryRateSchema,
+  EffortPivotRow: effortPivotRowSchema,
+  EvalHeadline: evalHeadlineSchema,
+  EvalSection: evalSectionSchema,
+  ExecutiveRollup: executiveRollupSchema,
+  FailureCluster: failureClusterSchema,
+  FailureClusters: failureClustersSchema,
+  Figure: figureSchema,
+  HeadlinePrimary: headlinePrimarySchema,
+  IntegrityIssue: integrityIssueSchema,
+  Interval: intervalSchema,
+  JudgeRow: judgeRowSchema,
+  JudgmentBreakdown: judgmentBreakdownSchema,
+  MeasureCells: measureCellsSchema,
+  MeasureVsBaseline: measureVsBaselineSchema,
+  PairwiseRow: pairwiseRowSchema,
+  ProvenanceState: provenanceStateSchema,
+  QualitativeAnswers: qualitativeAnswersSchema,
+  Quote: quoteSchema,
+  Rate: rateSchema,
+  RegressionChanges: regressionChangesSchema,
+  ReportClaim: reportClaimSchema,
+  RosterRow: rosterRowSchema,
+  RunHeader: runHeaderSchema,
+  RunReport: runReportSchema,
+  RunTally: runTallySchema,
+  Spread: spreadSchema,
+  TaskResults: taskResultsSchema,
+  VariantComparison: variantComparisonSchema,
+}
+
 /** The newest `reportVersion` this reeval writes and reads. */
 export const REPORT_VERSION = 1
 
@@ -753,14 +805,21 @@ function loose<T extends z.ZodType>(schema: T): T {
 export const looseRunReportSchema: z.ZodType<RunReport> = loose(runReportSchema)
 
 /**
- * A stored `report.json` as a reader sees it: fields a newer reeval added, at any depth, pass
- * through, while a missing or mistyped field fails the parse. One with a `reportVersion` above
- * this reeval's throws a `NewerSchemaError`.
+ * A stored `report.json` as a reader sees it: migrated to this reeval's `reportVersion`, each field
+ * added after it was written read as its default (`READ_DEFAULTS['run-report']`), and fields a
+ * newer reeval added, at any depth, passed through, while a missing or mistyped field fails the
+ * parse. One with a `reportVersion` above this reeval's throws a `NewerSchemaError`.
  */
 export function readableRunReport(value: unknown, what = 'This report'): RunReport {
-  const version = (value as { reportVersion?: unknown } | null)?.reportVersion
+  let version = (value as { reportVersion?: unknown } | null)?.reportVersion
   if (typeof version === 'number' && version > REPORT_VERSION) {
     throw new NewerSchemaError(what, version, REPORT_VERSION)
   }
-  return looseRunReportSchema.parse(value)
+  let v = value
+  for (; typeof version === 'number' && version < REPORT_VERSION; version++) {
+    const migrate = MIGRATIONS['run-report']?.[version]
+    if (!migrate) break
+    v = migrate(v as never)
+  }
+  return looseRunReportSchema.parse(fillDefaults('run-report', v))
 }

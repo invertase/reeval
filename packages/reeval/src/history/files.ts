@@ -33,7 +33,7 @@ import {
   ignoredRecordedFiles,
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
-import { renderSummary } from './summary.ts'
+import { summaryFiles } from './summary.ts'
 import type {
   ArtifactLevel,
   ArtifactRef,
@@ -809,7 +809,9 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       files.set(REMARKS_FILE, remarkBytes)
     } catch {}
   }
-  if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
+  if (level !== 'none') {
+    for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
+  }
   const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
   if (debug) record.debug = debug
 
