@@ -24,22 +24,38 @@ type Args = {
   handshakeMs?: number
 }
 
-/** The run's summary.md, from the history folder or `.reeval/runs`; null when neither has one. */
-function summaryPath(source: StudioSource, runId: string): string | null {
-  for (const dir of [source.historyDir, scratchDir(source.root)]) {
+/** The run's summary.md, from the history folder or `.reeval/runs`, and whether it is recorded. */
+function summaryPath(
+  source: StudioSource,
+  runId: string,
+): { file: string; recorded: boolean } | null {
+  for (const [dir, recorded] of [
+    [source.historyDir, true],
+    [scratchDir(source.root), false],
+  ] as const) {
     const file = join(dir, runId, 'summary.md')
-    if (existsSync(file)) return file
+    if (existsSync(file)) return { file, recorded }
   }
   return null
 }
 
+type TimeoutRun = { runId: string; report: string | null; recorded: boolean }
+
 /** What `reeval studio` prints when the hosted page hasn't paired in time: why, and what to open instead. */
-export function handshakeTimeoutLines(server: string, report: string | null): string[] {
+export function handshakeTimeoutLines(server: string, run: TimeoutRun | null): string[] {
+  const share = !run
+    ? []
+    : run.recorded
+      ? [`Or run reeval studio share ${run.runId} to view it in the hosted studio.`]
+      : [
+          `Or record it with reeval record ${run.runId}, then run reeval studio share to view it in the hosted studio.`,
+        ]
   return [
     `The studio page hasn't connected yet: your browser may block it from reaching ${server}.`,
     '  Chrome and Firefox ask first whether the page may reach apps on your device: choose Allow.',
     "  Safari can't reach a local server from a secure page: open the address in Chrome or Firefox.",
-    ...(report ? [`The run's Markdown report is at ${report}`] : []),
+    ...(run?.report ? [`The run's Markdown report is at ${run.report}`] : []),
+    ...share,
   ]
 }
 
@@ -75,8 +91,9 @@ export async function studioCommand({ config, flags, version, run, handshakeMs =
   const waiting = setTimeout(() => {
     if (paired) return
     const summary = focus ? summaryPath(source, focus) : null
-    const report = summary ? fromCwd(summary) || summary : null
-    for (const line of handshakeTimeoutLines(studio.server, report)) console.log(line)
+    const report = summary ? fromCwd(summary.file) || summary.file : null
+    const timeoutRun = focus ? { runId: focus, report, recorded: summary?.recorded ?? false } : null
+    for (const line of handshakeTimeoutLines(studio.server, timeoutRun)) console.log(line)
   }, handshakeMs)
   await new Promise<void>((resolveStop) => {
     process.once('SIGINT', resolveStop)

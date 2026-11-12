@@ -1336,17 +1336,28 @@ describe('a record landing while the studio lists runs', () => {
 
 describe('reeval studio', () => {
   test("says why the page may not have paired and where the run's report is", () => {
-    const lines = handshakeTimeoutLines('http://127.0.0.1:4984', '.reeval/runs/r1/summary.md')
+    const scratch = { runId: 'r1', report: '.reeval/runs/r1/summary.md', recorded: false }
+    const lines = handshakeTimeoutLines('http://127.0.0.1:4984', scratch)
     assert.match(
       lines[0] as string,
       /hasn't connected yet: .* reaching http:\/\/127\.0\.0\.1:4984\./,
     )
     assert.ok(lines.some((l) => /Chrome and Firefox ask first .*choose Allow/.test(l)))
     assert.ok(lines.some((l) => /Safari can't reach a local server from a secure page/.test(l)))
-    assert.equal(lines.at(-1), "The run's Markdown report is at .reeval/runs/r1/summary.md")
+    assert.ok(lines.includes("The run's Markdown report is at .reeval/runs/r1/summary.md"))
+    assert.equal(
+      lines.at(-1),
+      'Or record it with reeval record r1, then run reeval studio share to view it in the hosted studio.',
+    )
+    const recorded = { runId: 'r2', report: 'history/r2/summary.md', recorded: true }
+    assert.equal(
+      handshakeTimeoutLines('http://127.0.0.1:4984', recorded).at(-1),
+      'Or run reeval studio share r2 to view it in the hosted studio.',
+    )
+    const bare = handshakeTimeoutLines('http://127.0.0.1:4984', null)
     assert.ok(
-      handshakeTimeoutLines('http://127.0.0.1:4984', null).every((l) => !/report/.test(l)),
-      'no report line when the run has no summary.md',
+      bare.every((l) => !/report|share/.test(l)),
+      'no report or share line without a run',
     )
   })
 
@@ -1440,6 +1451,7 @@ describe('reeval studio', () => {
         out,
         new RegExp(`Markdown report is at \\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`),
       )
+      assert.match(out, /then run reeval studio share to view it in the hosted studio/)
 
       const local = server
       const pair = await fetch(`${local}${studioPaths.pair()}`, {
