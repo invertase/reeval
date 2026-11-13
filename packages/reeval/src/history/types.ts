@@ -938,6 +938,12 @@ export type RunRecord = {
   retriedAt?: string[]
   author: string
   git: GitInfo | null
+  /**
+   * The run's trace, `spans.jsonl`: what ran where and when, one OpenTelemetry-shaped span per line
+   * (`RunSpan`): the run, its image builds, each machine and container, and each attempt with its
+   * lease and phases. Absent in records from before reeval wrote one.
+   */
+  spans?: FileRef
   runner: RunnerInfo
   dependencies: {
     /** Lockfiles in the project root (and the repo root, if different), by content hash. */

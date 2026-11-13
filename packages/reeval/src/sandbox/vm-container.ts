@@ -157,6 +157,7 @@ export async function createVmContainerSandbox(
           id: info.id,
           name: info.name,
         },
+        machineSpan: lease.span,
       })
     } catch (error) {
       await done(true)

@@ -1259,6 +1259,16 @@ async function runCommand(
   }
   const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions, leftOut } =
     executed
+  const exportDone = async () => {
+    const why = await executed.exported
+    if (why)
+      renderer.onEvent({
+        type: 'notice',
+        at: Date.now(),
+        level: 'warn',
+        text: `OpenTelemetry export: ${why}`,
+      })
+  }
   const { retried } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   if ((interrupted || engineRun.canceled) && plan) {
@@ -1268,6 +1278,7 @@ async function runCommand(
   if (plan) await reapOrphans(plan.sandboxes)
   if (engineRun.stopped || !plan) {
     live?.remove()
+    await exportDone()
     renderer.close()
     return EXIT.ok
   }
@@ -1370,6 +1381,7 @@ async function runCommand(
   const endRun = async (recorded?: RecordedPaths) => {
     if (ended) return
     ended = true
+    await exportDone()
     renderer.onEvent({
       type: 'run-end',
       at: Date.now(),
@@ -2310,7 +2322,10 @@ async function executeRun(
         {
           root: config.root,
           runId,
-          onEvent: (e) => renderer.onEvent({ type: 'prepare', at: Date.now(), ...e }),
+          onEvent: (e) => {
+            trace?.prepare(e)
+            renderer.onEvent({ type: 'prepare', at: Date.now(), ...e })
+          },
           ...(setup.registry ? { registry: setup.registry } : {}),
         },
       )
@@ -2347,6 +2362,23 @@ async function executeRun(
   let cutShort = false
   const { MACHINES, MachineService } = await import('./sandbox/machine-service.ts')
   const machines = new MachineService()
+  const { TRACE } = await import('./trace/spans.ts')
+  const { RunTrace } = await import('./trace/run.ts')
+  const { exportSpans, otlpTarget } = await import('./trace/otlp.ts')
+  const exporting = otlpTarget(process.env)
+  let exported: Promise<string | null> = Promise.resolve(null)
+  let runStarted = false
+  const trace = setup.dryRun
+    ? undefined
+    : new RunTrace({
+        dir: stagingDir,
+        runId,
+        keep: typeof exporting === 'object' && exporting !== null,
+        attributes: {
+          'reeval.version': version,
+          ...(profile && { 'reeval.profile': profile.name }),
+        },
+      }).install()
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
@@ -2359,12 +2391,15 @@ async function executeRun(
         call: (owner, service, body) =>
           service === MACHINES
             ? machines.call(owner, body)
-            : service === SECRETS_SERVICE
-              ? Promise.resolve(heldSecrets())
-              : Promise.reject(new Error(`This run has no ${service} service`)),
+            : service === TRACE
+              ? (trace?.call(body) ?? Promise.resolve(null))
+              : service === SECRETS_SERVICE
+                ? Promise.resolve(heldSecrets())
+                : Promise.reject(new Error(`This run has no ${service} service`)),
         released: (owner) => machines.released(owner),
       },
       onRunStart: (files) => {
+        runStarted = true
         writeCurrent(setup.config.root, runId)
         live = writeLiveProgress({
           dir: stagingDir,
@@ -2482,6 +2517,14 @@ async function executeRun(
   } finally {
     clearTimeout(budgetTimer)
     await machines.close()
+    if (trace) {
+      const spans = trace.close({
+        status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
+        started: runStarted,
+      })
+      // Awaited only once the run's record is written: a slow collector never holds it up.
+      exported = exportSpans(spans, process.env, version)
+    }
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
     const { removePreparedWorkspaces } = await import('./workspace.ts')
@@ -2506,6 +2549,7 @@ async function executeRun(
     cutShort,
     live,
     questions,
+    exported,
     leftOut,
     /** The attempts that ran again after an infra error, by key; none on a dry run. */
     retried: setup.dryRun ? new Set<string>() : retried,
