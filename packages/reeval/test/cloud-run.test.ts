@@ -97,6 +97,17 @@ async function fixtureProject(answer = '42') {
   return p.dir
 }
 
+/** The fixture project, linked to `proj_a` in `org_a`. */
+async function linkedFixture() {
+  const dir = await fixtureProject()
+  mkdirSync(join(dir, '.reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, '.reeval/project.json'),
+    JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+  )
+  return dir
+}
+
 /** Where the platform's machine extracts a bundle, with `reeval` resolving to this package. */
 function extractRoot(): string {
   const dir = tempDir('cloud-tmp')
@@ -177,7 +188,13 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * `exitCode` when given.
  */
 async function platform(
-  options: { fails?: string; exitCode?: number; env?: Record<string, string> } = {},
+  options: {
+    fails?: string
+    exitCode?: number
+    env?: Record<string, string>
+    /** The linked project's secret names, or the status the route answers; no route when unset. */
+    secretNames?: string[] | number
+  } = {},
 ) {
   const seen: Seen[] = []
   const tmp = extractRoot()
@@ -208,6 +225,16 @@ async function platform(
     const body = await bodyOf(req)
     if (req.method === 'GET' && url.pathname === '/api/config') {
       return json(res, 200, { gatewayBaseUrl: null })
+    }
+    if (
+      req.method === 'GET' &&
+      url.pathname === '/api/orgs/org_a/projects/proj_a/secret-names' &&
+      options.secretNames !== undefined
+    ) {
+      const names = options.secretNames
+      return typeof names === 'number'
+        ? json(res, names, { error: { code: 'internal', message: 'down' } })
+        : json(res, 200, { names })
     }
     if (
       req.method === 'POST' &&
@@ -371,6 +398,69 @@ describe('reeval run on the cloud platform', () => {
       )
     } finally {
       await p.close()
+    }
+  })
+
+  test('stops before uploading, naming them, when the linked project lacks secrets the run needs', async () => {
+    const p = await platform({ secretNames: ['AI_GATEWAY_API_KEY', 'OTHER_KEY'] })
+    try {
+      const dir = await linkedFixture()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /The cloud project proj_a lacks 2 secrets this run needs, so nothing was uploaded:\n {2}CHECK_TOKEN\n {2}FROM_FILE \(read from \.env\)\nAdd each with reeval cloud secrets set <name>/,
+      )
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.deepEqual(
+        p.seen.map((s) => `${s.method} ${s.path}`),
+        ['GET /api/config', 'GET /api/orgs/org_a/projects/proj_a/secret-names'],
+      )
+      assert.equal(p.seen[1]?.auth, 'Bearer cloud-test-token')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('runs when the linked project has every secret the run needs', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const r = await runCli(await linkedFixture(), ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(
+        p.seen.slice(0, 3).map((s) => `${s.method} ${s.path}`),
+        [
+          'GET /api/config',
+          'GET /api/orgs/org_a/projects/proj_a/secret-names',
+          'POST /api/orgs/org_a/projects/proj_a/runs',
+        ],
+      )
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('skips the secrets check, with a debug line, when the platform cannot list the names', async () => {
+    for (const secretNames of [undefined, 500]) {
+      const p = await platform({ secretNames })
+      try {
+        const r = await runCli(await linkedFixture(), ['run', '--cloud'], {
+          env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token', REEVAL_DEBUG: '1' },
+        })
+        assert.equal(r.code, 0, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          new RegExp(`cloud: secrets check skipped: HTTP ${secretNames ?? 404}`),
+        )
+        assert.ok(p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+      } finally {
+        await p.close()
+      }
     }
   })
 
