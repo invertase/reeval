@@ -1150,6 +1150,8 @@ async function cloudTarget(
     bundle: made,
     project,
     log: (line) => console.log(dim(line)),
+    ...(process.stdin.isTTY && process.stdout.isTTY && { confirm }),
+    ...(flags.force && { force: true }),
     follow: (options) => attachHere(flags, options),
     ...(flags.download && {
       download: {

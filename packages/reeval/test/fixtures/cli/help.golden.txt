@@ -28,7 +28,8 @@ Usage:
                                 come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
-    --force                     Run even when the plan is over budget.attempts
+    --force                     Run even when the plan is over budget.attempts; on --cloud, without
+                                asking, when the linked project lacks names .env files set here
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
