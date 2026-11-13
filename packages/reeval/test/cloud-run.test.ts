@@ -2278,4 +2278,55 @@ describe('reeval run --cloud --resume', () => {
       await p.close()
     }
   })
+
+  test('a --dry-run resume of a downloaded run keeps it a download, which still resumes in the cloud', async () => {
+    const ran = await platform()
+    const dir = await fixtureProject()
+    let runId: string
+    try {
+      const r = await runCli(dir, ['run', '--cloud', '--download'], {
+        env: { REEVAL_CLOUD_URL: ran.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const name = readdirSync(join(dir, '.reeval/runs')).find((n) => n.endsWith('.json'))
+      assert.ok(name)
+      runId = name.slice(0, -'.json'.length)
+      const file = join(dir, '.reeval/runs', name)
+      const record = JSON.parse(readFileSync(file, 'utf8'))
+      record.status = 'budget'
+      for (const e of record.evals) {
+        e.attempts = e.attempts.map((a: object) => ({
+          ...a,
+          outcome: 'skipped',
+          error: null,
+          files: {},
+          checks: [],
+        }))
+      }
+      writeFileSync(file, JSON.stringify(record))
+    } finally {
+      await ran.close()
+    }
+    const marker = join(dir, '.reeval/cloud', `${runId}.json`)
+    for (const args of [
+      ['--resume', runId],
+      ['--local', '--resume', runId],
+    ]) {
+      const dry = await runCli(dir, ['run', ...args, '--dry-run'])
+      assert.equal(dry.code, 0, `${args.join(' ')}: ${dry.stdout}${dry.stderr}`)
+      assert.ok(existsSync(marker), `${args.join(' ')} --dry-run keeps the marker`)
+    }
+    const p = await platform({ resume: [] })
+    try {
+      cloudConfig(dir)
+      const real = await runCli(dir, ['run', '--resume', runId], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(real.code, 0, real.stdout + real.stderr)
+      assert.match(real.stdout, /Resumed cloud run run_1/)
+      assert.doesNotMatch(real.stdout, /continues here/)
+    } finally {
+      await p.close()
+    }
+  })
 })

@@ -1292,10 +1292,6 @@ async function runCommand(
   const cloud = bundled ? undefined : await cloudTarget(runFlags, setup, filters, configPath)
   if (cloud && 'exit' in cloud) return cloud.exit
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
-  if (resumed?.runId && configPath !== undefined) {
-    const { forgetCloudOrigin } = await import('./cloud-files.ts')
-    await forgetCloudOrigin(dirname(configPath), resumed.runId)
-  }
   const ctx = await startRun(setup, bundled)
   const startedWith: RunInvocation | undefined = resumed
     ? (resumed.saved ?? undefined)
@@ -1377,7 +1373,7 @@ async function runCommand(
     })
   } catch (error) {
     renderer.close()
-    if (ctx.retry) await restoreRetry(setup.config.root, ctx.runId)
+    if (ctx.retry) await undoRetry(setup.config.root, ctx)
     else if (setup.resume === undefined) {
       await rm(ctx.stagingDir, { recursive: true, force: true })
     }
@@ -1415,7 +1411,7 @@ async function runCommand(
       questions?.cancel()
       live?.remove()
       renderer.close()
-      await restoreRetry(setup.config.root, ctx.runId)
+      await undoRetry(setup.config.root, ctx)
       throw new UsageError(
         `run ${ctx.runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, ctx.runId)} only with the plan they ran with, so the run is left as it was: put it back, or start a new run with reeval run.`,
       )
@@ -1664,6 +1660,14 @@ async function cloudContinue(
     follow: (options) => attachHere(flags, options),
     ...(download && { download }),
   })
+}
+
+/** Puts back a retry that stopped before it changed the run, with its `.reeval/cloud` marker. */
+async function undoRetry(root: string, ctx: StartedRun): Promise<void> {
+  await restoreRetry(root, ctx.runId)
+  if (ctx.forgotOrigin === undefined) return
+  const { rememberCloudOrigin } = await import('./cloud-files.ts')
+  await rememberCloudOrigin(root, ctx.runId, ctx.forgotOrigin)
 }
 
 /**
@@ -1932,6 +1936,8 @@ type StartedRun = RunContext & {
   /** A retry's run, prepared once its plan is known to be the run's. */
   /** `--retry-errors`'s run, which it moves aside only once its plan is the run's. */
   retryTarget?: ResumeTarget
+  /** The `.reeval/cloud` marker a retry removed as it set the run aside, which undoing it puts back. */
+  forgotOrigin?: string
   /**
    * A `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process
    * started it; `startedAt` is the run's own start. `began`: when the retry a resume finishes
@@ -1979,8 +1985,10 @@ async function startRun(
   if (resume !== undefined || retry !== undefined) {
     const target = await continuedRun(config.root, { resume, 'retry-errors': retry }, bundled)
     // A retry moves the finished run aside only once its plan is the run's.
-    if (!dryRun && retry === undefined) await prepareResume(target, config.root)
-    else if (!dryRun) holdRetry(target, config.root)
+    if (!dryRun && retry === undefined) {
+      await prepareResume(target, config.root)
+      await (await import('./cloud-files.ts')).forgetCloudOrigin(config.root, target.runId)
+    } else if (!dryRun) holdRetry(target, config.root)
     const stopped = retry === undefined ? await stoppedRetry(config.root, target) : null
     if (!dryRun) await sweep(config.root, target.runId)
     const aside = dryRun
@@ -2269,6 +2277,9 @@ async function executeRun(
       }
       if (ctx.retryTarget && !setup.dryRun) {
         await prepareResume(ctx.retryTarget, config.root, { held: true })
+        const { forgetCloudOrigin } = await import('./cloud-files.ts')
+        const forgot = await forgetCloudOrigin(config.root, runId)
+        if (forgot !== null) ctx.forgotOrigin = forgot
         const aside = await loadPrevious(stagingDir)
         ctx.previous = aside.record ?? ctx.previous
         ctx.previousArtifacts = aside.artifacts

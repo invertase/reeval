@@ -515,10 +515,19 @@ export async function cloudOriginOf(
 }
 
 /**
- * Forgets that run `runId` came from a cloud run, as its continuation on this machine starts: its
- * files are this machine's from then on, so `reeval run --resume` keeps it here and a download
- * never writes over them.
+ * Forgets that run `runId` came from a cloud run, as its continuation on this machine sets the
+ * run aside: its files are this machine's from then on, so `reeval run --resume` keeps it here
+ * and a download never writes over them. Returns the marker it removed, or null.
  */
-export async function forgetCloudOrigin(root: string, runId: string): Promise<void> {
-  await rm(join(originDir(root), `${runId}.json`), { force: true })
+export async function forgetCloudOrigin(root: string, runId: string): Promise<string | null> {
+  const file = join(originDir(root), `${runId}.json`)
+  const text = await readFile(file, 'utf8').catch(() => null)
+  await rm(file, { force: true })
+  return text
+}
+
+/** Puts back the marker {@link forgetCloudOrigin} removed, for a continuation undone unchanged. */
+export async function rememberCloudOrigin(root: string, runId: string, text: string) {
+  await mkdir(originDir(root), { recursive: true })
+  await writeFile(join(originDir(root), `${runId}.json`), text)
 }
