@@ -1,7 +1,6 @@
 // `reeval login`, `logout` and `whoami` against a fake platform that runs the device flow
 // (RFC 8628) and answers `/api/me` for the tokens it gave out.
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -154,6 +153,9 @@ esac
   chmodSync(join(bin, 'secret-tool'), 0o755)
   return {
     log,
+    /** Puts `token` in the keyring under `account`, as `secret-tool store` would. */
+    seed: (account: string, token: string) =>
+      writeFileSync(join(store, `${account}\n`.replace(/[^a-zA-Z0-9]/g, '_')), token),
     env: {
       REEVAL_NO_KEYCHAIN: '',
       DBUS_SESSION_BUS_ADDRESS: 'unix:path=/fake',
@@ -365,19 +367,14 @@ describe('reeval login, whoami and logout', () => {
   }, async () => {
     const p = await platform({ pending: 0 })
     try {
-      const { log, env } = secretTool()
+      const { log, seed, env } = secretTool()
       const m = machine(p.base, env)
       const dir = tempDir('login-cwd')
       const slashed = `${p.base}/`
       const login = { store: 'keychain', user: USER, signedInAt: '2026-11-01T00:00:00Z' }
       mkdirSync(join(m.config, 'reeval'), { recursive: true })
       writeFileSync(m.file, JSON.stringify({ schemaVersion: 1, logins: { [slashed]: login } }))
-      const seeded = spawnSync(
-        'secret-tool',
-        ['store', '--label=x', 'service', 'reeval', 'account', slashed],
-        { env: { ...process.env, ...m.env }, input: 'old-token' },
-      )
-      assert.equal(seeded.status, 0)
+      seed(slashed, 'old-token')
       p.live.add('old-token')
       const who = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(who.code, 0, who.stdout + who.stderr)
