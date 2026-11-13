@@ -1239,10 +1239,8 @@ async function runCommand(
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
   }
-  if (flags.resume !== undefined && flags.cloud) {
-    throw new UsageError(
-      "--resume with --cloud isn't supported by this reeval yet: reeval run --resume continues a run on this machine",
-    )
+  if ((flags.resume !== undefined || retry !== undefined) && !flags.local) {
+    await refuseCloudContinue(flags, configPath)
   }
   if (retry !== undefined && (given.length || flags.tag?.length || flags.trait?.length)) {
     throw new UsageError(
@@ -1558,6 +1556,37 @@ async function runCommand(
  * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
  * so it plans with the flags given now, with a note.
  */
+/**
+ * Refuses `--resume` or `--retry-errors` on a run that goes to the cloud, from `--cloud` or the
+ * config's or profile's `cloud`, before anything looks for the run here.
+ */
+async function refuseCloudContinue(flags: Flags, configPath: string | undefined) {
+  const { wantsCloud } = await import('./cloud-run.ts')
+  let cloud = !!flags.cloud
+  if (!cloud) {
+    const path = requireConfig(configPath)
+    loadEnvFiles(path)
+    const loaded = await loadConfig(
+      path,
+      'run',
+      flags.profile ?? (process.env.REEVAL_PROFILE || undefined),
+    )
+    let profile: ReturnType<typeof selectProfile> = null
+    try {
+      profile = selectProfile(loaded, flags.profile)
+    } catch (error) {
+      // The resume checks report a profile the config no longer defines, naming the run's own.
+      if (!(error instanceof UsageError)) throw error
+    }
+    cloud = wantsCloud(flags, loaded, profile)
+  }
+  if (!cloud) return
+  const flag = flags.resume !== undefined ? '--resume' : '--retry-errors'
+  throw new UsageError(
+    `${flag} with a cloud run isn't supported by this reeval yet: pass --local to continue a run on this machine`,
+  )
+}
+
 async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
   const path = requireConfig(configPath)
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.

@@ -996,13 +996,6 @@ describe('reeval run on the cloud platform', () => {
     })
     assert.equal(local.code, 2)
     assert.match(local.stderr, /--concurrency applies to a run on this machine/)
-    for (const resume of [['--resume', 'run_1'], ['--resume']]) {
-      const resumed = await runCli(dir, ['run', '--cloud', ...resume], {
-        env: { REEVAL_CLOUD_URL: 'https://platform.test' },
-      })
-      assert.equal(resumed.code, 2, resumed.stdout + resumed.stderr)
-      assert.match(resumed.stderr, /--resume with --cloud isn't supported by this reeval yet/)
-    }
     const creds = await runCli(dir, ['run', '--cloud'], {
       env: { REEVAL_CLOUD_URL: 'https://u:secret@platform.test' },
     })
@@ -1016,6 +1009,46 @@ describe('reeval run on the cloud platform', () => {
       })
       assert.equal(token.code, 2, token.stdout + token.stderr)
       assert.match(token.stderr, /REEVAL_TOKEN has whitespace or a control character \(U\+000a\)/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--resume and --retry-errors on a cloud run exit 2 before looking for the run, from --cloud or the config, and --local continues one here', async () => {
+    const p = await platform()
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    const continues = [
+      ['--resume', 'run_1'],
+      ['--resume'],
+      ['--retry-errors', 'run_1'],
+      ['--retry-errors'],
+    ]
+    try {
+      const dir = await fixtureProject()
+      for (const args of continues) {
+        const r = await runCli(dir, ['run', '--cloud', ...args], { env })
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`${args[0]} with a cloud run isn't supported by this reeval yet`),
+        )
+      }
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace('defineConfig({', 'defineConfig({\n  cloud: true,'),
+      )
+      for (const args of continues) {
+        const r = await runCli(dir, ['run', ...args], { env })
+        assert.equal(r.code, 2, `cloud: true, ${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`${args[0]} with a cloud run isn't supported by this reeval yet`),
+        )
+        const here = await runCli(dir, ['run', '--local', ...args], { env })
+        assert.doesNotMatch(here.stderr, /with a cloud run/, `--local ${args.join(' ')}`)
+      }
+      assert.deepEqual(p.seen, [], 'nothing reaches the platform')
     } finally {
       await p.close()
     }
