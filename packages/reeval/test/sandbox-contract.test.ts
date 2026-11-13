@@ -76,16 +76,22 @@ for (const kind of kinds) {
         runId: `contract-${process.pid}`,
         timeoutMs: 120_000,
         signal: new AbortController().signal,
-        env: { REEVAL_CONTRACT_VAR: 'from-the-sandbox' },
+        env: {
+          REEVAL_CONTRACT_VAR: 'from-the-sandbox',
+          OTEL_EXPORTER_OTLP_HEADERS: 'authorization=leak-options',
+        },
         egress: { policy: 'allow-all', auto: [] },
       })
       return box
     }
     let release = () => {}
+    const hostOtel = 'OTEL_EXPORTER_OTLP_TRACES_HEADERS'
     before(async () => {
       if (kind.loopback) release = await holdLoopback()
+      process.env[hostOtel] = 'authorization=leak-host'
     })
     after(async () => {
+      delete process.env[hostOtel]
       try {
         await box?.destroy()
       } finally {
@@ -124,6 +130,16 @@ for (const kind of kinds) {
       })
       assert.equal(over.stdout, 'from-the-command')
       assert.equal((await s.exec('printf %s "$REEVAL_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
+    })
+
+    test("no OTEL_* variable gets in: not the host's, the sandbox's or a command's", async () => {
+      const s = await sandbox()
+      const env = await s.exec('env', {
+        env: { OTEL_SERVICE_NAME: 'leak-command', otel_resource_attributes: 'a=b', KEPT: '1' },
+      })
+      assert.equal(env.exitCode, 0, env.stderr)
+      assert.match(env.stdout, /^KEPT=1$/m)
+      assert.doesNotMatch(env.stdout, /otel_|leak-/i)
     })
 
     test('writeFile replaces a file whole', async () => {

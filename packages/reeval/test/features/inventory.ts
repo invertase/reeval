@@ -535,7 +535,11 @@ export const inventory: InventoryFeature[] = [
     id: 'otel.export',
     area: 'Records and studio',
     name: 'OpenTelemetry export from the `OTEL_*` variables: spans as they end, log records and host metrics, over OTLP/HTTP protobuf or JSON',
-    unit: ['reeval/test/otlp.test.ts', 'reeval/test/spans.test.ts'],
+    unit: [
+      'reeval/test/otlp.test.ts',
+      'reeval/test/spans.test.ts',
+      'reeval/test/sandbox-contract.test.ts',
+    ],
   },
   {
     id: 'budget.recorded',

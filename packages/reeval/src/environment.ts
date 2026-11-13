@@ -22,6 +22,7 @@ import { closest, genericProblem, got, type Issue, refusal } from './contract/sh
 import { parseDuration } from './duration.ts'
 import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plugins.ts'
 import { isObjectLike } from './object.ts'
+import { isOtelVar, otelRefusal } from './otel-env.ts'
 import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
 import {
@@ -425,6 +426,7 @@ function secretHelper(): SecretHelper {
         `secret.fromEnv(${JSON.stringify(host)}) needs a host variable name: letters, digits and _, not starting with a digit, e.g. secret.fromEnv('API_KEY')`,
       )
     }
+    if (isOtelVar(host)) throw new DefinitionError(otelRefusal(`secret.fromEnv("${host}")`))
     return { kind: 'secret', from: host, ...secretOptions(options, `secret.fromEnv("${host}")`) }
   }
   secret.template = (template) => ({ kind: 'secret-template', template })
@@ -1060,6 +1062,9 @@ const mcpHelper: McpHelper = {
         `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got ${JSON.stringify(command)})`,
       )
     }
+    const otel = Object.keys(o.env ?? {}).find(isOtelVar)
+    if (otel)
+      throw new DefinitionError(otelRefusal(`mcp.stdio(${JSON.stringify(command)}).env.${otel}`))
     return { kind: 'mcp', transport: 'stdio', command, args: [...args], env: { ...o.env } }
   },
   http: (url, o = {}) => ({ kind: 'mcp', transport: 'http', url, headers: { ...o.headers } }),
@@ -1091,6 +1096,7 @@ export function checkEnv(env: unknown, where: string, Err = DefinitionError): vo
       throw new Err(
         `env.${name} in ${where} isn't a valid variable name: use letters, digits and _, not starting with a digit`,
       )
+    if (isOtelVar(name)) throw new Err(otelRefusal(`env.${name} in ${where}`))
     if (isSecret(value)) {
       const problem = descriptorProblem(secretSchema, value, 'secret')
       if (problem) throw new Err(`env.${name} in ${where}: ${problem}`)

@@ -285,7 +285,13 @@ export async function postOtlp(
     await response.body?.cancel().catch(() => {})
     return response.ok ? null : `${url} answered ${response.status}`
   } catch (error) {
-    const message = (error as Error).message.split(target.url).join(url)
+    // A malformed header value comes back in fetch's own message.
+    const message = Object.values(target.headers)
+      .filter(Boolean)
+      .reduce(
+        (m, v) => m.split(v).join('***'),
+        (error as Error).message.split(target.url).join(url),
+      )
     return `couldn't reach ${url}: ${message}`
   }
 }

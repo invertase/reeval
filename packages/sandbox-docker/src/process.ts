@@ -77,6 +77,16 @@ export function killTree(pid: number): void {
   }
 }
 
+/**
+ * The host's `OTEL_*` variables, unset, for a host program that runs commands in a machine (the
+ * fake sandbox's shell, `tart exec`, `ssh`): they configure the host's own OpenTelemetry export,
+ * and its headers carry the collector's credentials, so nothing in the machine inherits them.
+ */
+export const unsetOtel = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv =>
+  Object.fromEntries(
+    Object.keys(env).flatMap((name) => (/^otel_/i.test(name) ? [[name, undefined]] : [])),
+  )
+
 /** `s` as one single-quoted POSIX shell word. */
 export const shellQuote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 

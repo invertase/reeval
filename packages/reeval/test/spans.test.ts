@@ -65,6 +65,23 @@ async function startCollector(t: TestContext) {
   }
 }
 
+/** `text` is in neither the run's output nor any file under `.reeval/`, spans.jsonl included. */
+function assertNowhere(dir: string, run: { stdout: string; stderr: string }, text: string) {
+  assert.ok(!(run.stdout + run.stderr).includes(text), run.stdout + run.stderr)
+  const files = (at: string): string[] =>
+    readdirSync(at, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? files(join(at, e.name)) : [join(at, e.name)],
+    )
+  const written = files(join(dir, '.reeval'))
+  assert.ok(written.some((f) => f.endsWith('spans.jsonl')))
+  for (const file of written) {
+    const line = readFileSync(file, 'utf8')
+      .split('\n')
+      .find((l) => l.includes(text))
+    assert.equal(line, undefined, `${file} has ${text}`)
+  }
+}
+
 const byName = (spans: RunSpan[], name: string) => spans.filter((s) => s.name === name)
 
 describe('run spans', () => {
@@ -144,6 +161,64 @@ describe('run spans', () => {
       metrics.some((m) => m.name === 'system.cpu.utilization'),
       'one sample at the end',
     )
+  })
+
+  test('no OTEL_* variable reaches the sandbox, and the headers appear nowhere reeval writes', async (t) => {
+    const collector = await startCollector(t)
+    const secret = 'otlp-header-secret-4f9a2c'
+    const p = await project('spans-otlp-sandbox', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig({
+        harness: `{ bootstrap: 'env > harness-env.txt', files: { 'hello.txt': 'hi\\n' } }`,
+      }),
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const setup = defineEnvironment('setup', { setup: ['env > setup-env.txt'] })
+evaluate('sees no OTEL_*', { environments: setup }, async (c) => {
+  await c.send('write hello.txt')
+  const own = await c.exec('env')
+  const extra = await c.exec('env', { env: { OTEL_EXPORTER_OTLP_HEADERS: 'x=y', KEPT: 'yes' } })
+  expect(extra.stdout).toContain('KEPT=yes')
+  for (const seen of [
+    own.stdout,
+    extra.stdout,
+    await c.readFile('setup-env.txt'),
+    await c.readFile('~/harness-env.txt'),
+  ]) {
+    expect(seen).toContain('PATH=')
+    expect(seen).not.toMatch(/OTEL_/i)
+  }
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: collector.url,
+        OTEL_EXPORTER_OTLP_HEADERS: `authorization=Bearer%20${secret}`,
+        OTEL_EXPORTER_OTLP_TRACES_HEADERS: `x-api-key=${secret}-traces`,
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
+        otel_service_name: 'lower-case',
+      },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.ok(
+      collector.requests.some((s) => s.auth === `Bearer ${secret}`),
+      'reeval itself exported',
+    )
+    assertNowhere(p.dir, r, secret)
+  })
+
+  test("a malformed header value stays out of the export's warning", async (t) => {
+    const collector = await startCollector(t)
+    const p = await fakeProject('spans-otlp-bad-header')
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: collector.url,
+        OTEL_EXPORTER_OTLP_HEADERS: 'authorization=Bearer%20bad-header-secret%0Avalue',
+      },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout + r.stderr, /invalid header value/)
+    assertNowhere(p.dir, r, 'bad-header-secret')
   })
 
   test('spans go out in batches as they end, not only when the run does', async (t) => {

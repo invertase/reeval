@@ -2,7 +2,8 @@
 // spans as each ends, its notices and finished attempts as log records, and the machine's metrics
 // on an interval, each in batches during the run. Nothing here can fail the run: an export that
 // fails is a reason `close` resolves to.
-import { redactSecrets } from '../redact.ts'
+import { maskedHeaderValue } from '../environment.ts'
+import { redactSecrets, registerSecret } from '../redact.ts'
 import type { ReevalEvent } from '../ui/events.ts'
 import type { RunSpan, SpanAttributes } from '../view/spans.ts'
 import { Batcher, batchOptions } from './batch.ts'
@@ -48,6 +49,11 @@ export function startTelemetry(o: {
   const traces = target('traces')
   const logs = target('logs')
   const metrics = target('metrics')
+  for (const t of [traces, logs, metrics]) {
+    for (const [name, value] of Object.entries(t?.headers ?? {})) {
+      if (maskedHeaderValue(name, value)) registerSecret(value)
+    }
+  }
   if (!traces && !logs && !metrics && !refusals.length) return null
   const resource = otlpResource(env)
   const post = (t: OtlpTarget, request: object) => postOtlp(t, request, fetcher)

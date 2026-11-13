@@ -232,7 +232,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `evals[].answers[].input`: what each pairwise question's model was sent, per pair and order | ✓ 2 | — | ● 1 | ● 1 | — | — |
 | The run's trace, `spans.jsonl`: each machine and container, each attempt on its lease | ✓ 4 | — | — | — | — | — |
-| OpenTelemetry export from the `OTEL_*` variables: spans as they end, log records and host metrics, over OTLP/HTTP protobuf or JSON | ✓ 2 | — | — | — | — | — |
+| OpenTelemetry export from the `OTEL_*` variables: spans as they end, log records and host metrics, over OTLP/HTTP protobuf or JSON | ✓ 3 | — | — | — | — | — |
 | Budget-stopped runs are recorded with status `budget` | ✓ 1 | — | — | — | — | — |
 | Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates | ✓ 1 | — | ● 2 | ● 1 | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 1 | — | — | — | — | — |

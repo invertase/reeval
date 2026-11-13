@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
-import { run, shellQuote } from '@reeval/sandbox-docker/process'
+import { run, shellQuote, unsetOtel } from '@reeval/sandbox-docker/process'
 import { hostListening } from '../attempt/serve.ts'
 import { UsageError } from '../errors.ts'
 import type { FakeSandboxDescriptor } from '../types.ts'
@@ -143,7 +143,11 @@ export async function createFakeSandbox(
     workdir,
     stateDir,
     execOwn: (command, { signal } = {}) =>
-      run(sh, ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, signal }),
+      run(sh, ['-c', command], {
+        cwd: workdir,
+        env: { ...unsetOtel(), HOME: base, ...env },
+        signal,
+      }),
     // The shell changes into `cwd`, so a missing one fails the command (as in Docker) rather
     // than the spawn.
     exec: (command, { cwd, env: extra, signal } = {}) => {
@@ -152,7 +156,7 @@ export async function createFakeSandbox(
       if (tag) signal?.addEventListener('abort', stop, { once: true })
       return run(sh, ['-c', cwd ? `cd ${shellQuote(cwd)} && ${command}` : command], {
         cwd: workdir,
-        env: { HOME: base, ...env, ...extra, ...(tag ? { [EXEC_TAG]: tag } : {}) },
+        env: { ...unsetOtel(), HOME: base, ...env, ...extra, ...(tag ? { [EXEC_TAG]: tag } : {}) },
         signal,
       }).finally(() => signal?.removeEventListener('abort', stop))
     },

@@ -30,6 +30,8 @@ npx reeval run
 
 Grafana Cloud takes `https://otlp-gateway-<zone>.grafana.net/otlp` with `Authorization=Basic%20<token>`. Datadog takes an Agent's or the OpenTelemetry Collector's OTLP endpoint. URL-encode a header value's spaces and commas as `%20` and `%2C`.
 
+Only reeval's own process exports. No `OTEL_*` variable reaches the sandbox or the agent, and an eval that declares one in `env`, `secret.fromEnv()` or an MCP server's `env` is refused.
+
 ## What a run sends
 
 | Signal | What | When |

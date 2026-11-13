@@ -23,6 +23,7 @@ import {
 } from '../environment.ts'
 import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
+import { isOtelVar, otelRefusal } from '../otel-env.ts'
 import { badCharacterAt, isPlaceholder, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { heldSecret } from '../secrets-file.ts'
@@ -288,6 +289,8 @@ function template(
 ): string {
   const placeholders = new Map<string, string>()
   return value.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
+    if (isOtelVar(name))
+      throw new InfraError(otelRefusal(`\${${name}} in secret.template for ${where}`))
     const file = held(name, where, secrets, hosts)
     const v = file?.value ?? process.env[name]
     if (!v)
@@ -881,6 +884,11 @@ export async function resolveEnvironment(
   const vars: Record<string, string> = {}
   const checkVars: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
+    // Declarations from another language's SDK reach here without defineEnvironment's checks.
+    if (isOtelVar(name)) throw new InfraError(otelRefusal(`env.${name} in ${envWhere}`))
+    if (isSecret(value) && value.from && isOtelVar(value.from)) {
+      throw new InfraError(otelRefusal(`env.${name}'s secret ${value.from} in ${envWhere}`))
+    }
     if (!isSecret(value)) {
       vars[name] = value
       continue
@@ -898,6 +906,9 @@ export async function resolveEnvironment(
   ): string | undefined => {
     if (typeof value === 'string') return value
     if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
+    if (value.from && isOtelVar(value.from)) {
+      throw new InfraError(otelRefusal(`the secret ${value.from} for ${key} in ${envWhere}`))
+    }
     const as = header ? (value.from ?? key) : key
     return hostValue(key, value, envWhere, secrets, hosts, as)
   }
@@ -906,6 +917,7 @@ export async function resolveEnvironment(
     if (s.transport === 'stdio') {
       const e: Record<string, string> = {}
       for (const [k, v] of Object.entries(s.env)) {
+        if (isOtelVar(k)) throw new InfraError(otelRefusal(`mcp.${name}.env.${k} in ${envWhere}`))
         const r = secretOf(v, k, false, isSecret(v) ? v.hosts : undefined)
         if (r !== undefined) e[k] = r
       }

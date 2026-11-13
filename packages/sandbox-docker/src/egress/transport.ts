@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { docker } from '../docker-cli.ts'
 import type { Engine } from '../engine.ts'
-import { type RunResult, run, shellQuote } from '../process.ts'
+import { type RunResult, run, shellQuote, unsetOtel } from '../process.ts'
 import { engineLabel, hostCommand } from '../remote-engine.ts'
 import { traceDocker } from '../trace.ts'
 
@@ -48,7 +48,11 @@ export async function execRun(
   const [bin = '', ...args] = transport.argv(command)
   const startedAt = Date.now()
   try {
-    const r = await run(bin, args, { ...options, env: transport.env, binary: true })
+    const r = await run(bin, args, {
+      ...options,
+      env: { ...unsetOtel(), ...transport.env },
+      binary: true,
+    })
     transport.trace?.([bin, ...args], startedAt, { ...r, stdin: options.input.length })
     return r
   } catch (error) {
@@ -69,7 +73,7 @@ export function execSpawn(
   const child = spawn(bin, args, {
     stdio: 'pipe',
     detached: true,
-    env: { ...process.env, ...transport.env },
+    env: { ...process.env, ...unsetOtel(), ...transport.env },
   })
   let stderr = ''
   child.stderr.on('data', (d) => {
