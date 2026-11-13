@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.26.0](https://github.com/reeval-ai/reeval/compare/v0.25.0...v0.26.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** require a linked project for a cloud run and check its secrets first ([#972](https://github.com/reeval-ai/reeval/issues/972))
+
+### Features
+
+* **api:** add a typed client for the cloud platform's API ([#975](https://github.com/reeval-ai/reeval/issues/975)) ([eb91fce](https://github.com/reeval-ai/reeval/commit/eb91fce1ed7d8532cfdfe54a040ae9465433cf4c))
+* **cli:** require a linked project for a cloud run and check its secrets first ([#972](https://github.com/reeval-ai/reeval/issues/972)) ([b238ebb](https://github.com/reeval-ai/reeval/commit/b238ebbb427cb94ea1f70361a75dc850a068f3b6))
+* **cloud:** cancel a cloud run with reeval cloud run cancel, and exit 4 when the platform stopped it ([#933](https://github.com/reeval-ai/reeval/issues/933)) ([747055a](https://github.com/reeval-ai/reeval/commit/747055ad9d1c927d60ae53c6afe6c046f046772d))
+* **run:** resume a bundle's run with --bundle and --resume ([#932](https://github.com/reeval-ai/reeval/issues/932)) ([a6f44f2](https://github.com/reeval-ai/reeval/commit/a6f44f217155cdb6cfaaceda81901caa5592401a))
+* **trace:** export spans, logs and host metrics over OTLP during the run ([#974](https://github.com/reeval-ai/reeval/issues/974)) ([c95599a](https://github.com/reeval-ai/reeval/commit/c95599a148bcc09a62d0a8b87b16f8c800b424de))
+
+
+### Bug Fixes
+
+* **fx:** move the relay port below the linux ephemeral range ([#969](https://github.com/reeval-ai/reeval/issues/969)) ([1f7ae3b](https://github.com/reeval-ai/reeval/commit/1f7ae3b2a0b6aa4519b7e42f31539a6275870710))
+* **login:** print the cloud URL without a trailing slash and read sign-ins stored under it ([#971](https://github.com/reeval-ai/reeval/issues/971)) ([acfb468](https://github.com/reeval-ai/reeval/commit/acfb468b6411843f94488d969d5b14c22ebb35c3))
+* **login:** warn about each sign-in login and logout couldn't revoke ([#973](https://github.com/reeval-ai/reeval/issues/973)) ([8515eee](https://github.com/reeval-ai/reeval/commit/8515eeeae4e71d3024a98c666cc3191d3fb369f6))
+* **resume:** write retries and resume stubs atomically, and ignore this process's own pid ([#931](https://github.com/reeval-ai/reeval/issues/931)) ([5a1dfcf](https://github.com/reeval-ai/reeval/commit/5a1dfcf0b45bce772f28897e6f43de8bb8c3385a))
+* **sandbox:** keep fixed loopback ports out of the ephemeral range ([#967](https://github.com/reeval-ai/reeval/issues/967)) ([0345795](https://github.com/reeval-ai/reeval/commit/0345795134e22f4177576afe9c1732b16e71ceed))
+
 ## [0.25.0](https://github.com/reeval-ai/reeval/compare/v0.24.0...v0.25.0) (2026-11-13)
 
 
