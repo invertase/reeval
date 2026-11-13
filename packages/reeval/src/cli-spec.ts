@@ -83,6 +83,10 @@ export const FLAGS = {
   org: { type: 'string' },
   download: { type: 'boolean' },
   'no-wait': { type: 'boolean' },
+  full: { type: 'boolean' },
+  public: { type: 'boolean' },
+  list: { type: 'boolean' },
+  revoke: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -359,6 +363,10 @@ export const COMMANDS: Record<string, CommandSpec> = {
           'profile',
           'offline',
           'all-branches',
+          'out',
+          'json',
+          'artifacts',
+          'allow-incomplete',
         ],
         positionals: 1,
         help: `
@@ -370,6 +378,14 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 brotli, zip and, on a Node that has it, zstd; raw deflate, which
                                 has no magic number, it scans as binary)
     --no-wait                   Return once it's uploaded
+    --out <file>                Write the scanned archive to this file instead, uploading nothing
+                                (no sign-in needed); a file already there must be a reeval archive
+    --artifacts <level>         all, evidence, failures or none: archive the attempts'
+                                artifacts and transcripts at this level, from the run's copy in
+                                .reeval/runs (an unrecorded run, or a recorded one it matches;
+                                nothing is recorded), else only narrowing a recorded run's
+    --allow-incomplete          With --artifacts, take an unrecorded run that didn't complete
+    --json                      The run's last state, or what --out wrote, as JSON
     --skip-secret-scan          Upload even then, printing what the scan found as a warning
     --org <slug>                The org, by slug or id, instead of the linked one
     --project <slug>            The project, by slug or id, instead of the linked one; required
@@ -543,6 +559,44 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --no-open                   Print the studio URL without opening the browser
     --no-scratch                Hide the unrecorded runs in .reeval/runs
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
+    sub: {
+      share: {
+        flags: [
+          'full',
+          'public',
+          'list',
+          'revoke',
+          'json',
+          'skip-secret-scan',
+          'org',
+          'project',
+          'profile',
+          'offline',
+          'all-branches',
+        ],
+        positionals: 1,
+        help: `
+  reeval studio share [run]     Share a recorded run's report (default: latest) from the cloud
+                                project reeval link linked, with the org's members, and print the
+                                link; pushes the run as reeval cloud push does first, secret scan
+                                included, unless the project has it already
+    --full                      Share the attempts' transcripts and artifacts too, not only the
+                                report
+    --public                    Anyone with the link can view it, without signing in; pushes the
+                                copy scanned here first, even when the project has the run, and
+                                the link serves the run's latest pushed copy
+    --list                      List the project's shares instead (with a run, that run's)
+    --revoke <id>               Revoke a share: its link stops working
+    --json                      The share, or the list, as JSON
+    --skip-secret-scan          Push even when the scan finds something, as reeval cloud push does
+    --org <slug>                The org, by slug or id, instead of the linked one
+    --project <slug>            The project, by slug or id, instead of the linked one; required
+                                when nothing is linked
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
+      },
+    },
   },
   report: {
     flags: ['out', 'json', 'last', 'issue', 'yes'],

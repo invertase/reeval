@@ -731,27 +731,64 @@ async function stageDebug(
 /** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
 export const SECRET_NOTE = 'not kept: it looked like it held a secret'
 
-/** Promotes a scratch run into the committed history folder. reeval never commits it. */
-export async function recordRun(options: RecordOptions): Promise<RecordResult> {
-  const { runId, artifacts: level } = options
-  const source = scratchDir(options.root)
-  let scratch: RunRecord
+/** A file the run's record names, which must be there. */
+const runFile = (source: string, runId: string, path: string) =>
+  readFile(join(source, runId, ...path.split('/'))).catch((error) => {
+    if (isMissing(error)) throw new HistoryError(`${runId}/${path} is missing`)
+    throw error
+  })
+
+/** A record as compared for "already recorded with different content": its debug data aside. */
+const comparable = (record: RunRecord) => {
+  const { debug: _, ...rest } = JSON.parse(encodeRecord(record).toString()) as RunRecord
+  return rest
+}
+
+/** Why `dir`'s copy `run` isn't the run `recorded` is, rebuilt at its level; null when it is. */
+async function differs(
+  dir: string,
+  run: RunRecord,
+  recorded: RunRecord,
+  options: { skipSecretScan?: boolean },
+): Promise<string | null> {
+  if (run.status !== recorded.status) {
+    return `it's ${run.status}, the recorded run ${recorded.status}`
+  }
+  let rebuilt: RunRecord
   try {
-    scratch = await readRecord(join(source, `${runId}.json`))
+    rebuilt = (await leveled(dir, run, recorded.artifacts, options)).record
   } catch (error) {
-    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .reeval/runs`)
+    if (error instanceof HistoryError) return error.message
     throw error
   }
-  if (scratch.status !== 'complete' && !options.allowIncomplete) {
-    throw new HistoryError(
-      `Run ${runId} was ${scratch.status}; pass --allow-incomplete to record it`,
-    )
-  }
-  const record: RunRecord = structuredClone(scratch)
+  return isDeepStrictEqual(comparable(rebuilt), comparable(recorded))
+    ? null
+    : 'its record differs from the recorded one'
+}
+
+/**
+ * The record and files a run in `source` keeps at `level`, as `recordRun` records them: each
+ * file checked against its hash, the worktree patch left out when it looks like it holds a
+ * secret (unless `skipSecretScan`), and the summary rendered for what's kept. Writes nothing.
+ */
+async function leveled(
+  source: string,
+  run: RunRecord,
+  level: ArtifactLevel,
+  options: { skipSecretScan?: boolean },
+): Promise<{
+  record: RunRecord
+  files: Map<string, Uint8Array>
+  droppedPatch: string[]
+  /** `droppedPatch` with each finding's rule alone, never any part of the value. */
+  droppedPatchRules: string[]
+}> {
+  const { runId } = run
+  const record: RunRecord = structuredClone(run)
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
   const keep = async (ref: FileRef) => {
-    const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
+    const bytes = await runFile(source, runId, ref.path)
     if (sha256(bytes) !== ref.sha256) {
       throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
     }
@@ -807,8 +844,9 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   }
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []
+  let droppedPatchRules: string[] = []
   if (patch && record.git && level !== 'none') {
-    const bytes = await readFile(join(source, runId, patch.path))
+    const bytes = await runFile(source, runId, patch.path)
     if (sha256(bytes) !== patch.sha256) {
       throw new HistoryError(`${runId}/${patch.path} changed since the run wrote it`)
     }
@@ -816,6 +854,10 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     const findings = options.skipSecretScan ? [] : scanText(patch.path, bytes.toString())
     if (findings.length > 0) {
       droppedPatch = findingLines(patch.path, findings)
+      droppedPatchRules = findingLines(
+        patch.path,
+        findings.map((f) => ({ ...f, what: f.rule })),
+      )
       record.git.worktreePatch = null
       record.git.worktreePatchNote = `${SECRET_NOTE} (${findingSummary(findings)})`
     } else {
@@ -846,6 +888,76 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   if (level !== 'none') {
     for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
   }
+  return { record, files, droppedPatch, droppedPatchRules }
+}
+
+/**
+ * The files of a run archive of `runId` at `level`, built from `dir`'s copy of the run (the
+ * history folder's or `.reeval/runs`') under its claim, as `recordRun` would keep them; nothing is
+ * written or recorded. `check` sees the run's record first and may refuse it. `droppedPatch` says
+ * where the worktree patch looked like it held a secret and by which rule, never any part of it.
+ */
+export async function leveledArchiveFiles(
+  dir: string,
+  runId: string,
+  level: ArtifactLevel,
+  options: {
+    skipSecretScan?: boolean
+    check?: (run: RunRecord) => void
+    /** The recorded run `dir`'s copy must be, rebuilt at its level; else `mismatch` says why. */
+    recorded?: RunRecord
+  },
+): Promise<
+  | { files: Array<{ path: string; data: Uint8Array }>; droppedPatch: string[] }
+  | { mismatch: string }
+> {
+  const release = await claimRun(dir, runId)
+  try {
+    const run = await readRecord(recordFile(dir, runId))
+    options.check?.(run)
+    if (options.recorded) {
+      const mismatch = await differs(dir, run, options.recorded, options)
+      if (mismatch) return { mismatch }
+    }
+    let made: Awaited<ReturnType<typeof leveled>>
+    try {
+      made = await leveled(dir, run, level, options)
+    } catch (error) {
+      if (options.recorded && error instanceof HistoryError) return { mismatch: error.message }
+      throw error
+    }
+    const { record, files, droppedPatchRules } = made
+    return {
+      files: [
+        { path: `${runId}.json`, data: encodeRecord(record) },
+        ...[...files]
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([path, data]) => ({ path: `${runId}/${path}`, data })),
+      ],
+      droppedPatch: droppedPatchRules,
+    }
+  } finally {
+    await release()
+  }
+}
+
+/** Promotes a scratch run into the committed history folder. reeval never commits it. */
+export async function recordRun(options: RecordOptions): Promise<RecordResult> {
+  const { runId, artifacts: level } = options
+  const source = scratchDir(options.root)
+  let scratch: RunRecord
+  try {
+    scratch = await readRecord(join(source, `${runId}.json`))
+  } catch (error) {
+    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .reeval/runs`)
+    throw error
+  }
+  if (scratch.status !== 'complete' && !options.allowIncomplete) {
+    throw new HistoryError(
+      `Run ${runId} was ${scratch.status}; pass --allow-incomplete to record it`,
+    )
+  }
+  const { record, files, droppedPatch } = await leveled(source, scratch, level, options)
   const debug = options.debug && (await stageDebug(options.root, runId, options.debug))
   if (debug) record.debug = debug
 

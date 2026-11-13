@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { connect } from 'node:net'
@@ -8,7 +16,7 @@ import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { handshakeTimeoutLines } from '../src/studio/command.ts'
+import { handshakeTimeoutLines, timeoutRun } from '../src/studio/command.ts'
 import { startStudio } from '../src/studio/index.ts'
 import { createStudioApi } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
@@ -1336,17 +1344,28 @@ describe('a record landing while the studio lists runs', () => {
 
 describe('reeval studio', () => {
   test("says why the page may not have paired and where the run's report is", () => {
-    const lines = handshakeTimeoutLines('http://127.0.0.1:4984', '.reeval/runs/r1/summary.md')
+    const scratch = { runId: 'r1', report: '.reeval/runs/r1/summary.md', recorded: false }
+    const lines = handshakeTimeoutLines('http://127.0.0.1:4984', scratch)
     assert.match(
       lines[0] as string,
       /hasn't connected yet: .* reaching http:\/\/127\.0\.0\.1:4984\./,
     )
     assert.ok(lines.some((l) => /Chrome and Firefox ask first .*choose Allow/.test(l)))
     assert.ok(lines.some((l) => /Safari can't reach a local server from a secure page/.test(l)))
-    assert.equal(lines.at(-1), "The run's Markdown report is at .reeval/runs/r1/summary.md")
+    assert.ok(lines.includes("The run's Markdown report is at .reeval/runs/r1/summary.md"))
+    assert.equal(
+      lines.at(-1),
+      'Or record it with reeval record r1, then run reeval studio share r1 to view it in the hosted studio.',
+    )
+    const recorded = { runId: 'r2', report: 'history/r2/summary.md', recorded: true }
+    assert.equal(
+      handshakeTimeoutLines('http://127.0.0.1:4984', recorded).at(-1),
+      'Or run reeval studio share r2 to view it in the hosted studio.',
+    )
+    const bare = handshakeTimeoutLines('http://127.0.0.1:4984', null)
     assert.ok(
-      handshakeTimeoutLines('http://127.0.0.1:4984', null).every((l) => !/report/.test(l)),
-      'no report line when the run has no summary.md',
+      bare.every((l) => !/report|share/.test(l)),
+      'no report or share line without a run',
     )
   })
 
@@ -1381,6 +1400,45 @@ describe('reeval studio', () => {
     } finally {
       studio.close()
     }
+  })
+
+  test('counts a run as recorded by its record in the history folder, whatever its artifacts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reeval-studio-timeout-'))
+    const source: StudioSource = { root, historyDir: join(root, 'history'), scratch: true }
+    const scratch = join(root, '.reeval/runs')
+    const summary = (dir: string, id: string) => {
+      mkdirSync(join(dir, id), { recursive: true })
+      writeFileSync(join(dir, id, 'summary.md'), '# run')
+    }
+    mkdirSync(source.historyDir, { recursive: true })
+    writeFileSync(join(source.historyDir, 'full.json'), '{}')
+    summary(source.historyDir, 'full')
+    writeFileSync(join(source.historyDir, 'none.json'), '{}')
+    summary(scratch, 'none')
+    summary(scratch, 'local')
+
+    const full = timeoutRun(source, 'full')
+    assert.equal(full.recorded, true)
+    assert.ok(full.report?.endsWith(join('history', 'full', 'summary.md')), full.report ?? '')
+    const none = timeoutRun(source, 'none')
+    assert.equal(none.recorded, true, "a run recorded with artifacts: 'none' is recorded")
+    assert.ok(
+      none.report?.endsWith(join('.reeval', 'runs', 'none', 'summary.md')),
+      none.report ?? '',
+    )
+    assert.equal(
+      handshakeTimeoutLines('http://127.0.0.1:4984', none).at(-1),
+      'Or run reeval studio share none to view it in the hosted studio.',
+    )
+    rmSync(join(scratch, 'none'), { recursive: true })
+    assert.deepEqual(timeoutRun(source, 'none'), { runId: 'none', report: null, recorded: true })
+    const local = timeoutRun(source, 'local')
+    assert.equal(local.recorded, false)
+    assert.ok(
+      local.report?.endsWith(join('.reeval', 'runs', 'local', 'summary.md')),
+      local.report ?? '',
+    )
+    assert.deepEqual(timeoutRun(source, 'gone'), { runId: 'gone', report: null, recorded: false })
   })
 
   test('opens the hosted page with its server and a one-time token, and says when it never pairs', async () => {
@@ -1439,6 +1497,12 @@ describe('reeval studio', () => {
       assert.match(
         out,
         new RegExp(`Markdown report is at \\.reeval/runs/${headers.at(-1)?.runId}/summary\\.md`),
+      )
+      assert.match(
+        out,
+        new RegExp(
+          `then run reeval studio share ${headers.at(-1)?.runId} to view it in the hosted studio`,
+        ),
       )
 
       const local = server

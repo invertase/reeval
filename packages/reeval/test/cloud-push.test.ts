@@ -2,7 +2,7 @@
 // reading it stands, as the platform's studio routes do, and refuses as they do.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hostname } from 'node:os'
@@ -36,6 +36,7 @@ type Answer =
   | { status: 'ready' | 'failed'; polls?: Poll[]; error?: string }
   | { refuse: 409 | 413 }
   | { redirect: true }
+  | { redirectStatus: true }
 
 async function platform(answer: Answer) {
   const seen: Seen[] = []
@@ -91,6 +92,14 @@ async function platform(answer: Answer) {
       }
       revision++
       return json(res, 202, state('pending'))
+    }
+    if (req.method === 'PUT' && 'redirectStatus' in answer) {
+      revision++
+      return json(res, 202, state('pending'))
+    }
+    if (req.method === 'GET' && 'redirectStatus' in answer) {
+      res.writeHead(302, { location: `${base}/elsewhere` })
+      return res.end()
     }
     if (req.method === 'GET' && 'status' in answer) {
       const poll = answer.polls?.[polls++]
@@ -311,6 +320,44 @@ describe('reeval cloud push', () => {
       } finally {
         await p.close()
       }
+    }
+  })
+
+  test('a redirected status check is refused and followed nowhere', async () => {
+    const p = await platform({ redirectStatus: true })
+    try {
+      const r = await runCli(dir, ['cloud', 'push'], { env: envFor(p.base) })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /redirected the request to the status check elsewhere, and reeval doesn't send your sign-in on/,
+      )
+      assert.deepEqual(
+        p.seen.map((s) => `${s.method} ${s.path}`),
+        [`PUT ${path()}`, `GET ${path()}`],
+      )
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a symlink in the run folder is left out, never followed', async () => {
+    const outside = join(dir, 'outside.txt')
+    writeFileSync(outside, `GITHUB_TOKEN=${SECRET}\n`)
+    const link = join(dir, HISTORY, runId, 'linked.txt')
+    symlinkSync(outside, link)
+    const p = await platform({ status: 'ready' })
+    try {
+      const r = await runCli(dir, ['cloud', 'push', '--no-wait'], { env: envFor(p.base) })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const archive = await openArchive(bufferSource((p.seen[0] as Seen).body))
+      assert.ok(!archive.has(`${runId}/linked.txt`))
+      await archive.close()
+      noSecret(r.stdout + r.stderr)
+    } finally {
+      rmSync(link)
+      rmSync(outside)
+      await p.close()
     }
   })
 
@@ -621,6 +668,17 @@ describe('the push scan', () => {
       'run/after.gz (too large to unpack and scan)',
     ])
     assert.deepEqual(scan.findings, [])
+  })
+
+  test('a zip entry that would unpack past the limit is named unread, not unpacked', async () => {
+    const big = await zipOf({ 'big.txt': Buffer.alloc(300 * 2 ** 20, 'a') })
+    assert.ok(big.length < 2 ** 20)
+    const scan = await scanPush([
+      { path: 'run/big.zip', data: big },
+      { path: 'run/after.zip', data: await zipOf({ 'x.txt': `GITHUB_TOKEN=${SECRET}` }) },
+    ])
+    assert.deepEqual(scan.unread, ['run/big.zip!/big.txt (too large to unpack and scan)'])
+    assert.deepEqual(scan.findings, ['run/after.zip!/x.txt: line 1: GitHub token'])
   })
 
   test('nested gzip, brotli and zip are unpacked, each labeled once', async () => {

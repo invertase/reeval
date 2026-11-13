@@ -49,7 +49,7 @@ import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo, RunInvocation } from './history/types.ts'
-import { cwdIn, fromCwd, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
+import { cwdIn, fromCwd, newRunId, RUN_ID, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
@@ -134,6 +134,7 @@ const PULLS = {
   analyze: 1,
   mcp: 1,
   'cloud push': 1,
+  'studio share': 1,
 }
 
 const EXPECTED_ERRORS = [
@@ -303,6 +304,7 @@ async function run(argv: string[]): Promise<number> {
       return pushCommand(config, values, args, {
         out: (s: string) => console.log(s),
         err: (s: string) => console.error(yellow(s)),
+        note: (s: string) => console.error(s),
         projectDir: projectDirFor(configPath),
       })
     }
@@ -327,6 +329,28 @@ async function run(argv: string[]): Promise<number> {
       )
     }
     return imageBuildCommand(values, configPath, filters.slice(1))
+  }
+  if (command === 'studio' && filters[0] === 'share') {
+    // Revoking, or listing without a run name to resolve, reads no runs, so it pulls no store.
+    const ref = filters[1]
+    const readsNoRuns =
+      values.revoke !== undefined || (values.list && (ref === undefined || RUN_ID.test(ref)))
+    const config = await historyConfig(
+      configPath,
+      'studio share',
+      values.profile,
+      readsNoRuns ? { ...values, offline: true } : values,
+    )
+    const [{ shareCommand }, { projectDirFor }] = await Promise.all([
+      import('./studio-share.ts'),
+      import('./cloud-project.ts'),
+    ])
+    return shareCommand(config, values, filters.slice(1), {
+      out: (s: string) => console.log(s),
+      err: (s: string) => console.error(yellow(s)),
+      note: (s: string) => console.error(s),
+      projectDir: projectDirFor(configPath),
+    })
   }
   if (command === 'studio') {
     const config = await historyConfig(configPath, 'studio', values.profile)
