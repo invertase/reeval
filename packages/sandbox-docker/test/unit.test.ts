@@ -827,13 +827,13 @@ const collect = (s: Duplex) =>
 describe('stdio mux', () => {
   test('streams in both directions carry bytes intact, with half-close', async () => {
     const { host, container, opened } = muxPair()
-    const a = host.open(43210)
-    const b = container.open(43128)
+    const a = host.open(24210)
+    const b = container.open(24128)
     await new Promise((r) => setImmediate(r))
     await new Promise((r) => setImmediate(r))
     assert.deepEqual(
       opened.map((o) => o.port),
-      [43210, 43128],
+      [24210, 24128],
     )
     const [aPeer, bPeer] = opened.map((o) => o.stream) as [Duplex, Duplex]
     const payload = Buffer.alloc(3 * 1024 * 1024 + 7, 'x')
@@ -921,7 +921,7 @@ describe('stdio mux', () => {
         onOpen: () => {},
         onError: (message) => errors.push(message),
       })
-      const stream = mux.open(43128)
+      const stream = mux.open(24128)
       assert.doesNotThrow(() => mux.receive(frame), name)
       assert.equal(errors.length, 1, name)
       assert.match(errors[0] ?? '', reason, name)
@@ -941,15 +941,15 @@ describe('stdio mux', () => {
       onError: (message) => errors.push(message),
     })
     const port = Buffer.alloc(2)
-    port.writeUInt16BE(43210, 0)
+    port.writeUInt16BE(24210, 0)
     mux.receive(Buffer.concat([header(1, 1, 2), port, header(5, 1, 4), Buffer.alloc(4)]))
     mux.receive(Buffer.concat([header(2, 1, 3), Buffer.from('abc'), header(3, 1, 0)]))
     assert.deepEqual(errors, [])
-    assert.deepEqual(opened, [43210])
+    assert.deepEqual(opened, [24210])
   })
 
   test('the forwarder script is self-contained JavaScript', () => {
-    const script = forwarderScript(43128)
+    const script = forwarderScript(24128)
     assert.doesNotThrow(() => new Function('require', 'process', script))
     assert.doesNotMatch(script, /\bimport\b|\bexport\b/)
   })

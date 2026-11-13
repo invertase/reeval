@@ -208,7 +208,8 @@ export const WORKSPACE_DIR = 'workspace'
  * {@link SANDBOX_USER} owns and so could rename it away and put its own in its place.
  */
 export const SANDBOX_STATE = '/var/lib/reeval'
-export const BRIDGE_PORT = 43210
+/** Below 32768, so no ephemeral port on a Linux machine (32768–60999) can hold it. */
+export const BRIDGE_PORT = 24210
 
 /**
  * Where one attempt lives on a Linux machine that runs several at once: its own user, home,
@@ -227,8 +228,10 @@ export type SlotLayout = {
   proxyPort: number
 }
 
-/** The egress forwarder's port for slot 0; slot `n` listens on this plus `n`. */
-export const BASE_PROXY_PORT = 43128
+/** The egress forwarder's port for slot 0; slot `n` listens on this plus `n`, below Linux's
+ * ephemeral range (32768–60999) like {@link BRIDGE_PORT}.
+ */
+export const BASE_PROXY_PORT = 24128
 
 /** Slot `slot`'s layout: slot 0's is {@link SANDBOX_USER}'s, `n` is `reeval-s<n>` in each place. */
 export function slotLayout(slot: number): SlotLayout {

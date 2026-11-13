@@ -305,8 +305,11 @@ export function fakeTartHosts(
   }
 }
 
-/** The loopback port whose listener is {@link holdLoopback}'s lock. */
-const LOOPBACK_LOCK_PORT = 43127
+/**
+ * The loopback port whose listener is {@link holdLoopback}'s lock: below Linux's ephemeral range
+ * (32768–60999), so no other socket on this machine is handed it.
+ */
+const LOOPBACK_LOCK_PORT = 24127
 
 /**
  * Holds this machine's loopback for one process's fake VMs until the returned release. Every
@@ -332,7 +335,7 @@ export async function holdLoopback(): Promise<() => void> {
     if (error.code !== 'EADDRINUSE') throw error
     if (Date.now() > deadline) {
       throw new Error(
-        `another process held 127.0.0.1:${LOOPBACK_LOCK_PORT} for ${LOOPBACK_WAIT_MS / 1000}s`,
+        `this or another process held 127.0.0.1:${LOOPBACK_LOCK_PORT} for ${LOOPBACK_WAIT_MS / 1000}s`,
       )
     }
     await new Promise((r) => setTimeout(r, 100))
