@@ -30,9 +30,12 @@ export type ProjectRef = { org: string; project: string }
 /** The grant type a device sign-in redeems its code with (RFC 8628). */
 export const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 
+type Query = Record<string, string | undefined>
+
 /**
  * The cloud platform's API, as the reeval CLI calls it. Every call takes {@link CallOptions} last
- * and fails with an `ApiError`.
+ * and returns a promise that rejects with an `ApiError`, or a `TypeError` for input it refuses
+ * before sending anything (an empty, `.` or `..` path segment, a token a header can't carry).
  *
  * ```ts
  * const api = new ReevalClient({ baseUrl, auth: async () => token })
@@ -56,44 +59,60 @@ export class ReevalClient {
     return this.#t.authHeaders()
   }
 
-  #get = async <S extends z.ZodType>(
+  async #get<S extends z.ZodType>(
     operation: string,
-    url: URL,
+    path: readonly string[],
     schema: S,
-    options?: CallOptions,
-  ): Promise<z.output<S>> => {
-    const req: Send = { operation, method: 'GET', url, options }
-    return this.#t.json(req, await this.#t.send(req), schema)
+    options: CallOptions | undefined,
+    query?: Query,
+  ): Promise<z.output<S>> {
+    return this.#t.request(
+      { operation, method: 'GET', url: this.#t.url(path, query), options },
+      schema,
+    )
   }
 
-  #project = ({ org, project }: ProjectRef, ...rest: string[]) =>
-    ['api', 'orgs', org, 'projects', project, ...rest] as const
+  /** A call whose answer's body isn't read. */
+  async #call(req: Omit<Send, 'url'> & { path: readonly string[]; query?: Query }) {
+    const { path, query, ...rest } = req
+    await this.#t.send({ ...rest, url: this.#t.url(path, query) }, async () => {})
+  }
+
+  #project = ({ org, project }: ProjectRef, ...rest: string[]) => [
+    'api',
+    'orgs',
+    org,
+    'projects',
+    project,
+    ...rest,
+  ]
 
   readonly config = {
     /** What a client needs before it bundles a run for this platform. */
-    get: (options?: CallOptions): Promise<PlatformConfig> =>
-      this.#get('config.get', this.#t.url(['api', 'config']), PlatformConfig, options),
+    get: async (options?: CallOptions): Promise<PlatformConfig> =>
+      this.#get('config.get', ['api', 'config'], PlatformConfig, options),
   }
 
   readonly me = {
     /** Who the token signs in as. */
     get: async (options?: CallOptions): Promise<User> =>
-      (await this.#get('me.get', this.#t.url(['api', 'me']), Me, options)).user,
+      (await this.#get('me.get', ['api', 'me'], Me, options)).user,
   }
 
   readonly auth = {
     /** Starts a device sign-in; sends no token. */
-    deviceCode: async (a: { clientId: string }, options?: CallOptions): Promise<DeviceCode> => {
-      const req: Send = {
-        operation: 'auth.deviceCode',
-        method: 'POST',
-        url: this.#t.url(['api', 'auth', 'device', 'code']),
-        body: { json: { client_id: a.clientId } },
-        auth: false,
-        options,
-      }
-      return this.#t.json(req, await this.#t.send(req), DeviceCode)
-    },
+    deviceCode: async (a: { clientId: string }, options?: CallOptions): Promise<DeviceCode> =>
+      this.#t.request(
+        {
+          operation: 'auth.deviceCode',
+          method: 'POST',
+          url: this.#t.url(['api', 'auth', 'device', 'code']),
+          body: { json: { client_id: a.clientId } },
+          auth: false,
+          options,
+        },
+        DeviceCode,
+      ),
     /**
      * Redeems a device code for a token; sends no token. Until the code is approved it fails
      * with `code` `authorization_pending` or `slow_down`, as RFC 8628 has it.
@@ -101,77 +120,64 @@ export class ReevalClient {
     deviceToken: async (
       a: { clientId: string; deviceCode: string },
       options?: CallOptions,
-    ): Promise<DeviceToken> => {
-      const req: Send = {
-        operation: 'auth.deviceToken',
-        method: 'POST',
-        url: this.#t.url(['api', 'auth', 'device', 'token']),
-        body: {
-          json: { grant_type: DEVICE_GRANT, device_code: a.deviceCode, client_id: a.clientId },
+    ): Promise<DeviceToken> =>
+      this.#t.request(
+        {
+          operation: 'auth.deviceToken',
+          method: 'POST',
+          url: this.#t.url(['api', 'auth', 'device', 'token']),
+          body: {
+            json: { grant_type: DEVICE_GRANT, device_code: a.deviceCode, client_id: a.clientId },
+          },
+          auth: false,
+          options,
         },
-        auth: false,
-        options,
-      }
-      return this.#t.json(req, await this.#t.send(req), DeviceToken)
-    },
+        DeviceToken,
+      ),
     /** Revokes the token's session; one the platform already refuses counts as revoked. */
-    signOut: async (options?: CallOptions): Promise<void> => {
-      const res = await this.#t.send({
+    signOut: async (options?: CallOptions): Promise<void> =>
+      this.#call({
         operation: 'auth.signOut',
         method: 'POST',
-        url: this.#t.url(['api', 'auth', 'sign-out']),
+        path: ['api', 'auth', 'sign-out'],
         headers: { origin: this.#t.base.origin },
         body: { json: {} },
         allow: [401],
         options,
-      })
-      await res.body?.cancel()
-    },
+      }),
   }
 
   readonly orgs = {
     /** The orgs the signed-in user is a member of. */
     list: async (options?: CallOptions): Promise<Org[]> =>
-      (await this.#get('orgs.list', this.#t.url(['api', 'orgs']), OrgList, options)).orgs,
+      (await this.#get('orgs.list', ['api', 'orgs'], OrgList, options)).orgs,
   }
 
   readonly projects = {
     list: async (a: { org: string }, options?: CallOptions): Promise<Project[]> =>
-      (
-        await this.#get(
-          'projects.list',
-          this.#t.url(['api', 'orgs', a.org, 'projects']),
-          ProjectList,
-          options,
-        )
-      ).projects,
+      (await this.#get('projects.list', ['api', 'orgs', a.org, 'projects'], ProjectList, options))
+        .projects,
   }
 
   readonly secrets = {
     /** The project's secrets, never their values. */
     list: async (a: ProjectRef, options?: CallOptions): Promise<Secret[]> =>
-      (
-        await this.#get(
-          'secrets.list',
-          this.#t.url(this.#project(a, 'secrets')),
-          SecretList,
-          options,
-        )
-      ).secrets,
+      (await this.#get('secrets.list', this.#project(a, 'secrets'), SecretList, options)).secrets,
     /**
      * Every name a run in the project gets a value for, and which of `reserved` the platform sets
      * itself.
      */
-    names: (a: ProjectRef & { reserved?: readonly string[] }, options?: CallOptions) =>
-      this.#get(
-        'secrets.names',
-        this.#t.url(this.#project(a, 'secret-names'), {
-          reserved: a.reserved?.length ? a.reserved.join(',') : undefined,
-        }),
-        SecretNames,
-        options,
-      ),
-    /** Adds or replaces a secret; `created` is true when there was none of that name. */
+    names: async (
+      a: ProjectRef & { reserved?: readonly string[] },
+      options?: CallOptions,
+    ): Promise<SecretNames> =>
+      this.#get('secrets.names', this.#project(a, 'secret-names'), SecretNames, options, {
+        reserved: a.reserved?.length ? a.reserved.join(',') : undefined,
+      }),
+    /**
+     * Adds or replaces a secret; `created` is true when there was none of that name. The PUT is
+     * retried, so when the first try's answer is lost, a secret it created reads `created: false`.
+     */
     set: async (
       a: ProjectRef & { name: string; value: string; mode?: string; hosts?: readonly string[] },
       options?: CallOptions,
@@ -189,19 +195,18 @@ export class ReevalClient {
         },
         options,
       }
-      const res = await this.#t.send(req)
-      const { secret } = await this.#t.json(req, res, SecretAnswer)
-      return { secret, created: res.status === 201 }
+      return this.#t.send(req, async (res) => ({
+        secret: (await this.#t.json(req, res, SecretAnswer)).secret,
+        created: res.status === 201,
+      }))
     },
-    delete: async (a: ProjectRef & { name: string }, options?: CallOptions): Promise<void> => {
-      const res = await this.#t.send({
+    delete: async (a: ProjectRef & { name: string }, options?: CallOptions): Promise<void> =>
+      this.#call({
         operation: 'secrets.delete',
         method: 'DELETE',
-        url: this.#t.url(this.#project(a, 'secrets', a.name)),
+        path: this.#project(a, 'secrets', a.name),
         options,
-      })
-      await res.body?.cancel()
-    },
+      }),
   }
 
   readonly providers = {
@@ -210,12 +215,15 @@ export class ReevalClient {
       (
         await this.#get(
           'providers.list',
-          this.#t.url(['api', 'orgs', a.org, 'providers']),
+          ['api', 'orgs', a.org, 'providers'],
           ProviderKeyList,
           options,
         )
       ).providers,
-    /** Adds or replaces the org's key for `provider`, or `project`'s own. */
+    /**
+     * Adds or replaces the org's key for `provider`, or `project`'s own. Retried as
+     * `secrets.set` is, with the same caveat on `created`.
+     */
     set: async (
       a: { org: string; provider: string; key: string; project?: string },
       options?: CallOptions,
@@ -227,24 +235,22 @@ export class ReevalClient {
         body: { json: { key: a.key, ...(a.project !== undefined && { projectId: a.project }) } },
         options,
       }
-      const res = await this.#t.send(req)
-      const { provider } = await this.#t.json(req, res, ProviderKeyAnswer)
-      return { provider, created: res.status === 201 }
+      return this.#t.send(req, async (res) => ({
+        provider: (await this.#t.json(req, res, ProviderKeyAnswer)).provider,
+        created: res.status === 201,
+      }))
     },
     delete: async (
       a: { org: string; provider: string; project?: string },
       options?: CallOptions,
-    ): Promise<void> => {
-      const res = await this.#t.send({
+    ): Promise<void> =>
+      this.#call({
         operation: 'providers.delete',
         method: 'DELETE',
-        url: this.#t.url(['api', 'orgs', a.org, 'providers', a.provider], {
-          projectId: a.project,
-        }),
+        path: ['api', 'orgs', a.org, 'providers', a.provider],
+        query: { projectId: a.project },
         options,
-      })
-      await res.body?.cancel()
-    },
+      }),
   }
 
   readonly runs = {
@@ -252,19 +258,21 @@ export class ReevalClient {
     create: async (
       a: ProjectRef & { bundleSha256: string; bundleBytes: number },
       options?: CallOptions,
-    ): Promise<CreatedRun> => {
-      const req: Send = {
-        operation: 'runs.create',
-        method: 'POST',
-        url: this.#t.url(this.#project(a, 'runs')),
-        body: { json: { bundleSha256: a.bundleSha256, bundleBytes: a.bundleBytes } },
-        options,
-      }
-      return this.#t.json(req, await this.#t.send(req), CreatedRun)
-    },
+    ): Promise<CreatedRun> =>
+      this.#t.request(
+        {
+          operation: 'runs.create',
+          method: 'POST',
+          url: this.#t.url(this.#project(a, 'runs')),
+          body: { json: { bundleSha256: a.bundleSha256, bundleBytes: a.bundleBytes } },
+          options,
+        },
+        CreatedRun,
+      ),
     /**
-     * Uploads the bundle to where `runs.create` said. The token goes only to the platform's own
-     * origin: another origin's URL carries its own authorization.
+     * Uploads the bundle to where `runs.create` said, trying once unless `retry` asks for more.
+     * The token goes only to the platform's own origin: another origin's URL carries its own
+     * authorization.
      */
     uploadBundle: async (
       a: { upload: CreatedRun['upload']; bundle: Uint8Array | Blob },
@@ -278,59 +286,67 @@ export class ReevalClient {
       if (method !== 'PUT' && method !== 'POST') {
         throw new TypeError(`the upload method is PUT or POST (got ${a.upload.method})`)
       }
-      const res = await this.#t.send({
-        operation: 'runs.uploadBundle',
-        method,
-        url,
-        body: { bytes: a.bundle, contentType: 'application/gzip' },
-        auth: url.origin === this.#t.base.origin,
-        options,
-      })
-      await res.body?.cancel()
+      await this.#t.send(
+        {
+          operation: 'runs.uploadBundle',
+          method,
+          url,
+          body: { bytes: a.bundle, contentType: 'application/gzip' },
+          auth: url.origin === this.#t.base.origin,
+          options,
+        },
+        async () => {},
+      )
     },
-    start: async (a: { run: string }, options?: CallOptions): Promise<void> => {
-      const res = await this.#t.send({
+    start: async (a: { run: string }, options?: CallOptions): Promise<void> =>
+      this.#call({
         operation: 'runs.start',
         method: 'POST',
-        url: this.#t.url(['api', 'runs', a.run, 'start']),
+        path: ['api', 'runs', a.run, 'start'],
         options,
-      })
-      await res.body?.cancel()
-    },
-    get: (a: { run: string }, options?: CallOptions): Promise<CloudRun> =>
-      this.#get('runs.get', this.#t.url(['api', 'runs', a.run]), CloudRun, options),
+      }),
+    get: async (a: { run: string }, options?: CallOptions): Promise<CloudRun> =>
+      this.#get('runs.get', ['api', 'runs', a.run], CloudRun, options),
     /** Asks the run to stop; it ends once its attempts have. */
-    cancel: async (a: { run: string }, options?: CallOptions): Promise<void> => {
-      const res = await this.#t.send({
+    cancel: async (a: { run: string }, options?: CallOptions): Promise<void> =>
+      this.#call({
         operation: 'runs.cancel',
         method: 'POST',
-        url: this.#t.url(['api', 'runs', a.run, 'cancel']),
+        path: ['api', 'runs', a.run, 'cancel'],
         options,
-      })
-      await res.body?.cancel()
-    },
+      }),
     /** The run's event stream, which `reeval attach` follows with {@link ReevalClient.authHeaders}. */
     eventsUrl: (a: { run: string }): URL => this.#t.url(['api', 'runs', a.run, 'events']),
-    /** The run's files as a gzipped tar, unread; null when the run has none. */
-    files: async (a: { run: string }, options?: CallOptions): Promise<Response | null> => {
-      const res = await this.#t.send({
-        operation: 'runs.files',
-        method: 'GET',
-        url: this.#t.url(['api', 'runs', a.run, 'artifacts', 'files.tar.gz']),
-        accept: 'application/gzip',
-        allow: [404],
-        options,
-      })
-      if (res.status !== 404) return res
-      await res.body?.cancel()
-      return null
-    },
+    /**
+     * The run's files as a gzipped tar, unread; null when the run has none. The deadline ends when
+     * the headers arrive: reading the body is bounded only by the call's `signal`.
+     */
+    files: async (a: { run: string }, options?: CallOptions): Promise<Response | null> =>
+      this.#t.send(
+        {
+          operation: 'runs.files',
+          method: 'GET',
+          url: this.#t.url(['api', 'runs', a.run, 'artifacts', 'files.tar.gz']),
+          accept: 'application/gzip',
+          allow: [404],
+          stream: true,
+          options,
+        },
+        async (res) => {
+          if (res.status !== 404) return res
+          await res.body?.cancel()
+          return null
+        },
+      ),
   }
 
   readonly studio = {
     runs: {
       /** How the project's copy of a recorded run stands; null when it has none. */
-      get: async (a: ProjectRef & { run: string }, options?: CallOptions) => {
+      get: async (
+        a: ProjectRef & { run: string },
+        options?: CallOptions,
+      ): Promise<StudioRunState | null> => {
         const req: Send = {
           operation: 'studio.runs.get',
           method: 'GET',
@@ -338,38 +354,45 @@ export class ReevalClient {
           allow: [404],
           options,
         }
-        const res = await this.#t.send(req)
-        if (res.status !== 404) return this.#t.json(req, res, StudioRunState)
-        await res.body?.cancel()
-        return null
+        return this.#t.send(req, async (res) =>
+          res.status === 404 ? null : this.#t.json(req, res, StudioRunState),
+        )
       },
-      /** Uploads a recorded run's archive (a zip) as the project's copy of it. */
+      /**
+       * Uploads a recorded run's archive (a zip) as the project's copy of it, trying once unless
+       * `retry` asks for more: each upload the platform takes is a revision it reads again.
+       */
       put: async (
         a: ProjectRef & { run: string; archive: Uint8Array | Blob },
         options?: CallOptions,
-      ): Promise<StudioRunState> => {
-        const req: Send = {
-          operation: 'studio.runs.put',
-          method: 'PUT',
-          url: this.#t.url(this.#project(a, 'studio', 'runs', a.run)),
-          body: { bytes: a.archive, contentType: 'application/zip' },
-          options,
-        }
-        return this.#t.json(req, await this.#t.send(req), StudioRunState)
-      },
+      ): Promise<StudioRunState> =>
+        this.#t.request(
+          {
+            operation: 'studio.runs.put',
+            method: 'PUT',
+            url: this.#t.url(this.#project(a, 'studio', 'runs', a.run)),
+            body: { bytes: a.archive, contentType: 'application/zip' },
+            options,
+          },
+          StudioRunState,
+        ),
     },
     shares: {
       /** The project's shares, or one run's. */
-      list: async (a: ProjectRef & { run?: string }, options?: CallOptions) =>
+      list: async (a: ProjectRef & { run?: string }, options?: CallOptions): Promise<Share[]> =>
         (
           await this.#get(
             'studio.shares.list',
-            this.#t.url(this.#project(a, 'studio', 'shares'), { runId: a.run }),
+            this.#project(a, 'studio', 'shares'),
             ShareList,
             options,
+            { runId: a.run },
           )
         ).shares,
-      /** Shares a run the project has; `created` is false when that share already existed. */
+      /**
+       * Shares a run the project has; `created` is false when that share already existed. The
+       * share's `url` is the platform's word: check its origin before printing it as a link.
+       */
       create: async (
         a: ProjectRef & { run: string; type: 'report' | 'full'; scope: 'team' | 'public' },
         options?: CallOptions,
@@ -381,31 +404,29 @@ export class ReevalClient {
           body: { json: { runId: a.run, type: a.type, scope: a.scope } },
           options,
         }
-        const res = await this.#t.send(req)
-        return { share: await this.#t.json(req, res, Share), created: res.status === 201 }
+        return this.#t.send(req, async (res) => ({
+          share: await this.#t.json(req, res, Share),
+          created: res.status === 201,
+        }))
       },
-      revoke: async (a: ProjectRef & { id: string }, options?: CallOptions): Promise<void> => {
-        const res = await this.#t.send({
+      revoke: async (a: ProjectRef & { id: string }, options?: CallOptions): Promise<void> =>
+        this.#call({
           operation: 'studio.shares.revoke',
           method: 'DELETE',
-          url: this.#t.url(this.#project(a, 'studio', 'shares', a.id)),
+          path: this.#project(a, 'studio', 'shares', a.id),
           options,
-        })
-        await res.body?.cancel()
-      },
+        }),
     },
     analysis: {
-      /** Uploads a saved analysis of a run the platform has. */
-      put: async (a: { run: string; analysis: Uint8Array }, options?: CallOptions) => {
-        const res = await this.#t.send({
+      /** Uploads a saved analysis of a run the platform has, trying once unless `retry` asks. */
+      put: async (a: { run: string; analysis: Uint8Array }, options?: CallOptions): Promise<void> =>
+        this.#call({
           operation: 'studio.analysis.put',
           method: 'PUT',
-          url: this.#t.url(['api', 'v1', 'runs', a.run, 'analysis']),
+          path: ['api', 'v1', 'runs', a.run, 'analysis'],
           body: { bytes: a.analysis, contentType: 'application/json' },
           options,
-        })
-        await res.body?.cancel()
-      },
+        }),
     },
   }
 }

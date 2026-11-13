@@ -1,6 +1,7 @@
 // The answers the client reads, as far as its callers read them. Each object is loose, so a field
-// the platform adds passes through, and status-like fields are open strings where a value the
-// platform adds later shouldn't make an older client refuse the answer.
+// the platform adds passes through, and status-like fields are open strings, so a value the
+// platform adds later doesn't make an older client refuse the answer. The one closed set is
+// `StudioRunState.status`, which a caller waits on: a state it doesn't know can't be waited out.
 import { z } from 'zod'
 
 export const PlatformConfig = z.looseObject({

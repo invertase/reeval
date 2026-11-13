@@ -11,7 +11,14 @@ export type Seen = {
   body: string
 }
 
-type Reply = { status?: number; json?: unknown; text?: string; headers?: Record<string, string> }
+type Reply = {
+  status?: number
+  json?: unknown
+  text?: string
+  headers?: Record<string, string>
+  /** Sends the headers and half the body, then the rest this long after; `Infinity` never does. */
+  stallMs?: number
+}
 type Handler = (req: Seen) => Reply | 'hang' | Promise<Reply | 'hang'>
 
 /** A local HTTP server that answers with `handler` and records every request it gets. */
@@ -42,7 +49,17 @@ export async function fakePlatform(handler: Handler) {
       ...(reply.json !== undefined && { 'content-type': 'application/json' }),
       ...reply.headers,
     })
-    res.end(body)
+    if (reply.stallMs === undefined) {
+      res.end(body)
+      return
+    }
+    res.write(body.slice(0, Math.floor(body.length / 2)))
+    open.add(res)
+    if (reply.stallMs === Number.POSITIVE_INFINITY) return
+    setTimeout(() => {
+      open.delete(res)
+      res.end(body.slice(Math.floor(body.length / 2)))
+    }, reply.stallMs)
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo

@@ -369,3 +369,195 @@ describe('retries', () => {
     assert.equal(p.seen.length, 1, 'an aborted signal sends nothing')
   })
 })
+
+describe('input refused before sending', () => {
+  test('refuses . and .. segments, which would name another route', async () => {
+    const p = await platform(() => ({ json: {} }))
+    const { api } = client(`${p.url}/base`)
+    assert.throws(() => api.runs.eventsUrl({ run: '.' }), /segment 2 .* is "\."/)
+    assert.throws(() => api.runs.eventsUrl({ run: '..' }), /is "\.\."/)
+    await assert.rejects(api.runs.start({ run: '..' }), TypeError)
+    await assert.rejects(api.secrets.delete({ org: 'o', project: '..', name: '..' }), TypeError)
+    await assert.rejects(api.providers.delete({ org: '.', provider: 'openai' }), TypeError)
+    assert.equal(api.runs.eventsUrl({ run: '...' }).pathname, '/base/api/runs/.../events')
+    assert.equal(p.seen.length, 0)
+  })
+
+  test('every call rejects on an empty segment, rather than throwing', async () => {
+    const { api } = client('http://127.0.0.1:9')
+    const calls = [
+      () => api.runs.get({ run: '' }),
+      () => api.secrets.names({ org: '', project: 'p' }),
+      () => api.projects.list({ org: '' }),
+      () => api.studio.runs.get({ org: 'o', project: 'p', run: '' }),
+    ]
+    for (const call of calls) {
+      const pending = call()
+      assert.ok(pending instanceof Promise)
+      await assert.rejects(pending, TypeError)
+    }
+  })
+
+  test("a token a header can't carry is refused once, naming none of it", async () => {
+    const p = await platform(() => ({ json: { orgs: [] } }))
+    for (const token of ['secret\ntok_123', 'secret tok_123', 'secret\u0000tok_123', 'tök_123']) {
+      const { api, waits } = client(p.url, { auth: () => token })
+      for (const pending of [api.orgs.list(), api.authHeaders()]) {
+        const error = await pending.then(
+          () => assert.fail('expected a refusal'),
+          (e: unknown) => e as Error,
+        )
+        assert.ok(error instanceof TypeError)
+        for (const part of ['secret', 'tok_123']) {
+          assert.ok(!`${error.message}${String(error.cause ?? '')}`.includes(part))
+        }
+      }
+      assert.deepEqual(waits, [])
+    }
+    assert.equal(p.seen.length, 0)
+  })
+
+  test("refuses a header value a header can't carry", async () => {
+    assert.throws(
+      () => new ReevalClient({ baseUrl: 'http://x', headers: { 'user-agent': 'a\r\nb' } }),
+      /user-agent header's value/,
+    )
+  })
+})
+
+describe('reading the answer', () => {
+  test('a GET whose body stalls past the deadline is unreachable, and retried', async () => {
+    let n = 0
+    const p = await platform(() =>
+      n++ === 0 ? { json: { orgs: [] }, stallMs: Infinity } : { json: { orgs: [] } },
+    )
+    const { api, waits } = client(p.url, { timeoutMs: 50 })
+    assert.deepEqual(await api.orgs.list(), [])
+    assert.equal(p.seen.length, 2)
+    assert.equal(waits.length, 1)
+  })
+
+  test('a POST whose body stalls is unreachable, never malformed, and not retried', async () => {
+    const p = await platform(() => ({
+      json: { runId: 'r1', upload: { url: 'http://x/u' } },
+      stallMs: Infinity,
+    }))
+    const { api } = client(p.url, { timeoutMs: 50 })
+    await rejectsWith(
+      api.runs.create({ org: 'o', project: 'p', bundleSha256: 'a', bundleBytes: 1 }),
+      (e) => {
+        assert.equal(e.kind, 'unreachable')
+        assert.match(e.message, /cut off \(past the 50 ms deadline\)/)
+      },
+    )
+    assert.equal(p.seen.length, 1)
+  })
+
+  test("an abort while the body is read rejects with the signal's reason", async () => {
+    const p = await platform(() => ({ json: { orgs: [] }, stallMs: Infinity }))
+    const controller = new AbortController()
+    const { api } = client(p.url)
+    const pending = api.orgs.list({ signal: controller.signal })
+    setTimeout(() => controller.abort(new Error('stopped')), 30)
+    await assert.rejects(pending, /stopped/)
+    assert.equal(p.seen.length, 1)
+  })
+
+  test("a download's body isn't held to the deadline", async () => {
+    const p = await platform(() => ({ text: 'x'.repeat(64), stallMs: 120 }))
+    const { api } = client(p.url, { timeoutMs: 40 })
+    const res = await api.runs.files({ run: 'r1' })
+    assert.equal((await res?.text())?.length, 64)
+  })
+
+  test('a malformed answer keeps no body, and a refusal is one line', async () => {
+    const p = await platform((s) =>
+      s.path === '/api/me'
+        ? { json: { access_token: 'tok_secret', user: null } }
+        : {
+            status: 400,
+            json: { error: { code: 'invalid_request', message: 'line1\nline2\ttab\n' } },
+          },
+    )
+    const { api } = client(p.url)
+    await rejectsWith(api.me.get(), (e) => {
+      assert.equal(e.kind, 'malformed')
+      assert.equal(e.body, null)
+      assert.ok(!JSON.stringify(e).includes('tok_secret'))
+    })
+    await rejectsWith(api.orgs.list(), (e) => assert.equal(e.said, 'line1 line2 tab'))
+  })
+})
+
+describe('uploads and retried PUTs', () => {
+  test('an upload tries once unless the call asks for more', async () => {
+    const p = await platform(() => ({ status: 503 }))
+    const { api } = client(p.url)
+    const at = { org: 'o', project: 'p', run: 'r1', archive: new Uint8Array(8) }
+    await rejectsWith(api.studio.runs.put(at), (e) => assert.equal(e.kind, 'failed'))
+    assert.equal(p.seen.length, 1)
+    await rejectsWith(api.studio.runs.put(at, { retry: { attempts: 2 } }), () => {})
+    assert.equal(p.seen.length, 3)
+    const upload = { url: `${p.url}/up`, method: 'PUT' }
+    await rejectsWith(api.runs.uploadBundle({ upload, bundle: new Uint8Array(8) }), () => {})
+    assert.equal(p.seen.length, 4)
+  })
+
+  test('a JSON PUT is retried, and reads the answer it ends with', async () => {
+    let n = 0
+    const p = await platform(() =>
+      n++ === 0
+        ? { status: 503 }
+        : { json: { secret: { name: 'A', mode: 'sandbox', version: 1 } } },
+    )
+    const { api } = client(p.url)
+    const set = await api.secrets.set({ org: 'o', project: 'p', name: 'A', value: 'v' })
+    assert.deepEqual(set, { secret: { name: 'A', mode: 'sandbox', version: 1 }, created: false })
+    assert.equal(p.seen.length, 2)
+  })
+})
+
+describe('the other routes', () => {
+  test('config, me, projects, providers, a share and a studio run read their answers', async () => {
+    const share = {
+      id: 'sh_1',
+      url: 'http://x/s/sh_1',
+      runId: 'r1',
+      type: 'report',
+      scope: 'team',
+      createdAt: '2026-11-13T00:00:00Z',
+    }
+    const answers: Record<string, { status?: number; json: unknown }> = {
+      'GET /api/config': { json: { gatewayBaseUrl: null } },
+      'GET /api/me': { json: { user: { id: 'u1', email: 'a@b.c' } } },
+      'GET /api/orgs/o/projects': { json: { projects: [{ id: 'p', slug: 'p', name: 'P' }] } },
+      'GET /api/orgs/o/providers': {
+        json: { providers: [{ provider: 'openai', projectId: null, version: 1 }] },
+      },
+      'POST /api/orgs/o/projects/p/studio/shares': { status: 201, json: share },
+      'GET /api/orgs/o/projects/p/studio/runs/r1': {
+        json: { revision: 2, status: 'ready', error: null },
+      },
+    }
+    const p = await platform((s) => answers[`${s.method} ${s.path}`] ?? { status: 404, json: {} })
+    const { api } = client(p.url)
+    assert.deepEqual(await api.config.get(), { gatewayBaseUrl: null })
+    assert.equal((await api.me.get()).email, 'a@b.c')
+    assert.equal((await api.projects.list({ org: 'o' }))[0]?.slug, 'p')
+    assert.equal((await api.providers.list({ org: 'o' }))[0]?.provider, 'openai')
+    const made = await api.studio.shares.create({
+      org: 'o',
+      project: 'p',
+      run: 'r1',
+      type: 'report',
+      scope: 'team',
+    })
+    assert.deepEqual(made, { share, created: true })
+    assert.deepEqual(JSON.parse(p.seen[4]?.body ?? ''), {
+      runId: 'r1',
+      type: 'report',
+      scope: 'team',
+    })
+    assert.equal((await api.studio.runs.get({ org: 'o', project: 'p', run: 'r1' }))?.revision, 2)
+  })
+})

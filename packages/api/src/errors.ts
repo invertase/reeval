@@ -24,13 +24,13 @@ export class ApiError extends Error {
   readonly status: number | null
   /** The platform's error code (`not_found`, `not_ready`, …), or an OAuth `error`. */
   readonly code: string | null
-  /** The platform's own words for the failure, with control characters taken out. */
+  /** The platform's own words for the failure, on one line, with control characters taken out. */
   readonly said: string | null
   /** The same call may succeed later. */
   readonly retryable: boolean
   /** How long the platform asked to wait before calling again, from `Retry-After`. */
   readonly retryAfterMs: number | null
-  /** The answer's parsed JSON body, when it had one. */
+  /** A refused or failed answer's parsed JSON body, when it had one; never a `malformed` one's. */
   readonly body: unknown
 
   constructor(o: {
@@ -81,7 +81,10 @@ export function describeFailure(body: unknown): {
   const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
   const nested =
     typeof b.error === 'object' && b.error !== null ? (b.error as Record<string, unknown>) : null
-  const text = (v: unknown) => (typeof v === 'string' && printable(v)) || null
+  const text = (v: unknown) =>
+    (typeof v === 'string' &&
+      printable(v.replace(/\s*[\r\n]+\s*/g, ' ').replace(/\t/g, ' ')).trim()) ||
+    null
   const code = text(nested?.code) ?? text(b.error)
   const said =
     text(nested?.message) ?? text(b.error_description) ?? text(b.message) ?? text(b.error)
