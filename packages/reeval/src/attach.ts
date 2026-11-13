@@ -44,6 +44,12 @@ export type AttachOptions = {
   onDetach?: () => void
   /** How to cancel a run this viewer can't reach, which the interactive list shows. */
   cancelHint?: string
+  /**
+   * The headers the stream holds before the resume this viewer follows, which starts with one of
+   * its own: an exit line ends it only after that header, so a resume that never starts reads as
+   * a stream that ended early.
+   */
+  resumedAfter?: number
 }
 
 const SILENT = Symbol('silent')
@@ -153,6 +159,9 @@ export async function attach(options: AttachOptions): Promise<number> {
   let code: number | undefined
   /** This segment's run writes heartbeats, so its silence means something from its header on. */
   let beating = false
+  /** Headers so far, and whether the one past `resumedAfter` has come. */
+  let headers = 0
+  let current = !options.resumedAfter
   let heard = Date.now()
   let stalled = false
   const rendererFor = (line: RunEventsHeader) =>
@@ -258,6 +267,7 @@ export async function attach(options: AttachOptions): Promise<number> {
         renderer = ended = undefined
         await last?.dismiss?.()
         code = undefined
+        if (++headers > (options.resumedAfter ?? 0)) current = true
         beating = line.heartbeatMs !== undefined
         stalled = false
         header = line
@@ -270,7 +280,8 @@ export async function attach(options: AttachOptions): Promise<number> {
         renderer?.close()
         ended = renderer
         renderer = undefined
-        code = line.code
+        if (current) code = line.code
+        else beating = false
         continue
       }
       if (line.type === 'plan') config = line.header.config

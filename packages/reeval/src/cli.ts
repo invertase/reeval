@@ -1097,7 +1097,7 @@ async function attachHere(
   flags: Flags,
   options: Pick<
     import('./attach.ts').AttachOptions,
-    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint'
+    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint' | 'resumedAfter'
   >,
 ): Promise<number> {
   const { attach } = await import('./attach.ts')
@@ -1576,16 +1576,20 @@ async function runCommand(
 }
 
 /**
- * `reeval run --cloud --resume <run>`, or `--resume <run>` where the config or its profile runs in
- * the cloud and this machine has no such run: resumes the cloud run and follows it. Its bundle
- * fixed the filters, profile, runs, tags and traits, so it takes none of them, and no config:
- * `loaded` is the config the cloud was picked from, which `--download` also reads.
+ * `reeval run --cloud --resume <run>`, or `--resume` where the config or its profile runs in the
+ * cloud and the run is a cloud run's download here or isn't here at all: resumes the cloud run
+ * and follows it. Its bundle fixed the filters, runs, tags and traits, so it takes none of them;
+ * `--profile` only picks where it goes and the history `--download` files it in. It needs no
+ * config: `found` is the config the cloud was picked from and, for a download, its cloud run.
  */
 async function cloudContinue(
   flags: Flags,
   filters: string[],
   configPath: string | undefined,
-  loaded?: Awaited<ReturnType<typeof loadConfig>>,
+  found?: {
+    config: Awaited<ReturnType<typeof loadConfig>>
+    origin: Awaited<ReturnType<typeof import('./cloud-files.ts').cloudOriginOf>>
+  },
 ): Promise<number> {
   const cloud = await import('./cloud-run.ts')
   if (flags['retry-errors'] !== undefined) {
@@ -1595,13 +1599,13 @@ async function cloudContinue(
   }
   const fixed = [
     ...(filters.length ? ['filters'] : []),
-    ...(['profile', 'runs', 'tag', 'trait'] as const)
+    ...(['runs', 'tag', 'trait'] as const)
       .filter((f) => flags[f] !== undefined)
       .map((f) => `--${f}`),
   ]
   if (fixed.length) {
     throw new UsageError(
-      `a cloud run resumes with the filters, profile, runs, tags and traits it started with: leave out ${fixed.join(', ')}`,
+      `a cloud run resumes with the filters, runs, tags and traits it started with: leave out ${fixed.join(', ')}`,
     )
   }
   cloud.refuseLocalFlags(flags)
@@ -1611,35 +1615,75 @@ async function cloudContinue(
       `${starting.map((f) => `--${f}`).join(', ')} ${starting.length === 1 ? 'applies' : 'apply'} to starting a cloud run, not resuming one: leave ${starting.length === 1 ? 'it' : 'them'} out`,
     )
   }
-  if (!flags.resume || flags.resume === 'latest') {
+  const ref = flags.resume ?? ''
+  let origin = found?.origin ?? null
+  if (!origin && (!ref || /^latest(~\d+)?$/.test(ref))) {
     throw new UsageError(
       "reeval run --cloud --resume needs the run: pass the cloud run's id, which reeval run --cloud printed, or its event stream URL",
     )
+  }
+  if (!origin && configPath !== undefined && !isAttachUrl(ref)) {
+    const { cloudOriginOf } = await import('./cloud-files.ts')
+    origin = await cloudOriginOf(dirname(configPath), ref)
   }
   // The platform URL may be in the project's .env, as it is for the other cloud commands.
   loadEnvFiles(configPath)
   const base = cloud.cloudUrl()
   let download: { root: string; history: ResolvedHistory; profile?: string } | undefined
-  if (flags.download) {
+  if (flags.download || flags.profile !== undefined) {
     if (configPath === undefined) {
+      const flag = flags.download ? '--download' : '--profile'
       throw new UsageError(
-        "--download puts the cloud run's files into a project, and there's no reeval config here: run it in the project, or leave out --download",
+        `${flag} reads the project's config, and there's no reeval config here: run it in the project, or leave out ${flag}`,
       )
     }
     const config =
-      loaded ?? (await loadConfig(configPath, 'run', process.env.REEVAL_PROFILE || undefined))
-    const picked = selectProfile(config, undefined)
+      found?.config ??
+      (await loadConfig(
+        configPath,
+        'run',
+        flags.profile ?? origin?.profile ?? (process.env.REEVAL_PROFILE || undefined),
+      ))
+    // The history a downloaded run was filed in is its own profile's, while the config has it.
+    const own = origin?.profile && config.profiles[origin.profile] ? origin.profile : undefined
+    const picked = selectProfile(config, flags.profile ?? own)
     const { root, history } = withProfileHistory(config, picked)
-    download = { root, history, ...(picked ? { profile: picked.name } : {}) }
+    if (flags.download) download = { root, history, ...(picked ? { profile: picked.name } : {}) }
   }
+  if (origin) console.log(dim(`run ${origin.runId} is cloud run ${origin.cloudRunId}'s download`))
   return cloud.resumeCloud({
     base,
-    run: flags.resume,
+    run: origin?.cloudRunId ?? ref,
     checkout: configPath !== undefined,
+    lookedHere: !!found && !origin,
     log: (line) => console.log(dim(line)),
     follow: (options) => attachHere(flags, options),
     ...(download && { download }),
   })
+}
+
+/**
+ * The cloud continuation of the run `ref` names when it was downloaded from a cloud run and the
+ * config or its profile runs in the cloud (`--profile`, else the run's own, else the default's).
+ */
+async function cloudContinuation(flags: Flags, path: string, ref: string, bundled?: Bundled) {
+  if (flags.local || bundled) return null
+  const { cloudOriginOf } = await import('./cloud-files.ts')
+  const origin = await cloudOriginOf(dirname(path), ref)
+  if (!origin) return null
+  const named = flags.profile ?? origin.profile ?? (process.env.REEVAL_PROFILE || undefined)
+  const loaded = await loadConfig(path, 'run', named)
+  const own = origin.profile && loaded.profiles[origin.profile] ? origin.profile : undefined
+  if (!wantsCloud(flags, loaded, selectProfile(loaded, flags.profile ?? own))) return null
+  return {
+    cloud: { config: loaded, origin },
+    runId: undefined,
+    nothing: null,
+    saved: null,
+    settings: null,
+    notes: [],
+    profileOf: undefined,
+  }
 }
 
 /**
@@ -1657,6 +1701,9 @@ async function resumedRun(
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
   loadEnvFiles(path)
   const root = dirname(path)
+  const ref = flags.resume ?? flags['retry-errors']
+  const named = ref && ref !== 'latest' ? await cloudContinuation(flags, path, ref, bundled) : null
+  if (named) return named
   let target: Awaited<ReturnType<typeof continuedRun>>
   try {
     target = await continuedRun(root, flags, bundled)
@@ -1669,7 +1716,7 @@ async function resumedRun(
     )
     if (!wantsCloud(flags, loaded, selectProfile(loaded, flags.profile))) throw error
     return {
-      cloud: loaded,
+      cloud: { config: loaded, origin: null },
       runId: undefined,
       nothing: null,
       saved: null,
@@ -1678,6 +1725,8 @@ async function resumedRun(
       profileOf: undefined,
     }
   }
+  const downloaded = await cloudContinuation(flags, path, target.runId, bundled)
+  if (downloaded) return downloaded
   if (
     flags['retry-errors'] !== undefined &&
     target.previous &&

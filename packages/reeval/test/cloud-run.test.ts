@@ -190,8 +190,10 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * goes on until it's canceled; with `stops`, it ends with `exitCode` (130 when not given) and
  * reads as stopped, for that reason. `status` and `error` replace what the run reads as (and a
  * cancel then finds it ended), and with `slowStatus` the run's status never answers. With
- * `resume`, the run's stream already holds a stopped segment, and resuming it answers each of
- * `resume` in turn (then 202): a 200 or 202 relays a new segment that ends with `resumedCode`.
+ * `resume`, the run's stream already holds a stopped run, and resuming it answers each of
+ * `resume` in turn (then 202): a 200 or 202 relays the resumed run's lines, ending with
+ * `resumedCode`; with `resumeEnds`, it relays nothing and the run reads as that status, for that
+ * reason.
  */
 async function platform(
   options: {
@@ -212,6 +214,7 @@ async function platform(
     slowStatus?: boolean
     resume?: Array<{ status: number; code?: string; message?: string; retryAfter?: string }>
     resumedCode?: number
+    resumeEnds?: { status: 'failed' | 'stopped'; message: string }
   } = {},
 ) {
   const seen: Seen[] = []
@@ -239,10 +242,13 @@ async function platform(
   const run = () => ({
     id: 'run_1',
     segment: resumed ? 1 : 0,
+    lastSeq: lines.length,
     status: resumed
-      ? over
-        ? 'succeeded'
-        : 'running'
+      ? options.resumeEnds
+        ? options.resumeEnds.status
+        : over
+          ? 'succeeded'
+          : 'running'
       : options.fails
         ? 'failed'
         : stops
@@ -255,13 +261,16 @@ async function platform(
               ? 'succeeded'
               : 'running',
     error: resumed
-      ? null
+      ? options.resumeEnds
+        ? { code: 'resume_failed', message: options.resumeEnds.message }
+        : null
       : options.fails
         ? { code: 'start_failed', message: options.fails }
         : stops
           ? { code: 'stopped_by_platform', message: stops }
           : null,
-    exitCode: options.exitCode ?? null,
+    exitCode:
+      resumed && !options.resumeEnds ? (options.resumedCode ?? 0) : (options.exitCode ?? null),
     ...(options.status === undefined ? {} : { status: options.status }),
     ...(options.error === undefined ? {} : { error: options.error }),
   })
@@ -356,6 +365,7 @@ async function platform(
         })
         return res.end(JSON.stringify({ error: { code: next.code, message: next.message } }))
       }
+      if (!resumed && options.resumeEnds) resumed = true
       if (!resumed) {
         resumed = true
         over = false
@@ -1736,13 +1746,17 @@ describe('reeval run --cloud --resume', () => {
   const calls = (p: { seen: Seen[] }) =>
     p.seen.filter((s) => s.path !== '/ingest').map((s) => `${s.method} ${s.path}`)
 
-  test('resumes the run and follows its new segment to its exit code, from its id or its events URL, with no project needed', async () => {
+  test('resumes the run and follows it to its new exit code, from its id or its events URL, with no project needed', async () => {
     const p = await platform({ resume: [], resumedCode: 1 })
     const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
     try {
       const dir = await fixtureProject()
       const r = await runCli(dir, ['run', '--cloud', '--resume', 'run_1'], { env })
       assert.equal(r.code, 1, r.stdout + r.stderr)
+      assert.ok(
+        r.stdout.indexOf('Resuming cloud run') < r.stdout.indexOf('Resumed cloud run'),
+        r.stdout,
+      )
       assert.match(
         r.stdout,
         /Resuming cloud run run_1 with the project as it was uploaded, without changes made here since; reeval run --cloud starts a new run/,
@@ -1774,7 +1788,7 @@ describe('reeval run --cloud --resume', () => {
     }
   })
 
-  test('a 200 follows the segment the platform already started', async () => {
+  test('a 200 follows the resume the platform already started', async () => {
     const p = await platform({ resume: [{ status: 200 }] })
     try {
       const r = await runCli(await fixtureProject(), ['run', '--cloud', '--resume', 'run_1'], {
@@ -1865,9 +1879,9 @@ describe('reeval run --cloud --resume', () => {
       },
       {
         options: {
-          resume: [{ status: 402, code: 'units_exhausted', message: 'No units left until Dec 1.' }],
+          resume: [{ status: 402, code: 'payment_required', message: 'Add a payment method.' }],
         },
-        said: /the cloud platform refused to resume run run_1: No units left until Dec 1\./,
+        said: /the cloud platform refused to resume run run_1: Add a payment method\./,
       },
       {
         options: { resume: [{ status: 403, code: 'suspended', message: 'The org is suspended.' }] },
@@ -1882,6 +1896,7 @@ describe('reeval run --cloud --resume', () => {
         })
         assert.equal(r.code, 2, r.stdout + r.stderr)
         assert.match(r.stderr, said)
+        assert.doesNotMatch(r.stdout, /Resuming cloud run/)
         assert.ok(!calls(p).includes('WS /api/runs/run_1/events'), 'nothing to follow')
       } finally {
         await p.close()
@@ -1908,10 +1923,9 @@ describe('reeval run --cloud --resume', () => {
       const refused: Array<[string[], RegExp]> = [
         [['answer'], /leave out filters$/m],
         [
-          ['--profile', 'p'],
-          /resumes with the filters, profile, runs, tags and traits it started with: leave out --profile/,
+          ['--runs', '2'],
+          /resumes with the filters, runs, tags and traits it started with: leave out --runs/,
         ],
-        [['--runs', '2'], /leave out --runs/],
         [['--tag', 't'], /leave out --tag/],
         [['--trait', 'k=v'], /leave out --trait/],
         [['--concurrency', '2'], /--concurrency applies to a run on this machine/],
@@ -1929,9 +1943,27 @@ describe('reeval run --cloud --resume', () => {
         retry.stderr,
         /--retry-errors runs the infra errors of a run on this machine again, not of a cloud run/,
       )
-      const bare = await runCli(dir, ['run', '--cloud', '--resume'], { env })
-      assert.equal(bare.code, 2, bare.stdout + bare.stderr)
-      assert.match(bare.stderr, /pass the cloud run's id/)
+      for (const ref of [[], ['latest'], ['latest~1']]) {
+        const bare = await runCli(dir, ['run', '--cloud', '--resume', ...ref], { env })
+        assert.equal(bare.code, 2, bare.stdout + bare.stderr)
+        assert.match(bare.stderr, /pass the cloud run's id/, ref.join(' '))
+      }
+      const unknown = await runCli(dir, ['run', '--cloud', '--resume', 'run_1', '--profile', 'p'], {
+        env,
+      })
+      assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
+      assert.match(unknown.stderr, /Unknown profile "p"/)
+      const raw = await runCli(dir, ['run', '--cloud', '--resume', 'run_1\u001b[2J'], { env })
+      assert.equal(raw.code, 2, raw.stdout + raw.stderr)
+      assert.match(raw.stderr, /isn't a cloud run's id: it holds control characters/)
+      assert.ok(!raw.stderr.includes('\u001b'), 'the id is printed escaped')
+      const profileHere = await runCli(
+        tempDir('no-project'),
+        ['run', '--cloud', '--resume', 'run_1', '--profile', 'p'],
+        { env },
+      )
+      assert.equal(profileHere.code, 2, profileHere.stdout + profileHere.stderr)
+      assert.match(profileHere.stderr, /--profile reads the project's config/)
       const both = await runCli(dir, ['run', '--local', '--cloud', '--resume'], { env })
       assert.equal(both.code, 2)
       assert.match(both.stderr, /--cloud and --local pick where the run goes/)
@@ -1941,7 +1973,7 @@ describe('reeval run --cloud --resume', () => {
         { env },
       )
       assert.equal(download.code, 2, download.stdout + download.stderr)
-      assert.match(download.stderr, /--download puts the cloud run's files into a project/)
+      assert.match(download.stderr, /--download reads the project's config/)
       assert.deepEqual(p.seen, [], 'nothing reaches the platform')
     } finally {
       await p.close()
@@ -2021,6 +2053,123 @@ describe('reeval run --cloud --resume', () => {
       assert.match(again.stdout, /1 passed/)
       assert.notEqual(devRun, localRun)
       assert.deepEqual(p.seen, [], 'nothing reaches the platform')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("a resume that adds nothing to the stream exits as the run's status says, never with the old exit line", async () => {
+    const cases = [
+      {
+        status: 'failed' as const,
+        code: 3,
+        said: /cloud run run_1 failed: The machine never started\./,
+      },
+      { status: 'stopped' as const, code: 4, said: /reeval run --cloud --resume run_1/ },
+    ]
+    for (const { status, code, said } of cases) {
+      const p = await platform({
+        resume: [],
+        resumeEnds: { status, message: 'The machine never started.' },
+      })
+      try {
+        const r = await runCli(await fixtureProject(), ['run', '--cloud', '--resume', 'run_1'], {
+          env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+        })
+        assert.equal(r.code, code, `${status}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stdout + r.stderr, said, status)
+        assert.ok(calls(p).includes('WS /api/runs/run_1/events'), 'it followed the stream')
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test('--profile picks a profile that runs in the cloud, and a run in neither place says so', async () => {
+    const p = await platform({ resume: [] })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace(
+          'defineConfig({',
+          'defineConfig({\n  profiles: { cloudy: { cloud: true } },',
+        ),
+      )
+      const r = await runCli(dir, ['run', '--profile', 'cloudy', '--resume', 'run_1'], { env })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(r.stdout, /Resumed cloud run run_1/)
+      const nowhere = await runCli(dir, ['run', '--profile', 'cloudy', '--resume', 'run_9'], {
+        env,
+      })
+      assert.equal(nowhere.code, 2, nowhere.stdout + nowhere.stderr)
+      assert.match(nowhere.stderr, /No run matches "run_9" here or in the cloud/)
+      const here = await runCli(dir, ['run', '--resume', 'run_1'], { env })
+      assert.equal(here.code, 2, here.stdout + here.stderr)
+      assert.match(here.stderr, /No run matches "run_1"/)
+      assert.doesNotMatch(here.stderr, /in the cloud/)
+      assert.equal(calls(p).filter((c) => c.endsWith('/resume')).length, 1)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("a run downloaded from a cloud run resumes there by the cloud run's id, and --local continues it here", async () => {
+    const ran = await platform()
+    const dir = await fixtureProject()
+    let runId: string
+    try {
+      const r = await runCli(dir, ['run', '--cloud', '--download'], {
+        env: { REEVAL_CLOUD_URL: ran.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const name = readdirSync(join(dir, '.reeval/runs')).find((n) => n.endsWith('.json'))
+      assert.ok(name)
+      runId = name.slice(0, -'.json'.length)
+      assert.deepEqual(
+        JSON.parse(readFileSync(join(dir, '.reeval/cloud', `${runId}.json`), 'utf8')),
+        { schemaVersion: 1, cloudRunId: 'run_1' },
+      )
+      const file = join(dir, '.reeval/runs', name)
+      const record = JSON.parse(readFileSync(file, 'utf8'))
+      record.status = 'budget'
+      for (const e of record.evals) {
+        e.attempts = e.attempts.map((a: object) => ({
+          ...a,
+          outcome: 'skipped',
+          error: null,
+          files: {},
+          checks: [],
+        }))
+      }
+      writeFileSync(file, JSON.stringify(record))
+    } finally {
+      await ran.close()
+    }
+    const p = await platform({ resume: [] })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const explicit = await runCli(dir, ['run', '--cloud', '--resume', runId.slice(0, 18)], {
+        env,
+      })
+      assert.equal(explicit.code, 0, explicit.stdout + explicit.stderr)
+      assert.match(explicit.stdout, new RegExp(`run ${runId} is cloud run run_1's download`))
+      assert.match(explicit.stdout, /Resumed cloud run run_1/)
+      cloudConfig(dir)
+      for (const args of [['--resume'], ['--resume', runId]]) {
+        const r = await runCli(dir, ['run', ...args], { env })
+        assert.equal(r.code, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stdout, /Already resuming cloud run run_1|Resumed cloud run run_1/)
+        assert.doesNotMatch(r.stdout, /continues here/)
+      }
+      const resumes = calls(p).filter((c) => c.endsWith('/resume')).length
+      assert.equal(resumes, 3)
+      const local = await runCli(dir, ['run', '--local', '--resume', runId], { env })
+      assert.equal(local.code, 0, local.stdout + local.stderr)
+      assert.match(local.stdout, /1 passed/)
+      assert.equal(calls(p).filter((c) => c.endsWith('/resume')).length, resumes)
     } finally {
       await p.close()
     }

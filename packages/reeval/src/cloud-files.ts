@@ -7,8 +7,10 @@ import {
   link,
   lstat,
   mkdir,
+  readdir,
   readFile,
   readlink,
+  rename,
   symlink,
   unlink,
   writeFile,
@@ -288,17 +290,20 @@ export async function downloadCloudFiles(options: {
     )
   }
   const recorded = new Set(files.filter((f) => f.record).map((f) => f.runId))
+  /** The profile each run in `.reeval/runs` started with, for its `.reeval/cloud` marker. */
+  const scratch = new Map<string, string | undefined>()
   for (const f of files.filter((f) => f.record)) {
-    let runId: string | undefined
+    let record: ReturnType<typeof parseRecord>
     try {
-      runId = parseRecord(f.data, f.path).runId
+      record = parseRecord(f.data, f.path)
     } catch (error) {
       if (error instanceof NewerRecordError) continue
       throw new CloudError(`${what} hold ${f.path}, which isn't a readable reeval run record`)
     }
-    if (runId !== f.runId) {
-      throw new CloudError(`${what} hold ${f.path}, the record of another run (${runId})`)
+    if (record.runId !== f.runId) {
+      throw new CloudError(`${what} hold ${f.path}, the record of another run (${record.runId})`)
     }
+    if (f.area === 'runs') scratch.set(f.runId, record.invocation?.profile)
   }
   const lines: string[] = []
   if (others) {
@@ -345,9 +350,14 @@ export async function downloadCloudFiles(options: {
   }
   // Links after every file, and each file's parents checked again as it's written, so nothing is
   // written through a link, even one a case-folding filesystem takes for another name. Records
-  // last, each linked into place whole from a temporary file, never over another.
+  // last, each linked into place whole from a temporary file, never over another, after the
+  // marker that says it came from the cloud.
   for (const f of order) {
     const file = join(root, ...f.path.split('/'))
+    if (f.record && f.area === 'runs' && scratch.has(f.runId)) {
+      const profile = scratch.get(f.runId)
+      await markCloudOrigin(root, f.runId, { cloudRunId, ...(profile ? { profile } : {}) })
+    }
     try {
       const parts = f.path.split('/')
       for (let i = 1; i < parts.length; i++) {
@@ -398,4 +408,71 @@ export async function downloadCloudFiles(options: {
     )
   }
   return lines
+}
+
+/**
+ * `.reeval/cloud/<run>.json`: the cloud run a run in `.reeval/runs` was downloaded from, so
+ * `reeval run --resume` continues it there, never on this machine.
+ */
+export type CloudOrigin = {
+  schemaVersion: 1
+  /** The run's id on the cloud platform. */
+  cloudRunId: string
+  /** The profile the run started with, when its record names one. */
+  profile?: string
+}
+
+const originDir = (root: string) => join(root, '.reeval', 'cloud')
+
+/** Writes run `runId`'s marker, through no link. */
+async function markCloudOrigin(
+  root: string,
+  runId: string,
+  origin: Omit<CloudOrigin, 'schemaVersion'>,
+): Promise<void> {
+  const dir = originDir(root)
+  const marker: CloudOrigin = { schemaVersion: 1, ...origin }
+  try {
+    for (const at of [dirname(dir), dir]) {
+      const info = await lstat(at).catch(() => null)
+      if (!info) await mkdir(at)
+      else if (!info.isDirectory()) throw new Error(`${relativeFile(root, at)} isn't a directory`)
+    }
+    const tmp = join(dir, `.${runId}.json.${process.pid}.tmp`)
+    await writeFile(tmp, `${JSON.stringify(marker)}\n`, { flag: 'wx' })
+    await rename(tmp, join(dir, `${runId}.json`))
+  } catch (error) {
+    throw new CloudError(
+      `couldn't write .reeval/cloud/${runId}.json: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
+/**
+ * The cloud run that the run of `.reeval/runs` whose id is `ref`, or starts with it, was
+ * downloaded from; null when no single downloaded run matches.
+ */
+export async function cloudOriginOf(
+  root: string,
+  ref: string,
+): Promise<(CloudOrigin & { runId: string }) | null> {
+  const names = await readdir(originDir(root)).catch((): string[] => [])
+  const ids = names.flatMap((n) => {
+    const id = n.endsWith('.json') ? n.slice(0, -'.json'.length) : ''
+    return RUN_ID.test(id) && id.startsWith(ref) ? [id] : []
+  })
+  const runId = ids.includes(ref) ? ref : ids.length === 1 ? ids[0] : undefined
+  if (!runId) return null
+  try {
+    const read = JSON.parse(await readFile(join(originDir(root), `${runId}.json`), 'utf8'))
+    if (read?.schemaVersion !== 1 || typeof read.cloudRunId !== 'string') return null
+    return {
+      runId,
+      schemaVersion: 1,
+      cloudRunId: read.cloudRunId,
+      ...(typeof read.profile === 'string' ? { profile: read.profile } : {}),
+    }
+  } catch {
+    return null
+  }
 }

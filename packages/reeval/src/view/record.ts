@@ -24,6 +24,7 @@ export type ShapeName =
   | 'remarks'
   | 'debug-request'
   | 'live-progress'
+  | 'cloud-origin'
   | 'cli-invocation'
   | 'capture-page'
   | 'run-events'
@@ -64,6 +65,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   remarks: [],
   'debug-request': [],
   'live-progress': [],
+  'cloud-origin': [],
   'cli-invocation': [],
   'capture-page': [],
   'run-events': [

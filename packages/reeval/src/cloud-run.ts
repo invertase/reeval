@@ -289,7 +289,8 @@ export async function stoppedOr(
 /**
  * When following cloud run `runId` lost its stream (`lost`): the exit code the platform recorded
  * for it, with the run as read, which `stoppedOr` takes. Throws `lost` when the platform has no
- * exit code and the run neither failed nor was stopped there.
+ * exit code and the run neither failed nor was stopped there. A `resumed` run's recorded code can
+ * be the one it stopped with before, so it counts only once the run has ended again.
  */
 export async function afterLostStream(
   lost: EventStreamError,
@@ -297,10 +298,13 @@ export async function afterLostStream(
   base: URL,
   auth: CloudAuth,
   log: (line: string) => void,
+  resumed = false,
 ): Promise<{ code: number; read: PlatformRun | null }> {
   const run = await readRun(runId, base, auth)
   const why = platformText(run?.error?.message) || platformText(run?.error?.code)
-  const exitCode = typeof run?.exitCode === 'number' ? run.exitCode : undefined
+  const ended = run?.status === 'succeeded' || run?.status === 'cancelled'
+  const exitCode =
+    typeof run?.exitCode === 'number' && (!resumed || ended) ? run.exitCode : undefined
   if (run?.status === 'stopped') return { code: exitCode ?? INTERRUPTED, read: run }
   if (exitCode === undefined) {
     if (run?.status === 'failed') {
@@ -317,15 +321,23 @@ export const cancelHint = (runId: string) => `reeval cloud run cancel ${runId} c
 
 /** A cloud run's id, from the id itself or its event stream URL on the platform at `base`. */
 async function cloudRunId(given: string, base: URL): Promise<string> {
-  if (!/^(https?|wss?):\/\//i.test(given)) return given
-  const { cloudRunOf } = await import('./cloud-files.ts')
-  const run = cloudRunOf(given, base)
-  if (!run) {
+  let runId = given
+  if (/^(https?|wss?):\/\//i.test(given)) {
+    const { cloudRunOf } = await import('./cloud-files.ts')
+    const run = cloudRunOf(given, base)
+    if (!run) {
+      throw new UsageError(
+        `${printable(displayUrl(given))} isn't a cloud run's event stream at ${displayUrl(base.href)}: pass the run's id, or its URL there (${displayUrl(base.href)}api/runs/<run>/events)`,
+      )
+    }
+    runId = run.runId
+  }
+  if (printable(runId) !== runId) {
     throw new UsageError(
-      `${displayUrl(given)} isn't a cloud run's event stream at ${displayUrl(base.href)}: pass the run's id, or its URL there (${displayUrl(base.href)}api/runs/<run>/events)`,
+      `"${printable(runId)}" isn't a cloud run's id: it holds control characters`,
     )
   }
-  return run.runId
+  return runId
 }
 
 /** `reeval cloud run cancel <run>`: asks the platform to cancel the run. */
@@ -462,7 +474,7 @@ export type CloudRunOptions = {
   log: (line: string) => void
   /** Follows the run's event stream and returns its exit code; `attach()` with the run's output. */
   follow: (
-    options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach' | 'cancelHint'>,
+    options: Pick<AttachOptions, 'source' | 'follow' | 'onDetach' | 'cancelHint' | 'resumedAfter'>,
   ) => Promise<number>
   /**
    * `--download`: once the run ends, its files go into this project as a run here leaves them,
@@ -679,6 +691,7 @@ async function followCloudRun(
   runId: string,
   auth: CloudAuth,
   lead: string,
+  resumedAfter?: number,
 ): Promise<number> {
   const { base, log } = options
   const { headers } = auth
@@ -701,10 +714,12 @@ async function followCloudRun(
         detached = true
       },
       cancelHint: cancelHint(runId),
+      ...(resumedAfter === undefined ? {} : { resumedAfter }),
     })
   } catch (error) {
     if (!(error instanceof EventStreamError)) throw error
-    ;({ code, read } = await afterLostStream(error, runId, base, auth, log))
+    const resumed = resumedAfter !== undefined
+    ;({ code, read } = await afterLostStream(error, runId, base, auth, log, resumed))
   }
   if (detached) {
     const again = options.download
@@ -793,12 +808,15 @@ export type CloudResumeOptions = Pick<CloudRunOptions, 'base' | 'log' | 'follow'
   run: string
   /** Whether a project's config is in sight, whose changes the resume doesn't take. */
   checkout: boolean
+  /** The run was looked for here first, so an unknown one is unknown in both places. */
+  lookedHere?: boolean
   env?: NodeJS.ProcessEnv
 }
 
 /**
  * `reeval run --cloud --resume <run>`: asks the platform to resume the run, which runs the project
- * as it was uploaded, then follows it as `runCloud` does once a run has started.
+ * as it was uploaded, then follows it as `runCloud` does once a run has started. Only lines after
+ * the ones the run had already count toward its exit code.
  */
 export async function resumeCloud(options: CloudResumeOptions): Promise<number> {
   const { base, log } = options
@@ -806,16 +824,14 @@ export async function resumeCloud(options: CloudResumeOptions): Promise<number> 
   const runId = await cloudRunId(options.run, base)
   const auth = await cloudAuth(base, env)
   const runUrl = (path = '') => new URL(`api/runs/${encodeURIComponent(runId)}${path}`, base)
-  if (options.checkout) {
-    log(
-      `Resuming cloud run ${runId} with the project as it was uploaded, without changes made here since; reeval run --cloud starts a new run`,
+  const read = await request(runUrl(), { method: 'GET', what: `read run ${runId}` }, auth.headers)
+  if (read.status === 404 && options.lookedHere) {
+    throw new UsageError(
+      `No run matches "${runId}" here or in the cloud. Pass a run id, or a cloud run's id as reeval run --cloud printed it.`,
     )
   }
-  const seen = await call<(PlatformRun & { segment?: unknown }) | null>(
-    runUrl(),
-    { method: 'GET', what: `read run ${runId}` },
-    auth,
-  )
+  if (!read.ok) throw platformError(read, `read run ${runId}`, auth)
+  const seen = read.body as (PlatformRun & { segment?: unknown }) | null
   const segment = typeof seen?.segment === 'number' ? { fromSegment: seen.segment } : {}
   const what = `resume run ${runId}`
   const answer = await askToResume(
@@ -843,6 +859,19 @@ export async function resumeCloud(options: CloudResumeOptions): Promise<number> 
     throw new UsageError(`the cloud platform can't resume run ${runId}${why ? `: ${why}` : ''}`)
   }
   if (!answer.ok) throw platformError(answer, what, auth)
+  if (options.checkout) {
+    log(
+      `Resuming cloud run ${runId} with the project as it was uploaded, without changes made here since; reeval run --cloud starts a new run`,
+    )
+  }
   const lead = answer.status === 202 ? 'Resumed cloud run' : 'Already resuming cloud run'
-  return followCloudRun(options, runId, auth, lead)
+  // Each start of the run, counted from 0, begins with a header of its own in the stream.
+  const now = (answer.body as { segment?: unknown } | null)?.segment
+  const before =
+    typeof now === 'number'
+      ? now
+      : typeof seen?.segment === 'number'
+        ? seen.segment + (answer.status === 202 ? 1 : 0)
+        : 0
+  return followCloudRun(options, runId, auth, lead, before)
 }
