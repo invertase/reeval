@@ -297,10 +297,10 @@ jobs:
             test/!(features|docker|docker-antigravity|store-minio|studio|pack|contract|e2e-real|questions-real|openrouter-real).test.ts
       # The other packages' own tests take seconds, so the first shard runs them. sandbox-docker's
       # real-container tests skip here: there's no sandbox image. The docker job runs them.
-      - name: sandbox-docker (without containers), vm-api and the harness packages
+      - name: sandbox-docker (without containers), api, vm-api and the harness packages
         if: matrix.shard == '1/4'
         run: |
-          for p in sandbox-docker vm-api harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
+          for p in sandbox-docker api vm-api harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
             echo "::group::@reeval/$p"
             pnpm --filter "@reeval/$p" test
             echo "::endgroup::"

@@ -29,6 +29,9 @@
       "ignoreBinaries": ["uv", "podman", "go", "pwsh", "tart", "pgrep", "script"],
       "ignoreDependencies": ["@ai-sdk/harness-acp", "@ai-sdk/provider", "@balena/dockerignore"]
     },
+    "packages/api": {
+      "entry": ["test/**/*.ts"]
+    },
     "packages/vm-api": {
       "entry": ["test/**/*.ts"]
     },
