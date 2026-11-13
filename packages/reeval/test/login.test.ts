@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { platformKey } from '../src/login/credentials.ts'
 import { runCli, tempDir } from './helpers.ts'
@@ -127,6 +127,14 @@ function machine(base: string, extra: NodeJS.ProcessEnv = {}) {
       ...extra,
     } as NodeJS.ProcessEnv,
   }
+}
+
+const SIGNED_IN = '2026-11-01T00:00:00Z'
+
+/** Writes a credentials file holding `logins`, as an earlier `reeval login` would have. */
+function stored(file: string, logins: Record<string, unknown>) {
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify({ schemaVersion: 1, logins }))
 }
 
 /**
@@ -388,6 +396,111 @@ describe('reeval login, whoami and logout', () => {
       assert.match(readFileSync(log, 'utf8'), new RegExp(`^clear .*account ${slashed}$`, 'm'))
       const gone = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(gone.code, 2)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('login replaces a keychain sign-in under the URL with a trailing /, revoking it', {
+    skip: process.platform !== 'linux' && 'secret-tool is the Linux keychain',
+  }, async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const { log, seed, env } = secretTool()
+      const m = machine(p.base, env)
+      const dir = tempDir('login-cwd')
+      const slashed = `${p.base}/`
+      stored(m.file, { [slashed]: { store: 'keychain', user: USER, signedInAt: SIGNED_IN } })
+      seed(slashed, 'old-token')
+      p.live.add('old-token')
+
+      const login = await runCli(dir, ['login'], { env: m.env })
+      assert.equal(login.code, 0, login.stdout + login.stderr)
+      assert.ok(!p.live.has('old-token'), 'the slashed sign-in is revoked')
+      const saved = JSON.parse(readFileSync(m.file, 'utf8'))
+      assert.deepEqual(Object.keys(saved.logins), [p.base])
+      assert.equal(saved.logins[p.base].store, 'keychain')
+      const argv = readFileSync(log, 'utf8')
+      assert.match(argv, new RegExp(`^store .*account ${p.base}$`, 'm'))
+      assert.match(argv, new RegExp(`^clear .*account ${slashed}$`, 'm'))
+      const who = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(who.code, 0, who.stdout + who.stderr)
+      assert.equal(p.seen.at(-1)?.auth, `Bearer ${TOKEN}`)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('logout and login revoke every token stored under any spelling of the platform', async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(p.base)
+      const dir = tempDir('login-cwd')
+      const both = {
+        [p.base]: { store: 'file', token: 'bare-token', user: USER, signedInAt: SIGNED_IN },
+        [`${p.base}/`]: {
+          store: 'file',
+          token: 'slashed-token',
+          user: USER,
+          signedInAt: SIGNED_IN,
+        },
+      }
+      stored(m.file, both)
+      p.live.add('bare-token').add('slashed-token')
+      const who = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer bare-token', 'the bare origin comes first')
+      assert.equal(who.code, 0)
+
+      const out = await runCli(dir, ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.ok(!p.live.has('bare-token'), 'the bare sign-in is revoked')
+      assert.ok(!p.live.has('slashed-token'), 'the slashed sign-in is revoked')
+      assert.ok(!existsSync(m.file))
+      assert.ok(!(out.stdout + out.stderr).includes('-token'), 'no token is printed')
+
+      stored(m.file, both)
+      p.live.add('bare-token').add('slashed-token')
+      const login = await runCli(dir, ['login'], { env: m.env })
+      assert.equal(login.code, 0, login.stdout + login.stderr)
+      assert.ok(!p.live.has('bare-token') && !p.live.has('slashed-token'), 'login revokes both')
+      assert.deepEqual(Object.keys(JSON.parse(readFileSync(m.file, 'utf8')).logins), [p.base])
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("another platform's sign-in (scheme, host or port) is kept and never sent", async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(p.base)
+      const dir = tempDir('login-cwd')
+      const port = Number(new URL(p.base).port)
+      const others = {
+        [`https://127.0.0.1:${port}/`]: 'scheme-token',
+        [`http://localhost:${port}/`]: 'host-token',
+        [`http://127.0.0.1:${port + 1}`]: 'port-token',
+      }
+      const logins = Object.fromEntries(
+        Object.entries(others).map(([key, token]) => [
+          key,
+          { store: 'file', token, user: USER, signedInAt: SIGNED_IN },
+        ]),
+      )
+      stored(m.file, logins)
+      for (const token of Object.values(others)) p.live.add(token)
+      const sent = () =>
+        p.seen.filter((s) => Object.values(others).some((t) => s.auth?.includes(t)))
+
+      const none = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(none.code, 2, none.stdout + none.stderr)
+      assert.match(none.stderr, /Not signed in to /)
+      assert.equal((await runCli(dir, ['login'], { env: m.env })).code, 0)
+      assert.equal((await runCli(dir, ['whoami'], { env: m.env })).code, 0)
+      assert.equal((await runCli(dir, ['logout'], { env: m.env })).code, 0)
+      assert.deepEqual(sent(), [], "another platform's token is never sent")
+      for (const token of Object.values(others)) assert.ok(p.live.has(token), `${token} stays live`)
+      const kept = JSON.parse(readFileSync(m.file, 'utf8')).logins
+      assert.deepEqual(Object.keys(kept).sort(), Object.keys(others).sort())
     } finally {
       await p.close()
     }

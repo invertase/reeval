@@ -19,8 +19,10 @@ import {
   cloudToken,
   credentialsPath,
   removeLogin,
+  type Stored,
   saveLogin,
   storedLogin,
+  storedLogins,
 } from './credentials.ts'
 import { keychain } from './keychain.ts'
 import type { SignedInUser } from './types.ts'
@@ -100,6 +102,10 @@ async function signOut(base: URL, token: string): Promise<void> {
   throw new Error(platformMessage(res.body) ?? `HTTP ${res.status}`)
 }
 
+/** The distinct tokens of the platform's stored sign-ins, each revoked once. */
+const tokensOf = (stored: readonly Stored[]) =>
+  new Set(stored.flatMap((s) => (s.token ? [s.token] : [])))
+
 /** Polls for the token until the code is approved, denied or expires. */
 async function awaitApproval(
   base: URL,
@@ -169,7 +175,7 @@ export async function loginCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
   const base = cloudUrl(env)
   // Read first, so a credentials file reeval can't read refuses before a session is made.
-  const previous = await storedLogin(base, env)
+  const previous = await storedLogins(base, env)
   const code = await call<DeviceCode | null>(
     new URL('api/auth/device/code', base),
     {
@@ -212,8 +218,8 @@ export async function loginCommand(io: LoginIo): Promise<number> {
     )
   }
   const where = await saveLogin(base, token, user, env)
-  if (previous?.token && previous.token !== token) {
-    await signOut(base, previous.token).catch(() => {})
+  for (const old of tokensOf(previous)) {
+    if (old !== token) await signOut(base, old).catch(() => {})
   }
   io.out(`Signed in to ${shown(base)} as ${who(user)}; the token is in ${where}.`)
   if (env[CLOUD_TOKEN_VAR]?.trim()) {
@@ -226,17 +232,19 @@ export async function loginCommand(io: LoginIo): Promise<number> {
 export async function logoutCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
   const base = cloudUrl(env)
-  const stored = await storedLogin(base, env)
-  if (!stored) {
+  const stored = await storedLogins(base, env)
+  const first = stored[0]
+  if (!first) {
     io.out(`Not signed in to ${shown(base)} with reeval login.`)
   } else {
-    if (!stored.token) {
+    if (stored.some((s) => !s.token)) {
       io.err(
         `reeval: the keychain didn't return the token, so the sign-in wasn't revoked on the platform and the keychain may still hold it.`,
       )
-    } else {
+    }
+    for (const token of tokensOf(stored)) {
       try {
-        await signOut(base, stored.token)
+        await signOut(base, token)
       } catch (error) {
         io.err(
           `reeval: couldn't revoke the sign-in on the platform (${(error as Error).message}); it stays valid until it expires.`,
@@ -245,9 +253,9 @@ export async function logoutCommand(io: LoginIo): Promise<number> {
     }
     await removeLogin(base, env)
     io.out(
-      stored.token
-        ? `Signed out of ${shown(base)} (${who(stored.login.user)}).`
-        : `Removed the sign-in to ${shown(base)} (${who(stored.login.user)}) from this machine's credentials.`,
+      first.token
+        ? `Signed out of ${shown(base)} (${who(first.login.user)}).`
+        : `Removed the sign-in to ${shown(base)} (${who(first.login.user)}) from this machine's credentials.`,
     )
   }
   if (env[CLOUD_TOKEN_VAR]?.trim()) {
