@@ -747,7 +747,7 @@ async function followCloudRun(
 }
 
 /** How long a resume waits for a run that's still stopping before it gives up. */
-const STILL_STOPPING_MS = 2 * 60_000
+const STILL_STOPPING_MS = 5 * 60_000
 
 /** The wait a `Retry-After` header asks for, in seconds or as a date; 5 s without one. */
 function retryAfterMs(header: string | null, now: number): number {

@@ -98,6 +98,7 @@ export const SCHEMA_VERSIONS = {
   'bundle-manifest': 1,
   'archive-manifest': 1,
   credentials: 1,
+  'cloud-origin': 1,
 } as const
 
 /** A file from a newer reeval, whose version (`field`, `schemaVersion` by default) this reeval doesn't know. */
@@ -234,3 +235,7 @@ export const readableCredentials = (
   doc: CredentialsFile,
   what = 'The credentials file',
 ): CredentialsFile => fillDefaults('credentials', upgrade('credentials', doc, what))
+
+/** A download's `.reeval/cloud/<run>.json` as `reeval run --resume` sees it; one from a newer reeval throws. */
+export const readableCloudOrigin = <T>(doc: T, what = 'This marker'): T =>
+  fillDefaults('cloud-origin', upgrade('cloud-origin', doc, what))

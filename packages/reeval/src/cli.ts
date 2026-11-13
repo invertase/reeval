@@ -1663,13 +1663,13 @@ async function cloudContinue(
 }
 
 /**
- * The cloud continuation of the run `ref` names when it was downloaded from a cloud run and the
+ * The cloud continuation of run `runId` (its whole id) when it was downloaded from a cloud run and the
  * config or its profile runs in the cloud (`--profile`, else the run's own, else the default's).
  */
-async function cloudContinuation(flags: Flags, path: string, ref: string, bundled?: Bundled) {
+async function cloudContinuation(flags: Flags, path: string, runId: string, bundled?: Bundled) {
   if (flags.local || bundled) return null
   const { cloudOriginOf } = await import('./cloud-files.ts')
-  const origin = await cloudOriginOf(dirname(path), ref)
+  const origin = await cloudOriginOf(dirname(path), runId, { exact: true })
   if (!origin) return null
   const named = flags.profile ?? origin.profile ?? (process.env.REEVAL_PROFILE || undefined)
   const loaded = await loadConfig(path, 'run', named)

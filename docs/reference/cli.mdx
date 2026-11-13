@@ -116,10 +116,11 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               keep passed and failed attempts, restart in-flight and infra-errored
                               ones. Without a ref, the newest resumable (Stopped staging, or an
                               interrupted/budget scratch), not assembled latest. Ref is a run id or
-                              unique prefix. With --cloud, or the config's cloud: true and no such
-                              run here or a run downloaded from the cloud, ref is a cloud run's id
-                              or event stream URL: the platform resumes it with the project as it
-                              was uploaded, and it's followed as --cloud follows a run (no config,
+                              unique prefix. With --cloud, or with the config's cloud: true when
+                              the run isn't here or was downloaded from the cloud, the platform
+                              resumes the cloud run (ref is its id or event stream URL) with the
+                              project as it was uploaded, waiting up to 5 minutes for one still
+                              stopping, and it's followed as --cloud follows a run (no config,
                               filters, --runs, --tag or --trait; --profile only picks the target;
                               a complete run exits 2)
   --retry-errors [ref]        Re-run a finished run's infra-errored attempts with its plan, into

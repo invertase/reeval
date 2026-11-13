@@ -1169,14 +1169,17 @@ describe("a cloud run's files, downloaded with --download", () => {
     }
   })
 
-  test('never replace a different file, and write nothing then', async () => {
+  test("never replace a different file, and write nothing then, but an earlier download's of the same cloud run", async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject()
       const r = await runCli(dir, ['run', '--cloud', '--download'], { env: env(p) })
       assert.equal(r.code, 0, r.stdout + r.stderr)
       const { runId, file } = recordOf(dir)
-      const changed = readFileSync(file, 'utf8').replace('"kind"', ' "kind"')
+      const marker = join(dir, '.reeval/cloud', `${runId}.json`)
+      writeFileSync(marker, JSON.stringify({ schemaVersion: 1, cloudRunId: 'run_0' }))
+      const original = readFileSync(file, 'utf8')
+      const changed = original.replace('"kind"', ' "kind"')
       writeFileSync(file, changed)
       const summary = join(dir, '.reeval/runs', runId, 'summary.md')
       const { rmSync } = await import('node:fs')
@@ -1193,6 +1196,19 @@ describe("a cloud run's files, downloaded with --download", () => {
       )
       assert.equal(readFileSync(file, 'utf8'), changed, 'the record is untouched')
       assert.ok(!existsSync(summary), 'nothing else was written either')
+      writeFileSync(marker, JSON.stringify({ schemaVersion: 1, cloudRunId: 'run_1' }))
+      const again = await runCli(dir, ['attach', '--download', `${p.base}/api/runs/run_1/events`], {
+        env: env(p),
+      })
+      assert.equal(again.code, 0, again.stdout + again.stderr)
+      assert.match(again.stdout, new RegExp(`Downloaded run ${runId} of cloud run run_1`))
+      assert.equal(readFileSync(file, 'utf8'), original, "the record is the cloud run's again")
+      assert.ok(existsSync(summary))
+      assert.deepEqual(
+        readdirSync(join(dir, '.reeval/runs')).filter((n) => n.endsWith('.tmp')),
+        [],
+        'no temporary file is left',
+      )
     } finally {
       await p.close()
     }
@@ -1810,7 +1826,7 @@ describe('reeval run --cloud --resume', () => {
       })
       assert.equal(r.code, 0, r.stdout + r.stderr)
       assert.equal(
-        r.stdout.match(/Cloud run run_1 is still stopping: waiting up to 2 minutes to resume it/g)
+        r.stdout.match(/Cloud run run_1 is still stopping: waiting up to 5 minutes to resume it/g)
           ?.length,
         1,
         r.stdout,
@@ -1834,7 +1850,7 @@ describe('reeval run --cloud --resume', () => {
         status: 409,
         ok: false,
         body: { error: { code: 'still_stopping', message: 'stopping' } },
-        headers: new Headers({ 'retry-after': '50' }),
+        headers: new Headers({ 'retry-after': '70' }),
       }
     }
     await assert.rejects(
@@ -1847,12 +1863,12 @@ describe('reeval run --cloud --resume', () => {
       }),
       (error: Error) =>
         error.name === 'CloudError' &&
-        /cloud run run_1 is still stopping after 2 minutes: reeval run --cloud --resume run_1 tries again/.test(
+        /cloud run run_1 is still stopping after 5 minutes: reeval run --cloud --resume run_1 tries again/.test(
           error.message,
         ),
     )
-    assert.deepEqual(waits, [50_000, 50_000, 20_000])
-    assert.equal(posts, 4)
+    assert.deepEqual(waits, [70_000, 70_000, 70_000, 70_000, 20_000])
+    assert.equal(posts, 6)
     assert.equal(lines.length, 1)
   })
 
@@ -2120,19 +2136,8 @@ describe('reeval run --cloud --resume', () => {
     const ran = await platform()
     const dir = await fixtureProject()
     let runId: string
-    try {
-      const r = await runCli(dir, ['run', '--cloud', '--download'], {
-        env: { REEVAL_CLOUD_URL: ran.base, REEVAL_TOKEN: 'cloud-test-token' },
-      })
-      assert.equal(r.code, 0, r.stdout + r.stderr)
-      const name = readdirSync(join(dir, '.reeval/runs')).find((n) => n.endsWith('.json'))
-      assert.ok(name)
-      runId = name.slice(0, -'.json'.length)
-      assert.deepEqual(
-        JSON.parse(readFileSync(join(dir, '.reeval/cloud', `${runId}.json`), 'utf8')),
-        { schemaVersion: 1, cloudRunId: 'run_1' },
-      )
-      const file = join(dir, '.reeval/runs', name)
+    /** Rewrites a scratch record as a budget stop that never ran its attempt. */
+    const budgetStop = (file: string) => {
       const record = JSON.parse(readFileSync(file, 'utf8'))
       record.status = 'budget'
       for (const e of record.evals) {
@@ -2145,6 +2150,20 @@ describe('reeval run --cloud --resume', () => {
         }))
       }
       writeFileSync(file, JSON.stringify(record))
+    }
+    try {
+      const r = await runCli(dir, ['run', '--cloud', '--download'], {
+        env: { REEVAL_CLOUD_URL: ran.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const name = readdirSync(join(dir, '.reeval/runs')).find((n) => n.endsWith('.json'))
+      assert.ok(name)
+      runId = name.slice(0, -'.json'.length)
+      assert.deepEqual(
+        JSON.parse(readFileSync(join(dir, '.reeval/cloud', `${runId}.json`), 'utf8')),
+        { schemaVersion: 1, cloudRunId: 'run_1' },
+      )
+      budgetStop(join(dir, '.reeval/runs', name))
     } finally {
       await ran.close()
     }
@@ -2166,6 +2185,29 @@ describe('reeval run --cloud --resume', () => {
       }
       const resumes = calls(p).filter((c) => c.endsWith('/resume')).length
       assert.equal(resumes, 3)
+      const here = await runCli(dir, ['run', '--local'], { env })
+      assert.equal(here.code, 0, here.stdout + here.stderr)
+      const mine = readdirSync(join(dir, '.reeval/runs')).find(
+        (n) => n.endsWith('.json') && n !== `${runId}.json`,
+      )
+      assert.ok(mine)
+      budgetStop(join(dir, '.reeval/runs', mine))
+      const shared = runId.slice(0, 9)
+      assert.ok(mine.startsWith(shared))
+      const ambiguous = await runCli(dir, ['run', '--resume', shared], { env })
+      assert.equal(ambiguous.code, 2, ambiguous.stdout + ambiguous.stderr)
+      assert.match(ambiguous.stderr, /matches 2 runs/)
+      const marker = join(dir, '.reeval/cloud', `${runId}.json`)
+      writeFileSync(marker, JSON.stringify({ schemaVersion: 2, cloudRunId: 'run_1' }))
+      const newer = await runCli(dir, ['run', '--resume', runId], { env })
+      assert.equal(newer.code, 2, newer.stdout + newer.stderr)
+      assert.match(
+        newer.stderr,
+        new RegExp(
+          `\\.reeval/cloud/${runId}\\.json was written by a newer reeval \\(schemaVersion 2; this reeval reads up to 1\\)\\. Upgrade reeval to read it\\.`,
+        ),
+      )
+      assert.equal(calls(p).filter((c) => c.endsWith('/resume')).length, resumes)
       const local = await runCli(dir, ['run', '--local', '--resume', runId], { env })
       assert.equal(local.code, 0, local.stdout + local.stderr)
       assert.match(local.stdout, /1 passed/)
