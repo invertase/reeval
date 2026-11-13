@@ -1,15 +1,16 @@
 // The CLI end to end with each real harness (support/harnesses.ts): `reeval run --record -v` twice on
 // one tiny eval (test/e2e/), then `reeval compare` says "same", every `reeval query` view answers, the
-// `-v` trace and `.reeval/debug` log exist, and the studio's run view builds from the recorded history. The fake
+// `-v` trace and `.reeval/debug` log exist, and the studio's report builds from the recorded history. The fake
 // row runs it key-free in Docker. Assertions are on exit codes, files and JSON, never model text.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { runTranscripts } from '../src/studio/facts.ts'
+import { readReportInputs } from '../src/history/report-inputs.ts'
 import { readRun as readStudioRun } from '../src/studio/source.ts'
-import { buildRunView } from '../src/view/run-view.ts'
+import { reportLinks } from '../src/view/api.ts'
+import { buildRunReport } from '../src/view/report/build.ts'
 import { type CliRun, readRun, recordedRuns, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
 import { fixture } from './support/fixture.ts'
@@ -118,19 +119,22 @@ for (const row of harnesses.filter((r) => !r.harness)) {
       assert.equal(shown.runId, runs[1])
     })
 
-    test("the studio's run view: both runs, with every attempt's transcript facts", async () => {
+    test("the studio's report: both runs, linking every attempt's transcript", async () => {
       assert.equal(runs.length, 2, 'the runs failed')
       const source = { root: dir, historyDir: join(dir, 'evals/.history'), scratch: false }
       for (const id of runs) {
         const run = await readStudioRun(source, id)
         assert.ok(run, id)
-        const view = buildRunView(run.record, {
-          recorded: true,
-          transcripts: await runTranscripts(source, run.record),
+        const report = buildRunReport(run.record, {
+          ...(await readReportInputs(join(run.dir, id))),
+          links: reportLinks(id),
         })
-        const attempts = view.evals.flatMap((e) => e.attempts)
-        assert.ok(attempts.length > 0, id)
-        for (const a of attempts) assert.ok(a.facts, `${id} ${a.key}: no transcript facts`)
+        assert.ok(report.attempts.length > 0, id)
+        for (const a of report.attempts) {
+          assert.ok(a.links.transcript, `${id} ${a.key}: no transcript link`)
+          const path = a.links.transcript.slice(reportLinks(id).base.length)
+          assert.ok(existsSync(join(run.dir, id, path)), `${id} ${a.key}: ${path}`)
+        }
       }
     })
 

@@ -17,9 +17,11 @@ import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
 import { createStudioApi } from '../src/studio/server.ts'
 import type { ResolvedConfig } from '../src/types.ts'
-import type { AttemptView, PairResponse, RunList, RunView } from '../src/view/api.ts'
+import type { PairResponse, RunList } from '../src/view/api.ts'
 import { studioPaths } from '../src/view/api.ts'
 import { readableRecord } from '../src/view/record.ts'
+import { type EvalDetail, joinRunReport, type RunReportIndex } from '../src/view/report/core.ts'
+import { readableRunReport } from '../src/view/report/schema.ts'
 import { project, runCli, tempDir } from './helpers.ts'
 import { CORPUS_DIR, corpus, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
@@ -315,7 +317,7 @@ describe('the record corpus', { concurrency: 4 }, () => {
   // One at a time: a history sync holds SQLite's write lock across awaits, and a second sync in
   // the same process waits for it synchronously, so the first never gets to finish.
   describe('in this process', { concurrency: 1 }, () => {
-    test("the studio serves every run's view and every attempt", async () => {
+    test("the studio serves every run's report, an index and every eval's detail", async () => {
       const { config } = await inProcess()
       const api = createStudioApi({
         source: { root: config.root, historyDir: config.history.dir, scratch: true },
@@ -341,11 +343,16 @@ describe('the record corpus', { concurrency: 4 }, () => {
       const runs = await get<RunList>(`${studioPaths.runs()}?limit=100`)
       assert.ok(runs.items.length > 0)
       for (const id of ALL_IDS) {
-        const view = await get<RunView>(studioPaths.run(id))
-        assert.equal(view.header.runId, id)
-        for (const a of view.evals.flatMap((e) => e.attempts)) {
-          assert.equal((await get<AttemptView>(studioPaths.attempt(id, a.key))).key, a.key)
+        const index = await get<RunReportIndex>(studioPaths.report(id))
+        assert.equal(index.runId, id)
+        const details: EvalDetail[] = []
+        for (const e of index.evals) {
+          const detail = await get<EvalDetail>(studioPaths.eval(id, e.id))
+          assert.equal(detail.eval.id, e.id)
+          details.push(detail)
         }
+        const report = joinRunReport(index, details)
+        assert.deepEqual(readableRunReport(report), report, id)
       }
     })
 

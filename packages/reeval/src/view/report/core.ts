@@ -54,4 +54,13 @@ export {
 } from './links.ts'
 export { REPORT_POLICY, type ReportPolicy } from './policy.ts'
 export { provenanceState, stateRows, warnings } from './provenance.ts'
+export {
+  type EvalDetail,
+  type EvalSummary,
+  joinRunReport,
+  REPORT_VERSION,
+  type RunReportIndex,
+  type SplitRunReport,
+  splitRunReport,
+} from './split.ts'
 export type * from './types.ts'

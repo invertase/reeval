@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { type Assert, dataProblem, type Same } from '../../contract/shared.ts'
 import { fillDefaults, MIGRATIONS, NewerSchemaError } from '../record.ts'
+import { REPORT_VERSION } from './split.ts'
 import type {
   Arm,
   ArmRef,
@@ -756,9 +757,6 @@ export const REPORT_SCHEMAS: Record<string, z.ZodType> = {
   TaskResults: taskResultsSchema,
   VariantComparison: variantComparisonSchema,
 }
-
-/** The newest `reportVersion` this reeval writes and reads. */
-export const REPORT_VERSION = 1
 
 const LEAVES = new Set(['string', 'number', 'boolean', 'literal', 'enum', 'null', 'unknown'])
 const loosened = new WeakMap<z.ZodType, z.ZodType>()

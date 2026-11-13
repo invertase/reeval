@@ -5,10 +5,10 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { readReportInputs } from '../src/history/report-inputs.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { runTranscripts } from '../src/studio/facts.ts'
 import { readRun as readStudioRun } from '../src/studio/source.ts'
-import { buildRunView } from '../src/view/run-view.ts'
+import { buildRunReport } from '../src/view/report/build.ts'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 
 const KEYS = /sk-ant-|aaaaaaaaaa|bbbbbbbbbb|cccccccccc|dddddddddd/
@@ -67,9 +67,11 @@ describe('eval names that hold a secret', () => {
     }
     const studio = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: false }
     for (const id of recordedRuns(p.dir)) {
-      const { record } = (await readStudioRun(studio, id)) as { record: RunRecord }
-      const transcripts = await runTranscripts(studio, record)
-      views.push(JSON.stringify(buildRunView(record, { recorded: true, transcripts })))
+      const { record, dir } = (await readStudioRun(studio, id)) as {
+        record: RunRecord
+        dir: string
+      }
+      views.push(JSON.stringify(buildRunReport(record, await readReportInputs(join(dir, id)))))
     }
     assert.match(views[1] ?? '', /plain \[REDACTED\]/)
     const written = ['.reeval', 'evals/.history'].flatMap((d) => filesUnder(join(p.dir, d)))

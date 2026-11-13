@@ -636,15 +636,18 @@ export type TranscriptItem =
 
 /** Parses `transcript.jsonl`, skipping lines that aren't JSON (a truncated tail, say). */
 export function parseTranscript(text: string): TranscriptLine[] {
-  const lines: TranscriptLine[] = []
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      const value = JSON.parse(line) as TranscriptLine
-      if (value && typeof value.type === 'string') lines.push(readableTranscriptLine(value))
-    } catch {}
+  return text.split('\n').flatMap((line) => parseTranscriptLine(line) ?? [])
+}
+
+/** One line of a transcript, or null when it's blank, isn't JSON or has no `type`. */
+export function parseTranscriptLine(line: string): TranscriptLine | null {
+  if (!line.trim()) return null
+  try {
+    const value = JSON.parse(line) as TranscriptLine
+    return value && typeof value.type === 'string' ? readableTranscriptLine(value) : null
+  } catch {
+    return null
   }
-  return lines
 }
 
 export function transcriptItems(lines: TranscriptLine[]): TranscriptItem[] {
