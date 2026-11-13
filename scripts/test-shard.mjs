@@ -1,4 +1,5 @@
-// Splits test files into shards of about equal running time, for ci-os.sh's Windows unit shards.
+// Splits test files into shards of about equal running time, for ci-os.sh's Windows and macOS
+// unit shards.
 // Node's --test-shard deals files round-robin in name order, and a handful of files take most of
 // the time, so it can stack them in one shard and push that job past its timeout.
 //
@@ -38,6 +39,16 @@ const SECONDS = {
 }
 const DEFAULT = 2
 
+// The files whose fake VMs take test/support/fake-tart.ts's loopback lock: in one shard they'd
+// queue on it, so they're dealt out one per shard in turn, before the rest are packed.
+const LOOPBACK = new Set([
+  'tart.test.ts',
+  'tart-hosts.test.ts',
+  'tart-images.test.ts',
+  'sandbox-provider-conformance.test.ts',
+  'sandbox-contract.test.ts',
+])
+
 const [spec, ...files] = process.argv.slice(2)
 const match = /^(\d+)\/(\d+)$/.exec(spec ?? '')
 const [index, total] = match ? [Number(match[1]), Number(match[2])] : []
@@ -51,9 +62,17 @@ const sorted = [...new Set(files)].sort(
   (a, b) => seconds(b) - seconds(a) || (a < b ? -1 : a > b ? 1 : 0),
 )
 const shards = Array.from({ length: total }, () => ({ seconds: 0, files: [] }))
-for (const file of sorted) {
-  const shard = shards.reduce((least, s) => (s.seconds < least.seconds ? s : least))
+const add = (shard, file) => {
   shard.seconds += seconds(file)
   shard.files.push(file)
 }
-for (const file of shards[index - 1].files) console.log(file)
+const loopback = sorted.filter((file) => LOOPBACK.has(basename(file)))
+for (const [i, file] of loopback.entries()) add(shards[i % total], file)
+for (const file of sorted.filter((file) => !LOOPBACK.has(basename(file)))) {
+  add(
+    shards.reduce((least, s) => (s.seconds < least.seconds ? s : least)),
+    file,
+  )
+}
+const shard = shards[index - 1].files.sort((a, b) => sorted.indexOf(a) - sorted.indexOf(b))
+for (const file of shard) console.log(file)

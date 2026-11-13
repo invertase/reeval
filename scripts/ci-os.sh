@@ -28,7 +28,8 @@ case $part in
     # (--test-shard) can stack them in one shard.
     if [ -n "${2:-}" ]; then
       shard=$(node "$root/scripts/test-shard.mjs" "$2" "${files[@]}")
-      mapfile -t files <<<"${shard//$'\r'/}"
+      files=()
+      while IFS= read -r f; do files+=("${f%$'\r'}"); done <<<"$shard"
     fi
     node_test "${files[@]}"
     ;;
