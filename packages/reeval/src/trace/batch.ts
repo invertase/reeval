@@ -1,6 +1,8 @@
 // OpenTelemetry's batch processor, for spans and log records: items queue as they end and go out
 // a batch at a time, once the batch is full or a delay after the first queued, with one request
-// in flight. A failed batch is dropped, as the SDK's is; a full queue drops new items.
+// in flight. A failed batch is dropped, as the SDK's is; a full queue drops new items. After a
+// failure the next batch waits longer, doubling up to a minute, and `close` drops what's left
+// rather than wait on a collector that just failed.
 
 export type BatchOptions = {
   /** `OTEL_BSP_SCHEDULE_DELAY`: how long an item waits for its batch to fill. */
@@ -40,6 +42,8 @@ export class Batcher<T> {
   #total = 0
   #lost = 0
   #why: string | undefined
+  /** Failed sends in a row. */
+  #failures = 0
 
   /** `send` posts a batch and resolves to null, or to why it wasn't taken; it never throws. */
   constructor(send: (items: T[]) => Promise<string | null>, o: BatchOptions, noun: string) {
@@ -57,9 +61,9 @@ export class Batcher<T> {
       return
     }
     this.#queue.push(item)
-    if (this.#queue.length >= this.#o.maxBatch) this.#kick()
+    if (this.#queue.length >= this.#o.maxBatch && !this.#failures) this.#kick()
     else if (!this.#timer && !this.#sending) {
-      this.#timer = setTimeout(() => this.#kick(), this.#o.delayMs)
+      this.#timer = setTimeout(() => this.#kick(), this.#retryMs())
       this.#timer.unref?.()
     }
   }
@@ -69,7 +73,7 @@ export class Batcher<T> {
     this.#timer = undefined
     this.#sending ??= this.#loop().finally(() => {
       this.#sending = undefined
-      if (this.#queue.length >= this.#o.maxBatch && !this.#closed) this.#kick()
+      if (this.#queue.length >= this.#o.maxBatch && !this.#closed && !this.#failures) this.#kick()
     })
   }
 
@@ -83,15 +87,29 @@ export class Batcher<T> {
       first = false
       const batch = this.#queue.splice(0, this.#o.maxBatch)
       const why = await this.#send(batch)
-      if (why) {
-        this.#lost += batch.length
-        this.#why ??= why
+      if (!why) {
+        this.#failures = 0
+        continue
       }
+      this.#lost += batch.length
+      this.#why ??= why
+      this.#failures++
+      if (this.#draining) this.#drop()
+      break
     }
     if (this.#queue.length && !this.#draining) {
-      this.#timer = setTimeout(() => this.#kick(), this.#o.delayMs)
+      this.#timer = setTimeout(() => this.#kick(), this.#retryMs())
       this.#timer.unref?.()
     }
+  }
+
+  #retryMs(): number {
+    return Math.min(this.#o.delayMs * 2 ** this.#failures, Math.max(this.#o.delayMs, 60_000))
+  }
+
+  #drop(): void {
+    this.#lost += this.#queue.length
+    this.#queue = []
   }
 
   /** Sends what's queued and takes no more; resolves to null, or to why some weren't sent. */
@@ -102,6 +120,7 @@ export class Batcher<T> {
       clearTimeout(this.#timer)
       this.#timer = undefined
       await this.#sending
+      if (this.#failures) this.#drop()
       if (this.#queue.length) {
         this.#kick()
         await this.#sending

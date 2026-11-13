@@ -207,6 +207,37 @@ evaluate('sees no OTEL_*', { environments: setup }, async (c) => {
     assertNowhere(p.dir, r, secret)
   })
 
+  test('every OTLP header value is masked, in what the eval process writes too', async (t) => {
+    const collector = await startCollector(t)
+    const honeycomb = 'hcK3y9fQ2mX7pL4vR8tZ1w'
+    const bearer = 'bearer-secret-7Qp2Lm9x'
+    const p = await project('spans-otlp-masked', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'hello.txt': 'hi\\n' } }` }),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('shows the headers', async (c) => {
+  await c.send('write hello.txt')
+  console.log(process.env.OTEL_EXPORTER_OTLP_HEADERS, process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS)
+  c.observe('headers', String(process.env.OTEL_EXPORTER_OTLP_HEADERS))
+  expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBe('nope')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: collector.url,
+        OTEL_EXPORTER_OTLP_HEADERS: `x-honeycomb-team=${honeycomb}`,
+        OTEL_EXPORTER_OTLP_TRACES_HEADERS: `authorization=Bearer%20${bearer}`,
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
+      },
+    })
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /toBe/)
+    assert.ok(collector.requests.length > 0)
+    assertNowhere(p.dir, r, honeycomb)
+    assertNowhere(p.dir, r, bearer)
+  })
+
   test("a malformed header value stays out of the export's warning", async (t) => {
     const collector = await startCollector(t)
     const p = await fakeProject('spans-otlp-bad-header')

@@ -6,15 +6,15 @@ import type { Readable } from 'node:stream'
 import { contextFiles } from './dockerignore.ts'
 import { sshArgv } from './egress/transport.ts'
 import { type Engine, engineEnv, engineSpec, isRemoteEngine } from './engine.ts'
-import { shellQuote as q } from './process.ts'
+import { shellQuote as q, unsetOtel } from './process.ts'
 import { type TarEntry, writeTar } from './tarball.ts'
 
 /** How a command on an engine runs on this machine. */
 export type EngineCommand = {
   bin: string
   args: string[]
-  /** Merged over `process.env` for the host process. */
-  env: Record<string, string>
+  /** Merged over `process.env` for the host process; the host's `OTEL_*` unset. */
+  env: NodeJS.ProcessEnv
   /** Written to the process's stdin before anything else: the remote environment. */
   preamble: Buffer | null
 }
@@ -41,7 +41,7 @@ export function hostCommand(
     return {
       bin: engineSpec(engine).bin,
       args: [...args],
-      env: { ...engineEnv(engine), ...env },
+      env: { ...unsetOtel(), ...engineEnv(engine), ...env },
       preamble: null,
     }
   }
@@ -56,7 +56,7 @@ export function hostCommand(
   return {
     bin,
     args: rest,
-    env: {},
+    env: unsetOtel(),
     preamble: names.length ? Buffer.from(`${Buffer.from(exports).toString('base64')}\n`) : null,
   }
 }

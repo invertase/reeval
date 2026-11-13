@@ -1354,6 +1354,16 @@ export const CASES: Record<string, Case[]> = {
         mcp: { docs: mcp.stdio('node', [], { env: { OTEL_EXPORTER_OTLP_ENDPOINT: 'x' } }) },
       })),
     ],
+    [
+      'mcp.http header: a bare secret named for an OpenTelemetry variable',
+      helpers(({ mcp, secret }) => ({
+        mcp: {
+          docs: mcp.http('https://mcp.example.com', {
+            headers: { OTEL_EXPORTER_OTLP_HEADERS: secret() },
+          }),
+        },
+      })),
+    ],
     ['options env: an OpenTelemetry variable', options({ env: { OTEL_SERVICE_NAME: 'agent' } })],
     [
       'secret good',

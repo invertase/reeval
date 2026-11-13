@@ -1055,6 +1055,18 @@ function directoryHelper(base: string): EnvironmentHelpers['directory'] {
   }
 }
 
+/** An MCP server's headers, refusing a secret that would read a host `OTEL_*` variable. */
+function otelFree<T>(url: string, headers: Record<string, T> = {}): Record<string, T> {
+  for (const [name, value] of Object.entries(headers)) {
+    if (isSecret(value) && isOtelVar(value.from ?? name)) {
+      throw new DefinitionError(
+        otelRefusal(`the secret ${value.from ?? name} for header ${name} of ${url}`),
+      )
+    }
+  }
+  return { ...headers }
+}
+
 const mcpHelper: McpHelper = {
   stdio: (command, args = [], o = {}) => {
     if (typeof command !== 'string' || !command) {
@@ -1067,8 +1079,13 @@ const mcpHelper: McpHelper = {
       throw new DefinitionError(otelRefusal(`mcp.stdio(${JSON.stringify(command)}).env.${otel}`))
     return { kind: 'mcp', transport: 'stdio', command, args: [...args], env: { ...o.env } }
   },
-  http: (url, o = {}) => ({ kind: 'mcp', transport: 'http', url, headers: { ...o.headers } }),
-  sse: (url, o = {}) => ({ kind: 'mcp', transport: 'sse', url, headers: { ...o.headers } }),
+  http: (url, o = {}) => ({
+    kind: 'mcp',
+    transport: 'http',
+    url,
+    headers: otelFree(url, o.headers),
+  }),
+  sse: (url, o = {}) => ({ kind: 'mcp', transport: 'sse', url, headers: otelFree(url, o.headers) }),
 }
 
 /** The helpers a callback gets, with relative paths resolving against `base`. */

@@ -21,7 +21,7 @@ export type ExecTransport = {
   /** The host argv, program first, that runs `command` in the sandbox as root with stdin open. */
   argv(command: readonly string[]): string[]
   /** Variables the host program runs with, over this process's. Never credentials in `argv`. */
-  env?: Record<string, string>
+  env?: NodeJS.ProcessEnv
   /** Runs `command` to its end with `input` on stdin; running `argv(command)` unless set. */
   run?(
     command: readonly string[],

@@ -906,8 +906,8 @@ export async function resolveEnvironment(
   ): string | undefined => {
     if (typeof value === 'string') return value
     if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
-    if (value.from && isOtelVar(value.from)) {
-      throw new InfraError(otelRefusal(`the secret ${value.from} for ${key} in ${envWhere}`))
+    if (isOtelVar(value.from ?? key)) {
+      throw new InfraError(otelRefusal(`the secret ${value.from ?? key} for ${key} in ${envWhere}`))
     }
     const as = header ? (value.from ?? key) : key
     return hostValue(key, value, envWhere, secrets, hosts, as)

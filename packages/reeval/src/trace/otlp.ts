@@ -75,7 +75,9 @@ export function otlpTarget(env: Env, signal: Signal = 'traces'): OtlpTarget | st
     return `reeval compresses OTLP with gzip or none, and the OTLP compression is ${compression}`
   }
   const timeout = Number(
-    env[`OTEL_EXPORTER_OTLP_${S}_TIMEOUT`] ?? env.OTEL_EXPORTER_OTLP_TIMEOUT ?? Number.NaN,
+    set(env[`OTEL_EXPORTER_OTLP_${S}_TIMEOUT`]) ??
+      set(env.OTEL_EXPORTER_OTLP_TIMEOUT) ??
+      Number.NaN,
   )
   return {
     signal,

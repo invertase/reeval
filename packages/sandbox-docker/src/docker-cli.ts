@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { sshArgv } from './egress/transport.ts'
 import { type Engine, engineEnv, engineSpec, isRemoteEngine, normalizeImageId } from './engine.ts'
-import { shellQuote as q, type RunResult, run } from './process.ts'
+import { shellQuote as q, type RunResult, run, unsetOtel } from './process.ts'
 import {
   engineLabel,
   hostCommand,
@@ -211,7 +211,7 @@ for (let i = 0; i < Number(seconds); i++) {
       stdio: 'ignore',
       windowsHide: true,
       // A compiled reeval (bun build --compile) runs as plain Bun, which takes -e, only when told.
-      env: { ...process.env, ...engineEnv(engine), BUN_BE_BUN: '1' },
+      env: { ...process.env, ...unsetOtel(), ...engineEnv(engine), BUN_BE_BUN: '1' },
     },
   )
   child.on('error', () => {})

@@ -97,6 +97,15 @@ describe('OTLP target', () => {
     })
   })
 
+  test('an empty per-signal timeout leaves the shared one', () => {
+    const t = otlpTarget({
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c',
+      OTEL_EXPORTER_OTLP_TIMEOUT: '2500',
+      OTEL_EXPORTER_OTLP_TRACES_TIMEOUT: '',
+    })
+    assert.equal(typeof t === 'object' && t?.timeoutMs, 2500)
+  })
+
   test("a signal's exporter of none turns it off; grpc and unknown compression are refused", () => {
     const on = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c' }
     assert.equal(otlpTarget({ ...on, OTEL_TRACES_EXPORTER: 'none' }, 'traces'), null)
@@ -361,7 +370,7 @@ describe('Batcher', () => {
     assert.equal(sent.length, 3, 'a closed batcher takes no more')
   })
 
-  test('a refused batch is dropped and named, and a full queue drops new items', async () => {
+  test('a refused batch is dropped and named, close drops the rest, and a full queue drops new items', async () => {
     let calls = 0
     const refusing = new Batcher<number>(
       async () => (++calls === 1 ? 'http://c answered 503' : null),
@@ -369,8 +378,8 @@ describe('Batcher', () => {
       'spans',
     )
     for (const i of [1, 2, 3, 4, 5]) refusing.add(i)
-    assert.equal(await refusing.close(), 'http://c answered 503 (2 of 5 spans not sent)')
-    assert.equal(calls, 3)
+    assert.equal(await refusing.close(), 'http://c answered 503 (5 of 5 spans not sent)')
+    assert.equal(calls, 1, "close doesn't wait on a collector that just failed")
 
     const full = new Batcher<number>(
       async () => null,
@@ -379,6 +388,40 @@ describe('Batcher', () => {
     )
     for (const i of [1, 2, 3, 4]) full.add(i)
     assert.equal(await full.close(), 'the queue of 3 spans was full (1 of 4 spans not sent)')
+  })
+})
+
+describe('Batcher backoff', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  test('after a failure the next batch waits twice the delay, and a success resets it', async () => {
+    const at: number[] = []
+    const started = Date.now()
+    let calls = 0
+    const b = new Batcher<number>(
+      async () => {
+        at.push(Date.now() - started)
+        return ++calls === 1 ? 'http://c answered 503' : null
+      },
+      { delayMs: 40, maxBatch: 2, maxQueue: 10 },
+      'spans',
+    )
+    b.add(1)
+    b.add(2)
+    await sleep(5)
+    assert.equal(calls, 1, 'the full batch went at once, and failed')
+    b.add(3)
+    b.add(4)
+    await sleep(50)
+    assert.equal(calls, 1, 'a full batch after a failure waits for the backoff')
+    await sleep(60)
+    assert.equal(calls, 2, 'it goes after twice the delay')
+    assert.ok((at[1] ?? 0) >= 75, String(at))
+    b.add(5)
+    b.add(6)
+    await sleep(5)
+    assert.equal(calls, 3, 'after a success a full batch goes at once again')
+    assert.equal(await b.close(), 'http://c answered 503 (2 of 6 spans not sent)')
   })
 })
 
