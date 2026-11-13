@@ -10,7 +10,6 @@ import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import type { TestContext } from 'node:test'
 import { describe, test } from 'node:test'
-import type { logsRequest, metricsRequest, tracesRequest } from '../src/trace/otlp.ts'
 import { RunTrace, traceIdOf } from '../src/trace/run.ts'
 import { parseSpans, type RunSpan } from '../src/view/spans.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -82,6 +81,9 @@ function assertNowhere(dir: string, run: { stdout: string; stderr: string }, tex
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: OTLP's JSON mapping, read loosely
+type Json = any
+
 const byName = (spans: RunSpan[], name: string) => spans.filter((s) => s.name === name)
 
 describe('run spans', () => {
@@ -134,7 +136,7 @@ describe('run spans', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, read } = readRun(p.dir)
     for (const sent of collector.requests) assert.equal(sent.auth, 'Bearer abc')
-    const traces = collector.of('/v1/traces') as Array<ReturnType<typeof tracesRequest>>
+    const traces = collector.of('/v1/traces') as Json[]
     const [resource] = traces[0]?.resourceSpans ?? []
     assert.deepEqual(resource?.resource.attributes, [
       { key: 'service.name', value: { stringValue: 'evals' } },
@@ -142,21 +144,28 @@ describe('run spans', () => {
     const sentSpans = traces.flatMap((b) => b.resourceSpans[0]?.scopeSpans[0]?.spans ?? [])
     const written = parseSpans(read('spans.jsonl'))
     assert.deepEqual(sentSpans.map((s) => s.spanId).sort(), written.map((s) => s.spanId).sort())
+    const parents = (spans: Array<{ spanId: string; parentSpanId?: string }>) =>
+      Object.fromEntries(spans.map((s) => [s.spanId, s.parentSpanId || null]))
+    assert.deepEqual(parents(sentSpans), parents(written))
     assert.match(
       sentSpans.find((s) => s.name === 'reeval.run')?.startTimeUnixNano ?? '',
       /^\d{19}$/,
     )
 
-    const logs = (collector.of('/v1/logs') as Array<ReturnType<typeof logsRequest>>).flatMap(
+    const logs: Json[] = (collector.of('/v1/logs') as Json[]).flatMap(
       (b) => b.resourceLogs[0]?.scopeLogs[0]?.logRecords ?? [],
     )
     const attempts = logs.filter((l) => l.body.stringValue.startsWith('passed writes hello'))
     assert.equal(attempts.length, 2, JSON.stringify(logs))
-    for (const l of logs) assert.equal(l.traceId, traceIdOf(run.runId))
+    const root = written.find((s) => s.name === 'reeval.run')
+    for (const l of logs) {
+      assert.equal(l.traceId, traceIdOf(run.runId))
+      assert.equal(l.spanId, root?.spanId)
+    }
 
-    const metrics = (
-      collector.of('/v1/metrics') as Array<ReturnType<typeof metricsRequest>>
-    ).flatMap((b) => b.resourceMetrics[0]?.scopeMetrics[0]?.metrics ?? [])
+    const metrics = (collector.of('/v1/metrics') as Json[]).flatMap(
+      (b) => b.resourceMetrics[0]?.scopeMetrics[0]?.metrics ?? [],
+    )
     assert.ok(
       metrics.some((m) => m.name === 'system.cpu.utilization'),
       'one sample at the end',
@@ -248,7 +257,8 @@ evaluate('shows the headers', async (c) => {
       },
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout + r.stderr, /invalid header value/)
+    assert.match(r.stdout + r.stderr, /traces: Invalid character in header content/)
+    assert.doesNotMatch(r.stdout + r.stderr, /stack|node_modules/)
     assertNowhere(p.dir, r, 'bad-header-secret')
   })
 
@@ -272,8 +282,8 @@ evaluate('writes hello', async (c) => {
       },
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const batches = (collector.of('/v1/traces') as Array<ReturnType<typeof tracesRequest>>).map(
-      (b) => (b.resourceSpans[0]?.scopeSpans[0]?.spans ?? []).map((s) => s.name),
+    const batches = (collector.of('/v1/traces') as Json[]).map((b) =>
+      (b.resourceSpans[0]?.scopeSpans[0]?.spans ?? []).map((s) => s.name),
     )
     assert.ok(batches.length >= 2, JSON.stringify(batches))
     const first = batches.findIndex((names) => names.includes('attempt'))
@@ -348,15 +358,39 @@ evaluate('throws', async () => {
     assert.ok(sawRecord, 'the record was written while the export was still waiting')
   })
 
+  test('a collector that never answers holds up the exit by seconds, not its timeout', async (t) => {
+    const p = await fakeProject('spans-otlp-black-hole')
+    const server = createServer((req) => req.resume())
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => {
+      server.closeAllConnections()
+      server.close()
+    })
+    const { port } = server.address() as AddressInfo
+    const began = Date.now()
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+        OTEL_EXPORTER_OTLP_TIMEOUT: '120000',
+      },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout + r.stderr, /OpenTelemetry export: .*didn't take the rest within 5 s/)
+    assert.ok(Date.now() - began < 12_000, `took ${Date.now() - began} ms`)
+  })
+
   test('a collector that refuses the spans is a warning, not a failed run', async () => {
     const p = await fakeProject('spans-otlp-down')
     const r = await runCli(p.dir, ['run'], {
-      env: { OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'http://127.0.0.1:1/v1/traces' },
+      env: {
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'http://127.0.0.1:1/v1/traces',
+        OTEL_EXPORTER_OTLP_TIMEOUT: '1000',
+      },
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout + r.stderr,
-      /OpenTelemetry export: couldn't reach http:\/\/127\.0\.0\.1:1/,
+      /OpenTelemetry export: traces: connect ECONNREFUSED 127\.0\.0\.1:1 \(\d+ spans not sent\)/,
     )
     assert.ok(readFileSync(join(readRun(p.dir).dir, 'spans.jsonl'), 'utf8').length > 0)
   })

@@ -2408,38 +2408,39 @@ async function executeRun(
   const { MACHINES, MachineService } = await import('./sandbox/machine-service.ts')
   const machines = new MachineService()
   const { TRACE } = await import('./trace/spans.ts')
-  const { RunTrace, traceIdOf } = await import('./trace/run.ts')
+  const { RunTrace } = await import('./trace/run.ts')
   const { otlpConfigured } = await import('./trace/otlp.ts')
   let exported: Promise<string | null> = Promise.resolve(null)
   let runStarted = false
-  const telemetry =
-    setup.dryRun || !otlpConfigured(process.env)
-      ? null
-      : (await import('./trace/telemetry.ts')).startTelemetry({
-          env: process.env,
-          version,
-          traceId: traceIdOf(runId),
-          runId,
-          paths: [config.root, stagingDir],
-        })
-  if (telemetry) {
-    const onEvent = renderer.onEvent.bind(renderer)
-    renderer.onEvent = (e) => {
-      telemetry.event(e)
-      onEvent(e)
-    }
-  }
+  let telemetry: import('./trace/telemetry.ts').Telemetry | null = null
   const trace = setup.dryRun
     ? undefined
     : new RunTrace({
         dir: stagingDir,
         runId,
-        ...(telemetry && { onSpan: (span) => telemetry.span(span) }),
+        onSpan: (span) => telemetry?.span(span),
         attributes: {
           'reeval.version': version,
           ...(profile && { 'reeval.profile': profile.name }),
         },
       }).install()
+  if (trace && otlpConfigured(process.env)) {
+    telemetry = (await import('./trace/telemetry.ts')).startTelemetry({
+      version,
+      traceId: trace.traceId,
+      spanId: trace.spanId,
+      runId,
+      paths: [config.root, stagingDir],
+    })
+  }
+  if (telemetry) {
+    const onEvent = renderer.onEvent.bind(renderer)
+    const exporting = telemetry
+    renderer.onEvent = (e) => {
+      exporting.event(e)
+      onEvent(e)
+    }
+  }
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:

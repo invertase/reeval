@@ -3,7 +3,38 @@
 // process's own CPU and memory. Containers on the machine share its kernel, so their use counts.
 import { statfsSync, statSync } from 'node:fs'
 import { cpus, freemem, loadavg, totalmem } from 'node:os'
-import type { OtlpMetric } from './otlp.ts'
+
+/** Each metric: a gauge, or an up-down counter of bytes. */
+export const HOST_METRICS = {
+  'system.cpu.utilization': { unit: '1', description: 'CPU in use, over every core', bytes: false },
+  'system.cpu.load_average.1m': {
+    unit: '{run_queue_item}',
+    description: 'Load average over 1 minute',
+    bytes: false,
+  },
+  'system.memory.usage': { unit: 'By', description: 'Memory in use and free', bytes: true },
+  'system.memory.utilization': { unit: '1', description: 'Memory in use', bytes: false },
+  'process.cpu.utilization': {
+    unit: '1',
+    description: "reeval's CPU, over every core",
+    bytes: false,
+  },
+  'process.memory.usage': { unit: 'By', description: "reeval's resident memory", bytes: true },
+  'system.filesystem.usage': {
+    unit: 'By',
+    description: 'Filesystem space used and free',
+    bytes: true,
+  },
+  'system.filesystem.utilization': {
+    unit: '1',
+    description: 'Filesystem space used',
+    bytes: false,
+  },
+} as const
+
+export type HostMetric = keyof typeof HOST_METRICS
+
+export type HostPoint = { name: HostMetric; value: number; attributes?: Record<string, string> }
 
 const cpuTimes = () => {
   let busy = 0
@@ -17,7 +48,6 @@ const cpuTimes = () => {
 }
 
 export class HostMetrics {
-  readonly #startMs = Date.now()
   readonly #paths: string[]
   #cpu = cpuTimes()
   #proc = process.cpuUsage()
@@ -39,19 +69,7 @@ export class HostMetrics {
   }
 
   /** The metrics now, the CPU's over the time since the last sample. */
-  sample(): OtlpMetric[] {
-    const timeMs = Date.now()
-    const startMs = this.#startMs
-    const gauge = (name: string, unit: string, description: string, value: number) => ({
-      name,
-      unit,
-      description,
-      type: 'gauge' as const,
-      startMs,
-      timeMs,
-      points: [{ value }],
-    })
-
+  sample(): HostPoint[] {
     const cpu = cpuTimes()
     const busy = cpu.busy - this.#cpu.busy
     const total = cpu.total - this.#cpu.total
@@ -64,52 +82,28 @@ export class HostMetrics {
 
     const memTotal = totalmem()
     const memFree = freemem()
-    const metrics: OtlpMetric[] = [
-      gauge(
-        'system.cpu.utilization',
-        '1',
-        'CPU in use, over every core',
-        total > 0 ? busy / total : 0,
-      ),
-      gauge(
-        'system.cpu.load_average.1m',
-        '{run_queue_item}',
-        'Load average over 1 minute',
-        loadavg()[0] ?? 0,
-      ),
+    const points: HostPoint[] = [
+      { name: 'system.cpu.utilization', value: total > 0 ? busy / total : 0 },
+      { name: 'system.cpu.load_average.1m', value: loadavg()[0] ?? 0 },
       {
         name: 'system.memory.usage',
-        unit: 'By',
-        description: 'Memory in use and free',
-        type: 'updown',
-        startMs,
-        timeMs,
-        points: [
-          { value: memTotal - memFree, int: true, attributes: { 'system.memory.state': 'used' } },
-          { value: memFree, int: true, attributes: { 'system.memory.state': 'free' } },
-        ],
+        value: memTotal - memFree,
+        attributes: { 'system.memory.state': 'used' },
       },
-      gauge(
-        'system.memory.utilization',
-        '1',
-        'Memory in use',
-        memTotal ? (memTotal - memFree) / memTotal : 0,
-      ),
-      gauge(
-        'process.cpu.utilization',
-        '1',
-        "reeval's CPU, over every core",
-        wallUs > 0 ? (proc.user + proc.system) / wallUs : 0,
-      ),
       {
-        name: 'process.memory.usage',
-        unit: 'By',
-        description: "reeval's resident memory",
-        type: 'updown',
-        startMs,
-        timeMs,
-        points: [{ value: process.memoryUsage.rss(), int: true }],
+        name: 'system.memory.usage',
+        value: memFree,
+        attributes: { 'system.memory.state': 'free' },
       },
+      {
+        name: 'system.memory.utilization',
+        value: memTotal ? (memTotal - memFree) / memTotal : 0,
+      },
+      {
+        name: 'process.cpu.utilization',
+        value: wallUs > 0 ? (proc.user + proc.system) / wallUs : 0,
+      },
+      { name: 'process.memory.usage', value: process.memoryUsage.rss() },
     ]
 
     for (const path of this.#paths) {
@@ -118,34 +112,25 @@ export class HostMetrics {
         const used = (fs.blocks - fs.bfree) * fs.bsize
         const free = fs.bavail * fs.bsize
         const mount = { 'system.filesystem.mountpoint': path }
-        metrics.push(
+        points.push(
           {
             name: 'system.filesystem.usage',
-            unit: 'By',
-            description: 'Filesystem space used and free',
-            type: 'updown',
-            startMs,
-            timeMs,
-            points: [
-              {
-                value: used,
-                int: true,
-                attributes: { ...mount, 'system.filesystem.state': 'used' },
-              },
-              {
-                value: free,
-                int: true,
-                attributes: { ...mount, 'system.filesystem.state': 'free' },
-              },
-            ],
+            value: used,
+            attributes: { ...mount, 'system.filesystem.state': 'used' },
           },
           {
-            ...gauge('system.filesystem.utilization', '1', 'Filesystem space used', 0),
-            points: [{ value: used + free ? used / (used + free) : 0, attributes: mount }],
+            name: 'system.filesystem.usage',
+            value: free,
+            attributes: { ...mount, 'system.filesystem.state': 'free' },
+          },
+          {
+            name: 'system.filesystem.utilization',
+            value: used + free ? used / (used + free) : 0,
+            attributes: mount,
           },
         )
       } catch {}
     }
-    return metrics
+    return points
   }
 }
