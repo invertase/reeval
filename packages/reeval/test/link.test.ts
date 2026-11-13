@@ -337,7 +337,7 @@ describe('reeval link and the sign-in', () => {
         JSON.stringify({
           schemaVersion: 1,
           logins: {
-            [`${p.base}/`]: {
+            [p.base]: {
               store: 'file',
               token: 'expired-token',
               user: { email: 'ada@example.com' },

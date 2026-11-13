@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { attach } from '../src/attach.ts'
-import { EventStreamError, openEventStream } from '../src/events.ts'
+import { ATTEMPTS_HEARTBEAT_RANGE, EventStreamError, openEventStream } from '../src/events.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { writeLiveProgress } from '../src/live.ts'
 import type { AttemptMeta } from '../src/types.ts'
@@ -15,7 +15,7 @@ import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import { failureReason, phaseOf, progressLine } from '../src/ui/format.ts'
 import { createRenderer } from '../src/ui/index.ts'
-import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
+import { type OutputOptions, parseHeartbeat, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
 import { InteractiveRenderer, type ListStore } from '../src/ui/tty.ts'
@@ -1224,6 +1224,26 @@ describe('output mode', () => {
     assert.equal(resolve({ REEVAL_HEARTBEAT: '30s' }).heartbeatMs, 30_000)
     assert.equal(resolve({ REEVAL_HEARTBEAT: '0' }).heartbeatMs, 0)
     assert.equal(resolve({}, true, 'codex').heartbeatMs, 0)
+  })
+
+  test('an attempts heartbeat is 0 or from 1s to 10m, and refuses anything else', () => {
+    const parse = (value: string | undefined) =>
+      parseHeartbeat('REEVAL_EVENTS_HEARTBEAT', value, 30_000, ATTEMPTS_HEARTBEAT_RANGE)
+    assert.equal(parse(undefined), 30_000)
+    assert.equal(parse('0'), 0)
+    assert.equal(parse('1s'), 1000)
+    assert.equal(parse('1000ms'), 1000)
+    assert.equal(parse('10m'), 600_000)
+    assert.equal(parse('45'), 45_000)
+    for (const value of ['999ms', '10.5m', '601', '30000000m', 'often', '-1s']) {
+      assert.throws(
+        () => parse(value),
+        new RegExp(
+          `^UsageError: REEVAL_EVENTS_HEARTBEAT must be 0 for none or a duration from 1s to 10m \\(got ${value}\\)$`,
+        ),
+        value,
+      )
+    }
   })
 })
 

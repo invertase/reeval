@@ -78,6 +78,12 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'run-span',
+    file: 'src/view/spans.ts',
+    type: 'RunSpan',
+    where: "One line of a run's spans.jsonl, its trace, in the history folder or .reeval/runs",
+  },
+  {
     name: 'run-events',
     file: 'src/view/events.ts',
     type: 'RunEventLine',

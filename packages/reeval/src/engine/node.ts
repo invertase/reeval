@@ -279,6 +279,15 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   }
 
   input.onRunStart?.(specs.length)
+  // The attempts in progress, by key, with the worker that runs each. The main process's own timer
+  // reports them, so a long turn that sends nothing still shows; a worker's go once it exits.
+  const active = new Map<string, string>()
+  const { heartbeat } = input
+  const beating = heartbeat
+    ? setInterval(() => heartbeat.beat([...active.keys()], false), heartbeat.ms)
+    : undefined
+  beating?.unref()
+  heartbeat?.beat([], false)
   let owner = 0
   await eachLimited(
     collected,
@@ -376,6 +385,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
           case 'start': {
             const test = state.tests[m.index] as WireTest
             const { id: evalKey, key, attempt } = identify(rel, test)
+            active.set(key, id)
             emit({ type: 'eval-start', at: m.at, id: evalKey, key, attempt })
             break
           }
@@ -395,6 +405,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
             const result: WireResult =
               canceled && m.result.state === 'failed' ? { ...m.result, state: 'skipped' } : m.result
             const e = toEval(rel, state.tests[m.index] as WireTest, result)
+            active.delete(e.key)
             state.results.set(m.index, e)
             if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
             break
@@ -424,6 +435,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       if (canceled) worker.send({ t: 'cancel' })
       const exit = await worker.exited
       live.delete(worker)
+      for (const [key, runner] of active) if (runner === id) active.delete(key)
       scheduler.releaseOwner(id)
       input.services?.released(id)
       markReady()
@@ -449,7 +461,10 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       }
     },
     () => !canceled,
-  )
+  ).finally(() => {
+    clearInterval(beating)
+    heartbeat?.beat([], true)
+  })
 
   // Attempts finish in any order; results are listed by file, then as declared.
   const evals: EngineEval[] = []

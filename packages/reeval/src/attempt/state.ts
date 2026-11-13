@@ -8,6 +8,7 @@ import { sandboxKind } from '../sandbox/kinds.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
 import type { ResourceMeter } from '../sandbox/resources.ts'
 import type { PreparedHost } from '../sandbox/tart-hosts.ts'
+import { childSpan } from '../trace/spans.ts'
 import type {
   AttemptContext,
   BackgroundHandle,
@@ -52,8 +53,12 @@ export type Attempt = {
   readonly record: EvalRecord
   readonly turns: Turn[]
   readonly report: (update: ProgressUpdate) => void
-  /** Runs `fn`, adding its duration to the record's timing for `phase`. */
-  readonly timed: <T>(phase: keyof EvalRecord['timings'], fn: () => Promise<T>) => Promise<T>
+  /** Counts `fn`'s time in `phase`, as a span named for the phase (or `span`) in the run's trace. */
+  readonly timed: <T>(
+    phase: keyof EvalRecord['timings'],
+    fn: () => Promise<T>,
+    span?: string,
+  ) => Promise<T>
   /** The test's signal while the environment is prepared; after that, the eval's timer too. */
   signal: AbortSignal
   /** Once the environment is resolved. */
@@ -175,11 +180,16 @@ export function createAttempt(
     },
     // The terminal draws a check's command, a judge's question and a warning as they come.
     report: (update) => progress({ at: Date.now(), ...redactFields(update, ['kind']) }),
-    async timed(phase, fn) {
+    async timed(phase, fn, name) {
       const start = performance.now()
+      const span = childSpan(name ?? phase.replace(/Ms$/, ''))
       try {
         return await fn()
+      } catch (error) {
+        span.end(error)
+        throw error
       } finally {
+        span.end()
         record.timings[phase] += Math.round(performance.now() - start)
       }
     },

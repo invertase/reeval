@@ -28,6 +28,7 @@ import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import type { SecretWarning } from '../history/types.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
+import { attemptSpan, openSpan } from '../trace/spans.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { type SampleMode, samplerHosts, sharedMeter, startMeter } from './resources.ts'
@@ -354,7 +355,45 @@ export async function containerSandbox(
     limits: Partial<SandboxLimits>
     /** The machine its resources are read on, as the record names it. */
     machine: { sandbox: string; size?: string; id?: string; name?: string }
+    /** The span of the pooled machine it runs on, in the run's trace. */
+    machineSpan?: string
   },
+): Promise<NetworkSandbox> {
+  const span = openSpan(
+    'container',
+    {
+      'reeval.sandbox': o.machine.sandbox,
+      'container.image.name': o.image,
+      ...(o.machine.id !== undefined && { 'host.id': o.machine.id }),
+    },
+    { parentSpanId: o.machineSpan },
+  )
+  try {
+    const box = await startContainer(options, o, (container) => {
+      const id = container.slice(0, 12)
+      span.set({ 'container.id': id })
+      attemptSpan()?.set({ 'reeval.sandbox': o.machine.sandbox, 'container.id': id })
+    })
+    const destroy = box.destroy.bind(box)
+    return Object.assign(box, {
+      destroy: async () => {
+        try {
+          await destroy()
+        } finally {
+          span.end()
+        }
+      },
+    })
+  } catch (error) {
+    span.end(error)
+    throw error
+  }
+}
+
+async function startContainer(
+  options: SandboxOptions,
+  o: Parameters<typeof containerSandbox>[1],
+  created: (id: string) => void,
 ): Promise<NetworkSandbox> {
   const { image, engine, root, limits } = o
   const spec = engineSpec(engine)
@@ -392,6 +431,7 @@ export async function containerSandbox(
         )
       : needsNode(error.reason)
   })
+  created(network.id)
   debug?.log(
     'container',
     `created ${network.id.slice(0, 12)} from ${image}${isRemoteEngine(engine) ? ` on ${engine.description}` : ''} in ${Math.round(performance.now() - started)}ms`,

@@ -809,6 +809,15 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       files.set(REMARKS_FILE, remarkBytes)
     } catch {}
   }
+  if (record.spans) {
+    const ref = record.spans
+    const bytes =
+      level === 'none'
+        ? null
+        : await readFile(join(source, runId, ...ref.path.split('/'))).catch(() => null)
+    if (bytes && sha256(bytes) === ref.sha256) files.set(ref.path, bytes)
+    else delete record.spans
+  }
   if (level !== 'none') {
     for (const [name, bytes] of summaryFiles(record, { remarks })) files.set(name, bytes)
   }

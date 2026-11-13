@@ -53,6 +53,12 @@ export type EngineOptions = {
   onPlan?: (collected: CollectedPlan) => Promise<boolean>
   /** What answers workers' `call`s; a call with none fails. */
   services?: Services
+  /**
+   * `beat` gets the keys of the attempts in progress, in the order they started (each one started
+   * and without a result yet, on a worker that hasn't exited): once as the files start to run,
+   * every `ms` while they do, and with `done`, and no keys, once they have all ended.
+   */
+  heartbeat?: { ms: number; beat: (attempts: string[], done: boolean) => void }
 }
 
 /** Services the run's workers share, in the main process: the machine pools. */

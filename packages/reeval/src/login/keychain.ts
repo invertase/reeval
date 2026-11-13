@@ -4,7 +4,7 @@
 // file instead.
 import { spawn } from 'node:child_process'
 
-/** The keychain item's service; its account is the platform's URL. */
+/** The keychain item's service; its account is the platform's origin (`platformKey`). */
 const SERVICE = 'reeval'
 const TIMEOUT_MS = 10_000
 

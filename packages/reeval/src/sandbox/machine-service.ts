@@ -4,9 +4,10 @@
 // ends. A worker leases a slot over its IPC channel (or, outside
 // a worker, from pools in its own process) and gives it back when its attempt is done.
 import { callService } from '../scheduler/services.ts'
+import { attemptSpan, emitSpan, openSpan } from '../trace/spans.ts'
 import type { MachineDescriptor } from './machine.ts'
 import { MACHINE_PROVIDERS } from './machines.ts'
-import { type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
+import { type GoneMachine, type LeaseFacts, MachinePool, type PoolLease } from './pool.ts'
 import { PoolAccount } from './pool-account.ts'
 import { RunStopped } from './types.ts'
 
@@ -22,6 +23,8 @@ export type MachineCall =
       /** What the provider starts machines from, as its preflight prepared it. */
       image?: unknown
       runId: string
+      /** The key of the attempt the lease is for. */
+      attempt?: string
       /** The project, where the provider's SDK resolves from. */
       root: string
       /** How long the attempt may hold the machine. */
@@ -40,7 +43,20 @@ export type WireLease = LeaseFacts & { info: unknown }
  */
 type WireEnded = { ended: string }
 
-type Held = { owner: string; lease?: PoolLease<unknown>; waiting?: AbortController }
+type Held = {
+  owner: string
+  attempt?: string
+  lease?: PoolLease<unknown>
+  waiting?: AbortController
+}
+
+/** The machines the run's pools hold, and which attempt holds a slot on which. */
+export type MachineHoldings = {
+  /** Every machine's id, idle and in use, from its start's return until it's removed. */
+  machines: string[]
+  /** The machine each attempt holds a slot on, by the attempt's key. */
+  leases: Map<string, string>
+}
 
 /**
  * How a sandbox kind pools its machines: one pool per `key`, opened with `open`, and the pools of
@@ -60,6 +76,7 @@ export class MachineService {
   readonly #pools = new Map<string, Promise<MachinePool<unknown>>>()
   readonly #accounts = new Map<string, PoolAccount>()
   readonly #held = new Map<string, Held>()
+  readonly #opened = new Set<MachinePool<unknown>>()
   readonly #idleMs: number | undefined
   readonly #pooled: (sandbox: MachineDescriptor) => Pooled | undefined
   #closed = false
@@ -83,7 +100,8 @@ export class MachineService {
     }
     if (this.#closed) throw new Error("The run's machine pools are closed")
     const waiting = new AbortController()
-    this.#held.set(key, { owner, waiting })
+    const attempt = call.attempt !== undefined ? { attempt: call.attempt } : {}
+    this.#held.set(key, { owner, ...attempt, waiting })
     let lease: PoolLease<unknown>
     try {
       const pool = await this.#pool(call)
@@ -98,9 +116,9 @@ export class MachineService {
       lease.release()
       throw new Error('The attempt stopped waiting for a machine')
     }
-    this.#held.set(key, { owner, lease })
-    const { info, machine, slot, reused, start, lost } = lease
-    return { info, machine, slot, reused, start, lost } satisfies WireLease
+    this.#held.set(key, { owner, ...attempt, lease })
+    const { info, machine, span, slot, reused, start, lost } = lease
+    return { info, machine, span, slot, reused, start, lost } satisfies WireLease
   }
 
   /** `owner`'s worker is gone: what it waited for is abandoned, what it held is broken. */
@@ -111,6 +129,17 @@ export class MachineService {
       held.waiting?.abort(new Error("The attempt's worker exited"))
       held.lease?.release(true)
     }
+  }
+
+  /** What the pools hold now; a pool still opening holds nothing yet. */
+  holdings(): MachineHoldings {
+    const machines = new Set<string>()
+    for (const pool of this.#opened) for (const id of pool.machineIds()) machines.add(id)
+    const leases = new Map<string, string>()
+    for (const held of this.#held.values()) {
+      if (held.attempt !== undefined && held.lease) leases.set(held.attempt, held.lease.machine)
+    }
+    return { machines: [...machines], leases }
   }
 
   /** What each pool did, by its key. */
@@ -150,16 +179,52 @@ export class MachineService {
           account = new PoolAccount(provider.helper, options)
           this.#accounts.set(name, account)
         }
-        return new MachinePool(provider, {
+        const opened = new MachinePool(provider, {
           ...options,
+          onGone: (m) => emitSpan(machineSpan(call.sandbox.kind, m)),
           ...(account && { account }),
           ...(this.#idleMs !== undefined && { idleMs: this.#idleMs }),
         })
+        this.#opened.add(opened)
+        return opened
       })
       pool.catch(() => this.#pools.delete(key))
       this.#pools.set(key, pool)
     }
     return pool
+  }
+}
+
+const text = (info: unknown, key: string): string | undefined => {
+  const v = (info as Record<string, unknown> | undefined)?.[key]
+  return typeof v === 'string' ? v : undefined
+}
+
+/** A pooled machine's span in the run's trace: from the pool asking for it until it's gone. */
+function machineSpan(sandbox: string, m: GoneMachine<unknown>) {
+  const name = text(m.info, 'name')
+  const size = text(m.info, 'size')
+  return {
+    spanId: m.span,
+    name: 'machine',
+    startMs: m.requestedAt,
+    endMs: m.goneAt,
+    attributes: {
+      'reeval.sandbox': sandbox,
+      ...(m.id !== undefined && { 'host.id': m.id }),
+      ...(name !== undefined && { 'host.name': name }),
+      ...(size !== undefined && { 'host.type': size }),
+      'reeval.machine.slots': m.slots,
+      'reeval.machine.leases': m.leases,
+      ...(m.upAt !== undefined && { 'reeval.machine.up_ms': m.upAt - m.requestedAt }),
+      ...(m.start && {
+        'reeval.machine.start_ms': m.start.ms,
+        'reeval.machine.queued_ms': m.start.queuedMs,
+        'reeval.machine.rate_limited': m.start.rateLimited,
+      }),
+      ...(m.why !== undefined && { 'reeval.machine.gone': m.why }),
+    },
+    ...(m.error !== undefined && { status: { code: 'error' as const, message: m.error } }),
   }
 }
 
@@ -193,6 +258,7 @@ export async function leaseMachine(
   signal: AbortSignal,
 ): Promise<MachineLease> {
   signal.throwIfAborted()
+  const asked = Date.now()
   const ticket = `${process.pid}-${++tickets}`
   const send = (body: MachineCall) => callService(MACHINES, body, localCall)
   const leased = send({ op: 'lease', ticket, ...request }) as Promise<WireLease | WireEnded>
@@ -203,9 +269,28 @@ export async function leaseMachine(
   try {
     const lease = await Promise.race([leased, stop])
     if ('ended' in lease) throw new RunStopped(lease.ended)
+    const placement = {
+      'reeval.sandbox': request.sandbox.kind,
+      'host.id': lease.machine,
+      'reeval.machine.slot': lease.slot,
+      'reeval.machine.use': lease.reused + 1,
+    }
+    attemptSpan()?.set(placement)
+    const span = openSpan(
+      'lease',
+      {
+        ...placement,
+        'reeval.lease.wait_ms': Date.now() - asked,
+        'reeval.machine.started': lease.start !== null,
+      },
+      { parentSpanId: attemptSpan()?.spanId },
+    )
+    span.link(lease.span)
     return {
       ...lease,
       release: async (broken = false) => {
+        if (broken) span.set({ 'reeval.lease.broken': true })
+        span.end()
         await send({ op: 'release', ticket, broken }).catch(() => {})
       },
     }

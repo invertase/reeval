@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from RunSpan in src/view/spans.ts by `pnpm schema:update`; don't edit. One line of a run's spans.jsonl, its trace, in the history folder or .reeval/runs.",
+  "title": "RunSpan",
+  "$ref": "#/$defs/RunSpan",
+  "$defs": {
+    "RunSpan": {
+      "description": "One span of a run's trace.",
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "description": "What it was, with OpenTelemetry's names where they have one (`host.id`, `container.id`) and `reeval.`'s otherwise.",
+          "$ref": "#/$defs/SpanAttributes"
+        },
+        "endMs": {
+          "type": "number"
+        },
+        "links": {
+          "description": "Spans it relates to outside its parent: a lease's machine.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spanId": {
+                "type": "string"
+              },
+              "traceId": {
+                "type": "string"
+              }
+            },
+            "required": ["spanId", "traceId"]
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "parentSpanId": {
+          "description": "Absent on a `reeval.run` span, the trace's roots.",
+          "type": "string"
+        },
+        "spanId": {
+          "description": "16 hex characters.",
+          "type": "string"
+        },
+        "startMs": {
+          "description": "When it started and ended, in milliseconds since the epoch.",
+          "type": "number"
+        },
+        "status": {
+          "description": "Set when what it covers failed.",
+          "type": "object",
+          "properties": {
+            "code": {
+              "const": "error"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": ["code"]
+        },
+        "traceId": {
+          "description": "32 hex characters, the same for every span of the run, its resumes' included.",
+          "type": "string"
+        }
+      },
+      "required": ["attributes", "endMs", "name", "spanId", "startMs", "traceId"]
+    },
+    "SpanAttributes": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    }
+  }
+}

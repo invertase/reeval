@@ -15,6 +15,7 @@ import {
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
+import { attemptSpan, openSpan } from '../trace/spans.ts'
 import type { TartSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { type BootedMachine, startSandbox } from './start.ts'
@@ -394,6 +395,8 @@ export async function createTartSandbox(
     )
   }
   const vm = `${vmPrefix(options.runId)}${randomBytes(3).toString('hex')}`
+  const span = openSpan('machine', { 'reeval.sandbox': 'tart', 'host.id': vm, 'host.name': vm })
+  attemptSpan()?.set({ 'reeval.sandbox': 'tart', 'host.id': vm })
   try {
     return await startSandbox(options, {
       helper: 'tart()',
@@ -402,7 +405,23 @@ export async function createTartSandbox(
       hint: 'The egress gateway needs Node in the image (brew install node) and passwordless sudo for its user.',
       // The image preflight baked the harness into, when it did.
       install: false,
-      boot: () => bootTart(descriptor, options, vm),
+      boot: async () => {
+        const booted = await bootTart(descriptor, options, vm).catch((error: unknown) => {
+          span.end(error)
+          throw error
+        })
+        const destroy = booted.destroy
+        return {
+          ...booted,
+          destroy: async () => {
+            try {
+              await destroy()
+            } finally {
+              span.end()
+            }
+          },
+        }
+      },
     })
   } catch (error) {
     if (signal.aborted) throw signal.reason

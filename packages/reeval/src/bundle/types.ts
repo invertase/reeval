@@ -99,11 +99,12 @@ export type BundleManifest = {
    * the eval code; `vm-waits`, its `cloud()` waiting on a refused machine start for as long as the
    * service asks and stopping its attempts only when the service ends the run; `vm-layout`, its
    * `cloud()` starting the machine type and attempts per machine the service gives, giving back a
-   * machine the service reclaims, and ending its attempts when the service ends the run. Another
-   * reeval may list others.
+   * machine the service reclaims, and ending its attempts when the service ends the run;
+   * `heartbeat`, its event stream's heartbeat lines naming the attempts in progress and the machines
+   * it holds (`REEVAL_EVENTS_HEARTBEAT`). Another reeval may list others.
    */
   features?: string[]
 }
 
 /** The features this reeval writes in every bundle's manifest. */
-export const BUNDLE_FEATURES = ['secrets-file', 'vm-layout', 'vm-waits']
+export const BUNDLE_FEATURES = ['heartbeat', 'secrets-file', 'vm-layout', 'vm-waits']
