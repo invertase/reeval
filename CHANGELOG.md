@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.25.0](https://github.com/reeval-ai/reeval/compare/v0.24.0...v0.25.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **studio:** serve the run report in place of the run and attempt views ([#942](https://github.com/reeval-ai/reeval/issues/942))
+* **studio:** reeval run --artifacts is removed; set history.artifacts, or pass reeval record --artifacts or reeval cloud push --artifacts.
+* **studio:** serve a typed studio API on loopback to a paired studio page ([#934](https://github.com/reeval-ai/reeval/issues/934))
+* **history:** add composable RunReport summary.md ([#935](https://github.com/reeval-ai/reeval/issues/935))
+
+### Features
+
+* **bundle:** declare vm-layout in the bundle manifest ([#962](https://github.com/reeval-ai/reeval/issues/962)) ([cf784d8](https://github.com/reeval-ai/reeval/commit/cf784d8f9c9298e1f01a428f63edc37caeb83094))
+* **cli:** add reeval link to link a project to a cloud project ([#926](https://github.com/reeval-ai/reeval/issues/926)) ([e526316](https://github.com/reeval-ai/reeval/commit/e526316781261d491f7a7dbb7ba4af4670257223))
+* **cloud:** push a recorded run to reeval cloud's studio ([#936](https://github.com/reeval-ai/reeval/issues/936)) ([f5d8350](https://github.com/reeval-ai/reeval/commit/f5d835064519c653fb5c0799e9acf3d831a6cf91))
+* **cloud:** push saved analyses with a run ([#959](https://github.com/reeval-ai/reeval/issues/959)) ([ddf0607](https://github.com/reeval-ai/reeval/commit/ddf0607d3dba2254709a5e8f6dc51b43e5d706a1))
+* **events:** emit a heartbeat with the attempts in progress ([#963](https://github.com/reeval-ai/reeval/issues/963)) ([1fe9f69](https://github.com/reeval-ai/reeval/commit/1fe9f69d51ddb971251b6ea98d1573749951a5fd))
+* **history:** add composable RunReport summary.md ([#935](https://github.com/reeval-ai/reeval/issues/935)) ([c58b3ef](https://github.com/reeval-ai/reeval/commit/c58b3ef5310998979589d0ecfd137e4ed4014bf5))
+* **history:** record a trace of what ran where in spans.jsonl ([#966](https://github.com/reeval-ai/reeval/issues/966)) ([46feb4d](https://github.com/reeval-ai/reeval/commit/46feb4d006fa728249e5096853e89e597af15118))
+* **report:** add each attempt's transcript facts to the run report ([#958](https://github.com/reeval-ai/reeval/issues/958)) ([2666d47](https://github.com/reeval-ai/reeval/commit/2666d47d6b5bda5bd67aa22565a2ac86265df4b5))
+* **sandbox:** add reeval/internal/vm-api, adapters over the Boat and Daytona SDKs ([#943](https://github.com/reeval-ai/reeval/issues/943)) ([f26ada3](https://github.com/reeval-ai/reeval/commit/f26ada3db868ec7c03c52890a7b0c38640d11125))
+* **sandbox:** stop a cloud run's starts when the service says the run can't go on ([#941](https://github.com/reeval-ai/reeval/issues/941)) ([fd66b4e](https://github.com/reeval-ai/reeval/commit/fd66b4e337072b3aaeba15cee62141271bd6ad4b))
+* **sandbox:** take cloud()'s layout from the service and give back reclaimed machines ([#940](https://github.com/reeval-ai/reeval/issues/940)) ([07b7bcb](https://github.com/reeval-ai/reeval/commit/07b7bcbf8cdaa710de4f12be51d3006e50946482))
+* **sandbox:** wait on cloud() starts until the service ends the run ([#939](https://github.com/reeval-ai/reeval/issues/939)) ([085c3df](https://github.com/reeval-ai/reeval/commit/085c3dfcf7ebeac1bcc711d8a3d5107eb6e4d6e2))
+* **studio:** serve a typed studio API on loopback to a paired studio page ([#934](https://github.com/reeval-ai/reeval/issues/934)) ([cee5ae8](https://github.com/reeval-ai/reeval/commit/cee5ae8e0b64891bc3bfbb8f1bf9d0d8f0492a2a))
+* **studio:** serve the run report in place of the run and attempt views ([#942](https://github.com/reeval-ai/reeval/issues/942)) ([d105ba7](https://github.com/reeval-ai/reeval/commit/d105ba70e46eaf90f8c0aa03e5f2e6adc6f22f0d))
+* **studio:** share a recorded run from the cli and write a push archive to a file ([#937](https://github.com/reeval-ai/reeval/issues/937)) ([365874e](https://github.com/reeval-ai/reeval/commit/365874ef4ea95b36873630aff83a811be1f7c9b2))
+* **ui:** report when an attempt's sandbox is up ([#938](https://github.com/reeval-ai/reeval/issues/938)) ([1b778a9](https://github.com/reeval-ai/reeval/commit/1b778a9c674f9869f4c761c1bc4a1362db3f3804))
+* **view:** derive a run's scope for like-with-like history and trends ([#945](https://github.com/reeval-ai/reeval/issues/945)) ([eaba735](https://github.com/reeval-ai/reeval/commit/eaba73506f806aef7b0123545a66177d30b05f09))
+
+
+### Bug Fixes
+
+* **compare:** treat a crashed attempt the engine passed as infra_error in questions ([#952](https://github.com/reeval-ai/reeval/issues/952)) ([24cef15](https://github.com/reeval-ai/reeval/commit/24cef150fe97a46b89aed7d379a0057f3622e8ab))
+* **fx:** bump fx to 0.0.16, refuse mcp.sse and pass the sandbox env to stdio MCP servers ([#948](https://github.com/reeval-ai/reeval/issues/948)) ([e07599e](https://github.com/reeval-ai/reeval/commit/e07599ec7ac269ba1f0d94954eb3bbc99d3dcf2c))
+* **login:** key the platform sign-in by its bare origin ([#965](https://github.com/reeval-ai/reeval/issues/965)) ([a3a33f6](https://github.com/reeval-ai/reeval/commit/a3a33f6d341768d5f232fd0fd16e8882cd9ce3e5))
+* **sandbox:** fold a reading too close to the last into its sample, so avgCores never tops peakCores ([#957](https://github.com/reeval-ai/reeval/issues/957)) ([ed30676](https://github.com/reeval-ai/reeval/commit/ed30676aea426e49d684b04a6f4fcfd32d125205))
+* **sandbox:** record no status for a brokered request the sandbox canceled ([#955](https://github.com/reeval-ai/reeval/issues/955)) ([d0fd4f7](https://github.com/reeval-ai/reeval/commit/d0fd4f7311fa6aed6d3e97df596315f9f20dd7c0))
+* **sandbox:** remove the containers a killed reeval left running ([#964](https://github.com/reeval-ai/reeval/issues/964)) ([f2cb1e9](https://github.com/reeval-ai/reeval/commit/f2cb1e97118c4286a563beadbcc4ee95f350b58d))
+
 ## [0.24.0](https://github.com/reeval-ai/reeval/compare/v0.23.0...v0.24.0) (2026-11-10)
 
 
