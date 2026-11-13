@@ -1,0 +1,36 @@
+{
+  "name": "@reeval/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A typed client for the reeval cloud platform's API, as the reeval CLI calls it",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reeval-ai/reeval.git",
+    "directory": "packages/api"
+  },
+  "homepage": "https://github.com/reeval-ai/reeval/tree/main/packages/api#readme",
+  "bugs": {
+    "url": "https://github.com/reeval-ai/reeval/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

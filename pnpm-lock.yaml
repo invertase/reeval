@@ -544,6 +544,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  packages/api:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
   packages/harness-antigravity:
     dependencies:
       '@ai-sdk/harness':
