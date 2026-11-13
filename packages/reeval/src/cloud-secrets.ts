@@ -73,14 +73,14 @@ export type SecretsIo = {
   projectDir?: string
 }
 
-type Target = { base: URL; auth: CloudAuth; orgId: string; projectId?: string }
+export type Target = { base: URL; auth: CloudAuth; orgId: string; projectId?: string }
 
 /**
  * The org, and the project when `project` is `'required'` or `--project` names one: `--org` and
  * `--project`, else the link in `.reeval/project.json`.
  */
-async function target(
-  io: SecretsIo,
+export async function target(
+  io: Pick<SecretsIo, 'env' | 'projectDir'>,
   flags: Flags,
   command: string,
   project: 'required' | 'optional',

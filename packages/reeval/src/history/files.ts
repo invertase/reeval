@@ -642,18 +642,43 @@ async function archiveRun(
   try {
     const landed = await readIfThere(recordFile(dir, runId))
     if (!landed?.equals(record)) return undefined
-    const files = (await filesUnder(runDir(dir, runId))).filter(([path]) => archived(path))
     return await freshArchive(archiveFile(dir, runId), {
       contents: 'run',
       runId,
-      files: [
-        { path: `${runId}.json`, data: landed },
-        ...files.map(([file, data]) => ({ path: `${runId}/${file}`, data })),
-      ],
+      files: await runArchiveFiles(dir, runId, landed),
     })
   } finally {
     await release()
   }
+}
+
+/**
+ * A run archive's files as `runArchiveFiles` lists them, read under the run's claim so a
+ * recording in progress can't mix two revisions; exit 2 while another process holds it.
+ */
+export async function readRunArchiveFiles(
+  dir: string,
+  runId: string,
+): Promise<Array<{ path: string; data: Uint8Array }>> {
+  const release = await claimRun(dir, runId)
+  try {
+    return await runArchiveFiles(dir, runId, await readFile(recordFile(dir, runId)))
+  } finally {
+    await release()
+  }
+}
+
+/** What a run archive of `runId` holds: `record`, and the run's files in `dir` but `analysis/`. */
+export async function runArchiveFiles(
+  dir: string,
+  runId: string,
+  record: Uint8Array,
+): Promise<Array<{ path: string; data: Uint8Array }>> {
+  const files = (await filesUnder(runDir(dir, runId))).filter(([path]) => archived(path))
+  return [
+    { path: `${runId}.json`, data: record },
+    ...files.map(([file, data]) => ({ path: `${runId}/${file}`, data })),
+  ]
 }
 
 /** Every file under `dir`, by posix path, with its bytes. */

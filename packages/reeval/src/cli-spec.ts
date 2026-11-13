@@ -82,6 +82,7 @@ export const FLAGS = {
   project: { type: 'string' },
   org: { type: 'string' },
   download: { type: 'boolean' },
+  'no-wait': { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -348,6 +349,34 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 Delete the provider's key (--project: that project's override)
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON`,
+      },
+      push: {
+        flags: [
+          'org',
+          'project',
+          'no-wait',
+          'skip-secret-scan',
+          'profile',
+          'offline',
+          'all-branches',
+        ],
+        positionals: 1,
+        help: `
+  reeval cloud push [run]       Upload a recorded run (default: latest) to the studio of the cloud
+                                project reeval link linked, as its history archive, then wait until
+                                the platform has read it and print the studio URL; exit 2 when a
+                                file in it, or a file's name, looks like it holds a secret, or is
+                                compressed in a format the scan can't read (it unpacks gzip, zlib,
+                                brotli, zip and, on a Node that has it, zstd; raw deflate, which
+                                has no magic number, it scans as binary)
+    --no-wait                   Return once it's uploaded
+    --skip-secret-scan          Upload even then, printing what the scan found as a warning
+    --org <slug>                The org, by slug or id, instead of the linked one
+    --project <slug>            The project, by slug or id, instead of the linked one; required
+                                when nothing is linked
+    --offline --all-branches    A remote history.store: read its copy without pulling first; list
+                                every branch's runs, not only HEAD's
+    --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
       },
     },
   },
@@ -793,7 +822,7 @@ function checkOne(
     } else if (command === 'image')
       return 'reeval image needs a subcommand: reeval image build, list or clean'
     else if (command === 'cloud')
-      return 'reeval cloud needs a subcommand: reeval cloud secrets or provider'
+      return 'reeval cloud needs a subcommand: reeval cloud secrets, provider or push'
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []

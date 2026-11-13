@@ -125,7 +125,16 @@ const HISTORY_COMMANDS = {
 }
 
 /** The commands that pull a remote store's new runs into its copy before reading it. */
-const PULLS = { history: 1, show: 1, compare: 1, checkout: 1, query: 1, analyze: 1, mcp: 1 }
+const PULLS = {
+  history: 1,
+  show: 1,
+  compare: 1,
+  checkout: 1,
+  query: 1,
+  analyze: 1,
+  mcp: 1,
+  'cloud push': 1,
+}
 
 const EXPECTED_ERRORS = [
   'CommandError',
@@ -280,10 +289,22 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'cloud') {
     const [area, ...args] = filters
-    if (area !== 'secrets' && area !== 'provider') {
+    if (area !== 'secrets' && area !== 'provider' && area !== 'push') {
       throw new UsageError(
-        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets or reeval cloud provider?`,
+        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider or push?`,
       )
+    }
+    if (area === 'push') {
+      const config = await historyConfig(configPath, 'cloud push', values.profile, values)
+      const [{ pushCommand }, { projectDirFor }] = await Promise.all([
+        import('./cloud-push.ts'),
+        import('./cloud-project.ts'),
+      ])
+      return pushCommand(config, values, args, {
+        out: (s: string) => console.log(s),
+        err: (s: string) => console.error(yellow(s)),
+        projectDir: projectDirFor(configPath),
+      })
     }
     loadEnvFiles(configPath)
     const cloud = await import('./cloud-secrets.ts')

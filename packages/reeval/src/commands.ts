@@ -110,6 +110,15 @@ async function pick(config: ResolvedConfig, ref = 'latest', entries?: HistoryEnt
   }
 }
 
+/** The run `ref` names, as `show` resolves it; one only in `.reeval/runs` is refused with how to record it. */
+export async function recordedRun(config: ResolvedConfig, ref = 'latest'): Promise<HistoryEntry> {
+  const found = await pick(config, ref)
+  if (found.recorded) return found
+  throw new CommandError(
+    `Run ${found.runId} isn't recorded: reeval record ${found.runId} records it into the history folder first`,
+  )
+}
+
 export async function lines(root: string, args: string[]): Promise<string[] | null> {
   const r = await git(root, args)
   if (r.code !== 0) return null
