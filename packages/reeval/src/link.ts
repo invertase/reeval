@@ -20,7 +20,13 @@ import {
   projectFile,
   writeLinkedProject,
 } from './cloud-project.ts'
-import { cloudUrl, platformError, refusedHint, request } from './cloud-run.ts'
+import {
+  cloudUrl,
+  platformError,
+  refusedHint,
+  request,
+  shownCloudUrl as shown,
+} from './cloud-run.ts'
 import { UsageError } from './errors.ts'
 import { CLOUD_TOKEN_VAR, cloudToken } from './login/credentials.ts'
 
@@ -36,8 +42,6 @@ export type LinkIo = {
   cwd?: string
   env?: NodeJS.ProcessEnv
 }
-
-const shown = (base: URL) => base.href.replace(/\/$/, '')
 
 /** An answer by number, id or slug; the empty answer takes the first. */
 function pick<T extends Org | Project>(items: T[], answer: string): T | undefined {

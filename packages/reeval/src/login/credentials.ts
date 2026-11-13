@@ -70,15 +70,45 @@ async function writeCredentials(doc: CredentialsFile, env: NodeJS.ProcessEnv): P
  */
 export const platformKey = (base: URL | string) => new URL(base).origin
 
+/**
+ * The file's keys for the platform: every key with its origin. A sign-in can be under a full URL
+ * (`https://cloud.reeval.ai/`), in the file and as its keychain account, which still reads as the
+ * platform's until `reeval login` or `logout` replaces it.
+ */
+const keysOf = (doc: CredentialsFile, base: URL) =>
+  Object.keys(doc.logins).filter((k) => URL.parse(k)?.origin === platformKey(base))
+
+/** The platform's key in the file: the bare origin, else another spelling of it. */
+function loginKey(doc: CredentialsFile, base: URL): string | undefined {
+  const key = platformKey(base)
+  return doc.logins[key] ? key : keysOf(doc, base)[0]
+}
+
+/** Drops every key of the platform's but `keep` from the file and the keychain. */
+async function dropKeys(
+  doc: CredentialsFile,
+  base: URL,
+  env: NodeJS.ProcessEnv,
+  keep?: string,
+): Promise<void> {
+  for (const key of keysOf(doc, base)) {
+    if (key === keep) continue
+    if (doc.logins[key]?.store === 'keychain') await keychain(env)?.delete(key)
+    delete doc.logins[key]
+  }
+}
+
 /** The sign-in `reeval login` stored for the platform, with its token (null when it's gone). */
 export async function storedLogin(
   base: URL,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ login: StoredLogin; token: string | null } | null> {
-  const login = (await readCredentials(env)).logins[platformKey(base)]
-  if (!login) return null
+  const doc = await readCredentials(env)
+  const key = loginKey(doc, base)
+  const login = key && doc.logins[key]
+  if (!key || !login) return null
   if (login.store === 'file') return { login, token: login.token || null }
-  return { login, token: (await keychain(env)?.get(platformKey(base))) ?? null }
+  return { login, token: (await keychain(env)?.get(key)) ?? null }
 }
 
 /**
@@ -102,6 +132,7 @@ export async function saveLogin(
     user,
     signedInAt: new Date().toISOString(),
   }
+  await dropKeys(doc, base, env, key)
   await writeCredentials(doc, env)
   return kept && chain ? chain.name : credentialsPath(env)
 }
@@ -109,10 +140,7 @@ export async function saveLogin(
 /** Removes the platform's sign-in from the file and the keychain. */
 export async function removeLogin(base: URL, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const doc = await readCredentials(env)
-  const key = platformKey(base)
-  const login = doc.logins[key]
-  if (login?.store === 'keychain') await keychain(env)?.delete(key)
-  delete doc.logins[key]
+  await dropKeys(doc, base, env)
   if (Object.keys(doc.logins).length) await writeCredentials(doc, env)
   else await rm(credentialsPath(env), { force: true })
 }

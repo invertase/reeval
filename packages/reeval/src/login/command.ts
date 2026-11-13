@@ -3,7 +3,15 @@
 // flow (RFC 8628): the platform gives a code, you approve it on its page in a browser, and the
 // CLI, polling, gets a bearer token it keeps for the cloud calls (`credentials.ts`).
 import type { Flags } from '../cli-spec.ts'
-import { CloudError, call, cloudUrl, platformMessage, refusedHint, request } from '../cloud-run.ts'
+import {
+  CloudError,
+  call,
+  cloudUrl,
+  platformMessage,
+  refusedHint,
+  request,
+  shownCloudUrl as shown,
+} from '../cloud-run.ts'
 import { UsageError } from '../errors.ts'
 import {
   CLOUD_TOKEN_VAR,
@@ -46,9 +54,6 @@ type DeviceCode = {
 const JSON_BODY = { 'content-type': 'application/json' }
 
 const sleepMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-
-/** The platform as the commands print it: its URL without the trailing `/`. */
-const shown = (base: URL) => base.href.replace(/\/$/, '')
 
 const who = (user: SignedInUser) =>
   user.name && user.email ? `${user.name} <${user.email}>` : user.email || user.name || user.id
@@ -281,7 +286,7 @@ export async function whoamiCommand(flags: Flags, io: LoginIo): Promise<number> 
   }
   const from = tokenSource(token, env)
   if (flags.json) {
-    io.out(JSON.stringify({ url: base.href, user, tokenFrom: from }, null, 2))
+    io.out(JSON.stringify({ url: shown(base), user, tokenFrom: from }, null, 2))
   } else {
     io.out(`Signed in to ${shown(base)} as ${who(user)} (token from ${from})`)
   }

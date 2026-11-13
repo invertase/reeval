@@ -1,6 +1,7 @@
 // `reeval login`, `logout` and `whoami` against a fake platform that runs the device flow
 // (RFC 8628) and answers `/api/me` for the tokens it gave out.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -129,6 +130,38 @@ function machine(base: string, extra: NodeJS.ProcessEnv = {}) {
   }
 }
 
+/**
+ * A fake `secret-tool` on `PATH`: a keyring of one file per account, and the arguments of every
+ * call in `log`.
+ */
+function secretTool() {
+  const bin = tempDir('login-bin')
+  const store = tempDir('login-keyring')
+  const log = join(store, 'argv.log')
+  writeFileSync(
+    join(bin, 'secret-tool'),
+    `#!/bin/sh
+echo "$@" >> "${log}"
+cmd=$1; shift
+key=$(echo "$*" | sed 's/.*account //' | tr -c 'a-zA-Z0-9' '_')
+case $cmd in
+  store) cat > "${store}/$key" ;;
+  lookup) [ -f "${store}/$key" ] && cat "${store}/$key" || exit 1 ;;
+  clear) rm -f "${store}/$key" ;;
+esac
+`,
+  )
+  chmodSync(join(bin, 'secret-tool'), 0o755)
+  return {
+    log,
+    env: {
+      REEVAL_NO_KEYCHAIN: '',
+      DBUS_SESSION_BUS_ADDRESS: 'unix:path=/fake',
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+    },
+  }
+}
+
 describe('reeval login, whoami and logout', () => {
   test('signs in with the device flow, keeps the token in a 0600 file, and signs out', async () => {
     const p = await platform()
@@ -170,7 +203,7 @@ describe('reeval login, whoami and logout', () => {
       const asJson = await runCli(dir, ['whoami', '--json'], { env: m.env })
       assert.equal(asJson.code, 0, asJson.stderr)
       const doc = JSON.parse(asJson.stdout)
-      assert.equal(doc.url, `${p.base}/`)
+      assert.equal(doc.url, p.base)
       assert.deepEqual(doc.user, USER)
       assert.equal(doc.tokenFrom, m.file)
 
@@ -219,29 +252,8 @@ describe('reeval login, whoami and logout', () => {
   }, async () => {
     const p = await platform({ pending: 0 })
     try {
-      const bin = tempDir('login-bin')
-      const store = tempDir('login-keyring')
-      const log = join(store, 'argv.log')
-      // A keyring of one file per account, and the arguments of every call.
-      writeFileSync(
-        join(bin, 'secret-tool'),
-        `#!/bin/sh
-echo "$@" >> "${log}"
-cmd=$1; shift
-key=$(echo "$*" | sed 's/.*account //' | tr -c 'a-zA-Z0-9' '_')
-case $cmd in
-  store) cat > "${store}/$key" ;;
-  lookup) [ -f "${store}/$key" ] && cat "${store}/$key" || exit 1 ;;
-  clear) rm -f "${store}/$key" ;;
-esac
-`,
-      )
-      chmodSync(join(bin, 'secret-tool'), 0o755)
-      const m = machine(p.base, {
-        REEVAL_NO_KEYCHAIN: '',
-        DBUS_SESSION_BUS_ADDRESS: 'unix:path=/fake',
-        PATH: `${bin}${delimiter}${process.env.PATH}`,
-      })
+      const { log, env } = secretTool()
+      const m = machine(p.base, env)
       const dir = tempDir('login-cwd')
       const login = await runCli(dir, ['login'], { env: m.env })
       assert.equal(login.code, 0, login.stdout + login.stderr)
@@ -296,10 +308,89 @@ esac
       for (const url of [p.base, upper, `${upper}/`]) {
         const who = await runCli(dir, ['whoami'], { env: { ...m.env, REEVAL_CLOUD_URL: url } })
         assert.equal(who.code, 0, `${url}: ${who.stdout}${who.stderr}`)
+        assert.match(who.stdout, new RegExp(`Signed in to ${p.base} as `))
+        const asJson = await runCli(dir, ['whoami', '--json'], {
+          env: { ...m.env, REEVAL_CLOUD_URL: url },
+        })
+        assert.equal(JSON.parse(asJson.stdout).url, p.base, `${url}: no trailing /`)
       }
       const out = await runCli(dir, ['logout'], { env: { ...m.env, REEVAL_CLOUD_URL: upper } })
       assert.match(out.stdout, /Signed out of /)
       assert.ok(!existsSync(m.file), 'logout under another spelling removes the sign-in')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a sign-in stored under the URL with a trailing / still signs in, until login replaces it', async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(p.base)
+      const dir = tempDir('login-cwd')
+      const slashed = `${p.base}/`
+      const login = {
+        store: 'file',
+        token: 'old-token',
+        user: USER,
+        signedInAt: '2026-11-01T00:00:00Z',
+      }
+      mkdirSync(join(m.config, 'reeval'), { recursive: true })
+      writeFileSync(m.file, JSON.stringify({ schemaVersion: 1, logins: { [slashed]: login } }))
+      p.live.add('old-token')
+      const who = await runCli(dir, ['whoami', '--json'], { env: m.env })
+      assert.equal(who.code, 0, who.stdout + who.stderr)
+      assert.equal(JSON.parse(who.stdout).url, p.base)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer old-token')
+      assert.ok(!who.stdout.includes('old-token'), 'the token is never printed')
+
+      assert.equal((await runCli(dir, ['login'], { env: m.env })).code, 0)
+      assert.ok(!p.live.has('old-token'), 'the old sign-in is revoked')
+      const saved = JSON.parse(readFileSync(m.file, 'utf8'))
+      assert.deepEqual(Object.keys(saved.logins), [p.base])
+
+      writeFileSync(
+        m.file,
+        JSON.stringify({ schemaVersion: 1, logins: { ...saved.logins, [slashed]: login } }),
+      )
+      const out = await runCli(dir, ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.ok(!existsSync(m.file), 'logout removes every spelling of the sign-in')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a keychain sign-in under the URL with a trailing / still signs in, and logout clears it', {
+    skip: process.platform !== 'linux' && 'secret-tool is the Linux keychain',
+  }, async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const { log, env } = secretTool()
+      const m = machine(p.base, env)
+      const dir = tempDir('login-cwd')
+      const slashed = `${p.base}/`
+      const login = { store: 'keychain', user: USER, signedInAt: '2026-11-01T00:00:00Z' }
+      mkdirSync(join(m.config, 'reeval'), { recursive: true })
+      writeFileSync(m.file, JSON.stringify({ schemaVersion: 1, logins: { [slashed]: login } }))
+      const seeded = spawnSync(
+        'secret-tool',
+        ['store', '--label=x', 'service', 'reeval', 'account', slashed],
+        { env: { ...process.env, ...m.env }, input: 'old-token' },
+      )
+      assert.equal(seeded.status, 0)
+      p.live.add('old-token')
+      const who = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(who.code, 0, who.stdout + who.stderr)
+      assert.match(who.stdout, /\(token from the Secret Service keyring\)/)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer old-token')
+
+      const out = await runCli(dir, ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.ok(!p.live.has('old-token'), 'the session is revoked on the platform')
+      assert.ok(!existsSync(m.file))
+      assert.match(readFileSync(log, 'utf8'), new RegExp(`^clear .*account ${slashed}$`, 'm'))
+      const gone = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(gone.code, 2)
     } finally {
       await p.close()
     }
