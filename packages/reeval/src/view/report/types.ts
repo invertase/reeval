@@ -1,6 +1,7 @@
 import type { ArtifactLevel, RunRecord, RunScope } from '../../history/types.ts'
 import type { CompareCut, Outcome } from '../../types.ts'
 import type { ActionKind, Confidence } from '../analysis.ts'
+import type { AttemptFacts } from '../classify.ts'
 import type { CompareStatus } from '../compare.ts'
 import type { Remark } from '../remarks.ts'
 
@@ -403,6 +404,14 @@ export type DiscoveryRate = {
   matcher: string
   found: Count
   rows: Array<{ keys: string[]; found: Count }>
+  /**
+   * For a skill, the attempts that found it by where the skill they checked came from, its first
+   * use in the report's `facts`: one source an attempt, so the counts sum to at most `found`. An
+   * attempt counts in none when it has no facts, when its passing `toHaveCalledSkill` had a label
+   * of its own (which doesn't name the skill), when the check that found it was a `not.`, or when
+   * the matcher passed on a call the facts leave out (a failed call, or a file under
+   * `skills/<name>/` that isn't its `SKILL.md`). Empty without facts.
+   */
   sources: Array<{ source: 'placed' | 'skill-dir' | 'elsewhere' | 'mcp' | 'web'; count: number }>
 }
 
@@ -515,6 +524,11 @@ export type AttemptIndexRow = {
   tokens: Figure
   agentMs: Figure
   toolCalls: Figure
+  /**
+   * What its transcript shows it did, from the report's `facts`; absent when the report had none
+   * for it, such as a passing attempt whose transcript `evidence` didn't keep.
+   */
+  facts?: AttemptFacts
   /** Lines exclude lockfiles; null counts print `not recorded`. */
   diff: { files: number; added: number | null; removed: number | null; text: string } | null
   links: {

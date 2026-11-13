@@ -2,7 +2,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type AssembleInput, assembleRun } from './history/assemble.ts'
 import { scratchDir, type WrittenRun, writeRun } from './history/files.ts'
-import { summaryFiles } from './history/summary.ts'
+import { keptFacts, summaryFiles } from './history/summary.ts'
 import type { RunRecord } from './history/types.ts'
 import type { ResolvedConfig } from './types.ts'
 import { REMARKS_FILE, type RunRemarks } from './view/remarks.ts'
@@ -43,7 +43,8 @@ export async function writeScratchRun(
     ? null
     : await runRemarks(input.ctx.config, record, (input.ctx.verbosity ?? 0) > 0)
   if (remarks) artifacts.set(REMARKS_FILE, Buffer.from(`${JSON.stringify(remarks, null, 2)}\n`))
-  for (const [name, bytes] of summaryFiles(record, { remarks })) artifacts.set(name, bytes)
+  const facts = keptFacts(record, artifacts)
+  for (const [name, bytes] of summaryFiles(record, { remarks, facts })) artifacts.set(name, bytes)
   const scratch = scratchDir(input.ctx.config.root)
   const written = await writeRun(scratch, record, artifacts, moves)
   landed?.()

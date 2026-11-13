@@ -371,7 +371,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     )
     if (record) {
       const { writeFile } = await import('node:fs/promises')
-      const inputs = await readReportInputs(artifactDir)
+      const inputs = await readReportInputs(artifactDir, record)
       for (const [name, bytes] of summaryFiles(record, { ...inputs, analysis: doc })) {
         await writeFile(join(artifactDir, name), bytes)
       }

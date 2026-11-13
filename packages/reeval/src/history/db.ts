@@ -12,6 +12,7 @@ import type { JSONValue } from '../types.ts'
 import { classifyAttempt, declaredContext, isRuntimeState } from '../view/classify.ts'
 import { filesChanged } from '../view/effort.ts'
 import { cellMeasures, familyMeasures, type Measure } from '../view/measures.ts'
+import { transcriptByLine } from '../view/model.ts'
 import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
@@ -840,7 +841,12 @@ function insertRun(
           x.durationMs ?? null,
         )
       }
-      const classified = classifyAttempt(a, { skills, mcp: env?.mcp ?? [] }, transcripts.get(a.key))
+      const transcript = transcripts.get(a.key)
+      const classified = classifyAttempt(
+        a,
+        { skills, mcp: env?.mcp ?? [] },
+        transcript === undefined ? undefined : transcriptByLine(transcript),
+      )
       for (const t of classified.calls) {
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',

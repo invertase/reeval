@@ -494,7 +494,7 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
   const remarks = await readRemarks(runRemarksFile(config, entry))
   if (ctx.flags.md) {
     const artifactDir = runDir(dir, entry.runId)
-    const inputs = await readReportInputs(artifactDir)
+    const inputs = await readReportInputs(artifactDir, run)
     ctx.out(renderSummary(run, { ...inputs, remarks: inputs.remarks ?? remarks }).trimEnd())
   } else ctx.out(formatShow(run, { remarks }))
   return 0
@@ -567,7 +567,7 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
         head.recorded ? ctx.config.history.dir : scratchDir(ctx.config.root),
         head.runId,
       )
-      const inputs = await readReportInputs(headDir)
+      const inputs = await readReportInputs(headDir, headRecord)
       ctx.out(
         renderSummary(headRecord, {
           ...inputs,

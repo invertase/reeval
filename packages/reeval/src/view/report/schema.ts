@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { type Assert, dataProblem, type Same } from '../../contract/shared.ts'
+import type { AttemptFacts } from '../classify.ts'
 import { fillDefaults, MIGRATIONS, NewerSchemaError } from '../record.ts'
 import { REPORT_VERSION } from './split.ts'
 import type {
@@ -636,6 +637,32 @@ const provenanceStateSchema: z.ZodType<ProvenanceState> = z.strictObject({
   warnings: z.array(z.string()),
 })
 
+const attemptFactsSchema: z.ZodType<AttemptFacts> = z.strictObject({
+  toolCalls: z.number().int().nonnegative(),
+  byClass: z.strictObject({
+    context: z.number().int().nonnegative(),
+    dependency: z.number().int().nonnegative(),
+    web: z.number().int().nonnegative(),
+    verify: z.number().int().nonnegative(),
+    workspace: z.number().int().nonnegative(),
+  }),
+  skills: z.array(
+    z.strictObject({
+      skill: z.string(),
+      source: z.enum(['placed', 'skill-dir', 'elsewhere']),
+      reads: z.number().int().positive(),
+      firstLine: z.number().int().positive(),
+    }),
+  ),
+  contextFiles: z.array(
+    z.strictObject({
+      path: z.string(),
+      reads: z.number().int().positive(),
+      firstLine: z.number().int().positive(),
+    }),
+  ),
+})
+
 const attemptIndexRowSchema: z.ZodType<AttemptIndexRow> = z.strictObject({
   id: z.string(),
   key: z.string(),
@@ -649,6 +676,7 @@ const attemptIndexRowSchema: z.ZodType<AttemptIndexRow> = z.strictObject({
   tokens: figureSchema,
   agentMs: figureSchema,
   toolCalls: figureSchema,
+  facts: attemptFactsSchema.optional(),
   diff: z
     .strictObject({
       files: z.number().int().nonnegative(),
@@ -715,6 +743,7 @@ export const REPORT_SCHEMAS: Record<string, z.ZodType> = {
   ArmRef: armRefSchema,
   ArmRow: armRowSchema,
   AssertionRow: assertionRowSchema,
+  AttemptFacts: attemptFactsSchema,
   AttemptIndexRow: attemptIndexRowSchema,
   AttemptRef: attemptRefSchema,
   BehaviorRow: behaviorRowSchema,

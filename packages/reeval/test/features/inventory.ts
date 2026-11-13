@@ -2315,6 +2315,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'summary.report-facts',
+    area: 'Records and studio',
+    name: "Each attempt's facts in the `RunReport` (`attemptFacts` in `reeval/view`: tool calls by class, skills used by source, context files read), counted from its kept transcript as `reeval query`'s `tool_calls`, `skill_uses` and `context_reads` count them, absent where the transcript wasn't kept, and a skill discovery's sources",
+    unit: ['reeval/test/report-facts.test.ts'],
+  },
+  {
     id: 'query.context-use',
     area: 'Records and studio',
     name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',

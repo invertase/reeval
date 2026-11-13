@@ -126,12 +126,13 @@ for (const row of harnesses.filter((r) => !r.harness)) {
         const run = await readStudioRun(source, id)
         assert.ok(run, id)
         const report = buildRunReport(run.record, {
-          ...(await readReportInputs(join(run.dir, id))),
+          ...(await readReportInputs(join(run.dir, id), run.record)),
           links: reportLinks(id),
         })
         assert.ok(report.attempts.length > 0, id)
         for (const a of report.attempts) {
           assert.ok(a.links.transcript, `${id} ${a.key}: no transcript link`)
+          assert.ok(a.facts, `${id} ${a.key}: no facts from its transcript`)
           const path = a.links.transcript.slice(reportLinks(id).base.length)
           assert.ok(existsSync(join(run.dir, id, path)), `${id} ${a.key}: ${path}`)
         }
