@@ -202,6 +202,26 @@ describe('resolveResume', () => {
     )
   })
 
+  test("another host's fresh heartbeat is still running, unless the state was moved in", async () => {
+    const p = await project('resume-moved-in', { 'reeval.config.ts': fakeConfig() })
+    const runId = '20260101T000000Z_nogit_moved_aaaa'
+    writeLiveStaging(p.dir, runId, {
+      pid: process.ppid,
+      heartbeatAt: new Date(Date.now() - 1_000).toISOString(),
+    })
+    const file = join(p.dir, '.reeval', 'staging', runId, 'live.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), host: 'elsewhere' }),
+    )
+    await assert.rejects(
+      () => resolveResume(p.dir, runId),
+      (e: unknown) => e instanceof UsageError && /still running/.test((e as Error).message),
+    )
+    const target = await resolveResume(p.dir, runId, { movedIn: true })
+    assert.equal(target.runId, runId)
+  })
+
   test('omitted ref names a live run instead of no resumable', async () => {
     const p = await project('resume-omitted-live', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_only_aaaa'

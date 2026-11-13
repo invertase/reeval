@@ -1261,7 +1261,7 @@ async function runCommand(
     )
   }
   const continued = flags.resume !== undefined || retry !== undefined
-  const resumed = continued ? await resumedRun(flags, given, configPath) : null
+  const resumed = continued ? await resumedRun(flags, given, configPath, bundled) : null
   if (resumed?.nothing) {
     // Nothing runs, so the exit code and `--json` are the run's own, as it was recorded.
     const { nothing, record } = resumed.nothing
@@ -1600,12 +1600,17 @@ async function refuseCloudContinue(flags: Flags, configPath: string | undefined)
   )
 }
 
-async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
+async function resumedRun(
+  flags: Flags,
+  filters: string[],
+  configPath: string | undefined,
+  bundled?: Bundled,
+) {
   const path = requireConfig(configPath)
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
   loadEnvFiles(path)
   const root = dirname(path)
-  const target = await continuedRun(root, flags)
+  const target = await continuedRun(root, flags, bundled)
   if (
     flags['retry-errors'] !== undefined &&
     target.previous &&
@@ -1646,10 +1651,14 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
 }
 
 /** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
-const continuedRun = (root: string, flags: Pick<Flags, 'resume' | 'retry-errors'>) =>
+const continuedRun = (
+  root: string,
+  flags: Pick<Flags, 'resume' | 'retry-errors'>,
+  bundled?: Bundled,
+) =>
   flags['retry-errors'] !== undefined
     ? resolveRetry(root, flags['retry-errors'] || undefined)
-    : resolveResume(root, flags.resume || undefined)
+    : resolveResume(root, flags.resume || undefined, { movedIn: bundled !== undefined })
 
 /**
  * Everything that can fail before the evals are collected: output mode, config, profile, flags.
@@ -1828,7 +1837,7 @@ async function startRun(
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
   if (resume !== undefined || retry !== undefined) {
-    const target = await continuedRun(config.root, { resume, 'retry-errors': retry })
+    const target = await continuedRun(config.root, { resume, 'retry-errors': retry }, bundled)
     // A retry moves the finished run aside only once its plan is the run's.
     if (!dryRun && retry === undefined) await prepareResume(target, config.root)
     else if (!dryRun) holdRetry(target, config.root)

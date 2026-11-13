@@ -487,6 +487,23 @@ describe('reeval bundle', () => {
     const staging = join(state, '.reeval', 'staging', run.runId)
     mkdirSync(staging, { recursive: true })
     writeFileSync(join(staging, 'holder'), '1\nanother-machine\n')
+    // That machine's live.json, beating a second ago: the state is here now, so it doesn't block.
+    writeFileSync(
+      join(staging, 'live.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        runId: run.runId,
+        startedAt: run.startedAt,
+        pid: 1,
+        host: 'another-machine',
+        heartbeatAt: new Date(Date.now() - 1_000).toISOString(),
+        phase: 'running',
+        planned: 1,
+        counts: { done: 0, passed: 0, failed: 0, errored: 0, skipped: 0, running: 0 },
+        attempts: [],
+        invocation: run.invocation,
+      })}\n`,
+    )
     writeFileSync(
       join(runs, `${run.runId}.json`),
       JSON.stringify({ ...run, status: 'interrupted' }),
