@@ -28,7 +28,8 @@ Usage:
                                 come from, in secrets)
     --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                                 document on stdout when it ends; progress goes to stderr
-    --force                     Run even when the plan is over budget.attempts
+    --force                     Run even when the plan is over budget.attempts; on --cloud, it only
+                                skips asking about names that only .env files set
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
@@ -74,8 +75,8 @@ Usage:
                                 in the extracted project
     --cloud                     Run in the cloud at REEVAL_CLOUD_URL (https://cloud.reeval.ai when
                                 unset), as the config's cloud: true does: bundle the project,
-                                upload it to the project reeval link linked (else the platform's
-                                default project), start the run and follow it as reeval attach does,
+                                upload it to the project reeval link linked (an unlinked project
+                                exits 2), start the run and follow it as reeval attach does,
                                 exiting with its exit code. A value that isn't an http or https
                                 URL, or one with a user name or password, exits 2. A plan the
                                 platform can't run (tart(), files a bundle can't carry) runs here,

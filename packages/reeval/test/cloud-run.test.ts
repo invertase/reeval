@@ -22,7 +22,7 @@ import { gzipSync } from 'node:zlib'
 import { type TarEntry, writeTar } from '@reeval/sandbox-docker'
 import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
-import { cloudUrl } from '../src/cloud-run.ts'
+import { checkCloudSecrets, cloudUrl } from '../src/cloud-run.ts'
 import { stripCredentials } from '../src/redact.ts'
 import { pkgRoot, project, runCli, tempDir } from './helpers.ts'
 import { fakeS3 } from './support/fake-s3.ts'
@@ -89,12 +89,24 @@ describe('the cloud platform URL', () => {
 
 const TOKEN = 'cloud-check-token-value'
 
-async function fixtureProject(answer = '42') {
+/** The fixture project, unlinked. */
+async function unlinkedFixture(answer = '42') {
   const p = await project('cloud', {})
   cpSync(join(pkgRoot, 'test/fixtures/bundle'), p.dir, { recursive: true })
   writeFileSync(join(p.dir, '.env'), `CHECK_TOKEN=${TOKEN}\n`)
   writeFileSync(join(p.dir, 'data/answer.txt'), `${answer}\n`)
   return p.dir
+}
+
+/** The fixture project, linked to `proj_a` in `org_a`, as every cloud run's project is. */
+async function fixtureProject(answer = '42') {
+  const dir = await unlinkedFixture(answer)
+  mkdirSync(join(dir, '.reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, '.reeval/project.json'),
+    JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+  )
+  return dir
 }
 
 /** Where the platform's machine extracts a bundle, with `reeval` resolving to this package. */
@@ -177,7 +189,18 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * `exitCode` when given.
  */
 async function platform(
-  options: { fails?: string; exitCode?: number; env?: Record<string, string> } = {},
+  options: {
+    fails?: string
+    exitCode?: number
+    env?: Record<string, string>
+    /**
+     * The linked project's secret names; the status the route answers; a body without them
+     * (`malformed`) or a dropped connection (`drop`). No route when unset.
+     */
+    secretNames?: string[] | number | 'malformed' | 'drop'
+    /** The asked-for names the fake platform reserves. */
+    reserved?: string[]
+  } = {},
 ) {
   const seen: Seen[] = []
   const tmp = extractRoot()
@@ -210,9 +233,24 @@ async function platform(
       return json(res, 200, { gatewayBaseUrl: null })
     }
     if (
-      req.method === 'POST' &&
-      (url.pathname === '/api/runs' || url.pathname === '/api/orgs/org_a/projects/proj_a/runs')
+      req.method === 'GET' &&
+      url.pathname === '/api/orgs/org_a/projects/proj_a/secret-names' &&
+      options.secretNames !== undefined
     ) {
+      const names = options.secretNames
+      if (names === 'drop') return req.socket.destroy()
+      if (names === 'malformed') return json(res, 200, { names: 'CHECK_TOKEN' })
+      if (typeof names === 'number') {
+        return json(res, names, { error: { code: 'internal', message: 'down' } })
+      }
+      const asked = url.searchParams.get('reserved')?.split(',') ?? []
+      const reserved = asked.filter((n) => options.reserved?.includes(n))
+      return json(res, 200, { names, reserved })
+    }
+    if (req.method === 'GET' && url.pathname === '/api/orgs/org_a/projects') {
+      return json(res, 200, { projects: [{ id: 'proj_a', slug: 'main', name: 'Main' }] })
+    }
+    if (req.method === 'POST' && url.pathname === '/api/orgs/org_a/projects/proj_a/runs') {
       declared = JSON.parse(body.toString())
       return json(res, 201, {
         runId: 'run_1',
@@ -314,7 +352,8 @@ describe('reeval run on the cloud platform', () => {
         p.seen.filter((s) => s.path !== '/ingest').map((s) => `${s.method} ${s.path}`),
         [
           'GET /api/config',
-          'POST /api/runs',
+          'GET /api/orgs/org_a/projects/proj_a/secret-names',
+          'POST /api/orgs/org_a/projects/proj_a/runs',
           'PUT /api/runs/run_1/bundle',
           'POST /api/runs/run_1/start',
           'WS /api/runs/run_1/events',
@@ -340,15 +379,33 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
+  test('refuses an unlinked project before bundling, naming reeval link, with --dry-run too', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const dir = await unlinkedFixture()
+      for (const args of [
+        ['run', '--cloud'],
+        ['run', '--cloud', '--dry-run'],
+      ]) {
+        const r = await runCli(dir, args, {
+          env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+        })
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          /A cloud run goes into a linked cloud project, and this project isn't linked: run reeval link --org <org> --project <project> to link it, or pass --local to run here/,
+        )
+      }
+      assert.deepEqual(p.seen, [])
+    } finally {
+      await p.close()
+    }
+  })
+
   test('creates the run in the project reeval link linked', async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject()
-      mkdirSync(join(dir, '.reeval'), { recursive: true })
-      writeFileSync(
-        join(dir, '.reeval/project.json'),
-        JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
-      )
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
@@ -371,6 +428,192 @@ describe('reeval run on the cloud platform', () => {
       )
     } finally {
       await p.close()
+    }
+  })
+
+  test('stops before uploading, naming them, when the linked project lacks a declared secret', async () => {
+    const p = await platform({ secretNames: ['AI_GATEWAY_API_KEY', 'OTHER_KEY'] })
+    try {
+      const dir = await fixtureProject()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud', '--force'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /The cloud project Main \(main\) lacks a secret this run needs, so nothing was uploaded:\n {2}CHECK_TOKEN\nAdd it with reeval cloud secrets set <name> --from-env, /,
+      )
+      assert.doesNotMatch(r.stderr, /FROM_FILE|sets this name itself/)
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.deepEqual(
+        p.seen.map((s) => `${s.method} ${s.path}`),
+        [
+          'GET /api/config',
+          'GET /api/orgs/org_a/projects/proj_a/secret-names',
+          'GET /api/orgs/org_a/projects',
+        ],
+      )
+      assert.equal(p.seen[1]?.auth, 'Bearer cloud-test-token')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('says a declared name the platform reserves needs renaming, not setting', async () => {
+    const p = await platform({ secretNames: [], reserved: ['CHECK_TOKEN'] })
+    try {
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /nothing was uploaded:\nThe cloud platform sets this name itself, so no cloud run can take it as a secret: rename it in the eval\.\n {2}CHECK_TOKEN/,
+      )
+      assert.doesNotMatch(r.stderr, /cloud secrets set/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("notes a reserved name from .env won't be sent, and runs", async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'], reserved: ['REEVAL_FROM_FILE'] })
+    try {
+      const dir = await fixtureProject()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nREEVAL_FROM_FILE=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(
+        r.stdout,
+        /cloud: REEVAL_FROM_FILE \(from \.env\) won't be sent: the cloud platform sets this name itself/,
+      )
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.ok(p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('stops with no terminal to ask on when the project lacks names only .env sets, naming --force', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const dir = await fixtureProject()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFOO=${TOKEN}-2\nBAR=${TOKEN}-3\n`)
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /Cloud environment does not have the following secrets you have locally defined:\n {2}BAR\n {2}FOO\nNothing was uploaded\. Pass --force to run without them, or add each with reeval cloud secrets set <name> --from-env, /,
+      )
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.ok(!p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('runs without the names only .env sets with --force, without asking', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const dir = await fixtureProject()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFOO=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud', '--force'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(
+        r.stdout,
+        /cloud: running without FOO, which only this machine's \.env files set/,
+      )
+      assert.doesNotMatch(r.stdout + r.stderr, /Do you want to continue/)
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.ok(p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('asks before running without the names only .env sets, and stops on no', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const check = (answer: boolean) => {
+        const asked: string[] = []
+        const logged: string[] = []
+        const done = checkCloudSecrets({
+          base: new URL(p.base),
+          auth: { headers: { authorization: 'Bearer cloud-test-token' }, refused: '' },
+          project: { orgId: 'org_a', projectId: 'proj_a' },
+          manifest: {
+            secrets: ['CHECK_TOKEN'],
+            envFiles: [{ path: '.env', variables: ['CHECK_TOKEN', 'FOO', 'BAR'] }],
+          },
+          log: (line) => logged.push(line),
+          confirm: async (question) => {
+            asked.push(question)
+            return answer
+          },
+        })
+        return { done, asked, logged }
+      }
+      const yes = check(true)
+      await yes.done
+      assert.deepEqual(yes.asked, [
+        'Cloud environment does not have the following secrets you have locally defined:\n  BAR\n  FOO\n\nDo you want to continue? [y/N] ',
+      ])
+      const no = check(false)
+      await assert.rejects(no.done, /Stopped: nothing was uploaded\./)
+      assert.equal(no.asked.length, 1)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('runs when the linked project has every name the run needs, its .env ones too', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN', 'FROM_FILE'] })
+    try {
+      const dir = await fixtureProject()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.deepEqual(
+        p.seen.slice(0, 3).map((s) => `${s.method} ${s.path}`),
+        [
+          'GET /api/config',
+          'GET /api/orgs/org_a/projects/proj_a/secret-names',
+          'POST /api/orgs/org_a/projects/proj_a/runs',
+        ],
+      )
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('skips the secrets check, with a debug line, when the platform cannot list the names', async () => {
+    const cases = [
+      [undefined, /HTTP 404/],
+      [500, /HTTP 500/],
+      ['malformed', /the answer has no list of names/],
+      ['drop', /couldn't list the project's secret names: .* didn't answer/],
+    ] as const
+    for (const [secretNames, why] of cases) {
+      const p = await platform({ secretNames })
+      try {
+        const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
+          env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token', REEVAL_DEBUG: '1' },
+        })
+        assert.equal(r.code, 0, r.stdout + r.stderr)
+        assert.match(r.stderr, new RegExp(`cloud: secrets check skipped: ${why.source}`))
+        assert.ok(p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+      } finally {
+        await p.close()
+      }
     }
   })
 

@@ -1087,6 +1087,11 @@ async function cloudTarget(
   }
   const { linkedProject, projectDirFor } = await import('./cloud-project.ts')
   const project = await linkedProject(projectDirFor(configPath))
+  if (!project) {
+    throw new UsageError(
+      `A cloud run goes into a linked cloud project, and this project isn't linked: run ${process.stdin.isTTY ? 'reeval link' : 'reeval link --org <org> --project <project>'} to link it, or pass --local to run here`,
+    )
+  }
   const { makeBundle } = await import('./bundle/index.ts')
   // The profile this machine picked (from REEVAL_PROFILE or defaultProfile too) goes in the
   // bundle's arguments, so the platform's machine plans with the same one.
@@ -1150,6 +1155,8 @@ async function cloudTarget(
     bundle: made,
     project,
     log: (line) => console.log(dim(line)),
+    ...(process.stdin.isTTY && process.stdout.isTTY && { confirm }),
+    ...(flags.force && { force: true }),
     follow: (options) => attachHere(flags, options),
     ...(flags.download && {
       download: {

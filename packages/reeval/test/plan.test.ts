@@ -75,6 +75,14 @@ const linkInputs = (dir: string) => {
   writeFileSync(join(dir, '.env'), 'GREETING=hello\n')
   writeFileSync(join(dir, 'package-lock.json'), '{}\n')
 }
+/** A cloud run goes into the project `reeval link` linked, so the cloud cases are linked. */
+const linkCloud = (dir: string) => {
+  mkdirSync(join(dir, '.reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, '.reeval/project.json'),
+    JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+  )
+}
 const modelsDev = async (dir: string) => {
   const { seedModelsDev } = await import('./support/cost.ts')
   seedModelsDev(dir)
@@ -313,27 +321,40 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'tart', name: 'two-vms', args: ['--concurrency', '8', 'evals/t.eval.ts'] },
   { dir: 'tart', name: 'hosts', args: ['--concurrency', '8', 'evals/hosts.eval.ts'] },
-  { dir: 'cloud', name: 'config', args: ['evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'local-flag', args: ['--local', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'profile-off', args: ['--profile', 'here', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'profile-keeps', args: ['--profile', 'there', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'tart-runs-here', args: ['evals/mac.eval.ts'] },
+  { dir: 'cloud', name: 'config', args: ['evals/a.eval.ts'], prepare: linkCloud },
+  { dir: 'cloud', name: 'local-flag', args: ['--local', 'evals/a.eval.ts'], prepare: linkCloud },
+  {
+    dir: 'cloud',
+    name: 'profile-off',
+    args: ['--profile', 'here', 'evals/a.eval.ts'],
+    prepare: linkCloud,
+  },
+  {
+    dir: 'cloud',
+    name: 'profile-keeps',
+    args: ['--profile', 'there', 'evals/a.eval.ts'],
+    prepare: linkCloud,
+  },
+  { dir: 'cloud', name: 'tart-runs-here', args: ['evals/mac.eval.ts'], prepare: linkCloud },
   {
     dir: 'cloud',
     name: 'ci-without',
     args: ['--config', 'reeval.local.config.ts', 'evals/a.eval.ts'],
+    prepare: linkCloud,
     env: { CI: 'true', REEVAL_CLOUD_URL: 'https://platform.test', REEVAL_TOKEN: 'token' },
   },
   {
     dir: 'cloud',
     name: 'ci-flag',
     args: ['--config', 'reeval.local.config.ts', '--cloud', 'evals/a.eval.ts'],
+    prepare: linkCloud,
     env: { CI: 'true' },
   },
   {
     dir: 'cloud',
     name: 'profile-on',
     args: ['--config', 'reeval.local.config.ts', '--profile', 'there', 'evals/a.eval.ts'],
+    prepare: linkCloud,
   },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
@@ -749,6 +770,30 @@ evaluate('judged', async () => {})
       r.stderr,
       /evaluate\.only\/group\.only in evals\/only\.eval\.ts isn't allowed in CI/,
     )
+  })
+
+  test("an unlinked project's cloud: true, from the config or a profile, exits 2 naming reeval link, a tart() plan too", async () => {
+    const p = await fixture('plan/cloud')
+    for (const args of [
+      ['run', '--dry-run', 'evals/mac.eval.ts'],
+      ['run', 'evals/mac.eval.ts'],
+      ['run', '--dry-run', 'evals/a.eval.ts'],
+      ['run', '--dry-run', '--config', 'reeval.local.config.ts', '--profile', 'there'],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(
+        r.stderr,
+        /this project isn't linked: run reeval link --org <org> --project <project> to link it, or pass --local to run here/,
+      )
+    }
+    for (const args of [
+      ['run', '--dry-run', '--local', 'evals/mac.eval.ts'],
+      ['run', '--dry-run', '--profile', 'here', 'evals/a.eval.ts'],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+    }
   })
 
   test('an egress policy the sandbox cannot enforce exits 2 at plan time', async () => {
