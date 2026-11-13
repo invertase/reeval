@@ -92,8 +92,8 @@ async function dropKeys(
   }
 }
 
-/** A sign-in `reeval login` stored, with its token (null when it's gone). */
-export type Stored = { login: StoredLogin; token: string | null }
+/** A sign-in `reeval login` stored, under its key, with its token (null when it's gone). */
+export type Stored = { key: string; login: StoredLogin; token: string | null }
 
 /**
  * Every sign-in stored under one of the platform's keys, the bare origin's first: `login` and
@@ -112,7 +112,7 @@ export async function storedLogins(
     if (!login) continue
     const token =
       login.store === 'file' ? login.token || null : ((await keychain(env)?.get(key)) ?? null)
-    found.push({ login, token })
+    found.push({ key, login, token })
   }
   return found
 }
