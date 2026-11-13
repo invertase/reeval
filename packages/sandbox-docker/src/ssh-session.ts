@@ -10,7 +10,7 @@ import {
   sshTransport,
 } from './egress/transport.ts'
 import { SANDBOX_HOME, SANDBOX_USER, type SlotLayout, slotLayout } from './image.ts'
-import { shellQuote as q, run as runHost } from './process.ts'
+import { shellQuote as q, run as runHost, unsetOtel } from './process.ts'
 import type { DockerSession } from './session.ts'
 import { EXEC_UMASK, linuxShell, SYSTEM_PATH } from './shells.ts'
 import { traceDocker } from './trace.ts'
@@ -280,7 +280,10 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshMachine
         `${sudo}/bin/sh -c ${q(`${EXEC_UMASK}\n${slotHome(layout, options.home)}`)}`,
       )
       const startedAt = Date.now()
-      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawn(bin, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, ...unsetOtel() },
+      })
       let [out, err] = ['', '']
       child.stderr.on('data', (d: Buffer) => {
         err += d.toString('utf8')

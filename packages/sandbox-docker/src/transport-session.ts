@@ -5,7 +5,7 @@ import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { Gateway } from './egress/gateway.ts'
 import type { NetworkPolicy } from './egress/policy.ts'
 import { BRIDGE_PORT } from './image.ts'
-import type { RunResult } from './process.ts'
+import { type RunResult, unsetOtel } from './process.ts'
 import { type DockerSession, type EgressStatus, pathOperations } from './session.ts'
 import { traceDocker } from './trace.ts'
 
@@ -103,7 +103,11 @@ export function transportSession(o: TransportSessionOptions): DockerSession {
   const streamed = (exec: number, c: HostCommand) => {
     const [bin = '', ...args] = c.argv
     const startedAt = Date.now()
-    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+    const child = spawn(bin, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,
+      env: { ...process.env, ...unsetOtel() },
+    })
     child.stdin.on('error', () => {})
     child.stdin.end(c.input)
     const exited = new Promise<{ exitCode: number }>((resolve) => {

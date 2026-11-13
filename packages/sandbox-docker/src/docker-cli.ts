@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { sshArgv } from './egress/transport.ts'
 import { type Engine, engineEnv, engineSpec, isRemoteEngine, normalizeImageId } from './engine.ts'
-import { shellQuote as q, type RunResult, run } from './process.ts'
+import { shellQuote as q, type RunResult, run, unsetOtel } from './process.ts'
 import {
   engineLabel,
   hostCommand,
@@ -187,7 +187,12 @@ export function sweepLabelDetached(label: string, seconds = 15, engine?: Engine)
     const filter = q(`label=${label}`)
     const loop = `for i in $(seq ${Math.max(1, Math.floor(seconds))}); do ids=$(docker ps -aq --filter ${filter}); [ -z "$ids" ] || docker ${rmForce.join(' ')} $ids >/dev/null 2>&1; sleep 1; done`
     const [ssh = 'ssh', ...rest] = sshArgv(engine.target, `sh -c ${q(loop)}`)
-    const child = spawn(ssh, rest, { detached: true, stdio: 'ignore', windowsHide: true })
+    const child = spawn(ssh, rest, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: { ...process.env, ...unsetOtel() },
+    })
     child.on('error', () => {})
     child.unref()
     return
@@ -211,7 +216,7 @@ for (let i = 0; i < Number(seconds); i++) {
       stdio: 'ignore',
       windowsHide: true,
       // A compiled reeval (bun build --compile) runs as plain Bun, which takes -e, only when told.
-      env: { ...process.env, ...engineEnv(engine), BUN_BE_BUN: '1' },
+      env: { ...process.env, ...unsetOtel(), ...engineEnv(engine), BUN_BE_BUN: '1' },
     },
   )
   child.on('error', () => {})

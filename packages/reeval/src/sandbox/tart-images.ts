@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { lstat, readdir, readlink, stat, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { unsetOtel } from '@reeval/sandbox-docker/process'
 import { runArgv, type TartTarget } from './tart-cli.ts'
 import { parseTartRef } from './tart-ref.ts'
 
@@ -331,6 +332,7 @@ export function tartPull(
     const [bin = 'tart', ...args] = options.on?.tart(['pull', image]) ?? ['tart', 'pull', image]
     const child = spawn(bin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, ...unsetOtel() },
       ...(options.signal ? { signal: options.signal } : {}),
     })
     const tail: string[] = []

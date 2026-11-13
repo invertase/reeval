@@ -12,7 +12,7 @@ import {
   transportSession,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
-import { shellQuote as q } from '@reeval/sandbox-docker/process'
+import { shellQuote as q, unsetOtel } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
 import { attemptSpan, openSpan } from '../trace/spans.ts'
@@ -256,6 +256,7 @@ export async function bootTartVm(
     booted = spawn(bin, args, {
       stdio: ['ignore', 'ignore', 'pipe'],
       detached: true,
+      env: { ...process.env, ...unsetOtel() },
     })
     const run = booted
     ended = new Promise((resolve) => {

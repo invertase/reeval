@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, posix, sep } from 'node:path'
 import { test } from 'node:test'
@@ -128,6 +130,7 @@ for (const installer of installers) {
       assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
     })
     await storeInApp(app, pkg, binCli(app))
+    await otlpInApp(binCli(app))
   })
 }
 
@@ -243,6 +246,35 @@ async function storeInApp(app: string, pkg: string, cli: Cli) {
   }
 }
 
+/**
+ * OpenTelemetry export in a packed install: the SDK and its OTLP exporters are reeval's own
+ * dependencies, `@opentelemetry/api` their peer among them, so a run with an endpoint set loads
+ * them with whatever the installer laid out and sends every signal.
+ */
+async function otlpInApp(cli: Cli) {
+  const paths: string[] = []
+  const server = createServer((req, res) => {
+    req.resume()
+    req.on('end', () => {
+      paths.push(req.url ?? '')
+      res.writeHead(200).end()
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const run = await cli(['run', '--ui', 'plain'], {
+      OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+    })
+    assert.equal(run.status, 0, run.out)
+    assert.doesNotMatch(run.out, /OpenTelemetry export/)
+    for (const path of ['/v1/traces', '/v1/logs', '/v1/metrics'])
+      assert.ok(paths.includes(path), `${path} in ${paths.join(', ')}`)
+  } finally {
+    server.close()
+  }
+}
+
 /** `doctor --online` in `cwd` loads the project's Boat SDK and reaches the fake Boat API. */
 async function reachesBoat(cli: Cli, api: FakeBoat, cwd: string) {
   api.requests.length = 0
@@ -332,6 +364,7 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs reeval"
     assert.equal(sdk.status, 0, sdk.stdout + sdk.stderr)
   })
   await storeInApp(app, pkg, cli)
+  await otlpInApp(cli)
 })
 
 test('the packed package installs into a clean project and runs reeval', {

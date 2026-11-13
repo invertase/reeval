@@ -1,6 +1,7 @@
 import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
 import type { SecretWarning } from '../history/types.ts'
+import { withoutOtel } from '../otel-env.ts'
 import type { HarnessDescriptor, PlannedEgress, SandboxBase, SandboxDescriptor } from '../types.ts'
 import { sandboxKind } from './kinds.ts'
 import type { PreparedHost } from './tart-hosts.ts'
@@ -47,7 +48,11 @@ export async function createSandbox(
 ): Promise<Sandbox> {
   const kind = sandboxKind(descriptor)
   try {
-    return await kind.create(descriptor, options)
+    const box = await kind.create(descriptor, { ...options, env: withoutOtel(options.env) })
+    const exec = box.exec.bind(box)
+    box.exec = (command, opts) =>
+      exec(command, opts?.env ? { ...opts, env: withoutOtel(opts.env) } : opts)
+    return box
   } catch (error) {
     if (error instanceof InfraError || error instanceof RunStopped || options.signal.aborted) {
       throw error

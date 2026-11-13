@@ -2409,21 +2409,38 @@ async function executeRun(
   const machines = new MachineService()
   const { TRACE } = await import('./trace/spans.ts')
   const { RunTrace } = await import('./trace/run.ts')
-  const { exportSpans, otlpTarget } = await import('./trace/otlp.ts')
-  const exporting = otlpTarget(process.env)
+  const { otlpConfigured } = await import('./trace/otlp.ts')
   let exported: Promise<string | null> = Promise.resolve(null)
   let runStarted = false
+  let telemetry: import('./trace/telemetry.ts').Telemetry | null = null
   const trace = setup.dryRun
     ? undefined
     : new RunTrace({
         dir: stagingDir,
         runId,
-        keep: typeof exporting === 'object' && exporting !== null,
+        onSpan: (span) => telemetry?.span(span),
         attributes: {
           'reeval.version': version,
           ...(profile && { 'reeval.profile': profile.name }),
         },
       }).install()
+  if (trace && otlpConfigured(process.env)) {
+    telemetry = (await import('./trace/telemetry.ts')).startTelemetry({
+      version,
+      traceId: trace.traceId,
+      spanId: trace.spanId,
+      runId,
+      filesystems: { project: config.root, staging: stagingDir },
+    })
+  }
+  if (telemetry) {
+    const onEvent = renderer.onEvent.bind(renderer)
+    const exporting = telemetry
+    renderer.onEvent = (e) => {
+      exporting.event(e)
+      onEvent(e)
+    }
+  }
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
@@ -2562,14 +2579,12 @@ async function executeRun(
   } finally {
     clearTimeout(budgetTimer)
     await machines.close()
-    if (trace) {
-      const spans = trace.close({
-        status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
-        started: runStarted,
-      })
-      // Awaited only once the run's record is written: a slow collector never holds it up.
-      exported = exportSpans(spans, process.env, version)
-    }
+    trace?.close({
+      status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
+      started: runStarted,
+    })
+    // Awaited only once the run's record is written: a slow collector never holds it up.
+    if (telemetry) exported = telemetry.close()
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
     const { removePreparedWorkspaces } = await import('./workspace.ts')

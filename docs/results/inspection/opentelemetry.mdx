@@ -1,0 +1,67 @@
+---
+title: "Export to OpenTelemetry"
+description: "Send a run's spans, logs, and machine metrics to an OpenTelemetry backend as the run goes."
+---
+
+Set the standard OpenTelemetry variables and `reeval run` sends its trace, its log records, and the machine's metrics to any OTLP backend while it runs.
+
+## Send a run to a collector
+
+Point `OTEL_EXPORTER_OTLP_ENDPOINT` at a collector's OTLP/HTTP port and run as usual:
+
+```bash
+docker run -d --name jaeger -p 16686:16686 -p 4318:4318 \
+  jaegertracing/jaeger:latest
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 npx reeval run
+```
+
+Open `http://localhost:16686` and pick the `reeval` service. Each run is one trace, with every attempt and its phases under the run's span. With no endpoint set, reeval loads none of this and sends nothing.
+
+## Send a run to a hosted backend
+
+A hosted backend takes the same variables, with its key in `OTEL_EXPORTER_OTLP_HEADERS`:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+export OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=$HONEYCOMB_API_KEY"
+export OTEL_SERVICE_NAME=evals
+npx reeval run
+```
+
+Grafana Cloud takes `https://otlp-gateway-<zone>.grafana.net/otlp` with `Authorization=Basic%20<token>`. Datadog takes an Agent's or the OpenTelemetry Collector's OTLP endpoint. URL-encode a header value's spaces and commas as `%20` and `%2C`.
+
+Only reeval's own process exports. No `OTEL_*` variable reaches the sandbox or the agent, and an eval that declares one in `env`, `secret.fromEnv()` or an MCP server's `env` is refused.
+
+## What a run sends
+
+| Signal | What | When |
+|---|---|---|
+| Traces | The spans in [`spans.jsonl`](/reference/run-record): the run, each machine, container, attempt, lease, and phase | In batches as each span ends; the run's span last |
+| Logs | The run's start, its notices, and one record for each finished attempt with its outcome, on the run's trace | In batches as they happen |
+| Metrics | `system.cpu.utilization`, `system.cpu.load_average.1m`, `system.memory.usage`, `system.memory.utilization`, `system.filesystem.usage`, and `system.filesystem.utilization` for the project's and staging filesystems (labeled `reeval.filesystem.role`), plus reeval's `process.cpu.utilization` and `process.memory.usage` | Every `OTEL_METRIC_EXPORT_INTERVAL` (60 seconds), and once at the end |
+
+Every span and log record carries `reeval.run.id`, so one query finds a run. A run that stops early leaves the spans that had ended; their parent, the run's span, is missing.
+
+## Choose what to send
+
+Each signal takes its own variables over the shared ones:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_METRICS_EXPORTER=none
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://logs.internal:4318/v1/logs
+export OTEL_RESOURCE_ATTRIBUTES=deployment.environment=ci,team=evals
+```
+
+reeval sends OTLP/HTTP as protobuf, or as JSON with `OTEL_EXPORTER_OTLP_PROTOCOL=http/json`; it doesn't send gRPC. A backend that's down or refuses a batch prints a warning when the run ends, and the run's result and exit code stay the same. For every variable reeval reads, see [Environment variables](/reference/environment-variables#otelexporterotlpendpoint).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Debugging" href="/results/inspection/debugging">
+    Read an attempt's phase trace and transcript.
+  </Card>
+  <Card title="Queries" href="/results/inspection/queries">
+    Ask the run history questions in SQL.
+  </Card>
+</CardGroup>

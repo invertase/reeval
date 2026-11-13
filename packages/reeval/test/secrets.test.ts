@@ -67,6 +67,100 @@ const PLACEHOLDER = /^reeval_secret_[0-9A-Za-z]{32}$/
 const resolve = (input: EnvironmentInput) =>
   resolveEnvironment(applied(defineEnvironment('e', input)), {}, '/p', 'e', 'AGENTS.md')
 
+describe('OpenTelemetry variables in a plain-data declaration', () => {
+  // Another language's SDK declares plain data, which never meets defineEnvironment's checks.
+  const declared = (spec: Record<string, unknown>) =>
+    resolveEnvironment(
+      { name: 'e', parent: null, layers: [{ name: 'e', spec: spec as EnvironmentInput }] },
+      {},
+      '/p',
+      'e',
+      'AGENTS.md',
+    )
+  const stdio = (env: Record<string, unknown>) => ({
+    kind: 'mcp',
+    transport: 'stdio',
+    command: 'srv',
+    args: [],
+    env,
+  })
+  const http = (headers: Record<string, unknown>) => ({
+    kind: 'mcp',
+    transport: 'http',
+    url: 'https://mcp.example.com',
+    headers,
+  })
+  const cases: Array<[string, Record<string, unknown>, RegExp]> = [
+    [
+      'an env key',
+      { env: { OTEL_EXPORTER_OTLP_HEADERS: 'x=y' } },
+      /env\.OTEL_EXPORTER_OTLP_HEADERS in environment e/,
+    ],
+    [
+      "an env secret's host variable",
+      { env: { A_KEY: { kind: 'secret', from: 'OTEL_EXPORTER_OTLP_HEADERS' } } },
+      /env\.A_KEY's secret OTEL_EXPORTER_OTLP_HEADERS/,
+    ],
+    [
+      'a stdio MCP env key',
+      { mcp: { s: stdio({ OTEL_SERVICE_NAME: 'x' }) } },
+      /mcp\.s\.env\.OTEL_SERVICE_NAME/,
+    ],
+    [
+      "a header's bare secret, named for its header",
+      { mcp: { s: http({ OTEL_EXPORTER_OTLP_HEADERS: { kind: 'secret' } }) } },
+      /the secret OTEL_EXPORTER_OTLP_HEADERS for OTEL_EXPORTER_OTLP_HEADERS/,
+    ],
+    [
+      "a header secret's host variable",
+      {
+        mcp: { s: http({ authorization: { kind: 'secret', from: 'OTEL_EXPORTER_OTLP_HEADERS' } }) },
+      },
+      /the secret OTEL_EXPORTER_OTLP_HEADERS for authorization/,
+    ],
+    [
+      'a secret.template variable',
+      {
+        mcp: {
+          s: http({
+            authorization: {
+              kind: 'secret-template',
+              template: 'Bearer ${OTEL_EXPORTER_OTLP_HEADERS}',
+            },
+          }),
+        },
+      },
+      /\$\{OTEL_EXPORTER_OTLP_HEADERS\} in secret\.template/,
+    ],
+  ]
+  for (const [what, spec, message] of cases) {
+    test(`${what} is refused at resolve time`, async () => {
+      await assert.rejects(declared(spec), (e: Error) => {
+        assert.match(e.message, message)
+        assert.match(
+          e.message,
+          /is an OpenTelemetry variable, which reeval keeps out of the sandbox/,
+        )
+        return true
+      })
+    })
+  }
+
+  test('twin: the same declarations without OTEL_* resolve', async () => {
+    const r = await declared({
+      env: { A_KEY: { kind: 'secret', from: 'REEVAL_UNIT_OTHER' }, PLAIN: 'x' },
+      mcp: {
+        s: stdio({ SERVICE_NAME: 'x' }),
+        h: http({
+          authorization: { kind: 'secret-template', template: 'Bearer ${REEVAL_UNIT_OTHER}' },
+        }),
+      },
+    })
+    assert.equal(r.vars.PLAIN, 'x')
+    assert.deepEqual(Object.keys(r.mcp).sort(), ['h', 's'])
+  })
+})
+
 describe('resolving brokered secrets', () => {
   test('the sandbox gets a placeholder, and the gateway the value on its hosts', async () => {
     const r = await resolve(({ secret }) => ({

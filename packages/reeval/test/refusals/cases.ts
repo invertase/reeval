@@ -1344,6 +1344,28 @@ export const CASES: Record<string, Case[]> = {
       helpers(({ secret }) => ({ env: { A_KEY: secret.fromEnv('a-b') } })),
     ],
     [
+      'secret.fromEnv an OpenTelemetry variable',
+      helpers(({ secret }) => ({ env: { A_KEY: secret.fromEnv('OTEL_EXPORTER_OTLP_HEADERS') } })),
+    ],
+    ['env: an OpenTelemetry variable', helpers(() => ({ env: { otel_service_name: 'agent' } }))],
+    [
+      'mcp.stdio env: an OpenTelemetry variable',
+      helpers(({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', [], { env: { OTEL_EXPORTER_OTLP_ENDPOINT: 'x' } }) },
+      })),
+    ],
+    [
+      'mcp.http header: a bare secret named for an OpenTelemetry variable',
+      helpers(({ mcp, secret }) => ({
+        mcp: {
+          docs: mcp.http('https://mcp.example.com', {
+            headers: { OTEL_EXPORTER_OTLP_HEADERS: secret() },
+          }),
+        },
+      })),
+    ],
+    ['options env: an OpenTelemetry variable', options({ env: { OTEL_SERVICE_NAME: 'agent' } })],
+    [
       'secret good',
       helpers(({ secret }) => ({
         env: {

@@ -1,7 +1,7 @@
 // The `tart` CLI, as the Tart sandbox's provider and sessions call it: on this machine, or on a
 // host of `tart({ hosts })` over SSH.
 import { traceDocker } from '@reeval/sandbox-docker'
-import { type RunResult, run } from '@reeval/sandbox-docker/process'
+import { type RunResult, run, unsetOtel } from '@reeval/sandbox-docker/process'
 
 /** Where `tart` runs: this machine, or a Mac reached over SSH (tart-hosts.ts). */
 export type TartTarget = {
@@ -38,7 +38,11 @@ export async function tracedRun(
 ): Promise<RunResult> {
   const started = Date.now()
   try {
-    const r = await run(bin, args, { signal: options.signal, input: options.input })
+    const r = await run(bin, args, {
+      signal: options.signal,
+      input: options.input,
+      env: unsetOtel(),
+    })
     traceDocker(args, started, { ...r, stdin: options.input?.length }, bin)
     return r
   } catch (error) {
@@ -55,7 +59,12 @@ export async function tracedRunBytes(
 ): Promise<RunResult<Buffer>> {
   const started = Date.now()
   try {
-    const r = await run(bin, args, { signal: options.signal, input: options.input, binary: true })
+    const r = await run(bin, args, {
+      signal: options.signal,
+      input: options.input,
+      env: unsetOtel(),
+      binary: true,
+    })
     traceDocker(args, started, { ...r, stdin: options.input?.length }, bin)
     return r
   } catch (error) {

@@ -1,7 +1,7 @@
 // The run's trace in its main process: one `reeval.run` span over this `reeval run`, the spans
 // every process sends it, appended to `spans.jsonl` in the run's staging directory as each ends,
-// and the preflight's targets as `image.prepare` spans. Recording copies the file into the run's
-// artifacts.
+// and the preflight's targets as `image.prepare` spans, each handed to `onSpan` too as it's written.
+// Recording copies the file into the run's artifacts.
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { redactSecrets } from '../redact.ts'
@@ -19,18 +19,23 @@ export class RunTrace {
   readonly #file: string
   readonly #startMs = Date.now()
   readonly #attributes: SpanAttributes
-  readonly #spans: RunSpan[] | undefined
+  readonly #onSpan: ((span: RunSpan) => void) | undefined
   readonly #images = new Map<string, { name: string; cached: boolean }>()
-  #closed: RunSpan[] | undefined
+  #closed = false
   #dirMade = false
   #written = 0
 
-  /** `keep` holds every span in memory too, for an exporter to send once the run ends. */
-  constructor(o: { dir: string; runId: string; attributes?: SpanAttributes; keep?: boolean }) {
+  /** `onSpan` gets every span as it's written, for an exporter. */
+  constructor(o: {
+    dir: string
+    runId: string
+    attributes?: SpanAttributes
+    onSpan?: (span: RunSpan) => void
+  }) {
     this.traceId = traceIdOf(o.runId)
     this.#file = join(o.dir, SPANS_FILE)
     this.#attributes = { 'reeval.run.id': o.runId, ...o.attributes }
-    if (o.keep) this.#spans = []
+    this.#onSpan = o.onSpan
   }
 
   /** Makes this process's spans this trace's, outside a worker. */
@@ -85,11 +90,11 @@ export class RunTrace {
   }
 
   /**
-   * Ends the run's span and stops taking spans; returns the spans it kept, for an exporter. A run
-   * that never `started` and has no other span writes no trace.
+   * Ends the run's span and stops taking spans. A run that never `started` and has no other span
+   * writes no trace.
    */
-  close(o: { status?: string; error?: string; started?: boolean } = {}): RunSpan[] {
-    if (this.#closed) return this.#closed
+  close(o: { status?: string; error?: string; started?: boolean } = {}): void {
+    if (this.#closed) return
     if (o.started !== false || this.#written > 0)
       this.#write({
         traceId: this.traceId,
@@ -101,8 +106,7 @@ export class RunTrace {
         ...(o.error && { status: { code: 'error' as const, message: o.error } }),
       })
     setLocalSpanSink(undefined)
-    this.#closed = this.#spans ?? []
-    return this.#closed
+    this.#closed = true
   }
 
   #write(written: RunSpan) {
@@ -112,8 +116,10 @@ export class RunTrace {
           status: { ...written.status, message: redactSecrets(written.status.message) },
         }
       : written
-    this.#spans?.push(span)
     this.#written++
+    try {
+      this.#onSpan?.(span)
+    } catch {}
     try {
       if (!this.#dirMade) mkdirSync(join(this.#file, '..'), { recursive: true })
       this.#dirMade = true

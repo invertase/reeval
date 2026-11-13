@@ -523,12 +523,22 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'record.spans',
     area: 'Records and studio',
-    name: "The run's trace, `spans.jsonl`: each machine and container, each attempt on its lease, and OTLP export",
+    name: "The run's trace, `spans.jsonl`: each machine and container, each attempt on its lease",
     unit: [
       'reeval/test/spans.test.ts',
       'reeval/test/machine-pool.test.ts',
       'reeval/test/machine-service.test.ts',
       'reeval/test/sandbox-provider-conformance.test.ts',
+    ],
+  },
+  {
+    id: 'otel.export',
+    area: 'Records and studio',
+    name: 'OpenTelemetry export from the `OTEL_*` variables: spans as they end, log records and host metrics, over OTLP/HTTP protobuf or JSON',
+    unit: [
+      'reeval/test/otlp.test.ts',
+      'reeval/test/spans.test.ts',
+      'reeval/test/sandbox-contract.test.ts',
     ],
   },
   {
