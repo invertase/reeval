@@ -326,24 +326,29 @@ export type CloudRunOptions = {
 }
 
 /**
- * Stops the run, naming them, when the linked project lacks secrets its bundle's `secrets` name,
- * against the names the platform says a run there gets. The platform checks again when the run
+ * Stops the run, naming them, when the linked project lacks names its bundle needs: the manifest's
+ * `secrets` and every loaded `.env` file's variables, which the platform also supplies from the
+ * project, against the names it says a run there gets. The platform checks again when the run
  * starts, so a platform that can't list them skips this check, with a line under `REEVAL_DEBUG`.
  */
 async function checkCloudSecrets(options: {
   base: URL
   auth: CloudAuth
   project: LinkedProject
-  secrets: readonly string[]
+  manifest: Pick<MadeBundle['manifest'], 'secrets' | 'envFiles'>
   env?: NodeJS.ProcessEnv
 }): Promise<void> {
-  const { base, auth, project } = options
+  const { base, auth, project, manifest } = options
   const env = options.env ?? process.env
   const skip = (why: string) => {
     if (env.REEVAL_DEBUG) console.error(`cloud: secrets check skipped: ${why}`)
   }
   if (!auth.headers.authorization) return skip('not signed in')
-  const needed = [...new Set(options.secrets)].sort()
+  const fromFile = new Map<string, string>()
+  for (const file of manifest.envFiles) {
+    for (const name of file.variables) if (!fromFile.has(name)) fromFile.set(name, file.path)
+  }
+  const needed = [...new Set([...manifest.secrets, ...fromFile.keys()])].sort()
   if (!needed.length) return
   const seg = encodeURIComponent
   const projectPath = `api/orgs/${seg(project.orgId)}/projects/${seg(project.projectId)}`
@@ -373,7 +378,13 @@ async function checkCloudSecrets(options: {
   if (!missing.length) return
   const settable = missing.filter((name) => !reserved.has(name))
   const refused = missing.filter((name) => reserved.has(name))
-  const list = (names: string[]) => names.map((name) => `  ${name}`).join('\n')
+  const list = (names: string[]) =>
+    names
+      .map((name) => {
+        const file = manifest.secrets.includes(name) ? undefined : fromFile.get(name)
+        return `  ${name}${file ? ` (from ${file})` : ''}`
+      })
+      .join('\n')
   const one = missing.length === 1
   const parts = [
     `The cloud project ${await projectLabel(base, auth, project)} lacks ${one ? 'a secret' : `${missing.length} secrets`} this run needs, so nothing was uploaded:`,
@@ -418,7 +429,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   const sha256 = createHash('sha256').update(archive).digest('hex')
   const { project } = options
   if (project) {
-    await checkCloudSecrets({ base, auth, project, secrets: bundle.manifest.secrets, env })
+    await checkCloudSecrets({ base, auth, project, manifest: bundle.manifest, env })
   }
   const what = 'create the run'
   const answer = await request(

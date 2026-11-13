@@ -425,9 +425,9 @@ describe('reeval run on the cloud platform', () => {
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /The cloud project Main \(main\) lacks a secret this run needs, so nothing was uploaded:\n {2}CHECK_TOKEN\nAdd it with reeval cloud secrets set <name> --from-env, /,
+        /The cloud project Main \(main\) lacks 2 secrets this run needs, so nothing was uploaded:\n {2}CHECK_TOKEN\n {2}FROM_FILE \(from \.env\)\nAdd each with reeval cloud secrets set <name> --from-env, /,
       )
-      assert.doesNotMatch(r.stderr, /FROM_FILE|sets this name itself/)
+      assert.doesNotMatch(r.stderr, /sets this name itself/)
       assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
       assert.deepEqual(
         p.seen.map((s) => `${s.method} ${s.path}`),
@@ -460,11 +460,32 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
-  test('runs when the linked project has every secret the run needs, whatever its .env holds', async () => {
-    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+  test('reports a reserved name from .env as one to rename', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'], reserved: ['REEVAL_FROM_FILE'] })
     try {
       const dir = await linkedFixture()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nREEVAL_FROM_FILE=${TOKEN}-2\n`)
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /lacks a secret this run needs, so nothing was uploaded:\nThe cloud platform sets this name itself, so no cloud run can take it as a secret: rename it in the eval\.\n {2}REEVAL_FROM_FILE \(from \.env\)/,
+      )
+      assert.doesNotMatch(r.stderr, /cloud secrets set/)
+      assert.ok(!(r.stdout + r.stderr).includes(TOKEN), 'no secret value in the output')
+      assert.ok(!p.seen.some((s) => s.method === 'POST' && s.path.endsWith('/runs')))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('runs when the linked project has every name the run needs, its .env ones too', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN', 'FROM_FILE'] })
+    try {
+      const dir = await linkedFixture()
+      writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
