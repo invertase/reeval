@@ -445,6 +445,19 @@ const stagingLive = (
   (progress && !(movedIn && progress.host !== hostname()) ? progressLive(progress, now) : false) ||
   holderLive(dir)
 
+/**
+ * `reeval run --bundle --resume`: a process on this host still runs from `staging`, by its holder
+ * or its `live.json`, so moving the staging away would take the work from under it. Another
+ * host's `live.json` is that host's, as once the staging is moved in.
+ */
+export function stagingInUse(staging: string, now = Date.now()): boolean {
+  let text: string | null = null
+  try {
+    text = readFileSync(join(staging, LIVE_FILE), 'utf8')
+  } catch {}
+  return stagingLive(staging, text ? readableLiveProgress(parseJson(text)) : null, now, true)
+}
+
 /** Options of `resolveResume`. */
 export type ResolveOptions = {
   /** The run's state was moved into this project, which owns it now: `--bundle --resume`. */
@@ -645,7 +658,9 @@ export async function resolveResume(
   const found = matchRef(candidates, ref)
   if (!found) {
     throw new RefError(
-      `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
+      options.movedIn
+        ? `No run matches "${ref}" in ${join(root, '.reeval')}.`
+        : `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
     )
   }
   if (found.live) throw stillRunning(found.runId)

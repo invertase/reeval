@@ -1566,10 +1566,6 @@ async function runCommand(
 }
 
 /**
- * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
- * so it plans with the flags given now, with a note.
- */
-/**
  * Refuses `--resume` or `--retry-errors` on a run that goes to the cloud, from `--cloud` or the
  * config's or profile's `cloud`, before anything looks for the run here.
  */
@@ -1600,6 +1596,10 @@ async function refuseCloudContinue(flags: Flags, configPath: string | undefined)
   )
 }
 
+/**
+ * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
+ * so it plans with the flags given now, with a note.
+ */
 async function resumedRun(
   flags: Flags,
   filters: string[],

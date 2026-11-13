@@ -131,8 +131,13 @@
   "collected: a --trait with no key": "UsageError: --trait =ts must be key=value, the trait's key and the value a cell's environment has, e.g. --trait lang=ts",
   "collected: a --trait with an empty value": null,
   "bundle resume: no run id": "UsageError: --bundle with --resume continues one run: pass its id, as in reeval run --bundle <file> --resume <run>.",
-  "bundle resume: a path for a run id": "UsageError: --resume ../r1 isn't a run id.",
-  "bundle resume: no state for the run here": "UsageError: No state for run r2 in <dir>/bundle-resume/.reeval: --bundle with --resume continues a run from its .reeval/staging/r2/ or .reeval/runs/r2.json in the current directory.",
+  "bundle resume: a path for a run id": "UsageError: --resume ../20260101T000000Z_nogit_staged_aaaa isn't a run id.",
+  "bundle resume: . for a run id": "UsageError: --resume . isn't a run id.",
+  "bundle resume: .. for a run id": "UsageError: --resume .. isn't a run id.",
+  "bundle resume: a backslash in the run id": "UsageError: --resume x\\20260101T000000Z_nogit_staged_aaaa isn't a run id.",
+  "bundle resume: a name that is not a run id": "UsageError: --resume r1 isn't a run id.",
+  "bundle resume: no state for the run here": "UsageError: No state for run 20260101T000000Z_nogit_absent_aaaa in <dir>/bundle-resume/.reeval: --bundle with --resume continues a run from its .reeval/staging/20260101T000000Z_nogit_absent_aaaa/ or .reeval/runs/20260101T000000Z_nogit_absent_aaaa.json in the current directory.",
+  "bundle resume: a run still running here": "UsageError: run 20260101T000000Z_nogit_running_aaaa is still running from <dir>/bundle-resume/.reeval/staging/20260101T000000Z_nogit_running_aaaa. Wait for it to finish or stop, then reeval run --bundle <file> --resume 20260101T000000Z_nogit_running_aaaa.",
   "good: bundle resume with the run staged here": null,
   "good: bundle resume with its scratch record here": null
 }

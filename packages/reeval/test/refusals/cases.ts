@@ -2,7 +2,7 @@
 // test/refusals.test.ts runs each and holds its exact message (or `null`, accepted) to
 // test/refusals/<segment>.json, so a change of wording, or of what's accepted, shows as a diff.
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkResumeState } from '../../src/bundle/index.ts'
 import {
@@ -177,12 +177,23 @@ writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
 
-/** `reeval run --bundle --resume <id>` from a directory holding run r1's staging and r3's record. */
+/** Run ids for `reeval run --bundle --resume`: staged here, recorded here, absent, still running. */
+const RESUME = {
+  staged: '20260101T000000Z_nogit_staged_aaaa',
+  recorded: '20260101T000000Z_nogit_recorded_aaaa',
+  absent: '20260101T000000Z_nogit_absent_aaaa',
+  running: '20260101T000000Z_nogit_running_aaaa',
+}
+/** `reeval run --bundle --resume <id>` from a directory holding those runs' state. */
 const bundleResume = (runId: string) => () => {
   const here = join(DIR, 'bundle-resume')
-  mkdirSync(join(here, '.reeval', 'staging', 'r1'), { recursive: true })
+  const staging = (id: string) => join(here, '.reeval', 'staging', id)
+  mkdirSync(staging(RESUME.staged), { recursive: true })
+  mkdirSync(staging(RESUME.running), { recursive: true })
+  // The test's parent process: alive on this host, and not this one.
+  writeFileSync(join(staging(RESUME.running), 'holder'), `${process.ppid}\n${hostname()}\n`)
   mkdirSync(join(here, '.reeval', 'runs'), { recursive: true })
-  writeFileSync(join(here, '.reeval', 'runs', 'r3.json'), '{}\n')
+  writeFileSync(join(here, '.reeval', 'runs', `${RESUME.recorded}.json`), '{}\n')
   checkResumeState(here, runId)
 }
 
@@ -2452,10 +2463,15 @@ environments:
     ['collected: a --trait with no key', traitKeys(['=ts'], undefined, ['lang'])],
     ['collected: a --trait with an empty value', traitKeys(['lang='], undefined, ['lang'])],
     ['bundle resume: no run id', bundleResume('')],
-    ['bundle resume: a path for a run id', bundleResume('../r1')],
-    ['bundle resume: no state for the run here', bundleResume('r2')],
-    ['good: bundle resume with the run staged here', bundleResume('r1')],
-    ['good: bundle resume with its scratch record here', bundleResume('r3')],
+    ['bundle resume: a path for a run id', bundleResume(`../${RESUME.staged}`)],
+    ['bundle resume: . for a run id', bundleResume('.')],
+    ['bundle resume: .. for a run id', bundleResume('..')],
+    ['bundle resume: a backslash in the run id', bundleResume(`x\\${RESUME.staged}`)],
+    ['bundle resume: a name that is not a run id', bundleResume('r1')],
+    ['bundle resume: no state for the run here', bundleResume(RESUME.absent)],
+    ['bundle resume: a run still running here', bundleResume(RESUME.running)],
+    ['good: bundle resume with the run staged here', bundleResume(RESUME.staged)],
+    ['good: bundle resume with its scratch record here', bundleResume(RESUME.recorded)],
   ],
   gateway: [
     ['ts: an empty list', config({ gateway: [] })],
