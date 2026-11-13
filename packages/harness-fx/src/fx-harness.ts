@@ -65,7 +65,7 @@ export const FX_QUIET_ENV = {
  * `prompt_tokens` and `completion_tokens` from it, so this is where the turn's cache reads and
  * reasoning tokens come from (see {@link FxUsageLedger}).
  */
-export const FX_RELAY_PORT = 47823
+export const FX_RELAY_PORT = 24823
 /** Where the relay logs each Chat Completions call's usage in the sandbox. */
 export const FX_RELAY_USAGE_FILE = '/tmp/reeval-fx-usage.ndjson'
 const FX_RELAY = `import { createServer } from 'node:http'

@@ -18,7 +18,7 @@ The model id picks the key:
 
 On OpenAI, reeval brokers the key on `POST https://api.openai.com/v1/chat/completions` only, and a restricted egress policy allows `api.openai.com`. On Vercel AI Gateway, reeval brokers it on fx's model list and language-model calls at `ai-gateway.vercel.sh`, which a restricted egress policy allows.
 
-fx ignores `HTTPS_PROXY`, so it sends its model calls to a relay on `127.0.0.1:47823` in the sandbox, which sends them on through the egress gateway.
+fx ignores `HTTPS_PROXY`, so it sends its model calls to a relay on `127.0.0.1:24823` in the sandbox, which sends them on through the egress gateway.
 
 When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
 
