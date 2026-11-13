@@ -1,4 +1,5 @@
-// Splits test files into shards of about equal running time, for ci-os.sh's Windows unit shards.
+// Splits test files into shards of about equal running time, for ci-os.sh's Windows and macOS
+// unit shards.
 // Node's --test-shard deals files round-robin in name order, and a handful of files take most of
 // the time, so it can stack them in one shard and push that job past its timeout.
 //

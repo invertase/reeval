@@ -6,9 +6,9 @@
 # The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
 # reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
 # have no Docker. Windows starts processes slowly, so its unit files run in six shards, split by
-# each file's running time (scripts/test-shard.mjs) rather than Node's round-robin. macOS
-# splits the same way so unit, tiers and packed overlap. Its `bootstraps` part installs the
-# macOS build of every harness tart() runs, the way tart() bakes them (no VM, no key).
+# each file's running time (scripts/test-shard.mjs) rather than Node's round-robin; macOS's
+# run in three the same way, alongside its tiers and packed parts. Its `bootstraps` part
+# installs the macOS build of every harness tart() runs, the way tart() bakes them (no VM, no key).
 name: extended
 
 on:
@@ -108,12 +108,11 @@ jobs:
   macos:
     name: macos (${{ matrix.part }})
     runs-on: macos-latest
-    # The unit files run in one job here, unsharded, and take up to about 25 minutes.
-    timeout-minutes: ${{ matrix.part == 'unit' && 40 || 25 }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        part: [unit, tiers, packed, bootstraps]
+        part: ['unit 1/3', 'unit 2/3', 'unit 3/3', tiers, packed, bootstraps]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
