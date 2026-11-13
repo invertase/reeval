@@ -1376,7 +1376,7 @@ function recordingSession(): {
     id: 'test',
     description: 'recording session',
     defaultWorkingDirectory: '/reeval',
-    ports: [43210],
+    ports: [24210],
     getPortEndpoint: stop,
     getPortUrl: stop,
     stop: async () => {},

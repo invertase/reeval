@@ -135,7 +135,7 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
     const box = await createTartSandbox(vm(), options())
     try {
       const r = await box.exec('printf %s "$HTTPS_PROXY"')
-      assert.equal(r.stdout, 'http://127.0.0.1:43128')
+      assert.equal(r.stdout, 'http://127.0.0.1:24128')
       assert.deepEqual(box.traffic?.(), { contacted: [], blocked: [], unresolved: [] })
       assert.match(
         (await box.getPortEndpoint?.({ port: 3000 }))?.url ?? '',
@@ -201,7 +201,7 @@ describe('the Tart sandbox', { skip: !posix && 'the fake tart is a bash script' 
         command: 'pwd; printf %s "$A:$HTTPS_PROXY"',
         workingDirectory: 'workspace',
       })
-      assert.equal(r.stdout, `${box.workdir}\neval:http://127.0.0.1:43128`)
+      assert.equal(r.stdout, `${box.workdir}\neval:http://127.0.0.1:24128`)
       const bundle = await net.run({ command: 'printf %s "$SSL_CERT_FILE:$GIT_SSL_CAINFO"' })
       const ca = join(box.stateDir, 'ca-bundle.pem')
       assert.equal(bundle.stdout, `${ca}:${ca}`)

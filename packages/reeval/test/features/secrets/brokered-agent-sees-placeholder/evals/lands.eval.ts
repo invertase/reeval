@@ -7,6 +7,6 @@ evaluate('lands', { environments: keys }, async (c) => {
   expect(key).toMatch(/^reeval_secret_[0-9A-Za-z]{32}$/)
   expect(key).not.toBe(process.env.REEVAL_FIXTURE_TOKEN)
   if (['docker', 'podman'].includes(process.env.REEVAL_FIXTURE_SANDBOX ?? '')) {
-    expect(proxy).toBe('http://127.0.0.1:43128')
+    expect(proxy).toBe('http://127.0.0.1:24128')
   }
 })

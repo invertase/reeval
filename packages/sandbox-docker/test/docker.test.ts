@@ -248,7 +248,7 @@ describe('egress gateway in Docker', {
       [`Bearer ${REAL}`, `Bearer ${PLACEHOLDER}`],
     )
     const env = await sh(s, 'env')
-    assert.match(env.stdout, /^HTTPS_PROXY=http:\/\/127\.0\.0\.1:43128$/m)
+    assert.match(env.stdout, /^HTTPS_PROXY=http:\/\/127\.0\.0\.1:24128$/m)
     assert.match(env.stdout, /^NODE_EXTRA_CA_CERTS=\/usr\/local\/share\/ca-certificates\//m)
   })
 
@@ -579,9 +579,9 @@ describe('egress gateway in Docker', {
 
     // The bridge port, published nowhere, is reached through the tunnel.
     const server = await s.spawn({
-      command: `node -e "require('http').createServer((q, r) => r.end('bridge ok')).listen(43210, '0.0.0.0')"`,
+      command: `node -e "require('http').createServer((q, r) => r.end('bridge ok')).listen(24210, '0.0.0.0')"`,
     })
-    const { url } = await s.getPortEndpoint({ port: 43210, protocol: 'http' })
+    const { url } = await s.getPortEndpoint({ port: 24210, protocol: 'http' })
     const body = await retry(() => get(url))
     assert.equal(body, 'bridge ok')
 
@@ -593,7 +593,7 @@ describe('egress gateway in Docker', {
     // Docker republishing the port, which Docker Desktop doesn't do on reconnect.
     await s.setNetworkPolicy?.({ mode: 'allow-all' })
     assert.ok((await upInterfaces(s)).some((i) => /^eth\d+$/.test(i)))
-    const reopened = await s.getPortEndpoint({ port: 43210, protocol: 'http' })
+    const reopened = await s.getPortEndpoint({ port: 24210, protocol: 'http' })
     assert.equal(reopened.url, url)
     assert.equal(await retry(() => get(reopened.url)), 'bridge ok')
     await server.kill()

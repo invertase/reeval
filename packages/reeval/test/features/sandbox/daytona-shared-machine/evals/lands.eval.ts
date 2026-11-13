@@ -11,6 +11,6 @@ evaluate('lands', { environments: vm }, async (c) => {
     `reeval${s}`,
     `/reeval${s}/workspace`,
     '/home/reeval',
-    `http://127.0.0.1:${43128 + slot}`,
+    `http://127.0.0.1:${24128 + slot}`,
   ])
 })
