@@ -15,7 +15,7 @@ import { CLOUD_TOKEN_VAR, type CloudToken, cloudToken } from './login/credential
 import type { PlanDocument } from './plan.ts'
 import { stripCredentials } from './redact.ts'
 import { sandboxKind } from './sandbox/kinds.ts'
-import { plural } from './text.ts'
+import { formatDuration, plural } from './text.ts'
 import type { ResolvedConfig, ResolvedHistory, ResolvedProfile } from './types.ts'
 
 /** The platform's URL, as the cloud run and `reeval login` read it. */
@@ -63,10 +63,11 @@ export function wantsCloud(
 }
 
 /**
- * The run flags a cloud run takes: the ones its bundle carries (filters aside) and the ones that
- * only change how this terminal shows it. `--json` only with `--dry-run`.
+ * The run flags a cloud run takes: the ones its bundle carries (filters aside), `--resume` and the
+ * ones that only change how this terminal shows it. `--json` only with `--dry-run`.
  */
 const CLOUD_FLAGS = new Set<FlagName>([
+  'resume',
   'profile',
   'tag',
   'trait',
@@ -372,7 +373,7 @@ export async function request(
   url: URL,
   init: CallInit,
   headers: Record<string, string>,
-): Promise<{ status: number; ok: boolean; body: unknown }> {
+): Promise<{ status: number; ok: boolean; body: unknown; headers: Headers }> {
   const { what, timeoutMs = 30_000, ...rest } = init
   let res: Response
   try {
@@ -392,7 +393,7 @@ export async function request(
   try {
     body = text ? JSON.parse(text) : null
   } catch {}
-  return { status: res.status, ok: res.ok, body }
+  return { status: res.status, ok: res.ok, body, headers: res.headers }
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
@@ -665,9 +666,26 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     uploadAuth,
   )
   await call(runUrl('/start'), { method: 'POST', what: `start run ${runId}` }, auth)
+  return followCloudRun(options, runId, auth, 'Started cloud run')
+}
+
+/**
+ * Follows cloud run `runId` from its event stream's start, after `lead` (`Started cloud run`) and
+ * the run's id, and returns its exit code: 130 once this terminal detaches, 4 when the platform
+ * stopped it, else the stream's. With `download`, its files follow once it ends.
+ */
+async function followCloudRun(
+  options: Pick<CloudRunOptions, 'base' | 'log' | 'follow' | 'download'>,
+  runId: string,
+  auth: CloudAuth,
+  lead: string,
+): Promise<number> {
+  const { base, log } = options
+  const { headers } = auth
+  const runUrl = (path = '') => new URL(`api/runs/${encodeURIComponent(runId)}${path}`, base)
   const events = runUrl('/events')
   const reattach = `reeval attach ${displayUrl(events.href)}`
-  log(`Started cloud run ${runId}; ${reattach} follows it`)
+  log(`${lead} ${runId}; ${reattach} follows it`)
   let detached = false
   let code: number
   let read: PlatformRun | null | undefined
@@ -711,4 +729,120 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     for (const line of lines) log(line)
   }
   return code
+}
+
+/** How long a resume waits for a run that's still stopping before it gives up. */
+const STILL_STOPPING_MS = 2 * 60_000
+
+/** The wait a `Retry-After` header asks for, in seconds or as a date; 5 s without one. */
+function retryAfterMs(header: string | null, now: number): number {
+  const value = header?.trim() ?? ''
+  if (/^\d+$/.test(value)) return Number(value) * 1000
+  const at = Date.parse(value)
+  return Number.isNaN(at) ? 5_000 : Math.max(0, at - now)
+}
+
+/** The `code` of the platform's error answer, when it has one. */
+const errorCode = (body: unknown) => {
+  const code = (body as { error?: { code?: unknown } } | null)?.error?.code
+  return typeof code === 'string' ? code : undefined
+}
+
+type Answer = Awaited<ReturnType<typeof request>>
+
+/**
+ * Asks the platform to resume cloud run `runId` with `post`, again after each `still_stopping`
+ * answer for as long as its `Retry-After` says, for up to `windowMs` in all, saying so once.
+ * Returns the first other answer; exit 3 when the run is still stopping at the end.
+ */
+export async function askToResume(
+  post: () => Promise<Answer>,
+  runId: string,
+  log: (line: string) => void,
+  {
+    windowMs = STILL_STOPPING_MS,
+    now = Date.now,
+    sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  }: { windowMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<Answer> {
+  const until = now() + windowMs
+  const window =
+    windowMs % 60_000 === 0 ? plural(windowMs / 60_000, 'minute') : formatDuration(windowMs)
+  let said = false
+  for (;;) {
+    const answer = await post()
+    if (answer.status !== 409 || errorCode(answer.body) !== 'still_stopping') return answer
+    const left = until - now()
+    if (left <= 0) {
+      throw new CloudError(
+        `cloud run ${runId} is still stopping after ${window}: reeval run --cloud --resume ${runId} tries again`,
+      )
+    }
+    if (!said) {
+      log(`Cloud run ${runId} is still stopping: waiting up to ${window} to resume it`)
+      said = true
+    }
+    await sleep(
+      Math.min(Math.max(retryAfterMs(answer.headers.get('retry-after'), now()), 1_000), left),
+    )
+  }
+}
+
+export type CloudResumeOptions = Pick<CloudRunOptions, 'base' | 'log' | 'follow' | 'download'> & {
+  /** The run: its id, as `reeval run --cloud` printed it, or its event stream URL. */
+  run: string
+  /** Whether a project's config is in sight, whose changes the resume doesn't take. */
+  checkout: boolean
+  env?: NodeJS.ProcessEnv
+}
+
+/**
+ * `reeval run --cloud --resume <run>`: asks the platform to resume the run, which runs the project
+ * as it was uploaded, then follows it as `runCloud` does once a run has started.
+ */
+export async function resumeCloud(options: CloudResumeOptions): Promise<number> {
+  const { base, log } = options
+  const env = options.env ?? process.env
+  const runId = await cloudRunId(options.run, base)
+  const auth = await cloudAuth(base, env)
+  const runUrl = (path = '') => new URL(`api/runs/${encodeURIComponent(runId)}${path}`, base)
+  if (options.checkout) {
+    log(
+      `Resuming cloud run ${runId} with the project as it was uploaded, without changes made here since; reeval run --cloud starts a new run`,
+    )
+  }
+  const seen = await call<(PlatformRun & { segment?: unknown }) | null>(
+    runUrl(),
+    { method: 'GET', what: `read run ${runId}` },
+    auth,
+  )
+  const segment = typeof seen?.segment === 'number' ? { fromSegment: seen.segment } : {}
+  const what = `resume run ${runId}`
+  const answer = await askToResume(
+    () =>
+      request(
+        runUrl('/resume'),
+        {
+          method: 'POST',
+          what,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(segment),
+        },
+        auth.headers,
+      ),
+    runId,
+    log,
+  )
+  if (answer.status === 409 && errorCode(answer.body) === 'not_resumable') {
+    if (seen?.status === 'succeeded') {
+      throw new UsageError(
+        `run ${runId} is complete and cannot be resumed; reeval run --cloud starts a new run`,
+      )
+    }
+    const why = platformMessage(answer.body)
+    throw new UsageError(`the cloud platform can't resume run ${runId}${why ? `: ${why}` : ''}`)
+  }
+  if (!answer.ok) throw platformError(answer, what, auth)
+  const lead = answer.status === 202 ? 'Resumed cloud run' : 'Already resuming cloud run'
+  return followCloudRun(options, runId, auth, lead)
 }

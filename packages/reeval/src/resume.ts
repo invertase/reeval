@@ -616,6 +616,16 @@ export async function removeStoppedStaging(root: string, now = Date.now()): Prom
   return removed
 }
 
+/** `--resume` or `--retry-errors` with no ref found no run of this machine's to continue. */
+class NoRunHere extends UsageError {}
+
+/** `--resume` or `--retry-errors` with a ref found no run of this machine's that it names. */
+class NoRunMatches extends RefError {}
+
+/** Whether `error` says this machine has no run for `--resume` or `--retry-errors`. */
+export const noRunHere = (error: unknown) =>
+  error instanceof NoRunHere || error instanceof NoRunMatches
+
 /**
  * `--resume` with no ref (or `latest`): the newest Stopped staging directory, or an
  * `interrupted` / `budget` scratch. A pointer at `.reeval/current` wins when it still names
@@ -640,7 +650,7 @@ export async function resolveResume(
       const pointedLive = pointer ? liveOnes.find((c) => c.runId === pointer) : undefined
       const livePick = pointedLive ?? liveOnes.at(-1)
       if (livePick) throw stillRunning(livePick.runId)
-      throw new UsageError(
+      throw new NoRunHere(
         'No resumable run. A stopped staging directory, or an interrupted or budget-stopped scratch record, can be resumed.',
       )
     }
@@ -657,7 +667,7 @@ export async function resolveResume(
   }
   const found = matchRef(candidates, ref)
   if (!found) {
-    throw new RefError(
+    throw new NoRunMatches(
       options.movedIn
         ? `No run matches "${ref}" in ${join(root, '.reeval')}.`
         : `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
@@ -698,7 +708,7 @@ export async function resolveRetry(root: string, ref?: string): Promise<ResumeTa
       )
     }
     if (!pick) {
-      throw new UsageError(
+      throw new NoRunHere(
         'No finished run to retry. --retry-errors re-runs the infra errors of a complete run in .reeval/runs; reeval run --resume continues one that stopped.',
       )
     }
@@ -715,7 +725,7 @@ export async function resolveRetry(root: string, ref?: string): Promise<ResumeTa
   }
   const found = matchRef(candidates, ref)
   if (!found) {
-    throw new RefError(
+    throw new NoRunMatches(
       `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --retry-errors empty for the newest finished run.`,
     )
   }

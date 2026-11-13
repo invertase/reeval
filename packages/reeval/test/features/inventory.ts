@@ -503,12 +503,18 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.cancel',
     area: 'Config and selection',
-    name: "`reeval cloud run cancel <run>`, by the run's id or its event stream URL, asks the cloud platform to cancel a cloud run (a run already ended says so; an unknown one is exit 2), and its followers see it end; Ctrl-C (or SIGTERM) while following a cloud run, with or without a terminal, only detaches, and the run goes on (the interactive list names `reeval cloud run cancel` in place of x); a followed cloud run the platform stopped before it finished exits 4, with how to resume it; `reeval run --cloud --resume` is exit 2 for now",
+    name: "`reeval cloud run cancel <run>`, by the run's id or its event stream URL, asks the cloud platform to cancel a cloud run (a run already ended says so; an unknown one is exit 2), and its followers see it end; Ctrl-C (or SIGTERM) while following a cloud run, with or without a terminal, only detaches, and the run goes on (the interactive list names `reeval cloud run cancel` in place of x); a followed cloud run the platform stopped before it finished exits 4, with how to resume it",
     unit: [
       'reeval/test/cloud-run.test.ts',
       'reeval/test/ink-list.test.ts',
       'reeval/test/cli.test.ts',
     ],
+  },
+  {
+    id: 'cloud.resume',
+    area: 'Config and selection',
+    name: "`reeval run --cloud --resume <run>`, by the cloud run's id or its event stream URL, or `--resume <run>` where the config or profile runs in the cloud and this machine has no such run: with no config, the platform resumes the run with the project as it was uploaded (said when a config is in sight) and it's followed as `--cloud` follows a run, `--download` and the output flags included; a run still stopping is asked again as `Retry-After` says for up to 2 minutes (then exit 3), a complete run, one the platform can't resume or refuses, filters, `--profile`, `--runs`, `--tag`, `--trait`, `--retry-errors` and no run are exit 2, an unreachable platform exit 3; a run this machine has continues here, under its saved profile",
+    unit: ['reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
     id: 'plan.cost',
