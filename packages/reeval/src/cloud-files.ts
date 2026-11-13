@@ -11,6 +11,7 @@ import {
   readFile,
   readlink,
   rename,
+  rm,
   symlink,
   unlink,
   writeFile,
@@ -23,6 +24,7 @@ import { UsageError } from './errors.ts'
 import { displayUrl } from './events.ts'
 import { NewerRecordError, parseRecord } from './history/files.ts'
 import { ensureHistoryGitattributes, ensureHistoryGitignore } from './history/ignore.ts'
+import { RefError } from './history/views.ts'
 import { fromCwd, RUN_ID, relativeFile } from './ids.ts'
 import { plural } from './text.ts'
 import type { ResolvedHistory } from './types.ts'
@@ -471,8 +473,9 @@ async function markCloudOrigin(
 
 /**
  * The cloud run that the run of `.reeval/runs` whose id is `ref` (or, unless `exact`, starts with
- * it) was downloaded from; null when no single downloaded run matches. A marker from a newer
- * reeval is a usage error, so its run is never taken for one of this machine's.
+ * it) was downloaded from; null when no downloaded run matches, and a `RefError` when a prefix
+ * matches several. A marker from a newer reeval is a usage error, so its run is never taken for
+ * one of this machine's.
  */
 export async function cloudOriginOf(
   root: string,
@@ -484,6 +487,9 @@ export async function cloudOriginOf(
     const id = n.endsWith('.json') ? n.slice(0, -'.json'.length) : ''
     return RUN_ID.test(id) && id.startsWith(ref) ? [id] : []
   })
+  if (!exact && !ids.includes(ref) && ids.length > 1) {
+    throw new RefError(`"${ref}" matches ${ids.length} runs: use more of the id`)
+  }
   const runId = ids.includes(ref) ? ref : !exact && ids.length === 1 ? ids[0] : undefined
   if (!runId) return null
   const where = `.reeval/cloud/${runId}.json`
@@ -506,4 +512,13 @@ export async function cloudOriginOf(
     cloudRunId: read.cloudRunId,
     ...(typeof read.profile === 'string' ? { profile: read.profile } : {}),
   }
+}
+
+/**
+ * Forgets that run `runId` came from a cloud run, as its continuation on this machine starts: its
+ * files are this machine's from then on, so `reeval run --resume` keeps it here and a download
+ * never writes over them.
+ */
+export async function forgetCloudOrigin(root: string, runId: string): Promise<void> {
+  await rm(join(originDir(root), `${runId}.json`), { force: true })
 }

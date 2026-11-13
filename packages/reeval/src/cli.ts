@@ -1292,6 +1292,10 @@ async function runCommand(
   const cloud = bundled ? undefined : await cloudTarget(runFlags, setup, filters, configPath)
   if (cloud && 'exit' in cloud) return cloud.exit
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
+  if (resumed?.runId && configPath !== undefined) {
+    const { forgetCloudOrigin } = await import('./cloud-files.ts')
+    await forgetCloudOrigin(dirname(configPath), resumed.runId)
+  }
   const ctx = await startRun(setup, bundled)
   const startedWith: RunInvocation | undefined = resumed
     ? (resumed.saved ?? undefined)
