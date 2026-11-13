@@ -147,7 +147,15 @@ const EXPECTED_ERRORS = [
 /** Errors that exit 3: reeval couldn't reach what the run needs, not a mistake in the command. */
 const INFRA_ERRORS = ['PreflightInfraError', 'StoreError', 'EventStreamError', 'CloudError']
 
-const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
+const EXIT = {
+  ok: 0,
+  failed: 1,
+  usage: 2,
+  infra: 3,
+  stopped: 4,
+  interrupted: 130,
+  terminated: 143,
+} as const
 
 const version = PACKAGE_VERSION
 
@@ -290,9 +298,9 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'cloud') {
     const [area, ...args] = filters
-    if (area !== 'secrets' && area !== 'provider' && area !== 'push') {
+    if (area !== 'secrets' && area !== 'provider' && area !== 'push' && area !== 'run') {
       throw new UsageError(
-        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider or push?`,
+        `Unknown command "${['cloud', area].filter(Boolean).join(' ')}". Did you mean reeval cloud secrets, provider, push or run?`,
       )
     }
     if (area === 'push') {
@@ -309,6 +317,10 @@ async function run(argv: string[]): Promise<number> {
       })
     }
     loadEnvFiles(configPath)
+    if (area === 'run') {
+      const { cloudRunCommand } = await import('./cloud-run.ts')
+      return cloudRunCommand(args, { out: (s) => console.log(s) })
+    }
     const cloud = await import('./cloud-secrets.ts')
     const { projectDirFor } = await import('./cloud-project.ts')
     const io = {
@@ -977,15 +989,35 @@ async function attachCommand(
     ? await cloudDownload(source, configPath, flags.profile)
     : undefined
   const follow = isAttachUrl(source) ? await cloud.cloudFollow(source) : undefined
+  const cloudRun = follow ? await cloudRunAt(source) : null
   let detached = false
-  const code = await attachHere(flags, {
-    source,
-    ...(root === undefined ? {} : { root }),
-    ...(follow ? { follow } : {}),
-    onDetach: () => {
-      detached = true
-    },
-  })
+  let code: number
+  let read: Awaited<ReturnType<typeof cloud.afterLostStream>>['read'] | undefined
+  const log = (line: string) => console.log(dim(line))
+  try {
+    code = await attachHere(flags, {
+      source,
+      ...(root === undefined ? {} : { root }),
+      ...(follow ? { follow } : {}),
+      ...(cloudRun ? { cancelHint: cloud.cancelHint(cloudRun.runId) } : {}),
+      onDetach: () => {
+        detached = true
+      },
+    })
+  } catch (error) {
+    const { EventStreamError } = await import('./events.ts')
+    if (!cloudRun || !(error instanceof EventStreamError)) throw error
+    ;({ code, read } = await cloud.afterLostStream(
+      error,
+      cloudRun.runId,
+      cloudRun.base,
+      cloudRun.auth,
+      log,
+    ))
+  }
+  if (cloudRun && !detached) {
+    code = await cloud.stoppedOr(code, cloudRun.runId, cloudRun.base, cloudRun.auth, log, read)
+  }
   if (download && detached) {
     console.log(
       dim(
@@ -999,6 +1031,15 @@ async function attachCommand(
     }
   }
   return code
+}
+
+/** The cloud run whose event stream is `source`, with what reads it; null for any other stream. */
+async function cloudRunAt(source: string) {
+  const cloud = await import('./cloud-run.ts')
+  const { cloudRunOf } = await import('./cloud-files.ts')
+  const base = cloud.cloudUrl()
+  const run = cloudRunOf(source, base)
+  return run ? { runId: run.runId, base, auth: await cloud.cloudAuth(base) } : null
 }
 
 /**
@@ -1039,7 +1080,10 @@ async function cloudDownload(
 /** `reeval attach`'s viewer on this terminal, drawn with the attach flags. */
 async function attachHere(
   flags: Flags,
-  options: Pick<import('./attach.ts').AttachOptions, 'source' | 'root' | 'follow' | 'onDetach'>,
+  options: Pick<
+    import('./attach.ts').AttachOptions,
+    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint'
+  >,
 ): Promise<number> {
   const { attach } = await import('./attach.ts')
   return attach({
@@ -1194,6 +1238,9 @@ async function runCommand(
   }
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
+  }
+  if ((flags.resume !== undefined || retry !== undefined) && !flags.local) {
+    await refuseCloudContinue(flags, configPath)
   }
   if (retry !== undefined && (given.length || flags.tag?.length || flags.trait?.length)) {
     throw new UsageError(
@@ -1509,6 +1556,37 @@ async function runCommand(
  * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
  * so it plans with the flags given now, with a note.
  */
+/**
+ * Refuses `--resume` or `--retry-errors` on a run that goes to the cloud, from `--cloud` or the
+ * config's or profile's `cloud`, before anything looks for the run here.
+ */
+async function refuseCloudContinue(flags: Flags, configPath: string | undefined) {
+  const { wantsCloud } = await import('./cloud-run.ts')
+  let cloud = !!flags.cloud
+  if (!cloud) {
+    const path = requireConfig(configPath)
+    loadEnvFiles(path)
+    const loaded = await loadConfig(
+      path,
+      'run',
+      flags.profile ?? (process.env.REEVAL_PROFILE || undefined),
+    )
+    let profile: ReturnType<typeof selectProfile> = null
+    try {
+      profile = selectProfile(loaded, flags.profile)
+    } catch (error) {
+      // The resume checks report a profile the config no longer defines, naming the run's own.
+      if (!(error instanceof UsageError)) throw error
+    }
+    cloud = wantsCloud(flags, loaded, profile)
+  }
+  if (!cloud) return
+  const flag = flags.resume !== undefined ? '--resume' : '--retry-errors'
+  throw new UsageError(
+    `${flag} with a cloud run isn't supported by this reeval yet: pass --local to continue a run on this machine`,
+  )
+}
+
 async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
   const path = requireConfig(configPath)
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.

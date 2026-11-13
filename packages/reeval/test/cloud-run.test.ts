@@ -186,7 +186,10 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * event socket. Starting runs the bundle with `reeval run --bundle --events-url`, posting to this
  * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `fails`,
  * starting runs nothing: the socket closes with no exit line and the run reads as failed, with
- * `exitCode` when given.
+ * `exitCode` when given. With `holds`, starting sends a header and a `held` notice and the run
+ * goes on until it's canceled; with `stops`, it ends with `exitCode` (130 when not given) and
+ * reads as stopped, for that reason. `status` and `error` replace what the run reads as (and a
+ * cancel then finds it ended), and with `slowStatus` the run's status never answers.
  */
 async function platform(
   options: {
@@ -200,6 +203,11 @@ async function platform(
     secretNames?: string[] | number | 'malformed' | 'drop'
     /** The asked-for names the fake platform reserves. */
     reserved?: string[]
+    holds?: boolean
+    stops?: string
+    status?: unknown
+    error?: unknown
+    slowStatus?: boolean
   } = {},
 ) {
   const seen: Seen[] = []
@@ -219,12 +227,46 @@ async function platform(
     res.writeHead(status, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
   }
+  let canceled = false
   const run = () => ({
     id: 'run_1',
-    status: options.fails ? 'failed' : over ? 'succeeded' : 'running',
-    error: options.fails ? { code: 'start_failed', message: options.fails } : null,
+    status: options.fails
+      ? 'failed'
+      : options.stops
+        ? 'stopped'
+        : canceled
+          ? over
+            ? 'cancelled'
+            : 'running'
+          : over
+            ? 'succeeded'
+            : 'running',
+    error: options.fails
+      ? { code: 'start_failed', message: options.fails }
+      : options.stops
+        ? { code: 'stopped_by_platform', message: options.stops }
+        : null,
     exitCode: options.exitCode ?? null,
+    ...(options.status === undefined ? {} : { status: options.status }),
+    ...(options.error === undefined ? {} : { error: options.error }),
   })
+  const relay = (line: object) => {
+    const l = JSON.stringify(line)
+    lines.push(l)
+    for (const v of viewers) v.send(`{"seq":${lines.length},"line":${l}}`)
+  }
+  const header = () =>
+    relay({
+      type: 'header',
+      schemaVersion: 1,
+      reeval: '0.0.0',
+      runId: 'r-held',
+      startedAt: new Date().toISOString(),
+      pid: 1,
+      host: 'platform-machine',
+      harness: 'fake',
+      verbosity: 0,
+    })
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://platform')
     seen.push({ method: req.method ?? '', path: url.pathname, auth: req.headers.authorization })
@@ -267,6 +309,13 @@ async function platform(
       if (!uploaded) return json(res, 409, { error: { code: 'no_bundle', message: 'no bundle' } })
       if (options.fails) {
         over = true
+      } else if (options.holds) {
+        header()
+        relay({ type: 'notice', at: Date.now(), level: 'info', text: 'held' })
+      } else if (options.stops) {
+        header()
+        relay({ type: 'exit', at: Date.now(), code: options.exitCode ?? 130 })
+        over = true
       } else {
         const file = join(tempDir('cloud-bundle'), 'bundle.tar.gz')
         writeFileSync(file, uploaded)
@@ -278,7 +327,18 @@ async function platform(
       }
       return json(res, 202, run())
     }
-    if (req.method === 'GET' && url.pathname === '/api/runs/run_1') return json(res, 200, run())
+    if (req.method === 'GET' && url.pathname === '/api/runs/run_1') {
+      if (options.slowStatus) return
+      return json(res, 200, run())
+    }
+    if (req.method === 'POST' && url.pathname === '/api/runs/run_1/cancel') {
+      if (over || options.status !== undefined) return json(res, 200, run())
+      canceled = true
+      const answer = run()
+      relay({ type: 'exit', at: Date.now(), code: 130 })
+      finish()
+      return json(res, 202, answer)
+    }
     if (req.method === 'GET' && url.pathname === '/api/runs/run_1/artifacts/files.tar.gz') {
       await vm
       const served = vm ? files(machineFiles(tmp, lines)) : null
@@ -357,6 +417,7 @@ describe('reeval run on the cloud platform', () => {
           'PUT /api/runs/run_1/bundle',
           'POST /api/runs/run_1/start',
           'WS /api/runs/run_1/events',
+          'GET /api/runs/run_1',
         ],
       )
       for (const s of p.seen.filter((s) => s.path !== '/ingest')) {
@@ -727,6 +788,190 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
+  test('Ctrl-C or SIGTERM without a terminal detaches and the run goes on, from reeval run and reeval attach', async () => {
+    for (const signals of [['SIGINT'], ['SIGTERM'], ['SIGINT', 'SIGTERM']] as const) {
+      const p = await platform({ holds: true })
+      const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+      const interrupt = (stdout: string, pid: number) => {
+        if (!stdout.includes('held')) return false
+        for (const signal of signals) process.kill(pid, signal)
+        return true
+      }
+      const sent = signals.join(' then ')
+      try {
+        const dir = await fixtureProject()
+        const r = await runCli(dir, ['run', '--cloud'], { env, onOutput: interrupt })
+        assert.equal(r.code, 130, `${sent}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stdout,
+          /Cloud run run_1 goes on: reeval attach \S+\/api\/runs\/run_1\/events follows it again; reeval cloud run cancel run_1 cancels it/,
+          sent,
+        )
+        const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
+          env,
+          onOutput: interrupt,
+        })
+        assert.equal(again.code, 0, `${sent}: ${again.stdout}${again.stderr}`)
+        assert.match(again.stdout, /Detached from run r-held\./, sent)
+        assert.ok(!p.seen.some((s) => s.path.endsWith('/cancel')), 'detaching cancels nothing')
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test("once the run ends, a status that doesn't come within a few seconds, or a Ctrl-C while waiting for it, keeps the stream's exit code", async () => {
+    const p = await platform({ slowStatus: true })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      let ended = 0
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env,
+        onOutput: (stdout) => {
+          if (!/1 passed/.test(stdout)) return false
+          ended = Date.now()
+          return true
+        },
+      })
+      const waited = Date.now() - ended
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.ok(waited < 15_000, `waited ${waited}ms for the status`)
+      let killed = 0
+      const interrupted = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], {
+        env,
+        onOutput: (stdout, pid) => {
+          if (!/1 passed/.test(stdout)) return false
+          setTimeout(() => {
+            killed = Date.now()
+            process.kill(pid, 'SIGINT')
+          }, 1500)
+          return true
+        },
+      })
+      assert.equal(interrupted.code, 0, interrupted.stdout + interrupted.stderr)
+      assert.ok(killed > 0 && Date.now() - killed < 3000, 'Ctrl-C ends the wait')
+      assert.doesNotMatch(interrupted.stdout + interrupted.stderr, /goes on|reeval:/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('reeval cloud run cancel cancels the run by its id or event stream URL, and its followers see it end', async () => {
+    const p = await platform({ holds: true })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      let canceling: Promise<Awaited<ReturnType<typeof runCli>>> | undefined
+      const followed = await runCli(dir, ['run', '--cloud'], {
+        env,
+        onOutput: (stdout) => {
+          if (!stdout.includes('held')) return false
+          canceling = runCli(dir, ['cloud', 'run', 'cancel', 'run_1'], { env })
+          return true
+        },
+      })
+      const canceled = await canceling
+      assert.equal(canceled?.code, 0, `${canceled?.stdout}${canceled?.stderr}`)
+      assert.match(canceled?.stdout ?? '', /Canceling cloud run run_1/)
+      assert.equal(followed.code, 130, followed.stdout + followed.stderr)
+      assert.doesNotMatch(followed.stdout, /goes on/)
+      const cancel = p.seen.find((s) => s.path === '/api/runs/run_1/cancel')
+      assert.equal(cancel?.method, 'POST')
+      assert.equal(cancel?.auth, 'Bearer cloud-test-token')
+      const ended = await runCli(
+        dir,
+        ['cloud', 'run', 'cancel', `${p.base.replace(/^http/, 'ws')}/api/runs/run_1/events`],
+        { env },
+      )
+      assert.equal(ended.code, 0, ended.stdout + ended.stderr)
+      const status = /Cloud run run_1 has already ended \((\w+)\)/.exec(ended.stdout)?.[1]
+      assert.equal(status, 'cancelled', ended.stdout)
+      const missing = await runCli(dir, ['cloud', 'run', 'cancel', 'run_2'], { env })
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(missing.stderr, /the cloud platform refused to cancel run run_2/)
+      const none = await runCli(dir, ['cloud', 'run', 'cancel'], { env })
+      assert.equal(none.code, 2)
+      assert.match(none.stderr, /reeval cloud run cancel needs the run/)
+      const bare = await runCli(dir, ['cloud', 'run'], { env })
+      assert.equal(bare.code, 2)
+      assert.match(
+        bare.stderr,
+        /Unknown command "cloud run"\. Did you mean reeval cloud run cancel/,
+      )
+      const elsewhere = await runCli(
+        dir,
+        ['cloud', 'run', 'cancel', 'https://elsewhere.test/api/runs/run_1/events'],
+        { env },
+      )
+      assert.equal(elsewhere.code, 2)
+      assert.match(elsewhere.stderr, /isn't a cloud run's event stream at/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a run the platform stopped exits 4 with how to resume it, from reeval run and reeval attach, whatever its stream ended with', async () => {
+    for (const exitCode of [130, 3, 0]) {
+      const p = await platform({ stops: 'The run was stopped by the platform.', exitCode })
+      const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+      try {
+        const dir = await fixtureProject()
+        const r = await runCli(dir, ['run', '--cloud'], { env })
+        assert.equal(r.code, 4, `exit ${exitCode}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stdout, /Cloud run run_1 stopped: The run was stopped by the platform\./)
+        assert.match(r.stdout, /reeval run --cloud --resume run_1 continues it/)
+        const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], { env })
+        assert.equal(again.code, 4, `exit ${exitCode}: ${again.stdout}${again.stderr}`)
+        assert.match(again.stdout, /reeval run --cloud --resume run_1 continues it/)
+      } finally {
+        await p.close()
+      }
+    }
+  })
+
+  test("the platform's text reaches the terminal without escape sequences, and a field that isn't text is left out", async () => {
+    const odd = await platform({ stops: 'x', error: { code: 12, message: { said: 'no' } } })
+    const env = { REEVAL_CLOUD_URL: odd.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], { env })
+      assert.equal(r.code, 4, r.stdout + r.stderr)
+      assert.match(r.stdout, /The cloud platform stopped run run_1 before it finished/)
+      assert.match(r.stdout, /reeval run --cloud --resume run_1 continues it/)
+    } finally {
+      await odd.close()
+    }
+    const escaped = await platform({ status: 'cancel\u001b[2Jled' })
+    try {
+      const r = await runCli(await fixtureProject(), ['cloud', 'run', 'cancel', 'run_1'], {
+        env: { REEVAL_CLOUD_URL: escaped.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      assert.match(r.stdout, /Cloud run run_1 has already ended \(cancel\[2Jled\)/)
+      assert.ok(!r.stdout.includes('\u001b'), 'no escape reaches the terminal')
+    } finally {
+      await escaped.close()
+    }
+  })
+
+  test("reeval attach reads a cloud run's status when its stream is lost, as reeval run --cloud does", async () => {
+    const p = await platform({ fails: 'lost', status: 'stopped', exitCode: 130 })
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    try {
+      const dir = await fixtureProject()
+      for (const args of [
+        ['run', '--cloud'],
+        ['attach', `${p.base}/api/runs/run_1/events`],
+      ]) {
+        const r = await runCli(dir, args, { env })
+        assert.equal(r.code, 4, `${args[0]}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stdout, /Cloud run run_1 stopped: lost/, args[0])
+      }
+    } finally {
+      await p.close()
+    }
+  })
+
   test('exit 2 for a REEVAL_CLOUD_URL that is not http(s) or carries userinfo, and for flags a cloud run cannot take', async () => {
     const dir = await fixtureProject()
     const unset = await runCli(dir, ['run', '--cloud', '--dry-run'], {
@@ -764,6 +1009,46 @@ describe('reeval run on the cloud platform', () => {
       })
       assert.equal(token.code, 2, token.stdout + token.stderr)
       assert.match(token.stderr, /REEVAL_TOKEN has whitespace or a control character \(U\+000a\)/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('--resume and --retry-errors on a cloud run exit 2 before looking for the run, from --cloud or the config, and --local continues one here', async () => {
+    const p = await platform()
+    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+    const continues = [
+      ['--resume', 'run_1'],
+      ['--resume'],
+      ['--retry-errors', 'run_1'],
+      ['--retry-errors'],
+    ]
+    try {
+      const dir = await fixtureProject()
+      for (const args of continues) {
+        const r = await runCli(dir, ['run', '--cloud', ...args], { env })
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`${args[0]} with a cloud run isn't supported by this reeval yet`),
+        )
+      }
+      const config = join(dir, 'reeval.config.ts')
+      writeFileSync(
+        config,
+        readFileSync(config, 'utf8').replace('defineConfig({', 'defineConfig({\n  cloud: true,'),
+      )
+      for (const args of continues) {
+        const r = await runCli(dir, ['run', ...args], { env })
+        assert.equal(r.code, 2, `cloud: true, ${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`${args[0]} with a cloud run isn't supported by this reeval yet`),
+        )
+        const here = await runCli(dir, ['run', '--local', ...args], { env })
+        assert.doesNotMatch(here.stderr, /with a cloud run/, `--local ${args.join(' ')}`)
+      }
+      assert.deepEqual(p.seen, [], 'nothing reaches the platform')
     } finally {
       await p.close()
     }

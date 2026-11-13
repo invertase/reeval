@@ -3,7 +3,8 @@
 // replays what already happened and then follows. It exits with the run's own exit code. On a
 // terminal that's the interactive list, whose q and Ctrl-C detach this viewer and leave the run
 // alone; x pressed twice cancels the run, which only a run on this host whose live.json vouches for
-// its pid can be reached for. A run that writes heartbeats (its header says so) and then goes quiet
+// its pid can be reached for. Anywhere else a SIGINT or SIGTERM detaches the same way, and another
+// one a second later quits. A run that writes heartbeats (its header says so) and then goes quiet
 // is shown as stalled, and after longer as lost, which ends attach.
 import { hostname } from 'node:os'
 import { isAbsolute, join, posix, win32 } from 'node:path'
@@ -41,9 +42,14 @@ export type AttachOptions = {
   silence?: { stallMs?: number; lostMs?: number }
   /** Told when the viewer detaches, before `attach` returns 0. */
   onDetach?: () => void
+  /** How to cancel a run this viewer can't reach, which the interactive list shows. */
+  cancelHint?: string
 }
 
 const SILENT = Symbol('silent')
+
+/** How close a second signal comes to be the same press, as `reeval run` takes it. */
+const SAME_PRESS_MS = 1000
 
 /**
  * A path the run printed, as this viewer reads it. The run prints paths from its own current
@@ -162,6 +168,7 @@ export async function attach(options: AttachOptions): Promise<number> {
         detach: () => detached.abort(),
         ...(line.host === hostname() ? {} : { host: line.host }),
         ...(root === undefined ? {} : { cancelable: () => reachable(line) }),
+        ...(options.cancelHint === undefined ? {} : { cancelHint: options.cancelHint }),
       },
       cancel: () => {
         if (!reachable(line)) return false
@@ -196,6 +203,23 @@ export async function attach(options: AttachOptions): Promise<number> {
     }
   }
   let pending = lines.next()
+  // A launcher such as pnpm passes a Ctrl-C on as a SIGTERM too, so a second signal within
+  // SAME_PRESS_MS of the first is the same press; a later one quits.
+  let signaled: number | undefined
+  const interrupted = (signal: NodeJS.Signals) => {
+    if (signaled === undefined) {
+      signaled = Date.now()
+      detached.abort()
+    } else if (Date.now() - signaled >= SAME_PRESS_MS) {
+      process.exit(signal === 'SIGTERM' ? 143 : 130)
+    }
+  }
+  const unlisten = () => {
+    process.off('SIGINT', interrupted)
+    process.off('SIGTERM', interrupted)
+  }
+  process.on('SIGINT', interrupted)
+  process.on('SIGTERM', interrupted)
   try {
     for (;;) {
       const got = await next(pending)
@@ -259,6 +283,8 @@ export async function attach(options: AttachOptions): Promise<number> {
       throw error
     }
   } finally {
+    if (signaled === undefined) unlisten()
+    else setTimeout(unlisten, SAME_PRESS_MS - (Date.now() - signaled)).unref()
     pending.catch(() => {})
     lines.return?.(undefined).catch(() => {})
   }

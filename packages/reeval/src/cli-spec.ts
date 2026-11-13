@@ -233,10 +233,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 unset), as the config's cloud: true does: bundle the project,
                                 upload it to the project reeval link linked (an unlinked project
                                 exits 2), start the run and follow it as reeval attach does,
-                                exiting with its exit code. A value that isn't an http or https
-                                URL, or one with a user name or password, exits 2. A plan the
-                                platform can't run (tart(), files a bundle can't carry) runs here,
-                                with a note
+                                exiting with its exit code (4 when the platform stopped it). Ctrl-C
+                                detaches and the run goes on: reeval cloud run cancel cancels it. A
+                                value that isn't an http or https URL, or one with a user name or
+                                password, exits 2. A plan the platform can't run (tart(), files a
+                                bundle can't carry) runs here, with a note
     --download                  With a cloud run, once it ends download its files as a run here
                                 leaves them, as reeval attach --download does
     --local                     Run here, whatever the config's or profile's cloud sets`,
@@ -251,7 +252,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 WebSocket, which reconnects after a drop from the last line it got
                                 and exits 3 when the run refuses another viewer. On a terminal,
                                 reeval run's interactive list: q detaches (exit 0) and the run goes
-                                on; x pressed twice cancels a run on this host. A run that stops
+                                on, as Ctrl-C does anywhere; x pressed twice cancels a run on this
+                                host. A cloud run the platform stopped exits 4. A run that stops
                                 sending heartbeats shows as stalled after 20s and ends attach as
                                 lost after 2m (exit 3)
     --download                  For a cloud run's URL: once the run ends, download its files into
@@ -396,6 +398,14 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --offline --all-branches    A remote history.store: read its copy without pulling first; list
                                 every branch's runs, not only HEAD's
     --profile <name>            Use the history store the profile sets (also REEVAL_PROFILE)`,
+      },
+      run: {
+        flags: [],
+        positionals: 2,
+        help: `
+  reeval cloud run cancel <run> Cancel a cloud run, by the id reeval run --cloud printed or its
+                                event stream URL; its followers then see it end. Ctrl-C while
+                                following a cloud run only detaches`,
       },
     },
   },
@@ -709,8 +719,9 @@ export const INSTEAD: Record<string, string> = {
 
 const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
 or reeval.yaml, in the current directory or above)
-Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
-143 terminated (SIGTERM)
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 4 stopped (the cloud
+platform stopped the run before it finished; reeval run --cloud --resume continues it),
+130 interrupted (Ctrl-C), 143 terminated (SIGTERM)
 `
 
 const helpLines = (spec: CommandSpec) => [
@@ -882,7 +893,7 @@ function checkOne(
     } else if (command === 'image')
       return 'reeval image needs a subcommand: reeval image build, list or clean'
     else if (command === 'cloud')
-      return 'reeval cloud needs a subcommand: reeval cloud secrets, provider or push'
+      return 'reeval cloud needs a subcommand: reeval cloud secrets, provider, push or run'
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []

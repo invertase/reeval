@@ -187,9 +187,17 @@ export type ListAppProps = {
    * list down, leaving the run alone.
    */
   detach?: () => void
+  /** Under `detach`, how to cancel a run no key here can reach, shown in place of x. */
+  cancelHint?: string
 }
 
-export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): ReactElement {
+export function ListApp({
+  store,
+  colors: c,
+  cancel,
+  detach,
+  cancelHint,
+}: ListAppProps): ReactElement {
   const state = useSyncExternalStore(store.subscribe, store.get)
   const { exit } = useApp()
   const { stdout } = useStdout()
@@ -314,7 +322,7 @@ export function ListApp({ store, colors: c, cancel, detach }: ListAppProps): Rea
   const keys = finished
     ? `↑↓ move · ${step} · ← close · q quit`
     : detach
-      ? `↑↓ move · ${step} · q detach${cancelable ? ' · x cancel the run' : ''}`
+      ? `↑↓ move · ${step} · q detach${cancelable ? ' · x cancel the run' : cancelHint ? ` · ${cancelHint}` : ''}`
       : `↑↓ move · ${step} · q cancel`
   const confirm = detach ? 'Press x again to cancel the run.' : 'Press q again to cancel the run.'
   // The phase spins while reeval waits on the run, and settles once it ends.
@@ -406,6 +414,7 @@ export function mountList(o: MountOptions): {
     colors: o.colors,
     ...(o.cancel ? { cancel: o.cancel } : {}),
     ...(o.detach ? { detach: o.detach } : {}),
+    ...(o.cancelHint ? { cancelHint: o.cancelHint } : {}),
   }
   // Only an interactive terminal mounts the list, so Ink draws it live even where it detects CI.
   const app = render(h(ListApp, props), {

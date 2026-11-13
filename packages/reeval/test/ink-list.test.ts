@@ -283,6 +283,22 @@ test('following a run that cannot be reached, there is no cancel key', async () 
   }
 })
 
+test('following a run no key reaches, the list says how to cancel it instead', async () => {
+  const store = new ListStore()
+  store.set({ files: files(), counts: { done: 2, total: 3 } })
+  const hint = 'reeval cloud run cancel run_1 cancels it'
+  const app = render(h(ListApp, { store, colors: c, detach: () => {}, cancelHint: hint }))
+  try {
+    await settle()
+    assert.match(
+      app.lastFrame() ?? '',
+      /↑↓ move · → open · q detach · reeval cloud run cancel run_1 cancels it$/m,
+    )
+  } finally {
+    app.unmount()
+  }
+})
+
 test('the cancel key goes as the run stops being reachable, and a refused cancel says so', async () => {
   const store = new ListStore()
   store.set({ files: files(), counts: { done: 2, total: 3 }, cancelable: true })

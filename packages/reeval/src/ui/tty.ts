@@ -196,8 +196,14 @@ export type InteractiveOptions = RendererOptions & {
    * The run is another process's, which `reeval attach` follows: q and Ctrl-C call `detach`, and
    * only `cancel` reaches the run, while `cancelable` (asked every `CANCELABLE_MS`) says it can.
    * `host` is the run's when it isn't this one's, and marks the paths the run prints as being there.
+   * `cancelHint` says how to cancel a run no key here reaches.
    */
-  attached?: { detach: () => void; host?: string; cancelable?: () => boolean }
+  attached?: {
+    detach: () => void
+    host?: string
+    cancelable?: () => boolean
+    cancelHint?: string
+  }
   /** Loads the Ink list; tests stand in a failing one. */
   load?: () => Promise<Pick<typeof import('./ink-list.ts'), 'mountList'>>
 }
@@ -283,6 +289,7 @@ export class InteractiveRenderer implements Renderer {
                   this.#detached = true
                   attached.detach()
                 },
+                ...(attached.cancelHint ? { cancelHint: attached.cancelHint } : {}),
               }
             : {}),
           stdout: this.#o.stdout,

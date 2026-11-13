@@ -501,6 +501,16 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/cloud-run.test.ts', 'reeval/test/cli.test.ts'],
   },
   {
+    id: 'cloud.cancel',
+    area: 'Config and selection',
+    name: "`reeval cloud run cancel <run>`, by the run's id or its event stream URL, asks the cloud platform to cancel a cloud run (a run already ended says so; an unknown one is exit 2), and its followers see it end; Ctrl-C (or SIGTERM) while following a cloud run, with or without a terminal, only detaches, and the run goes on (the interactive list names `reeval cloud run cancel` in place of x); a followed cloud run the platform stopped before it finished exits 4, with how to resume it; `reeval run --cloud --resume` is exit 2 for now",
+    unit: [
+      'reeval/test/cloud-run.test.ts',
+      'reeval/test/ink-list.test.ts',
+      'reeval/test/cli.test.ts',
+    ],
+  },
+  {
     id: 'plan.cost',
     area: 'Config and selection',
     name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",
