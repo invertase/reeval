@@ -451,6 +451,9 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   return runCommand(
     {
       ...flags,
+      ...(flags['events-file'] === undefined
+        ? {}
+        : { 'events-file': resolve(from, flags['events-file']) }),
       bundle: undefined,
       local: true,
       ...(args.profile ? { profile: args.profile } : {}),

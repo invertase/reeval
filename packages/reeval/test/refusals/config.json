@@ -129,5 +129,10 @@
   "collected: every trait key defined": null,
   "collected: a --trait without =": "UsageError: --trait lang must be key=value, the trait's key and the value a cell's environment has, e.g. --trait lang=ts",
   "collected: a --trait with no key": "UsageError: --trait =ts must be key=value, the trait's key and the value a cell's environment has, e.g. --trait lang=ts",
-  "collected: a --trait with an empty value": null
+  "collected: a --trait with an empty value": null,
+  "bundle resume: no run id": "UsageError: --bundle with --resume continues one run: pass its id, as in reeval run --bundle <file> --resume <run>.",
+  "bundle resume: a path for a run id": "UsageError: --resume ../r1 isn't a run id.",
+  "bundle resume: no state for the run here": "UsageError: No state for run r2 in <dir>/bundle-resume/.reeval: --bundle with --resume continues a run from its .reeval/staging/r2/ or .reeval/runs/r2.json in the current directory.",
+  "good: bundle resume with the run staged here": null,
+  "good: bundle resume with its scratch record here": null
 }

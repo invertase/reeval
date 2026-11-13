@@ -4,6 +4,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { checkResumeState } from '../../src/bundle/index.ts'
 import {
   checkGateways,
   parseYamlConfig,
@@ -175,6 +176,15 @@ export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** `reeval run --bundle --resume <id>` from a directory holding run r1's staging and r3's record. */
+const bundleResume = (runId: string) => () => {
+  const here = join(DIR, 'bundle-resume')
+  mkdirSync(join(here, '.reeval', 'staging', 'r1'), { recursive: true })
+  mkdirSync(join(here, '.reeval', 'runs'), { recursive: true })
+  writeFileSync(join(here, '.reeval', 'runs', 'r3.json'), '{}\n')
+  checkResumeState(here, runId)
+}
 
 /** A marketplace whose review entry is a `file:` URL on this machine. */
 const hostEntry = () => {
@@ -2441,6 +2451,11 @@ environments:
     ['collected: a --trait without =', traitKeys(['lang'], undefined, ['lang'])],
     ['collected: a --trait with no key', traitKeys(['=ts'], undefined, ['lang'])],
     ['collected: a --trait with an empty value', traitKeys(['lang='], undefined, ['lang'])],
+    ['bundle resume: no run id', bundleResume('')],
+    ['bundle resume: a path for a run id', bundleResume('../r1')],
+    ['bundle resume: no state for the run here', bundleResume('r2')],
+    ['good: bundle resume with the run staged here', bundleResume('r1')],
+    ['good: bundle resume with its scratch record here', bundleResume('r3')],
   ],
   gateway: [
     ['ts: an empty list', config({ gateway: [] })],

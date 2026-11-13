@@ -849,11 +849,15 @@ export async function openBundle(file: string, log: (line: string) => void): Pro
   }
 }
 
-/** The paths under a `.reeval/` that hold run `runId`'s state, staged or assembled. */
+/**
+ * The paths under a `.reeval/` that hold run `runId`'s state, staged or assembled, and the event
+ * stream `--events` writes, which a resume appends to.
+ */
 const runState = (reevalDir: string, runId: string) => [
   join(reevalDir, 'staging', runId),
   join(reevalDir, 'runs', `${runId}.json`),
   join(reevalDir, 'runs', runId),
+  join(reevalDir, 'events', `${runId}.ndjson`),
 ]
 
 /**
@@ -878,8 +882,8 @@ export function checkResumeState(from: string, runId: string): void {
 }
 
 /**
- * Moves run `runId`'s staging and scratch record from `from`'s `.reeval/` into the extracted
- * project's, where the resume reads them as a local resume does.
+ * Moves run `runId`'s staging, scratch record and event stream from `from`'s `.reeval/` into the
+ * extracted project's, where the resume reads them as a local resume does.
  */
 export function moveResumeState(from: string, project: string, runId: string): void {
   const source = runState(join(from, '.reeval'), runId)
