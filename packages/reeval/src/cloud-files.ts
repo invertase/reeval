@@ -447,24 +447,30 @@ export type CloudOrigin = {
 
 const originDir = (root: string) => join(root, '.reeval', 'cloud')
 
-/** Writes run `runId`'s marker, through no link. */
+/** Writes run `runId`'s marker. */
 async function markCloudOrigin(
   root: string,
   runId: string,
   origin: Omit<CloudOrigin, 'schemaVersion'>,
 ): Promise<void> {
-  const dir = originDir(root)
   const marker: CloudOrigin = { schemaVersion: 1, ...origin }
+  await writeOrigin(root, runId, `${JSON.stringify(marker)}\n`)
+}
+
+/** Writes `text` as run `runId`'s marker whole, through a temporary file and no link. */
+async function writeOrigin(root: string, runId: string, text: string): Promise<void> {
+  const dir = originDir(root)
+  const tmp = join(dir, `.${runId}.json.${process.pid}.tmp`)
   try {
     for (const at of [dirname(dir), dir]) {
       const info = await lstat(at).catch(() => null)
       if (!info) await mkdir(at)
       else if (!info.isDirectory()) throw new Error(`${relativeFile(root, at)} isn't a directory`)
     }
-    const tmp = join(dir, `.${runId}.json.${process.pid}.tmp`)
-    await writeFile(tmp, `${JSON.stringify(marker)}\n`, { flag: 'wx' })
+    await writeFile(tmp, text, { flag: 'wx' })
     await rename(tmp, join(dir, `${runId}.json`))
   } catch (error) {
+    await unlink(tmp).catch(() => {})
     throw new CloudError(
       `couldn't write .reeval/cloud/${runId}.json: ${error instanceof Error ? error.message : String(error)}`,
     )
@@ -528,6 +534,5 @@ export async function forgetCloudOrigin(root: string, runId: string): Promise<st
 
 /** Puts back the marker {@link forgetCloudOrigin} removed, for a continuation undone unchanged. */
 export async function rememberCloudOrigin(root: string, runId: string, text: string) {
-  await mkdir(originDir(root), { recursive: true })
-  await writeFile(join(originDir(root), `${runId}.json`), text)
+  await writeOrigin(root, runId, text)
 }

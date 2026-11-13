@@ -2329,4 +2329,39 @@ describe('reeval run --cloud --resume', () => {
       await p.close()
     }
   })
+
+  test('a retry of a downloaded run that is undone puts its cloud origin back', async () => {
+    const p = await platform()
+    try {
+      const dir = await fixtureProject()
+      const r = await runCli(dir, ['run', '--cloud', '--download'], {
+        env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const name = readdirSync(join(dir, '.reeval/runs')).find((n) => n.endsWith('.json'))
+      assert.ok(name)
+      const runId = name.slice(0, -'.json'.length)
+      const file = join(dir, '.reeval/runs', name)
+      const record = JSON.parse(readFileSync(file, 'utf8'))
+      for (const e of record.evals) {
+        for (const c of e.cells) c.environmentDigest = `sha256:${'0'.repeat(64)}`
+        for (const a of e.attempts) {
+          a.outcome = 'infra_error'
+          a.error = { kind: 'infra', message: 'the sandbox went away' }
+        }
+      }
+      writeFileSync(file, JSON.stringify(record))
+      const before = readFileSync(file, 'utf8')
+      const marker = join(dir, '.reeval/cloud', `${runId}.json`)
+      const origin = readFileSync(marker)
+      const retry = await runCli(dir, ['run', '--local', '--retry-errors', runId])
+      assert.equal(retry.code, 2, retry.stdout + retry.stderr)
+      assert.match(retry.stderr, /plan changed since it ran: the environment of .* changed/)
+      assert.ok(readFileSync(marker).equals(origin), 'the marker is back byte for byte')
+      assert.equal(readFileSync(file, 'utf8'), before, 'the record is as it was')
+      assert.ok(!existsSync(join(dir, '.reeval/staging', runId)), 'its staging is gone')
+    } finally {
+      await p.close()
+    }
+  })
 })
