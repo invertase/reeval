@@ -2408,17 +2408,33 @@ async function executeRun(
   const { MACHINES, MachineService } = await import('./sandbox/machine-service.ts')
   const machines = new MachineService()
   const { TRACE } = await import('./trace/spans.ts')
-  const { RunTrace } = await import('./trace/run.ts')
-  const { exportSpans, otlpTarget } = await import('./trace/otlp.ts')
-  const exporting = otlpTarget(process.env)
+  const { RunTrace, traceIdOf } = await import('./trace/run.ts')
+  const { otlpConfigured } = await import('./trace/otlp.ts')
   let exported: Promise<string | null> = Promise.resolve(null)
   let runStarted = false
+  const telemetry =
+    setup.dryRun || !otlpConfigured(process.env)
+      ? null
+      : (await import('./trace/telemetry.ts')).startTelemetry({
+          env: process.env,
+          version,
+          traceId: traceIdOf(runId),
+          runId,
+          paths: [config.root, stagingDir],
+        })
+  if (telemetry) {
+    const onEvent = renderer.onEvent.bind(renderer)
+    renderer.onEvent = (e) => {
+      telemetry.event(e)
+      onEvent(e)
+    }
+  }
   const trace = setup.dryRun
     ? undefined
     : new RunTrace({
         dir: stagingDir,
         runId,
-        keep: typeof exporting === 'object' && exporting !== null,
+        ...(telemetry && { onSpan: (span) => telemetry.span(span) }),
         attributes: {
           'reeval.version': version,
           ...(profile && { 'reeval.profile': profile.name }),
@@ -2562,14 +2578,12 @@ async function executeRun(
   } finally {
     clearTimeout(budgetTimer)
     await machines.close()
-    if (trace) {
-      const spans = trace.close({
-        status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
-        started: runStarted,
-      })
-      // Awaited only once the run's record is written: a slow collector never holds it up.
-      exported = exportSpans(spans, process.env, version)
-    }
+    trace?.close({
+      status: interrupted ? 'interrupted' : reached ? 'budget' : 'ran',
+      started: runStarted,
+    })
+    // Awaited only once the run's record is written: a slow collector never holds it up.
+    if (telemetry) exported = telemetry.close()
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
     const { removePreparedWorkspaces } = await import('./workspace.ts')

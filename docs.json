@@ -536,6 +536,10 @@
             {
               "title": "Queries",
               "href": "/results/inspection/queries"
+            },
+            {
+              "title": "OpenTelemetry",
+              "href": "/results/inspection/opentelemetry"
             }
           ]
         }

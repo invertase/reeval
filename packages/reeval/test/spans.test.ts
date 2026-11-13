@@ -1,14 +1,16 @@
 // The run's trace, spans.jsonl: a fake run writes one with the run, its attempts and their phases
 // under it, the record names it, recording keeps it with the run's evidence, and with
-// OTEL_EXPORTER_OTLP_ENDPOINT set the run posts it to a collector as OTLP/HTTP JSON.
+// OTEL_EXPORTER_OTLP_ENDPOINT set the run sends its spans, log records and metrics to a collector
+// during the run.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
+import type { TestContext } from 'node:test'
 import { describe, test } from 'node:test'
-import { exportSpans, OTLP_BATCH, otlpRequest, otlpTarget, shownUrl } from '../src/trace/otlp.ts'
+import type { logsRequest, metricsRequest, tracesRequest } from '../src/trace/otlp.ts'
 import { RunTrace, traceIdOf } from '../src/trace/run.ts'
 import { parseSpans, type RunSpan } from '../src/view/spans.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -33,6 +35,34 @@ async function fakeProject(name: string) {
   git('-c', 'user.name=T', '-c', 'user.email=t@example.com', 'add', '-A')
   git('-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'init')
   return p
+}
+
+/** A collector on loopback that takes every request, keeping JSON bodies parsed. */
+async function startCollector(t: TestContext) {
+  const requests: Array<{ path: string; auth?: string; type?: string; body: unknown }> = []
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = []
+    req.on('data', (d: Buffer) => chunks.push(d))
+    req.on('end', () => {
+      const type = req.headers['content-type']
+      const raw = Buffer.concat(chunks)
+      requests.push({
+        path: req.url ?? '',
+        ...(req.headers.authorization && { auth: req.headers.authorization }),
+        ...(type && { type }),
+        body: type === 'application/json' ? JSON.parse(raw.toString('utf8')) : raw,
+      })
+      res.writeHead(200, { 'content-type': 'application/json' }).end('{}')
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+  const { port } = server.address() as AddressInfo
+  return {
+    url: `http://127.0.0.1:${port}`,
+    requests,
+    of: (path: string) => requests.filter((r) => r.path === path).map((r) => r.body),
+  }
 }
 
 const byName = (spans: RunSpan[], name: string) => spans.filter((s) => s.name === name)
@@ -73,46 +103,87 @@ describe('run spans', () => {
     assert.equal(recorded.read('spans.jsonl'), read('spans.jsonl'))
   })
 
-  test('with OTEL_EXPORTER_OTLP_ENDPOINT set, the run posts its spans as OTLP JSON', async (t) => {
-    const bodies: Array<{ url: string; auth: string | undefined; body: unknown }> = []
-    const server = createServer((req, res) => {
-      let data = ''
-      req.on('data', (d) => {
-        data += d
-      })
-      req.on('end', () => {
-        bodies.push({ url: req.url ?? '', auth: req.headers.authorization, body: JSON.parse(data) })
-        res.writeHead(200, { 'content-type': 'application/json' }).end('{}')
-      })
-    })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    t.after(() => server.close())
-    const { port } = server.address() as AddressInfo
-
+  test('with OTEL_EXPORTER_OTLP_ENDPOINT set, the run sends spans, log records and metrics', async (t) => {
+    const collector = await startCollector(t)
     const p = await fakeProject('spans-otlp')
     const r = await runCli(p.dir, ['run'], {
       env: {
-        OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}/`,
+        OTEL_EXPORTER_OTLP_ENDPOINT: `${collector.url}/`,
         OTEL_EXPORTER_OTLP_HEADERS: 'authorization=Bearer%20abc',
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
         OTEL_SERVICE_NAME: 'evals',
       },
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(bodies.length, 1)
-    const [sent] = bodies
-    assert.equal(sent?.url, '/v1/traces')
-    assert.equal(sent?.auth, 'Bearer abc')
-    const request = sent?.body as ReturnType<typeof otlpRequest>
-    const [resource] = request.resourceSpans
+    const { run, read } = readRun(p.dir)
+    for (const sent of collector.requests) assert.equal(sent.auth, 'Bearer abc')
+    const traces = collector.of('/v1/traces') as Array<ReturnType<typeof tracesRequest>>
+    const [resource] = traces[0]?.resourceSpans ?? []
     assert.deepEqual(resource?.resource.attributes, [
       { key: 'service.name', value: { stringValue: 'evals' } },
     ])
-    const sentSpans = resource?.scopeSpans[0]?.spans ?? []
-    const { read } = readRun(p.dir)
+    const sentSpans = traces.flatMap((b) => b.resourceSpans[0]?.scopeSpans[0]?.spans ?? [])
     const written = parseSpans(read('spans.jsonl'))
     assert.deepEqual(sentSpans.map((s) => s.spanId).sort(), written.map((s) => s.spanId).sort())
-    const root = sentSpans.find((s) => s.name === 'reeval.run')
-    assert.match(root?.startTimeUnixNano ?? '', /^\d{19}$/)
+    assert.match(
+      sentSpans.find((s) => s.name === 'reeval.run')?.startTimeUnixNano ?? '',
+      /^\d{19}$/,
+    )
+
+    const logs = (collector.of('/v1/logs') as Array<ReturnType<typeof logsRequest>>).flatMap(
+      (b) => b.resourceLogs[0]?.scopeLogs[0]?.logRecords ?? [],
+    )
+    const attempts = logs.filter((l) => l.body.stringValue.startsWith('passed writes hello'))
+    assert.equal(attempts.length, 2, JSON.stringify(logs))
+    for (const l of logs) assert.equal(l.traceId, traceIdOf(run.runId))
+
+    const metrics = (
+      collector.of('/v1/metrics') as Array<ReturnType<typeof metricsRequest>>
+    ).flatMap((b) => b.resourceMetrics[0]?.scopeMetrics[0]?.metrics ?? [])
+    assert.ok(
+      metrics.some((m) => m.name === 'system.cpu.utilization'),
+      'one sample at the end',
+    )
+  })
+
+  test('spans go out in batches as they end, not only when the run does', async (t) => {
+    const collector = await startCollector(t)
+    const p = await project('spans-otlp-live', {
+      'reeval.config.ts': fakeConfig({ harness, extra: 'runs: 2, concurrency: 1,' }),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes hello', async (c) => {
+  await c.send('write hello.txt')
+  await new Promise((r) => setTimeout(r, 1500))
+  expect(1).toBe(1)
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: {
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: `${collector.url}/v1/traces`,
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
+        OTEL_BSP_SCHEDULE_DELAY: '100',
+      },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const batches = (collector.of('/v1/traces') as Array<ReturnType<typeof tracesRequest>>).map(
+      (b) => (b.resourceSpans[0]?.scopeSpans[0]?.spans ?? []).map((s) => s.name),
+    )
+    assert.ok(batches.length >= 2, JSON.stringify(batches))
+    const first = batches.findIndex((names) => names.includes('attempt'))
+    const root = batches.findIndex((names) => names.includes('reeval.run'))
+    assert.ok(first >= 0 && first < root, 'an attempt went out before the run ended')
+  })
+
+  test('protobuf is the default protocol', async (t) => {
+    const collector = await startCollector(t)
+    const p = await fakeProject('spans-otlp-proto')
+    const r = await runCli(p.dir, ['run'], {
+      env: { OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: `${collector.url}/v1/traces` },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.ok(collector.requests.length > 0)
+    for (const sent of collector.requests) assert.equal(sent.type, 'application/x-protobuf')
   })
 
   test('a failed attempt is an error span with its outcome, and the run goes on', async () => {
@@ -185,153 +256,28 @@ evaluate('throws', async () => {
   })
 })
 
-describe('OTLP target', () => {
-  test('OTEL_SDK_DISABLED turns the export off', () => {
-    const on = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c:4318' }
-    assert.equal(otlpTarget({ ...on, OTEL_SDK_DISABLED: 'true' }), null)
-    assert.equal(typeof otlpTarget({ ...on, OTEL_SDK_DISABLED: 'false' }), 'object')
-  })
-
-  test('a message shows the URL without its credentials', () => {
-    assert.equal(
-      shownUrl('https://user:pass@c.example:4318/v1/traces?token=abc'),
-      'https://c.example:4318/v1/traces',
-    )
-  })
-
-  test('reads the standard variables', () => {
-    assert.equal(otlpTarget({}), null)
-    assert.equal(
-      otlpTarget({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c:4318', OTEL_TRACES_EXPORTER: 'none' }),
-      null,
-    )
-    const target = otlpTarget({
-      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c:4318',
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'http://t:4318/traces',
-      OTEL_EXPORTER_OTLP_HEADERS: 'a=1,b=x%3Dy',
-      OTEL_EXPORTER_OTLP_TRACES_HEADERS: 'b=2',
-      OTEL_RESOURCE_ATTRIBUTES: 'deployment.environment=ci',
-      OTEL_EXPORTER_OTLP_TIMEOUT: '500',
-      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
-    })
-    assert.deepEqual(target, {
-      url: 'http://t:4318/traces',
-      headers: { a: '1', b: '2' },
-      serviceName: 'reeval',
-      resource: { 'deployment.environment': 'ci' },
-      timeoutMs: 500,
-    })
-    assert.match(
-      String(
-        otlpTarget({
-          OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c',
-          OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc',
-        }),
-      ),
-      /OTLP\/HTTP as JSON only.*grpc: set it to http\/json/,
-    )
-  })
-
-  test('maps a span to OTLP JSON', () => {
-    const [span] =
-      otlpRequest(
-        [
-          {
-            traceId: 'a'.repeat(32),
-            spanId: 'b'.repeat(16),
-            parentSpanId: 'c'.repeat(16),
-            name: 'lease',
-            startMs: 1_794_500_000_000,
-            endMs: 1_794_500_000_250,
-            attributes: { 'host.id': 'vm-1', 'reeval.machine.slot': 0, ok: true, ratio: 0.5 },
-            status: { code: 'error', message: 'gone' },
-            links: [{ traceId: 'a'.repeat(32), spanId: 'd'.repeat(16) }],
-          },
-        ],
-        { url: '', headers: {}, serviceName: 'reeval', resource: {}, timeoutMs: 1 },
-        '1.0.0',
-      ).resourceSpans[0]?.scopeSpans[0]?.spans ?? []
-    assert.deepEqual(span, {
-      traceId: 'a'.repeat(32),
-      spanId: 'b'.repeat(16),
-      parentSpanId: 'c'.repeat(16),
-      name: 'lease',
-      kind: 1,
-      startTimeUnixNano: '1794500000000000000',
-      endTimeUnixNano: '1794500000250000000',
-      attributes: [
-        { key: 'host.id', value: { stringValue: 'vm-1' } },
-        { key: 'reeval.machine.slot', value: { intValue: '0' } },
-        { key: 'ok', value: { boolValue: true } },
-        { key: 'ratio', value: { doubleValue: 0.5 } },
-      ],
-      links: [{ traceId: 'a'.repeat(32), spanId: 'd'.repeat(16) }],
-      status: { code: 2, message: 'gone' },
-    })
-  })
-})
-
-const span = (i: number): RunSpan => ({
-  traceId: 'a'.repeat(32),
-  spanId: i.toString(16).padStart(16, '0'),
-  name: 'attempt',
-  startMs: 1,
-  endMs: 2,
-  attributes: {},
-})
-
-describe('OTLP export', () => {
-  const env = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://user:secret@c.example:4318' }
-  const many = Array.from({ length: OTLP_BATCH * 2 + 76 }, (_, i) => span(i))
-  const sizes = (bodies: string[]) =>
-    bodies.map(
-      (b) =>
-        (JSON.parse(b) as ReturnType<typeof otlpRequest>).resourceSpans[0]?.scopeSpans[0]?.spans
-          .length,
-    )
-
-  test('sends the spans in batches, one request after another', async () => {
-    const bodies: string[] = []
-    let inFlight = 0
-    const fetcher = (async (_url: string, init: RequestInit) => {
-      inFlight++
-      assert.equal(inFlight, 1, 'one request at a time')
-      bodies.push(init.body as string)
-      await new Promise((r) => setTimeout(r, 5))
-      inFlight--
-      return new Response('{}')
-    }) as typeof fetch
-    assert.equal(await exportSpans(many, env, '1.0.0', fetcher), null)
-    assert.deepEqual(sizes(bodies), [OTLP_BATCH, OTLP_BATCH, 76])
-  })
-
-  test('stops at the first refused batch, and the message hides the credentials', async () => {
-    const bodies: string[] = []
-    const fetcher = (async (_url: string, init: RequestInit) => {
-      bodies.push(init.body as string)
-      return new Response('', { status: bodies.length === 2 ? 413 : 200 })
-    }) as typeof fetch
-    const why = await exportSpans(many, env, '1.0.0', fetcher)
-    assert.equal(
-      why,
-      `http://c.example:4318/v1/traces answered 413, after ${OTLP_BATCH} of ${many.length} spans`,
-    )
-    assert.equal(bodies.length, 2)
-  })
-})
-
 describe('RunTrace', () => {
-  test('keeps spans for an exporter only when asked, and redacts errors as it writes', () => {
+  test('hands each span to onSpan as it writes it, and redacts errors first', () => {
     const token = `ghp_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'}`
-    for (const keep of [false, true]) {
-      const dir = tempDir('run-trace')
-      const trace = new RunTrace({ dir, runId: 'r', keep })
-      trace.add({ ...span(1), status: { code: 'error', message: `start failed: ${token}` } })
-      const kept = trace.close()
-      assert.equal(kept.length, keep ? 2 : 0)
-      const text = readFileSync(join(dir, 'spans.jsonl'), 'utf8')
-      assert.equal(parseSpans(text).length, 2)
-      assert.doesNotMatch(text + JSON.stringify(kept), /ghp_a1B2/)
-    }
+    const dir = tempDir('run-trace')
+    const handed: RunSpan[] = []
+    const trace = new RunTrace({ dir, runId: 'r', onSpan: (s) => handed.push(s) })
+    trace.add({
+      spanId: '1'.padStart(16, '0'),
+      name: 'attempt',
+      startMs: 1,
+      endMs: 2,
+      attributes: {},
+      status: { code: 'error', message: `start failed: ${token}` },
+    })
+    assert.equal(handed.length, 1, 'before the run ends')
+    trace.close()
+    assert.deepEqual(
+      handed.map((s) => s.name),
+      ['attempt', 'reeval.run'],
+    )
+    const text = readFileSync(join(dir, 'spans.jsonl'), 'utf8')
+    assert.deepEqual(parseSpans(text), handed)
+    assert.doesNotMatch(text + JSON.stringify(handed), /ghp_a1B2/)
   })
 })

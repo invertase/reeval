@@ -593,7 +593,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.172
-        version: 1.0.172(ws@8.22.0)(zod@4.6.7)
+        version: 1.0.172(ws@8.22.1)(zod@4.6.7)
       '@ai-sdk/harness-acp':
         specifier: 1.0.112
         version: 1.0.112(zod@4.6.7)
@@ -796,6 +796,12 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 2.4.0
         version: 2.4.0
+      '@opentelemetry/api':
+        specifier: 1.10.0
+        version: 1.10.0
+      '@opentelemetry/otlp-transformer':
+        specifier: 0.300.0
+        version: 0.300.0(@opentelemetry/api@1.10.0)
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.17
         version: link:../harness-antigravity
