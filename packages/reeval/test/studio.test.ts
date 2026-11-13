@@ -1462,6 +1462,30 @@ describe('studio data server', () => {
     assert.equal((await readReportInputs(join(history, 'missing'))).pages, undefined)
   })
 
+  test("the report skips a saved analysis this reeval can't read, and still serves", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reeval-studio-unreadable-'))
+    await cp(source.historyDir, join(root, 'evals/.history'), { recursive: true })
+    const fresh: StudioSource = { root, historyDir: join(root, 'evals/.history'), scratch: true }
+    const runId = headers.find((h) => existsSync(join(source.historyDir, `${h.runId}.json`)))
+      ?.runId as string
+    assert.ok(runId, 'a recorded run')
+    const folder = join(fresh.historyDir, runId, 'analysis')
+    mkdirSync(folder, { recursive: true })
+    for (const [name, text] of Object.entries({
+      'a.json': '{}',
+      'b.json': '[]',
+      'c.json': 'null',
+      'd.json': '{"kind": "reeval-analysis"}',
+      'e.json': '{"kind": "reeval-analysis", "schemaVersion": 1, "analysis": {}}',
+    })) {
+      writeFileSync(join(folder, name), text)
+    }
+    assert.equal((await readReportInputs(join(fresh.historyDir, runId))).analysis, null)
+    const api = await paired(fresh)
+    const { index } = await servedReport(api.get, runId)
+    assert.equal(index.runId, runId)
+  })
+
   test("a run recorded at evidence links only the transcripts it kept: a passing attempt's is null", async () => {
     const p = await project('studio-evidence', {
       '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',

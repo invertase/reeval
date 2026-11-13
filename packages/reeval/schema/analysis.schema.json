@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from AnalysisDoc in src/view/analysis.ts by `pnpm schema:update`; don't edit. A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json.",
+  "$comment": "Generated from AnalysisDoc's Zod schemas, held to its type in src/view/analysis.ts by `pnpm schema:update`; don't edit. A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json.",
   "title": "AnalysisDoc",
   "$ref": "#/$defs/AnalysisDoc",
   "$defs": {
     "ActionKind": {
-      "enum": ["docs", "eval", "harness", "judge", "reeval", "skill"]
+      "type": "string",
+      "enum": ["skill", "docs", "eval", "judge", "reeval", "harness"]
     },
     "AnalysisAction": {
       "type": "object",
@@ -50,7 +51,8 @@
           "$ref": "#/$defs/ActionKind"
         },
         "role": {
-          "enum": ["action", "caveat", "finding"]
+          "type": "string",
+          "enum": ["finding", "caveat", "action"]
         },
         "target": {
           "type": "string"
@@ -60,14 +62,7 @@
         },
         "verify": {
           "description": "An `reeval` command that shows the effect; null when the model's didn't parse as reeval's CLI.",
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "type": ["string", "null"]
         },
         "verifyProblem": {
           "description": "Why the model's verify command was rejected.",
@@ -117,7 +112,8 @@
           "$ref": "#/$defs/AnomalyKind"
         },
         "role": {
-          "enum": ["action", "caveat", "finding"]
+          "type": "string",
+          "enum": ["finding", "caveat", "action"]
         },
         "text": {
           "type": "string"
@@ -225,7 +221,8 @@
         },
         "role": {
           "description": "Section role; optional on older docs (derived from which body array it sits in).",
-          "enum": ["action", "caveat", "finding"]
+          "type": "string",
+          "enum": ["finding", "caveat", "action"]
         },
         "text": {
           "type": "string"
@@ -253,8 +250,9 @@
         "attempts": {
           "description": "Short attempt ids used in citations, and where each attempt is.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -277,8 +275,9 @@
         "cited": {
           "description": "Each cited fact or evidence id, summarized in one line.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
           }
@@ -318,6 +317,7 @@
           "required": ["digestHash", "digestVersion", "records"]
         },
         "kind": {
+          "type": "string",
           "const": "reeval-analysis"
         },
         "latencyMs": {
@@ -330,19 +330,14 @@
           "type": "string"
         },
         "resolvedModel": {
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "type": ["string", "null"]
         },
         "route": {
-          "enum": ["direct", "fake", "gateway", "openrouter", "vertex"]
+          "type": "string",
+          "enum": ["direct", "gateway", "openrouter", "vertex", "fake"]
         },
         "schemaVersion": {
+          "type": "number",
           "const": 1
         },
         "scope": {
@@ -352,24 +347,10 @@
           "type": "object",
           "properties": {
             "inputTokens": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
+              "type": ["number", "null"]
             },
             "outputTokens": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
+              "type": ["number", "null"]
             }
           },
           "required": ["inputTokens", "outputTokens"]
@@ -403,30 +384,17 @@
       "properties": {
         "base": {
           "description": "Resolved once, so a nearer ancestor recorded later doesn't change what this analyzed.",
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "type": ["string", "null"]
         },
         "evals": {
           "description": "An eval filter (substring of the eval id), or null for every eval.",
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "type": ["string", "null"]
         },
         "head": {
           "type": "string"
         },
         "kind": {
+          "type": "string",
           "const": "run"
         }
       },
@@ -472,13 +440,16 @@
       ]
     },
     "AnomalyKind": {
-      "enum": ["eval-design", "judge", "noise", "other", "reeval-bug"]
+      "type": "string",
+      "enum": ["reeval-bug", "eval-design", "judge", "noise", "other"]
     },
     "Confidence": {
-      "enum": ["high", "low", "medium"]
+      "type": "string",
+      "enum": ["high", "medium", "low"]
     },
     "Level": {
-      "enum": ["high", "low", "medium"]
+      "type": "string",
+      "enum": ["high", "medium", "low"]
     }
   },
   "x-schemaVersion": 1

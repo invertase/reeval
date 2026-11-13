@@ -1,8 +1,11 @@
 // `reeval analyze [run] [--vs base] [--eval filter]`: a digest of the run's facts, one structured call,
-// validation, then the cache (always) and the run's history folder (with --save).
+// validation, then the cache (always), the run's history folder (with --save) and the cloud's copy
+// of the run (with --save --push).
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
+import { studioUrl } from '../cloud-push.ts'
+import { type CloudAuth, cloudAuth, cloudUrl } from '../cloud-run.ts'
 import { allRuns, CommandError, lines, reachability } from '../commands.ts'
 import { UsageError } from '../errors.ts'
 import { openHistoryDb } from '../history/db.ts'
@@ -32,6 +35,7 @@ import {
   type ResolvedAnalysisModel,
   resolveAnalysisModel,
 } from './model.ts'
+import { analysisProblem, putAnalysis } from './push.ts'
 import { renderMarkdown, renderText } from './render.ts'
 import { SYSTEM_PROMPT } from './schema.ts'
 import { validateAnalysis } from './validate.ts'
@@ -42,6 +46,7 @@ export type AnalyzeFlags = {
   vs?: string
   eval?: string
   save?: boolean
+  push?: boolean
   context?: boolean
   'dry-run'?: boolean
   'no-cache'?: boolean
@@ -282,11 +287,26 @@ export async function analyzeDigest(
   }
 }
 
+/** The platform `--push` uploads to, with the stored sign-in; exit 2 when signed out. */
+async function signedIn(): Promise<{ base: URL; auth: CloudAuth }> {
+  const base = cloudUrl()
+  const auth = await cloudAuth(base)
+  if (!auth.headers.authorization) {
+    throw new UsageError(`reeval analyze --push needs you signed in: ${auth.refused}`)
+  }
+  return { base, auth }
+}
+
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
   if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
   if (flags.context && flags.save) {
     throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')
+  }
+  if (flags.push && !flags.save) {
+    throw new UsageError(
+      'reeval analyze --push uploads the analysis --save writes: pass --save --push',
+    )
   }
   if (flags.save && config.history.store.kind !== 'local') {
     throw new UsageError(
@@ -323,6 +343,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       `${head.runId} isn't recorded, so there's no history folder to save into. Run reeval record ${head.runId} first, then reeval analyze ${head.runId} --save.`,
     )
   }
+  const cloud = flags.push && !flags.context && !flags['dry-run'] ? await signedIn() : null
   // Fail on a missing model or key before any work, unless no call is coming.
   const model = flags.context || flags['dry-run'] ? null : resolveAnalysisModel(config)
 
@@ -375,6 +396,14 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       for (const [name, bytes] of summaryFiles(record, { ...inputs, analysis: doc })) {
         await writeFile(join(artifactDir, name), bytes)
       }
+    }
+    if (cloud) {
+      const json = saved[0] as string
+      const bytes = await readFile(json)
+      const problem = analysisProblem(bytes, fromCwd(json), head.runId)
+      if (problem) throw new CommandError(`Refusing to push the analysis: ${problem}`)
+      await putAnalysis(cloud.base, cloud.auth, head.runId, bytes)
+      ctx.err(`pushed it to the cloud studio: ${studioUrl(cloud, head.runId).href}`)
     }
   }
   ctx.out(

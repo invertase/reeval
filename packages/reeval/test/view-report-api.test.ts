@@ -53,6 +53,8 @@ const SCHEMA_EXPORTS: readonly string[] = [
   'rateSchema',
   'reportClaimSchema',
   'spreadSchema',
+  'analysisDocSchema',
+  'parsedAnalysis',
 ]
 
 describe('reeval/view/report and reeval/renderer/* public exports', () => {

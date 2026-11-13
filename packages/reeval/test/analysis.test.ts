@@ -1751,6 +1751,40 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.deepEqual([...tree(history).keys()].sort(), [...after.keys()].sort())
   })
 
+  test("a saved analysis file this reeval can't read is skipped with a warning by show --md and the --save re-render", async () => {
+    const p = await fakeProject('analyze-unreadable')
+    const folder = join(p.dir, 'evals/.history', HEAD, 'analysis')
+    mkdirSync(folder, { recursive: true })
+    const good = JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          'fixtures/records/with-observations/evals/.history/20261030T183503Z_7e9208f_cursor-agent_c479/analysis/20261030T183514Z_cursor-agent_6ffd5e1e.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>
+    const unreadable: Record<string, string> = {
+      'a-object.json': '{}',
+      'b-array.json': '[]',
+      'c-null.json': 'null',
+      'd-kind-only.json': '{"kind": "reeval-analysis"}',
+      'e-empty-analysis.json': JSON.stringify({ ...good, anchor: HEAD, analysis: {} }),
+    }
+    for (const [name, text] of Object.entries(unreadable)) writeFileSync(join(folder, name), text)
+    const skipped = [
+      /warning: skipped evals\/\.history\/.+\/d-kind-only\.json has no schemaVersion, which every reeval analysis has, so this reeval can't read it/,
+      /warning: skipped evals\/\.history\/.+\/e-empty-analysis\.json's analysis\.tldr .+, so this reeval can't read it/,
+    ]
+
+    const show = await runCli(p.dir, ['show', HEAD, '--md'])
+    assert.equal(show.code, 0, show.stdout + show.stderr)
+    for (const said of skipped) assert.match(show.stderr, said)
+    const save = await runCli(p.dir, ['analyze', HEAD, '--save'])
+    assert.equal(save.code, 0, save.stdout + save.stderr)
+    for (const said of skipped) assert.match(save.stderr, said)
+  })
+
   test('without a language model or its key, it exits 2 and points at --context', async () => {
     const cases: Array<[string, RegExp]> = [
       [

@@ -1,11 +1,12 @@
 import { readdir, readFile, realpath } from 'node:fs/promises'
 import { basename, dirname, join, sep } from 'node:path'
+import { readAnalysisText } from '../analysis/files.ts'
 import type { CapturePageFile } from '../types.ts'
 import type { AnalysisDoc } from '../view/analysis.ts'
 import { type AnalysisEntry, pinnedAnalysis, sortAnalyses } from '../view/analysis.ts'
 import { type AttemptFacts, attemptFacts } from '../view/classify.ts'
 import { transcriptByLine } from '../view/model.ts'
-import { readableAnalysis, readableCapturePage, readableRemarks } from '../view/record.ts'
+import { readableCapturePage, readableRemarks } from '../view/record.ts'
 import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import type { RunReportOptions } from '../view/report/index.ts'
 import type { RunRecord } from './types.ts'
@@ -95,12 +96,8 @@ async function loadPinnedAnalysis(read: Read, dir: string): Promise<AnalysisDoc 
     .reverse()) {
     const text = await read(join(dir, name))
     if (text === null) continue
-    try {
-      const doc = readableAnalysis(JSON.parse(text) as AnalysisDoc)
-      entries.push({ file: name, source: 'saved', doc })
-    } catch {
-      // Skip unreadable analyses; the report still renders without them.
-    }
+    const doc = readAnalysisText(text, join(dir, name))
+    if (doc) entries.push({ file: name, source: 'saved', doc })
   }
   if (entries.length === 0) return null
   return pinnedAnalysis(sortAnalyses(entries))?.doc ?? entries[0]?.doc ?? null
