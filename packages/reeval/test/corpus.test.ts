@@ -1,8 +1,8 @@
 // Every reader against every run in the record corpus (test/fixtures/records/), so a record reeval
 // wrote at any point since keeps loading in the CLI. Every entry's runs go into one history: the
-// commands that read all of it (history, query, studio build) run once, through the CLI, and the
-// per-run ones (show, compare, analyze) run in this process for every run, since a CLI start each
-// would be most of the suite's time. The studio's browser test opens the same runs.
+// commands that read all of it (history, query) run once, through the CLI, and the
+// per-run ones (show, compare, analyze, the studio's run view) run in this process for every run, since a CLI start each
+// would be most of the suite's time.
 import assert from 'node:assert/strict'
 import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -15,7 +15,10 @@ import type { RunTrace } from '../src/history/trace.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
+import { createStudioApi } from '../src/studio/server.ts'
 import type { ResolvedConfig } from '../src/types.ts'
+import type { AttemptView, PairResponse, RunList, RunView } from '../src/view/api.ts'
+import { studioPaths } from '../src/view/api.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { project, runCli, tempDir } from './helpers.ts'
 import { CORPUS_DIR, corpus, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
@@ -138,7 +141,7 @@ async function capture(
 
 /**
  * One project whose history holds every entry's runs, so each reader that reads the whole history
- * (`history`, `query`, `studio build`) reads every run at once, across every reeval that wrote one.
+ * (`history`, `query`) reads every run at once, across every reeval that wrote one.
  */
 async function mergedProject(name: string) {
   const p = await project(name, { 'reeval.config.ts': CONFIG })
@@ -307,14 +310,45 @@ describe('the record corpus', { concurrency: 4 }, () => {
       await ok(['query', q, '--json'])
     }
     await ok(['query', '--rebuild', 'select count(*) as n from runs'])
-    const site = join(p.dir, 'site')
-    await ok(['studio', 'build', '--out', site])
-    for (const id of ALL_IDS) readFileSync(join(site, 'data/runs', `${id}.json`))
   })
 
   // One at a time: a history sync holds SQLite's write lock across awaits, and a second sync in
   // the same process waits for it synchronously, so the first never gets to finish.
   describe('in this process', { concurrency: 1 }, () => {
+    test("the studio serves every run's view and every attempt", async () => {
+      const { config } = await inProcess()
+      const api = createStudioApi({
+        source: { root: config.root, historyDir: config.history.dir, scratch: true },
+        reeval: 'test',
+        project: 'corpus',
+        origin: 'https://studio.example',
+        pairingToken: 'corpus-pairing-token',
+        hosts: [],
+        focus: null,
+      })
+      const pair = await api.request(`http://x${studioPaths.pair()}`, {
+        method: 'POST',
+        body: JSON.stringify({ token: 'corpus-pairing-token' }),
+      })
+      const { session } = (await pair.json()) as PairResponse
+      const get = async <T>(path: string) => {
+        const res = await api.request(`http://x${path}`, {
+          headers: { authorization: `Bearer ${session}` },
+        })
+        assert.equal(res.status, 200, `${path}: ${await res.clone().text()}`)
+        return (await res.json()) as T
+      }
+      const runs = await get<RunList>(`${studioPaths.runs()}?limit=100`)
+      assert.ok(runs.items.length > 0)
+      for (const id of ALL_IDS) {
+        const view = await get<RunView>(studioPaths.run(id))
+        assert.equal(view.header.runId, id)
+        for (const a of view.evals.flatMap((e) => e.attempts)) {
+          assert.equal((await get<AttemptView>(studioPaths.attempt(id, a.key))).key, a.key)
+        }
+      }
+    })
+
     test('every view and table of reeval query, in both formats, over the merged history', async () => {
       const { config } = await inProcess()
       const schema = JSON.parse(

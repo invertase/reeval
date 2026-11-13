@@ -407,7 +407,7 @@ describe('recording to s3()', () => {
   })
 
   test('the studio refuses a remote store; sync on local() has nothing to do', async () => {
-    const studio = await runCli(dir, ['studio', 'build', '--profile', 'ci'], { env: env() })
+    const studio = await runCli(dir, ['studio', '--no-open', '--profile', 'ci'], { env: env() })
     assert.equal(studio.code, 2, studio.stdout + studio.stderr)
     assert.match(
       studio.stderr,

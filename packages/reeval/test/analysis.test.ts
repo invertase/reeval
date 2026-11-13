@@ -23,9 +23,8 @@ import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
-import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
-import { analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
+import { pinnedAnalysis } from '../src/view/analysis.ts'
 import {
   contrastEffort,
   directional,
@@ -761,7 +760,7 @@ describe('reeval CLI spec', () => {
       'reeval analyze latest --vs latest~1 --json',
       'reeval analyze --vs none',
       'reeval run --tag smoke -vv',
-      'reeval studio build --out site',
+      'reeval studio --no-open',
       'reeval image build --dry-run',
       `reeval query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
       'reeval run --record && reeval query effort',
@@ -1750,31 +1749,6 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.equal(twice.code, 2)
     assert.match(twice.stderr, /is already saved for .+\. Saved analyses are never rewritten\./)
     assert.deepEqual([...tree(history).keys()].sort(), [...after.keys()].sort())
-
-    // The studio shows saved and cached analyses live, and saved ones in a static build.
-    const app = createStudioApp({
-      source: { root: p.dir, historyDir: history, scratch: false },
-      app: new Map(),
-      reeval: 'test',
-      project: 'analysis',
-      token: null,
-      hosts: [],
-    })
-    const live = await (await app.request(`http://x/${analysisDataPath(HEAD)}`)).json()
-    assert.deepEqual(
-      live.entries.map((e: { source: string }) => e.source),
-      ['saved', 'cached'],
-    )
-    const none = await (await app.request(`http://x/${analysisDataPath(BASE)}`)).json()
-    assert.deepEqual(none.entries, [])
-    const out = join(p.dir, 'site')
-    assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out])).code, 0)
-    const built = JSON.parse(readFileSync(join(out, analysisDataPath(HEAD)), 'utf8'))
-    assert.deepEqual(
-      built.entries.map((e: { source: string }) => e.source),
-      ['saved'],
-    )
-    assert.equal(existsSync(join(out, analysisDataPath(BASE))), false)
   })
 
   test('without a language model or its key, it exits 2 and points at --context', async () => {

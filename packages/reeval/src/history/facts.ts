@@ -3,7 +3,6 @@
 // `*_m` tables that those views select from. Every verdict here is a fixed rule over the lift
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { isRuntimeState } from '../attempt/context.ts'
 import {
   containsZero,
   familySmallSample,
@@ -14,6 +13,7 @@ import {
   wilson,
 } from '../stats.ts'
 import { totalTokens } from '../usage.ts'
+import { isRuntimeState } from '../view/classify.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,

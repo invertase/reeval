@@ -130,7 +130,7 @@ Without the skill, no attempt used `Output.object`; with it, all four did. `help
 | <code>reeval&nbsp;compare&nbsp;--fail-on-regression</code> | Diff a run against its nearest recorded ancestor, and exit 1 when an eval regressed. |
 | <code>reeval&nbsp;show&nbsp;--md</code> | One run's results as Markdown, for a job summary or a PR comment. |
 | <code>reeval&nbsp;query</code> | Read-only SQL over every run, or built-in views such as `lift`, `effort`, and `failing_attempts`. |
-| <code>reeval&nbsp;studio</code> | Runs, transcripts, diffs, and checks in the browser, or a static site with `reeval studio build`. |
+| <code>reeval&nbsp;studio</code> | Runs, transcripts, diffs, and checks in the browser. |
 
 Environments load extensions from where teams already keep them:
 

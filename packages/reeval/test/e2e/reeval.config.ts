@@ -13,7 +13,7 @@ import {
 } from 'reeval/harness'
 
 // The CLI end to end on a real agent: e2e-real.test.ts records two runs of this one eval and
-// reads them back with compare, query, history and studio build. Same rows as the contract
+// reads them back with compare, query, history and the studio's run view. Same rows as the contract
 // (REEVAL_CONTRACT_HARNESS, REEVAL_CONTRACT_MODEL); without one, the scripted fake agent.
 const model = process.env.REEVAL_CONTRACT_MODEL ?? ''
 const harness = () => {
@@ -47,6 +47,6 @@ export default defineConfig({
   runs: 1,
   timeout: '4m',
   budget: { attempts: 1 },
-  // The eval passes, and studio build serves its recorded transcript.
+  // The eval passes, and the studio's run view reads its recorded transcript.
   history: { artifacts: 'all' },
 })

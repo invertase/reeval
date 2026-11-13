@@ -75,13 +75,11 @@ What reads them:
 - `pnpm --filter reeval schema:check` (and `test/schema.test.ts`): every record,
   transcript line and saved analysis, read the way reeval reads it, fits the current schema, and each
   read default runs on some file that lacks its field.
-- `test/corpus.test.ts`: one project holding every entry's runs. `reeval history`, `query` and
-  `studio build` read all of it through the CLI. `show` (plain, `--md`, `--json`), `compare` (plain,
-  `--md`, `--json`), every `reeval query` table and view and `reeval analyze --dry-run` read every
-  run in the test's own process, and through the CLI on the oldest and newest. The corpus as a
-  whole covers each kind of run the record describes.
-- `packages/studio-web/test/e2e.test.ts`: every run, its analysis and every attempt tab in a
-  browser.
+- `test/corpus.test.ts`: one project holding every entry's runs. `reeval history` and `query`
+  read all of it through the CLI. `show` (plain, `--md`, `--json`), `compare` (plain, `--md`,
+  `--json`), every `reeval query` table and view, `reeval analyze --dry-run` and the studio API's
+  run and attempt views read every run in the test's own process, and through the CLI on the oldest
+  and newest. The corpus as a whole covers each kind of run the record describes.
 
 ## Adding an entry
 

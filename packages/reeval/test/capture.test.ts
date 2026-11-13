@@ -23,7 +23,7 @@ import {
 } from '../src/capture/index.ts'
 import { unzip } from '../src/capture/zip.ts'
 import { posixShell } from '../src/sandbox/fake.ts'
-import { artifactPath, parseDataPath } from '../src/view/paths.ts'
+import { parseStudioPath, studioPaths } from '../src/view/api.ts'
 
 const viewport = { width: 1280, height: 720 }
 
@@ -186,7 +186,7 @@ test('checkCaptureName accepts 1 to 100 of [a-z0-9_-], starting with a letter or
 test('every capture name reeval accepts or derives is one the studio serves', () => {
   const run = '20260101T000000Z_a1b2c3d_main_ab12'
   const served = (name: string) =>
-    parseDataPath(artifactPath(run, `evals/a/e/0/artifacts/${name}.png`)) !== null
+    parseStudioPath(studioPaths.artifact(run, `evals/a/e/0/artifacts/${name}.png`)) !== null
   const accepted = (name: string) => {
     try {
       checkCaptureName(name)

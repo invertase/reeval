@@ -1,8 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
-import { listRuns, scratchDir } from '../history/files.ts'
-import type { HistoryEntry } from '../history/types.ts'
-import type { DataTarget } from '../view/paths.ts'
+import { listRuns, readRecord, scratchDir } from '../history/files.ts'
+import type { HistoryEntry, RunRecord } from '../history/types.ts'
 
 export type StudioSource = {
   root: string
@@ -47,25 +46,6 @@ export async function fileInside(
   }
 }
 
-/** Like `fileInside`, for a snapshot: a file (a `.tar.gz`) or a directory. */
-export async function snapshotInside(
-  base: string,
-  dirs: string[],
-  rest: string[],
-): Promise<{ path: string; file: boolean } | null> {
-  try {
-    const [realBase, real] = await Promise.all([
-      realpath(base),
-      realpath(join(base, ...dirs, ...rest)),
-    ])
-    if (!real.startsWith(join(realBase, ...dirs) + sep)) return null
-    const info = await stat(real)
-    return info.isFile() || info.isDirectory() ? { path: real, file: info.isFile() } : null
-  } catch {
-    return null
-  }
-}
-
 /**
  * The file a record or artifact path names, or null. A run resolves to the history folder first,
  * then `.reeval/runs/`; the real path must stay inside that folder's directory for the run, so
@@ -73,13 +53,27 @@ export async function snapshotInside(
  */
 export async function resolveFile(
   source: StudioSource,
-  target: Extract<DataTarget, { kind: 'record' | 'artifact' }>,
+  target:
+    | { kind: 'record'; runId: string }
+    | { kind: 'artifact'; runId: string; segments: string[] },
 ): Promise<string | null> {
   for (const dir of dirsOf(source)) {
     const record = await fileInside(dir, [], [`${target.runId}.json`])
     if (!record) continue
     if (target.kind === 'record') return record
     return fileInside(dir, [target.runId], target.segments)
+  }
+  return null
+}
+
+/** A run's record, and whether it came from the history folder; null when neither folder has it. */
+export async function readRun(
+  source: StudioSource,
+  runId: string,
+): Promise<{ record: RunRecord; recorded: boolean } | null> {
+  for (const dir of dirsOf(source)) {
+    const file = await fileInside(dir, [], [`${runId}.json`])
+    if (file) return { record: await readRecord(file), recorded: dir === source.historyDir }
   }
   return null
 }

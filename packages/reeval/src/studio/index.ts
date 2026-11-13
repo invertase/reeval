@@ -1,84 +1,71 @@
 import { spawn } from 'node:child_process'
-import { getRequestListener, serve } from '@hono/node-server'
-import { scratchDir } from '../history/files.ts'
-import type { StudioAppFiles } from './app.ts'
-import { watchLive } from './live.ts'
-import { allowedHosts, createStudioApp, newToken, type StudioEvent } from './server.ts'
+import type { AddressInfo } from 'node:net'
+import { type ServerType, serve } from '@hono/node-server'
+import { allowedHosts, createStudioApi, newToken } from './server.ts'
 import type { StudioSource } from './source.ts'
-import { watchRuns } from './watch.ts'
-
-export { embeddedApp } from './app.ts'
-export { buildStudio } from './build.ts'
 
 export type StartOptions = {
   source: StudioSource
-  host: string
   port: number
-  token: boolean
   reeval: string
   project: string
-  app: StudioAppFiles
+  /** The hosted studio page, such as `https://example.com/studio`. */
+  studioUrl: URL
+  focus: string | null
+  onPair?: () => void
 }
 
-type Listening = { close(): void; address(): unknown }
+const HOST = '127.0.0.1'
 
-function listen(app: ReturnType<typeof createStudioApp>, host: string, port: number) {
-  return new Promise<Listening>((resolve, reject) => {
-    const server = serve({ fetch: app.fetch, hostname: host, port })
+function listen(app: ReturnType<typeof createStudioApi>, port: number) {
+  return new Promise<ServerType>((resolve, reject) => {
+    const server = serve({ fetch: app.fetch, hostname: HOST, port })
     server.once('error', reject)
     server.once('listening', () => resolve(server))
   })
 }
 
-/** Starts `reeval studio`: the next free port from `port`, a fresh token, and a history watcher. */
+/** The hosted page's URL for a data server: the server in `s`, the pairing token in the fragment. */
+export function pairingUrl(studioUrl: URL, server: string, token: string, focus: string | null) {
+  const url = new URL(studioUrl)
+  url.searchParams.set('s', server)
+  if (focus) url.searchParams.set('run', focus)
+  url.hash = `t=${token}`
+  return url.toString()
+}
+
+/**
+ * Starts `reeval studio`'s data server on loopback, on the next free port from `port`, with a fresh
+ * pairing token, and returns the hosted page's URL that pairs with it.
+ */
 export async function startStudio(options: StartOptions) {
-  const { source, host } = options
-  const token = options.token ? newToken() : null
-  const listeners = new Set<(event: StudioEvent) => void>()
-  const send = (event: StudioEvent) => {
-    for (const l of listeners) l(event)
-  }
-  const stopRuns = watchRuns(
-    source.scratch ? [source.historyDir, scratchDir(source.root)] : [source.historyDir],
-    () => send({ type: 'history.changed' }),
-  )
-  const stopLive = watchLive(source, (runs) => send({ type: 'run.progress', runs }))
-  const stopWatching = () => {
-    stopRuns()
-    stopLive()
-  }
+  const token = newToken()
   for (let port = options.port; port < options.port + 20; port++) {
-    const app = createStudioApp({
-      source,
-      app: options.app,
+    const app = createStudioApi({
+      source: options.source,
       reeval: options.reeval,
       project: options.project,
-      token,
-      hosts: allowedHosts(host, port),
-      subscribe: (listener) => {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      },
+      origin: options.studioUrl.origin,
+      pairingToken: token,
+      hosts: allowedHosts(HOST, port),
+      focus: options.focus,
+      ...(options.onPair ? { onPair: options.onPair } : {}),
     })
     try {
-      const server = await listen(app, host, port)
-      const origin = `http://${host.includes(':') ? `[${host}]` : host}:${port}`
+      const server = await listen(app, port)
+      const address = server.address() as AddressInfo
+      // The address it bound, not `localhost`, which a browser may resolve to another process on ::1.
+      const local = `http://${address.address}:${address.port}`
       return {
-        url: token ? `${origin}/?token=${token}` : `${origin}/`,
-        port,
-        close() {
-          stopWatching()
-          server.close()
-        },
+        url: pairingUrl(options.studioUrl, local, token, options.focus),
+        server: local,
+        address,
+        close: () => server.close(),
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') {
-        stopWatching()
-        throw error
-      }
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error
     }
   }
-  stopWatching()
   throw new Error(
     `Ports ${options.port}–${options.port + 19} are all in use: pass another with --port`,
   )
@@ -90,17 +77,4 @@ export function openBrowser(url: string) {
   spawn(command, [url], { stdio: 'ignore', detached: true })
     .on('error', () => {})
     .unref()
-}
-
-/** The data routes as a Node request listener, for the studio-web dev server (which serves the app). No token or Host check. */
-export function devListener(source: StudioSource, version: string) {
-  const app = createStudioApp({
-    source,
-    app: new Map(),
-    reeval: version,
-    project: source.root.split(/[\\/]/).at(-1) ?? 'project',
-    token: null,
-    hosts: [],
-  })
-  return getRequestListener(app.fetch)
 }

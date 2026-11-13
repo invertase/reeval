@@ -77,18 +77,6 @@ export type DebugView = {
   trace: boolean
 }
 
-/**
- * The studio server's debug API (`reeval studio` only): an attempt's DebugView (null when it has no
- * local data), and its raw trace.
- */
-export const debugApiPath = (runId: string, attemptKey: string) =>
-  `api/debug/${runId}?attempt=${encodeURIComponent(attemptKey)}`
-export const traceApiPath = (runId: string, attemptKey: string) =>
-  `api/debug/${runId}/trace?attempt=${encodeURIComponent(attemptKey)}`
-/** A snapshot from the run's directory in `.reeval/runs`, as a tar.gz (`reeval studio` only). */
-export const snapshotApiPath = (runId: string, path: string) =>
-  `api/snapshot/${runId}?path=${encodeURIComponent(path)}`
-
 const PHASE_WIDTH = Math.max(...DEBUG_PHASES.map((p) => p.length))
 
 /** `12:50:01`, or `12:50:01.234` with milliseconds, in UTC like every reeval timestamp. */

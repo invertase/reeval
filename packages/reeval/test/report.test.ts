@@ -124,8 +124,8 @@ describe('reeval report: redaction', () => {
       '--json',
     ])
     assert.deepEqual(
-      redactArgv(['--config=reeval.x.ts', 'studio', 'build', '--out', '/home/me/x']),
-      ['--config=<value>', 'studio', 'build', '--out', '<value>'],
+      redactArgv(['--config=reeval.x.ts', 'image', 'build', '--profile', 'secret-profile']),
+      ['--config=<value>', 'image', 'build', '--profile', '<value>'],
     )
     assert.deepEqual(redactArgv(['query', 'select 1', '--api-key=abc', '--', 'x']), [
       'query',

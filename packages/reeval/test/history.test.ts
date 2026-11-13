@@ -35,6 +35,7 @@ import {
   tempDir,
 } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
+import { writeStudioResponses } from './support/studio.ts'
 
 const GIT_ENV = {
   ...baseEnv,
@@ -1973,7 +1974,6 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     assert.deepEqual(JSON.parse((await ok(['query', 'failing_attempts', '--json'])).stdout), [])
     assert.ok(existsSync(join(p.dir, '.reeval/history.db')))
     await ok(['analyze', '--context'])
-    assert.match((await ok(['studio', 'build'])).stdout, /built \.\.\/\.\.\/\.\.\/studio-dist\//)
     assert.match(
       (await ok(['image', 'build', '--dry-run'])).stdout,
       /No eval runs in a Docker or Tart sandbox/,
@@ -2135,7 +2135,6 @@ describe('records from before a field existed', () => {
       await ok(['compare', oldRun, runs[1] as string]),
       /^(\d+ (regressed|fixed|can't compare|infra error|new|removed|same)( · )?)+$/m,
     )
-    await ok(['studio', 'build', '--out', join(p.dir, 'site')])
   })
 })
 
@@ -2164,11 +2163,7 @@ describe('records from a newer reeval', () => {
     const shown = await runCli(p.dir, ['show', newRun])
     assert.notEqual(shown.code, 0, shown.stdout + shown.stderr)
     assert.match(shown.stderr, upgrade)
-    for (const args of [
-      ['history'],
-      ['query', 'select count(*) as n from runs'],
-      ['studio', 'build', '--out', join(p.dir, 'site')],
-    ]) {
+    for (const args of [['history'], ['query', 'select count(*) as n from runs']]) {
       const r = await runCli(p.dir, args)
       assert.equal(r.code, 0, `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`)
       assert.match(r.stderr, new RegExp(`skipped ${HISTORY}/${newRun}\\.json: ${upgrade.source}`))
@@ -2222,7 +2217,6 @@ describe('records from a newer reeval', () => {
       ['query', 'eval_trend'],
       ['query', 'select count(*) as n from tool_calls'],
       ['compare', oldRun, newRun],
-      ['studio', 'build', '--out', join(p.dir, 'site')],
     ]) {
       const r = await runCli(p.dir, args)
       assert.ok(
@@ -2235,6 +2229,10 @@ describe('records from a newer reeval', () => {
         `reeval ${args.join(' ')}\n${r.stderr}`,
       )
     }
+    await writeStudioResponses(
+      { root: p.dir, historyDir: join(p.dir, HISTORY), scratch: false },
+      join(p.dir, 'site'),
+    )
   })
 })
 

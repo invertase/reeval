@@ -4,30 +4,20 @@
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { isRuntimeState } from '../attempt/context.ts'
 import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
-import { SKILL_DIRS } from '../harness/agents.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import type { JSONValue } from '../types.ts'
+import { classifyAttempt, declaredContext, isRuntimeState } from '../view/classify.ts'
 import { filesChanged } from '../view/effort.ts'
 import { cellMeasures, familyMeasures, type Measure } from '../view/measures.ts'
 import { caseEntries, caseName } from './cases.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
-import {
-  type ClassContext,
-  classifyCall,
-  skillDirSkill,
-  skillsWritten,
-  skillUses,
-} from './tool-class.ts'
-import { targetText, toolTarget } from './tool-target.ts'
+import type { ToolClass } from './tool-class.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
-
-export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
 const DB_VERSION = 25
@@ -490,96 +480,8 @@ const json = (value: unknown) => JSON.stringify(value)
 const valueKind = (value: JSONValue) =>
   value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
 
-/** The agent CLI's home config, which its harness writes (MCP servers, settings), not the eval. */
-const HARNESS_CONFIG = /^~\/.*(^|\/)(config\.(toml|ya?ml|json)|settings(\.local)?\.json|mcp\.json)$/
-
-/**
- * A placed file the environment declared: under one of its skills, or a rules file outside any
- * skills directory. Not an agent CLI's own state or home config, its bundled skills or the
- * adapter's skill index.
- */
-const declaredContext = (path: string, skills: string[]) =>
-  !isRuntimeState(path) &&
-  !path.endsWith('/.ai-sdk-harness-skills.json') &&
-  !HARNESS_CONFIG.test(path) &&
-  (skills.some((s) => path.includes(`skills/${s}/`)) || !/(^|\/)skills(-[^/]+)?\//.test(path))
-
 /** `attempts.last_text` is the agent's final message, capped: most "why" questions start there. */
 export const LAST_TEXT_LIMIT = 2048
-
-export type ToolCall = {
-  line: number
-  turn: number | null
-  tool: string
-  target: string
-  /** The target uncapped, which classifies the call. */
-  text: string
-  /** Null when the harness never reported the call's result. */
-  ok: boolean | null
-  durationMs: number | null
-}
-
-/** The tool calls in a transcript.jsonl, numbered by line from 1; lines that aren't JSON are skipped. */
-export function toolCalls(transcript: string): ToolCall[] {
-  const calls: ToolCall[] = []
-  transcript.split('\n').forEach((line, i) => {
-    if (!line.trim()) return
-    let event: Record<string, unknown>
-    try {
-      event = JSON.parse(line)
-    } catch {
-      return
-    }
-    if (event?.type !== 'tool') return
-    calls.push({
-      line: i + 1,
-      turn: typeof event.turn === 'number' ? event.turn : null,
-      tool: String(event.tool ?? ''),
-      target: toolTarget(event.input, String(event.tool ?? '')),
-      text: targetText(event.input, String(event.tool ?? '')),
-      ok: event.ok === null ? null : event.ok !== false,
-      durationMs:
-        typeof event.durationMs === 'number' && !event.durationInferred ? event.durationMs : null,
-    })
-  })
-  return calls
-}
-
-/**
- * The skills whose `SKILL.md` an attempt wrote: by a file-editing tool that created or rewrote it,
- * or by a shell command (a redirect, `tee`, `cp` and the like).
- */
-function skillsAuthored(transcript: string, calls: ToolCall[]): Set<string> {
-  const authored = new Set(calls.flatMap((t) => skillsWritten(t.tool, t.text)))
-  for (const line of transcript.split('\n')) {
-    if (!line.includes('"file-edit"')) continue
-    let event: Record<string, unknown>
-    try {
-      event = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (event?.type !== 'file-edit' || (event.kind !== 'create' && event.kind !== 'write')) continue
-    for (const name of skillsWritten('write', String(event.path ?? ''))) authored.add(name)
-  }
-  return authored
-}
-
-/** `classifyCall`, but a call its heuristic can't read counts as workspace: one transcript line can't stop the sync. */
-function classifyOrWorkspace(
-  tool: string,
-  target: string,
-  ctx: ClassContext,
-): ReturnType<typeof classifyCall> & { skills: ReturnType<typeof skillUses> } {
-  try {
-    return {
-      ...classifyCall(tool, target, ctx),
-      skills: skillUses(tool, target, ctx.skills, ctx.skillDirs, ctx.found),
-    }
-  } catch {
-    return { class: 'workspace', files: [], skills: [] }
-  }
-}
 
 /**
  * What a cell's results can be pooled on across runs: its fingerprint parts, with the context
@@ -898,15 +800,7 @@ function insertRun(
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []
-      const transcript = transcripts.get(a.key)
-      const calls = transcript ? toolCalls(transcript) : []
-      const authored = transcript ? skillsAuthored(transcript, calls) : new Set<string>()
-      const found = new Map<string, { source: string; path: string | null }>()
       for (const c of a.context) {
-        const skill = isRuntimeState(c.path) ? undefined : skillDirSkill(c.path, SKILL_DIRS)
-        if (skill && !skills.includes(skill) && !authored.has(skill) && !found.has(skill)) {
-          found.set(skill, { source: 'skill-dir', path: c.path })
-        }
         run(
           'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -946,16 +840,8 @@ function insertRun(
           x.durationMs ?? null,
         )
       }
-      const ctx: ClassContext = {
-        skills,
-        skillDirs: SKILL_DIRS,
-        found: [...found.keys()],
-        files: a.context.map((c) => c.path).filter((p) => declaredContext(p, skills)),
-        mcp: env?.mcp ?? [],
-        verify: a.checks.map((c) => c.command),
-      }
-      for (const t of calls) {
-        const call = classifyOrWorkspace(t.tool, t.text, ctx)
+      const classified = classifyAttempt(a, { skills, mcp: env?.mcp ?? [] }, transcripts.get(a.key))
+      for (const t of classified.calls) {
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
@@ -966,14 +852,12 @@ function insertRun(
           t.target,
           t.ok === null ? null : t.ok ? 1 : 0,
           t.durationMs,
-          call.class,
+          t.class,
         )
-        for (const path of call.files) {
+        for (const path of t.files) {
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
         }
-        for (const { skill, source } of call.skills) {
-          // A failed call names a skill that may not exist; a placed one does.
-          if (source !== 'placed' && (t.ok === false || authored.has(skill))) continue
+        for (const { skill, source } of t.skills) {
           run(
             'INSERT INTO skill_uses VALUES (?, ?, ?, ?, ?)',
             record.runId,
@@ -982,13 +866,9 @@ function insertRun(
             skill,
             source,
           )
-          const had = found.get(skill)
-          if (source !== 'placed' && had?.source !== 'skill-dir') {
-            found.set(skill, { source, path: had?.path ?? null })
-          }
         }
       }
-      for (const [skill, f] of found) {
+      for (const [skill, f] of classified.found) {
         run(
           'INSERT INTO found_skills VALUES (?, ?, ?, ?, ?)',
           record.runId,

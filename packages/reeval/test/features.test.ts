@@ -81,6 +81,7 @@ import {
   startDaytonaVm,
   startSshVm,
 } from './support/ssh-vm.ts'
+import { writeStudioResponses } from './support/studio.ts'
 import { type FakeVmService, fakeVmService, VM_RUN_LABEL } from './support/vm-service.ts'
 
 /**
@@ -184,6 +185,11 @@ function entryOf(stdout: string, name: string): string {
     .join('\n')
 }
 
+const studioSource = (project: string) => ({
+  root: project,
+  historyDir: join(project, 'evals', '.history'),
+  scratch: false,
+})
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
 const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
 
@@ -1861,8 +1867,7 @@ export const features: Feature[] = [
       const recorded = await runCli(project, ['record'], { env })
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const site = join(project, 'site')
-      const built = await runCli(project, ['studio', 'build', '--out', site], { env })
-      assert.equal(built.code, 0, built.stdout + built.stderr)
+      await writeStudioResponses(studioSource(project), site)
       const [judgeInput, ...more] = filesNamed(runDir, 'judge-input.json')
       assert.ok(judgeInput && more.length === 0, 'one judge call')
       const input = JSON.parse(readFileSync(judgeInput, 'utf8')) as Array<{
@@ -1873,7 +1878,7 @@ export const features: Feature[] = [
       for (const [where, paths] of [
         ['the run', [runDir]],
         ['the history folder', [join(project, 'evals', '.history')]],
-        ['the studio build', [site]],
+        ['the studio', [site]],
         ['the judge input', [judgeInput, judged]],
       ] as const) {
         for (const form of leakyForms()) {
@@ -1910,8 +1915,7 @@ export const features: Feature[] = [
       const recorded = await runCli(project, ['record'])
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const site = join(project, 'site')
-      const built = await runCli(project, ['studio', 'build', '--out', site])
-      assert.equal(built.code, 0, built.stdout + built.stderr)
+      await writeStudioResponses(studioSource(project), site)
       const history = await runCli(project, ['history'])
       assert.match(history.stdout, /lands/)
       const runs = join(project, '.reeval', 'runs')
@@ -1920,7 +1924,7 @@ export const features: Feature[] = [
         ['`reeval history`', history.stdout],
         ['the runs folder', filesContaining(runs, 'sk-ant-')],
         ['the history folder', filesContaining(join(project, 'evals', '.history'), 'sk-ant-')],
-        ['the studio build', filesContaining(site, 'sk-ant-')],
+        ['the studio', filesContaining(site, 'sk-ant-')],
       ] as const) {
         assert.doesNotMatch(text, /sk-ant-|reeval-fixture-not-a-key/, `${where} has the key`)
       }

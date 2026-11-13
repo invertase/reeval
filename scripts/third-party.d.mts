@@ -1,4 +1,4 @@
-import type { Plugin } from 'vite'
+import type license from 'rollup-plugin-license'
 
 export interface ThirdParty {
   name: string
@@ -12,11 +12,12 @@ export interface ThirdParty {
 }
 
 export const ALLOWED: string[]
-export function bundledLicenses(where: string, output: (packages: ThirdParty[]) => void): Plugin
+export function bundledLicenses(
+  where: string,
+  output: (packages: ThirdParty[]) => void,
+): ReturnType<typeof license>
 export function packageLicense(dir: string, where: string): ThirdParty
 export function packageDir(name: string, from: string): string
-export function cssImports(file: string, where: string): ThirdParty[]
-export function markedFiles(dir: string, marker: string, base: string): string[]
 export function renderNotices(
   name: string,
   packages: ThirdParty[],

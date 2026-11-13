@@ -405,7 +405,7 @@ const nonEmpty = z.string().regex(/\S/, 'must not be empty')
 
 /**
  * A capture's name is the `<name>.png` segment of its artifact path, so it stays within what
- * the studio serves as a path segment (`src/view/paths.ts`): a leading letter or digit, and
+ * the studio serves as a path segment (`parseStudioPath` in `src/view/api.ts`): a leading letter or digit, and
  * short enough to leave room for `.png`.
  */
 export const CAPTURE_NAME_MAX = 100

@@ -19,7 +19,7 @@
           "type": "string"
         },
         "command": {
-          "description": "`run`, `studio build`, …; null when the command line didn't parse.",
+          "description": "`run`, `image build`, …; null when the command line didn't parse.",
           "anyOf": [
             {
               "type": "null"

@@ -1,11 +1,11 @@
 // The third-party code inlined into reeval's tarball, for its THIRD_PARTY_NOTICES.md.
-// rollup-plugin-license lists the packages whose modules land in a bundle (tsdown's, and the
-// studio app's Vite build); packages that reach it other ways (CSS @imports, files copied from a
-// package) are added by path. Every one must carry a license in ALLOWED, and a license file
-// where its license asks for the notice to ship; otherwise the build fails. The package's own
+// rollup-plugin-license lists the packages whose modules land in tsdown's bundle; packages that
+// reach it other ways (files copied from a package) are added by path. Every one must carry a
+// license in ALLOWED, and a license file where its license asks for the notice to ship; otherwise
+// the build fails. The package's own
 // `dependencies` aren't inlined: installers fetch them, notices and all.
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import license from 'rollup-plugin-license'
 import validate from 'spdx-expression-validate'
 import satisfies from 'spdx-satisfies'
@@ -27,7 +27,7 @@ export const ALLOWED = [
 const NO_NOTICE = ['MIT-0', '0BSD', 'CC0-1.0', 'Unlicense']
 
 const root = join(import.meta.dirname, '..')
-/** The workspace's own packages, which the studio reaches by path (`reeval/view`). */
+/** The workspace's own packages, which are never third-party. */
 const own = new Set(
   readdirSync(join(root, 'packages')).map(
     (dir) => JSON.parse(readFileSync(join(root, 'packages', dir, 'package.json'), 'utf8')).name,
@@ -115,29 +115,6 @@ export function packageDir(name, from) {
     if (existsSync(join(candidate, 'package.json'))) return realpathSync(candidate)
     if (dirname(dir) === dir) throw new Error(`can't find ${name} from ${from}`)
   }
-}
-
-/** The packages a CSS file pulls in with a bare `@import` (Tailwind inlines them). */
-export function cssImports(file, where) {
-  const css = readFileSync(file, 'utf8')
-  return [...css.matchAll(/@import\s+(?:url\()?["']([^./"'][^"']*)["']/g)].map((m) => {
-    const spec = /** @type {string} */ (m[1])
-    const name = spec
-      .split('/')
-      .slice(0, spec.startsWith('@') ? 2 : 1)
-      .join('/')
-    return packageLicense(packageDir(name, dirname(file)), where)
-  })
-}
-
-/** Files under `dir` whose first line credits `marker`, relative to `base`. */
-export function markedFiles(dir, marker, base) {
-  return readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((e) => e.isFile())
-    .map((e) => join(e.parentPath, e.name))
-    .filter((f) => readFileSync(f, 'utf8').split('\n', 1)[0]?.includes(marker))
-    .map((f) => relative(base, f).replaceAll('\\', '/'))
-    .sort()
 }
 
 /**

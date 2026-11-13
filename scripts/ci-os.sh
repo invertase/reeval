@@ -3,7 +3,7 @@
 #
 #   scripts/ci-os.sh unit 2/4    a shard of the unit and plan test files
 #   scripts/ci-os.sh tiers       typecheck, schema check, lint, fixtures (fake tier), studio, the other packages
-#   scripts/ci-os.sh packed      the pack test, then reeval init → run → doctor → studio build from the tarball
+#   scripts/ci-os.sh packed      the pack test, then reeval init → run → doctor from the tarball
 #   scripts/ci-os.sh bootstraps  macOS only: every bootstrap tart() bakes, on this host
 #
 # Run after `pnpm install` and `pnpm build`, from anywhere in the repo.
@@ -41,9 +41,6 @@ case $part in
     for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
       pnpm --filter "@reeval/$p" test
     done
-    # The browser test skips without Chrome: count that as a failure here.
-    pnpm --filter studio-web test 2>&1 | tee "${RUNNER_TEMP:-/tmp}/studio-web.log"
-    grep -Eq '^(ℹ|#) skipped 0' "${RUNNER_TEMP:-/tmp}/studio-web.log"
     ;;
 
   bootstraps)
@@ -57,7 +54,7 @@ case $part in
     tarball=$(cd "$work" && ls ./*.tgz)
     reeval() { npx --no-install reeval "$@"; }
 
-    # A fresh project, its eval run on the fake agent: init, run, doctor and a studio build of the run.
+    # A fresh project, its eval run on the fake agent: init, run and doctor.
     mkdir "$work/fake" && cd "$work/fake"
     npm init -y >/dev/null
     npm install --no-audit --no-fund "../$tarball"
@@ -77,8 +74,6 @@ export default defineConfig({
 EOF
     reeval run --config fake.config.ts
     reeval doctor --config fake.config.ts
-    reeval studio build --scratch | tee build.log
-    grep -q 'built studio-dist/: 1 run' build.log
 
     # A fresh project on Docker: doctor names what this machine's Docker lacks, with the fix.
     mkdir "$work/docker" && cd "$work/docker"

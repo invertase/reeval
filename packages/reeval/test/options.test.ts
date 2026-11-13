@@ -1543,8 +1543,8 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
     const remote =
       /^reeval: reeval studio reads a local\(\) history only, and history\.store in reeval\.yaml keeps runs in s3:\/\/runs\./
     for (const [args, env] of [
-      [['studio', 'build', '--profile', 'ci'], {}],
-      [['studio', 'build'], { REEVAL_PROFILE: 'ci' }],
+      [['studio', '--no-open', '--profile', 'ci'], {}],
+      [['studio', '--no-open'], { REEVAL_PROFILE: 'ci' }],
     ] as const) {
       const r = await runCli(p.dir, [...args], { env })
       assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -1556,7 +1556,7 @@ evaluate('e', { environments: defineEnvironment('review', ({ plugin }) => ({ plu
     assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
     assert.match(unknown.stderr, /Unknown profile "nope"\. Profiles in reeval\.yaml: ci\./)
     writeFileSync(join(p.dir, '.env'), 'REEVAL_PROFILE=ci\n')
-    const fromEnv = await runCli(p.dir, ['studio', 'build'])
+    const fromEnv = await runCli(p.dir, ['studio', '--no-open'])
     assert.equal(fromEnv.code, 2, fromEnv.stdout + fromEnv.stderr)
     assert.match(fromEnv.stderr, remote, 'REEVAL_PROFILE in .env')
   })

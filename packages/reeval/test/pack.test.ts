@@ -5,7 +5,6 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, posix, sep } from 'node:path'
 import { test } from 'node:test'
-import { pathToFileURL } from 'node:url'
 import { VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { packageReadme } from '../../../scripts/package-readme.mjs'
@@ -358,7 +357,6 @@ test('the packed package installs into a clean project and runs reeval', {
     readFileSync(join(pkgRoot, '..', '..', 'CHANGELOG.md'), 'utf8'),
   )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
-  assert.doesNotMatch(listing, /^package\/dist\/studio-app\//m, 'the studio app is in a chunk')
   for (const entry of [
     'index',
     'harness',
@@ -415,19 +413,12 @@ test('the packed package installs into a clean project and runs reeval', {
   const listed = sections.map((s) => s.slice(0, s.indexOf('\n')))
   for (const inlined of [
     /^@ai-sdk\/harness-claude-code@/, // dist and dist/bridge
-    /^react@/,
-    /^react-dom@/,
-    /^@radix-ui\/react-select@/,
-    /^@tanstack\/react-router@/,
-    /^lucide-react@/,
-    /^tailwindcss@/, // through the studio's CSS
-    /^shadcn\/ui$/,
+    /^@ai-sdk\/harness@/, // dist/bridge
   ])
     assert.ok(
       listed.some((name) => inlined.test(name)),
       `${inlined} in ${listed.join(', ')}`,
     )
-  assert.ok(listed.length > 30, listed.join(', '))
   for (const section of sections) {
     assert.match(section, /^- License: \S+/m, section.slice(0, 200))
     assert.match(section, /^```+text\n[\s\S]*(Copyright|Permission)/m, section.slice(0, 200))
@@ -505,15 +496,6 @@ test('the packed package installs into a clean project and runs reeval', {
   )
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f))
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
-  const appChunk = shipped.find((f) => /^app-files-[\w-]+\.js$/.test(f))
-  assert.ok(appChunk, 'the studio app ships in its own chunk')
-  const { APP_FILES } = await import(pathToFileURL(join(dist, appChunk)).href)
-  const appPaths = Object.keys(APP_FILES)
-  assert.ok(appPaths.includes('index.html'), appPaths.join(', '))
-  assert.ok(
-    appPaths.some((f) => /^assets\/.+\.js$/.test(f)),
-    appPaths.join(', '),
-  )
   // Each adapter's declarations take its SDK's types; nothing else names either SDK.
   for (const file of code) {
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)

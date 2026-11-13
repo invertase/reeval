@@ -19,7 +19,7 @@ reeval query lift        reeval query effort
 reeval query "SELECT … FROM failing_attempts"
 reeval analyze           one checked LLM reading of a run; --vs none for this
                          run only; --context for your own agent
-reeval studio            reeval studio build --out site
+reeval studio [run]      the runs, served on 127.0.0.1 to the studio page
 reeval image build [--dry-run] [--profile <p>]     reeval clean
 reeval mcp               the history as read-only MCP tools
 reeval doctor            Docker, keys and images, with fixes (--json, --online)

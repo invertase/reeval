@@ -32,9 +32,9 @@ const out = join(root, 'coverage')
 const raw = join(out, 'raw')
 const reports = join(out, 'report')
 const repo = pathToFileURL(join(root, 'packages')).href
-/** The packages whose src/ is reported; studio-web's app runs in a browser, which isn't measured. */
-const PACKAGES = readdirSync(join(root, 'packages')).filter(
-  (p) => p !== 'studio-web' && existsSync(join(root, 'packages', p, 'src')),
+/** The packages whose src/ is reported. */
+const PACKAGES = readdirSync(join(root, 'packages')).filter((p) =>
+  existsSync(join(root, 'packages', p, 'src')),
 )
 /** Where the executed code comes from: built dist/ (mapped to src/) and src/ run directly by tests. */
 const ours = new RegExp(`^${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/(dist|src)/`)
@@ -204,7 +204,7 @@ function report(dirs) {
       '--reporter=json-summary',
       '--exclude-after-remap',
       ...PACKAGES.map((p) => `--include=packages/${p}/src/**`),
-      // Every src file counts, loaded or not; studio-web's app runs in the browser, not here.
+      // Every src file counts, loaded or not.
       '--all',
       ...PACKAGES.map((p) => `--src=packages/${p}/src`),
       ...typeOnly().map((file) => `--exclude=${file}`),
@@ -263,7 +263,7 @@ function markdown(summary) {
     '',
     'Every process the tests start (the test runner, `reeval`, its workers and the egress',
     'gateway), merged, mapped to `src/`. Report-only: no threshold. Code inside Docker',
-    'containers, the browser (studio-web) and the packed-install test is not counted.',
+    'containers and the packed-install test is not counted.',
     '',
     '| | Lines | Branches | Functions |',
     '|---|---|---|---|',

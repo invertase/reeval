@@ -19,7 +19,7 @@ import { fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 const GOLDEN = join(pkgRoot, 'test/fixtures/cli/help.golden.txt')
 const { version } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
 
-/** Every command path with its spec: `run`, `studio`, `studio build`, `image build`, … */
+/** Every command path with its spec: `run`, `studio`, `image build`, … */
 const PATHS = Object.entries(COMMANDS).flatMap(([name, spec]) => [
   ...(spec.help ? [{ path: [name], spec }] : []),
   ...Object.entries(spec.sub ?? {}).map(([sub, s]) => ({ path: [name, sub], spec: s })),
@@ -70,8 +70,9 @@ describe('cli', () => {
     assert.match(image, /^ {2}reeval image clean$/m)
     assert.match(commandHelpText('V', ['image', 'clean']), /--older-than <duration>/)
     const studio = commandHelpText('V', ['studio'])
-    assert.match(studio, /reeval studio build/)
-    assert.doesNotMatch(commandHelpText('V', ['studio', 'build']), /--no-token/)
+    assert.match(studio, /^ {2}reeval studio \[run\] /m)
+    assert.match(studio, /--no-open/)
+    assert.doesNotMatch(studio, /--no-token|reeval studio build/)
     assert.equal(commandHelpText('V', ['run', 'greet']), commandHelpText('V', ['run']))
     assert.equal(commandHelpText('V', ['bogus']), helpText('V'))
   })
@@ -182,12 +183,11 @@ describe('cli', () => {
       values: { org: 'acme', project: 'web', yes: true },
     })
     usage(['cloud', 'provider', 'openai', 'set', '--host', 'x'], /--host/)
-    assert.deepEqual(parseCli(['studio', '--no-token', '--no-scratch']).values, {
-      'no-token': true,
+    assert.deepEqual(parseCli(['studio', '--no-open', '--no-scratch']).values, {
+      'no-open': true,
       'no-scratch': true,
     })
     assert.deepEqual(parseCli(['analyze', '--vs', 'none']).values, { vs: 'none' })
-    assert.deepEqual(parseCli(['studio', 'build', '--scratch']).values, { scratch: true })
     assert.deepEqual(parseCli(['mcp', '--http', '--port', '4990', '--token', 't']), {
       positionals: ['mcp'],
       values: { http: true, port: '4990', token: 't' },
@@ -239,14 +239,14 @@ describe('cli', () => {
     )
     usage(['--dry-run', 'run'], /^--dry-run isn't an option of reeval\b/)
     usage(['studio', '--out', 'x'], /^--out isn't an option of reeval studio\b/)
-    usage(['studio', 'build', '--port', '1'], /^--port isn't an option of reeval studio build/)
+    usage(['studio', '--no-token'], /^Unknown option '--no-token'\. Did you mean --no-open\?/)
     usage(['clean', 'extra'], /^reeval clean takes no arguments \(got extra\)$/)
     usage(['show', 'a', 'b'], /^reeval show takes at most 1 argument \(got a b\)$/)
     usage(['compare', 'a', 'b', 'c'], /^reeval compare takes at most 2 arguments \(got a b c\)$/)
-    usage(['studio', 'foo'], /^reeval studio takes no arguments \(got foo\)$/)
+    usage(['studio', 'a', 'b'], /^reeval studio takes at most 1 argument \(got a b\)$/)
     usage(['mcp', 'x'], /^reeval mcp takes no arguments \(got x\)$/)
     usage(['mcp', '--json'], /^--json isn't an option of reeval mcp\b/)
-    usage(['mcp', '--no-token'], /^--no-token isn't an option of reeval mcp\b/)
+    usage(['mcp', '--no-token'], /^Unknown option '--no-token'\. Did you mean --token\?/)
     // Every command refuses every flag that isn't its own.
     for (const { path, spec } of PATHS) {
       for (const flag of Object.keys(FLAGS) as FlagName[]) {

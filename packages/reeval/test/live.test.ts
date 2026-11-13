@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -11,19 +11,15 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import type { PlannedItem } from '../src/engine/types.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { attemptKey, recordFileName } from '../src/ids.ts'
+import { attemptKey } from '../src/ids.ts'
 import { replace, writeLiveProgress } from '../src/live.ts'
-import { listLive, liveTranscript, stagingRoot } from '../src/studio/live.ts'
-import { createStudioApp, type StudioEvent } from '../src/studio/server.ts'
+import { listLive, stagingRoot } from '../src/studio/live.ts'
 import type { StudioSource } from '../src/studio/source.ts'
 import type { EvalResult } from '../src/ui/events.ts'
 import {
   LIVE_FILE,
-  type LiveIndex,
   type LiveProgress,
   type LiveRun,
-  liveApiPath,
-  liveTranscriptPath,
   readableLiveProgress,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun } from './helpers.ts'
@@ -450,180 +446,7 @@ describe('the studio reads live runs', () => {
   })
 })
 
-const HOST = '127.0.0.1:4984'
-
-describe('the studio serves and streams live runs', () => {
-  const secret = `sk-ant-${'x'.repeat(32)}`
-  async function setup() {
-    const { root, source } = await stagingProject({ [RUN]: progress(RUN) })
-    const done = progress(RUN).attempts[0]?.key as string
-    const staged = {
-      turns: [
-        {
-          startedAt: '2026-09-27T18:00:01.000Z',
-          durationMs: 2000,
-          status: 'ok',
-          prompt: 'write hello.txt',
-          transcript: [{ type: 'text', atMs: 5, text: `done, with ${secret}` }],
-        },
-      ],
-    }
-    await writeFile(
-      join(stagingRoot(root), RUN, 'evals', recordFileName(done)),
-      JSON.stringify(staged),
-    )
-    const listeners = new Set<(e: StudioEvent) => void>()
-    const app = createStudioApp({
-      source,
-      app: new Map(),
-      reeval: 'test',
-      project: 'live',
-      token: null,
-      hosts: [],
-      subscribe: (l) => {
-        listeners.add(l)
-        return () => listeners.delete(l)
-      },
-    })
-    const send = (e: StudioEvent) => {
-      for (const l of listeners) l(e)
-    }
-    return { root, source, app, done, send, listeners }
-  }
-  const get = (app: ReturnType<typeof createStudioApp>, path: string) =>
-    app.request(`http://${HOST}/${path}`, { headers: { host: HOST } })
-
-  test('/api/live lists them; a finished attempt serves its redacted transcript', async () => {
-    const { root, app, done } = await setup()
-    const index = (await (await get(app, liveApiPath)).json()) as LiveIndex
-    assert.deepEqual(
-      index.runs.map((r) => [r.runId, r.state, r.counts.done, r.planned]),
-      [[RUN, 'running', 1, 2]],
-    )
-
-    const res = await get(app, liveTranscriptPath(RUN, done))
-    assert.equal(res.status, 200)
-    assert.equal(res.headers.get('content-security-policy'), 'sandbox')
-    const text = await res.text()
-    const lines = text
-      .trim()
-      .split('\n')
-      .map((l) => JSON.parse(l))
-    assert.deepEqual(
-      lines.map((l) => l.type),
-      ['prompt', 'text', 'turn-end'],
-    )
-    assert.doesNotMatch(text, /sk-ant-x{32}/)
-    assert.match(text, /done, with/)
-
-    const running = progress(RUN).attempts[1]?.key as string
-    await writeFile(join(stagingRoot(root), RUN, 'evals', recordFileName(running)), '{}')
-    for (const path of [
-      liveTranscriptPath(RUN, running),
-      liveTranscriptPath(RUN, `${done}0`),
-      liveTranscriptPath(RUN, '../../../reeval.config.ts'),
-      liveTranscriptPath('not-a-run', done),
-      liveTranscriptPath(stamp(1), done),
-    ]) {
-      assert.equal((await get(app, path)).status, 404, path)
-    }
-  })
-
-  test("a staged record that's a symlink out of the run is never served", async () => {
-    const { root, source, done } = await setup()
-    const file = join(stagingRoot(root), RUN, 'evals', recordFileName(done))
-    const outside = join(root, 'outside.json')
-    await writeFile(outside, await readFile(file))
-    await rm(file)
-    await symlink(outside, file)
-    assert.equal(await liveTranscript(source, RUN, done), null)
-  })
-
-  test('a staging run directory that is a symlink is neither listed nor served', async () => {
-    const { root, source, done } = await setup()
-    const linked = stamp(9)
-    const outside = join(root, 'outside')
-    await cp(join(stagingRoot(root), RUN), outside, { recursive: true })
-    await writeFile(join(outside, LIVE_FILE), JSON.stringify(progress(linked)))
-    await symlink(outside, join(stagingRoot(root), linked), 'dir')
-    assert.deepEqual(
-      (await listLive(source)).map((r) => r.runId),
-      [RUN],
-    )
-    assert.equal(await liveTranscript(source, linked, done), null)
-  })
-
-  test('/api/events streams run.progress with the runs, and history.changed', async () => {
-    const { app, send, listeners } = await setup()
-    const res = await get(app, 'api/events')
-    const reader = (res.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    let text = ''
-    const until = async (pattern: RegExp) => {
-      while (!pattern.test(text)) {
-        const { value, done } = await reader.read()
-        if (done) throw new Error(`stream ended: ${text}`)
-        text += decoder.decode(value)
-      }
-    }
-    await until(/event: ready/)
-    send({ type: 'run.progress', runs: [{ ...progress(RUN), state: 'running' } as LiveRun] })
-    send({ type: 'history.changed' })
-    await until(/event: history\.changed/)
-    const progressEvent = /event: run\.progress\ndata: (.+)\n/.exec(text)
-    assert.ok(progressEvent, text)
-    const data = JSON.parse(progressEvent[1] as string) as LiveIndex
-    assert.equal(data.runs[0]?.runId, RUN)
-    await reader.cancel()
-    await sleep(20)
-    assert.equal(listeners.size, 0, 'a closed stream unsubscribes')
-  })
-})
-
-/**
- * Each distinct `done/planned` a run's progress file showed, polled until the CLI exits.
- * `onStep` hears each new step's done count.
- */
-async function watchRun(
-  dir: string,
-  args: string[],
-  env: NodeJS.ProcessEnv = {},
-  onStep: (done: number) => void = () => {},
-) {
-  const child = spawn(process.execPath, [cli, ...args], {
-    cwd: dir,
-    env: { ...baseEnv, ...env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  let output = ''
-  child.stdout.on('data', (d) => (output += d))
-  child.stderr.on('data', (d) => (output += d))
-  const exited = new Promise<number | null>((resolve) => child.on('close', resolve))
-  const seen: string[] = []
-  let runId: string | undefined
-  let open = true
-  void exited.then(() => (open = false))
-  while (open) {
-    const staging = join(dir, '.reeval/staging')
-    const [name] = existsSync(staging) ? readdirSync(staging) : []
-    const file = name && join(staging, name, LIVE_FILE)
-    if (file && existsSync(file)) {
-      try {
-        const p = readableLiveProgress(JSON.parse(readFileSync(file, 'utf8')))
-        if (p) {
-          runId = p.runId
-          const step = `${p.counts.done}/${p.planned}${p.phase === 'running' ? '' : ` ${p.phase}`}`
-          if (seen.at(-1) !== step) {
-            seen.push(step)
-            onStep(p.counts.done)
-          }
-        }
-      } catch {}
-    }
-    await sleep(25)
-  }
-  return { code: await exited, seen, runId, output }
-}
+const _HOST = '127.0.0.1:4984'
 
 describe('reeval run keeps its progress file', () => {
   const evalFile = `import { evaluate, expect } from 'reeval'
@@ -764,7 +587,7 @@ evaluate('waits', { runs: 2 }, async (c) => {
     writeFileSync(join(p.dir, '.reeval/runs', `${run.runId}.json`), JSON.stringify(run))
     const was = (name: string, n = 1) =>
       run.evals.find((e) => e.name === name)?.attempts.find((a) => a.n === n)
-    const keptKey = was('kept pass')?.key as string
+    const _keptKey = was('kept pass')?.key as string
     const keptFile = was('kept pass')?.files.transcript?.path as string
     const keptTranscript = readFileSync(join(p.dir, '.reeval/runs', run.runId, keptFile), 'utf8')
     assert.match(keptTranscript, /write hello\.txt/)
@@ -781,7 +604,6 @@ evaluate('waits', { runs: 2 }, async (c) => {
     const exited = new Promise<number | null>((resolve) => child.on('close', resolve))
     const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
     let live: LiveRun | undefined
-    let served: string | null = null
     try {
       const deadline = Date.now() + 30_000
       while (!live?.attempts.some((a) => a.status === 'running')) {
@@ -789,12 +611,10 @@ evaluate('waits', { runs: 2 }, async (c) => {
         await sleep(25)
         live = (await listLive(source))[0]
       }
-      served = await liveTranscript(source, run.runId, keptKey)
     } finally {
       writeFileSync(gate, '')
     }
     assert.equal(await exited, 1, output)
-    assert.equal(served, keptTranscript)
 
     const seen = (name: string, n = 1) => live?.attempts.find((a) => a.name === name && a.n === n)
     for (const [name, n, status] of [
@@ -841,3 +661,44 @@ evaluate('waits', { runs: 2 }, async (c) => {
     assert.deepEqual(r.seen, [])
   })
 })
+
+async function watchRun(
+  dir: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = {},
+  onStep: (done: number) => void = () => {},
+) {
+  const child = spawn(process.execPath, [cli, ...args], {
+    cwd: dir,
+    env: { ...baseEnv, ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  child.stdout.on('data', (d) => (output += d))
+  child.stderr.on('data', (d) => (output += d))
+  const exited = new Promise<number | null>((resolve) => child.on('close', resolve))
+  const seen: string[] = []
+  let runId: string | undefined
+  let open = true
+  void exited.then(() => (open = false))
+  while (open) {
+    const staging = join(dir, '.reeval/staging')
+    const [name] = existsSync(staging) ? readdirSync(staging) : []
+    const file = name && join(staging, name, LIVE_FILE)
+    if (file && existsSync(file)) {
+      try {
+        const p = readableLiveProgress(JSON.parse(readFileSync(file, 'utf8')))
+        if (p) {
+          runId = p.runId
+          const step = `${p.counts.done}/${p.planned}${p.phase === 'running' ? '' : ` ${p.phase}`}`
+          if (seen.at(-1) !== step) {
+            seen.push(step)
+            onStep(p.counts.done)
+          }
+        }
+      } catch {}
+    }
+    await sleep(25)
+  }
+  return { code: await exited, seen, runId, output }
+}

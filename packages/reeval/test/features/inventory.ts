@@ -239,7 +239,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: "`evals[].answers[].input`: what each pairwise question's model was sent, per pair and order",
     fixtures: ['compare/question-input'],
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'questions.attempt',
@@ -1927,7 +1927,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: "Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates",
     fixtures: ['history/observe', 'judge/input-observations'],
-    unit: ['reeval/test/observe.test.ts', 'studio-web/test/e2e.test.ts'],
+    unit: ['reeval/test/observe.test.ts'],
   },
   {
     id: 'assert.named-checks',
@@ -2072,7 +2072,7 @@ export const inventory: InventoryFeature[] = [
     id: 'history.logs',
     area: 'Records and studio',
     name: 'History `.gitignore` un-ignores recorded logs and `.gitattributes` marks them generated; `reeval record` warns when git still ignores them',
-    unit: ['reeval/test/history.test.ts', 'studio-web/test/artifact.test.ts'],
+    unit: ['reeval/test/history.test.ts'],
   },
   {
     id: 'harness.grok-build',
@@ -2354,19 +2354,19 @@ export const inventory: InventoryFeature[] = [
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'summary.judge-score',
     area: 'Records and studio',
     name: 'Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count)',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'summary.usage',
     area: 'Records and studio',
     name: 'Token usage on each attempt and a per-cell sum of counted attempts, in the studio',
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'analyze',
@@ -2384,7 +2384,7 @@ export const inventory: InventoryFeature[] = [
     id: 'analysis.notes',
     area: 'Records and studio',
     name: "A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document",
-    unit: ['reeval/test/studio.test.ts'],
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
   },
   {
     id: 'ui.capture',
@@ -2462,27 +2462,21 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'studio',
     area: 'Records and studio',
-    name: '`reeval studio` and `reeval studio build`',
-    unit: ['reeval/test/studio.test.ts'],
-    real: ['e2e › reeval studio build'],
-  },
-  {
-    id: 'studio.debug',
-    area: 'Records and studio',
-    name: "The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only",
-    unit: ['reeval/test/studio.test.ts', 'studio-web/test/e2e.test.ts'],
+    name: "`reeval studio`: the studio API (`reeval/view`'s routes and shapes, `buildRunView` and transcript facts, the same in any JavaScript runtime) on local runs, on loopback, paired with the hosted studio page by a one-time token, CORS for its origin only",
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
+    real: ["e2e › the studio's run view: both runs, with every attempt's transcript facts"],
   },
   {
     id: 'studio.live',
     area: 'Records and studio',
-    name: "Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it",
-    unit: ['reeval/test/live.test.ts', 'studio-web/test/e2e.test.ts'],
+    name: "Runs in progress: `reeval run`'s `.reeval/staging/<run>/live.json`, attempts filling in, `stopped` for a killed run, and the record replacing it",
+    unit: ['reeval/test/live.test.ts'],
   },
   {
     id: 'studio.answers',
     area: 'Records and studio',
-    name: "Compare questions' answers on the studio's run page: win rates within and across harnesses, the model, and a failed call's error",
-    unit: ['reeval/test/studio.test.ts', 'studio-web/test/e2e.test.ts'],
+    name: "Compare questions' answers as `reeval/view` tallies them: win rates within and across harnesses, the model, and a failed call's error",
+    unit: ['reeval/test/studio.test.ts', 'reeval/test/view-boundary.test.ts'],
     real: ['questions › test/real-agents --profile questions'],
   },
 

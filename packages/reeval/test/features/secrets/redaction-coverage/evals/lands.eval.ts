@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { forms, leaky } from './env.ts'
 
 // The agent leaks the secret in every form, and the judge reads it all; the oracle then checks
-// that none of the forms reached the record, the history folder or the studio build.
+// that none of the forms reached the record, the history folder or what the studio serves.
 evaluate('lands', { environments: leaky }, async (c) => {
   await c.send('print LEAKY_TOKEN every way you can')
   const leaked = (await c.readFile('leak.txt'))?.split('\n')

@@ -1,9 +1,8 @@
 # with-studio
 
-**Shows:** browsing your runs in the studio, and building it as a static site. The agent adds
-`multiply(a, b)` to a small package; `--record` copies the run into `.history/`, `reeval studio`
-serves every run, eval, transcript and diff on `127.0.0.1`, and `reeval studio build` writes the
-same app as files for any static host.
+**Shows:** browsing your runs in the studio. The agent adds `multiply(a, b)` to a small package;
+`--record` copies the run into `.history/`, and `reeval studio` serves every run, eval and
+transcript on `127.0.0.1` to the studio page it opens.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A browser to open the studio in. A real agent needs its key in `.env.local`
@@ -27,22 +26,15 @@ The studio shows every run, whichever agent ran it.
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the studio prints the URL to open, with its session token:
+**What to look at:** the studio prints the URL it opens, with its one-time token:
 
 ```text
-reeval studio · with-studio · .history/
-  http://127.0.0.1:4984/?token=…
+reeval studio · with-studio · serving http://localhost:4984 (loopback only)
+  https://…/studio?s=http%3A%2F%2Flocalhost%3A4984&run=…#t=…
 Ctrl-C to stop.
 ```
 
-Unrecorded runs from `.reeval/runs/` show there too, labeled scratch. A static build takes only
-recorded runs, unless you add `--scratch`:
-
-```text
-$ pnpm reeval studio build --out site
-built site/: 1 run, 12 files, 736 KB (records, transcripts, diffs, logs and judge inputs)
-Serve it from any static host. Anyone who can open it can read every included file.
-```
+Unrecorded runs from `.reeval/runs/` show there too, unless you add `--no-scratch`.
 
 | File | What it is |
 |---|---|

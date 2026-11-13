@@ -1,12 +1,15 @@
 // The CLI end to end with each real harness (support/harnesses.ts): `reeval run --record -v` twice on
 // one tiny eval (test/e2e/), then `reeval compare` says "same", every `reeval query` view answers, the
-// `-v` trace and `.reeval/debug` log exist, and `reeval studio build` builds the recorded history. The fake
+// `-v` trace and `.reeval/debug` log exist, and the studio's run view builds from the recorded history. The fake
 // row runs it key-free in Docker. Assertions are on exit codes, files and JSON, never model text.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { runTranscripts } from '../src/studio/facts.ts'
+import { readRun as readStudioRun } from '../src/studio/source.ts'
+import { buildRunView } from '../src/view/run-view.ts'
 import { type CliRun, readRun, recordedRuns, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
 import { fixture } from './support/fixture.ts'
@@ -115,16 +118,20 @@ for (const row of harnesses.filter((r) => !r.harness)) {
       assert.equal(shown.runId, runs[1])
     })
 
-    test('reeval studio build: a static site with both runs and their transcripts', async () => {
+    test("the studio's run view: both runs, with every attempt's transcript facts", async () => {
       assert.equal(runs.length, 2, 'the runs failed')
-      const site = join(dir, 'site')
-      ok(await runCli(dir, ['studio', 'build', '--out', site], { env }), 'reeval studio build')
-      assert.ok(existsSync(join(site, 'index.html')))
-      for (const id of runs) assert.ok(existsSync(join(site, 'data/runs', `${id}.json`)), id)
-      assert.ok(
-        filesUnder(site).some((f) => f.endsWith('transcript.jsonl')),
-        'the transcripts are in the site',
-      )
+      const source = { root: dir, historyDir: join(dir, 'evals/.history'), scratch: false }
+      for (const id of runs) {
+        const run = await readStudioRun(source, id)
+        assert.ok(run, id)
+        const view = buildRunView(run.record, {
+          recorded: true,
+          transcripts: await runTranscripts(source, run.record),
+        })
+        const attempts = view.evals.flatMap((e) => e.attempts)
+        assert.ok(attempts.length > 0, id)
+        for (const a of attempts) assert.ok(a.facts, `${id} ${a.key}: no transcript facts`)
+      }
     })
 
     test('no container outlives the runs', async () => {

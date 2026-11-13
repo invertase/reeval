@@ -3,8 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "ignoreIssues": {
     "packages/reeval/src/contract/*.ts": ["types"],
-    "packages/reeval/src/view/report/schema.ts": ["types"],
-    "packages/studio-web/src/components/ui/*.tsx": ["exports"]
+    "packages/reeval/src/view/report/schema.ts": ["types"]
   },
   "workspaces": {
     ".": {
@@ -22,19 +21,13 @@
     "packages/reeval": {
       "entry": [
         "src/{index,harness,sandbox,sandbox-boat,sandbox-daytona,internal-vm,internal-vm-api,internal-vm-api-boat,internal-vm-api-daytona,store-local,store-s3,judge,testing,bin}.ts",
-        "src/studio/index.ts",
         "test/**/*.{ts,mjs}",
         "scripts/**/*.ts"
       ],
       "project": ["src/**/*.ts", "test/**/*.{ts,mjs}", "scripts/**/*.ts"],
       "ignore": ["test/fixtures/records/**"],
       "ignoreBinaries": ["uv", "podman", "go", "pwsh", "tart", "pgrep", "script"],
-      "ignoreDependencies": [
-        "@ai-sdk/harness-acp",
-        "@ai-sdk/provider",
-        "@balena/dockerignore",
-        "studio-web"
-      ]
+      "ignoreDependencies": ["@ai-sdk/harness-acp", "@ai-sdk/provider", "@balena/dockerignore"]
     },
     "packages/vm-api": {
       "entry": ["test/**/*.ts"]
@@ -64,10 +57,6 @@
     },
     "packages/sandbox-docker": {
       "entry": ["test/**/*.ts"]
-    },
-    "packages/studio-web": {
-      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"],
-      "ignore": ["scripts/demo/**"]
     },
     "examples/with-*": {
       "entry": ["*.eval.ts", "reeval*.config.ts"],

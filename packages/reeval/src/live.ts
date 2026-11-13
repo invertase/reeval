@@ -1,5 +1,5 @@
-// The running `reeval run`'s progress file, `.reeval/staging/<runId>/live.json`, for `reeval studio`. It's
-// replaced whole (a temp file, then a rename), so a reader sees the old file or the new one.
+// The running `reeval run`'s progress file, `.reeval/staging/<runId>/live.json`, which `reeval show`
+// reads for a run in progress or stopped. It's replaced whole (a temp file, then a rename), so a reader sees the old file or the new one.
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'

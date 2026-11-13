@@ -15,7 +15,7 @@ import { redactJson, redactSecrets } from '../redact.ts'
 import { resolveFile } from '../studio/source.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { sortAnalyses } from '../view/analysis.ts'
-import { RUN_ID } from '../view/paths.ts'
+import { RUN_ID } from '../view/api.ts'
 import { DEFAULT_FAILURES, DEFAULT_TAIL, failuresView } from './failures.ts'
 import { readTranscript, source } from './files.ts'
 

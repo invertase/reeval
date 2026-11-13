@@ -208,13 +208,6 @@ check(
 )
 const query = compiled(example, ['query', 'effort', '--json'])
 check('reeval query (node:sqlite)', query.status === 0, why(query))
-const site = join(example, 'site')
-const studio = compiled(example, ['studio', 'build', '--out', site])
-check(
-  'reeval studio build',
-  studio.status === 0 && existsSync(join(site, 'index.html')),
-  why(studio),
-)
 
 const docker = sh('docker', ['image', 'inspect', 'reeval-sandbox-base:latest'])
 if (docker.status === 0) {
@@ -229,11 +222,7 @@ if (docker.status === 0) {
   rmSync(fixture, { recursive: true, force: true })
 } else console.log('skip a Docker attempt: no Docker, or no sandbox images (reeval image build)')
 const copied = existsSync(cache) ? readdirSync(join(cache, 'reeval')).sort() : []
-check(
-  'what it copied out of itself',
-  copied.length > 0 && !copied.some((d) => d.startsWith('studio-app')),
-  copied.join(', '),
-)
+check('what it copied out of itself', copied.length > 0, copied.join(', '))
 
 for (const dir of [withNode, example, alone]) rmSync(dir, { recursive: true, force: true })
 if (checks.includes(false)) fail('the compiled reeval differs from Node')
