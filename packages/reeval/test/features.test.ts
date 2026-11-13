@@ -5598,8 +5598,8 @@ function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string |
 // there, and the slowest reach 60s.
 const FAKE_TIMEOUT_MS = process.platform === 'win32' ? 150_000 : 60_000
 
-function fixtureTests(tiers: Tier[]) {
-  for (const f of features) {
+function fixtureTests(tiers: Tier[], pick: (f: Feature) => boolean = () => true) {
+  for (const f of features.filter(pick)) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout =
         f.timeoutMs?.[tier] ??
@@ -5681,7 +5681,14 @@ function fixtureTests(tiers: Tier[]) {
   }
 }
 
-describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker', 'podman']))
+describe('feature fixtures', { concurrency: 4 }, () =>
+  fixtureTests(['fake', 'docker', 'podman'], (f) => !f.loopback),
+)
+// One at a time: they share one loopback lock, so concurrent rows would only queue on it with
+// their timeouts running.
+describe('feature fixtures on the loopback', { concurrency: 1 }, () =>
+  fixtureTests(['fake', 'docker', 'podman'], (f) => !!f.loopback),
+)
 // Real attempts run one at a time, each within its own timeout.
 describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
