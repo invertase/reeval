@@ -187,8 +187,8 @@ type FilesOf = (machine: TarEntry[]) => TarEntry[] | null
  * server, which numbers the lines and relays them as `{"seq":n,"line":…}` frames. With `fails`,
  * starting runs nothing: the socket closes with no exit line and the run reads as failed, with
  * `exitCode` when given. With `holds`, starting sends a header and a `held` notice and the run
- * goes on until it's canceled; with `stops`, it ends interrupted and reads as stopped, for that
- * reason.
+ * goes on until it's canceled; with `stops`, it ends with `exitCode` (130 when not given) and
+ * reads as stopped, for that reason.
  */
 async function platform(
   options: {
@@ -243,7 +243,6 @@ async function platform(
         ? { code: 'units_exhausted', message: options.stops }
         : null,
     exitCode: options.exitCode ?? null,
-    ...(options.stops ? { stopReason: 'units_exhausted' } : {}),
   })
   const relay = (line: object) => {
     const l = JSON.stringify(line)
@@ -309,7 +308,7 @@ async function platform(
         relay({ type: 'notice', at: Date.now(), level: 'info', text: 'held' })
       } else if (options.stops) {
         header()
-        relay({ type: 'exit', at: Date.now(), code: 130 })
+        relay({ type: 'exit', at: Date.now(), code: options.exitCode ?? 130 })
         over = true
       } else {
         const file = join(tempDir('cloud-bundle'), 'bundle.tar.gz')
@@ -409,6 +408,7 @@ describe('reeval run on the cloud platform', () => {
           'PUT /api/runs/run_1/bundle',
           'POST /api/runs/run_1/start',
           'WS /api/runs/run_1/events',
+          'GET /api/runs/run_1',
         ],
       )
       for (const s of p.seen.filter((s) => s.path !== '/ingest')) {
@@ -855,21 +855,22 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
-  test('a run the platform stopped exits 4, from reeval run and reeval attach', async () => {
-    const p = await platform({ stops: 'the org is out of units' })
-    const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
-    try {
-      const dir = await fixtureProject()
-      const r = await runCli(dir, ['run', '--cloud'], { env })
-      assert.equal(r.code, 4, r.stdout + r.stderr)
-      assert.match(
-        r.stdout,
-        /The cloud platform stopped run run_1 before it finished: the org is out of units/,
-      )
-      const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], { env })
-      assert.equal(again.code, 4, again.stdout + again.stderr)
-    } finally {
-      await p.close()
+  test('a run the platform stopped exits 4 with how to resume it, from reeval run and reeval attach, whatever its stream ended with', async () => {
+    for (const exitCode of [130, 3, 0]) {
+      const p = await platform({ stops: 'The org ran out of units.', exitCode })
+      const env = { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' }
+      try {
+        const dir = await fixtureProject()
+        const r = await runCli(dir, ['run', '--cloud'], { env })
+        assert.equal(r.code, 4, `exit ${exitCode}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stdout, /Cloud run run_1 stopped: The org ran out of units\./)
+        assert.match(r.stdout, /reeval run --cloud --resume run_1 continues it/)
+        const again = await runCli(dir, ['attach', `${p.base}/api/runs/run_1/events`], { env })
+        assert.equal(again.code, 4, `exit ${exitCode}: ${again.stdout}${again.stderr}`)
+        assert.match(again.stdout, /reeval run --cloud --resume run_1 continues it/)
+      } finally {
+        await p.close()
+      }
     }
   })
 

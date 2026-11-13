@@ -719,8 +719,9 @@ export const INSTEAD: Record<string, string> = {
 
 const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
 or reeval.yaml, in the current directory or above)
-Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 4 stopped (by the cloud
-platform), 130 interrupted (Ctrl-C), 143 terminated (SIGTERM)
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 4 stopped (the cloud
+platform stopped the run before it finished; reeval run --cloud --resume continues it),
+130 interrupted (Ctrl-C), 143 terminated (SIGTERM)
 `
 
 const helpLines = (spec: CommandSpec) => [
