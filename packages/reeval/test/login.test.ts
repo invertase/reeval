@@ -24,6 +24,8 @@ async function platform(
     outcome?: 'token' | 'denied' | 'expired' | 'refused'
     /** The approval page it sends, instead of its own. */
     page?: string
+    /** Sign-outs it fails for these tokens: a 500, or the socket dropped with no answer. */
+    failSignOut?: Record<string, 'error' | 'drop'>
   } = {},
 ) {
   const seen: Seen[] = []
@@ -96,6 +98,11 @@ async function platform(
       return json(res, 200, { user: { ...USER, emailVerified: true } })
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/sign-out') {
+      const fail = bearer && options.failSignOut?.[bearer]
+      if (fail === 'drop') return req.socket.destroy()
+      if (fail === 'error') {
+        return json(res, 500, { error: { code: 'internal', message: 'The platform broke.' } })
+      }
       if (bearer) live.delete(bearer)
       return json(res, 200, { success: true })
     }
@@ -426,6 +433,152 @@ describe('reeval login, whoami and logout', () => {
       const who = await runCli(dir, ['whoami'], { env: m.env })
       assert.equal(who.code, 0, who.stdout + who.stderr)
       assert.equal(p.seen.at(-1)?.auth, `Bearer ${TOKEN}`)
+    } finally {
+      await p.close()
+    }
+  })
+
+  for (const fail of ['error', 'drop'] as const) {
+    test(`a sign-out the platform ${fail === 'error' ? 'fails' : "doesn't answer"} is a warning naming the sign-in, on login and logout`, async () => {
+      const p = await platform({ pending: 0, failSignOut: { 'slashed-token': fail } })
+      try {
+        const m = machine(p.base)
+        const dir = tempDir('login-cwd')
+        const slashed = `${p.base}/`
+        const both = () => {
+          stored(m.file, {
+            [p.base]: { store: 'file', token: 'bare-token', user: USER, signedInAt: SIGNED_IN },
+            [slashed]: { store: 'file', token: 'slashed-token', user: USER, signedInAt: SIGNED_IN },
+          })
+          p.live.add('bare-token').add('slashed-token')
+        }
+        const warning = new RegExp(
+          `couldn't revoke the sign-in to ${slashed} \\(Ada Lovelace <ada@example.com>\\) on the platform \\(.+\\); it stays valid until it expires`,
+        )
+
+        both()
+        const login = await runCli(dir, ['login'], { env: m.env })
+        assert.equal(login.code, 0, login.stdout + login.stderr)
+        assert.match(login.stderr, warning)
+        assert.equal(login.stderr.match(/couldn't revoke/g)?.length, 1, login.stderr)
+        assert.ok(!p.live.has('bare-token'), 'the other sign-in is still revoked')
+        assert.match(login.stdout, /Signed in to /)
+        for (const token of [TOKEN, 'bare-token', 'slashed-token']) {
+          assert.ok(!(login.stdout + login.stderr).includes(token), `login never prints ${token}`)
+        }
+
+        both()
+        const out = await runCli(dir, ['logout'], { env: m.env })
+        assert.equal(out.code, 0, out.stdout + out.stderr)
+        assert.match(out.stderr, warning)
+        assert.equal(out.stderr.match(/couldn't revoke/g)?.length, 1, out.stderr)
+        assert.ok(!p.live.has('bare-token'))
+        assert.match(
+          out.stdout,
+          new RegExp(
+            `Removed the sign-in to ${p.base} \\(Ada Lovelace <ada@example.com>\\) from this machine's credentials`,
+          ),
+        )
+        assert.ok(!(out.stdout + out.stderr).includes('-token'), 'logout never prints a token')
+        assert.ok(!existsSync(m.file))
+      } finally {
+        await p.close()
+      }
+    })
+  }
+
+  test('a token stored under two spellings is revoked once', async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(p.base)
+      const dir = tempDir('login-cwd')
+      const twice = () => {
+        stored(m.file, {
+          [p.base]: { store: 'file', token: 'shared-token', user: USER, signedInAt: SIGNED_IN },
+          [`${p.base}/`]: {
+            store: 'file',
+            token: 'shared-token',
+            user: USER,
+            signedInAt: SIGNED_IN,
+          },
+        })
+        p.live.add('shared-token')
+      }
+      const signOuts = () =>
+        p.seen.filter((s) => s.path === '/api/auth/sign-out' && s.auth === 'Bearer shared-token')
+          .length
+
+      twice()
+      const out = await runCli(dir, ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.equal(signOuts(), 1)
+      assert.match(out.stdout, /Signed out of .* \(Ada Lovelace <ada@example.com>\)\./)
+      assert.equal(out.stderr, '')
+
+      twice()
+      assert.equal((await runCli(dir, ['login'], { env: m.env })).code, 0)
+      assert.equal(signOuts(), 2, 'login revokes it once too')
+      assert.ok(!p.live.has('shared-token'))
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a file sign-in without a token is removed without a keychain warning', async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const m = machine(p.base)
+      stored(m.file, { [p.base]: { store: 'file', token: '', user: USER, signedInAt: SIGNED_IN } })
+      const out = await runCli(tempDir('login-cwd'), ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.doesNotMatch(out.stderr, /keychain/)
+      assert.match(out.stdout, /Removed the sign-in to .* from this machine's credentials/)
+      assert.ok(!existsSync(m.file))
+      assert.ok(!p.seen.some((s) => s.path === '/api/auth/sign-out'), 'nothing to revoke')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('a keychain spelling without its token is named, while another spelling is revoked', {
+    skip: process.platform !== 'linux' && 'secret-tool is the Linux keychain',
+  }, async () => {
+    const p = await platform({ pending: 0 })
+    try {
+      const { seed, env } = secretTool()
+      const m = machine(p.base, env)
+      const dir = tempDir('login-cwd')
+      const slashed = `${p.base}/`
+      const both = () => {
+        stored(m.file, {
+          [p.base]: { store: 'keychain', user: USER, signedInAt: SIGNED_IN },
+          [slashed]: { store: 'keychain', user: USER, signedInAt: SIGNED_IN },
+        })
+        seed(p.base, 'bare-token')
+        p.live.add('bare-token')
+      }
+      const warning = new RegExp(
+        `the keychain didn't return the token of the sign-in to ${slashed} \\(Ada Lovelace <ada@example.com>\\), so it wasn't revoked on the platform and the keychain may still hold it`,
+      )
+
+      both()
+      const who = await runCli(dir, ['whoami'], { env: m.env })
+      assert.equal(who.code, 0, who.stdout + who.stderr)
+      assert.equal(p.seen.at(-1)?.auth, 'Bearer bare-token')
+      const out = await runCli(dir, ['logout'], { env: m.env })
+      assert.equal(out.code, 0, out.stdout + out.stderr)
+      assert.match(out.stderr, warning)
+      assert.equal(out.stderr.match(/keychain didn't return/g)?.length, 1, out.stderr)
+      assert.ok(!p.live.has('bare-token'), 'the spelling with its token is revoked')
+      assert.match(out.stdout, /Removed the sign-in to .* from this machine's credentials/)
+
+      both()
+      const login = await runCli(dir, ['login'], { env: m.env })
+      assert.equal(login.code, 0, login.stdout + login.stderr)
+      assert.match(login.stderr, warning)
+      assert.ok(!p.live.has('bare-token'))
+      assert.ok(!(login.stdout + login.stderr).includes('bare-token'), 'login never prints a token')
+      assert.ok(!(login.stdout + login.stderr).includes(TOKEN))
     } finally {
       await p.close()
     }

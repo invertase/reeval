@@ -102,9 +102,50 @@ async function signOut(base: URL, token: string): Promise<void> {
   throw new Error(platformMessage(res.body) ?? `HTTP ${res.status}`)
 }
 
-/** The distinct tokens of the platform's stored sign-ins, each revoked once. */
-const tokensOf = (stored: readonly Stored[]) =>
-  new Set(stored.flatMap((s) => (s.token ? [s.token] : [])))
+/** A stored sign-in as a warning names it: its key and who it signs in as. */
+const signIn = (s: Stored) => `the sign-in to ${s.key} (${who(s.login.user)})`
+
+/** Everyone the stored sign-ins sign in as, once each. */
+const whoAll = (stored: readonly Stored[]) =>
+  [...new Set(stored.map((s) => who(s.login.user)))].join(', ')
+
+/**
+ * Revokes each distinct token of the platform's stored sign-ins once, but `keep`, warning about
+ * every sign-in it couldn't revoke: a keychain item that didn't return its token (which the
+ * keychain may still hold) or a token the platform didn't revoke.
+ */
+async function revokeAll(
+  base: URL,
+  stored: readonly Stored[],
+  io: LoginIo,
+  keep?: string,
+): Promise<{ revoked: number; failed: boolean }> {
+  let revoked = 0
+  let failed = false
+  const byToken = new Map<string, Stored[]>()
+  for (const s of stored) {
+    if (s.token) {
+      if (s.token !== keep) byToken.set(s.token, [...(byToken.get(s.token) ?? []), s])
+    } else if (s.login.store === 'keychain') {
+      failed = true
+      io.err(
+        `reeval: the keychain didn't return the token of ${signIn(s)}, so it wasn't revoked on the platform and the keychain may still hold it.`,
+      )
+    }
+  }
+  for (const [token, holders] of byToken) {
+    try {
+      await signOut(base, token)
+      revoked++
+    } catch (error) {
+      failed = true
+      io.err(
+        `reeval: couldn't revoke ${holders.map(signIn).join(' and ')} on the platform (${(error as Error).message}); it stays valid until it expires.`,
+      )
+    }
+  }
+  return { revoked, failed }
+}
 
 /** Polls for the token until the code is approved, denied or expires. */
 async function awaitApproval(
@@ -218,9 +259,7 @@ export async function loginCommand(io: LoginIo): Promise<number> {
     )
   }
   const where = await saveLogin(base, token, user, env)
-  for (const old of tokensOf(previous)) {
-    if (old !== token) await signOut(base, old).catch(() => {})
-  }
+  await revokeAll(base, previous, io, token)
   io.out(`Signed in to ${shown(base)} as ${who(user)}; the token is in ${where}.`)
   if (env[CLOUD_TOKEN_VAR]?.trim()) {
     io.err(`${CLOUD_TOKEN_VAR} is set, so the cloud calls send it instead of this sign-in.`)
@@ -233,29 +272,15 @@ export async function logoutCommand(io: LoginIo): Promise<number> {
   const env = io.env ?? process.env
   const base = cloudUrl(env)
   const stored = await storedLogins(base, env)
-  const first = stored[0]
-  if (!first) {
+  if (!stored.length) {
     io.out(`Not signed in to ${shown(base)} with reeval login.`)
   } else {
-    if (stored.some((s) => !s.token)) {
-      io.err(
-        `reeval: the keychain didn't return the token, so the sign-in wasn't revoked on the platform and the keychain may still hold it.`,
-      )
-    }
-    for (const token of tokensOf(stored)) {
-      try {
-        await signOut(base, token)
-      } catch (error) {
-        io.err(
-          `reeval: couldn't revoke the sign-in on the platform (${(error as Error).message}); it stays valid until it expires.`,
-        )
-      }
-    }
+    const { revoked, failed } = await revokeAll(base, stored, io)
     await removeLogin(base, env)
     io.out(
-      first.token
-        ? `Signed out of ${shown(base)} (${who(first.login.user)}).`
-        : `Removed the sign-in to ${shown(base)} (${who(first.login.user)}) from this machine's credentials.`,
+      revoked && !failed
+        ? `Signed out of ${shown(base)} (${whoAll(stored)}).`
+        : `Removed the sign-in to ${shown(base)} (${whoAll(stored)}) from this machine's credentials.`,
     )
   }
   if (env[CLOUD_TOKEN_VAR]?.trim()) {
