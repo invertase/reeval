@@ -30,7 +30,7 @@ const agent = new HarnessAgent({
   `reasoning_effort` and no `max_tokens`, so that route needs a model that accepts function tools
   without `reasoning_effort`: OpenAI refuses them from `gpt-5.6` on unless it is `none`.
 - **Relay.** fx's HTTP client ignores `HTTPS_PROXY`, so `fx-acp` starts a small Node relay on
-  `127.0.0.1:47823` and points fx at it (`FX_GATEWAY_BASE_URL`, or the configured provider's
+  `127.0.0.1:24823` and points fx at it (`FX_GATEWAY_BASE_URL`, or the configured provider's
   `base_url`). The relay forwards each request with Node's `fetch`, which honors the sandbox's
   proxy (`NODE_USE_ENV_PROXY`) and its CA, so model calls still pass the egress gateway.
 - **Quiet.** `FX_QUIET_ENV`: no self-upgrade, no sounds and no color.

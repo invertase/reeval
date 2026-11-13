@@ -89,8 +89,8 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     ...FX_QUIET_ENV,
     FX_PROVIDER: 'openai',
     FX_MODEL: 'gpt-4.1-mini',
-    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
-    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
+    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:24823',
+    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:24823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://api.openai.com',
     FX_RELAY_EFFORT: '',
     FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
@@ -112,7 +112,7 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
   })
   assert.equal(
     JSON.parse(file?.content ?? '').providers.openai.base_url,
-    'http://127.0.0.1:47823/v1',
+    'http://127.0.0.1:24823/v1',
   )
 })
 
@@ -121,8 +121,8 @@ test('on OpenRouter, an OpenRouter id runs on its Chat Completions API through t
     ...FX_QUIET_ENV,
     FX_PROVIDER: 'openrouter',
     FX_MODEL: 'openai/gpt-5-mini',
-    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
-    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
+    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:24823',
+    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:24823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://openrouter.ai',
     FX_RELAY_EFFORT: '',
     FX_RELAY_USAGE: FX_RELAY_USAGE_FILE,
@@ -133,7 +133,7 @@ test('on OpenRouter, an OpenRouter id runs on its Chat Completions API through t
     providers: {
       openrouter: {
         protocol: 'openai-chat-completions',
-        base_url: 'http://127.0.0.1:47823/api/v1',
+        base_url: 'http://127.0.0.1:24823/api/v1',
         auth: { type: 'bearer', env: 'OPENROUTER_API_KEY' },
       },
     },
@@ -173,7 +173,7 @@ test("on Vertex AI, fx calls the relay's copy of the Chat Completions endpoint w
   assert.deepEqual(JSON.parse(file?.content ?? '').providers, {
     vertex: {
       protocol: 'openai-chat-completions',
-      base_url: 'http://127.0.0.1:47823/v1/projects/p-1/locations/global/endpoints/openapi',
+      base_url: 'http://127.0.0.1:24823/v1/projects/p-1/locations/global/endpoints/openapi',
       auth: { type: 'none' },
     },
   })
