@@ -235,10 +235,13 @@ const pairHash = (text: string, i: number) =>
 let cached: { key: string; secrets: Secrets } | undefined
 
 const OTLP_HEADERS = /^OTEL_EXPORTER_OTLP_(?:(?:TRACES|LOGS|METRICS)_)?HEADERS$/i
+const AUTH_SCHEME = /^(?:Bearer|Basic|Token|Api-?Key)(?: |%20)+(\S.*)$/i
 
 /**
  * Every value in the OTLP exporter's header variables, raw and decoded, whatever its header is
  * called: a collector's key goes in headers such as `x-honeycomb-team`, which no name rule knows.
+ * The credential after an auth scheme (`Bearer <token>`) is a value of its own, since it appears
+ * without the scheme too.
  */
 function otlpHeaderValues(env: NodeJS.ProcessEnv): Array<[string, string]> {
   const out: Array<[string, string]> = []
@@ -247,11 +250,15 @@ function otlpHeaderValues(env: NodeJS.ProcessEnv): Array<[string, string]> {
     for (const part of text.split(',')) {
       const raw = part.slice(part.indexOf('=') + 1).trim()
       if (!part.includes('=') || raw.length < 4) continue
-      out.push([raw, name])
+      let decoded = raw
       try {
-        const decoded = decodeURIComponent(raw)
-        if (decoded !== raw) out.push([decoded, name])
+        decoded = decodeURIComponent(raw)
       } catch {}
+      for (const value of new Set([raw, decoded])) {
+        out.push([value, name])
+        const token = AUTH_SCHEME.exec(value)?.[1]?.trim()
+        if (token && token.length >= 4) out.push([token, name])
+      }
     }
   }
   return out

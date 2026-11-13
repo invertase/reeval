@@ -48,15 +48,18 @@ const cpuTimes = () => {
 }
 
 export class HostMetrics {
-  readonly #paths: string[]
+  readonly #filesystems: Array<[role: string, path: string]>
   #cpu = cpuTimes()
   #proc = process.cpuUsage()
   #at = performance.now()
 
-  /** `paths` name the filesystems to report, one per device. */
-  constructor(paths: string[]) {
+  /**
+   * `filesystems` name the filesystems to report by their role, one per device. Each is labeled
+   * with its role, never its path, which would send a local directory to the collector.
+   */
+  constructor(filesystems: Record<string, string>) {
     const seen = new Set<number>()
-    this.#paths = paths.filter((p) => {
+    this.#filesystems = Object.entries(filesystems).filter(([, p]) => {
       try {
         const { dev } = statSync(p)
         if (seen.has(dev)) return false
@@ -106,12 +109,12 @@ export class HostMetrics {
       { name: 'process.memory.usage', value: process.memoryUsage.rss() },
     ]
 
-    for (const path of this.#paths) {
+    for (const [role, path] of this.#filesystems) {
       try {
         const fs = statfsSync(path)
         const used = (fs.blocks - fs.bfree) * fs.bsize
         const free = fs.bavail * fs.bsize
-        const mount = { 'system.filesystem.mountpoint': path }
+        const mount = { 'reeval.filesystem.role': role }
         points.push(
           {
             name: 'system.filesystem.usage',

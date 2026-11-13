@@ -58,14 +58,22 @@ describe('OTLP signals', () => {
 
 describe('host metrics', () => {
   test('samples CPU, memory, load and each filesystem once', () => {
-    const host = new HostMetrics([process.cwd(), process.cwd(), '/no/such/dir'])
+    const host = new HostMetrics({
+      project: process.cwd(),
+      staging: process.cwd(),
+      gone: '/no/such/dir',
+    })
     const points = host.sample()
     for (const name of Object.keys(HOST_METRICS))
       assert.ok(
         points.some((p) => p.name === name),
         name,
       )
-    assert.equal(points.filter((p) => p.name === 'system.filesystem.utilization').length, 1)
+    assert.deepEqual(
+      points.filter((p) => p.name === 'system.filesystem.utilization').map((p) => p.attributes),
+      [{ 'reeval.filesystem.role': 'project' }],
+    )
+    assert.ok(!JSON.stringify(points).includes(process.cwd()))
     for (const p of host.sample()) assert.ok(Number.isFinite(p.value) && p.value >= 0, p.name)
   })
 })
@@ -101,9 +109,12 @@ async function collector(
 }
 
 /** Sets `vars` in `process.env`, where the exporters read them, for this test only. */
-function withEnv(t: TestContext, vars: Record<string, string>) {
+function withEnv(t: TestContext, vars: Record<string, string | undefined>) {
   const before = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]))
-  Object.assign(process.env, vars)
+  for (const [k, v] of Object.entries(vars)) {
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+  }
   t.after(() => {
     for (const [k, v] of Object.entries(before)) {
       if (v === undefined) delete process.env[k]
@@ -113,7 +124,7 @@ function withEnv(t: TestContext, vars: Record<string, string>) {
 }
 
 const start = () =>
-  startTelemetry({ version: '1.0.0', traceId: T, spanId: R, runId: 'r1', paths: [] })
+  startTelemetry({ version: '1.0.0', traceId: T, spanId: R, runId: 'r1', filesystems: {} })
 
 // biome-ignore lint/suspicious/noExplicitAny: OTLP's JSON mapping, read loosely
 type Json = any
@@ -122,11 +133,14 @@ const attributesOf = (list: Json[]) =>
   Object.fromEntries(list.map((a: Json) => [a.key, Object.values(a.value)[0]]))
 
 describe('startTelemetry', () => {
-  test('is null with nothing to export', () => {
-    assert.equal(
-      startTelemetry({ version: '1', traceId: T, spanId: R, runId: 'r', paths: [], env: {} }),
-      null,
-    )
+  test('is null with nothing to export', (t) => {
+    withEnv(t, {
+      OTEL_EXPORTER_OTLP_ENDPOINT: undefined,
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: undefined,
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: undefined,
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: undefined,
+    })
+    assert.equal(start(), null)
   })
 
   test('sends spans with their own ids, times, parents and links, on the resource the variables name', async (t) => {
@@ -267,15 +281,9 @@ describe('startTelemetry', () => {
     assert.equal(await telemetry?.close(), 'traces: the collector answered 400 (3 spans not sent)')
   })
 
-  test('a refused protocol is a reason close gives, not a throw', async () => {
-    const telemetry = startTelemetry({
-      version: '1',
-      traceId: T,
-      spanId: R,
-      runId: 'r',
-      paths: [],
-      env: { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c', OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc' },
-    })
+  test('a refused protocol is a reason close gives, not a throw', async (t) => {
+    withEnv(t, { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://c', OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc' })
+    const telemetry = start()
     assert.match((await telemetry?.close()) ?? '', /grpc/)
   })
 

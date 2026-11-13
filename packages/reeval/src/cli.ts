@@ -2430,7 +2430,7 @@ async function executeRun(
       traceId: trace.traceId,
       spanId: trace.spanId,
       runId,
-      paths: [config.root, stagingDir],
+      filesystems: { project: config.root, staging: stagingDir },
     })
   }
   if (telemetry) {

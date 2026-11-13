@@ -220,6 +220,7 @@ evaluate('sees no OTEL_*', { environments: setup }, async (c) => {
     const collector = await startCollector(t)
     const honeycomb = 'hcK3y9fQ2mX7pL4vR8tZ1w'
     const bearer = 'bearer-secret-7Qp2Lm9x'
+    const basic = 'dXNlcjpiYXNpYy1zZWNyZXQ='
     const p = await project('spans-otlp-masked', {
       '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'hello.txt': 'hi\\n' } }` }),
@@ -227,6 +228,10 @@ evaluate('sees no OTEL_*', { environments: setup }, async (c) => {
 evaluate('shows the headers', async (c) => {
   await c.send('write hello.txt')
   console.log(process.env.OTEL_EXPORTER_OTLP_HEADERS, process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS)
+  const tokens = [process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS, process.env.OTEL_EXPORTER_OTLP_LOGS_HEADERS]
+    .map((h) => decodeURIComponent(String(h)).split(' ')[1])
+  console.log('tokens', ...tokens)
+  c.observe('tokens', tokens.join(','))
   c.observe('headers', String(process.env.OTEL_EXPORTER_OTLP_HEADERS))
   expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBe('nope')
 })
@@ -237,6 +242,7 @@ evaluate('shows the headers', async (c) => {
         OTEL_EXPORTER_OTLP_ENDPOINT: collector.url,
         OTEL_EXPORTER_OTLP_HEADERS: `x-honeycomb-team=${honeycomb}`,
         OTEL_EXPORTER_OTLP_TRACES_HEADERS: `authorization=Bearer%20${bearer}`,
+        OTEL_EXPORTER_OTLP_LOGS_HEADERS: `authorization=Basic ${basic}`,
         OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
       },
     })
@@ -245,6 +251,7 @@ evaluate('shows the headers', async (c) => {
     assert.ok(collector.requests.length > 0)
     assertNowhere(p.dir, r, honeycomb)
     assertNowhere(p.dir, r, bearer)
+    assertNowhere(p.dir, r, basic)
   })
 
   test("a malformed header value stays out of the export's warning", async (t) => {

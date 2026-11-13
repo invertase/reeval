@@ -37,8 +37,8 @@ Only reeval's own process exports. No `OTEL_*` variable reaches the sandbox or t
 | Signal | What | When |
 |---|---|---|
 | Traces | The spans in [`spans.jsonl`](/reference/run-record): the run, each machine, container, attempt, lease, and phase | In batches as each span ends; the run's span last |
-| Logs | The run's start, its warnings, and one record for each finished attempt with its outcome, on the run's trace | In batches as they happen |
-| Metrics | `system.cpu.utilization`, `system.cpu.load_average.1m`, `system.memory.usage`, `system.memory.utilization`, `system.filesystem.usage`, and `system.filesystem.utilization` for the project's filesystems, plus reeval's `process.cpu.utilization` and `process.memory.usage` | Every `OTEL_METRIC_EXPORT_INTERVAL` (60 seconds), and once at the end |
+| Logs | The run's start, its notices, and one record for each finished attempt with its outcome, on the run's trace | In batches as they happen |
+| Metrics | `system.cpu.utilization`, `system.cpu.load_average.1m`, `system.memory.usage`, `system.memory.utilization`, `system.filesystem.usage`, and `system.filesystem.utilization` for the project's and staging filesystems (labeled `reeval.filesystem.role`), plus reeval's `process.cpu.utilization` and `process.memory.usage` | Every `OTEL_METRIC_EXPORT_INTERVAL` (60 seconds), and once at the end |
 
 Every span and log record carries `reeval.run.id`, so one query finds a run. A run that stops early leaves the spans that had ended; their parent, the run's span, is missing.
 

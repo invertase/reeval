@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { docker, dockerCapacity, type RemoteEngine, sshArgv } from '@reeval/sandbox-docker'
-import { run } from '@reeval/sandbox-docker/process'
+import { run, unsetOtel } from '@reeval/sandbox-docker/process'
 import { attemptDebug } from '../debug/attempt.ts'
 import { registerSecret } from '../redact.ts'
 import type { BoatSandboxDescriptor, SandboxBase } from '../types.ts'
@@ -64,7 +64,7 @@ async function untilImage(
 /** Closes the SSH connection the machine's commands shared. */
 async function closeConnection(engine: RemoteEngine): Promise<void> {
   const [bin = 'ssh', ...args] = sshArgv(engine.target, '')
-  await run(bin, ['-O', 'exit', ...args.slice(0, -1)]).catch(() => {})
+  await run(bin, ['-O', 'exit', ...args.slice(0, -1)], { env: unsetOtel() }).catch(() => {})
 }
 
 /**

@@ -107,11 +107,11 @@ export function startTelemetry(o: {
   /** The run's span, which the log records belong to. */
   spanId: string
   runId: string
-  /** The filesystems the run writes to, for the metrics. */
-  paths: string[]
-  env?: Record<string, string | undefined>
+  /** The filesystems the run writes to, by role, for the metrics. */
+  filesystems: Record<string, string>
 }): Telemetry | null {
-  const { version, traceId, spanId, runId, env = process.env } = o
+  const { version, traceId, spanId, runId } = o
+  const env = process.env
   const reasons = new Set<string>()
   const protocols: Partial<Record<Signal, OtlpProtocol>> = {}
   for (const signal of ['traces', 'logs', 'metrics'] as const) {
@@ -272,7 +272,7 @@ export function startTelemetry(o: {
       ],
     })
     const meter = meters.getMeter('reeval', version)
-    const host = new HostMetrics(o.paths)
+    const host = new HostMetrics(o.filesystems)
     const instruments = Object.fromEntries(
       Object.entries(HOST_METRICS).map(([name, m]) => [
         name,
