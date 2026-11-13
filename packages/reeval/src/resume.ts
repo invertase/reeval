@@ -60,17 +60,21 @@ export async function pruneEvents(root: string, keep: number): Promise<string[]>
   return finished
 }
 
-export function writeCurrent(root: string, runId: string): void {
-  const file = currentPath(root)
-  mkdirSync(join(root, '.reeval'), { recursive: true })
+/** Replaced whole, so a reader or a copy of the folder never sees half a file. */
+function writeWhole(file: string, text: string): void {
   const tmp = `${file}.${process.pid}.tmp`
-  writeFileSync(tmp, `${runId}\n`)
+  writeFileSync(tmp, text)
   try {
     replace(tmp, file)
   } catch (error) {
     rmSync(tmp, { force: true })
     throw error
   }
+}
+
+export function writeCurrent(root: string, runId: string): void {
+  mkdirSync(join(root, '.reeval'), { recursive: true })
+  writeWhole(currentPath(root), `${runId}\n`)
 }
 
 type Continue = '--resume' | '--retry-errors'
@@ -140,9 +144,16 @@ function readHolder(dir: string): { pid: number; host: string } | null {
   }
 }
 
+/**
+ * Another process than this one is alive at `pid` on this host. A run folder copied to a new
+ * machine or container can name the pid this process now has, and that isn't a run still going.
+ */
+const otherProcessAlive = (pid: number, host: string) =>
+  !(pid === process.pid && host === hostname()) && processAlive(pid, host)
+
 const holderLive = (dir: string) => {
   const holder = readHolder(dir)
-  return holder ? processAlive(holder.pid, holder.host) : false
+  return holder ? otherProcessAlive(holder.pid, holder.host) : false
 }
 
 /** This process holds the run's staging. */
@@ -287,7 +298,7 @@ export function noteRetries(
   }
   if (write && retries.size) {
     mkdirSync(staging, { recursive: true })
-    writeFileSync(join(staging, RETRIES_FILE), `${JSON.stringify(Object.fromEntries(retries))}\n`)
+    writeWhole(join(staging, RETRIES_FILE), `${JSON.stringify(Object.fromEntries(retries))}\n`)
   }
   return { errored, retries }
 }
@@ -390,8 +401,8 @@ function progressLive(
   progress: NonNullable<ReturnType<typeof readableLiveProgress>>,
   now: number,
 ): boolean {
-  // A sleeping laptop goes quiet; the pid is still this process. Do not steal it.
-  if (processAlive(progress.pid, progress.host)) return true
+  // A sleeping laptop goes quiet; the pid is still that run's process. Do not steal it.
+  if (otherProcessAlive(progress.pid, progress.host)) return true
   const quiet = now - Date.parse(progress.heartbeatAt) > STALE_MS
   if (quiet) return false
   return progress.host !== hostname()
@@ -777,7 +788,7 @@ export async function prepareResume(
         judgements: [],
         timings: { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
       }
-      writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`)
+      writeWhole(path, `${JSON.stringify(record, null, 2)}\n`)
     }
   }
 }
