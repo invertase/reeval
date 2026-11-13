@@ -1089,7 +1089,7 @@ async function cloudTarget(
   const project = await linkedProject(projectDirFor(configPath))
   if (!project) {
     throw new UsageError(
-      "A cloud run goes into a linked cloud project, and this project isn't linked: run reeval link to link it, or pass --local to run here",
+      `A cloud run goes into a linked cloud project, and this project isn't linked: run ${process.stdin.isTTY ? 'reeval link' : 'reeval link --org <org> --project <project>'} to link it, or pass --local to run here`,
     )
   }
   const { makeBundle } = await import('./bundle/index.ts')

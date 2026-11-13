@@ -772,6 +772,30 @@ evaluate('judged', async () => {})
     )
   })
 
+  test("an unlinked project's cloud: true, from the config or a profile, exits 2 naming reeval link, a tart() plan too", async () => {
+    const p = await fixture('plan/cloud')
+    for (const args of [
+      ['run', '--dry-run', 'evals/mac.eval.ts'],
+      ['run', 'evals/mac.eval.ts'],
+      ['run', '--dry-run', 'evals/a.eval.ts'],
+      ['run', '--dry-run', '--config', 'reeval.local.config.ts', '--profile', 'there'],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(
+        r.stderr,
+        /this project isn't linked: run reeval link --org <org> --project <project> to link it, or pass --local to run here/,
+      )
+    }
+    for (const args of [
+      ['run', '--dry-run', '--local', 'evals/mac.eval.ts'],
+      ['run', '--dry-run', '--profile', 'here', 'evals/a.eval.ts'],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+    }
+  })
+
   test('an egress policy the sandbox cannot enforce exits 2 at plan time', async () => {
     const p = await fixture('plan/egress')
     const env = { REEVAL_EGRESS_FAKE: '1' }

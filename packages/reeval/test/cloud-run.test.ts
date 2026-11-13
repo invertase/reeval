@@ -393,7 +393,7 @@ describe('reeval run on the cloud platform', () => {
         assert.equal(r.code, 2, r.stdout + r.stderr)
         assert.match(
           r.stderr,
-          /A cloud run goes into a linked cloud project, and this project isn't linked: run reeval link to link it, or pass --local to run here/,
+          /A cloud run goes into a linked cloud project, and this project isn't linked: run reeval link --org <org> --project <project> to link it, or pass --local to run here/,
         )
       }
       assert.deepEqual(p.seen, [])
