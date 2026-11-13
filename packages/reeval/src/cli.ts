@@ -300,7 +300,7 @@ async function run(argv: string[]): Promise<number> {
     const [area, ...args] = filters
     if (area !== 'secrets' && area !== 'provider' && area !== 'push' && area !== 'run') {
       throw new UsageError(
-        `Unknown command "cloud ${area ?? ''}". Did you mean reeval cloud secrets, provider, push or run?`,
+        `Unknown command "${['cloud', area].filter(Boolean).join(' ')}". Did you mean reeval cloud secrets, provider, push or run?`,
       )
     }
     if (area === 'push') {
@@ -991,19 +991,32 @@ async function attachCommand(
   const follow = isAttachUrl(source) ? await cloud.cloudFollow(source) : undefined
   const cloudRun = follow ? await cloudRunAt(source) : null
   let detached = false
-  let code = await attachHere(flags, {
-    source,
-    ...(root === undefined ? {} : { root }),
-    ...(follow ? { follow } : {}),
-    ...(cloudRun ? { cancelHint: cloud.cancelHint(cloudRun.runId) } : {}),
-    onDetach: () => {
-      detached = true
-    },
-  })
+  let code: number
+  let read: Awaited<ReturnType<typeof cloud.afterLostStream>>['read'] | undefined
+  const log = (line: string) => console.log(dim(line))
+  try {
+    code = await attachHere(flags, {
+      source,
+      ...(root === undefined ? {} : { root }),
+      ...(follow ? { follow } : {}),
+      ...(cloudRun ? { cancelHint: cloud.cancelHint(cloudRun.runId) } : {}),
+      onDetach: () => {
+        detached = true
+      },
+    })
+  } catch (error) {
+    const { EventStreamError } = await import('./events.ts')
+    if (!cloudRun || !(error instanceof EventStreamError)) throw error
+    ;({ code, read } = await cloud.afterLostStream(
+      error,
+      cloudRun.runId,
+      cloudRun.base,
+      cloudRun.auth,
+      log,
+    ))
+  }
   if (cloudRun && !detached) {
-    code = await cloud.stoppedOr(code, cloudRun.runId, cloudRun.base, cloudRun.auth, (line) =>
-      console.log(dim(line)),
-    )
+    code = await cloud.stoppedOr(code, cloudRun.runId, cloudRun.base, cloudRun.auth, log, read)
   }
   if (download && detached) {
     console.log(
@@ -1225,6 +1238,11 @@ async function runCommand(
   }
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
+  }
+  if (flags.resume !== undefined && flags.cloud) {
+    throw new UsageError(
+      "--resume with --cloud isn't supported by this reeval yet: reeval run --resume continues a run on this machine",
+    )
   }
   if (retry !== undefined && (given.length || flags.tag?.length || flags.trait?.length)) {
     throw new UsageError(

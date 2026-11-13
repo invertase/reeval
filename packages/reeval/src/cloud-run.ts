@@ -225,6 +225,40 @@ type PlatformRun = {
 /** The exit code of a run the platform stopped before it finished. */
 const STOPPED = 4
 
+/** How long a cloud run's status is waited for once its stream has ended or been lost. */
+const STATUS_TIMEOUT_MS = 5_000
+
+/** A field of the platform's answer as it may reach a terminal; empty when it isn't a string. */
+const platformText = (value: unknown) => (typeof value === 'string' ? printable(value) : '')
+
+/**
+ * Cloud run `runId` as the platform has it; null when it doesn't answer within
+ * `STATUS_TIMEOUT_MS`, refuses, or a Ctrl-C or SIGTERM cuts the wait short.
+ */
+async function readRun(runId: string, base: URL, auth: CloudAuth): Promise<PlatformRun | null> {
+  const stop = new AbortController()
+  const abort = () => stop.abort()
+  process.on('SIGINT', abort)
+  process.on('SIGTERM', abort)
+  try {
+    return await call<PlatformRun>(
+      new URL(`api/runs/${encodeURIComponent(runId)}`, base),
+      {
+        method: 'GET',
+        what: `read run ${runId}`,
+        timeoutMs: STATUS_TIMEOUT_MS,
+        signal: stop.signal,
+      },
+      auth,
+    )
+  } catch {
+    return null
+  } finally {
+    process.off('SIGINT', abort)
+    process.off('SIGTERM', abort)
+  }
+}
+
 /**
  * `code`, the exit code cloud run `runId`'s stream ended with, or 4 when the platform says it
  * stopped the run before it finished. A stop can end the stream with any code (a cancel's, or
@@ -239,16 +273,9 @@ export async function stoppedOr(
   log: (line: string) => void,
   read?: PlatformRun | null,
 ): Promise<number> {
-  const run =
-    read !== undefined
-      ? read
-      : await call<PlatformRun>(
-          new URL(`api/runs/${encodeURIComponent(runId)}`, base),
-          { method: 'GET', what: `read run ${runId}` },
-          auth,
-        ).catch(() => null)
+  const run = read !== undefined ? read : await readRun(runId, base, auth)
   if (run?.status !== 'stopped') return code
-  const why = printable(run.error?.message ?? run.error?.code ?? '')
+  const why = platformText(run.error?.message) || platformText(run.error?.code)
   log(
     why
       ? `Cloud run ${runId} stopped: ${why}`
@@ -256,6 +283,32 @@ export async function stoppedOr(
   )
   log(`reeval run --cloud --resume ${runId} continues it`)
   return STOPPED
+}
+
+/**
+ * When following cloud run `runId` lost its stream (`lost`): the exit code the platform recorded
+ * for it, with the run as read, which `stoppedOr` takes. Throws `lost` when the platform has no
+ * exit code and the run neither failed nor was stopped there.
+ */
+export async function afterLostStream(
+  lost: EventStreamError,
+  runId: string,
+  base: URL,
+  auth: CloudAuth,
+  log: (line: string) => void,
+): Promise<{ code: number; read: PlatformRun | null }> {
+  const run = await readRun(runId, base, auth)
+  const why = platformText(run?.error?.message) || platformText(run?.error?.code)
+  const exitCode = typeof run?.exitCode === 'number' ? run.exitCode : undefined
+  if (run?.status === 'stopped') return { code: exitCode ?? INTERRUPTED, read: run }
+  if (exitCode === undefined) {
+    if (run?.status === 'failed') {
+      throw new CloudError(`cloud run ${runId} failed${why ? `: ${why}` : ''}`)
+    }
+    throw lost
+  }
+  if (why) log(`cloud run ${runId} ended: ${why}`)
+  return { code: exitCode, read: run }
 }
 
 /** How the interactive list says to cancel cloud run `runId`, which no key there reaches. */
@@ -283,7 +336,7 @@ export async function cloudRunCommand(
   const [action, given] = args
   if (action !== 'cancel') {
     throw new UsageError(
-      `Unknown command "cloud run ${action ?? ''}". Did you mean reeval cloud run cancel <run>?`,
+      `Unknown command "${['cloud', 'run', action].filter(Boolean).join(' ')}". Did you mean reeval cloud run cancel <run>?`,
     )
   }
   if (!given) {
@@ -305,7 +358,8 @@ export async function cloudRunCommand(
   if (answer.status === 202) {
     io.out(`Canceling cloud run ${runId}; its followers see it end once it stops`)
   } else {
-    const status = typeof run?.status === 'string' ? ` (${run.status})` : ''
+    const said = platformText(run?.status)
+    const status = said ? ` (${said})` : ''
     io.out(`Cloud run ${runId} has already ended${status}`)
   }
   return 0
@@ -325,7 +379,9 @@ export async function request(
     res = await fetch(url, {
       ...rest,
       headers: { accept: 'application/json', ...headers, ...rest.headers },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: rest.signal
+        ? AbortSignal.any([AbortSignal.timeout(timeoutMs), rest.signal])
+        : AbortSignal.timeout(timeoutMs),
     })
   } catch (error) {
     const reason = error instanceof Error ? (error.cause ?? error).toString() : String(error)
@@ -630,23 +686,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     })
   } catch (error) {
     if (!(error instanceof EventStreamError)) throw error
-    const run = await call<PlatformRun>(
-      runUrl(),
-      { method: 'GET', what: `read run ${runId}` },
-      auth,
-    ).catch(() => null)
-    read = run
-    const why = run?.error?.message ?? run?.error?.code
-    if (run?.status === 'stopped') code = run.exitCode ?? INTERRUPTED
-    else if (typeof run?.exitCode !== 'number') {
-      if (run?.status === 'failed') {
-        throw new CloudError(`cloud run ${runId} failed${why ? `: ${why}` : ''}`)
-      }
-      throw error
-    } else {
-      if (why) log(`cloud run ${runId} ended: ${why}`)
-      code = run.exitCode
-    }
+    ;({ code, read } = await afterLostStream(error, runId, base, auth, log))
   }
   if (detached) {
     const again = options.download

@@ -503,7 +503,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.cancel',
     area: 'Config and selection',
-    name: "`reeval cloud run cancel <run>`, by the run's id or its event stream URL, asks the cloud platform to cancel a cloud run (a run already ended says so; an unknown one is exit 2), and its followers see it end; Ctrl-C while following a cloud run, with or without a terminal, only detaches, and the run goes on (the interactive list names `reeval cloud run cancel` in place of x); a followed cloud run the platform stopped before it finished exits 4",
+    name: "`reeval cloud run cancel <run>`, by the run's id or its event stream URL, asks the cloud platform to cancel a cloud run (a run already ended says so; an unknown one is exit 2), and its followers see it end; Ctrl-C (or SIGTERM) while following a cloud run, with or without a terminal, only detaches, and the run goes on (the interactive list names `reeval cloud run cancel` in place of x); a followed cloud run the platform stopped before it finished exits 4, with how to resume it; `reeval run --cloud --resume` is exit 2 for now",
     unit: [
       'reeval/test/cloud-run.test.ts',
       'reeval/test/ink-list.test.ts',
