@@ -137,6 +137,12 @@ export function cloudUrl(env: NodeJS.ProcessEnv = process.env): URL {
 }
 
 /**
+ * The platform's URL as reeval prints it, in text and JSON: `cloudUrl`'s without the trailing
+ * `/` (`https://cloud.reeval.ai`), however `REEVAL_CLOUD_URL` spells it.
+ */
+export const shownCloudUrl = (base: URL) => base.href.replace(/\/$/, '')
+
+/**
  * `Running in the cloud (3 attempts, est. $0.10–0.30), --local to run here`, from the plan the
  * bundle was made with. The estimate is left out when the plan has no prices for it or costs
  * nothing.

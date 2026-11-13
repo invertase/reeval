@@ -70,15 +70,59 @@ async function writeCredentials(doc: CredentialsFile, env: NodeJS.ProcessEnv): P
  */
 export const platformKey = (base: URL | string) => new URL(base).origin
 
-/** The sign-in `reeval login` stored for the platform, with its token (null when it's gone). */
+/**
+ * The file's keys for the platform: every key with its origin. A sign-in can be under a full URL
+ * (`https://cloud.reeval.ai/`), in the file and as its keychain account, which still reads as the
+ * platform's until `reeval login` or `logout` replaces it.
+ */
+const keysOf = (doc: CredentialsFile, base: URL) =>
+  Object.keys(doc.logins).filter((k) => URL.parse(k)?.origin === platformKey(base))
+
+/** Drops every key of the platform's but `keep` from the file and the keychain. */
+async function dropKeys(
+  doc: CredentialsFile,
+  base: URL,
+  env: NodeJS.ProcessEnv,
+  keep?: string,
+): Promise<void> {
+  for (const key of keysOf(doc, base)) {
+    if (key === keep) continue
+    if (doc.logins[key]?.store === 'keychain') await keychain(env)?.delete(key)
+    delete doc.logins[key]
+  }
+}
+
+/** A sign-in `reeval login` stored, with its token (null when it's gone). */
+export type Stored = { login: StoredLogin; token: string | null }
+
+/**
+ * Every sign-in stored under one of the platform's keys, the bare origin's first: `login` and
+ * `logout` revoke each one's token before they drop its key.
+ */
+export async function storedLogins(
+  base: URL,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Stored[]> {
+  const doc = await readCredentials(env)
+  const bare = platformKey(base)
+  const keys = keysOf(doc, base).sort((a, b) => Number(b === bare) - Number(a === bare))
+  const found: Stored[] = []
+  for (const key of keys) {
+    const login = doc.logins[key]
+    if (!login) continue
+    const token =
+      login.store === 'file' ? login.token || null : ((await keychain(env)?.get(key)) ?? null)
+    found.push({ login, token })
+  }
+  return found
+}
+
+/** The sign-in the cloud calls use for the platform: the bare origin's, else another spelling's. */
 export async function storedLogin(
   base: URL,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ login: StoredLogin; token: string | null } | null> {
-  const login = (await readCredentials(env)).logins[platformKey(base)]
-  if (!login) return null
-  if (login.store === 'file') return { login, token: login.token || null }
-  return { login, token: (await keychain(env)?.get(platformKey(base))) ?? null }
+): Promise<Stored | null> {
+  return (await storedLogins(base, env))[0] ?? null
 }
 
 /**
@@ -102,6 +146,7 @@ export async function saveLogin(
     user,
     signedInAt: new Date().toISOString(),
   }
+  await dropKeys(doc, base, env, key)
   await writeCredentials(doc, env)
   return kept && chain ? chain.name : credentialsPath(env)
 }
@@ -109,10 +154,7 @@ export async function saveLogin(
 /** Removes the platform's sign-in from the file and the keychain. */
 export async function removeLogin(base: URL, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const doc = await readCredentials(env)
-  const key = platformKey(base)
-  const login = doc.logins[key]
-  if (login?.store === 'keychain') await keychain(env)?.delete(key)
-  delete doc.logins[key]
+  await dropKeys(doc, base, env)
   if (Object.keys(doc.logins).length) await writeCredentials(doc, env)
   else await rm(credentialsPath(env), { force: true })
 }
