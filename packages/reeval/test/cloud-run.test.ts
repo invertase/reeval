@@ -89,7 +89,8 @@ describe('the cloud platform URL', () => {
 
 const TOKEN = 'cloud-check-token-value'
 
-async function fixtureProject(answer = '42') {
+/** The fixture project, unlinked. */
+async function unlinkedFixture(answer = '42') {
   const p = await project('cloud', {})
   cpSync(join(pkgRoot, 'test/fixtures/bundle'), p.dir, { recursive: true })
   writeFileSync(join(p.dir, '.env'), `CHECK_TOKEN=${TOKEN}\n`)
@@ -97,9 +98,9 @@ async function fixtureProject(answer = '42') {
   return p.dir
 }
 
-/** The fixture project, linked to `proj_a` in `org_a`. */
-async function linkedFixture() {
-  const dir = await fixtureProject()
+/** The fixture project, linked to `proj_a` in `org_a`, as every cloud run's project is. */
+async function fixtureProject(answer = '42') {
+  const dir = await unlinkedFixture(answer)
   mkdirSync(join(dir, '.reeval'), { recursive: true })
   writeFileSync(
     join(dir, '.reeval/project.json'),
@@ -249,10 +250,7 @@ async function platform(
     if (req.method === 'GET' && url.pathname === '/api/orgs/org_a/projects') {
       return json(res, 200, { projects: [{ id: 'proj_a', slug: 'main', name: 'Main' }] })
     }
-    if (
-      req.method === 'POST' &&
-      (url.pathname === '/api/runs' || url.pathname === '/api/orgs/org_a/projects/proj_a/runs')
-    ) {
+    if (req.method === 'POST' && url.pathname === '/api/orgs/org_a/projects/proj_a/runs') {
       declared = JSON.parse(body.toString())
       return json(res, 201, {
         runId: 'run_1',
@@ -354,7 +352,8 @@ describe('reeval run on the cloud platform', () => {
         p.seen.filter((s) => s.path !== '/ingest').map((s) => `${s.method} ${s.path}`),
         [
           'GET /api/config',
-          'POST /api/runs',
+          'GET /api/orgs/org_a/projects/proj_a/secret-names',
+          'POST /api/orgs/org_a/projects/proj_a/runs',
           'PUT /api/runs/run_1/bundle',
           'POST /api/runs/run_1/start',
           'WS /api/runs/run_1/events',
@@ -380,15 +379,33 @@ describe('reeval run on the cloud platform', () => {
     }
   })
 
+  test('refuses an unlinked project before bundling, naming reeval link, with --dry-run too', async () => {
+    const p = await platform({ secretNames: ['CHECK_TOKEN'] })
+    try {
+      const dir = await unlinkedFixture()
+      for (const args of [
+        ['run', '--cloud'],
+        ['run', '--cloud', '--dry-run'],
+      ]) {
+        const r = await runCli(dir, args, {
+          env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+        })
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          /A cloud run goes into a linked cloud project, and this project isn't linked: run reeval link to link it, or pass --local to run here/,
+        )
+      }
+      assert.deepEqual(p.seen, [])
+    } finally {
+      await p.close()
+    }
+  })
+
   test('creates the run in the project reeval link linked', async () => {
     const p = await platform()
     try {
       const dir = await fixtureProject()
-      mkdirSync(join(dir, '.reeval'), { recursive: true })
-      writeFileSync(
-        join(dir, '.reeval/project.json'),
-        JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
-      )
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
@@ -417,7 +434,7 @@ describe('reeval run on the cloud platform', () => {
   test('stops before uploading, naming them, when the linked project lacks a declared secret', async () => {
     const p = await platform({ secretNames: ['AI_GATEWAY_API_KEY', 'OTHER_KEY'] })
     try {
-      const dir = await linkedFixture()
+      const dir = await fixtureProject()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
       const r = await runCli(dir, ['run', '--cloud', '--force'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
@@ -446,7 +463,7 @@ describe('reeval run on the cloud platform', () => {
   test('says a declared name the platform reserves needs renaming, not setting', async () => {
     const p = await platform({ secretNames: [], reserved: ['CHECK_TOKEN'] })
     try {
-      const r = await runCli(await linkedFixture(), ['run', '--cloud'], {
+      const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
       })
       assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -463,7 +480,7 @@ describe('reeval run on the cloud platform', () => {
   test("notes a reserved name from .env won't be sent, and runs", async () => {
     const p = await platform({ secretNames: ['CHECK_TOKEN'], reserved: ['REEVAL_FROM_FILE'] })
     try {
-      const dir = await linkedFixture()
+      const dir = await fixtureProject()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nREEVAL_FROM_FILE=${TOKEN}-2\n`)
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
@@ -483,7 +500,7 @@ describe('reeval run on the cloud platform', () => {
   test('stops with no terminal to ask on when the project lacks names only .env sets, naming --force', async () => {
     const p = await platform({ secretNames: ['CHECK_TOKEN'] })
     try {
-      const dir = await linkedFixture()
+      const dir = await fixtureProject()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFOO=${TOKEN}-2\nBAR=${TOKEN}-3\n`)
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
@@ -503,7 +520,7 @@ describe('reeval run on the cloud platform', () => {
   test('runs without the names only .env sets with --force, without asking', async () => {
     const p = await platform({ secretNames: ['CHECK_TOKEN'] })
     try {
-      const dir = await linkedFixture()
+      const dir = await fixtureProject()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFOO=${TOKEN}-2\n`)
       const r = await runCli(dir, ['run', '--cloud', '--force'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
@@ -559,7 +576,7 @@ describe('reeval run on the cloud platform', () => {
   test('runs when the linked project has every name the run needs, its .env ones too', async () => {
     const p = await platform({ secretNames: ['CHECK_TOKEN', 'FROM_FILE'] })
     try {
-      const dir = await linkedFixture()
+      const dir = await fixtureProject()
       writeFileSync(join(dir, '.env'), `CHECK_TOKEN=${TOKEN}\nFROM_FILE=${TOKEN}-2\n`)
       const r = await runCli(dir, ['run', '--cloud'], {
         env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
@@ -588,7 +605,7 @@ describe('reeval run on the cloud platform', () => {
     for (const [secretNames, why] of cases) {
       const p = await platform({ secretNames })
       try {
-        const r = await runCli(await linkedFixture(), ['run', '--cloud'], {
+        const r = await runCli(await fixtureProject(), ['run', '--cloud'], {
           env: { REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token', REEVAL_DEBUG: '1' },
         })
         assert.equal(r.code, 0, r.stdout + r.stderr)

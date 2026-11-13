@@ -75,6 +75,14 @@ const linkInputs = (dir: string) => {
   writeFileSync(join(dir, '.env'), 'GREETING=hello\n')
   writeFileSync(join(dir, 'package-lock.json'), '{}\n')
 }
+/** A cloud run goes into the project `reeval link` linked, so the cloud cases are linked. */
+const linkCloud = (dir: string) => {
+  mkdirSync(join(dir, '.reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, '.reeval/project.json'),
+    JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+  )
+}
 const modelsDev = async (dir: string) => {
   const { seedModelsDev } = await import('./support/cost.ts')
   seedModelsDev(dir)
@@ -313,27 +321,40 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'tart', name: 'two-vms', args: ['--concurrency', '8', 'evals/t.eval.ts'] },
   { dir: 'tart', name: 'hosts', args: ['--concurrency', '8', 'evals/hosts.eval.ts'] },
-  { dir: 'cloud', name: 'config', args: ['evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'local-flag', args: ['--local', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'profile-off', args: ['--profile', 'here', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'profile-keeps', args: ['--profile', 'there', 'evals/a.eval.ts'] },
-  { dir: 'cloud', name: 'tart-runs-here', args: ['evals/mac.eval.ts'] },
+  { dir: 'cloud', name: 'config', args: ['evals/a.eval.ts'], prepare: linkCloud },
+  { dir: 'cloud', name: 'local-flag', args: ['--local', 'evals/a.eval.ts'], prepare: linkCloud },
+  {
+    dir: 'cloud',
+    name: 'profile-off',
+    args: ['--profile', 'here', 'evals/a.eval.ts'],
+    prepare: linkCloud,
+  },
+  {
+    dir: 'cloud',
+    name: 'profile-keeps',
+    args: ['--profile', 'there', 'evals/a.eval.ts'],
+    prepare: linkCloud,
+  },
+  { dir: 'cloud', name: 'tart-runs-here', args: ['evals/mac.eval.ts'], prepare: linkCloud },
   {
     dir: 'cloud',
     name: 'ci-without',
     args: ['--config', 'reeval.local.config.ts', 'evals/a.eval.ts'],
+    prepare: linkCloud,
     env: { CI: 'true', REEVAL_CLOUD_URL: 'https://platform.test', REEVAL_TOKEN: 'token' },
   },
   {
     dir: 'cloud',
     name: 'ci-flag',
     args: ['--config', 'reeval.local.config.ts', '--cloud', 'evals/a.eval.ts'],
+    prepare: linkCloud,
     env: { CI: 'true' },
   },
   {
     dir: 'cloud',
     name: 'profile-on',
     args: ['--config', 'reeval.local.config.ts', '--profile', 'there', 'evals/a.eval.ts'],
+    prepare: linkCloud,
   },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },

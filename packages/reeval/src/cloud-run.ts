@@ -321,8 +321,8 @@ export type CloudRunOptions = {
    * a recorded run's into `history`; `profile` is the profile that picked it.
    */
   download?: { root: string; history: ResolvedHistory; profile?: string }
-  /** The project `reeval link` linked, which the run is created in; else the platform's default. */
-  project?: LinkedProject | null
+  /** The project `reeval link` linked, which the run is created in. */
+  project: LinkedProject
   /** Asks a yes-or-no question; unset when there's no terminal to ask on. */
   confirm?: (question: string) => Promise<boolean>
   /** `--force`: runs without the `.env` names the linked project lacks, without asking. */
@@ -464,24 +464,20 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
   const { archive } = bundle
   const sha256 = createHash('sha256').update(archive).digest('hex')
   const { project } = options
-  if (project) {
-    await checkCloudSecrets({
-      base,
-      auth,
-      project,
-      manifest: bundle.manifest,
-      log,
-      ...(options.confirm && { confirm: options.confirm }),
-      ...(options.force && { force: true }),
-      env,
-    })
-  }
+  await checkCloudSecrets({
+    base,
+    auth,
+    project,
+    manifest: bundle.manifest,
+    log,
+    ...(options.confirm && { confirm: options.confirm }),
+    ...(options.force && { force: true }),
+    env,
+  })
   const what = 'create the run'
   const answer = await request(
     new URL(
-      project
-        ? `api/orgs/${encodeURIComponent(project.orgId)}/projects/${encodeURIComponent(project.projectId)}/runs`
-        : 'api/runs',
+      `api/orgs/${encodeURIComponent(project.orgId)}/projects/${encodeURIComponent(project.projectId)}/runs`,
       base,
     ),
     {
@@ -492,7 +488,7 @@ export async function runCloud(options: CloudRunOptions): Promise<number> {
     },
     headers,
   )
-  if (project && (answer.status === 403 || answer.status === 404)) {
+  if (answer.status === 403 || answer.status === 404) {
     throw new UsageError(
       `the cloud platform refused to create the run in ${project.projectId}, the project reeval link linked: ${platformMessage(answer.body) ?? `HTTP ${answer.status}`} (reeval link links another)`,
     )
