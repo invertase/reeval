@@ -418,11 +418,11 @@ async function run(argv: string[]): Promise<number> {
 /**
  * `reeval run --bundle`: the bundle's own filters, profile, tags, traits and runs, from the
  * project it extracts to. Other run flags (`--json`, `--record`, `--concurrency`, …) apply as given.
+ * With `--resume <id>`, the run's state moves from the current directory's `.reeval/` into the
+ * extracted project's, and the run continues there.
  */
 async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
-  const planning = (
-    ['profile', 'tag', 'trait', 'runs', 'config', 'resume', 'retry-errors', 'cloud'] as const
-  )
+  const planning = (['profile', 'tag', 'trait', 'runs', 'config', 'retry-errors', 'cloud'] as const)
     .filter((f) => flags[f] !== undefined)
     .map((f) => `--${f}`)
   if (filters.length || planning.length) {
@@ -432,15 +432,28 @@ async function bundleRun(flags: Flags, filters: string[]): Promise<number> {
   }
   const file = flags.bundle as string
   const log = (s: string) => (flags.json ? console.error(s) : console.log(s))
-  const { bundledGit, openBundle } = await import('./bundle/index.ts')
+  const { bundledGit, checkResumeState, moveResumeState, openBundle } = await import(
+    './bundle/index.ts'
+  )
+  const from = process.cwd()
+  const resume = flags.resume
+  if (resume !== undefined) checkResumeState(from, resume)
   const opened = await openBundle(file, log)
   if (opened.exit !== undefined) return opened.exit
   const { args, author } = opened.manifest
-  log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
+  if (resume !== undefined) {
+    moveResumeState(from, opened.project, resume)
+    log(
+      `reeval: resuming run ${resume} from ${file} in ${opened.project}, where its .reeval/ stays`,
+    )
+  } else log(`reeval: running ${file} in ${opened.project}, where its .reeval/ stays`)
   process.chdir(opened.project)
   return runCommand(
     {
       ...flags,
+      ...(flags['events-file'] === undefined
+        ? {}
+        : { 'events-file': resolve(from, flags['events-file']) }),
       bundle: undefined,
       local: true,
       ...(args.profile ? { profile: args.profile } : {}),
@@ -1248,7 +1261,7 @@ async function runCommand(
     )
   }
   const continued = flags.resume !== undefined || retry !== undefined
-  const resumed = continued ? await resumedRun(flags, given, configPath) : null
+  const resumed = continued ? await resumedRun(flags, given, configPath, bundled) : null
   if (resumed?.nothing) {
     // Nothing runs, so the exit code and `--json` are the run's own, as it was recorded.
     const { nothing, record } = resumed.nothing
@@ -1553,10 +1566,6 @@ async function runCommand(
 }
 
 /**
- * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
- * so it plans with the flags given now, with a note.
- */
-/**
  * Refuses `--resume` or `--retry-errors` on a run that goes to the cloud, from `--cloud` or the
  * config's or profile's `cloud`, before anything looks for the run here.
  */
@@ -1587,12 +1596,21 @@ async function refuseCloudContinue(flags: Flags, configPath: string | undefined)
   )
 }
 
-async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
+/**
+ * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
+ * so it plans with the flags given now, with a note.
+ */
+async function resumedRun(
+  flags: Flags,
+  filters: string[],
+  configPath: string | undefined,
+  bundled?: Bundled,
+) {
   const path = requireConfig(configPath)
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
   loadEnvFiles(path)
   const root = dirname(path)
-  const target = await continuedRun(root, flags)
+  const target = await continuedRun(root, flags, bundled)
   if (
     flags['retry-errors'] !== undefined &&
     target.previous &&
@@ -1633,10 +1651,14 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
 }
 
 /** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
-const continuedRun = (root: string, flags: Pick<Flags, 'resume' | 'retry-errors'>) =>
+const continuedRun = (
+  root: string,
+  flags: Pick<Flags, 'resume' | 'retry-errors'>,
+  bundled?: Bundled,
+) =>
   flags['retry-errors'] !== undefined
     ? resolveRetry(root, flags['retry-errors'] || undefined)
-    : resolveResume(root, flags.resume || undefined)
+    : resolveResume(root, flags.resume || undefined, { movedIn: bundled !== undefined })
 
 /**
  * Everything that can fail before the evals are collected: output mode, config, profile, flags.
@@ -1815,7 +1837,7 @@ async function startRun(
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
   if (resume !== undefined || retry !== undefined) {
-    const target = await continuedRun(config.root, { resume, 'retry-errors': retry })
+    const target = await continuedRun(config.root, { resume, 'retry-errors': retry }, bundled)
     // A retry moves the finished run aside only once its plan is the run's.
     if (!dryRun && retry === undefined) await prepareResume(target, config.root)
     else if (!dryRun) holdRetry(target, config.root)

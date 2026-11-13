@@ -431,13 +431,44 @@ async function readProgress(dir: string) {
   return text ? readableLiveProgress(parseJson(text)) : null
 }
 
+/**
+ * `movedIn`: the run's state was moved here (`reeval run --bundle --resume`), so a `live.json`
+ * from another host is that host's past run, not one still going. A holder on another host is
+ * never live, since its pid can't be probed.
+ */
 const stagingLive = (
   dir: string,
   progress: Awaited<ReturnType<typeof readProgress>>,
   now: number,
-) => (progress ? progressLive(progress, now) : false) || holderLive(dir)
+  movedIn = false,
+) =>
+  (progress && !(movedIn && progress.host !== hostname()) ? progressLive(progress, now) : false) ||
+  holderLive(dir)
 
-async function listCandidates(root: string, now = Date.now()): Promise<Candidate[]> {
+/**
+ * `reeval run --bundle --resume`: a process on this host still runs from `staging`, by its holder
+ * or its `live.json`, so moving the staging away would take the work from under it. Another
+ * host's `live.json` is that host's, as once the staging is moved in.
+ */
+export function stagingInUse(staging: string, now = Date.now()): boolean {
+  let text: string | null = null
+  try {
+    text = readFileSync(join(staging, LIVE_FILE), 'utf8')
+  } catch {}
+  return stagingLive(staging, text ? readableLiveProgress(parseJson(text)) : null, now, true)
+}
+
+/** Options of `resolveResume`. */
+export type ResolveOptions = {
+  /** The run's state was moved into this project, which owns it now: `--bundle --resume`. */
+  movedIn?: boolean
+}
+
+async function listCandidates(
+  root: string,
+  now = Date.now(),
+  { movedIn = false }: ResolveOptions = {},
+): Promise<Candidate[]> {
   const found = new Map<string, Candidate>()
   const stagingRoot = join(root, '.reeval', 'staging')
   const names = await readdir(stagingRoot).catch((): string[] => [])
@@ -446,7 +477,7 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     const info = await stat(dir).catch(() => null)
     if (!info?.isDirectory()) continue
     const progress = await readProgress(dir)
-    const live = stagingLive(dir, progress, now)
+    const live = stagingLive(dir, progress, now, movedIn)
     const startedAt = progress?.startedAt ?? new Date(info.mtimeMs).toISOString()
     found.set(runId, {
       runId,
@@ -592,8 +623,12 @@ export async function removeStoppedStaging(root: string, now = Date.now()): Prom
  * `--resume` names that id instead of "No resumable run". `--resume <ref>` is a run id or
  * unique prefix, not today's assembled `latest` and not a git SHA.
  */
-export async function resolveResume(root: string, ref?: string): Promise<ResumeTarget> {
-  const candidates = await listCandidates(root)
+export async function resolveResume(
+  root: string,
+  ref?: string,
+  options: ResolveOptions = {},
+): Promise<ResumeTarget> {
+  const candidates = await listCandidates(root, Date.now(), options)
   const open = candidates.filter(resumable)
   const omitted = ref === undefined || ref === '' || ref === 'latest'
   if (omitted) {
@@ -623,7 +658,9 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
   const found = matchRef(candidates, ref)
   if (!found) {
     throw new RefError(
-      `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
+      options.movedIn
+        ? `No run matches "${ref}" in ${join(root, '.reeval')}.`
+        : `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
     )
   }
   if (found.live) throw stillRunning(found.runId)

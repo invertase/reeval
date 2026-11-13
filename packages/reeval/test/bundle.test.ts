@@ -10,12 +10,16 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { before, describe, test } from 'node:test'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { readTar, type TarEntry, writeTar } from '@reeval/sandbox-docker'
+import { moveResumeState } from '../src/bundle/index.ts'
 import type { BundleManifest } from '../src/bundle/types.ts'
+import { UsageError } from '../src/errors.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { recordFileName } from '../src/ids.ts'
 import { baseEnv, pkgRoot, project, readRun, runCli, spawnTool, tempDir } from './helpers.ts'
 
 const fixture = join(pkgRoot, 'test/fixtures/bundle')
@@ -108,7 +112,13 @@ describe('reeval bundle', () => {
     ])
     const manifest = manifestOf(entries)
     assert.equal(manifest.schemaVersion, 1)
-    assert.deepEqual(manifest.features, ['heartbeat', 'secrets-file', 'vm-layout', 'vm-waits'])
+    assert.deepEqual(manifest.features, [
+      'heartbeat',
+      'resume',
+      'secrets-file',
+      'vm-layout',
+      'vm-waits',
+    ])
     assert.equal(manifest.project, '')
     assert.equal(manifest.config, 'reeval.config.ts')
     assert.equal(manifest.git, null)
@@ -458,6 +468,224 @@ describe('reeval bundle', () => {
     assert.match(r.stdout, /Removed 1 extracted bundle/)
     assert.ok(!existsSync(ended))
     assert.ok(existsSync(running), "a running bundle's copy stays")
+  })
+
+  test('--resume continues the run whose .reeval/ state is in the current directory', async () => {
+    const tmp = extractRoot()
+    const first = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', file, '--events'], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(first.code, 0, first.stderr + first.stdout)
+    const extracted = /running .* in (\S+), where its \.reeval\/ stays/.exec(first.stdout)?.[1]
+    assert.ok(extracted, first.stdout)
+    const { run } = readRun(extracted)
+    const state = tempDir('bundle-state')
+    const runs = join(state, '.reeval', 'runs')
+    mkdirSync(runs, { recursive: true })
+    cpSync(join(extracted, '.reeval', 'runs', run.runId), join(runs, run.runId), {
+      recursive: true,
+    })
+    const stream = join('.reeval', 'events', `${run.runId}.ndjson`)
+    cpSync(join(extracted, stream), join(state, stream))
+    // Staging and the scratch record both, as a copy from another machine leaves them.
+    const staging = join(state, '.reeval', 'staging', run.runId)
+    mkdirSync(staging, { recursive: true })
+    writeFileSync(join(staging, 'holder'), '1\nanother-machine\n')
+    // That machine's live.json, beating a second ago: the state is here now, so it doesn't block.
+    writeFileSync(
+      join(staging, 'live.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        runId: run.runId,
+        startedAt: run.startedAt,
+        pid: 1,
+        host: 'another-machine',
+        heartbeatAt: new Date(Date.now() - 1_000).toISOString(),
+        phase: 'running',
+        planned: 1,
+        counts: { done: 0, passed: 0, failed: 0, errored: 0, skipped: 0, running: 0 },
+        attempts: [],
+        invocation: run.invocation,
+      })}\n`,
+    )
+    writeFileSync(
+      join(runs, `${run.runId}.json`),
+      JSON.stringify({ ...run, status: 'interrupted' }),
+    )
+    const r = await runCli(state, ['run', '--bundle', file, '--resume', run.runId], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    const resumed = /resuming run \S+ from .* in (\S+), where its \.reeval\/ stays/.exec(
+      r.stdout,
+    )?.[1]
+    assert.ok(resumed && resumed !== extracted, r.stdout)
+    assert.ok(!existsSync(join(runs, `${run.runId}.json`)), 'the state moved out')
+    assert.ok(!existsSync(join(runs, run.runId)))
+    const after = readRun(resumed).run
+    assert.equal(after.runId, run.runId)
+    assert.equal(after.status, 'complete')
+    const [kept] = after.evals[0]?.attempts ?? []
+    assert.equal(kept?.outcome, 'pass')
+    assert.equal(kept?.startedAt, run.evals[0]?.attempts[0]?.startedAt, 'the attempt was kept')
+    assert.ok(!existsSync(join(state, stream)), 'the event stream moved too')
+    assert.ok(!existsSync(staging))
+    assert.ok(!existsSync(join(resumed, '.reeval', 'staging', run.runId)), 'assembled')
+    const lines = readFileSync(join(resumed, stream), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as { type: string })
+    assert.deepEqual(
+      lines.filter((l) => l.type === 'header' || l.type === 'exit').map((l) => l.type),
+      ['header', 'exit', 'header', 'exit'],
+      'the resume appends a new header after the first exit',
+    )
+    assert.match(readFileSync(join(resumed, stream), 'utf8'), /"resumed":1/)
+  })
+
+  test('--events-file resolves from the current directory, not the extracted project', async () => {
+    const here = tempDir('bundle-fresh')
+    const r = await runCli(here, ['run', '--bundle', file, '--events-file', 'events.ndjson'], {
+      env: { TMPDIR: extractRoot(), CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    assert.match(readFileSync(join(here, 'events.ndjson'), 'utf8'), /^\{"type":"header"/)
+  })
+
+  test('--resume refuses a run with no state here, or no id, before extracting', async () => {
+    const tmp = extractRoot()
+    const id = '20260101T000000Z_nogit_gone_aaaa'
+    const none = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', file, '--resume', id], {
+      env: { TMPDIR: tmp },
+    })
+    assert.equal(none.code, 2, none.stderr + none.stdout)
+    assert.match(
+      none.stderr,
+      /No state for run \S+ in .*\.reeval: --bundle with --resume continues/,
+    )
+    const bare = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', file, '--resume'], {
+      env: { TMPDIR: tmp },
+    })
+    assert.equal(bare.code, 2, bare.stderr + bare.stdout)
+    assert.match(bare.stderr, /--bundle with --resume continues one run: pass its id/)
+    const path = await runCli(
+      tempDir('bundle-fresh'),
+      ['run', '--bundle', file, '--resume', `../${id}`],
+      { env: { TMPDIR: tmp } },
+    )
+    assert.equal(path.code, 2, path.stderr + path.stdout)
+    assert.match(path.stderr, /--resume \.\.\/\S+ isn't a run id/)
+    assert.deepEqual(
+      readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
+      [],
+    )
+  })
+
+  test('--resume refuses a run still running from here, and leaves its state where it is', async () => {
+    const tmp = extractRoot()
+    const here = tempDir('bundle-live')
+    const id = '20260101T000000Z_nogit_live_aaaa'
+    const staging = join(here, '.reeval', 'staging', id)
+    mkdirSync(join(staging, 'evals'), { recursive: true })
+    // This test process: alive on this host, and not the reeval it starts.
+    writeFileSync(join(staging, 'holder'), `${process.pid}\n${hostname()}\n`)
+    writeFileSync(join(staging, 'evals', 'a.json'), '{}\n')
+    const r = await runCli(here, ['run', '--bundle', file, '--resume', id], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(r.code, 2, r.stderr + r.stdout)
+    assert.match(r.stderr, /run \S+ is still running from \S+\. Wait for it to finish or stop/)
+    assert.ok(existsSync(join(staging, 'evals', 'a.json')), 'the live run keeps its state')
+    assert.ok(existsSync(join(staging, 'holder')))
+    assert.deepEqual(
+      readdirSync(tmp).filter((d) => d.startsWith('reeval-bundle-')),
+      [],
+    )
+  })
+
+  test("--resume keeps a staged pass and the scratch record's, and runs the rest again", async () => {
+    const three = join(tempDir('bundle-out'), 'three.tar.gz')
+    const made = await runCli(dir, ['bundle', '--runs', '3', '--out', three])
+    assert.equal(made.code, 0, made.stderr)
+    const tmp = extractRoot()
+    const first = await runCli(tempDir('bundle-fresh'), ['run', '--bundle', three], {
+      env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN },
+    })
+    assert.equal(first.code, 0, first.stderr + first.stdout)
+    const extracted = /running .* in (\S+), where its \.reeval\/ stays/.exec(first.stdout)?.[1]
+    assert.ok(extracted, first.stdout)
+    const { run } = readRun(extracted)
+    const [one, two, rest] = run.evals[0]?.attempts ?? []
+    assert.ok(one && two && rest)
+    // The scratch record holds attempt 1, the staging attempt 2, and nothing holds attempt 3.
+    const state = tempDir('bundle-state')
+    const runs = join(state, '.reeval', 'runs')
+    mkdirSync(runs, { recursive: true })
+    const evals = run.evals.map((e) => ({ ...e, attempts: e.attempts.slice(0, 1) }))
+    writeFileSync(
+      join(runs, `${run.runId}.json`),
+      JSON.stringify({ ...run, status: 'interrupted', evals }),
+    )
+    const staged = join(state, '.reeval', 'staging', run.runId, 'evals')
+    mkdirSync(staged, { recursive: true })
+    writeFileSync(
+      join(staged, recordFileName(two.key)),
+      JSON.stringify({
+        outcome: 'pass',
+        error: null,
+        startedAt: two.startedAt,
+        turns: [],
+        diff: null,
+        checks: [],
+        judgements: [],
+        timings: { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
+      }),
+    )
+    const events = join(state, 'events.ndjson')
+    const r = await runCli(
+      state,
+      ['run', '--bundle', three, '--resume', run.runId, '--events-file', events],
+      { env: { TMPDIR: tmp, CHECK_TOKEN: TOKEN } },
+    )
+    assert.equal(r.code, 0, r.stderr + r.stdout)
+    const resumed = /resuming run \S+ from .* in (\S+), where its \.reeval\/ stays/.exec(
+      r.stdout,
+    )?.[1]
+    assert.ok(resumed, r.stdout)
+    const after = readRun(resumed).run
+    assert.equal(after.status, 'complete')
+    const attempts = after.evals[0]?.attempts ?? []
+    assert.deepEqual(
+      attempts.map((a) => a.outcome),
+      ['pass', 'pass', 'pass'],
+    )
+    assert.equal(attempts[0]?.startedAt, one.startedAt, "the scratch record's pass is kept")
+    assert.equal(attempts[1]?.startedAt, two.startedAt, 'the staged pass is kept')
+    assert.notEqual(attempts[2]?.startedAt, rest.startedAt, 'attempt 3 ran again')
+    assert.match(readFileSync(events, 'utf8'), /"resumed":2/)
+  })
+
+  test('--resume moves the state all or nothing, and refuses when a move fails', () => {
+    const from = tempDir('bundle-state')
+    const id = '20260101T000000Z_nogit_split_aaaa'
+    const staging = join(from, '.reeval', 'staging', id)
+    mkdirSync(join(staging, 'evals'), { recursive: true })
+    writeFileSync(join(staging, 'evals', 'a.json'), '{}\n')
+    mkdirSync(join(from, '.reeval', 'runs'))
+    writeFileSync(join(from, '.reeval', 'runs', `${id}.json`), '{}\n')
+    const project = tempDir('bundle-project')
+    mkdirSync(join(project, '.reeval'))
+    // The record's folder can't be made, after the staging has moved.
+    writeFileSync(join(project, '.reeval', 'runs'), '')
+    assert.throws(
+      () => moveResumeState(from, project, id),
+      (e: unknown) =>
+        e instanceof UsageError &&
+        /^Couldn't move run \S+'s state into .*: .*\. The state is still in /.test(e.message),
+    )
+    assert.ok(existsSync(join(staging, 'evals', 'a.json')), 'the staging moved back')
+    assert.ok(existsSync(join(from, '.reeval', 'runs', `${id}.json`)))
+    assert.ok(!existsSync(join(project, '.reeval', 'staging', id)))
   })
 
   test('takes its filters and profile from the bundle', async () => {

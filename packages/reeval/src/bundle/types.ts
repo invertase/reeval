@@ -101,10 +101,12 @@ export type BundleManifest = {
    * `cloud()` starting the machine type and attempts per machine the service gives, giving back a
    * machine the service reclaims, and ending its attempts when the service ends the run;
    * `heartbeat`, its event stream's heartbeat lines naming the attempts in progress and the machines
-   * it holds (`REEVAL_EVENTS_HEARTBEAT`). Another reeval may list others.
+   * it holds (`REEVAL_EVENTS_HEARTBEAT`); `resume`, its `reeval run --bundle <file> --resume <run>`
+   * continuing the bundle's run from that run's `.reeval/` state in the current directory. Another
+   * reeval may list others.
    */
   features?: string[]
 }
 
 /** The features this reeval writes in every bundle's manifest. */
-export const BUNDLE_FEATURES = ['heartbeat', 'secrets-file', 'vm-layout', 'vm-waits']
+export const BUNDLE_FEATURES = ['heartbeat', 'resume', 'secrets-file', 'vm-layout', 'vm-waits']
