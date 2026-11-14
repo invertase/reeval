@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/reeval-ai/reeval/compare/v0.26.0...v0.27.0) (2026-11-14)
+
+
+### Features
+
+* **cloud:** resume a cloud run with reeval run --cloud --resume ([#976](https://github.com/reeval-ai/reeval/issues/976)) ([988c326](https://github.com/reeval-ai/reeval/commit/988c326256944236e7a36af017ee4ba3494d4a74))
+
 ## [0.26.0](https://github.com/reeval-ai/reeval/compare/v0.25.0...v0.26.0) (2026-11-13)
 
 
