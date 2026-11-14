@@ -20,7 +20,7 @@ import {
   vertexSettings,
   vertexSettingsIn,
 } from '../gateway/vertex.ts'
-import { isFakeJudge, judgeRoute } from '../judge/index.ts'
+import { hostCall, isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -28,8 +28,6 @@ import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 export type ResolvedAnalysisModel = {
   name: string
   route: 'direct' | 'gateway' | 'openrouter' | 'vertex' | 'fake'
-  /** The gateway it resolved to; `providerModel` settles the call on it again when it's made. */
-  gateway?: GatewayName
   fake?: FakeAnalysisModel
   /** On OpenRouter, whether it may fail the call over to another upstream provider. */
   fallbacks?: boolean
@@ -127,7 +125,6 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
     return {
       name: model,
       route,
-      ...(gateway && { gateway }),
       ...(route === 'openrouter' ? { fallbacks: openRouterFallbacks(scope.gateways) } : {}),
       ...(route === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
     }
@@ -201,6 +198,9 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
  * The provider's own model for a direct route, the AI Gateway's by name on vercel, OpenRouter's
  * on openrouter, or Vertex AI's on vertex.
  */
+/** The gateway each resolved route calls through. */
+const ON = { direct: 'direct', gateway: 'vercel', openrouter: 'openrouter' } as const
+
 export async function providerModel(
   model: ResolvedAnalysisModel,
   what = 'analysis model',
@@ -208,20 +208,21 @@ export async function providerModel(
   if (model.route === 'vertex') {
     return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())
   }
-  const route = judgeRoute(model.name, process.env, what, model.gateway)
-  if (route.kind === 'gateway') return vercelLanguageModel(model.name, route.call)
+  if (model.route === 'fake') return model.name
+  const { route, call } = hostCall(model.name, process.env, what, ON[model.route])
+  if (route.kind === 'gateway') return vercelLanguageModel(model.name, call)
   if (route.kind === 'openrouter') {
-    return openRouterLanguageModel(model.name, !!model.fallbacks, route.call)
+    return openRouterLanguageModel(model.name, !!model.fallbacks, call)
   }
   if (route.kind !== 'direct') return model.name
   const id = model.name.slice(route.provider.length + 1)
   switch (route.provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).createAnthropic(route.call)(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic(call)(id)
     case 'google':
-      return (await import('@ai-sdk/google')).createGoogle(route.call)(id)
+      return (await import('@ai-sdk/google')).createGoogle(call)(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).createOpenAI(route.call)(id)
+      return (await import('@ai-sdk/openai')).createOpenAI(call)(id)
     default:
       return model.name
   }
@@ -242,7 +243,6 @@ export function hostModel(
     {
       name,
       route,
-      ...(gateway && { gateway }),
       ...(route === 'openrouter' ? { fallbacks } : {}),
       ...(route === 'vertex' && vertex ? { vertex } : {}),
     },

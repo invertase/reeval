@@ -51,7 +51,7 @@ import {
 import { type ProviderStop, providerStop } from '../src/harness/provider-stop.ts'
 import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
-import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
+import { hostCall, judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../src/types.ts'
 
 // Vercel's own API, whatever the shell running the tests exports.
@@ -181,7 +181,6 @@ describe('the models reeval calls itself', () => {
     const both = { ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'g' }
     assert.deepEqual(judgeRoute('anthropic/claude-x', both, 'judge model', 'vercel'), {
       kind: 'gateway',
-      call: {},
     })
     assert.throws(
       () => judgeRoute('anthropic/claude-x', { ANTHROPIC_API_KEY: 'a' }, 'judge model', 'vercel'),
@@ -943,7 +942,7 @@ describe('OpenRouter routes', () => {
     assert.deepEqual(judgeCredentials('anthropic/claude-x', 'openrouter'), ['OPENROUTER_API_KEY'])
     assert.deepEqual(
       judgeRoute('typesafe/jev-1.14', { OPENROUTER_API_KEY: 'k' }, 'judge model', 'openrouter'),
-      { kind: 'openrouter', call: { apiKey: 'k' } },
+      { kind: 'openrouter' },
     )
     assert.throws(
       () =>
@@ -1660,7 +1659,16 @@ describe('AI_GATEWAY_BASE_URL', () => {
         'judge model',
         'vercel',
       ),
-      { kind: 'gateway', call: { baseURL: `${BASE}${VERCEL_AI_SDK_PATH}` } },
+      { kind: 'gateway' },
+    )
+    assert.equal(
+      hostCall(
+        'anthropic/claude-x',
+        { AI_GATEWAY_API_KEY: 'g', AI_GATEWAY_BASE_URL: BASE },
+        'judge model',
+        'vercel',
+      ).call.baseURL,
+      `${BASE}${VERCEL_AI_SDK_PATH}`,
     )
     assert.throws(
       () =>

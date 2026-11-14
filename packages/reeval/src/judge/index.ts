@@ -94,9 +94,9 @@ export type HostCall = { baseURL?: string; apiKey?: string; fetch?: typeof fetch
  * package, or Vertex AI.
  */
 export type JudgeRoute =
-  | { kind: 'direct'; provider: string; pkg: string; call: HostCall }
-  | { kind: 'gateway'; call: HostCall }
-  | { kind: 'openrouter'; call: HostCall }
+  | { kind: 'direct'; provider: string; pkg: string }
+  | { kind: 'gateway' }
+  | { kind: 'openrouter' }
   | { kind: 'vertex' }
 
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/
@@ -202,13 +202,25 @@ export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 
  * set, when the key it would send has whitespace or a line break in it, or when Vercel's project
  * token has expired.
  */
-export function judgeRoute(
+export const judgeRoute = (
   model: string,
   env: NodeJS.ProcessEnv = process.env,
   what = 'judge model',
   gateway: GatewayName = 'direct',
-): JudgeRoute {
-  if (gateway === 'vertex') return { kind: 'vertex' }
+): JudgeRoute => hostCall(model, env, what, gateway).route
+
+/**
+ * The route as `judgeRoute` checks it, with what a model factory takes to make the call: the base
+ * URL, the key and, for a held key, a fetch that keeps it on its hosts. The call holds the key's
+ * value, so it goes straight into the factory and nowhere that's kept or written.
+ */
+export function hostCall(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+  what = 'judge model',
+  gateway: GatewayName = 'direct',
+): { route: JudgeRoute; call: HostCall } {
+  if (gateway === 'vertex') return { route: { kind: 'vertex' }, call: {} }
   const provider = providerOf(model)
   const direct = DIRECT_PROVIDERS[provider]
   const keys = judgeCredentials(model, gateway)
@@ -284,11 +296,11 @@ export function judgeRoute(
       `${key} for ${what} "${model}" has whitespace or a line break in it at character ${at}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
     )
   }
-  if (kind === 'openrouter') return { kind, call }
-  if (kind === 'direct' && direct) return { kind, provider, pkg: direct.pkg, call }
+  if (kind === 'openrouter') return { route: { kind }, call }
+  if (kind === 'direct' && direct) return { route: { kind, provider, pkg: direct.pkg }, call }
   const base = vercelBaseUrlProblem(settings)
   if (base) throw new Error(`${what} "${model}": ${base}`)
-  return { kind: 'gateway', call }
+  return { route: { kind: 'gateway' }, call }
 }
 
 /** A verdict plus the transient failures retried on the way to it. */

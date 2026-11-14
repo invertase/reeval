@@ -14,7 +14,7 @@ import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
 import { vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import { agentAuth, agentFor } from '../src/harness/agents.ts'
-import { judgeRoute } from '../src/judge/index.ts'
+import { hostCall, judgeRoute } from '../src/judge/index.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { hostEnv, readSecretsFile } from '../src/secrets-file.ts'
 import { pinStartEnv } from '../src/startup.ts'
@@ -236,9 +236,14 @@ describe('held secrets in this process', () => {
       },
       OPENAI_API_KEY: { mode: 'brokered', hosts: ['*.openai.com'], value: 'sk-oa-1234567890' },
     })
-    const anthropic = judgeRoute('anthropic/claude-sonnet-5-5')
-    assert.equal(anthropic.kind, 'direct')
-    assert.ok('call' in anthropic)
+    const anthropic = hostCall('anthropic/claude-sonnet-5-5')
+    assert.equal(anthropic.route.kind, 'direct')
+    // The route alone, as `judgeRoute` gives it to anything kept, holds no key.
+    assert.deepEqual(judgeRoute('anthropic/claude-sonnet-5-5'), {
+      kind: 'direct',
+      provider: 'anthropic',
+      pkg: '@ai-sdk/anthropic',
+    })
     assert.equal(anthropic.call.baseURL, 'https://api.anthropic.com/v1')
     assert.equal(anthropic.call.apiKey, 'sk-ant-12345678')
     assert.ok(anthropic.call.fetch)
@@ -246,12 +251,12 @@ describe('held secrets in this process', () => {
       anthropic.call.fetch('https://elsewhere.example.com/v1/messages', { method: 'POST' }),
       /reeval refused to send ANTHROPIC_API_KEY, a brokered key, to https:\/\/elsewhere\.example\.com/,
     )
-    const openai = judgeRoute('openai/gpt-6', process.env, 'analysis model')
-    assert.ok(openai.kind === 'direct' && openai.call.apiKey === 'sk-oa-1234567890')
-    const router = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
-    assert.ok(router.kind === 'openrouter' && router.call.apiKey === 'sk-or-123456789')
-    const gateway = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
-    assert.ok(gateway.kind === 'gateway' && gateway.call.apiKey === 'vck-1234567890ab')
+    const openai = hostCall('openai/gpt-6', process.env, 'analysis model')
+    assert.ok(openai.route.kind === 'direct' && openai.call.apiKey === 'sk-oa-1234567890')
+    const router = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
+    assert.ok(router.route.kind === 'openrouter' && router.call.apiKey === 'sk-or-123456789')
+    const gateway = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
+    assert.ok(gateway.route.kind === 'gateway' && gateway.call.apiKey === 'vck-1234567890ab')
     // The AI SDK's gateway provider gets the held value; without one, `ai` resolves the model by
     // name with the environment's key.
     assert.notEqual(typeof vercelLanguageModel('google/gemini-3.8-flash', gateway.call), 'string')
