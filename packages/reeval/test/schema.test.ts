@@ -361,6 +361,7 @@ describe('read defaults', () => {
       remarks: [],
       'debug-request': [],
       'live-progress': [],
+      'cloud-origin': [],
       'cli-invocation': [],
       'capture-page': [],
       'run-events': eventLines,

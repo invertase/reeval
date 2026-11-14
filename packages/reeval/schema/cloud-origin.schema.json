@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from CloudOrigin in src/cloud-files.ts by `pnpm schema:update`; don't edit. The cloud run a run in .reeval/runs was downloaded from: .reeval/cloud/<run>.json, read by reeval run --resume.",
+  "title": "CloudOrigin",
+  "$ref": "#/$defs/CloudOrigin",
+  "$defs": {
+    "CloudOrigin": {
+      "description": "`.reeval/cloud/<run>.json`: the cloud run a run in `.reeval/runs` was downloaded from, so `reeval run --resume` continues it there, never on this machine.",
+      "type": "object",
+      "properties": {
+        "cloudRunId": {
+          "description": "The run's id on the cloud platform.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "The profile the run started with, when its record names one.",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": ["cloudRunId", "schemaVersion"]
+    }
+  },
+  "x-schemaVersion": 1
+}

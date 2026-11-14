@@ -70,6 +70,7 @@ import {
   leftOutAttempts,
   liveAttempts,
   loadPrevious,
+  noRunHere,
   noteRetries,
   prepareResume,
   previousAttempt,
@@ -104,6 +105,7 @@ import type {
   CursorEfforts,
   LocalInput,
   ResolvedConfig,
+  ResolvedHistory,
   RunContext,
   SandboxDescriptor,
 } from './types.ts'
@@ -1095,7 +1097,7 @@ async function attachHere(
   flags: Flags,
   options: Pick<
     import('./attach.ts').AttachOptions,
-    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint'
+    'source' | 'root' | 'follow' | 'onDetach' | 'cancelHint' | 'resumedAfter'
   >,
 ): Promise<number> {
   const { attach } = await import('./attach.ts')
@@ -1252,16 +1254,16 @@ async function runCommand(
   if (retry !== undefined && flags.resume !== undefined) {
     throw new UsageError('--resume and --retry-errors both continue a run: pass one of them.')
   }
-  if ((flags.resume !== undefined || retry !== undefined) && !flags.local) {
-    await refuseCloudContinue(flags, configPath)
-  }
+  if (flags.cloud && flags.local) wantsCloud(flags, { cloud: false }, null)
+  const continued = flags.resume !== undefined || retry !== undefined
+  if (continued && flags.cloud) return cloudContinue(flags, given, configPath)
   if (retry !== undefined && (given.length || flags.tag?.length || flags.trait?.length)) {
     throw new UsageError(
       '--retry-errors runs every infra-errored attempt of the run again, with its plan: leave out filters, --tag and --trait.',
     )
   }
-  const continued = flags.resume !== undefined || retry !== undefined
   const resumed = continued ? await resumedRun(flags, given, configPath, bundled) : null
+  if (resumed?.cloud) return cloudContinue(flags, given, configPath, resumed.cloud)
   if (resumed?.nothing) {
     // Nothing runs, so the exit code and `--json` are the run's own, as it was recorded.
     const { nothing, record } = resumed.nothing
@@ -1273,12 +1275,20 @@ async function runCommand(
     } else console.log(nothing)
     return outcome === 'fail' ? EXIT.failed : outcome === 'infra_error' ? EXIT.infra : EXIT.ok
   }
-  const runFlags = resumed?.settings ? { ...flags, ...resumed.settings } : flags
+  // A run this machine continues ran here, whatever the config or its profile says now.
+  const runFlags = {
+    ...flags,
+    ...resumed?.settings,
+    ...(resumed && { local: true, cloud: undefined }),
+  }
   const filters = resumed?.settings?.filters ?? given
   const setup = await prepareRun(runFlags, configPath, {
     noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
     ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
+  if (resumed && !bundled && !flags.local && wantsCloud(flags, setup.config, setup.profile)) {
+    console.log(dim(`run ${resumed.runId} ran on this machine, so it continues here`))
+  }
   const cloud = bundled ? undefined : await cloudTarget(runFlags, setup, filters, configPath)
   if (cloud && 'exit' in cloud) return cloud.exit
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
@@ -1363,7 +1373,7 @@ async function runCommand(
     })
   } catch (error) {
     renderer.close()
-    if (ctx.retry) await restoreRetry(setup.config.root, ctx.runId)
+    if (ctx.retry) await undoRetry(setup.config.root, ctx)
     else if (setup.resume === undefined) {
       await rm(ctx.stagingDir, { recursive: true, force: true })
     }
@@ -1401,7 +1411,7 @@ async function runCommand(
       questions?.cancel()
       live?.remove()
       renderer.close()
-      await restoreRetry(setup.config.root, ctx.runId)
+      await undoRetry(setup.config.root, ctx)
       throw new UsageError(
         `run ${ctx.runId}'s plan changed since it ran: ${changes.join('; ')}. ${retryVerb(ctx.retry, ctx.runId)} only with the plan they ran with, so the run is left as it was: put it back, or start a new run with reeval run.`,
       )
@@ -1566,39 +1576,128 @@ async function runCommand(
 }
 
 /**
- * Refuses `--resume` or `--retry-errors` on a run that goes to the cloud, from `--cloud` or the
- * config's or profile's `cloud`, before anything looks for the run here.
+ * `reeval run --cloud --resume <run>`, or `--resume` where the config or its profile runs in the
+ * cloud and the run is a cloud run's download here or isn't here at all: resumes the cloud run
+ * and follows it. Its bundle fixed the filters, runs, tags and traits, so it takes none of them;
+ * `--profile` only picks where it goes and the history `--download` files it in. It needs no
+ * config: `found` is the config the cloud was picked from and, for a download, its cloud run.
  */
-async function refuseCloudContinue(flags: Flags, configPath: string | undefined) {
-  const { wantsCloud } = await import('./cloud-run.ts')
-  let cloud = !!flags.cloud
-  if (!cloud) {
-    const path = requireConfig(configPath)
-    loadEnvFiles(path)
-    const loaded = await loadConfig(
-      path,
-      'run',
-      flags.profile ?? (process.env.REEVAL_PROFILE || undefined),
+async function cloudContinue(
+  flags: Flags,
+  filters: string[],
+  configPath: string | undefined,
+  found?: {
+    config: Awaited<ReturnType<typeof loadConfig>>
+    origin: Awaited<ReturnType<typeof import('./cloud-files.ts').cloudOriginOf>>
+  },
+): Promise<number> {
+  const cloud = await import('./cloud-run.ts')
+  if (flags['retry-errors'] !== undefined) {
+    throw new UsageError(
+      '--retry-errors runs the infra errors of a run on this machine again, not of a cloud run: reeval run --cloud --resume <run> continues a cloud run, or pass --local to retry a run here',
     )
-    let profile: ReturnType<typeof selectProfile> = null
-    try {
-      profile = selectProfile(loaded, flags.profile)
-    } catch (error) {
-      // The resume checks report a profile the config no longer defines, naming the run's own.
-      if (!(error instanceof UsageError)) throw error
-    }
-    cloud = wantsCloud(flags, loaded, profile)
   }
-  if (!cloud) return
-  const flag = flags.resume !== undefined ? '--resume' : '--retry-errors'
-  throw new UsageError(
-    `${flag} with a cloud run isn't supported by this reeval yet: pass --local to continue a run on this machine`,
-  )
+  const fixed = [
+    ...(filters.length ? ['filters'] : []),
+    ...(['runs', 'tag', 'trait'] as const)
+      .filter((f) => flags[f] !== undefined)
+      .map((f) => `--${f}`),
+  ]
+  if (fixed.length) {
+    throw new UsageError(
+      `a cloud run resumes with the filters, runs, tags and traits it started with: leave out ${fixed.join(', ')}`,
+    )
+  }
+  cloud.refuseLocalFlags(flags)
+  const starting = (['dry-run', 'json', 'force'] as const).filter((f) => flags[f])
+  if (starting.length) {
+    throw new UsageError(
+      `${starting.map((f) => `--${f}`).join(', ')} ${starting.length === 1 ? 'applies' : 'apply'} to starting a cloud run, not resuming one: leave ${starting.length === 1 ? 'it' : 'them'} out`,
+    )
+  }
+  const ref = flags.resume ?? ''
+  let origin = found?.origin ?? null
+  if (!origin && (!ref || /^latest(~\d+)?$/.test(ref))) {
+    throw new UsageError(
+      "reeval run --cloud --resume needs the run: pass the cloud run's id, which reeval run --cloud printed, or its event stream URL",
+    )
+  }
+  if (!origin && configPath !== undefined && !isAttachUrl(ref)) {
+    const { cloudOriginOf } = await import('./cloud-files.ts')
+    origin = await cloudOriginOf(dirname(configPath), ref)
+  }
+  // The platform URL may be in the project's .env, as it is for the other cloud commands.
+  loadEnvFiles(configPath)
+  const base = cloud.cloudUrl()
+  let download: { root: string; history: ResolvedHistory; profile?: string } | undefined
+  if (flags.download || flags.profile !== undefined) {
+    if (configPath === undefined) {
+      const flag = flags.download ? '--download' : '--profile'
+      throw new UsageError(
+        `${flag} reads the project's config, and there's no reeval config here: run it in the project, or leave out ${flag}`,
+      )
+    }
+    const config =
+      found?.config ??
+      (await loadConfig(
+        configPath,
+        'run',
+        flags.profile ?? origin?.profile ?? (process.env.REEVAL_PROFILE || undefined),
+      ))
+    // The history a downloaded run was filed in is its own profile's, while the config has it.
+    const own = origin?.profile && config.profiles[origin.profile] ? origin.profile : undefined
+    const picked = selectProfile(config, flags.profile ?? own)
+    const { root, history } = withProfileHistory(config, picked)
+    if (flags.download) download = { root, history, ...(picked ? { profile: picked.name } : {}) }
+  }
+  if (origin) console.log(dim(`run ${origin.runId} is cloud run ${origin.cloudRunId}'s download`))
+  return cloud.resumeCloud({
+    base,
+    run: origin?.cloudRunId ?? ref,
+    checkout: configPath !== undefined,
+    lookedHere: !!found && !origin,
+    log: (line) => console.log(dim(line)),
+    follow: (options) => attachHere(flags, options),
+    ...(download && { download }),
+  })
+}
+
+/** Puts back a retry that stopped before it changed the run, with its `.reeval/cloud` marker. */
+async function undoRetry(root: string, ctx: StartedRun): Promise<void> {
+  await restoreRetry(root, ctx.runId)
+  if (ctx.forgotOrigin === undefined) return
+  const { rememberCloudOrigin } = await import('./cloud-files.ts')
+  await rememberCloudOrigin(root, ctx.runId, ctx.forgotOrigin)
+}
+
+/**
+ * The cloud continuation of run `runId` (its whole id) when it was downloaded from a cloud run and the
+ * config or its profile runs in the cloud (`--profile`, else the run's own, else the default's).
+ */
+async function cloudContinuation(flags: Flags, path: string, runId: string, bundled?: Bundled) {
+  if (flags.local || bundled) return null
+  const { cloudOriginOf } = await import('./cloud-files.ts')
+  const origin = await cloudOriginOf(dirname(path), runId, { exact: true })
+  if (!origin) return null
+  const named = flags.profile ?? origin.profile ?? (process.env.REEVAL_PROFILE || undefined)
+  const loaded = await loadConfig(path, 'run', named)
+  const own = origin.profile && loaded.profiles[origin.profile] ? origin.profile : undefined
+  if (!wantsCloud(flags, loaded, selectProfile(loaded, flags.profile ?? own))) return null
+  return {
+    cloud: { config: loaded, origin },
+    runId: undefined,
+    nothing: null,
+    saved: null,
+    settings: null,
+    notes: [],
+    profileOf: undefined,
+  }
 }
 
 /**
  * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
- * so it plans with the flags given now, with a note.
+ * so it plans with the flags given now, with a note. With no such run here, `cloud` is the
+ * config when it or the profile picked runs in the cloud, where the run is then continued.
  */
 async function resumedRun(
   flags: Flags,
@@ -1610,7 +1709,32 @@ async function resumedRun(
   // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
   loadEnvFiles(path)
   const root = dirname(path)
-  const target = await continuedRun(root, flags, bundled)
+  const ref = flags.resume ?? flags['retry-errors']
+  const named = ref && ref !== 'latest' ? await cloudContinuation(flags, path, ref, bundled) : null
+  if (named) return named
+  let target: Awaited<ReturnType<typeof continuedRun>>
+  try {
+    target = await continuedRun(root, flags, bundled)
+  } catch (error) {
+    if (!noRunHere(error) || flags.local) throw error
+    const loaded = await loadConfig(
+      path,
+      'run',
+      flags.profile ?? (process.env.REEVAL_PROFILE || undefined),
+    )
+    if (!wantsCloud(flags, loaded, selectProfile(loaded, flags.profile))) throw error
+    return {
+      cloud: { config: loaded, origin: null },
+      runId: undefined,
+      nothing: null,
+      saved: null,
+      settings: null,
+      notes: [],
+      profileOf: undefined,
+    }
+  }
+  const downloaded = await cloudContinuation(flags, path, target.runId, bundled)
+  if (downloaded) return downloaded
   if (
     flags['retry-errors'] !== undefined &&
     target.previous &&
@@ -1620,7 +1744,14 @@ async function resumedRun(
       nothing: `run ${target.runId} has no infra errors, so --retry-errors has nothing to run again.`,
       record: target.previous,
     }
-    return { nothing, saved: null, settings: null, notes: [], profileOf: undefined }
+    return {
+      runId: target.runId,
+      nothing,
+      saved: null,
+      settings: null,
+      notes: [],
+      profileOf: undefined,
+    }
   }
   if (
     flags.resume !== undefined &&
@@ -1634,7 +1765,14 @@ async function resumedRun(
   const saved = await savedInvocation(root, target)
   if (!saved) {
     const note = `run ${target.runId} saved no --runs, profile or filters, so this ${flags.resume === undefined ? 'retry' : 'resume'} plans with the ones given now`
-    return { nothing: null, saved: null, settings: null, notes: [note], profileOf: undefined }
+    return {
+      runId: target.runId,
+      nothing: null,
+      saved: null,
+      settings: null,
+      notes: [note],
+      profileOf: undefined,
+    }
   }
   const given = {
     runs: flags.runs,
@@ -1647,7 +1785,13 @@ async function resumedRun(
   const flag = flags.resume === undefined ? '--retry-errors' : '--resume'
   const resumed = resumeSettings(target.runId, saved, given, { root, flag })
   const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
-  return { nothing: null, saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
+  return {
+    runId: target.runId,
+    nothing: null,
+    saved,
+    ...resumed,
+    profileOf: fromRun ? target.runId : undefined,
+  }
 }
 
 /** The run `--resume` continues, or the finished one `--retry-errors` runs the errors of again. */
@@ -1792,6 +1936,8 @@ type StartedRun = RunContext & {
   /** A retry's run, prepared once its plan is known to be the run's. */
   /** `--retry-errors`'s run, which it moves aside only once its plan is the run's. */
   retryTarget?: ResumeTarget
+  /** The `.reeval/cloud` marker a retry removed as it set the run aside, which undoing it puts back. */
+  forgotOrigin?: string
   /**
    * A `--retry-errors`, or a `--resume` that finishes one (`resume`), and when this process
    * started it; `startedAt` is the run's own start. `began`: when the retry a resume finishes
@@ -1839,8 +1985,10 @@ async function startRun(
   if (resume !== undefined || retry !== undefined) {
     const target = await continuedRun(config.root, { resume, 'retry-errors': retry }, bundled)
     // A retry moves the finished run aside only once its plan is the run's.
-    if (!dryRun && retry === undefined) await prepareResume(target, config.root)
-    else if (!dryRun) holdRetry(target, config.root)
+    if (!dryRun && retry === undefined) {
+      await prepareResume(target, config.root)
+      await (await import('./cloud-files.ts')).forgetCloudOrigin(config.root, target.runId)
+    } else if (!dryRun) holdRetry(target, config.root)
     const stopped = retry === undefined ? await stoppedRetry(config.root, target) : null
     if (!dryRun) await sweep(config.root, target.runId)
     const aside = dryRun
@@ -2129,6 +2277,9 @@ async function executeRun(
       }
       if (ctx.retryTarget && !setup.dryRun) {
         await prepareResume(ctx.retryTarget, config.root, { held: true })
+        const { forgetCloudOrigin } = await import('./cloud-files.ts')
+        const forgot = await forgetCloudOrigin(config.root, runId)
+        if (forgot !== null) ctx.forgotOrigin = forgot
         const aside = await loadPrevious(stagingDir)
         ctx.previous = aside.record ?? ctx.previous
         ctx.previousArtifacts = aside.artifacts

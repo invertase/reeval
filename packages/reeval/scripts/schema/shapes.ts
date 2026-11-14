@@ -80,6 +80,14 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'cloud-origin',
+    file: 'src/cloud-files.ts',
+    type: 'CloudOrigin',
+    where:
+      'The cloud run a run in .reeval/runs was downloaded from: .reeval/cloud/<run>.json, read by reeval run --resume',
+    versionField: 'schemaVersion',
+  },
+  {
     name: 'run-span',
     file: 'src/view/spans.ts',
     type: 'RunSpan',

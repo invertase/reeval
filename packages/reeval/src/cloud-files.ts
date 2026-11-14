@@ -7,8 +7,11 @@ import {
   link,
   lstat,
   mkdir,
+  readdir,
   readFile,
   readlink,
+  rename,
+  rm,
   symlink,
   unlink,
   writeFile,
@@ -21,10 +24,12 @@ import { UsageError } from './errors.ts'
 import { displayUrl } from './events.ts'
 import { NewerRecordError, parseRecord } from './history/files.ts'
 import { ensureHistoryGitattributes, ensureHistoryGitignore } from './history/ignore.ts'
+import { RefError } from './history/views.ts'
 import { fromCwd, RUN_ID, relativeFile } from './ids.ts'
 import { plural } from './text.ts'
 import type { ResolvedHistory } from './types.ts'
 import { formatBytes } from './view/debug.ts'
+import { NewerSchemaError, readableCloudOrigin } from './view/record.ts'
 
 /** The most a run's files may unpack to. */
 const MAX_BYTES = 2 * 1024 ** 3
@@ -288,17 +293,20 @@ export async function downloadCloudFiles(options: {
     )
   }
   const recorded = new Set(files.filter((f) => f.record).map((f) => f.runId))
+  /** The profile each run in `.reeval/runs` started with, for its `.reeval/cloud` marker. */
+  const scratch = new Map<string, string | undefined>()
   for (const f of files.filter((f) => f.record)) {
-    let runId: string | undefined
+    let record: ReturnType<typeof parseRecord>
     try {
-      runId = parseRecord(f.data, f.path).runId
+      record = parseRecord(f.data, f.path)
     } catch (error) {
       if (error instanceof NewerRecordError) continue
       throw new CloudError(`${what} hold ${f.path}, which isn't a readable reeval run record`)
     }
-    if (runId !== f.runId) {
-      throw new CloudError(`${what} hold ${f.path}, the record of another run (${runId})`)
+    if (record.runId !== f.runId) {
+      throw new CloudError(`${what} hold ${f.path}, the record of another run (${record.runId})`)
     }
+    if (f.area === 'runs') scratch.set(f.runId, record.invocation?.profile)
   }
   const lines: string[] = []
   if (others) {
@@ -320,14 +328,25 @@ export async function downloadCloudFiles(options: {
       `Not downloading ${what}: ${listed(blocked)} ${one ? 'is a link or a file' : 'are links or files'} here, not a directory, and nothing is written through one. Move ${one ? 'it' : 'them'} aside to download them`,
     )
   }
-  const clashes = kept.filter((_, i) => states[i] === 'other').map((f) => f.path)
+  // A run downloaded from this cloud run before takes its files in .reeval/runs and .reeval/debug
+  // as they are now, as a resume rewrites a run of this machine's; the history folder's stay.
+  const ours = new Set<string>()
+  for (const id of recorded) {
+    if ((await cloudOriginOf(root, id, { exact: true }))?.cloudRunId === cloudRunId) ours.add(id)
+  }
+  const replaced = new Set(
+    kept.filter((f, i) => states[i] === 'other' && f.area !== 'history' && ours.has(f.runId)),
+  )
+  const clashes = kept
+    .filter((f, i) => states[i] === 'other' && !replaced.has(f))
+    .map((f) => f.path)
   if (clashes.length) {
     const one = clashes.length === 1
     throw new UsageError(
       `Not downloading ${what}: ${listed(clashes)} ${one ? 'is' : 'are'} already here with other content. Move ${one ? 'it' : 'them'} aside to download them`,
     )
   }
-  const fresh = kept.filter((_, i) => states[i] === 'free')
+  const fresh = kept.filter((f, i) => states[i] === 'free' || replaced.has(f))
   const order = [
     ...fresh.filter((f) => !f.record && f.link === undefined),
     ...fresh.filter((f) => f.link !== undefined),
@@ -345,9 +364,14 @@ export async function downloadCloudFiles(options: {
   }
   // Links after every file, and each file's parents checked again as it's written, so nothing is
   // written through a link, even one a case-folding filesystem takes for another name. Records
-  // last, each linked into place whole from a temporary file, never over another.
+  // last, each linked into place whole from a temporary file, never over another but an earlier
+  // download's of the same cloud run, after the marker that says it came from the cloud.
   for (const f of order) {
     const file = join(root, ...f.path.split('/'))
+    if (f.record && f.area === 'runs' && scratch.has(f.runId)) {
+      const profile = scratch.get(f.runId)
+      await markCloudOrigin(root, f.runId, { cloudRunId, ...(profile ? { profile } : {}) })
+    }
     try {
       const parts = f.path.split('/')
       for (let i = 1; i < parts.length; i++) {
@@ -357,8 +381,17 @@ export async function downloadCloudFiles(options: {
         else if (!info.isDirectory())
           throw new Error(`${parts.slice(0, i).join('/')} isn't a directory`)
       }
-      if (f.link !== undefined) await symlink(f.link, file)
-      else if (!f.record) await writeFile(file, f.data, { flag: 'wx' })
+      if (f.link !== undefined) {
+        if (replaced.has(f)) await unlink(file)
+        await symlink(f.link, file)
+      } else if (replaced.has(f)) {
+        const tmp = join(dirname(file), `.${parts.at(-1)}.${process.pid}.tmp`)
+        await writeFile(tmp, f.data, { flag: 'wx' })
+        await rename(tmp, file).catch(async (error) => {
+          await unlink(tmp).catch(() => {})
+          throw error
+        })
+      } else if (!f.record) await writeFile(file, f.data, { flag: 'wx' })
       else {
         const tmp = join(dirname(file), `.${f.runId}.json.${process.pid}.tmp`)
         await writeFile(tmp, f.data)
@@ -398,4 +431,108 @@ export async function downloadCloudFiles(options: {
     )
   }
   return lines
+}
+
+/**
+ * `.reeval/cloud/<run>.json`: the cloud run a run in `.reeval/runs` was downloaded from, so
+ * `reeval run --resume` continues it there, never on this machine.
+ */
+export type CloudOrigin = {
+  schemaVersion: 1
+  /** The run's id on the cloud platform. */
+  cloudRunId: string
+  /** The profile the run started with, when its record names one. */
+  profile?: string
+}
+
+const originDir = (root: string) => join(root, '.reeval', 'cloud')
+
+/** Writes run `runId`'s marker. */
+async function markCloudOrigin(
+  root: string,
+  runId: string,
+  origin: Omit<CloudOrigin, 'schemaVersion'>,
+): Promise<void> {
+  const marker: CloudOrigin = { schemaVersion: 1, ...origin }
+  await writeOrigin(root, runId, `${JSON.stringify(marker)}\n`)
+}
+
+/** Writes `text` as run `runId`'s marker whole, through a temporary file and no link. */
+async function writeOrigin(root: string, runId: string, text: string): Promise<void> {
+  const dir = originDir(root)
+  const tmp = join(dir, `.${runId}.json.${process.pid}.tmp`)
+  try {
+    for (const at of [dirname(dir), dir]) {
+      const info = await lstat(at).catch(() => null)
+      if (!info) await mkdir(at)
+      else if (!info.isDirectory()) throw new Error(`${relativeFile(root, at)} isn't a directory`)
+    }
+    await writeFile(tmp, text, { flag: 'wx' })
+    await rename(tmp, join(dir, `${runId}.json`))
+  } catch (error) {
+    await unlink(tmp).catch(() => {})
+    throw new CloudError(
+      `couldn't write .reeval/cloud/${runId}.json: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
+/**
+ * The cloud run that the run of `.reeval/runs` whose id is `ref` (or, unless `exact`, starts with
+ * it) was downloaded from; null when no downloaded run matches, and a `RefError` when a prefix
+ * matches several. A marker from a newer reeval is a usage error, so its run is never taken for
+ * one of this machine's.
+ */
+export async function cloudOriginOf(
+  root: string,
+  ref: string,
+  { exact = false } = {},
+): Promise<(CloudOrigin & { runId: string }) | null> {
+  const names = await readdir(originDir(root)).catch((): string[] => [])
+  const ids = names.flatMap((n) => {
+    const id = n.endsWith('.json') ? n.slice(0, -'.json'.length) : ''
+    return RUN_ID.test(id) && id.startsWith(ref) ? [id] : []
+  })
+  if (!exact && !ids.includes(ref) && ids.length > 1) {
+    throw new RefError(`"${ref}" matches ${ids.length} runs: use more of the id`)
+  }
+  const runId = ids.includes(ref) ? ref : !exact && ids.length === 1 ? ids[0] : undefined
+  if (!runId) return null
+  const where = `.reeval/cloud/${runId}.json`
+  let read: Partial<CloudOrigin> | null
+  try {
+    read = JSON.parse(await readFile(join(originDir(root), `${runId}.json`), 'utf8'))
+  } catch {
+    return null
+  }
+  try {
+    read = readableCloudOrigin(read, where)
+  } catch (error) {
+    if (error instanceof NewerSchemaError) throw new UsageError(error.message)
+    throw error
+  }
+  if (typeof read?.cloudRunId !== 'string') return null
+  return {
+    runId,
+    schemaVersion: 1,
+    cloudRunId: read.cloudRunId,
+    ...(typeof read.profile === 'string' ? { profile: read.profile } : {}),
+  }
+}
+
+/**
+ * Forgets that run `runId` came from a cloud run, as its continuation on this machine sets the
+ * run aside: its files are this machine's from then on, so `reeval run --resume` keeps it here
+ * and a download never writes over them. Returns the marker it removed, or null.
+ */
+export async function forgetCloudOrigin(root: string, runId: string): Promise<string | null> {
+  const file = join(originDir(root), `${runId}.json`)
+  const text = await readFile(file, 'utf8').catch(() => null)
+  await rm(file, { force: true })
+  return text
+}
+
+/** Puts back the marker {@link forgetCloudOrigin} removed, for a continuation undone unchanged. */
+export async function rememberCloudOrigin(root: string, runId: string, text: string) {
+  await writeOrigin(root, runId, text)
 }
