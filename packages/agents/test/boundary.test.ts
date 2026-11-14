@@ -123,9 +123,10 @@ function loads(file: string, text: string): (string | null)[] {
   }
   visit(program as unknown as Node)
   for (const c of comments) {
-    const ref = c.type === 'Line' && /^\/\s*<reference\s+(types|path)\s*=\s*"([^"]+)"/.exec(c.value)
+    const ref =
+      c.type === 'Line' && /^\/\s*<reference\s+(types|path)\s*=\s*(["'])(.+?)\2/.exec(c.value)
     if (!ref) continue
-    const [, kind, target = ''] = ref
+    const [, kind, , target = ''] = ref
     out.push(kind === 'path' && !target.startsWith('.') ? `./${target}` : target)
   }
   return out
@@ -182,6 +183,7 @@ test('the checks refuse what they are meant to', () => {
     `/// <reference types="reeval" />`,
     `/// <reference path="../../../reeval/src/types.d.ts" />`,
     `/// <reference lib="es2023" />`,
+    `/// <reference types='reeval/view' />`,
     `import { a } from '../index.ts'`,
     `import type { Attempt } from '../../../reeval/src/types.ts'`,
     `import { type RunRecord } from 'reeval'`,
@@ -243,6 +245,7 @@ test('the checks refuse what they are meant to', () => {
       ['./egress.ts', undefined],
       ['reeval', notDependency('reeval')],
       ['../../../reeval/src/types.d.ts', outside('../../../reeval/src/types.d.ts')],
+      ['reeval/view', notDependency('reeval')],
     ],
   )
   assert.deepEqual(exportedNames(file, text).filter(refusedName), [
