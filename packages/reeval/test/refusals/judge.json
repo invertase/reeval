@@ -42,5 +42,10 @@
   "config: a typo": "UsageError: Unknown judge option \"modle\" in reeval.config.ts. Did you mean \"model\"?",
   "config: state": "UsageError: Unknown judge option \"state\" in reeval.config.ts.",
   "config: diff": "UsageError: Unknown judge option \"diff\" in reeval.config.ts. diff is per call: c.judge(question, { diff }).",
-  "config: good": null
+  "config: good": null,
+  "held: a sandbox key": "Error: ANTHROPIC_API_KEY for judge model \"anthropic/claude\" is a sandbox secret, which only the agent's sandbox gets, and the judge model calls api.anthropic.com from reeval's own process: give ANTHROPIC_API_KEY the brokered mode with api.anthropic.com among its hosts, or the readable mode.",
+  "held: a brokered key off the provider host": "Error: ANTHROPIC_API_KEY for judge model \"anthropic/claude\" is brokered to api.anthropic.com, and the judge model calls proxy.example.com, which it isn't brokered to.",
+  "held: a brokered gateway key off the gateway host": "Error: OPENROUTER_API_KEY for judge model \"google/gemini-3.8-flash\" is brokered to api.example.com, and the judge model calls openrouter.ai, which it isn't brokered to.",
+  "held: a brokered Vercel project token": "Error: VERCEL_OIDC_TOKEN for judge model \"google/gemini-3.8-flash\" is a brokered secret, and the judge model calls ai-gateway.vercel.sh from reeval's own process, which reads Vercel's project token only from the environment: give VERCEL_OIDC_TOKEN the readable mode, or use AI_GATEWAY_API_KEY.",
+  "held: good, a brokered key on its host": null
 }

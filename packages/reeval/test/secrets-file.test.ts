@@ -3,15 +3,21 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { placeholder } from '@reeval/sandbox-docker'
+import { generateText } from 'ai'
+import { hostModel } from '../src/analysis/model.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
+import { vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import { agentAuth, agentFor } from '../src/harness/agents.ts'
-import { judgeRoute } from '../src/judge/index.ts'
+import { hostCall, judgeRoute } from '../src/judge/index.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { hostEnv, readSecretsFile } from '../src/secrets-file.ts'
+import { pinStartEnv } from '../src/startup.ts'
 import type { AgentHarnessDescriptor, EnvironmentInput } from '../src/types.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
@@ -185,7 +191,7 @@ describe('held secrets in this process', () => {
     assert.deepEqual(box.substitutions, [])
   })
 
-  test("reeval's own calls get the value: the agent's key on its endpoints, and the judge refuses one", () => {
+  test("reeval's own calls get the value: the agent's key on its endpoints, and the judge refuses a sandbox one", () => {
     hold({
       ANTHROPIC_API_KEY: {
         mode: 'brokered',
@@ -203,7 +209,7 @@ describe('held secrets in this process', () => {
     hold({ GOOGLE_GENERATIVE_AI_API_KEY: { mode: 'sandbox', value: 'g-held-1234567890' } })
     assert.throws(
       () => judgeRoute('google/gemini-3.8-flash'),
-      /GOOGLE_GENERATIVE_AI_API_KEY for judge model "google\/gemini-3\.8-flash" is a sandbox secret.*give GOOGLE_GENERATIVE_AI_API_KEY the readable mode/,
+      /GOOGLE_GENERATIVE_AI_API_KEY for judge model "google\/gemini-3\.8-flash" is a sandbox secret, which only the agent's sandbox gets, and the judge model calls generativelanguage\.googleapis\.com .*give GOOGLE_GENERATIVE_AI_API_KEY the brokered mode with generativelanguage\.googleapis\.com among its hosts, or the readable mode/,
     )
     // Twin: brokered to hosts the agent doesn't call, the key isn't handed over.
     hold({
@@ -213,6 +219,165 @@ describe('held secrets in this process', () => {
       () => agentAuth(claude),
       /ANTHROPIC_API_KEY is brokered to other\.test, and the .* harness sends it to api\.anthropic\.com, which it isn't brokered to/,
     )
+  })
+
+  test("reeval's own model calls use a brokered key on its hosts, and refuse it elsewhere", async () => {
+    hold({
+      ANTHROPIC_API_KEY: {
+        mode: 'brokered',
+        hosts: ['api.anthropic.com'],
+        value: 'sk-ant-12345678',
+      },
+      OPENROUTER_API_KEY: { mode: 'brokered', hosts: ['openrouter.ai'], value: 'sk-or-123456789' },
+      AI_GATEWAY_API_KEY: {
+        mode: 'brokered',
+        hosts: ['ai-gateway.vercel.sh'],
+        value: 'vck-1234567890ab',
+      },
+      OPENAI_API_KEY: { mode: 'brokered', hosts: ['*.openai.com'], value: 'sk-oa-1234567890' },
+    })
+    const anthropic = hostCall('anthropic/claude-sonnet-5-5')
+    assert.equal(anthropic.route.kind, 'direct')
+    // The route alone, as `judgeRoute` gives it to anything kept, holds no key.
+    assert.deepEqual(judgeRoute('anthropic/claude-sonnet-5-5'), {
+      kind: 'direct',
+      provider: 'anthropic',
+      pkg: '@ai-sdk/anthropic',
+    })
+    assert.equal(anthropic.call.baseURL, 'https://api.anthropic.com/v1')
+    assert.equal(anthropic.call.apiKey, 'sk-ant-12345678')
+    assert.ok(anthropic.call.fetch)
+    await assert.rejects(
+      anthropic.call.fetch('https://elsewhere.example.com/v1/messages', { method: 'POST' }),
+      /reeval refused to send ANTHROPIC_API_KEY, a brokered key, to https:\/\/elsewhere\.example\.com/,
+    )
+    const openai = hostCall('openai/gpt-6', process.env, 'analysis model')
+    assert.ok(openai.route.kind === 'direct' && openai.call.apiKey === 'sk-oa-1234567890')
+    const router = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
+    assert.ok(router.route.kind === 'openrouter' && router.call.apiKey === 'sk-or-123456789')
+    const gateway = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
+    assert.ok(gateway.route.kind === 'gateway' && gateway.call.apiKey === 'vck-1234567890ab')
+    // The AI SDK's gateway provider gets the held value; without one, `ai` resolves the model by
+    // name with the environment's key.
+    assert.notEqual(typeof vercelLanguageModel('google/gemini-3.8-flash', gateway.call), 'string')
+    assert.equal(typeof vercelLanguageModel('google/gemini-3.8-flash'), 'string')
+
+    // Twins: the call goes to a host the key isn't brokered to, or over plain http.
+    for (const [url, refusal] of [
+      [
+        'https://proxy.example.com/v1',
+        /ANTHROPIC_API_KEY for judge model "anthropic\/claude-sonnet-5-5" is brokered to api\.anthropic\.com, and the judge model calls proxy\.example\.com, which it isn't brokered to/,
+      ],
+      [
+        'http://api.anthropic.com/v1',
+        /ANTHROPIC_API_KEY for judge model "anthropic\/claude-sonnet-5-5" is brokered, and the judge model would call http:\/\/api\.anthropic\.com\/v1: a brokered key goes only to an https:\/\/ URL, or to this machine/,
+      ],
+    ] as const) {
+      process.env.ANTHROPIC_BASE_URL = url
+      try {
+        assert.throws(() => judgeRoute('anthropic/claude-sonnet-5-5'), refusal)
+      } finally {
+        delete process.env.ANTHROPIC_BASE_URL
+      }
+    }
+    hold({
+      AI_GATEWAY_API_KEY: {
+        mode: 'brokered',
+        hosts: ['api.example.com'],
+        value: 'vck-1234567890ab',
+      },
+    })
+    assert.throws(
+      () => judgeRoute('google/gemini-3.8-flash', process.env, 'analysis model', 'vercel'),
+      /AI_GATEWAY_API_KEY for analysis model "google\/gemini-3\.8-flash" is brokered to api\.example\.com, and the analysis model calls ai-gateway\.vercel\.sh, which it isn't brokered to/,
+    )
+  })
+
+  test("a brokered judge key reaches the provider's endpoint, and the eval code's environment keeps the placeholder", async () => {
+    let seen: string | undefined
+    const server = createServer((req, res) => {
+      seen = req.headers['x-api-key'] as string
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'no' } }),
+      )
+    })
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    const { port } = server.address() as AddressInfo
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['127.0.0.1'], value: 'sk-ant-wire-1234' },
+    })
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}/v1`
+    // Eval code that wraps the global fetch never sees the call.
+    const global = globalThis.fetch
+    let wrapped = 0
+    globalThis.fetch = (...args) => {
+      wrapped++
+      return global(...args)
+    }
+    try {
+      const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
+      assert.equal(seen, 'sk-ant-wire-1234')
+      assert.equal(wrapped, 0)
+      assert.match(process.env.ANTHROPIC_API_KEY ?? '', /^reeval_secret_/)
+    } finally {
+      globalThis.fetch = global
+      delete process.env.ANTHROPIC_BASE_URL
+      server.close()
+    }
+  })
+
+  test('a base URL changed after start, or a redirect, never takes a brokered key elsewhere', async () => {
+    const seen: Record<string, string | undefined> = {}
+    const listen = async (
+      name: string,
+      answer: (port: number) => [number, Record<string, string>],
+    ) => {
+      const server = createServer((req, res) => {
+        seen[name] = req.headers['x-api-key'] as string
+        const [status, headers] = answer((server.address() as AddressInfo).port)
+        res.writeHead(status, headers)
+        res.end(
+          JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'no' } }),
+        )
+      })
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+      return server
+    }
+    const other = await listen('other', () => [401, { 'content-type': 'application/json' }])
+    const otherPort = (other.address() as AddressInfo).port
+    const pinnedServer = await listen('pinned', () => [401, { 'content-type': 'application/json' }])
+    const redirecting = await listen('redirecting', () => [
+      307,
+      { location: `http://localhost:${otherPort}/v1/messages` },
+    ])
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['127.0.0.1'], value: 'sk-ant-pin-12345' },
+    })
+    try {
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(pinnedServer.address() as AddressInfo).port}/v1`
+      pinStartEnv()
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${otherPort}/v1`
+      const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
+      assert.equal(seen.pinned, 'sk-ant-pin-12345')
+      assert.equal(seen.other, undefined)
+
+      pinStartEnv(null)
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(redirecting.address() as AddressInfo).port}/v1`
+      const redirected = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(
+        generateText({ model: redirected, prompt: 'hi', maxRetries: 0 }),
+        /redirect/,
+      )
+      assert.equal(seen.redirecting, 'sk-ant-pin-12345')
+      assert.equal(seen.other, undefined)
+    } finally {
+      pinStartEnv(null)
+      delete process.env.ANTHROPIC_BASE_URL
+      for (const server of [other, pinnedServer, redirecting]) server.close()
+    }
   })
 
   test('a placeholder is never masked, even registered as a secret, and one with no held value fails', async () => {

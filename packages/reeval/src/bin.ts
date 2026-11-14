@@ -3,9 +3,11 @@
 // file (engine/pool.ts), so a compiled reeval can start its own; anything else is the CLI.
 import module from 'node:module'
 import { takeSecretsFile } from './secrets-file-take.ts'
+import { pinStartEnv } from './startup.ts'
 
 // V8's code cache makes coverage of the functions it restores less precise.
 if (!process.env.NODE_V8_COVERAGE) module.enableCompileCache?.()
+pinStartEnv()
 if (process.argv[2] === '__worker') await import('./engine/worker-entry.ts')
 else {
   takeSecretsFile()

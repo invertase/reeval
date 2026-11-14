@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
+import { pinStartEnv } from './startup.ts'
 import { withoutBom } from './text.ts'
 
 /**
@@ -17,6 +18,7 @@ export function loadEnvFiles(configPath: string | undefined): void {
       process.env[key] ??= value
     }
   }
+  pinStartEnv()
 }
 
 /** `CI` is set to anything but `false`: records by default, forbids `.only`, names CI authors. */

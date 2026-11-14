@@ -30,7 +30,12 @@ import {
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import { onRoutingGateway, ROUTING_GATEWAYS, type RouteWire } from '../src/gateway/routes.ts'
-import { VERCEL_GATEWAY, vercelApi, vercelCredential } from '../src/gateway/vercel.ts'
+import {
+  VERCEL_AI_SDK_PATH,
+  VERCEL_GATEWAY,
+  vercelApi,
+  vercelCredential,
+} from '../src/gateway/vercel.ts'
 import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
@@ -52,7 +57,7 @@ import {
 } from '../src/harness/agents.ts'
 import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
-import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
+import { hostCall, judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../src/types.ts'
 
 // Vercel's own API, whatever the shell running the tests exports.
@@ -1673,6 +1678,15 @@ describe('AI_GATEWAY_BASE_URL', () => {
       ),
       { kind: 'gateway' },
     )
+    assert.equal(
+      hostCall(
+        'anthropic/claude-x',
+        { AI_GATEWAY_API_KEY: 'g', AI_GATEWAY_BASE_URL: BASE },
+        'judge model',
+        'vercel',
+      ).call.baseURL,
+      `${BASE}${VERCEL_AI_SDK_PATH}`,
+    )
     assert.throws(
       () =>
         judgeRoute(
@@ -1689,8 +1703,8 @@ describe('AI_GATEWAY_BASE_URL', () => {
   })
 
   test("reeval's own calls go to it with the key, at the AI SDK's path under it", async () => {
-    assert.equal(vercelLanguageModel('openai/m', {}), 'openai/m')
-    assert.equal(vercelDecisionModel('openai/m', {}), 'openai/m')
+    assert.equal(vercelLanguageModel('openai/m'), 'openai/m')
+    assert.equal(vercelDecisionModel('openai/m'), 'openai/m')
     const seen: { url?: string; auth?: string }[] = []
     const server = createServer((req, res) => {
       seen.push({ url: req.url, auth: req.headers.authorization })
@@ -1701,14 +1715,14 @@ describe('AI_GATEWAY_BASE_URL', () => {
     try {
       const { port } = server.address() as AddressInfo
       process.env.AI_GATEWAY_API_KEY = 'run-token'
-      const env = { AI_GATEWAY_BASE_URL: `http://127.0.0.1:${port}/proxy` }
+      const call = { baseURL: `http://127.0.0.1:${port}/proxy${VERCEL_AI_SDK_PATH}` }
       await generateText({
-        model: vercelLanguageModel('openai/m', env),
+        model: vercelLanguageModel('openai/m', call),
         prompt: 'hi',
         maxRetries: 0,
       }).catch(() => undefined)
       assert.deepEqual(seen, [{ url: '/proxy/v4/ai/language-model', auth: 'Bearer run-token' }])
-      assert.equal(typeof vercelDecisionModel('openai/m', env), 'object')
+      assert.equal(typeof vercelDecisionModel('openai/m', call), 'object')
     } finally {
       server.close()
     }

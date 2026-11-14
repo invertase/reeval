@@ -45,6 +45,7 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { cloud } from '../../src/internal-vm.ts'
+import { judgeRoute } from '../../src/judge/index.ts'
 import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
 import { PrepareError } from '../../src/sandbox/provider.ts'
@@ -52,6 +53,7 @@ import { missingImagesMessage, pullSpaceMessage } from '../../src/sandbox/tart-i
 import { docker, fakeSandbox, podman, tart } from '../../src/sandbox.ts'
 import { boat } from '../../src/sandbox-boat.ts'
 import { daytona } from '../../src/sandbox-daytona.ts'
+import { readSecretsFile } from '../../src/secrets-file.ts'
 import { checkTraitKeys, traitFilters, traitFlags } from '../../src/traits.ts'
 import type {
   EnvironmentHelpers,
@@ -170,6 +172,37 @@ const vertexEntry = (entry: { project?: string }, env: NodeJS.ProcessEnv) => () 
   vertexSettings(entry, env)
 const jwt = (expiresMs: number) =>
   `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
+
+/**
+ * The route reeval's own model call takes for `model` on `gateway` while `secrets` are held from a
+ * secrets file, with `env`'s host variables; the secrets are let go afterwards.
+ */
+const heldModelCall =
+  (
+    secrets: Record<string, { mode: string; hosts?: string[] }>,
+    model: string,
+    gateway: GatewayName,
+    env: NodeJS.ProcessEnv = {},
+  ) =>
+  () => {
+    const hold = (mode?: string) => {
+      const file = join(mkdtempSync(join(tmpdir(), 'reeval-held-')), 'secrets.json')
+      const entries = Object.entries(secrets).map(([name, s]) => [
+        name,
+        { ...(mode ? { mode } : s), value: `held-${name.toLowerCase()}-0123456789` },
+      ])
+      writeFileSync(file, JSON.stringify({ version: 1, secrets: Object.fromEntries(entries) }))
+      const at = { ...env, REEVAL_SECRETS_FILE: file }
+      readSecretsFile(at)
+      return at
+    }
+    const at = hold()
+    try {
+      return judgeRoute(model, at, 'judge model', gateway)
+    } finally {
+      hold('readable')
+    }
+  }
 
 /** A directory with one file and an empty subdirectory, for `directory()`, and a Dockerfile. */
 export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
@@ -1068,6 +1101,43 @@ export const CASES: Record<string, Case[]> = {
     ['config: state', config({ judge: { state: { contents: ['a.ts'] } } })],
     ['config: diff', config({ judge: { diff: true } })],
     ['config: good', config({ judge: { model: 'google/gemini-3.8-flash', threshold: 0.7 } })],
+    [
+      'held: a sandbox key',
+      heldModelCall({ ANTHROPIC_API_KEY: { mode: 'sandbox' } }, 'anthropic/claude', 'direct'),
+    ],
+    [
+      'held: a brokered key off the provider host',
+      heldModelCall(
+        { ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['api.anthropic.com'] } },
+        'anthropic/claude',
+        'direct',
+        { ANTHROPIC_BASE_URL: 'https://proxy.example.com/v1' },
+      ),
+    ],
+    [
+      'held: a brokered gateway key off the gateway host',
+      heldModelCall(
+        { OPENROUTER_API_KEY: { mode: 'brokered', hosts: ['api.example.com'] } },
+        'google/gemini-3.8-flash',
+        'openrouter',
+      ),
+    ],
+    [
+      'held: a brokered Vercel project token',
+      heldModelCall(
+        { VERCEL_OIDC_TOKEN: { mode: 'brokered', hosts: ['ai-gateway.vercel.sh'] } },
+        'google/gemini-3.8-flash',
+        'vercel',
+      ),
+    ],
+    [
+      'held: good, a brokered key on its host',
+      heldModelCall(
+        { AI_GATEWAY_API_KEY: { mode: 'brokered', hosts: ['ai-gateway.vercel.sh'] } },
+        'google/gemini-3.8-flash',
+        'vercel',
+      ),
+    ],
   ],
   compare: [
     ['a list', options({ compare: [e1, e2] })],

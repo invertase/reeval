@@ -41,6 +41,13 @@ export {
 } from '@reeval/agents'
 export { fxAskedModel, fxVercelCall, fxVercelEndpoints, servedOn }
 
+/**
+ * Where the AI SDK's gateway provider calls under Vercel's origin (`createGateway`'s default
+ * `baseURL`, `https://ai-gateway.vercel.sh/v4/ai`): a gateway at `AI_GATEWAY_BASE_URL` serves the
+ * same path under its own.
+ */
+export const VERCEL_AI_SDK_PATH = '/v4/ai'
+
 const on = (api: RouteApi, path: string, method: 'GET' | 'POST') =>
   ({ host: apiHost(api), path: { exact: path }, method: [method] }) as const satisfies EndpointMatch
 
