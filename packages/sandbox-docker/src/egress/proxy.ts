@@ -43,6 +43,9 @@ import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
 import { MODEL_FIELD, usageReader } from './usage.ts'
 import { webSocketScrubber } from './websocket.ts'
 
+/** A relay for some hosts' requests: see `EgressProxyOptions.relays`. */
+export type Relay = { hosts: readonly string[]; via: string }
+
 export type EgressProxyOptions = {
   ca: CertificateAuthority
   policy: NetworkPolicy
@@ -119,6 +122,12 @@ export type EgressProxyOptions = {
    * answer is a placeholder the gateway then swaps for a real token on the model calls.
    */
   localResponses?: readonly LocalResponse[]
+  /**
+   * Hosts whose requests go to another server instead: each decrypted request to one of `hosts`
+   * is sent, after its credentials are swapped in, to `via`'s origin with `via`'s path before its
+   * own, as it is otherwise. `via` is an `https://` URL; the relay is reached over HTTP/1.1.
+   */
+  relays?: readonly Relay[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
   onEvent?: (event: EgressEvent) => void
 }
@@ -479,6 +488,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
   const locals = options.localResponses ?? []
   const localHosts = locals.map((l) => l.match.host)
+  const relays = (options.relays ?? []).map((r) => {
+    const via = new URL(r.via)
+    if (via.protocol !== 'https:') throw new Error(`a relay's via must be an https:// URL`)
+    return { hosts: r.hosts, via, base: via.pathname.replace(/\/+$/, '') }
+  })
+  const relayHosts = relays.flatMap((r) => r.hosts)
+  const relayFor = (host: string) => relays.find((r) => hostAllowed(r.hosts, host))
   let policyCheck = createPolicyCheck(options.policy, options)
   /** Bumped by `switchPolicy`: a verdict reached under the policy before it is reached again. */
   let generation = 0
@@ -719,7 +735,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         decrypts(rules, host) ||
         substitutes(allSubs(), host) ||
         hostAllowed(tokenHosts, host) ||
-        hostAllowed(localHosts, host)
+        hostAllowed(localHosts, host) ||
+        hostAllowed(relayHosts, host)
       ) {
         log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
@@ -1584,6 +1601,26 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       substitutes(allSubs(), target.host) ||
       hostAllowed(tokenHosts, target.host)
     const body = requestBody(req as Readable, headers, own, t, readsEffort)
+    const relay = relayFor(target.host)
+    if (relay) {
+      const upstream = https.request({
+        host: relay.via.hostname,
+        port: relay.via.port || 443,
+        method,
+        path: `${relay.base}${path}`,
+        headers: { ...headers, host: relay.via.host },
+        agent,
+        ca,
+      })
+      return forwardHttp1(body, res, upstream, {
+        own,
+        creds: credentialScrubs(target.host),
+        url,
+        ...(exchange ? { exchange } : {}),
+        ...(t ? { t } : {}),
+        reads,
+      })
+    }
     const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
@@ -1730,6 +1767,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     if (refused) {
       upgraded({ allowed: false, status: refused.status, reason: refused.reason })
       return reply(socket, refused.status, refused.reason)
+    }
+    if (relayFor(target.host)) {
+      const reason = `reeval egress gateway: ${target.host}'s requests go through a relay, which takes no upgrades`
+      upgraded({ allowed: false, status: 501, reason })
+      return reply(socket, 501, reason)
     }
     const upstream = https.request({
       ...reachAt(target),
