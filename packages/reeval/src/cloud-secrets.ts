@@ -1,7 +1,7 @@
-// `reeval cloud secrets` and `reeval cloud provider`: the cloud platform's eval secrets and
-// provider keys, set, deleted and listed with the stored sign-in. A value goes in and never comes
-// back out: it's read from stdin or a hidden prompt (or the local environment), never from the
-// command line, and no message quotes it.
+// `reeval cloud secrets`, `reeval cloud provider` and `reeval cloud gateway`: the cloud platform's
+// eval secrets and provider and gateway keys, set, deleted and listed with the stored sign-in. A
+// value goes in and never comes back out: it's read from stdin or a hidden prompt (or the local
+// environment), never from the command line, and no message quotes it.
 import { resolve } from 'node:path'
 import type { Flags } from './cli-spec.ts'
 import { cloudScope, linkedProject } from './cloud-project.ts'
@@ -20,9 +20,10 @@ import { plural } from './text.ts'
 export const SECRET_MODES = ['brokered', 'sandbox', 'readable'] as const
 export type SecretMode = (typeof SECRET_MODES)[number]
 
-const MAX_PROVIDER = 64
-const PROVIDER = /^[a-z0-9]+(?:[-_.][a-z0-9]+)*$/
-const KEY_PREFIX = /^(sk|pk|rk|csk|gsk|xai|ghp|gho|ghs|github_pat|glpat|hf|r8|pplx|fw)[-_]|^AIza/
+const MAX_KEY_NAME = 64
+const KEY_NAME = /^[a-z0-9]+(?:[-_.][a-z0-9]+)*$/
+const KEY_PREFIX =
+  /^(sk|pk|rk|csk|gsk|vck|xai|ghp|gho|ghs|github_pat|glpat|hf|r8|pplx|fw)[-_]|^AIza/
 
 /** Bits per character, over the string's own characters. */
 function entropy(s: string): number {
@@ -34,11 +35,12 @@ function entropy(s: string): number {
 }
 
 /**
- * Which providers exist is the platform's answer, but a key pasted where the provider goes would
- * land in a request path and in reeval's messages, so a name shaped like one never leaves here.
+ * Which providers and gateways exist is the platform's answer, but a key pasted where the name
+ * goes would land in a request path and in reeval's messages, so a name shaped like one never
+ * leaves here.
  */
 function looksLikeKey(name: string): boolean {
-  if (name.length > MAX_PROVIDER || KEY_PREFIX.test(name)) return true
+  if (name.length > MAX_KEY_NAME || KEY_PREFIX.test(name)) return true
   if (name.length < 16 || !/\d/.test(name)) return false
   return (/[a-z]/.test(name) && /[A-Z]/.test(name)) || (name.length >= 20 && entropy(name) >= 3.5)
 }
@@ -56,14 +58,6 @@ type Secret = {
   name: string
   mode: SecretMode
   hosts?: string[] | null
-  version: number
-  updatedAt?: string
-  updatedBy?: Who
-}
-type ProviderKey = {
-  provider: string
-  projectId: string | null
-  last4?: string
   version: number
   updatedAt?: string
   updatedBy?: Who
@@ -309,43 +303,67 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
   return 0
 }
 
-const providerPath = (t: Target, provider?: string) =>
-  `api/orgs/${seg(t.orgId)}/providers${provider ? `/${seg(provider)}` : ''}`
+/** A kind of org key the platform stores by name: an AI SDK provider's, or a model gateway's. */
+type KeyKind = {
+  /** The word for one, in commands and messages. */
+  noun: 'provider' | 'gateway'
+  /** How a valid name is described when one isn't. */
+  shape: string
+  /** The platform's route under the org. */
+  route: 'providers' | 'gateways'
+}
 
-/** `reeval cloud provider set|delete <provider>` and `reeval cloud provider list`. */
-export async function providerCommand(
+const PROVIDER_KIND: KeyKind = { noun: 'provider', shape: "a provider's slug", route: 'providers' }
+const GATEWAY_KIND: KeyKind = { noun: 'gateway', shape: "a gateway's name", route: 'gateways' }
+
+type StoredKey = {
+  provider?: string
+  gateway?: string
+  projectId: string | null
+  last4?: string
+  version: number
+  updatedAt?: string
+  updatedBy?: Who
+}
+
+const keyPath = (kind: KeyKind, t: Target, name?: string) =>
+  `api/orgs/${seg(t.orgId)}/${kind.route}${name ? `/${seg(name)}` : ''}`
+
+/** `reeval cloud <noun> set|delete <name>` and `reeval cloud <noun> list`. */
+async function keyCommand(
+  kind: KeyKind,
   flags: Flags,
   args: string[],
   io: SecretsIo,
 ): Promise<number> {
-  const [action, provider, key] = args
+  const { noun } = kind
+  const [action, name, key] = args
   if (action === 'list') {
-    if (provider !== undefined)
-      throw new UsageError('reeval cloud provider list takes no arguments')
+    if (name !== undefined) throw new UsageError(`reeval cloud ${noun} list takes no arguments`)
     if (flags.project !== undefined) {
       throw new UsageError(
-        "reeval cloud provider list takes --org, not --project: it lists the org's keys and every project's override",
+        `reeval cloud ${noun} list takes --org, not --project: it lists the org's keys and every project's override`,
       )
     }
-    const t = await target(io, flags, 'cloud provider list', 'optional')
-    const { body } = await send<{ providers?: ProviderKey[] }>(t, providerPath(t), {
+    const t = await target(io, flags, `cloud ${noun} list`, 'optional')
+    const { body } = await send<Record<string, StoredKey[] | undefined>>(t, keyPath(kind, t), {
       method: 'GET',
-      what: 'list the provider keys',
+      what: `list the ${noun} keys`,
     })
-    const keys = body?.providers ?? []
+    const keys = body?.[kind.route] ?? []
     if (flags.json) {
-      io.out(JSON.stringify({ orgId: t.orgId, providers: keys }, null, 2))
+      io.out(JSON.stringify({ orgId: t.orgId, [kind.route]: keys }, null, 2))
       return 0
     }
     if (!keys.length) {
-      io.out(`No provider keys in ${t.orgId}: reeval cloud provider set <provider> adds one.`)
+      io.out(`No ${noun} keys in ${t.orgId}: reeval cloud ${noun} set <${noun}> adds one.`)
       return 0
     }
-    io.out(`${plural(keys.length, 'provider key')} in ${t.orgId}:`)
+    io.out(`${plural(keys.length, `${noun} key`)} in ${t.orgId}:`)
     for (const line of table([
-      ['PROVIDER', 'FOR', 'KEY', 'VERSION', 'UPDATED'],
+      [noun.toUpperCase(), 'FOR', 'KEY', 'VERSION', 'UPDATED'],
       ...keys.map((k) => [
-        k.provider,
+        k[noun] ?? '-',
         k.projectId ?? 'the org',
         k.last4 ? `…${k.last4}` : '-',
         String(k.version),
@@ -358,25 +376,25 @@ export async function providerCommand(
   }
   if (action !== 'set' && action !== 'delete') {
     throw new UsageError(
-      'reeval cloud provider has no such subcommand: reeval cloud provider set <provider>, delete <provider> or list',
+      `reeval cloud ${noun} has no such subcommand: reeval cloud ${noun} set <${noun}>, delete <${noun}> or list`,
     )
   }
-  if (!provider) {
+  if (!name) {
     throw new UsageError(
-      `reeval cloud provider ${action} needs the provider: reeval cloud provider ${action} <provider>`,
+      `reeval cloud ${noun} ${action} needs the ${noun}: reeval cloud ${noun} ${action} <${noun}>`,
     )
   }
-  if (looksLikeKey(provider)) {
+  if (looksLikeKey(name)) {
     throw new UsageError(
-      `reeval cloud provider ${action}: that looks like a key, not a provider name, so reeval didn't send or repeat it. Give the provider (reeval cloud provider set <provider>) and the key on stdin or at the prompt`,
+      `reeval cloud ${noun} ${action}: that looks like a key, not a ${noun} name, so reeval didn't send or repeat it. Give the ${noun} (reeval cloud ${noun} set <${noun}>) and the key on stdin or at the prompt`,
     )
   }
-  if (!PROVIDER.test(provider)) {
+  if (!KEY_NAME.test(name)) {
     throw new UsageError(
-      `reeval cloud provider ${action} needs a provider's slug: lowercase letters and digits, joined by -, _ or ., at most ${MAX_PROVIDER}. reeval doesn't repeat it, in case it's a key`,
+      `reeval cloud ${noun} ${action} needs ${kind.shape}: lowercase letters and digits, joined by -, _ or ., at most ${MAX_KEY_NAME}. reeval doesn't repeat it, in case it's a key`,
     )
   }
-  const command = `cloud provider ${action} ${provider}`
+  const command = `cloud ${noun} ${action} ${name}`
   if (action === 'delete' && key !== undefined) {
     throw new UsageError(`reeval ${command} takes no value`)
   }
@@ -384,37 +402,49 @@ export async function providerCommand(
   const forProject = t.projectId !== undefined
   const scope = t.projectId ?? t.orgId
   if (action === 'delete') {
-    const path = `${providerPath(t, provider)}${forProject ? `?projectId=${seg(t.projectId ?? '')}` : ''}`
+    const path = `${keyPath(kind, t, name)}${forProject ? `?projectId=${seg(t.projectId ?? '')}` : ''}`
     await send(t, path, {
       method: 'DELETE',
-      what: `delete the ${provider} key`,
-      missing: `No ${provider} key for ${scope}`,
+      what: `delete the ${name} key`,
+      missing: `No ${name} key for ${scope}`,
     })
-    io.out(`Deleted the ${provider} key for ${scope}.`)
+    io.out(`Deleted the ${name} key for ${scope}.`)
     return 0
   }
   refuseArgv(command, key)
   signedIn(t, command)
-  const read = await io.readValue(`the ${provider} key`)
-  checkValue(read, `The ${provider} key`, MAX_KEY_BYTES)
+  const read = await io.readValue(`the ${name} key`)
+  checkValue(read, `The ${name} key`, MAX_KEY_BYTES)
   const bad = badCharacterAt(read)
   if (bad) {
     throw new UsageError(
-      `The ${provider} key has whitespace or a control character at position ${bad}: give the key alone`,
+      `The ${name} key has whitespace or a control character at position ${bad}: give the key alone`,
     )
   }
-  const { status, body } = await send<{ provider?: ProviderKey }>(t, providerPath(t, provider), {
-    method: 'PUT',
-    what: `set the ${provider} key`,
-    body: { key: read, ...(forProject && { projectId: t.projectId }) },
-  })
-  const saved = body?.provider
-  if (!saved) throw new CloudError(`the cloud platform set the ${provider} key but didn't say how`)
+  const { status, body } = await send<Record<string, StoredKey | undefined>>(
+    t,
+    keyPath(kind, t, name),
+    {
+      method: 'PUT',
+      what: `set the ${name} key`,
+      body: { key: read, ...(forProject && { projectId: t.projectId }) },
+    },
+  )
+  const saved = body?.[noun]
+  if (!saved) throw new CloudError(`the cloud platform set the ${name} key but didn't say how`)
   io.out(
-    `${status === 201 ? 'Added' : 'Replaced'} the ${provider} key for ${scope}${saved.last4 ? ` (…${saved.last4})` : ''}, version ${saved.version}.`,
+    `${status === 201 ? 'Added' : 'Replaced'} the ${name} key for ${scope}${saved.last4 ? ` (…${saved.last4})` : ''}, version ${saved.version}.`,
   )
   return 0
 }
+
+/** `reeval cloud provider set|delete <provider>` and `reeval cloud provider list`. */
+export const providerCommand = (flags: Flags, args: string[], io: SecretsIo) =>
+  keyCommand(PROVIDER_KIND, flags, args, io)
+
+/** `reeval cloud gateway set|delete <gateway>` and `reeval cloud gateway list`. */
+export const gatewayCommand = (flags: Flags, args: string[], io: SecretsIo) =>
+  keyCommand(GATEWAY_KIND, flags, args, io)
 
 /**
  * The value from stdin when it isn't a terminal (one trailing line break dropped), else from a

@@ -455,7 +455,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cloud.secrets',
     area: 'Config and selection',
-    name: "`reeval cloud secrets set|delete|list` and `reeval cloud provider set|delete <provider>` and `list` against the cloud platform with the stored sign-in: a secret's `--mode` (`brokered`, which needs `--host`, `sandbox` or `readable`), on the project and org in `.reeval/project.json`, or `--org` and `--project` by slug or id (required when nothing is linked), a provider key for the org or, with `--project`, that project's override; the value comes from stdin, a hidden prompt or `--from-env`, never the command line, and is never printed",
+    name: "`reeval cloud secrets set|delete|list` and `reeval cloud provider set|delete <provider>` and `list`, and `reeval cloud gateway set|delete <gateway>` and `list`, against the cloud platform with the stored sign-in: a secret's `--mode` (`brokered`, which needs `--host`, `sandbox` or `readable`), on the project and org in `.reeval/project.json`, or `--org` and `--project` by slug or id (required when nothing is linked), a provider or gateway key for the org or, with `--project`, that project's override; the value comes from stdin, a hidden prompt or `--from-env`, never the command line, and is never printed",
     unit: ['reeval/test/cloud-secrets.test.ts', 'reeval/test/cli.test.ts'],
   },
   {

@@ -62,7 +62,7 @@ function helpSections(text) {
       continue
     }
     const head =
-      /^ {2}reeval ((?:[a-z]+)(?: (?:build|list|clean|secrets|provider|push|share|run))?)\b/.exec(
+      /^ {2}reeval ((?:[a-z]+)(?: (?:build|list|clean|secrets|provider|gateway|push|share|run))?)\b/.exec(
         line,
       )
     if (head) current = head[1]
