@@ -297,10 +297,7 @@ describe('reeval cloud secrets', () => {
           ['set', 'A', '--mode', 'sandbox', '--host', 'a.example'],
           /--host is for a brokered secret/,
         ],
-        [
-          ['set', 'A', '--mode', 'hidden'],
-          /--mode is brokered, sandbox or readable \(got "hidden"\)/,
-        ],
+        [['set', 'A', '--mode', 'hidden'], /--mode is brokered, sandbox or readable$/m],
         [
           ['set', 'A', '--host', 'https://a.example/x'],
           /--host https:\/\/a\.example\/x isn't a host name/,
@@ -309,7 +306,7 @@ describe('reeval cloud secrets', () => {
         [['set', 'A', '--host', 'a.example', VALUE, 'x'], /takes at most 3 arguments \(got 4\)$/m],
         [['set', 'sk-live-0123', '--host', 'a.example'], /the secret's name isn't one/],
         [['set', 'NEW'], /NEW is a new secret: give --host <host> for a brokered one/],
-        [['get', 'A'], /reeval cloud secrets needs set, delete or list \(got get\)/],
+        [['get', 'A'], /reeval cloud secrets needs set, delete or list$/m],
         [['set', 'A', `-${VALUE}`], /reeval cloud secrets has no such option/],
       ]
       for (const [args, message] of cases) {
@@ -598,9 +595,110 @@ describe('reeval cloud provider', () => {
         /the cloud platform refused to set the acme key: acme isn't a provider this org can use\.$/m,
       )
       assert.doesNotMatch(refused.stdout + refused.stderr, /acme-key-9z8y|9z8y/)
-      const odd = await runCli(dir, ['cloud', 'provider', 'Open AI/x?y', 'delete'], { env })
-      assert.equal(odd.code, 2, odd.stdout + odd.stderr)
-      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/Open%20AI%2Fx%3Fy')
+    } finally {
+      await p.close()
+    }
+  })
+
+  /** Runs each refused command and checks its argument is in no output, request or log line. */
+  async function refusesUnsaid(
+    cases: { args: string[]; secret: string; message: RegExp }[],
+  ): Promise<void> {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      for (const { args, secret, message } of cases) {
+        const before = p.seen.length
+        const r = await runCli(dir, ['cloud', 'provider', ...args], {
+          env,
+          input: 'real-key-q7w8\n',
+        })
+        const said = r.stdout + r.stderr
+        assert.equal(r.code, 2, `${JSON.stringify(args)}: ${said}`)
+        assert.match(r.stderr, message, JSON.stringify(args))
+        // `.` and `..` are in any sentence; their sign is the request they don't make.
+        if (secret.length > 2) {
+          assert.ok(!said.includes(secret), `${JSON.stringify(secret)} is repeated: ${said}`)
+        }
+        assert.ok(!said.includes('\u001b'), `an escape sequence reached the terminal: ${said}`)
+        const sent = p.seen.slice(before)
+        assert.deepEqual(
+          sent.filter((s) => s.method !== 'GET'),
+          [],
+          `${JSON.stringify(args)} sent a write`,
+        )
+        assert.ok(!JSON.stringify(sent).includes('real-key-q7w8'), 'the key was sent')
+        assert.ok(!JSON.stringify(sent).includes(encodeURIComponent(secret)), 'it was sent')
+      }
+      const log = readFileSync(join(dir, '.reeval', 'cli.jsonl'), 'utf8')
+      for (const { secret } of cases.filter((c) => c.secret.length > 2)) {
+        assert.ok(!log.includes(secret), `${JSON.stringify(secret)} is in the command log`)
+        assert.ok(!log.includes(JSON.stringify(secret).slice(1, -1)), 'escaped, it is in the log')
+      }
+    } finally {
+      await p.close()
+    }
+  }
+
+  test('refuses a name that is no slug, dot segments included, without repeating or sending it', async () => {
+    const slug =
+      /needs a provider's slug: lowercase letters and digits, joined by -, _ or \., at most 64\. reeval doesn't repeat it/
+    await refusesUnsaid(
+      [
+        '..',
+        '.',
+        'a/..',
+        'Open AI/x?y',
+        'OpenAI',
+        'openai-',
+        'open..ai',
+        'open\nai',
+        'open\u001b[31mai',
+      ].flatMap((name) =>
+        ['set', 'delete'].map((action) => ({ args: [name, action], secret: name, message: slug })),
+      ),
+    )
+  })
+
+  test('refuses set or delete in the provider position without repeating what follows', async () => {
+    await refusesUnsaid([
+      {
+        args: ['set', 'abcd1234efgh5678'],
+        secret: 'abcd1234efgh5678',
+        message: /takes the provider first: reeval cloud provider <provider> set$/m,
+      },
+      {
+        args: ['delete', 'deadbeefcafe0123'],
+        secret: 'deadbeefcafe0123',
+        message: /takes the provider first: reeval cloud provider <provider> delete$/m,
+      },
+      {
+        args: ['set', 'csk-abcdefgh12345678'],
+        secret: 'csk-abcdefgh12345678',
+        message: /takes the provider first/,
+      },
+      {
+        args: ['openai', 'abcd1234efgh5678'],
+        secret: 'abcd1234efgh5678',
+        message: /reeval cloud provider openai needs set or delete$/m,
+      },
+      {
+        args: ['csk-ab12', 'set'],
+        secret: 'csk-ab12',
+        message: /that looks like a key, not a provider name/,
+      },
+    ])
+  })
+
+  test('sends a dotted or underscored slug to its own route', async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      for (const name of ['my.provider', 'snake_case', 'openai.compat-v2']) {
+        const r = await runCli(dir, ['cloud', 'provider', name, 'delete'], { env })
+        assert.match(r.stderr, /No .* key for org_a/, name)
+        assert.equal(p.seen.at(-1)?.path, `/api/orgs/org_a/providers/${name}`)
+      }
     } finally {
       await p.close()
     }
@@ -656,7 +754,7 @@ describe('reeval cloud provider', () => {
           /not as an argument, which would land in your shell history/,
         ],
         [['openai', 'set'], 'sk x', /whitespace or a control character at position 3/],
-        [['openai', 'rotate'], 'k', /needs set or delete \(got rotate\)/],
+        [['openai', 'rotate'], 'k', /needs set or delete$/m],
         [['openai', 'sk-proj-Abc123'], 'k', /needs set or delete$/m],
         [['openai', 'set', '--sk-proj-Abc123'], 'k', /reeval cloud provider has no such option/],
       ]

@@ -21,7 +21,8 @@ export const SECRET_MODES = ['brokered', 'sandbox', 'readable'] as const
 export type SecretMode = (typeof SECRET_MODES)[number]
 
 const MAX_PROVIDER = 64
-const KEY_PREFIX = /^(sk|pk|rk|gsk|xai|ghp|gho|ghs|github_pat|glpat|hf|r8|pplx|fw)[-_]|^AIza/
+const PROVIDER = /^[a-z0-9]+(?:[-_.][a-z0-9]+)*$/
+const KEY_PREFIX = /^(sk|pk|rk|csk|gsk|xai|ghp|gho|ghs|github_pat|glpat|hf|r8|pplx|fw)[-_]|^AIza/
 
 /** Bits per character, over the string's own characters. */
 function entropy(s: string): number {
@@ -154,10 +155,6 @@ function signedIn(t: Target, command: string): void {
   }
 }
 
-/** ` (got <word>)` for a refused word, unless it could be the value given in the wrong place. */
-const got = (word: string | undefined) =>
-  word && /^[a-z][a-z0-9-]{0,31}$/.test(word) ? ` (got ${word})` : ''
-
 function checkValue(value: string, what: string, max: number): void {
   if (!value) throw new UsageError(`${what} is empty`)
   if (Buffer.byteLength(value) > max) {
@@ -180,7 +177,7 @@ function modeOf(flags: Flags): { mode?: SecretMode; hosts?: string[] } {
   const hosts = (flags.host ?? []).map((h) => h.trim().toLowerCase())
   const given = flags.mode
   if (given !== undefined && !SECRET_MODES.includes(given as SecretMode)) {
-    throw new UsageError(`--mode is brokered, sandbox or readable (got "${given}")`)
+    throw new UsageError('--mode is brokered, sandbox or readable')
   }
   const mode = (given as SecretMode | undefined) ?? (hosts.length ? 'brokered' : undefined)
   if (mode === 'brokered' && !hosts.length) {
@@ -266,7 +263,7 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
     return 0
   }
   if (action !== 'set') {
-    throw new UsageError(`reeval cloud secrets needs set, delete or list${got(action)}`)
+    throw new UsageError(`reeval cloud secrets needs set, delete or list`)
   }
   const secret = checkName(name, 'cloud secrets set')
   refuseArgv('cloud secrets set', value)
@@ -363,13 +360,23 @@ export async function providerCommand(
       'reeval cloud provider needs a provider: reeval cloud provider <provider> set|delete, or list',
     )
   }
+  if (provider === 'set' || provider === 'delete') {
+    throw new UsageError(
+      `reeval cloud provider takes the provider first: reeval cloud provider <provider> ${provider}`,
+    )
+  }
   if (looksLikeKey(provider)) {
     throw new UsageError(
       "reeval cloud provider: that looks like a key, not a provider name, so reeval didn't send or repeat it. Give the provider (reeval cloud provider <provider> set) and the key on stdin or at the prompt",
     )
   }
+  if (!PROVIDER.test(provider)) {
+    throw new UsageError(
+      `reeval cloud provider needs a provider's slug: lowercase letters and digits, joined by -, _ or ., at most ${MAX_PROVIDER}. reeval doesn't repeat it, in case it's a key`,
+    )
+  }
   if (action !== 'set' && action !== 'delete') {
-    throw new UsageError(`reeval cloud provider ${provider} needs set or delete${got(action)}`)
+    throw new UsageError(`reeval cloud provider ${provider} needs set or delete`)
   }
   const command = `cloud provider ${provider} ${action}`
   if (action === 'delete' && key !== undefined) {
