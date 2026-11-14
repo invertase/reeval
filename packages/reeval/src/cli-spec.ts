@@ -364,6 +364,25 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON`,
       },
+      gateway: {
+        flags: ['org', 'project', 'json'],
+        positionals: 3,
+        secretArgs: true,
+        help: `
+  reeval cloud gateway set <gateway>
+                                Set the linked org's key for a model gateway in the config's
+                                gateway list, by name (vercel, openrouter), which cloud runs use as
+                                a run here uses the key on this machine; the platform refuses a
+                                gateway it doesn't serve. The key comes from stdin or a hidden
+                                prompt
+    --org <slug>                The org, by slug or id, instead of the linked one; required when
+                                nothing is linked
+    --project <slug>            Set or delete this project's own key, which overrides the org's
+  reeval cloud gateway delete <gateway>
+                                Delete the gateway's key (--project: that project's override)
+  reeval cloud gateway list     The org's gateway keys and each project's override: last 4
+                                characters, version, who updated it and when. --json as JSON`,
+      },
       push: {
         flags: [
           'org',
@@ -900,7 +919,7 @@ function checkOne(
     } else if (command === 'image')
       return 'reeval image needs a subcommand: reeval image build, list or clean'
     else if (command === 'cloud')
-      return 'reeval cloud needs a subcommand: reeval cloud secrets, provider, push or run'
+      return 'reeval cloud needs a subcommand: reeval cloud secrets, provider, gateway, push or run'
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []

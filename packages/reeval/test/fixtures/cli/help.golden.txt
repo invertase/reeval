@@ -165,6 +165,19 @@ Usage:
                                 Delete the provider's key (--project: that project's override)
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON
+  reeval cloud gateway set <gateway>
+                                Set the linked org's key for a model gateway in the config's
+                                gateway list, by name (vercel, openrouter), which cloud runs use as
+                                a run here uses the key on this machine; the platform refuses a
+                                gateway it doesn't serve. The key comes from stdin or a hidden
+                                prompt
+    --org <slug>                The org, by slug or id, instead of the linked one; required when
+                                nothing is linked
+    --project <slug>            Set or delete this project's own key, which overrides the org's
+  reeval cloud gateway delete <gateway>
+                                Delete the gateway's key (--project: that project's override)
+  reeval cloud gateway list     The org's gateway keys and each project's override: last 4
+                                characters, version, who updated it and when. --json as JSON
   reeval cloud push [run]       Upload a recorded run (default: latest) to the studio of the cloud
                                 project reeval link linked, as its history archive with its saved
                                 analyses, then wait until the platform has read it and print the
