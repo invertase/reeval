@@ -164,8 +164,9 @@ type Secrets = {
 
 /**
  * The value `REEVAL_SECRETS_FILE` holds for host variable `from`, with the hosts it's brokered to:
- * the file's, narrowed to the ones `hosts` names when the environment names some. A sandbox one
- * keeps `hosts`.
+ * the file's, narrowed to the ones `hosts` names when the environment names some, or the
+ * environment's alone when the file names none. A sandbox one keeps `hosts`; a relayed one is
+ * refused, since only a harness's credential and reeval's own calls take its relay.
  */
 function held(
   from: string,
@@ -182,15 +183,28 @@ function held(
   }
   // The mode the file gives wins over the config's hosts: a sandbox secret is never brokered.
   if (secret.mode === 'sandbox') return { value: secret.value, hosts: undefined }
-  const kept = hosts
-    ? [
-        ...new Set([
-          ...hosts.filter((h) => hostAllowed(secret.hosts, h)),
-          ...secret.hosts.filter((h) => hostAllowed(hosts, h)),
-        ]),
-      ]
-    : secret.hosts
-  const to = secret.hosts.join(', ')
+  if (secret.mode === 'relayed') {
+    throw new InfraError(
+      `${from} for ${where} is relayed, which only a harness's own credential and reeval's own model calls take: give it the brokered mode for ${where}.`,
+    )
+  }
+  const own = secret.hosts
+  if (!own && !hosts) {
+    throw new InfraError(
+      `${from} for ${where} is brokered with no hosts of its own, so ${where} has to name where it goes: secret.fromEnv('${from}', { hosts: ['api.example.com'] }).`,
+    )
+  }
+  const kept = !own
+    ? [...(hosts ?? [])]
+    : hosts
+      ? [
+          ...new Set([
+            ...hosts.filter((h) => hostAllowed(own, h)),
+            ...own.filter((h) => hostAllowed(hosts, h)),
+          ]),
+        ]
+      : own
+  const to = (own ?? kept).join(', ')
   if (!kept.length) {
     throw new InfraError(
       `${from} for ${where} is brokered to ${to}, and ${where} sends it to ${hosts?.join(', ')}, which it isn't brokered to.`,

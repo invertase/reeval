@@ -28,6 +28,7 @@ import '../debug/docker.ts'
 import { egressLabel, gatewayPolicy, isDirect, setupEgress } from '../egress.ts'
 import type { SecretWarning } from '../history/types.ts'
 import { callUsage, type ModelCall } from '../model-calls.ts'
+import { heldSecret } from '../secrets-file.ts'
 import { attemptSpan, openSpan } from '../trace/spans.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
@@ -115,6 +116,12 @@ export function gatewayGlue(options: SandboxOptions) {
   const calls: ModelCall[] = []
   let cost: number | undefined
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
+  // A relayed credential's requests go to its relay, which swaps in the key it stands for.
+  const relayed = brokering && heldSecret(brokering.credential)
+  const relays =
+    brokering && relayed?.mode === 'relayed'
+      ? [{ hosts: [...new Set(brokering.endpoints.map((e) => e.host))], via: relayed.via }]
+      : undefined
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
     if (event.type === 'dns') return
@@ -198,6 +205,7 @@ export function gatewayGlue(options: SandboxOptions) {
       ...(brokering.modelCalls ? { modelCalls: brokering.modelCalls } : {}),
       ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
       ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
+      ...(relays && { relays }),
       onRefused: ({ method, url }: { method: string; url: string }) =>
         warn(
           `the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,

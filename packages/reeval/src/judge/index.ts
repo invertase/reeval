@@ -1,4 +1,4 @@
-import { apiHost, OPENROUTER_HOST } from '@reeval/agents'
+import { apiHost, OPENROUTER_API, OPENROUTER_HOST } from '@reeval/agents'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from '../gateway/routes.ts'
@@ -268,23 +268,37 @@ export function hostCall(
         `${key} for ${what} "${model}" is a ${held.mode} secret, and the ${what} calls ${host} from reeval's own process, which reads Vercel's project token only from the environment: give ${key} the readable mode, or use AI_GATEWAY_API_KEY.`,
       )
     }
-    if (held.mode !== 'brokered') {
+    if (held.mode === 'sandbox') {
       throw new Error(
         `${key} for ${what} "${model}" is a ${held.mode} secret, which only the agent's sandbox gets, and the ${what} calls ${host} from reeval's own process: give ${key} the brokered mode with ${host} among its hosts, or the readable mode.`,
       )
     }
-    const { hosts } = held
-    if (!hostAllowed(hosts, host)) {
-      throw new Error(
-        `${key} for ${what} "${model}" is brokered to ${hosts.join(', ')}, and the ${what} calls ${host}, which it isn't brokered to.`,
-      )
+    if (held.mode === 'relayed') {
+      // The relay passes each request on to the API under the same path, so the call keeps the
+      // API's own path under the relay.
+      const api =
+        kind === 'direct' && direct
+          ? direct.api
+          : kind === 'openrouter'
+            ? OPENROUTER_API.openai
+            : `${vercelApi({}).origin}${VERCEL_AI_SDK_PATH}`
+      const via = new URL(held.via)
+      call.baseURL = `${held.via.replace(/\/+$/, '')}${new URL(api).pathname}`
+      call.fetch = brokeredFetch(key, (h) => h === via.hostname)
+    } else {
+      const { hosts } = held
+      if (hosts && !hostAllowed(hosts, host)) {
+        throw new Error(
+          `${key} for ${what} "${model}" is brokered to ${hosts.join(', ')}, and the ${what} calls ${host}, which it isn't brokered to.`,
+        )
+      }
+      if (!url || (url.protocol !== 'https:' && !LOOPBACK.test(url.hostname))) {
+        throw new Error(
+          `${key} for ${what} "${model}" is brokered, and the ${what} would call ${baseURL}: a brokered key goes only to an https:// URL, or to this machine.`,
+        )
+      }
+      call.fetch = brokeredFetch(key, (h) => (hosts ? hostAllowed(hosts, h) : h === host))
     }
-    if (!url || (url.protocol !== 'https:' && !LOOPBACK.test(url.hostname))) {
-      throw new Error(
-        `${key} for ${what} "${model}" is brokered, and the ${what} would call ${baseURL}: a brokered key goes only to an https:// URL, or to this machine.`,
-      )
-    }
-    call.fetch = brokeredFetch(key, (h) => hostAllowed(hosts, h))
   }
   if (key === VERCEL_OIDC) {
     const expired = vercelCredentialProblem(real)

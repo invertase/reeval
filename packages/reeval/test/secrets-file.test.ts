@@ -16,6 +16,7 @@ import { vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import { agentAuth, agentFor } from '../src/harness/agents.ts'
 import { hostCall, judgeRoute } from '../src/judge/index.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
+import { gatewayGlue } from '../src/sandbox/docker.ts'
 import { hostEnv, readSecretsFile } from '../src/secrets-file.ts'
 import { pinStartEnv } from '../src/startup.ts'
 import type { AgentHarnessDescriptor, EnvironmentInput } from '../src/types.ts'
@@ -126,12 +127,19 @@ export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
         'is version 2, and this reeval reads version 1',
       ],
       [
-        JSON.stringify({ version: 1, secrets: { K: { mode: 'brokered', value: 'v' } } }),
-        'has no hosts for K',
+        JSON.stringify({ version: 1, secrets: { K: { mode: 'brokered', hosts: [], value: 'v' } } }),
+        'has no hosts for K, which is brokered: list them, or leave hosts out',
+      ],
+      [
+        JSON.stringify({
+          version: 1,
+          secrets: { K: { mode: 'relayed', via: 'http://relay.example.com', value: 'v' } },
+        }),
+        'has no https:// via for K, which is relayed',
       ],
       [
         JSON.stringify({ version: 1, secrets: { K: { mode: 'open', value: 'v' } } }),
-        'gives K the mode "open"',
+        'gives K the mode "open", not brokered, relayed, sandbox or readable',
       ],
       [
         JSON.stringify({
@@ -377,6 +385,121 @@ describe('held secrets in this process', () => {
       pinStartEnv(null)
       delete process.env.ANTHROPIC_BASE_URL
       for (const server of [other, pinnedServer, redirecting]) server.close()
+    }
+  })
+
+  test('a brokered key with no hosts goes where each use goes: the agent’s endpoints, the model’s base URL, and nowhere a config names none', async () => {
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'brokered', value: 'sk-ant-hostless-1234' },
+      OPENAI_API_KEY: { mode: 'brokered', value: 'sk-oa-hostless-12345' },
+    })
+    const claude = agentFor({
+      kind: 'claude-code',
+      model: 'claude-sonnet-5-5',
+    } as AgentHarnessDescriptor)
+    assert.deepEqual(agentAuth(claude), { ANTHROPIC_API_KEY: 'sk-ant-hostless-1234' })
+    const route = judgeRoute('anthropic/claude-sonnet-5-5')
+    assert.ok(route.kind === 'direct' && route.call.apiKey === 'sk-ant-hostless-1234')
+    process.env.ANTHROPIC_BASE_URL = 'https://proxy.example.com/v1'
+    try {
+      const proxied = judgeRoute('anthropic/claude-sonnet-5-5')
+      assert.ok(proxied.kind === 'direct' && proxied.call.fetch)
+      assert.equal(proxied.call.baseURL, 'https://proxy.example.com/v1')
+      // Its fetch takes the key to the base URL's host only.
+      await assert.rejects(
+        proxied.call.fetch('https://elsewhere.example.com/v1/messages', { method: 'POST' }),
+        /reeval refused to send ANTHROPIC_API_KEY, a brokered key, to https:\/\/elsewhere\.example\.com/,
+      )
+    } finally {
+      delete process.env.ANTHROPIC_BASE_URL
+    }
+    const kept = await resolve(({ secret }) => ({
+      env: { K: secret.fromEnv('OPENAI_API_KEY', { hosts: ['api.example.com'] }) },
+    }))
+    assert.deepEqual(kept.substitutions[0]?.hosts, ['api.example.com'])
+    // Twin: an environment that names no hosts has nowhere to send it.
+    await assert.rejects(
+      resolve(({ secret }) => ({ env: { K: secret.fromEnv('OPENAI_API_KEY') } })),
+      /OPENAI_API_KEY .*is brokered with no hosts of its own, so .* has to name where it goes: secret\.fromEnv\('OPENAI_API_KEY', \{ hosts: \['api\.example\.com'\] \}\)/,
+    )
+  })
+
+  test("a relayed key's calls go to its relay under the API's own path, and the agent's go there through the gateway", async () => {
+    const seen: { url?: string; auth?: string }[] = []
+    const relay = createServer((req, res) => {
+      seen.push({
+        url: req.url,
+        auth: (req.headers['x-api-key'] ?? req.headers.authorization) as string,
+      })
+      req.resume()
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'no' } }),
+      )
+    })
+    await new Promise<void>((done) => relay.listen(0, '127.0.0.1', done))
+    const via = `http://127.0.0.1:${(relay.address() as AddressInfo).port}/relay/`
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'relayed', via, value: 'run-token-anthropic' },
+      OPENROUTER_API_KEY: { mode: 'relayed', via, value: 'run-token-router-12' },
+      AI_GATEWAY_API_KEY: {
+        mode: 'relayed',
+        via: 'https://relay.example.com/v',
+        value: 'run-token-vercel-12',
+      },
+    })
+    try {
+      const anthropic = judgeRoute('anthropic/claude-sonnet-5-5')
+      assert.ok(anthropic.kind === 'direct')
+      assert.equal(anthropic.call.baseURL, `${via.slice(0, -1)}/v1`)
+      const router = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
+      assert.ok(router.kind === 'openrouter')
+      assert.equal(router.call.baseURL, `${via.slice(0, -1)}/api/v1`)
+      const gateway = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
+      assert.ok(gateway.kind === 'gateway' && gateway.call.apiKey === 'run-token-vercel-12')
+      assert.equal(gateway.call.baseURL, 'https://relay.example.com/v/v4/ai')
+      await assert.rejects(
+        gateway.call.fetch?.('https://ai-gateway.vercel.sh/v4/ai/language-model') ??
+          Promise.resolve(),
+        /reeval refused to send AI_GATEWAY_API_KEY, a brokered key, to https:\/\/ai-gateway\.vercel\.sh/,
+      )
+
+      const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
+      assert.deepEqual(seen, [{ url: '/relay/v1/messages', auth: 'run-token-anthropic' }])
+
+      // The agent's credential: its endpoints' requests go to the relay.
+      const glue = gatewayGlue({
+        egress: { policy: 'deny-all', auto: [] },
+        brokering: {
+          credential: 'AI_GATEWAY_API_KEY',
+          endpoints: [
+            { host: 'ai-gateway.vercel.sh', path: { exact: '/v1/messages' }, method: ['POST'] },
+            { host: 'ai-gateway.vercel.sh', path: { exact: '/v1/models' }, method: ['GET'] },
+          ],
+        },
+      } as never)
+      assert.deepEqual((glue.egress as { relays?: unknown }).relays, [
+        { hosts: ['ai-gateway.vercel.sh'], via: 'https://relay.example.com/v' },
+      ])
+      // Twin: a brokered credential has no relay.
+      hold({ AI_GATEWAY_API_KEY: { mode: 'brokered', value: 'vck-hostless-12345' } })
+      const plain = gatewayGlue({
+        egress: { policy: 'deny-all', auto: [] },
+        brokering: { credential: 'AI_GATEWAY_API_KEY', endpoints: [] },
+      } as never)
+      assert.equal((plain.egress as { relays?: unknown }).relays, undefined)
+
+      // An environment's own secret can't take a relayed key.
+      hold({ OPENROUTER_API_KEY: { mode: 'relayed', via, value: 'run-token-router-12' } })
+      await assert.rejects(
+        resolve(({ secret }) => ({
+          env: { K: secret.fromEnv('OPENROUTER_API_KEY', { hosts: ['openrouter.ai'] }) },
+        })),
+        /OPENROUTER_API_KEY for .* is relayed, which only a harness's own credential and reeval's own model calls take/,
+      )
+    } finally {
+      relay.close()
     }
   })
 
