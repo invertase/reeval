@@ -3426,10 +3426,53 @@ describe('relays', () => {
     }
   })
 
-  test('a relay must be https', async () => {
+  test("a relayed path that could climb out of the relay's prefix is refused, and the relay gets nothing", async () => {
+    const gw = await startProxy(undefined, {
+      relays: [{ hosts: [HOST], via: `https://localhost:${relay.port}/echo/vercel/` }],
+    })
+    try {
+      for (const path of [
+        '/../../openrouter/v1/x',
+        '/%2e%2e/%2e%2e/openrouter',
+        '/%2E./openrouter',
+        '/a/../../../b',
+        '/v1/./chat',
+        '/v1//chat',
+        '/v1\\..\\x',
+        '/v1/%5c../x',
+      ]) {
+        seen.length = 0
+        const r = await viaProxy(gw, HOST, upstream.port, { path })
+        assert.equal(r.status, 400, path)
+        assert.match(r.body, /takes no path with a dot, empty or backslash segment/, path)
+        assert.deepEqual(seen, [], `${path} reached nothing`)
+      }
+      // Twins: dots inside a segment, and a trailing slash, are ordinary paths.
+      for (const path of ['/v1/models/gpt-6.1', '/v1/chat/', '/v1/..x/y']) {
+        const r = await viaProxy(gw, HOST, upstream.port, { path })
+        assert.equal(r.status, 200, path)
+        assert.equal(JSON.parse(r.body).path, `/echo/vercel${path}`)
+      }
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a relay must be https, with no user, query or fragment', async () => {
     await assert.rejects(
       startProxy(undefined, { relays: [{ hosts: [HOST], via: 'http://localhost:1/' }] }),
       /a relay's via must be an https:\/\/ URL/,
     )
+    for (const via of [
+      'https://u:p@localhost:1/',
+      'https://localhost:1/v?x=1',
+      'https://localhost:1/v#f',
+    ]) {
+      await assert.rejects(
+        startProxy(undefined, { relays: [{ hosts: [HOST], via }] }),
+        /a relay's via is an origin and path, with no user, query or fragment/,
+        via,
+      )
+    }
   })
 })

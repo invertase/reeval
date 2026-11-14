@@ -21,14 +21,17 @@ export const SECRETS_SERVICE = 'secrets'
  * relay, and its value. A brokered one without hosts, and a relayed one, go where each use sends
  * them: a harness's credential to the harness's endpoints, a key for reeval's own model calls to
  * its provider's or gateway's API. A relayed one's requests to those hosts go to `via` instead,
- * with `via`'s path before their own.
+ * with `via`'s path before their own; `via` is an `https://` origin and path, with no user, query or
+ * fragment.
+ *
+ * A brokered one without hosts is kept from the agent, not from the eval code: an environment that
+ * names it with `secret.fromEnv(name, { hosts })` decides its hosts, and the eval code writes that
+ * environment.
  */
 export type HeldSecret =
   | { mode: 'brokered'; hosts?: string[]; value: string }
   | { mode: 'relayed'; via: string; value: string }
   | { mode: 'sandbox'; value: string }
-
-const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/
 
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/
@@ -64,13 +67,13 @@ function parse(
     const hosts = s.hosts
     if (s.mode === 'relayed') {
       const via = typeof s.via === 'string' ? URL.parse(s.via) : null
-      if (
-        !via ||
-        (via.protocol !== 'https:' && !(via.protocol === 'http:' && LOOPBACK.test(via.hostname)))
-      ) {
-        throw bad(`has no https:// via for ${name}, which is relayed`)
+      if (via?.protocol !== 'https:') throw bad(`has no https:// via for ${name}, which is relayed`)
+      if (via.username || via.password || /[?#]/.test(via.href)) {
+        throw bad(
+          `gives ${name} a via with a user, a query or a fragment, where reeval takes an https:// origin and path only`,
+        )
       }
-      out[name] = { mode: 'relayed', via: s.via as string, value: s.value }
+      out[name] = { mode: 'relayed', via: via.href, value: s.value }
     } else if (s.mode === 'brokered' && hosts === undefined) {
       out[name] = { mode: 'brokered', value: s.value }
     } else if (s.mode === 'brokered') {

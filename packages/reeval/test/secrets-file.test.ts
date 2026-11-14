@@ -138,6 +138,21 @@ export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
         'has no https:// via for K, which is relayed',
       ],
       [
+        JSON.stringify({
+          version: 1,
+          secrets: { K: { mode: 'relayed', via: 'http://127.0.0.1:8787/v', value: 'v' } },
+        }),
+        'has no https:// via for K, which is relayed',
+      ],
+      ...[
+        'https://u:p@relay.example.com/v',
+        'https://relay.example.com/v?x=1',
+        'https://relay.example.com/v#f',
+      ].map((via) => [
+        JSON.stringify({ version: 1, secrets: { K: { mode: 'relayed', via, value: 'v' } } }),
+        'gives K a via with a user, a query or a fragment, where reeval takes an https:// origin and path only',
+      ]),
+      [
         JSON.stringify({ version: 1, secrets: { K: { mode: 'open', value: 'v' } } }),
         'gives K the mode "open", not brokered, relayed, sandbox or readable',
       ],
@@ -398,12 +413,12 @@ describe('held secrets in this process', () => {
       model: 'claude-sonnet-5-5',
     } as AgentHarnessDescriptor)
     assert.deepEqual(agentAuth(claude), { ANTHROPIC_API_KEY: 'sk-ant-hostless-1234' })
-    const route = judgeRoute('anthropic/claude-sonnet-5-5')
-    assert.ok(route.kind === 'direct' && route.call.apiKey === 'sk-ant-hostless-1234')
+    const route = hostCall('anthropic/claude-sonnet-5-5')
+    assert.ok(route.route.kind === 'direct' && route.call.apiKey === 'sk-ant-hostless-1234')
     process.env.ANTHROPIC_BASE_URL = 'https://proxy.example.com/v1'
     try {
-      const proxied = judgeRoute('anthropic/claude-sonnet-5-5')
-      assert.ok(proxied.kind === 'direct' && proxied.call.fetch)
+      const proxied = hostCall('anthropic/claude-sonnet-5-5')
+      assert.ok(proxied.route.kind === 'direct' && proxied.call.fetch)
       assert.equal(proxied.call.baseURL, 'https://proxy.example.com/v1')
       // Its fetch takes the key to the base URL's host only.
       await assert.rejects(
@@ -424,21 +439,35 @@ describe('held secrets in this process', () => {
     )
   })
 
+  test("a harness's endpoints come from the environment at start, so a later change can't move a key with no hosts", () => {
+    hold({ AI_GATEWAY_API_KEY: { mode: 'brokered', value: 'vck-hostless-12345' } })
+    const hostsOf = (agent: ReturnType<typeof agentFor>) => [
+      ...new Set(agent.endpoints.map((e) => e.host)),
+    ]
+    const claude = { kind: 'claude-code', model: 'm', gateway: 'vercel' } as AgentHarnessDescriptor
+    const bedrock = { kind: 'opencode', model: 'amazon-bedrock/m' } as AgentHarnessDescriptor
+    process.env.AWS_REGION = 'eu-west-1'
+    pinStartEnv()
+    try {
+      process.env.AI_GATEWAY_BASE_URL = 'https://attacker.example'
+      process.env.AWS_REGION = 'ap-south-1'
+      const agent = agentFor(claude)
+      assert.deepEqual(hostsOf(agent), ['ai-gateway.vercel.sh'])
+      assert.deepEqual(agentAuth(agent), { AI_GATEWAY_API_KEY: 'vck-hostless-12345' })
+      assert.ok(hostsOf(agentFor(bedrock)).every((h) => h.includes('.eu-west-1.')))
+      // Twin: the same values set before start are the project's own, and are followed.
+      pinStartEnv()
+      assert.deepEqual(hostsOf(agentFor(claude)), ['attacker.example'])
+      assert.ok(hostsOf(agentFor(bedrock)).every((h) => h.includes('.ap-south-1.')))
+    } finally {
+      pinStartEnv(null)
+      delete process.env.AI_GATEWAY_BASE_URL
+      delete process.env.AWS_REGION
+    }
+  })
+
   test("a relayed key's calls go to its relay under the API's own path, and the agent's go there through the gateway", async () => {
-    const seen: { url?: string; auth?: string }[] = []
-    const relay = createServer((req, res) => {
-      seen.push({
-        url: req.url,
-        auth: (req.headers['x-api-key'] ?? req.headers.authorization) as string,
-      })
-      req.resume()
-      res.writeHead(401, { 'content-type': 'application/json' })
-      res.end(
-        JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'no' } }),
-      )
-    })
-    await new Promise<void>((done) => relay.listen(0, '127.0.0.1', done))
-    const via = `http://127.0.0.1:${(relay.address() as AddressInfo).port}/relay/`
+    const via = 'https://relay.example.com/relay/'
     hold({
       ANTHROPIC_API_KEY: { mode: 'relayed', via, value: 'run-token-anthropic' },
       OPENROUTER_API_KEY: { mode: 'relayed', via, value: 'run-token-router-12' },
@@ -448,15 +477,16 @@ describe('held secrets in this process', () => {
         value: 'run-token-vercel-12',
       },
     })
-    try {
-      const anthropic = judgeRoute('anthropic/claude-sonnet-5-5')
-      assert.ok(anthropic.kind === 'direct')
+    {
+      const anthropic = hostCall('anthropic/claude-sonnet-5-5')
+      assert.ok(anthropic.route.kind === 'direct')
       assert.equal(anthropic.call.baseURL, `${via.slice(0, -1)}/v1`)
-      const router = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
-      assert.ok(router.kind === 'openrouter')
+      assert.equal(anthropic.call.apiKey, 'run-token-anthropic')
+      const router = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
+      assert.ok(router.route.kind === 'openrouter')
       assert.equal(router.call.baseURL, `${via.slice(0, -1)}/api/v1`)
-      const gateway = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
-      assert.ok(gateway.kind === 'gateway' && gateway.call.apiKey === 'run-token-vercel-12')
+      const gateway = hostCall('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
+      assert.ok(gateway.route.kind === 'gateway' && gateway.call.apiKey === 'run-token-vercel-12')
       assert.equal(gateway.call.baseURL, 'https://relay.example.com/v/v4/ai')
       await assert.rejects(
         gateway.call.fetch?.('https://ai-gateway.vercel.sh/v4/ai/language-model') ??
@@ -464,9 +494,10 @@ describe('held secrets in this process', () => {
         /reeval refused to send AI_GATEWAY_API_KEY, a brokered key, to https:\/\/ai-gateway\.vercel\.sh/,
       )
 
-      const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
-      await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
-      assert.deepEqual(seen, [{ url: '/relay/v1/messages', auth: 'run-token-anthropic' }])
+      await assert.rejects(
+        anthropic.call.fetch?.('https://api.anthropic.com/v1/messages') ?? Promise.resolve(),
+        /reeval refused to send ANTHROPIC_API_KEY, a brokered key, to https:\/\/api\.anthropic\.com/,
+      )
 
       // The agent's credential: its endpoints' requests go to the relay.
       const glue = gatewayGlue({
@@ -498,8 +529,6 @@ describe('held secrets in this process', () => {
         })),
         /OPENROUTER_API_KEY for .* is relayed, which only a harness's own credential and reeval's own model calls take/,
       )
-    } finally {
-      relay.close()
     }
   })
 

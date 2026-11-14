@@ -23,6 +23,7 @@ import type { DerivedTokens, EndpointMatch, LocalResponse } from '@reeval/sandbo
 import type { SandboxAdc, VertexChat } from '../gateway/vertex.ts'
 import type { Agent } from '../harness/agents.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { startEnv } from '../startup.ts'
 import type { BrokeredToken } from './token.ts'
 
 /** What the egress gateway and an agent's route add to its catalog entry. */
@@ -310,7 +311,7 @@ const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEff
  */
 export function opencodeForModel(
   model: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = startEnv(),
 ): ModelSpecific {
   const resolved = resolveOpenCodeProvider(model, env)
   if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
@@ -330,7 +331,7 @@ export function opencodeForModel(
  * The variables besides its key that OpenCode's provider takes from the host, as they are:
  * Bedrock's `AWS_REGION` (default `us-east-1`); none for most providers.
  */
-export function opencodeVars(model: string, env: NodeJS.ProcessEnv = process.env) {
+export function opencodeVars(model: string, env: NodeJS.ProcessEnv = startEnv()) {
   const resolved = resolveOpenCodeProvider(model, env)
   if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
   return resolved.vars

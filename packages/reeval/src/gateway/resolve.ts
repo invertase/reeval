@@ -11,6 +11,7 @@ import { UsageError } from '../errors.ts'
 import { AGENTS, directProviderRefusal, isAgentKind } from '../harness/agents.ts'
 import { harnessEffort } from '../harness/effort.ts'
 import { harnessId } from '../options.ts'
+import { startEnv } from '../startup.ts'
 import type {
   GatewayDescriptor,
   GatewayName,
@@ -18,7 +19,6 @@ import type {
   ResolvedGateway,
 } from '../types.ts'
 import { isRoutingGateway, ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
-
 import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key. */
@@ -40,7 +40,7 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       }
       if (h.kind === 'pi' || h.kind === 'goose') return directProviderRefusal(h.kind, h.model)
       if (h.kind === 'opencode') {
-        const resolved = resolveOpenCodeProvider(h.model, process.env)
+        const resolved = resolveOpenCodeProvider(h.model, startEnv())
         if ('error' in resolved) return resolved.error
         const effort = harnessEffort(h)
         const refused = openCodeEffortOn(h.model, 'direct', effort)
@@ -124,7 +124,7 @@ function routingEntry(name: RoutingGatewayName): GatewayEntry {
           gateway.refusals[h.kind] ?? `reeval doesn't run ${agentName(h)} on ${gateway.name} yet`
         )
       }
-      const here = h.kind === 'fake' ? undefined : gateway.refusedAt?.[h.kind]?.(process.env)
+      const here = h.kind === 'fake' ? undefined : gateway.refusedAt?.[h.kind]?.(startEnv())
       if (here) return here
       const effort = harnessEffort(h)
       if (effort !== undefined && h.kind !== 'fake' && gateway.unprovenEffort[h.kind]?.(h.model)) {

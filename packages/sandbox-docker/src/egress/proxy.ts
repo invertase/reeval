@@ -43,6 +43,20 @@ import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
 import { MODEL_FIELD, usageReader } from './usage.ts'
 import { webSocketScrubber } from './websocket.ts'
 
+/**
+ * Whether a request path could leave the relay's prefix once a URL parser resolves it: a `.` or `..`
+ * segment, raw or percent-encoded, a backslash (which WHATWG URLs read as `/`), or an empty segment
+ * before the last.
+ */
+function climbsOut(path: string): boolean {
+  const pathname = path.split('?')[0] ?? ''
+  if (/\\|%5c/i.test(pathname)) return true
+  const segments = pathname.split('/').slice(1)
+  return segments.some(
+    (s, i) => (s === '' && i < segments.length - 1) || /^(\.|%2e){1,2}$/i.test(s),
+  )
+}
+
 /** A relay for some hosts' requests: see `EgressProxyOptions.relays`. */
 export type Relay = { hosts: readonly string[]; via: string }
 
@@ -125,7 +139,9 @@ export type EgressProxyOptions = {
   /**
    * Hosts whose requests go to another server instead: each decrypted request to one of `hosts`
    * is sent, after its credentials are swapped in, to `via`'s origin with `via`'s path before its
-   * own, as it is otherwise. `via` is an `https://` URL; the relay is reached over HTTP/1.1.
+   * own, as it is otherwise. `via` is an `https://` URL with no user, query or fragment; the relay is
+   * reached over HTTP/1.1. A relayed request whose path has a `.`, `..` or empty segment, or a
+   * backslash, is refused, so a relay that resolves the path can't be reached outside `via`'s.
    */
   relays?: readonly Relay[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
@@ -491,6 +507,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const relays = (options.relays ?? []).map((r) => {
     const via = new URL(r.via)
     if (via.protocol !== 'https:') throw new Error(`a relay's via must be an https:// URL`)
+    if (via.username || via.password || /[?#]/.test(via.href)) {
+      throw new Error(`a relay's via is an origin and path, with no user, query or fragment`)
+    }
     return { hosts: r.hosts, via, base: via.pathname.replace(/\/+$/, '') }
   })
   const relayHosts = relays.flatMap((r) => r.hosts)
@@ -1576,12 +1595,21 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       transformed(target, method, asked, sent, req.httpVersion)
     t.set({ substituted: names, credentials, ...(readsUsage ? { modelCall: true } : {}) })
     const reads: Reads = { model: !!readsModel, usage: !!readsUsage }
-    if (refused) {
-      t.refuse(refused.reason)
+    const relay = relayFor(target.host)
+    const relayRefusal =
+      relay && climbsOut(path)
+        ? {
+            status: 400,
+            reason: `reeval egress gateway: ${target.host}'s requests go through a relay, which takes no path with a dot, empty or backslash segment`,
+          }
+        : undefined
+    const refusal = refused ?? relayRefusal
+    if (refusal) {
+      t.refuse(refusal.reason)
       req.resume()
       return res
-        .writeHead(refused.status, { 'content-type': 'text/plain' })
-        .end(`${refused.reason}\n`)
+        .writeHead(refusal.status, { 'content-type': 'text/plain' })
+        .end(`${refusal.reason}\n`)
     }
     const local = locals.find((l) =>
       onEndpoint([l.match], { host: target.host, method, path: asked, headers: {} }),
@@ -1601,7 +1629,6 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       substitutes(allSubs(), target.host) ||
       hostAllowed(tokenHosts, target.host)
     const body = requestBody(req as Readable, headers, own, t, readsEffort)
-    const relay = relayFor(target.host)
     if (relay) {
       const upstream = https.request({
         host: relay.via.hostname,
