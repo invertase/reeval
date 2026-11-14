@@ -32,6 +32,31 @@ the API refused the key or the model provider stopped the turn (`providerStop`).
 network sees the model calls passes their statuses and served models as `traffic`; a failure to
 start is an `AgentError`.
 
+`agent()` is the session API over it:
+
+```ts
+const a = agent({
+  harness: { kind: 'cursor', model: 'composer-2.5', adapter: (input) => createCursorSdk(input) },
+  runner: local({ cwd: './workspace' }),
+  credentials: { CURSOR_API_KEY: key },
+  rules: 'Run the tests before you finish.\n',
+  out: './out',
+})
+const session = await a.start()
+const turn = session.send('Fix the failing test')
+for await (const event of turn.events) console.log(event.type)
+const result = await turn.result
+await session.close()
+```
+
+`start()` asks the runner where it is, writes the rules and the `workspace` skills where the
+harness reads them, builds the adapter from the credentials, model and MCP servers, and starts the
+session; `exec(prompt)` does all of that for one turn. A runner from a function is the session's
+own, closed with it. With `out`, the session writes `session.json`, a line of `turns.jsonl` and
+the turn's lines of `transcript.jsonl` as each turn ends (`raw/parts.jsonl` and `debug.log` on
+request), every one with the credentials masked; `schema/` has their JSON Schemas, which
+`pnpm --filter reeval schema:check` holds to the types and lets change additively only.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.

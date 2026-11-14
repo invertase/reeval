@@ -188,6 +188,40 @@ export const PLAN_SHAPES: PlanShape[] = [
   },
 ]
 
+/** Where `@reeval/agents`' snapshots live: `packages/agents/schema/<name>.schema.json`. */
+export const AGENTS_SNAPSHOT_DIR = fileURLToPath(
+  new URL('../../../agents/schema/', import.meta.url),
+)
+
+/**
+ * A shape `@reeval/agents` writes to a session's `out` directory, which its readers may get from
+ * an older or newer version: held to its snapshot as `SHAPES` are, with no read defaults or
+ * migrations, so it only changes additively. `file` is the built declaration reeval compiles against.
+ */
+export type AgentsShape = PlanShape & { versionField?: string }
+
+export const AGENTS_SHAPES: AgentsShape[] = [
+  {
+    name: 'session',
+    file: '../agents/dist/out/types.d.ts',
+    type: 'OutSession',
+    where: "A session's session.json in its out directory",
+    versionField: 'schemaVersion',
+  },
+  {
+    name: 'turn',
+    file: '../agents/dist/out/types.d.ts',
+    type: 'OutTurn',
+    where: "One line of a session's turns.jsonl in its out directory",
+  },
+  {
+    name: 'transcript-line',
+    file: '../agents/dist/out/types.d.ts',
+    type: 'OutTranscriptLine',
+    where: "One line of a session's transcript.jsonl in its out directory",
+  },
+]
+
 export const PROTOCOL_SNAPSHOT_DIR = fileURLToPath(
   new URL('../../schema/protocol/', import.meta.url),
 )

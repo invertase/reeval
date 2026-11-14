@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from OutTurn in ../agents/dist/out/types.d.ts by `pnpm schema:update`; don't edit. One line of a session's turns.jsonl in its out directory.",
+  "title": "OutTurn",
+  "$ref": "#/$defs/OutTurn",
+  "$defs": {
+    "CostUsd": {
+      "description": "A dollar figure and where it came from.",
+      "type": "object",
+      "properties": {
+        "basis": {
+          "description": "`reported`: what the harness (Claude Code, pi) or the gateway (OpenRouter) said it cost; `estimated`: the tokens at list prices, which leave out discounts and long-context rates.",
+          "enum": ["estimated", "reported"]
+        },
+        "source": {
+          "description": "Who reported it (`claude-code`, `pi`, `openrouter`, `fake`), or the prices it was estimated at (`models.dev 2026-11-05`, a `REEVAL_PRICES` file); several, joined with `, `, in a sum.",
+          "type": "string"
+        },
+        "usd": {
+          "description": "US dollars.",
+          "type": "number"
+        }
+      },
+      "required": ["basis", "source", "usd"]
+    },
+    "OutTurn": {
+      "description": "One line of `turns.jsonl`: a turn's result, less its transcript, raw parts and steps.",
+      "type": "object",
+      "properties": {
+        "agentMs": {
+          "description": "The turn's agent time, recorded in place of the wall clock around `send`; only a scripted harness sets it.",
+          "type": "number"
+        },
+        "cost": {
+          "description": "What the harness said the turn cost, when it says.",
+          "$ref": "#/$defs/CostUsd"
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "model": {
+          "description": "The model the harness says served the turn; null when it reports none.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "prompt": {
+          "description": "What the turn was sent.",
+          "type": "string"
+        },
+        "providerStop": {
+          "description": "When the model provider, not the agent, ended the turn: the run is then an infra error.",
+          "$ref": "#/$defs/ProviderStop"
+        },
+        "reasoningMs": {
+          "description": "Milliseconds the agent spent reasoning in the turn, from the reasoning blocks it streamed; null when the harness can't time its reasoning, and absent for a scripted harness, whose reasoning events carry their own durations.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "rejectedKey": {
+          "description": "The turn's error, naming the variable, when the model API rejected the harness's credential: the run is then an infra error, not the agent's failure.",
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TurnStatus"
+        },
+        "text": {
+          "description": "The agent's final message for the turn.",
+          "type": "string"
+        },
+        "turn": {
+          "description": "The turn's index in the session, from 0.",
+          "type": "number"
+        },
+        "unreported": {
+          "description": "Event types the harness can't report, so their absence from `transcript` proves nothing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WebEventType"
+          }
+        },
+        "usage": {
+          "description": "Tokens the turn used, when the harness reports them.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "durationMs",
+        "model",
+        "prompt",
+        "startedAt",
+        "status",
+        "text",
+        "turn",
+        "unreported",
+        "usage"
+      ]
+    },
+    "ProviderStop": {
+      "description": "A turn the model provider stopped, with the message to fail the turn's run with.",
+      "type": "object",
+      "properties": {
+        "cause": {
+          "enum": ["credit", "overloaded", "quota", "rate_limit"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": ["cause", "message", "status"]
+    },
+    "TokenUsage": {
+      "description": "The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.",
+      "type": "object",
+      "properties": {
+        "cacheRead": {
+          "type": "number"
+        },
+        "cacheWrite": {
+          "type": "number"
+        },
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"]
+    },
+    "TurnStatus": {
+      "enum": ["aborted", "completed", "error"]
+    },
+    "WebEventType": {
+      "description": "The transcript events a harness may be unable to report.",
+      "enum": ["web-fetch", "web-search"]
+    }
+  }
+}
