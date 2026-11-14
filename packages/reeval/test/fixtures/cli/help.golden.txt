@@ -153,16 +153,15 @@ Usage:
                                 Delete an eval secret from the cloud project
   reeval cloud secrets list     The cloud project's secrets: name, mode, hosts, version, who updated
                                 it and when; never a value. --json as JSON
-  reeval cloud provider <provider> set
-                                Set the linked org's key for an AI SDK provider (openai, anthropic,
-                                google, xai, mistral, groq, deepseek, cohere, perplexity,
-                                fireworks, togetherai, cerebras, deepinfra or typesafe-ai), which
-                                the cloud platform's model calls use; the key comes from stdin or a
-                                hidden prompt
+  reeval cloud provider set <provider>
+                                Set the linked org's key for an AI SDK provider, by its slug, which
+                                the cloud platform's model calls use; the platform refuses a
+                                provider it doesn't serve. The key comes from stdin or a hidden
+                                prompt
     --org <slug>                The org, by slug or id, instead of the linked one; required when
                                 nothing is linked
     --project <slug>            Set or delete this project's own key, which overrides the org's
-  reeval cloud provider <provider> delete
+  reeval cloud provider delete <provider>
                                 Delete the provider's key (--project: that project's override)
   reeval cloud provider list    The org's provider keys and each project's override: last 4
                                 characters, version, who updated it and when. --json as JSON
