@@ -11,6 +11,8 @@ import { runCli, tempDir } from './helpers.ts'
 const TOKEN = 'cli-session-token'
 const ADMIN = { id: 'usr_1', email: 'ada@example.com' }
 const VALUE = 'sk_live_canary_value_0123456789'
+/** The providers the fake platform keeps keys for; reeval itself has no list. */
+const SERVED = ['openai', 'typesafe-ai', 'openrouter']
 
 type Seen = { method: string; path: string; auth?: string; body: string }
 type Secret = { name: string; mode: string; hosts: string[] | null; version: number }
@@ -107,6 +109,9 @@ async function platform(options: { admin?: boolean } = {}) {
         })
       }
       if (req.method === 'PUT' && provider) {
+        if (!SERVED.includes(provider)) {
+          return fail(res, 400, 'invalid_request', `${provider} isn't a provider this org can use.`)
+        }
         const sent = JSON.parse(body)
         const id = `${provider}/${sent.projectId ?? ''}`
         const had = keys.get(id)
@@ -573,16 +578,39 @@ describe('reeval cloud provider', () => {
     }
   })
 
-  test('refuses an unknown provider, a key on the command line and a key with whitespace', async () => {
+  test("sends any provider name, encoded, and passes on the platform's refusal", async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const set = await runCli(dir, ['cloud', 'provider', 'openrouter', 'set'], {
+        env,
+        input: 'or-key-c3d4\n',
+      })
+      assert.equal(set.code, 0, set.stderr)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openrouter')
+      const refused = await runCli(dir, ['cloud', 'provider', 'acme', 'set'], {
+        env,
+        input: 'acme-key-9z8y\n',
+      })
+      assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+      assert.match(
+        refused.stderr,
+        /the cloud platform refused to set the acme key: acme isn't a provider this org can use\.$/m,
+      )
+      assert.doesNotMatch(refused.stdout + refused.stderr, /acme-key-9z8y|9z8y/)
+      const odd = await runCli(dir, ['cloud', 'provider', 'Open AI/x?y', 'delete'], { env })
+      assert.equal(odd.code, 2, odd.stdout + odd.stderr)
+      assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/Open%20AI%2Fx%3Fy')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test('refuses a key on the command line and a key with whitespace', async () => {
     const p = await platform()
     try {
       const { dir, env } = linked(p.base)
       const cases: [string[], string, RegExp][] = [
-        [
-          ['acme', 'set'],
-          'k',
-          /needs a provider the cloud platform keeps keys for \(got acme\): openai, anthropic, .*, deepinfra, typesafe-ai$/m,
-        ],
         [
           ['openai', 'set', 'sk-x'],
           'k',

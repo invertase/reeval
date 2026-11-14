@@ -352,11 +352,10 @@ export const COMMANDS: Record<string, CommandSpec> = {
         secretArgs: true,
         help: `
   reeval cloud provider <provider> set
-                                Set the linked org's key for an AI SDK provider (openai, anthropic,
-                                google, xai, mistral, groq, deepseek, cohere, perplexity,
-                                fireworks, togetherai, cerebras, deepinfra or typesafe-ai), which
-                                the cloud platform's model calls use; the key comes from stdin or a
-                                hidden prompt
+                                Set the linked org's key for an AI SDK provider, by its slug, which
+                                the cloud platform's model calls use; the platform refuses a
+                                provider it doesn't serve. The key comes from stdin or a hidden
+                                prompt
     --org <slug>                The org, by slug or id, instead of the linked one; required when
                                 nothing is linked
     --project <slug>            Set or delete this project's own key, which overrides the org's

@@ -20,24 +20,6 @@ import { plural } from './text.ts'
 export const SECRET_MODES = ['brokered', 'sandbox', 'readable'] as const
 export type SecretMode = (typeof SECRET_MODES)[number]
 
-/** The AI SDK provider slugs the platform keeps keys for. */
-export const PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'mistral',
-  'groq',
-  'deepseek',
-  'cohere',
-  'perplexity',
-  'fireworks',
-  'togetherai',
-  'cerebras',
-  'deepinfra',
-  'typesafe-ai',
-] as const
-
 const NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/
 const MAX_HOSTS = 20
@@ -357,11 +339,6 @@ export async function providerCommand(
   if (!provider) {
     throw new UsageError(
       'reeval cloud provider needs a provider: reeval cloud provider <provider> set|delete, or list',
-    )
-  }
-  if (!(PROVIDERS as readonly string[]).includes(provider)) {
-    throw new UsageError(
-      `reeval cloud provider needs a provider the cloud platform keeps keys for${got(provider)}: ${PROVIDERS.join(', ')}`,
     )
   }
   if (action !== 'set' && action !== 'delete') {
