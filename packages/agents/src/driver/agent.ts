@@ -147,6 +147,16 @@ export function everyCallFailed(name: string, statuses: readonly number[]): stri
 }
 
 /**
+ * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
+ * wording, Google's (which answers 400), and OpenCode's for any provider's 401 or 403. A bare 403
+ * isn't here: proxies and MCP servers send those for reasons that have nothing to do with the
+ * harness's key. Grok Build checks its key as it starts and, when xAI refuses it (a 400 or 401,
+ * not an outage), offers no `xai.api_key` sign-in, which is all `@ai-sdk/harness-acp` reports.
+ */
+export const REFUSED_KEY =
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b|\bauthentication method "xai\.api_key" is not advertised\b/i
+
+/**
  * The turn's refused-key error (`hinted`, the first error `authHint` named the key in) when the API
  * rejected the harness's key for the whole turn: the turn errored, or every model call failed,
  * and no call the runner's network saw succeeded. A key that served one call isn't rejected,
@@ -203,6 +213,8 @@ export type StartAgentOptions = {
   workspace?: RegExp
   /** Keep every stream part on each turn's result, as `raw`. */
   raw?: boolean
+  /** Each stream part of a turn, as it arrives. */
+  onPart?: (part: StampedPart) => void
   /** Called when the session closes, or fails to start. */
   onClose?: () => void
 }
@@ -369,8 +381,10 @@ export async function startAgent(options: StartAgentOptions): Promise<HarnessSes
         const tools = new Map<string, { name: string; at: number }>()
         for await (const part of result.fullStream) {
           const ms = Date.now() - startedAt
-          parts.push({ ms, part: part as StampedPart['part'] })
-          traceStreamPart(log, part as StampedPart['part'], ms, tools)
+          const stamped: StampedPart = { ms, part: part as StampedPart['part'] }
+          parts.push(stamped)
+          options.onPart?.(stamped)
+          traceStreamPart(log, stamped.part, ms, tools)
           if (part.type === 'finish-step') {
             const step = tokenUsage(part.usage as Usage)
             if (step) steps.push(step)

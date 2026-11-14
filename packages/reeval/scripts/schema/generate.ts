@@ -270,7 +270,7 @@ export function generate(
       if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
       const gen = new Generator(checker, srcDirs, typeNamedIn(project))
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
-      const plan = !SHAPES.includes(shape as PersistedShape)
+      const plan = PLAN_SHAPES.includes(shape as PlanShape)
       if (plan) for (const name of gen.defs.keys()) typed.add(name)
       if (plan) owned ??= zodDefs(CONTRACT_SCHEMAS, CONTRACT_REFS, contractDocs(project))
       const doc: ShapeSchema = {

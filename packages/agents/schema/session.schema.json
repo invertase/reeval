@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from OutSession in ../agents/dist/out/types.d.ts by `pnpm schema:update`; don't edit. A session's session.json in its out directory.",
+  "title": "OutSession",
+  "$ref": "#/$defs/OutSession",
+  "$defs": {
+    "AgentKind": {
+      "description": "The kind of a real agent's harness, e.g. `cursor` or `claude-code`.",
+      "enum": [
+        "antigravity",
+        "claude-code",
+        "codex",
+        "cursor",
+        "fx",
+        "goose",
+        "grok-build",
+        "opencode",
+        "pi"
+      ]
+    },
+    "OutSession": {
+      "description": "`session.json`: the session as a whole, rewritten as it starts and as it ends.",
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "description": "The AI SDK adapter that drove the harness: its `harnessId`; absent when none was built.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
+        },
+        "agentsVersion": {
+          "description": "The `@reeval/agents` version that wrote it.",
+          "type": "string"
+        },
+        "endedAt": {
+          "description": "Absent while the session is open.",
+          "type": "string"
+        },
+        "error": {
+          "description": "Why it failed to start.",
+          "type": "string"
+        },
+        "harness": {
+          "type": "object",
+          "properties": {
+            "effort": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/AgentKind"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": ["kind", "model"]
+        },
+        "phases": {
+          "description": "Milliseconds each start-up phase took, for the phases it reached.",
+          "type": "object",
+          "properties": {
+            "bootstrap": {
+              "type": "number"
+            },
+            "place": {
+              "type": "number"
+            },
+            "runner": {
+              "type": "number"
+            }
+          },
+          "required": []
+        },
+        "runner": {
+          "description": "Where the agent's CLI ran; absent when the session failed before the runner answered.",
+          "$ref": "#/$defs/RunnerInfo"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "description": "`running` while open, `closed` once closed, `failed` when it failed to start.",
+          "enum": ["closed", "failed", "running"]
+        }
+      },
+      "required": ["agentsVersion", "harness", "phases", "schemaVersion", "startedAt", "status"]
+    },
+    "RunnerInfo": {
+      "description": "Where a runner runs commands: what a harness's setup picks its build by, and its paths.",
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "description": "The directory commands start in, and relative paths resolve against. Absolute.",
+          "type": "string"
+        },
+        "home": {
+          "description": "Absolute.",
+          "type": "string"
+        },
+        "libc": {
+          "description": "On Linux, the C library its binaries need.",
+          "enum": ["glibc", "musl"]
+        },
+        "platform": {
+          "enum": ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"]
+        },
+        "shell": {
+          "description": "What runs a string command: `<shell> -c <command>`.",
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        }
+      },
+      "required": ["cwd", "home", "platform", "shell"]
+    }
+  },
+  "x-schemaVersion": 1
+}

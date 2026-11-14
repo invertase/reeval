@@ -43,6 +43,7 @@ export {
   interactiveTools,
   type ModelTraffic,
   observed,
+  REFUSED_KEY,
   rejectedKey,
   type StartAgentOptions,
   startAgent,
@@ -60,6 +61,8 @@ export {
 export type { AgentLog, AgentLogPhase, HarnessResult, HarnessSession } from './driver/types.ts'
 export { AgentError } from './errors.ts'
 export { type LocalOptions, local } from './local.ts'
+export { masked, OUTPUT_CAP, type OutOptions } from './out/index.ts'
+export type { OutSession, OutTranscriptLine, OutTurn } from './out/types.ts'
 export { anthropicPath, apiHost, openaiPath, type RouteApi } from './routes/api.ts'
 export { everyModel, notGemini } from './routes/effort.ts'
 export { openCodeModelOn, ROUTES, type RouteName } from './routes/index.ts'
@@ -104,6 +107,18 @@ export type { Proc, ProcExit, Runner, RunnerInfo, SpawnOptions } from './runner.
 export { withFallbacks } from './runner.ts'
 export { type RunnerSessionOptions, runnerSession } from './runner-session.ts'
 export {
+  type AdapterInput,
+  type Agent,
+  type AgentEvent,
+  type AgentHarness,
+  type AgentOptions,
+  type AgentPhase,
+  type AgentSession,
+  type AgentSkill,
+  type AgentTurn,
+  agent,
+} from './session.ts'
+export {
   PLUGIN_DIR,
   PLUGIN_PARTS,
   type PlacedPlugin,
@@ -124,3 +139,4 @@ export type {
   WebEventType,
 } from './types.ts'
 export { addUsage, promptTokens, sumUsage, tokenUsage, totalTokens } from './usage.ts'
+export { AGENTS_VERSION } from './version.ts'
