@@ -54,3 +54,5 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
   escapes them (`$` as `$$`, a leading `!` as `$!`): every value reaches the server as written.
   pi writes each `-` in those names as `_`; the translator puts a server's configured name back
   when no other server sanitizes alike, and leaves the tool part as pi wrote it.
+
+<!-- CI scope probe: an adapter-only change. -->
