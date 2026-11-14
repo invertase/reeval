@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.2](https://github.com/reeval-ai/reeval/compare/v0.27.1...v0.27.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **bundle:** plan a held cursor key's catalog alike where a bundle runs ([#980](https://github.com/reeval-ai/reeval/issues/980)) ([a7d3d90](https://github.com/reeval-ai/reeval/commit/a7d3d908c07d7bef4b8070662ef8c3e6f79b78a1))
+
 ## [0.27.1](https://github.com/reeval-ai/reeval/compare/v0.27.0...v0.27.1) (2026-11-14)
 
 
