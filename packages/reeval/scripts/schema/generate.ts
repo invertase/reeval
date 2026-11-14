@@ -58,12 +58,12 @@ class Generator {
   readonly #names = new Map<string, number>()
 
   readonly checker: Any
-  readonly srcDir: string
+  readonly srcDirs: string[]
   readonly typeNamed: (name: string) => Any
 
-  constructor(checker: Any, srcDir: string, typeNamed: (name: string) => Any) {
+  constructor(checker: Any, srcDirs: string[], typeNamed: (name: string) => Any) {
     this.checker = checker
-    this.srcDir = srcDir
+    this.srcDirs = srcDirs
     this.typeNamed = typeNamed
   }
 
@@ -90,7 +90,7 @@ class Generator {
           : null
     if (!symbol) return null
     const path = String(symbol.declarations?.[0]?.path ?? '')
-    if (!path.startsWith(this.srcDir)) return null
+    if (!this.srcDirs.some((dir) => path.startsWith(dir))) return null
     return symbol
   }
 
@@ -190,7 +190,8 @@ class Generator {
 
 type Project = {
   checker: Any
-  srcDir: string
+  /** Where reeval's own types are declared: its `src/`, and the `@reeval/agents` declarations it re-exports. */
+  srcDirs: string[]
   exported: (file: string, name: string) => Any
 }
 
@@ -211,11 +212,18 @@ function withProject<T>(use: (project: Project) => T): T {
       checker,
       // Declarations carry the checker's canonical path: lower case on a case-insensitive file
       // system (macOS, Windows), with forward slashes.
-      srcDir: api.toPath(join(PACKAGE_DIR, 'src')),
+      srcDirs: [
+        api.toPath(join(PACKAGE_DIR, 'src')),
+        api.toPath(join(PACKAGE_DIR, '../agents/dist')),
+      ],
       exported: (file, name) => {
         const source = project.program.getSourceFile(join(PACKAGE_DIR, file))
         if (!source) throw new Error(`${file} isn't in packages/reeval's tsconfig`)
-        return checker.getSymbolAtLocation(source)?.getExports().get(name)
+        const symbol = checker.getSymbolAtLocation(source)?.getExports().get(name)
+        // A type another package declares, re-exported here, is described where it's declared.
+        return symbol && symbol.flags & SymbolFlags.Alias
+          ? checker.getAliasedSymbol(symbol)
+          : symbol
       },
     })
   } finally {
@@ -228,14 +236,14 @@ export function generate(
   shapes: Array<PersistedShape | PlanShape> = SHAPES,
 ): Map<string, ShapeSchema> {
   return withProject((project) => {
-    const { checker, srcDir, exported } = project
+    const { checker, srcDirs, exported } = project
     const out = new Map<string, ShapeSchema>()
     const typed = new Set<string>()
     let owned: Record<string, Schema> | undefined
     for (const shape of shapes) {
       const symbol = exported(shape.file, shape.type)
       if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
-      const gen = new Generator(checker, srcDir, typeNamedIn(project))
+      const gen = new Generator(checker, srcDirs, typeNamedIn(project))
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
       const plan = !SHAPES.includes(shape as PersistedShape)
       if (plan) for (const name of gen.defs.keys()) typed.add(name)
@@ -319,7 +327,7 @@ function persistedZodDefs(
 const DOC_TYPE_FILES = ['src/types.ts', 'src/declaration.ts']
 
 function typeDefsIn(project: Project, types: Record<string, string>): Record<string, Schema> {
-  const gen = new Generator(project.checker, project.srcDir, typeNamedIn(project))
+  const gen = new Generator(project.checker, project.srcDirs, typeNamedIn(project))
   return Object.fromEntries(
     Object.entries(types).map(([key, type]) => {
       const symbol = DOC_TYPE_FILES.map((file) => project.exported(file, type)).find(Boolean)

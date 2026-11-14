@@ -378,7 +378,11 @@ async function blocks() {
     ].join('\n'),
   )
 
-  const typeFiles = [join(src, 'history/types.ts'), join(src, 'types.ts')]
+  const typeFiles = [
+    join(src, 'history/types.ts'),
+    join(src, 'types.ts'),
+    join(root, 'packages/agents/src/types.ts'),
+  ]
   const types = new Map(typeFiles.flatMap(objectTypes).map((t) => [t.name, t]))
   const aliasMap = aliases(typeFiles)
   for (const name of RECORD_ALIASES) {
@@ -401,7 +405,9 @@ async function blocks() {
   )
   for (const name of RECORD_TYPES) {
     if (!types.has(name))
-      problems.push(`record type ${name} isn't in history/types.ts or types.ts any more`)
+      problems.push(
+        `record type ${name} isn't in history/types.ts, types.ts or @reeval/agents' types.ts any more`,
+      )
   }
   out.set(
     'record-types',

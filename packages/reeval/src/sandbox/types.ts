@@ -1,4 +1,5 @@
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
+import { AgentError } from '@reeval/agents'
 import type { EgressTraffic, NetworkPolicy, Substitution } from '@reeval/sandbox-docker'
 import type { SecretWarning } from '../history/types.ts'
 import type { ModelCall } from '../model-calls.ts'
@@ -89,14 +90,8 @@ export type NetworkSandbox = Sandbox & { readonly network: HarnessV1NetworkSandb
 export const hasNetworkSession = (s: Sandbox): s is NetworkSandbox => 'network' in s
 
 /** A failure of the sandbox or harness infrastructure, as opposed to the agent's work. */
-export class InfraError extends Error {
+export class InfraError extends AgentError {
   override name = 'InfraError'
-  /** Another try may succeed: a 5xx, a network error or a timeout, not a refused key or a bad config. */
-  readonly transient: boolean
-  constructor(message: string, options: { transient?: boolean } = {}) {
-    super(message)
-    this.transient = options.transient ?? false
-  }
 }
 
 /**

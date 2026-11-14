@@ -3,6 +3,8 @@
 // package: these tests walk its imports, in src/ and in the built dist/, and refuse a `node:` or bare
 // import and a Node global. The one exception is zod in the RunReport schema module and the modules
 // it loads, which only the `reeval/view/report` subpath reaches; the `reeval/view` root stays zod-free.
+// The other is the `@reeval/agents` subpaths in PURE_PACKAGES, which the walk follows into their
+// source and holds to the same rules.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -14,6 +16,11 @@ import { pkgRoot } from './helpers.ts'
  * schema behind `reeval/view/report`, whose refusals come from `src/contract/shared.ts`.
  */
 const ZOD_MODULES = ['src/view/analysis-schema.ts', 'src/view/report/schema.ts']
+
+/** The package subpaths `src/view` may load, each walked from its source as reeval's own module is. */
+const PURE_PACKAGES: Record<string, string> = {
+  '@reeval/agents/usage': join(pkgRoot, '../agents/src/usage.ts'),
+}
 
 const NODE_GLOBALS = /\b(process|Buffer|require|__dirname|__filename|global|setImmediate)\b\s*[.([]/
 
@@ -94,6 +101,7 @@ function walk(
       if (m[2] || (m[3] && typesOnly(m[3]))) continue
       const spec = (m[5] ?? m[7] ?? m[9]) as string
       if (spec.startsWith('.')) visit(resolveImport(file, spec), zodOk)
+      else if (PURE_PACKAGES[spec]) visit(PURE_PACKAGES[spec], zodOk)
       else if (spec === 'zod' && zodOk) continue
       else problems.push(`${name} imports ${spec}`)
     }
@@ -118,6 +126,7 @@ test('everything src/view loads runs in any JavaScript runtime: no Node, no pack
     'src/view/classify.ts',
     'src/history/tool-class.ts',
     'src/harness/skill-dirs.ts',
+    '../agents/src/usage.ts',
   ]) {
     assert.ok(files.includes(join(pkgRoot, shared)), `${shared} is on the view path`)
   }
