@@ -378,7 +378,7 @@ describe('reeval cloud secrets', () => {
       )
       const key = await runCli(
         dir,
-        ['cloud', 'provider', 'openai', 'set', '--org', 'acme', '--project', 'sk-proj-given'],
+        ['cloud', 'provider', 'set', 'openai', '--org', 'acme', '--project', 'sk-proj-given'],
         { env, input: 'sk-proj-c3d4\n' },
       )
       assert.equal(key.code, 2)
@@ -428,7 +428,7 @@ describe('reeval cloud provider', () => {
     const p = await platform()
     try {
       const { dir, env } = linked(p.base)
-      const org = await runCli(dir, ['cloud', 'provider', 'openai', 'set'], {
+      const org = await runCli(dir, ['cloud', 'provider', 'set', 'openai'], {
         env,
         input: 'sk-org-a1b2\n',
       })
@@ -437,7 +437,7 @@ describe('reeval cloud provider', () => {
       assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'sk-org-a1b2' })
       const project = await runCli(
         dir,
-        ['cloud', 'provider', 'openai', 'set', '--project', 'app'],
+        ['cloud', 'provider', 'set', 'openai', '--project', 'app'],
         { env, input: 'sk-proj-c3d4' },
       )
       assert.equal(project.code, 0, project.stderr)
@@ -453,13 +453,13 @@ describe('reeval cloud provider', () => {
       assert.match(list.stdout, /openai\s+the org\s+…a1b2\s+1/)
       assert.match(list.stdout, /openai\s+proj_a\s+…c3d4\s+1/)
 
-      const del = await runCli(dir, ['cloud', 'provider', '--project', 'app', 'openai', 'delete'], {
+      const del = await runCli(dir, ['cloud', 'provider', '--project', 'app', 'delete', 'openai'], {
         env,
       })
       assert.equal(del.code, 0, del.stderr)
       assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openai?projectId=proj_a')
       assert.match(del.stdout, /Deleted the openai key for proj_a\./)
-      const gone = await runCli(dir, ['cloud', 'provider', 'openai', 'delete', '--project=APP'], {
+      const gone = await runCli(dir, ['cloud', 'provider', 'delete', 'openai', '--project=APP'], {
         env,
       })
       assert.equal(gone.code, 2)
@@ -486,7 +486,7 @@ describe('reeval cloud provider', () => {
       const listed = await runCli(dir, ['cloud', 'provider', 'list', '--project', 'app'], { env })
       assert.equal(listed.code, 2)
       assert.match(listed.stderr, /takes --org, not --project/)
-      const r = await runCli(dir, ['cloud', 'provider', 'openai', 'set', '--org', 'acme'], {
+      const r = await runCli(dir, ['cloud', 'provider', 'set', 'openai', '--org', 'acme'], {
         env,
         input: 'sk-org-a1b2\n',
       })
@@ -502,7 +502,7 @@ describe('reeval cloud provider', () => {
     const p = await platform()
     try {
       const { dir, env } = linked(p.base)
-      const set = await runCli(dir, ['cloud', 'provider', 'typesafe-ai', 'set'], {
+      const set = await runCli(dir, ['cloud', 'provider', 'set', 'typesafe-ai'], {
         env,
         input: 'ts-key-e5f6\n',
       })
@@ -510,7 +510,7 @@ describe('reeval cloud provider', () => {
       assert.match(set.stdout, /Added the typesafe-ai key for org_a \(…e5f6\), version 1\./)
       assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/typesafe-ai')
       assert.deepEqual(JSON.parse(p.seen.at(-1)?.body ?? ''), { key: 'ts-key-e5f6' })
-      const del = await runCli(dir, ['cloud', 'provider', 'typesafe-ai', 'delete'], { env })
+      const del = await runCli(dir, ['cloud', 'provider', 'delete', 'typesafe-ai'], { env })
       assert.equal(del.code, 0, del.stderr)
       assert.match(del.stdout, /Deleted the typesafe-ai key for org_a\./)
     } finally {
@@ -579,13 +579,13 @@ describe('reeval cloud provider', () => {
     const p = await platform()
     try {
       const { dir, env } = linked(p.base)
-      const set = await runCli(dir, ['cloud', 'provider', 'openrouter', 'set'], {
+      const set = await runCli(dir, ['cloud', 'provider', 'set', 'openrouter'], {
         env,
         input: 'or-key-c3d4\n',
       })
       assert.equal(set.code, 0, set.stderr)
       assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/openrouter')
-      const refused = await runCli(dir, ['cloud', 'provider', 'acme', 'set'], {
+      const refused = await runCli(dir, ['cloud', 'provider', 'set', 'acme'], {
         env,
         input: 'acme-key-9z8y\n',
       })
@@ -655,37 +655,48 @@ describe('reeval cloud provider', () => {
         'open\nai',
         'open\u001b[31mai',
       ].flatMap((name) =>
-        ['set', 'delete'].map((action) => ({ args: [name, action], secret: name, message: slug })),
+        ['set', 'delete'].map((action) => ({ args: [action, name], secret: name, message: slug })),
       ),
     )
   })
 
-  test('refuses set or delete in the provider position without repeating what follows', async () => {
+  test('refuses a key in any position, the old order included, without repeating or sending it', async () => {
+    const unknown =
+      /reeval cloud provider has no such subcommand: reeval cloud provider set <provider>, delete <provider> or list$/m
+    const asKey = /that looks like a key, not a provider name/
+    const keys = [
+      'abcd1234efgh5678',
+      'csk-abcdefgh12345678',
+      'sk-proj-Abc123def456',
+      'deadbeefcafe0123',
+    ]
     await refusesUnsaid([
+      // The old order, and a key where the subcommand goes.
+      ...['set', 'delete'].flatMap((action) =>
+        keys.map((key) => ({ args: [key, action], secret: key, message: unknown })),
+      ),
+      { args: ['vercel', 'set'], secret: 'vercel', message: unknown },
+      { args: ['anthropic', 'delete'], secret: 'anthropic', message: unknown },
+      { args: ['rotate', 'openai'], secret: 'rotate', message: unknown },
+      // A key as the name.
+      ...['set', 'delete'].flatMap((action) =>
+        ['csk-ab12', 'sk-proj-Abc123def456', 'k3Jd9fQ2mZp7Lx4Rv8Wn'].map((key) => ({
+          args: [action, key],
+          secret: key,
+          message: asKey,
+        })),
+      ),
+      // A key as a third argument.
       {
-        args: ['set', 'abcd1234efgh5678'],
+        args: ['set', 'openai', 'abcd1234efgh5678'],
         secret: 'abcd1234efgh5678',
-        message: /takes the provider first: reeval cloud provider <provider> set$/m,
+        message:
+          /reeval cloud provider set openai takes the value on stdin or at its prompt, not as an argument/,
       },
       {
-        args: ['delete', 'deadbeefcafe0123'],
-        secret: 'deadbeefcafe0123',
-        message: /takes the provider first: reeval cloud provider <provider> delete$/m,
-      },
-      {
-        args: ['set', 'csk-abcdefgh12345678'],
-        secret: 'csk-abcdefgh12345678',
-        message: /takes the provider first/,
-      },
-      {
-        args: ['openai', 'abcd1234efgh5678'],
+        args: ['delete', 'openai', 'abcd1234efgh5678'],
         secret: 'abcd1234efgh5678',
-        message: /reeval cloud provider openai needs set or delete$/m,
-      },
-      {
-        args: ['csk-ab12', 'set'],
-        secret: 'csk-ab12',
-        message: /that looks like a key, not a provider name/,
+        message: /reeval cloud provider delete openai takes no value$/m,
       },
     ])
   })
@@ -695,7 +706,7 @@ describe('reeval cloud provider', () => {
     try {
       const { dir, env } = linked(p.base)
       for (const name of ['my.provider', 'snake_case', 'openai.compat-v2']) {
-        const r = await runCli(dir, ['cloud', 'provider', name, 'delete'], { env })
+        const r = await runCli(dir, ['cloud', 'provider', 'delete', name], { env })
         assert.match(r.stderr, /No .* key for org_a/, name)
         assert.equal(p.seen.at(-1)?.path, `/api/orgs/org_a/providers/${name}`)
       }
@@ -720,7 +731,7 @@ describe('reeval cloud provider', () => {
       ]
       for (const key of keys) {
         for (const action of ['set', 'delete']) {
-          const r = await runCli(dir, ['cloud', 'provider', key, action], { env, input: 'k\n' })
+          const r = await runCli(dir, ['cloud', 'provider', action, key], { env, input: 'k\n' })
           const said = r.stdout + r.stderr
           assert.equal(r.code, 2, `${key} ${action}: ${said}`)
           assert.match(r.stderr, /that looks like a key, not a provider name/, key)
@@ -734,7 +745,7 @@ describe('reeval cloud provider', () => {
       for (const key of keys) assert.ok(!log.includes(key), `${key} is in the command log`)
       // Twins: provider slugs, long or with digits, still go to the platform.
       for (const name of ['google-vertex-anthropic', 'amazon-bedrock', 'xai', 'r1-provider-2']) {
-        const r = await runCli(dir, ['cloud', 'provider', name, 'delete'], { env })
+        const r = await runCli(dir, ['cloud', 'provider', 'delete', name], { env })
         assert.match(r.stderr, /No .* key for org_a/, name)
         assert.equal(p.seen.at(-1)?.path, `/api/orgs/org_a/providers/${name}`)
       }
@@ -749,14 +760,18 @@ describe('reeval cloud provider', () => {
       const { dir, env } = linked(p.base)
       const cases: [string[], string, RegExp][] = [
         [
-          ['openai', 'set', 'sk-x'],
+          ['set', 'openai', 'sk-x'],
           'k',
           /not as an argument, which would land in your shell history/,
         ],
-        [['openai', 'set'], 'sk x', /whitespace or a control character at position 3/],
-        [['openai', 'rotate'], 'k', /needs set or delete$/m],
-        [['openai', 'sk-proj-Abc123'], 'k', /needs set or delete$/m],
-        [['openai', 'set', '--sk-proj-Abc123'], 'k', /reeval cloud provider has no such option/],
+        [['set', 'openai'], 'sk x', /whitespace or a control character at position 3/],
+        [
+          ['set'],
+          'k',
+          /reeval cloud provider set needs the provider: reeval cloud provider set <provider>$/m,
+        ],
+        [[], 'k', /has no such subcommand/],
+        [['set', 'openai', '--sk-proj-Abc123'], 'k', /reeval cloud provider has no such option/],
       ]
       for (const [args, input, message] of cases) {
         const r = await runCli(dir, ['cloud', 'provider', ...args], { env, input })

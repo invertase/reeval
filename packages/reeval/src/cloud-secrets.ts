@@ -312,15 +312,16 @@ export async function secretsCommand(flags: Flags, args: string[], io: SecretsIo
 const providerPath = (t: Target, provider?: string) =>
   `api/orgs/${seg(t.orgId)}/providers${provider ? `/${seg(provider)}` : ''}`
 
-/** `reeval cloud provider <provider> set|delete` and `reeval cloud provider list`. */
+/** `reeval cloud provider set|delete <provider>` and `reeval cloud provider list`. */
 export async function providerCommand(
   flags: Flags,
   args: string[],
   io: SecretsIo,
 ): Promise<number> {
-  const [provider, action, key] = args
-  if (provider === 'list') {
-    if (action !== undefined) throw new UsageError('reeval cloud provider list takes no arguments')
+  const [action, provider, key] = args
+  if (action === 'list') {
+    if (provider !== undefined)
+      throw new UsageError('reeval cloud provider list takes no arguments')
     if (flags.project !== undefined) {
       throw new UsageError(
         "reeval cloud provider list takes --org, not --project: it lists the org's keys and every project's override",
@@ -337,7 +338,7 @@ export async function providerCommand(
       return 0
     }
     if (!keys.length) {
-      io.out(`No provider keys in ${t.orgId}: reeval cloud provider <provider> set adds one.`)
+      io.out(`No provider keys in ${t.orgId}: reeval cloud provider set <provider> adds one.`)
       return 0
     }
     io.out(`${plural(keys.length, 'provider key')} in ${t.orgId}:`)
@@ -355,30 +356,27 @@ export async function providerCommand(
     }
     return 0
   }
-  if (!provider) {
+  if (action !== 'set' && action !== 'delete') {
     throw new UsageError(
-      'reeval cloud provider needs a provider: reeval cloud provider <provider> set|delete, or list',
+      'reeval cloud provider has no such subcommand: reeval cloud provider set <provider>, delete <provider> or list',
     )
   }
-  if (provider === 'set' || provider === 'delete') {
+  if (!provider) {
     throw new UsageError(
-      `reeval cloud provider takes the provider first: reeval cloud provider <provider> ${provider}`,
+      `reeval cloud provider ${action} needs the provider: reeval cloud provider ${action} <provider>`,
     )
   }
   if (looksLikeKey(provider)) {
     throw new UsageError(
-      "reeval cloud provider: that looks like a key, not a provider name, so reeval didn't send or repeat it. Give the provider (reeval cloud provider <provider> set) and the key on stdin or at the prompt",
+      `reeval cloud provider ${action}: that looks like a key, not a provider name, so reeval didn't send or repeat it. Give the provider (reeval cloud provider set <provider>) and the key on stdin or at the prompt`,
     )
   }
   if (!PROVIDER.test(provider)) {
     throw new UsageError(
-      `reeval cloud provider needs a provider's slug: lowercase letters and digits, joined by -, _ or ., at most ${MAX_PROVIDER}. reeval doesn't repeat it, in case it's a key`,
+      `reeval cloud provider ${action} needs a provider's slug: lowercase letters and digits, joined by -, _ or ., at most ${MAX_PROVIDER}. reeval doesn't repeat it, in case it's a key`,
     )
   }
-  if (action !== 'set' && action !== 'delete') {
-    throw new UsageError(`reeval cloud provider ${provider} needs set or delete`)
-  }
-  const command = `cloud provider ${provider} ${action}`
+  const command = `cloud provider ${action} ${provider}`
   if (action === 'delete' && key !== undefined) {
     throw new UsageError(`reeval ${command} takes no value`)
   }
