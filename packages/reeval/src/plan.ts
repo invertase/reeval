@@ -798,6 +798,11 @@ export type PlanDocument = {
    * the config's, profile's and attempts' secrets read.
    */
   secrets: string[]
+  /**
+   * The names in `secrets` that the cloud platform sets on the machine a cloud run runs on, and
+   * nothing else in the run reads, so a cloud run's bundle leaves them out.
+   */
+  cloudSets?: string[]
   /** Why the cloud platform can't run the plan, with the evals each reason holds back. */
   notCloud?: string[]
   /** Set when the run asked for the cloud platform: where it goes, and why when that's here. */

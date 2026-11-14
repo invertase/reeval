@@ -357,6 +357,22 @@ describe('machine providers', () => {
     assert.equal(lines.filter((l) => l.includes('for boat()')).length, 1)
   })
 
+  test("cloud()'s variables are the cloud platform's to set, and boat()'s key isn't", () => {
+    const config = { harness: [], judge: {}, env: {}, profiles: {} } as unknown as ResolvedConfig
+    const needed = neededCredentials(config, {
+      harnesses: [],
+      sandboxes: [boatVm(), { kind: 'cloud' }],
+    })
+    assert.deepEqual(
+      needed.map((c) => [c.names.join(), c.cloudSets ?? false]),
+      [
+        ['BOAT_API_KEY', false],
+        ['REEVAL_VM_URL', true],
+        ['REEVAL_VM_TOKEN', true],
+      ],
+    )
+  })
+
   test('the plan warns of a moving Tart tag, and nothing else asks for warnings', () => {
     assert.match(SANDBOX_KINDS.tart.planWarnings?.(tartVm())[0] ?? '', /moving tag "latest"/)
     assert.deepEqual(

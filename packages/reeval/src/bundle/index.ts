@@ -111,6 +111,7 @@ export type PlanDoc = Record<string, unknown> & {
   profile?: { name: string } | null
   inputs?: PlanInput[]
   secrets?: string[]
+  cloudSets?: string[]
   totals?: { attempts: number; fewest: number }
   cost?: import('../cost.ts').PlanCost
   notCloud?: string[]
@@ -121,6 +122,11 @@ export type BundleOptions = {
   env?: Record<string, string>
   /** Prices the plan's cost, which the dry run otherwise leaves to tokens. */
   prices?: boolean
+  /**
+   * For a cloud run: the manifest's `secrets` leave out the plan's `cloudSets`, which the cloud
+   * platform sets itself. Its plan keeps them, as the dry run there plans them too.
+   */
+  cloud?: boolean
 }
 
 /** A bundle made in memory: the archive, its manifest, the plan its dry run printed, and its sizes. */
@@ -517,7 +523,7 @@ export async function makeBundle(
     files,
     ...(bundleLinks.length ? { links: bundleLinks } : {}),
     envFiles: [...envFiles.values()].sort((a, b) => (a.path < b.path ? -1 : 1)),
-    secrets,
+    secrets: options.cloud ? secrets.filter((name) => !plan.cloudSets?.includes(name)) : secrets,
   }
   const manifestEntry: TarEntry = {
     type: 'file',

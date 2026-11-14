@@ -232,8 +232,8 @@ export const CLOUD_MACHINE: MachineProvider<CloudSandboxDescriptor> = {
     await removeRunVms(runId)
   },
   credentials: () => [
-    { names: ['REEVAL_VM_URL'], line: 'REEVAL_VM_URL (for cloud())' },
-    { names: ['REEVAL_VM_TOKEN'], line: 'REEVAL_VM_TOKEN (for cloud())' },
+    { names: ['REEVAL_VM_URL'], line: 'REEVAL_VM_URL (for cloud())', cloudSets: true },
+    { names: ['REEVAL_VM_TOKEN'], line: 'REEVAL_VM_TOKEN (for cloud())', cloudSets: true },
   ],
   slotsPerMachine: (s) => s.attemptsPerMachine ?? 1,
   async doctor(sandboxes, ctx) {
