@@ -1,6 +1,7 @@
 // Generates a JSON Schema of each shape reeval persists and later reads back, from the TypeScript types
 // that write and read them, with TypeScript 7's (unstable) checker API. Each named type's and
 // property's TSDoc comment becomes its `description`, in the contract's Zod-owned defs too.
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import type { z } from 'zod'
@@ -202,7 +203,34 @@ const typeNamedIn = (project: Project) => (name: string) => {
 }
 
 /** Runs `use` on packages/reeval's program, through TypeScript's API. */
+const AGENTS_DIR = join(PACKAGE_DIR, '../agents')
+
+/** The newest and oldest modification time of the files under `dir` whose names end in `ext`. */
+function mtimes(dir: string, ext: string): { newest: number; oldest: number } {
+  const times = readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith(ext))
+    .map((f) => statSync(join(dir, f)).mtimeMs)
+  return { newest: Math.max(...times), oldest: Math.min(...times) }
+}
+
+/**
+ * The checker reads @reeval/agents' types from its built declarations, as reeval's own typecheck
+ * does, so a build older than its source would describe types that are no longer there.
+ */
+function assertAgentsBuilt() {
+  const built = mtimes(join(AGENTS_DIR, 'dist'), '.d.ts')
+  if (
+    !Number.isFinite(built.oldest) ||
+    mtimes(join(AGENTS_DIR, 'src'), '.ts').newest > built.oldest
+  ) {
+    throw new Error(
+      "@reeval/agents' build is older than its source: run pnpm --filter @reeval/agents build",
+    )
+  }
+}
+
 function withProject<T>(use: (project: Project) => T): T {
+  assertAgentsBuilt()
   const api = new API({ cwd: PACKAGE_DIR })
   try {
     const snapshot = api.updateSnapshot({ openProject: join(PACKAGE_DIR, 'tsconfig.json') })
@@ -212,10 +240,7 @@ function withProject<T>(use: (project: Project) => T): T {
       checker,
       // Declarations carry the checker's canonical path: lower case on a case-insensitive file
       // system (macOS, Windows), with forward slashes.
-      srcDirs: [
-        api.toPath(join(PACKAGE_DIR, 'src')),
-        api.toPath(join(PACKAGE_DIR, '../agents/dist')),
-      ],
+      srcDirs: [api.toPath(join(PACKAGE_DIR, 'src')), api.toPath(join(AGENTS_DIR, 'dist'))],
       exported: (file, name) => {
         const source = project.program.getSourceFile(join(PACKAGE_DIR, file))
         if (!source) throw new Error(`${file} isn't in packages/reeval's tsconfig`)

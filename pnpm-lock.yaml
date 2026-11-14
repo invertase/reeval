@@ -549,6 +549,21 @@ importers:
       '@ai-sdk/harness':
         specifier: 1.0.172
         version: 1.0.172(ws@8.22.1)(zod@4.6.7)
+      '@reeval/harness-codex':
+        specifier: workspace:*
+        version: link:../harness-codex
+      '@reeval/harness-goose':
+        specifier: workspace:*
+        version: link:../harness-goose
+      '@reeval/harness-grok-build':
+        specifier: workspace:*
+        version: link:../harness-grok-build
+      '@reeval/harness-opencode':
+        specifier: workspace:*
+        version: link:../harness-opencode
+      '@reeval/harness-pi':
+        specifier: workspace:*
+        version: link:../harness-pi
     devDependencies:
       oxc-parser:
         specifier: 0.156.0

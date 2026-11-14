@@ -19,6 +19,7 @@ const ZOD_MODULES = ['src/view/analysis-schema.ts', 'src/view/report/schema.ts']
 
 /** The package subpaths `src/view` may load, each walked from its source as reeval's own module is. */
 const PURE_PACKAGES: Record<string, string> = {
+  '@reeval/agents/layouts': join(pkgRoot, '../agents/src/catalog/skill-dirs.ts'),
   '@reeval/agents/usage': join(pkgRoot, '../agents/src/usage.ts'),
 }
 
@@ -125,7 +126,7 @@ test('everything src/view loads runs in any JavaScript runtime: no Node, no pack
   for (const shared of [
     'src/view/classify.ts',
     'src/history/tool-class.ts',
-    'src/harness/skill-dirs.ts',
+    '../agents/src/catalog/skill-dirs.ts',
     '../agents/src/usage.ts',
   ]) {
     assert.ok(files.includes(join(pkgRoot, shared)), `${shared} is on the view path`)

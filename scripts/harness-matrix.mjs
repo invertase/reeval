@@ -3,6 +3,7 @@
 // the harness contract (test/support/harnesses.ts), whose real runs check tokens and the served
 // model.
 import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
@@ -11,7 +12,7 @@ const { AGENTS, agentFor } = await import(join(src, 'harness/agents.ts'))
 const { OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
-const { InfraError } = await import(join(src, 'sandbox/types.ts'))
+const { AgentError } = await import(createRequire(join(src, 'index.ts')).resolve('@reeval/agents'))
 const { runsAgent, suggestedSandbox } = await import(join(src, 'sandbox/kinds.ts'))
 const { PLUGIN_PARTS } = await import(join(src, 'environment/plugins.ts'))
 const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
@@ -31,7 +32,7 @@ function mcpSupport(agent) {
     try {
       agent.mcpServers({ probe: PROBE[transport] })
     } catch (error) {
-      if (!(error instanceof InfraError)) throw error
+      if (!(error instanceof AgentError)) throw error
       refused = true
     }
     out[transport] = { ok: !refused }

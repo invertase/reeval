@@ -1,9 +1,11 @@
 // Worker side of environments: layers an attempt's environments, reads skills, plugins and files
 // on the host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
 // touches the sandbox.
+
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
+import type { ResolvedMcpServer } from '@reeval/agents'
 import { hostAllowed, placeholder, type Substitution } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
@@ -73,10 +75,7 @@ export type HarnessSkill = {
   files: Array<{ path: string; content: string }>
 }
 
-/** An MCP server with its secrets resolved, for the harness adapter. */
-export type ResolvedMcpServer =
-  | { transport: 'stdio'; command: string; args: string[]; env: Record<string, string> }
-  | { transport: 'http' | 'sse'; url: string; headers: Record<string, string> }
+export type { ResolvedMcpServer }
 
 export type ResolvedStep = { run: string; timeoutMs: number; cwd?: string }
 

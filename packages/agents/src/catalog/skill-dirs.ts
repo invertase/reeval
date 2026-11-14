@@ -1,4 +1,4 @@
-// Where each agent reads skills, as plain data. `LAYOUTS` in agents.ts takes these, and the tool-call
+// Where each agent reads skills, as plain data. `LAYOUTS` in layouts.ts takes these, and the tool-call
 // classifier reads them in the studio view too, so this module imports nothing: it runs alike in any
 // JavaScript runtime.
 
