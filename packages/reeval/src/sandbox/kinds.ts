@@ -18,6 +18,17 @@ import { kindOf } from './machine.ts'
 import { BOAT_MACHINE, CLOUD_MACHINE, DAYTONA_MACHINE, TART_MACHINE } from './machines.ts'
 import type { Sandbox } from './types.ts'
 
+/** A credential a sandbox needs: any one of `names` provides it, and `line` names it. */
+export type Credential = {
+  names: string[]
+  line: string
+  /**
+   * The cloud platform sets it on the machine a cloud run runs on, so a cloud run neither asks
+   * the project for it nor carries its name in the bundle; a run here still needs it.
+   */
+  cloudSets?: true
+}
+
 /** What a sandbox kind can do, which planning and the attempt check instead of its name. */
 export type SandboxCapabilities = {
   /** The OS its commands run on: what a harness's bootstrap has to install a build for. */
@@ -69,7 +80,7 @@ export type SandboxHooks<D extends SandboxDescriptor> = {
    */
   cleanupScope?(sandbox: D): { key: string; atStart: boolean } | null
   /** The credentials `sandbox` needs of its own, as `neededCredentials` lists them. */
-  credentials?(sandbox: D): Array<{ names: string[]; line: string }>
+  credentials?(sandbox: D): Credential[]
   /** `reeval doctor`'s checks of the kind's sandboxes the config or the plan uses. */
   doctor?(sandboxes: readonly D[], ctx: DoctorContext): Promise<Check[]>
   /** The plan's warnings about `sandbox`. */

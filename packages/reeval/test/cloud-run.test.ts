@@ -18,8 +18,8 @@ import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
-import { gzipSync } from 'node:zlib'
-import { type TarEntry, writeTar } from '@reeval/sandbox-docker'
+import { gunzipSync, gzipSync } from 'node:zlib'
+import { readTar, type TarEntry, writeTar } from '@reeval/sandbox-docker'
 import type WebSocket from 'ws'
 import { WebSocketServer } from 'ws'
 import { checkCloudSecrets, cloudUrl } from '../src/cloud-run.ts'
@@ -584,6 +584,58 @@ describe('reeval run on the cloud platform', () => {
         /nothing was uploaded:\nThe cloud platform sets this name itself, so no cloud run can take it as a secret: rename it in the eval\.\n {2}CHECK_TOKEN/,
       )
       assert.doesNotMatch(r.stderr, /cloud secrets set/)
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("uploads a cloud() run without the VM service's variables, which a run here still needs", async () => {
+    const vmNames = ['REEVAL_VM_TOKEN', 'REEVAL_VM_URL']
+    const p = await platform({ secretNames: [], reserved: vmNames, fails: 'not started here' })
+    try {
+      const { dir } = await project('cloud-vm-names', {
+        'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { cloud } from 'reeval/internal/vm'
+export default defineConfig({
+  harnesses: fakeHarness({ script: [[{ exec: 'true' }]] }),
+  sandbox: cloud(),
+  egress: 'allow-all',
+})
+`,
+        'evals/a.eval.ts': `
+import { evaluate } from 'reeval'
+evaluate('reaches', async (c) => {
+  await c.exec('true')
+})
+`,
+        '.reeval/project.json': JSON.stringify({ orgId: 'org_a', projectId: 'proj_a' }),
+      })
+      const unset = { REEVAL_VM_URL: '', REEVAL_VM_TOKEN: '' }
+      const planned = await runCli(dir, ['run', '--dry-run', '--json', '--local'], { env: unset })
+      assert.equal(planned.code, 0, planned.stderr)
+      const doc = JSON.parse(planned.stdout) as { secrets: string[]; cloudSets?: string[] }
+      assert.deepEqual(doc.secrets, vmNames)
+      assert.deepEqual(doc.cloudSets, vmNames)
+
+      const r = await runCli(dir, ['run', '--cloud'], {
+        env: { ...unset, REEVAL_CLOUD_URL: p.base, REEVAL_TOKEN: 'cloud-test-token' },
+      })
+      assert.doesNotMatch(r.stdout + r.stderr, /nothing was uploaded|REEVAL_VM_/)
+      assert.ok(p.uploaded, r.stdout + r.stderr)
+      const entry = readTar(gunzipSync(p.uploaded)).find((e) => e.path === 'manifest.json')
+      assert.ok(entry?.type === 'file')
+      const manifest = JSON.parse(entry.data.toString('utf8'))
+      assert.deepEqual(manifest.secrets, [], 'the platform sets them on its machine')
+      assert.deepEqual(manifest.plan.secrets, vmNames, 'the plan there names them too')
+
+      const here = await runCli(dir, ['run', '--local'], { env: unset })
+      assert.equal(here.code, 2, here.stdout + here.stderr)
+      assert.match(
+        here.stderr,
+        /Missing credentials: REEVAL_VM_URL \(for cloud\(\)\); REEVAL_VM_TOKEN \(for cloud\(\)\)/,
+      )
     } finally {
       await p.close()
     }

@@ -1166,7 +1166,7 @@ async function cloudTarget(
         filters,
         configPath,
         process.argv.slice(2),
-        { env, prices: true },
+        { env, prices: true, cloud: true },
       )
       if ('code' in made) return made
       const blocked = made.plan.notCloud ?? []
@@ -2406,11 +2406,18 @@ async function executeRun(
         profile,
         judges: running.flatMap((p) => (p.attempt.judge ? [p.attempt.judge] : [])),
       })
-      for (const { names } of needed) for (const name of names) secrets.add(name)
+      for (const { names, cloudSets } of needed) {
+        if (!cloudSets) for (const name of names) secrets.add(name)
+      }
+      const cloudSets = new Set(
+        needed.flatMap((c) => (c.cloudSets ? c.names : [])).filter((name) => !secrets.has(name)),
+      )
+      for (const name of cloudSets) secrets.add(name)
       const { notCloud } = await import('./cloud-run.ts')
       const blocked = notCloud(skipped)
       const doc: PlanDocument = {
         ...planDocument(plan, skipped, excluded, images, inputs, [...secrets].sort()),
+        ...(cloudSets.size ? { cloudSets: [...cloudSets].sort() } : {}),
         ...(blocked.length ? { notCloud: blocked } : {}),
         ...(started.target ? { target: started.target } : {}),
       }
