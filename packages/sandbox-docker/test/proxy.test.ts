@@ -347,6 +347,7 @@ async function startProxy(
     | 'onEvent'
     | 'modelResponses'
     | 'localResponses'
+    | 'relays'
     | 'firstByteTimeout'
   > = {},
   /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
@@ -3371,6 +3372,125 @@ describe('local responses', () => {
       )
     } finally {
       gw.close()
+    }
+  })
+})
+
+describe('relays', () => {
+  let upstream: { port: number; close(): void }
+  let relay: { port: number; close(): void }
+  before(async () => {
+    upstream = await startUpstream(HOST, false)
+    relay = await startUpstream('localhost', false)
+  })
+  after(() => {
+    upstream.close()
+    relay.close()
+  })
+
+  test("a relayed host's requests go to the relay, under its path, with the credential swapped in", async () => {
+    const gw = await startProxy(undefined, {
+      relays: [{ hosts: [HOST], via: `https://localhost:${relay.port}/echo/vercel/` }],
+    })
+    gw.proxy.addTransformations([
+      {
+        match: {
+          host: HOST,
+          headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+        },
+        transform: { headers: { Authorization: `Bearer ${REAL}` } },
+      },
+    ])
+    try {
+      seen.length = 0
+      const r = await viaProxy(gw, HOST, upstream.port, {
+        method: 'POST',
+        path: '/v1/chat?stream=1',
+        headers: { authorization: `Bearer ${PLACEHOLDER}`, 'content-type': 'application/json' },
+        body: '{"model":"m"}',
+      })
+      assert.equal(r.status, 200)
+      const echo = JSON.parse(r.body)
+      assert.equal(echo.path, '/echo/vercel/v1/chat?stream=1')
+      assert.equal(echo.body, '{"model":"m"}')
+      assert.equal(echo.headers.host, `localhost:${relay.port}`)
+      assert.deepEqual(
+        seen.map((x) => [x.host, x.headers.authorization]),
+        [['localhost', `Bearer ${REAL}`]],
+        'only the relay was reached, with the swapped credential',
+      )
+      // The response is scrubbed as any brokered host's is.
+      assert.equal(r.headers['x-echo-authorization'], `Bearer ${PLACEHOLDER}`)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a relayed target outside plain segments and queries is refused, and the relay gets nothing', async () => {
+    const gw = await startProxy(undefined, {
+      relays: [{ hosts: [HOST], via: `https://localhost:${relay.port}/echo/vercel/` }],
+    })
+    try {
+      for (const path of [
+        '/../../openrouter/v1/x',
+        '/%2e%2e/%2e%2e/openrouter',
+        '/%2E./openrouter',
+        '/a/../../../b',
+        '/v1/./chat',
+        '/v1//chat',
+        '/v1\\..\\x',
+        '/v1/%5c../x',
+        '/..#x',
+        '/a/..#?q',
+        '/..;/x',
+        '/..%2f..%2fx',
+        '/%252e%252e/x',
+        '/x/..%3b/y',
+        '/a/..%09/b',
+        '/..%00/x',
+        '/v1/chat?x=1#f',
+        '/v1/chat?x=%00',
+      ]) {
+        seen.length = 0
+        const r = await viaProxy(gw, HOST, upstream.port, { path })
+        assert.equal(r.status, 400, path)
+        assert.match(r.body, /takes only plain path segments and queries/, path)
+        assert.deepEqual(seen, [], `${path} reached nothing`)
+      }
+      // Twins: dots inside a segment, a trailing slash, sub-delims, `:` and `@`, another
+      // percent-encoding, and a query with `;` and `/`, go through as they are.
+      for (const path of [
+        '/v1/models/gpt-6.1',
+        '/v1/chat/',
+        '/v1/..x/y',
+        "/v1/a:b@c/!$&'()*+,=",
+        '/v1/models/anthropic%2Dclaude',
+        '/v1/chat?stream=1&a=b;c/d?e',
+      ]) {
+        const r = await viaProxy(gw, HOST, upstream.port, { path })
+        assert.equal(r.status, 200, path)
+        assert.equal(JSON.parse(r.body).path, `/echo/vercel${path}`)
+      }
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a relay must be https, with no user, query or fragment', async () => {
+    await assert.rejects(
+      startProxy(undefined, { relays: [{ hosts: [HOST], via: 'http://localhost:1/' }] }),
+      /a relay's via must be an https:\/\/ URL/,
+    )
+    for (const via of [
+      'https://u:p@localhost:1/',
+      'https://localhost:1/v?x=1',
+      'https://localhost:1/v#f',
+    ]) {
+      await assert.rejects(
+        startProxy(undefined, { relays: [{ hosts: [HOST], via }] }),
+        /a relay's via is an origin and path, with no user, query or fragment/,
+        via,
+      )
     }
   })
 })

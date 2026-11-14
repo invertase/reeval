@@ -56,6 +56,7 @@ import {
 } from './options.ts'
 import { providerLimit, sandboxKind } from './sandbox/kinds.ts'
 import type { Limits } from './scheduler/core.ts'
+import { startEnv } from './startup.ts'
 import { controlTraitKeys, filtersLabel, pickTraits, traitFilters } from './traits.ts'
 import type {
   AttemptMeta,
@@ -251,7 +252,9 @@ function planTests(
           if (gatewaySet || harness.gateway !== undefined) {
             routes.set(hid, route)
             const at =
-              route.name === 'vercel' && !vercelBaseUrlProblem() ? vercelBaseUrl() : undefined
+              route.name === 'vercel' && !vercelBaseUrlProblem(startEnv())
+                ? vercelBaseUrl(startEnv())
+                : undefined
             gatewayNotes.push(
               `gateway: ${hid} → ${route.name}${at ? ` at ${at}` : ''}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
             )
@@ -260,7 +263,7 @@ function planTests(
           if (harness.kind !== 'fake') {
             try {
               if (route.name === 'vercel') {
-                const problem = vercelCredentialProblem() ?? vercelBaseUrlProblem()
+                const problem = vercelCredentialProblem() ?? vercelBaseUrlProblem(startEnv())
                 if (problem) throw new UsageError(problem)
               }
               if (route.name === 'vertex') {

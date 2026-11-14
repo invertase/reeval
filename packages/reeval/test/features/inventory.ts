@@ -940,7 +940,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'secret.file',
     area: 'Environments',
-    name: '`REEVAL_SECRETS_FILE` modes (brokered, sandbox, readable) and `secretWarnings`',
+    name: '`REEVAL_SECRETS_FILE` modes (brokered, with or without hosts, relayed, sandbox, readable) and `secretWarnings`',
     fixtures: [
       'secrets/file-sandbox-agent-sees-value',
       'secrets/file-sandbox-hidden-from-eval',

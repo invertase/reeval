@@ -83,6 +83,8 @@ export {
   type Upstream,
 } from '../environment/harness-wire.ts'
 
+import { startEnv } from '../startup.ts'
+
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
 
@@ -270,7 +272,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     ...WIRE.pi,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const pi = await import('@reeval/harness-pi')
-      const api = vercelApi()
+      const api = vercelApi(startEnv())
       const gateway = onRoutingGateway(descriptor, {
         vercel: { ...pi.PI_AI_GATEWAY, openai: api.openai, anthropic: api.anthropic },
         openrouter: pi.PI_OPENROUTER,
@@ -298,7 +300,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     adapter: async ({ auth, mcpServers, descriptor, plugins }) => {
       const codex = await import('@reeval/harness-codex')
       const provider = onRoutingGateway(descriptor, {
-        vercel: { ...codex.AI_GATEWAY_PROVIDER, baseUrl: vercelApi().openai },
+        vercel: { ...codex.AI_GATEWAY_PROVIDER, baseUrl: vercelApi(startEnv()).openai },
         openrouter: codex.OPENROUTER_PROVIDER,
       })
       return codex.createCodex({
@@ -322,7 +324,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
         model,
         // On Vercel AI Gateway, the model id picks fx's own provider.
         ...onRoutingGateway(descriptor, {
-          vercel: { gatewayUrl: vercelApi().origin },
+          vercel: { gatewayUrl: vercelApi(startEnv()).origin },
           openrouter: { provider: 'openrouter' as const },
         }),
         // On Vertex AI, the route's project and region.
@@ -352,7 +354,7 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
               auth,
               ...onRoutingGateway(descriptor, {
                 vercel: {
-                  provider: { ...grok.AI_GATEWAY_PROVIDER, baseUrl: vercelApi().openai },
+                  provider: { ...grok.AI_GATEWAY_PROVIDER, baseUrl: vercelApi(startEnv()).openai },
                 },
                 openrouter: { provider: grok.OPENROUTER_PROVIDER },
               }),
@@ -649,7 +651,7 @@ export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Ag
     const route = gateway.routes[h.kind]
     if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on ${gateway.name}`)
     // The route stands in for forModel: it decides the credential, endpoints and hosts there.
-    return { ...routed, ...route(process.env) }
+    return { ...routed, ...route(startEnv()) }
   }
   if (agent.credential === undefined) return { ...agent, ...agent.forModel(h.model) }
   return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
@@ -726,13 +728,14 @@ export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = hostEnv()) {
   const name = credentialIn(agent, env)
   const value = env[name]
   const held = heldSecret(name)
-  if (held?.mode === 'brokered') {
+  if (held?.mode === 'brokered' && held.hosts) {
+    const { hosts } = held
     const off = [...new Set(agent.endpoints.map((e) => e.host))].filter(
-      (host) => !hostAllowed(held.hosts, host),
+      (host) => !hostAllowed(hosts, host),
     )
     if (off.length) {
       throw new InfraError(
-        `${name} is brokered to ${held.hosts.join(', ')}, and the ${agent.name} harness sends it to ${off.join(', ')}, which it isn't brokered to.`,
+        `${name} is brokered to ${hosts.join(', ')}, and the ${agent.name} harness sends it to ${off.join(', ')}, which it isn't brokered to.`,
       )
     }
   }

@@ -1,11 +1,11 @@
 // `REEVAL_SECRETS_FILE`: secrets handed to reeval with the mode that decides who sees each value.
 // reeval reads the file once as it starts, before it loads a config, and deletes it. A `readable`
-// value goes into the environment as a variable would; a `brokered` or `sandbox` one is held here,
+// value goes into the environment as a variable would; a `brokered`, `relayed` or `sandbox` one is held here,
 // out of every environment, and the environment gets a placeholder in its place, so the eval code
 // reads a placeholder. An attempt's worker asks the main process for the held values over the
 // run's service channel, and the environment's `secret()`s take them from there: a brokered one
-// reaches only the egress gateway, which swaps it in on its hosts, a sandbox one only the agent's
-// sandbox. The eval code runs in the worker that holds them, so this keeps values out of its reach
+// reaches only the egress gateway, which swaps it in on its hosts, a relayed one too, with its
+// hosts' requests sent to its relay, and a sandbox one only the agent's sandbox. The eval code runs in the worker that holds them, so this keeps values out of its reach
 // by accident, not against code that reads reeval's own state.
 import { placeholder } from '@reeval/sandbox-docker'
 import { UsageError } from './errors.ts'
@@ -16,9 +16,21 @@ import { claimSecretsFile, SECRETS_FILE_VAR } from './secrets-file-take.ts'
 /** The run service a worker fetches the held values from. */
 export const SECRETS_SERVICE = 'secrets'
 
-/** A secret reeval holds out of the environment: its mode, a brokered one's hosts and its value. */
+/**
+ * A secret reeval holds out of the environment: its mode, a brokered one's hosts, a relayed one's
+ * relay, and its value. A brokered one without hosts, and a relayed one, go where each use sends
+ * them: a harness's credential to the harness's endpoints, a key for reeval's own model calls to
+ * its provider's or gateway's API. A relayed one's requests to those hosts go to `via` instead,
+ * with `via`'s path before their own; `via` is an `https://` origin and path, with no user, query or
+ * fragment.
+ *
+ * A brokered one without hosts is kept from the agent, not from the eval code: an environment that
+ * names it with `secret.fromEnv(name, { hosts })` decides its hosts, and the eval code writes that
+ * environment.
+ */
 export type HeldSecret =
-  | { mode: 'brokered'; hosts: string[]; value: string }
+  | { mode: 'brokered'; hosts?: string[]; value: string }
+  | { mode: 'relayed'; via: string; value: string }
   | { mode: 'sandbox'; value: string }
 
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -50,16 +62,27 @@ function parse(
   for (const [name, raw] of Object.entries(d.secrets)) {
     if (!VAR.test(name))
       throw bad(`has a secret named ${JSON.stringify(name)}, which isn't a variable name`)
-    const s = raw as { mode?: unknown; hosts?: unknown; value?: unknown } | null
+    const s = raw as { mode?: unknown; hosts?: unknown; via?: unknown; value?: unknown } | null
     if (typeof s?.value !== 'string' || !s.value) throw bad(`has no value for ${name}`)
     const hosts = s.hosts
-    if (s.mode === 'brokered') {
+    if (s.mode === 'relayed') {
+      const via = typeof s.via === 'string' ? URL.parse(s.via) : null
+      if (via?.protocol !== 'https:') throw bad(`has no https:// via for ${name}, which is relayed`)
+      if (via.username || via.password || /[?#]/.test(via.href)) {
+        throw bad(
+          `gives ${name} a via with a user, a query or a fragment, where reeval takes an https:// origin and path only`,
+        )
+      }
+      out[name] = { mode: 'relayed', via: via.href, value: s.value }
+    } else if (s.mode === 'brokered' && hosts === undefined) {
+      out[name] = { mode: 'brokered', value: s.value }
+    } else if (s.mode === 'brokered') {
       if (
         !Array.isArray(hosts) ||
         !hosts.length ||
         !hosts.every((h): h is string => typeof h === 'string' && h.length > 0)
       ) {
-        throw bad(`has no hosts for ${name}, which is brokered`)
+        throw bad(`has no hosts for ${name}, which is brokered: list them, or leave hosts out`)
       }
       const named = hosts.map((h) => h.toLowerCase())
       const off = named.find((h) => !HOST.test(h))
@@ -73,7 +96,7 @@ function parse(
       out[name] = { mode: s.mode, value: s.value }
     } else {
       throw bad(
-        `gives ${name} the mode ${JSON.stringify(s.mode)}, not brokered, sandbox or readable`,
+        `gives ${name} the mode ${JSON.stringify(s.mode)}, not brokered, relayed, sandbox or readable`,
       )
     }
   }
