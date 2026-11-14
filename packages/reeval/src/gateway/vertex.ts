@@ -340,6 +340,11 @@ const VERTEX_WIRE: Partial<
   fx,
 }
 
+const extraWire = Object.keys(VERTEX_WIRE).filter((kind) => !Object.hasOwn(VERTEX_CONFIGS, kind))
+if (extraWire.length) {
+  throw new Error(`Vertex AI has wire entries for ${extraWire.join(', ')}, which it doesn't serve`)
+}
+
 /** The harnesses reeval runs on Vertex, and what each needs there. */
 export const VERTEX_ROUTES: Partial<
   Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexRoute>

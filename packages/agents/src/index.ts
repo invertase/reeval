@@ -37,6 +37,27 @@ export {
   SKILL_LAYOUTS,
   type SkillLayout,
 } from './catalog/skill-dirs.ts'
+export {
+  everyCallFailed,
+  harnessUsage,
+  interactiveTools,
+  type ModelTraffic,
+  observed,
+  rejectedKey,
+  type StartAgentOptions,
+  startAgent,
+  turnCosts,
+} from './driver/agent.ts'
+export { type ProviderStop, providerStop } from './driver/provider-stop.ts'
+export {
+  errorText,
+  normalizeStream,
+  reasoningTime,
+  STALL_TOOL_MS,
+  type StampedPart,
+  timesReasoning,
+} from './driver/transcript.ts'
+export type { AgentLog, AgentLogPhase, HarnessResult, HarnessSession } from './driver/types.ts'
 export { AgentError } from './errors.ts'
 export { type LocalOptions, local } from './local.ts'
 export { anthropicPath, apiHost, openaiPath, type RouteApi } from './routes/api.ts'

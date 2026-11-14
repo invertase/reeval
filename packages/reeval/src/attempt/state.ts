@@ -1,6 +1,6 @@
+import type { HarnessSession } from '@reeval/agents'
 import { parseDuration } from '../config.ts'
 import type { ResolvedEnvironment } from '../environment/resolve.ts'
-import type { HarnessSession } from '../harness/types.ts'
 import type { PlannedAttempt } from '../options.ts'
 import { redactFields } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'

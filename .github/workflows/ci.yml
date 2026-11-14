@@ -426,12 +426,13 @@ jobs:
           - package: 'reeval'
             part: sandbox 2/2
             run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$IMAGE_BUILDS" test/docker.test.ts
-          # The Docker sandbox contracts, every machine provider's conformance on its fake backend,
-          # Boat's image snapshots built over a fake VM's SSH, the harness contract and e2e CLI
-          # suites on their key-free fake row (real rows run in real.yml), and s3() on MinIO.
+          # The Docker sandbox contracts, a container's session as a Runner, every machine
+          # provider's conformance on its fake backend, Boat's image snapshots built over a fake
+          # VM's SSH, the harness contract and e2e CLI suites on their key-free fake row (real rows
+          # run in real.yml), and s3() on MinIO.
           - package: 'reeval'
             part: contracts
-            run: node --test --experimental-strip-types --no-warnings test/store-minio.test.ts test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/sandbox-provider-conformance.test.ts test/boat-images.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
+            run: node --test --experimental-strip-types --no-warnings test/store-minio.test.ts test/docker-antigravity.test.ts test/environment-runner.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/sandbox-provider-conformance.test.ts test/boat-images.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
           # Its whole suite, real containers included.
           - package: '@reeval/sandbox-docker'
             part: all

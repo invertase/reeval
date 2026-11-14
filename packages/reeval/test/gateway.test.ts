@@ -5,7 +5,14 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, test } from 'node:test'
-import { apiHost } from '@reeval/agents'
+import {
+  apiHost,
+  everyCallFailed,
+  type ProviderStop,
+  providerStop,
+  rejectedKey,
+  VERCEL_ROUTE,
+} from '@reeval/agents'
 import { fxVertexBaseUrl } from '@reeval/harness-fx'
 import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
@@ -22,7 +29,7 @@ import {
 } from '../src/gateway/openrouter.ts'
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
-import { onRoutingGateway, ROUTING_GATEWAYS } from '../src/gateway/routes.ts'
+import { onRoutingGateway, ROUTING_GATEWAYS, type RouteWire } from '../src/gateway/routes.ts'
 import { VERCEL_GATEWAY, vercelApi, vercelCredential } from '../src/gateway/vercel.ts'
 import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import {
@@ -35,7 +42,7 @@ import {
   vertexRegion,
   vertexSettings,
 } from '../src/gateway/vertex.ts'
-import { everyCallFailed, rejectedKey } from '../src/harness/agent.ts'
+import { withWire } from '../src/gateway/with-wire.ts'
 import {
   agentAuth,
   agentFor,
@@ -43,7 +50,6 @@ import {
   brokeringFor,
   expectedBlockedFor,
 } from '../src/harness/agents.ts'
-import { type ProviderStop, providerStop } from '../src/harness/provider-stop.ts'
 import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
 import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
@@ -1473,6 +1479,17 @@ describe('routing gateways as data', () => {
 
   test('one gateway per name reeval/gateway routes on', () => {
     assert.deepEqual(Object.keys(ROUTING_GATEWAYS), [...ROUTING_GATEWAY_NAMES])
+  })
+
+  test('withWire takes a wire half for every harness the route serves, and no other', () => {
+    const route = { ...VERCEL_ROUTE, routes: { codex: VERCEL_ROUTE.routes.codex } }
+    const half = () => ({}) as RouteWire
+    assert.throws(() => withWire(route, {}), /has no wire entry for codex/)
+    assert.throws(
+      () => withWire(route, { codex: half, cursor: half }),
+      /has wire entries for cursor, which it doesn't serve/,
+    )
+    assert.deepEqual(Object.keys(withWire(route, { codex: half }).routes), ['codex'])
   })
 
   test('onRoutingGateway takes the entry for the gateway a harness resolved to', () => {

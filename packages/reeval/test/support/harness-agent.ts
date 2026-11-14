@@ -1,7 +1,6 @@
 import type { HarnessV1, HarnessV1StreamPart } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { observed } from '../../src/harness/agent.ts'
-import { errorText, type StampedPart } from '../../src/harness/transcript.ts'
+import { errorText, observed, type StampedPart } from '@reeval/agents'
 import { tokenUsage } from '../../src/usage.ts'
 
 /**

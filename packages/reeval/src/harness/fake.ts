@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { resolveBridgePort } from '@ai-sdk/harness/utils'
+import { type AgentLog, type HarnessResult, providerStop } from '@reeval/agents'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { redactSecrets } from '../redact.ts'
@@ -16,8 +17,7 @@ import {
   writePluginFiles,
 } from './agents.ts'
 import { fakeBootstrapScript } from './fake-bootstrap.ts'
-import { providerStop } from './provider-stop.ts'
-import type { AgentLog, Harness, HarnessResult } from './types.ts'
+import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
   text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0
