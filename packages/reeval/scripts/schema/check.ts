@@ -22,6 +22,9 @@ import { CORPUS_DIR, corpus } from './corpus.ts'
 import { generate, type ShapeSchema } from './generate.ts'
 import { protocolDocs } from './protocol.ts'
 import {
+  AGENTS_SHAPES,
+  AGENTS_SNAPSHOT_DIR,
+  type AgentsShape,
   PACKAGE_DIR,
   type PersistedShape,
   PLAN_SHAPES,
@@ -236,8 +239,8 @@ export async function checkCorpus(current: Map<string, ShapeSchema>): Promise<st
   ]
 }
 
-function readSnapshot(shape: PersistedShape): ShapeSchema | null {
-  const file = snapshotFile(shape)
+function readSnapshot(shape: Pick<PersistedShape, 'name'>, dir = SNAPSHOT_DIR): ShapeSchema | null {
+  const file = snapshotFile(shape, dir)
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as ShapeSchema) : null
 }
 
@@ -265,6 +268,27 @@ async function main(argv: string[]): Promise<number> {
   const reports = SHAPES.map((s) =>
     checkShape(s, current.get(s.name) as ShapeSchema, readSnapshot(s)),
   )
+  const agents = generate(AGENTS_SHAPES)
+  const agentReports = AGENTS_SHAPES.map((s) =>
+    checkShape(
+      s as AgentsShape as PersistedShape,
+      agents.get(s.name) as ShapeSchema,
+      readSnapshot(s, AGENTS_SNAPSHOT_DIR),
+      { defaults: [], migrations: [] },
+    ),
+  )
+  const agentsBroken = agentReports.filter((r) => r.breaking.length)
+  if (agentsBroken.length) {
+    for (const r of agentsBroken) {
+      process.stderr.write(
+        `✗ @reeval/agents' ${r.shape.type} changed in a way that breaks files it already wrote (${relative(PACKAGE_DIR, snapshotFile(r.shape, AGENTS_SNAPSHOT_DIR))}):\n${r.breaking.map((c) => `  - ${c.message}\n`).join('')}`,
+      )
+    }
+    process.stderr.write(
+      "  Keep each field, and make a new one optional: an out directory's readers may be older or newer.\n",
+    )
+    return 1
+  }
   const broken = reports.filter((r) => r.breaking.length)
   const misfits = await checkCorpus(current)
   if (broken.length || misfits.length) {
@@ -275,15 +299,16 @@ async function main(argv: string[]): Promise<number> {
     return 1
   }
   const stale = reports.filter((r) => r.stale)
+  const agentsStale = agentReports.filter((r) => r.stale)
   const plan = stalePlanShapes(current)
   const protocol = protocolDocs()
   const protocolStale = staleProtocolShapes(protocol)
-  for (const r of reports) {
+  for (const r of [...reports, ...agentReports]) {
     for (const c of r.changes) process.stdout.write(`  ${r.shape.type}: ${c.message}\n`)
   }
-  if (!stale.length && !plan.length && !protocolStale.length) {
+  if (!stale.length && !plan.length && !protocolStale.length && !agentsStale.length) {
     process.stdout.write(
-      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads; ${PLAN_SHAPES.length} plan shapes match schema/plan/; ${PROTOCOL_SHAPES.length} protocol shapes match schema/protocol/\n`,
+      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads; ${PLAN_SHAPES.length} plan shapes match schema/plan/; ${PROTOCOL_SHAPES.length} protocol shapes match schema/protocol/; ${AGENTS_SHAPES.length} @reeval/agents shapes match packages/agents/schema/\n`,
     )
     return 0
   }
@@ -292,6 +317,7 @@ async function main(argv: string[]): Promise<number> {
       ...stale.map((r) => r.shape.type),
       ...plan.map((s) => s.type),
       ...protocolStale.map((s) => s.root),
+      ...agentsStale.map((r) => r.shape.type),
     ]
     process.stderr.write(
       `✗ ${names.join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter reeval schema:update\` and commit schema/.\n`,
@@ -301,7 +327,12 @@ async function main(argv: string[]): Promise<number> {
   mkdirSync(SNAPSHOT_DIR, { recursive: true })
   mkdirSync(PLAN_SNAPSHOT_DIR, { recursive: true })
   mkdirSync(PROTOCOL_SNAPSHOT_DIR, { recursive: true })
+  mkdirSync(AGENTS_SNAPSHOT_DIR, { recursive: true })
   const written = [
+    ...agentsStale.map((r) => ({
+      file: snapshotFile(r.shape, AGENTS_SNAPSHOT_DIR),
+      doc: agents.get(r.shape.name),
+    })),
     ...stale.map((r) => ({ file: snapshotFile(r.shape), doc: current.get(r.shape.name) })),
     ...plan.map((s) => ({ file: snapshotFile(s, PLAN_SNAPSHOT_DIR), doc: current.get(s.name) })),
     ...protocolStale.map((s) => ({
