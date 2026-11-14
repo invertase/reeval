@@ -53,9 +53,11 @@ jobs:
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
   # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
-  # `checks`, which always runs. Any other change needs `unit`. On the light tier, the rest follow
-  # their own paths, and a change to CI, the lockfile or the workspace needs every job; on the full
-  # tier, every code change needs every job.
+  # `checks`, which always runs. Any other change needs `unit`, except one only to `packages/api`,
+  # which reeval doesn't run on. A change to a workspace package needs its own tests (`packages`),
+  # and those of every package that depends on it. On the light tier, the rest follow their
+  # own paths, and a change to CI, the lockfile or the workspace needs every job; on the full tier,
+  # every code change needs every job.
   changes:
     name: changes
     runs-on: ubuntu-24.04
@@ -72,11 +74,11 @@ jobs:
       pack: ${{ steps.scope.outputs.pack }}
       engine: ${{ steps.scope.outputs.engine }}
       launchers: ${{ steps.scope.outputs.launchers }}
+      packages: ${{ steps.scope.outputs.packages }}
     steps:
       # A PR's merge commit has the base it would merge into as its first parent; a merge group's
-      # base is further back.
-      - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # base is further back. Every event checks out: the package list comes from the manifests.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -86,9 +88,20 @@ jobs:
           ALL: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           BASE: ${{ github.event.merge_group.base_sha || 'HEAD^1' }}
         run: |
+          # The workspace packages with tests of their own, by directory (reeval's are the jobs below).
+          declare -A name_of pkgs
+          for m in packages/*/package.json; do
+            d=${m#packages/} d=${d%/package.json}
+            [ "$d" = reeval ] && continue
+            n=$(jq -r 'select(.scripts.test) | .name' "$m")
+            [ -n "$n" ] && name_of[$d]=$n
+          done
           unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL launchers=$ALL
-          every() { unit=true features=true docker=true studio=true pack=true engine=true launchers=true; }
-          if [ "$ALL" != true ]; then
+          every() {
+            unit=true features=true docker=true studio=true pack=true engine=true launchers=true
+            for d in "${!name_of[@]}"; do pkgs[$d]=1; done
+          }
+          if [ "$ALL" = true ]; then every; else
             echo "Tier: $PR_TIER"
             while IFS= read -r f; do
               case $f in
@@ -96,7 +109,15 @@ jobs:
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac
-              unit=true
+              case $f in
+                packages/*/*)
+                  d=${f#packages/} d=${d%%/*}
+                  [ -n "${name_of[$d]:-}" ] && pkgs[$d]=1 ;;
+              esac
+              case $f in
+                packages/api/*) ;;
+                *) unit=true ;;
+              esac
               if [ "$PR_TIER" != light ]; then every; continue; fi
               case $f in
                 .github/* | \
@@ -187,9 +208,25 @@ jobs:
                 scripts/ctrl-c.py)
                   launchers=true ;;
               esac
-            done < <(git diff --name-only "$BASE" HEAD)
+            done < <(git diff --no-renames --name-only "$BASE" HEAD)
           fi
+          # A package's dependents run too (sandbox-docker lists every adapter), until none is added.
+          added=true
+          while [ "$added" = true ]; do
+            added=false
+            for d in "${!name_of[@]}"; do
+              [ -n "${pkgs[$d]:-}" ] && continue
+              for p in "${!pkgs[@]}"; do
+                if jq -e --arg n "${name_of[$p]}" '(.dependencies // {}) + (.devDependencies // {}) | has($n)' \
+                  "packages/$d/package.json" > /dev/null; then
+                  pkgs[$d]=1 added=true
+                  break
+                fi
+              done
+            done
+          done
           {
+            echo "packages=$(printf '%s\n' "${!pkgs[@]}" | sort | xargs)"
             echo "unit=$unit"
             echo "features=$features"
             echo "docker=$docker"
@@ -295,19 +332,39 @@ jobs:
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
             --test-shard=${{ matrix.shard }} \
             test/!(features|docker|docker-antigravity|store-minio|studio|pack|contract|e2e-real|questions-real|openrouter-real).test.ts
-      # The other packages' own tests take seconds, so the first shard runs them. sandbox-docker's
-      # real-container tests skip here: there's no sandbox image. The docker job runs them.
-      - name: sandbox-docker (without containers), api, vm-api and the harness packages
-        if: matrix.shard == '1/4'
+      - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
+        uses: ./.github/actions/upload-coverage
+        with: { name: 'unit-${{ strategy.job-index }}' }
+
+  # The other workspace packages' own tests, each a few seconds, for the packages the change
+  # touches and their dependents (all of them on a full run). sandbox-docker's real-container
+  # tests skip here: there's no sandbox image. The docker job runs them.
+  packages:
+    name: packages
+    needs: changes
+    if: needs.changes.outputs.packages != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - if: needs.changes.outputs.coverage == 'true'
+        run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - env:
+          PACKAGES: ${{ needs.changes.outputs.packages }}
         run: |
-          for p in sandbox-docker api vm-api harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
-            echo "::group::@reeval/$p"
-            pnpm --filter "@reeval/$p" test
+          for p in $PACKAGES; do
+            echo "::group::packages/$p"
+            (cd "packages/$p" && pnpm test)
             echo "::endgroup::"
           done
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
-        with: { name: 'unit-${{ strategy.job-index }}' }
+        with: { name: packages }
 
   features:
     name: features (fake)
@@ -608,7 +665,7 @@ jobs:
 
   coverage:
     name: coverage
-    needs: [changes, unit, features, docker, studio]
+    needs: [changes, unit, packages, features, docker, studio]
     # Report what ran even when a test job failed; report-only, so a low number never fails it.
     if: ${{ !cancelled() && needs.changes.outputs.coverage == 'true' }}
     runs-on: ubuntu-24.04
@@ -643,7 +700,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
+    needs: [changes, checks, unit, packages, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
