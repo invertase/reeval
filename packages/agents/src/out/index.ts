@@ -9,7 +9,11 @@ import type { OutSession, OutTranscriptLine, OutTurn } from './types.ts'
 /** Where a session writes what it did, on the host. */
 export type OutOptions = {
   dir: string
-  /** Also write every stream part to `raw/parts.jsonl`. */
+  /**
+   * Also write every stream part to `raw/parts.jsonl`. A turn's parts are held in memory and
+   * written when it ends, so a secret split across them can be masked: a process killed mid-turn
+   * leaves none of that turn's.
+   */
   raw?: boolean
   /** Also write the session's log lines to `debug.log`. */
   debug?: boolean
@@ -54,12 +58,18 @@ function secretRanges(text: string, secrets: readonly string[]): Array<[number, 
   return ranges.sort((a, b) => a[0] - b[0])
 }
 
+/** The shortest piece of a split secret masked in a turn's other parts: shorter ones read as noise. */
+const MIN_FRAGMENT = 4
+
 /**
  * The parts with each secret masked in the text their deltas make together: a model's text splits
  * a key over several deltas, none of which holds the whole of it. The first delta a match starts
- * in gets `[masked]`, and every delta loses the match's characters it held.
+ * in gets `[masked]`, and every delta loses the match's characters it held. `fragments` are those
+ * characters, each delta's piece of a secret, which an adapter's `raw` part for the same native
+ * event repeats, for masking in the turn's other parts.
  */
 function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[]) {
+  const fragments = new Set<string>()
   const out = parts.map((p) => ({ ...p, part: { ...p.part } as Record<string, unknown> }))
   const streams = new Map<string, Array<{ part: Record<string, unknown>; field: string }>>()
   for (const { part } of out) {
@@ -79,17 +89,30 @@ function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[])
     for (const d of deltas) {
       const text = d.part[d.field] as string
       let next = ''
+      let piece = ''
+      const keep = () => {
+        if (piece.length >= MIN_FRAGMENT) fragments.add(piece)
+        piece = ''
+      }
       for (let i = 0; i < text.length; i++) {
         const at = offset + i
         const range = ranges.find(([s, e]) => at >= s && at < e)
-        if (!range) next += text[i]
-        else if (range[0] === at) next += '[masked]'
+        if (range?.[0] === at) {
+          keep()
+          next += '[masked]'
+        }
+        if (range) piece += text[i]
+        else {
+          keep()
+          next += text[i]
+        }
       }
+      keep()
       d.part[d.field] = next
       offset += text.length
     }
   }
-  return out
+  return { parts: out, fragments: [...fragments] }
 }
 
 /** The transcript event as `transcript.jsonl` has it: a tool's long output cut to its ends. */
@@ -136,9 +159,10 @@ export class OutWriter {
     return next
   }
 
-  #append(file: string, lines: readonly unknown[]): Promise<void> {
+  #append(file: string, lines: readonly unknown[], also: readonly string[] = []): Promise<void> {
     const text = lines.map((l) => `${JSON.stringify(l)}\n`).join('')
-    return this.#then(() => appendFile(join(this.dir, file), masked(text, this.#secrets)))
+    const secrets = [...this.#secrets, ...also]
+    return this.#then(() => appendFile(join(this.dir, file), masked(text, secrets)))
   }
 
   session(doc: OutSession): Promise<void> {
@@ -171,8 +195,9 @@ export class OutWriter {
     const parts = this.#parts.get(turn)
     if (!parts) return Promise.resolve()
     this.#parts.delete(turn)
-    const lines = maskedDeltas(parts, this.#secrets).map((p) => ({ turn, ...p }))
-    return this.#append('raw/parts.jsonl', lines)
+    const { parts: deltas, fragments } = maskedDeltas(parts, this.#secrets)
+    const lines = deltas.map((p) => ({ turn, ...p }))
+    return this.#append('raw/parts.jsonl', lines, fragments)
   }
 
   log(text: string): Promise<void> {

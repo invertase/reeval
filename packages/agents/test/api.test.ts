@@ -63,7 +63,7 @@ test('start, two turns and close run in order, placing rules and skills first', 
   assert.equal(await readFile(join(dir, 'AGENTS.md'), 'utf8'), 'Be brief.\n')
   assert.equal(
     await readFile(join(dir, '.cursor/skills/repo/SKILL.md'), 'utf8'),
-    '---\nname: "repo"\ndescription: "A repo skill"\n---\nDo it here.',
+    '---\nname: repo\ndescription: "A repo skill"\n---\nDo it here.',
   )
   assert.equal(await readFile(join(dir, '.cursor/skills/repo/notes.md'), 'utf8'), 'notes')
   const [input] = script.inputs
@@ -276,6 +276,16 @@ test('a skill name or file that would leave its directory is refused before anyt
       placement: 'workspace' as const,
     },
     { name: 'ok', description: 'd', content: 'c', files: [{ path: '/etc/x', content: 'x' }] },
+    { name: 'trailing.', description: 'd', content: 'c' },
+    { name: 'a\\..\\x', description: 'd', content: 'c' },
+    { name: 'x'.repeat(300), description: 'd', content: 'c' },
+    ...['a\\..\\..\\x', 'sub/', 'a./b', 'nul\0.md', `${'y'.repeat(300)}.md`].map((path) => ({
+      name: 'ok',
+      description: 'd',
+      content: 'c',
+      files: [{ path, content: 'x' }],
+      placement: 'workspace' as const,
+    })),
   ]) {
     const script = scripted([])
     await assert.rejects(
@@ -290,4 +300,45 @@ test('a skill name or file that would leave its directory is refused before anyt
     assert.deepEqual(script.inputs, [], 'refused before the adapter is built')
   }
   assert.deepEqual(await readdir(dir), [])
+})
+
+test("a skill file the runner's file system can't name is the skill's AgentError", async () => {
+  const deep = Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(250, 'd')).join('/')
+  await assert.rejects(
+    agent({
+      harness: scripted([]).harness,
+      runner: local({ cwd: dir }),
+      skills: [
+        {
+          name: 'deep',
+          description: 'd',
+          content: 'c',
+          files: [{ path: `${deep}/x.md`, content: 'x' }],
+          placement: 'workspace',
+        },
+      ],
+    }).start(),
+    (error) => error instanceof AgentError && /Couldn't place the skill deep/.test(error.message),
+  )
+})
+
+test('closeTimeoutMs past what setTimeout takes waits, rather than forcing the turn at once', async () => {
+  const warnings: string[] = []
+  const slow = async (emit: (part: never) => void) => {
+    emit({ type: 'stream-start' } as never)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    for (const part of reply('late').slice(1)) emit(part as never)
+  }
+  for (const closeTimeoutMs of [Number.POSITIVE_INFINITY, 2 ** 31, Number.NaN]) {
+    const session = await agent({
+      harness: scripted([slow]).harness,
+      runner: local({ cwd: dir }),
+      closeTimeoutMs,
+      onEvent: (e) => e.type === 'warning' && warnings.push(e.message),
+    }).start()
+    const turn = session.send('go')
+    await session.close()
+    assert.equal((await turn.result).text, 'late', String(closeTimeoutMs))
+  }
+  assert.deepEqual(warnings, [])
 })

@@ -254,3 +254,68 @@ test('a secret that starts another leaves none of the longer one', async () => {
     assert.match(body, /key \[masked\] and \[masked\]/)
   }
 })
+
+/** The key in three pieces of at least four characters, each a delta followed by `raw(piece)`. */
+function splitWithRaw(id: string, type: 'text' | 'reasoning', raw: (piece: string) => unknown) {
+  const pieces = [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]
+  return [
+    { type: `${type}-start`, id },
+    ...pieces.flatMap((piece, i) => {
+      const delta = i === 0 ? `key ${piece}` : i === 2 ? `${piece}!` : piece
+      return [
+        { type: `${type}-delta`, id, delta },
+        { type: 'raw', rawValue: raw(delta) },
+      ]
+    }),
+    { type: `${type}-end`, id },
+  ]
+}
+
+async function rawOf(turn: HarnessV1StreamPart[]) {
+  const session = await agent({
+    harness: scripted([turn]).harness,
+    runner: local({ cwd: dir }),
+    credentials: { CURSOR_API_KEY: KEY },
+    out: { dir: out, raw: true },
+  }).start()
+  await session.send('go').result
+  await session.close()
+  return text('raw/parts.jsonl')
+}
+
+const finish = reply('').slice(-2)
+
+test("a split key is masked in the raw part Cursor's adapter sends with each delta", async () => {
+  const body = await rawOf([
+    { type: 'stream-start' },
+    ...splitWithRaw('text-1', 'text', (piece) => ({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: piece }] },
+    })),
+    ...finish,
+  ] as HarnessV1StreamPart[])
+  for (const piece of [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]) {
+    assert.ok(!body.includes(piece), `raw/parts.jsonl has ${piece.length} characters of the key`)
+  }
+  assert.match(body, /"text":"key \[masked\]"/)
+})
+
+test("a split key is masked in the raw part pi's adapter sends with each text and thinking delta", async () => {
+  const event = (kind: string) => (piece: string) => ({
+    type: 'message_update',
+    assistantMessageEvent: { type: kind, contentIndex: 0, delta: piece },
+  })
+  const body = await rawOf([
+    { type: 'stream-start' },
+    ...splitWithRaw('reasoning-0', 'reasoning', event('thinking_delta')),
+    ...splitWithRaw('text-0', 'text', event('text_delta')),
+    ...finish,
+  ] as HarnessV1StreamPart[])
+  for (const piece of [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]) {
+    assert.ok(!body.includes(piece), `raw/parts.jsonl has ${piece.length} characters of the key`)
+  }
+  const deltas = (await lines('raw/parts.jsonl'))
+    .map((l) => l.part as { type: string; delta?: string; text?: string })
+    .filter((p) => p.type === 'text-delta')
+  assert.equal(deltas.map((p) => p.text ?? p.delta).join(''), 'key [masked]!')
+})

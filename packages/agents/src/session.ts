@@ -91,7 +91,9 @@ export type AgentOptions = {
   signal?: AbortSignal
   /**
    * How long `close()` waits for a turn that ignores its abort, and then for the harness session
-   * to close, before it ends the turn `aborted` and closes the runner anyway; 10 seconds by default.
+   * to close, before it ends the turn `aborted` and closes the runner anyway; 10 seconds by
+   * default, and at most 2³¹ − 1 ms (`Infinity` is that). A turn ended this way has only the
+   * timeout's error in its transcript: what it streamed before is in `raw/parts.jsonl` alone.
    */
   closeTimeoutMs?: number
 }
@@ -153,23 +155,28 @@ function channel<T>() {
 }
 
 const skillMd = (skill: AgentSkill) =>
-  `---\nname: ${JSON.stringify(skill.name)}\ndescription: ${JSON.stringify(skill.description)}\n---\n${skill.content}`
+  `---\nname: ${skill.name}\ndescription: ${JSON.stringify(skill.description)}\n---\n${skill.content}`
 
-/** One path segment: a skill's directory name. */
-const SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+/** One path segment of at most 128 characters, not ending in `.`: a skill's directory name. */
+const SKILL_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?$/
 
 /** Refuses a skill whose name or files would land outside its own directory. */
 function checkSkills(skills: readonly AgentSkill[]) {
   for (const skill of skills) {
     if (!SKILL_NAME.test(skill.name)) {
       throw new AgentError(
-        `The skill name ${JSON.stringify(skill.name)} isn't one path segment of letters, digits, '.', '_' or '-'`,
+        `The skill name ${JSON.stringify(skill.name)} isn't one path segment of at most 128 letters, digits, '.', '_' or '-', ending in no '.'`,
       )
     }
     for (const f of skill.files ?? []) {
-      if (!f.path || f.path.startsWith('/') || f.path.split('/').some((s) => s === '..')) {
+      const segments = f.path.split('/')
+      const unsafe =
+        /[\\\0]/.test(f.path) ||
+        f.path.startsWith('/') ||
+        segments.some((s) => s === '' || s === '..' || s.endsWith('.') || s.length > 255)
+      if (unsafe) {
         throw new AgentError(
-          `The skill ${skill.name}'s file ${JSON.stringify(f.path)} isn't a relative path inside it`,
+          `The skill ${skill.name}'s file ${JSON.stringify(f.path)} isn't a relative path inside it, with no '\\', NUL, empty segment or segment ending in '.'`,
         )
       }
     }
@@ -178,6 +185,30 @@ function checkSkills(skills: readonly AgentSkill[]) {
 
 /** How long `close()` waits on each step of a turn or session that doesn't stop, by default. */
 const CLOSE_TIMEOUT_MS = 10_000
+/** The longest `setTimeout` takes; past it, Node fires at once. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1
+
+const closeTimeoutOf = (ms: number | undefined) =>
+  ms === undefined || Number.isNaN(ms)
+    ? CLOSE_TIMEOUT_MS
+    : Math.min(Math.max(ms, 0), MAX_TIMEOUT_MS)
+
+/** A write that fails on the path it was given (too long, a NUL) as the skill's fault. */
+async function placing(skill: string, write: () => Promise<void>) {
+  try {
+    await write()
+  } catch (error) {
+    const code = (error as { code?: unknown }).code
+    if (
+      code === 'ENAMETOOLONG' ||
+      code === 'ERR_INVALID_ARG_VALUE' ||
+      code === 'ERR_INVALID_ARG_TYPE'
+    ) {
+      throw new AgentError(`Couldn't place the skill ${skill}: ${errorText(error)}`)
+    }
+    throw error
+  }
+}
 
 /** `promise`'s value, or undefined once `ms` have passed without it settling. */
 async function within<T>(promise: PromiseLike<T>, ms: number): Promise<{ value: T } | undefined> {
@@ -203,7 +234,7 @@ export function agent(options: AgentOptions): Agent {
   const layout = LAYOUTS[harness.kind]
   const workDir = options.workDir ?? '.'
   const outOptions = typeof options.out === 'string' ? { dir: options.out } : options.out
-  const closeTimeout = options.closeTimeoutMs ?? CLOSE_TIMEOUT_MS
+  const closeTimeout = closeTimeoutOf(options.closeTimeoutMs)
   const emit = (event: AgentEvent) => {
     try {
       options.onEvent?.(event)
@@ -268,8 +299,10 @@ export function agent(options: AgentOptions): Agent {
       }
       for (const skill of skills.filter((s) => s.placement === 'workspace')) {
         const dir = posix.join(workDir, layout.workspaceSkillDir, skill.name)
-        await box.writeFile(`${dir}/SKILL.md`, skillMd(skill))
-        for (const f of skill.files ?? []) await box.writeFile(`${dir}/${f.path}`, f.content)
+        await placing(skill.name, () => box.writeFile(`${dir}/SKILL.md`, skillMd(skill)))
+        for (const f of skill.files ?? []) {
+          await placing(skill.name, () => box.writeFile(`${dir}/${f.path}`, f.content))
+        }
       }
       phase('place', since)
 
