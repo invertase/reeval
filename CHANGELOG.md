@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/reeval-ai/reeval/compare/v0.27.0...v0.27.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **cloud:** leave the cloud platform's own VM variables out of a cloud run's bundle ([#978](https://github.com/reeval-ai/reeval/issues/978)) ([5f50783](https://github.com/reeval-ai/reeval/commit/5f50783ce01341017494c249342dae32138b5854))
+
 ## [0.27.0](https://github.com/reeval-ai/reeval/compare/v0.26.0...v0.27.0) (2026-11-14)
 
 
