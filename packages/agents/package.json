@@ -30,6 +30,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
+  "dependencies": {
+    "@ai-sdk/harness": "1.0.172"
+  },
   "devDependencies": {
     "oxc-parser": "0.156.0"
   }
