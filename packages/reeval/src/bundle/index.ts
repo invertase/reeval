@@ -27,6 +27,7 @@ import { loadConfig, requireConfig, selectProfile, withProfileHistory } from '..
 import { loadEnvFiles } from '../env.ts'
 import { UsageError } from '../errors.ts'
 import { git, repoTop } from '../git.ts'
+import { uncheckedCursorIds } from '../harness/default-effort.ts'
 import { author, gitInfo } from '../history/provenance.ts'
 import { findingLines, scanText } from '../history/secret-scan.ts'
 import { worktreePatch } from '../history/state.ts'
@@ -564,10 +565,30 @@ function differences(a: unknown, b: unknown, at = '', found: string[] = [], limi
       differences(a[key], b[key], at ? `${at}.${key}` : key, found, limit)
     }
   } else {
-    const show = (v: unknown) => (v === undefined ? 'nothing' : JSON.stringify(v).slice(0, 80))
-    found.push(`${at || 'the plan'}: ${show(a)} → ${show(b)}`)
+    const [before, now] = shown(a, b)
+    found.push(`${at || 'the plan'}:\n      bundled: ${before}\n      here:    ${now}`)
   }
   return found
+}
+
+/** The most of a value a plan difference shows. */
+const SHOWN = 400
+
+/**
+ * `a` and `b` as JSON, each at most {@link SHOWN} characters. Two long strings start a little
+ * before the first character they differ at, so the cut never hides the difference.
+ */
+function shown(a: unknown, b: unknown): [string, string] {
+  const json = (v: unknown) => (v === undefined ? 'nothing' : JSON.stringify(v))
+  let [x, y] = [json(a), json(b)]
+  if (typeof a === 'string' && typeof b === 'string' && Math.max(x.length, y.length) > SHOWN) {
+    let at = 0
+    while (at < x.length && x[at] === y[at]) at++
+    const from = Math.max(1, at - 40)
+    if (from > 1) [x, y] = [`"…${x.slice(from)}`, `"…${y.slice(from)}`]
+  }
+  const cut = (t: string) => (t.length > SHOWN ? `${t.slice(0, SHOWN - 1)}…` : t)
+  return [cut(x), cut(y)]
 }
 
 /** Keys of the plan that depend on the machine or its history, not on the bundle's files. */
@@ -587,6 +608,49 @@ function comparable(plan: Record<string, unknown>) {
         : v
   const { profile, totals, evals, excluded, images, secrets } = plan
   return strip({ profile, totals, evals, excluded, images, secrets }) as Record<string, unknown>
+}
+
+type ComparedEval = { id?: unknown; notes?: unknown; cells?: unknown }
+
+/**
+ * `a` and `b` without the efforts Cursor's model catalog decides, on each eval where either plan
+ * couldn't read it (no key where it was bundled, or a failed request): the catalog answers per
+ * key and per moment, not from the bundle's files, so the plan that read it wins.
+ */
+function withoutUncheckedEfforts(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): [Record<string, unknown>, Record<string, unknown>] {
+  const evals = (plan: Record<string, unknown>) =>
+    Array.isArray(plan.evals) ? (plan.evals as ComparedEval[]) : []
+  const notes = (e: ComparedEval | undefined) =>
+    Array.isArray(e?.notes)
+      ? (e.notes as unknown[]).filter((n): n is string => typeof n === 'string')
+      : []
+  const unchecked = new Map<unknown, Set<string>>()
+  for (const e of [...evals(a), ...evals(b)]) {
+    const ids = uncheckedCursorIds(notes(e))
+    if (ids.length) unchecked.set(e.id, new Set([...(unchecked.get(e.id) ?? []), ...ids]))
+  }
+  const strip = (plan: Record<string, unknown>) => ({
+    ...plan,
+    evals: evals(plan).map((e) => {
+      const ids = unchecked.get(e.id)
+      if (!ids) return e
+      const effortNote = (n: string) =>
+        n.startsWith('efforts differ: ') || [...ids].some((id) => n.startsWith(`effort: ${id} `))
+      return {
+        ...e,
+        notes: notes(e).filter((n) => !effortNote(n)),
+        cells: Array.isArray(e.cells)
+          ? (e.cells as Record<string, unknown>[]).map((c) =>
+              typeof c.harness === 'string' && ids.has(c.harness) ? { ...c, effort: null } : c,
+            )
+          : e.cells,
+      }
+    }),
+  })
+  return unchecked.size ? [strip(a), strip(b)] : [a, b]
 }
 
 /** A path inside the bundle, as `safeTarPath` writes it: relative, `/`-separated, no `..`. */
@@ -991,7 +1055,7 @@ function throughLink(path: string, target: string, links: Map<string, string>): 
 }
 
 /** What differs between the manifest's plan and `plan`, the same run's dry run from the bundle. */
-function planDifferences(manifest: BundleManifest, plan: PlanDoc): string[] {
+export function planDifferences(manifest: BundleManifest, plan: PlanDoc): string[] {
   const out: string[] = []
   const project = manifest.project ? `${manifest.project}/` : ''
   const inputs = (doc: { inputs?: PlanInput[] }) =>
@@ -1013,7 +1077,8 @@ function planDifferences(manifest: BundleManifest, plan: PlanDoc): string[] {
   for (const [path] of before) {
     if (!now.has(path)) out.push(`the bundle has ${inBundle(path)}, which the run no longer reads`)
   }
-  out.push(...differences(comparable(manifest.plan), comparable(plan)).map((d) => `plan: ${d}`))
+  const [bundled, here] = withoutUncheckedEfforts(comparable(manifest.plan), comparable(plan))
+  out.push(...differences(bundled, here).map((d) => `plan: ${d}`))
   return out
 }
 

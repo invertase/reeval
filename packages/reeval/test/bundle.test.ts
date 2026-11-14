@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 import { before, describe, test } from 'node:test'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { readTar, type TarEntry, writeTar } from '@reeval/sandbox-docker'
-import { moveResumeState } from '../src/bundle/index.ts'
+import { moveResumeState, planDifferences } from '../src/bundle/index.ts'
 import type { BundleManifest } from '../src/bundle/types.ts'
 import { UsageError } from '../src/errors.ts'
 import type { RunRecord } from '../src/history/types.ts'
@@ -200,7 +200,7 @@ describe('reeval bundle', () => {
     })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /doesn't plan here as it did where it was bundled, so nothing ran/)
-    assert.match(r.stderr, /plan: totals\.attempts: 1 → 2/)
+    assert.match(r.stderr, /plan: totals\.attempts:\n {6}bundled: 1\n {6}here: {4}2\n/)
     assert.doesNotMatch(r.stdout, /Run:/)
   })
 
@@ -927,5 +927,46 @@ describe('symbolic links in a skill folder', () => {
     assert.equal(r.code, 2, r.stderr)
     assert.match(r.stderr, /secret\.md/)
     assert.ok(!r.written)
+  })
+})
+
+describe("a bundle's plan where it runs", () => {
+  const cell = (effort: string | null) => ({ harness: 'cursor:composer-2.5', effort, runs: 1 })
+  const plan = (notes: string[], effort: string | null = null, more: string[] = []) => ({
+    totals: { evals: 1, attempts: 1 },
+    evals: [{ id: 'e', notes: [...notes, ...more], cells: [cell(effort)] }],
+  })
+  const manifest = (p: ReturnType<typeof plan>) => ({ project: '', plan: p }) as BundleManifest
+  const differs = (bundled: ReturnType<typeof plan>, here: ReturnType<typeof plan>) =>
+    planDifferences(manifest(bundled), here as Parameters<typeof planDifferences>[1])
+  const NONE =
+    "effort: cursor:composer-2.5 none (Cursor's model catalog lists no effort for composer-2.5)"
+  const FAILED =
+    "effort: cursor:composer-2.5 not checked against Cursor's model catalog (its request failed: HTTP 401)"
+  const TAKES = 'effort: cursor:composer-2.5 none (params.fast sets it)'
+  const NO_KEY =
+    "effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set)"
+
+  test("ignores the efforts Cursor's model catalog decides where either side couldn't read it", () => {
+    assert.deepEqual(differs(plan([NONE]), plan([FAILED])), [])
+    assert.deepEqual(differs(plan([NO_KEY]), plan([], 'medium')), [])
+    assert.deepEqual(differs(plan([], 'medium'), plan([FAILED])), [])
+  })
+
+  test('still compares the efforts both sides read, and every other note', () => {
+    assert.equal(differs(plan([NONE]), plan([TAKES])).length, 1)
+    assert.equal(differs(plan([NONE], null), plan([], 'medium')).length, 2)
+    assert.deepEqual(differs(plan([NO_KEY], null, ['a']), plan([FAILED], null, ['b'])), [
+      'plan: evals[0].notes[0]:\n      bundled: "a"\n      here:    "b"',
+    ])
+  })
+
+  test('shows both values whole, or from just before they differ', () => {
+    const [line] = differs(plan([NONE]), plan([TAKES]))
+    assert.ok(line?.includes(JSON.stringify(NONE)), line)
+    assert.ok(line?.includes(JSON.stringify(TAKES)), line)
+    const long = 'x'.repeat(600)
+    const [cut] = differs(plan([`${long} where it was bundled`]), plan([`${long} here`]))
+    assert.match(cut ?? '', /bundled: "…x+ where it was bundled"\n {6}here: {4}"…x+ here"/)
   })
 })

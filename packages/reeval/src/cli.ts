@@ -55,7 +55,7 @@ import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './liv
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { PlanDocument, RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import { redactSecrets, registerSecret, stripCredentials } from './redact.ts'
+import { isPlaceholder, redactSecrets, registerSecret, stripCredentials } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
@@ -96,7 +96,7 @@ import {
   sandboxCapacity,
   sandboxKind,
 } from './sandbox/kinds.ts'
-import { heldSecrets, readSecretsFile, SECRETS_SERVICE } from './secrets-file.ts'
+import { heldSecrets, hostEnv, readSecretsFile, SECRETS_SERVICE } from './secrets-file.ts'
 import { localStudio } from './store/resolve.ts'
 import { isRemote, pullStore, storeCredentials } from './store/sync.ts'
 import { clip, formatDuration } from './text.ts'
@@ -2118,7 +2118,8 @@ function namesDeclaredSecret(evals: ReadonlyArray<{ id: string }>): UsageError |
 }
 
 /**
- * Reads Cursor's model catalog for the planned Cursor cells, checks their `effort` and `params`
+ * Reads Cursor's model catalog for the planned Cursor cells (with a held CURSOR_API_KEY's value,
+ * not its placeholder, so a bundle plans alike where it runs), checks their `effort` and `params`
  * against it (exit 2, naming the eval and cell), gives each the effort it runs at, and notes each
  * eval's harnesses that run with none. A catalog that can't be read leaves the Cursor cells
  * unchecked and noted; each attempt then reports why it couldn't start.
@@ -2128,8 +2129,8 @@ async function planEfforts(planned: PlannedItem[]): Promise<CursorEfforts | unde
   const { effortNotes, withDefaultEffort } = await import('./harness/default-effort.ts')
   let cursor: CursorEfforts | undefined
   let unchecked = "CURSOR_API_KEY isn't set"
-  const key = process.env.CURSOR_API_KEY
-  if (key && live.some((p) => p.attempt.harness.kind === 'cursor')) {
+  const key = hostEnv().CURSOR_API_KEY
+  if (key && !isPlaceholder(key) && live.some((p) => p.attempt.harness.kind === 'cursor')) {
     const { checkCursorPlan } = await import('./harness/cursor-catalog.ts')
     const checked = await checkCursorPlan(key, live)
     if (checked instanceof Error) {

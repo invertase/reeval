@@ -1,7 +1,8 @@
 // REEVAL_SECRETS_FILE: read once and deleted, each secret's mode deciding who gets its value. The
 // fixtures under test/features/secrets/file-* check what the agent and the eval code see.
 import assert from 'node:assert/strict'
-import { existsSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { placeholder } from '@reeval/sandbox-docker'
@@ -74,6 +75,41 @@ describe('REEVAL_SECRETS_FILE', () => {
       readRun(r.dir).evals[0]?.error?.message ?? '',
       /is brokered to api\.example\.com, and .* sends it to api\.other\.test, which it isn't brokered to/,
     )
+  })
+
+  test("a held CURSOR_API_KEY's value, not its placeholder, reads Cursor's model catalog at plan time", async () => {
+    const key = `cursor-held-key-${Date.now()}`
+    const cache = tempDir('secrets-file-cache')
+    const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
+    mkdirSync(join(cache, 'reeval'))
+    writeFileSync(
+      join(cache, `reeval/cursor-models-${hash}.json`),
+      JSON.stringify({
+        fetchedAt: new Date().toISOString(),
+        items: [{ id: 'composer-2.5', parameters: [] }],
+      }),
+    )
+    const p = await project('secrets-file-cursor', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harnesses: cursor({ model: 'composer-2.5' }) })
+`,
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+    })
+    const file = join(p.dir, 'secrets.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ version: 1, secrets: { CURSOR_API_KEY: { mode: 'sandbox', value: key } } }),
+    )
+    const r = await runCli(p.dir, ['run', '--dry-run'], {
+      env: { REEVAL_SECRETS_FILE: file, XDG_CACHE_HOME: cache },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /effort: cursor:composer-2\.5 none \(Cursor's model catalog lists no effort for composer-2\.5\)/,
+    )
+    assert.doesNotMatch(r.stdout, /not checked against Cursor's model catalog/)
   })
 
   test('a file that isn’t one is refused, and deleted all the same', async () => {
