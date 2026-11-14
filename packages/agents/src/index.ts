@@ -119,6 +119,14 @@ export {
   agent,
 } from './session.ts'
 export {
+  type HarnessSetup,
+  type InstallMode,
+  installHarness,
+  recipeIdentity,
+  recipeMarker,
+  setupOf,
+} from './setup.ts'
+export {
   PLUGIN_DIR,
   PLUGIN_PARTS,
   type PlacedPlugin,

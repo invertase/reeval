@@ -18,7 +18,6 @@ import { type Engine, engineSpec } from './engine.ts'
 import {
   BASE_IMAGE,
   type BakedHarness,
-  HARNESS_PACKAGES,
   type HarnessBootstrap,
   harnessLabel,
   imageFor,
@@ -94,12 +93,6 @@ export const bakeKey = (...inputs: readonly string[]) =>
  */
 export const harnessImageFor = (harness: BakedHarness, from: string) =>
   `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${bakeKey(toolchainDockerfile(from))}`
-
-/**
- * The adapter whose bootstrap `harness`'s image bakes. An attempt whose adapter asks for any other
- * bootstrap reinstalls the CLI at start, which a restricted egress policy can refuse.
- */
-export const bakedAdapter = (harness: BakedHarness) => HARNESS_PACKAGES[harness].bootstrap.adapter()
 
 /** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */
 const profilePathScript = () =>
@@ -387,6 +380,8 @@ export async function buildImage(
   log: (line: string) => void,
   options: {
     harness: BakedHarness
+    /** How `harness`'s CLI is installed. */
+    bootstrap: HarnessBootstrap
     from?: string
     signal?: AbortSignal
     output?: BuildOutput
@@ -397,7 +392,7 @@ export async function buildImage(
     key?: string
   },
 ): Promise<{ image: string; agentVersion: string }> {
-  const { harness, from, signal, engine } = options
+  const { harness, bootstrap, from, signal, engine } = options
   // Built on the digest `from` names now, and labeled with it, so a moved tag is visible.
   const resolved = from ? await resolveFrom(from, signal, engine) : null
   const digest = resolved && 'digest' in resolved ? resolved.digest : null
@@ -405,7 +400,6 @@ export async function buildImage(
     from && digest && resolved && 'local' in resolved && !resolved.local && !from.includes('@')
       ? `${from}@${digest}`
       : from
-  const { bootstrap } = HARNESS_PACKAGES[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
   // Empty on a base only this machine has, which nothing pulls, so a base's own label isn't kept.
@@ -528,18 +522,18 @@ export async function buildImage(
 }
 
 /**
- * Runs `harness`'s bootstrap in `session` (a container, or a VM reeval then keeps as an image)
- * and returns the CLI version it installed.
+ * Runs `bootstrap` in `session` (a container, or a VM reeval then keeps as an image) and returns
+ * the CLI version it installed.
  */
-export const bakeHarness = (session: DockerSession, harness: BakedHarness) =>
-  bake(session, HARNESS_PACKAGES[harness].bootstrap)
+export const bakeHarness = (session: DockerSession, bootstrap: HarnessBootstrap) =>
+  bake(session, bootstrap)
 
 /**
- * A hash of the bootstrap `harness`'s adapter applies (its files and commands): it changes
- * whenever what the bootstrap installs does, version bump or not.
+ * A hash of what `bootstrap`'s adapter applies (its files and commands): it changes whenever
+ * what the bootstrap installs does, version bump or not.
  */
-export async function bakedRecipe(harness: BakedHarness): Promise<string> {
-  const adapter = await HARNESS_PACKAGES[harness].bootstrap.adapter()
+export async function bakedRecipe(bootstrap: HarnessBootstrap): Promise<string> {
+  const adapter = await bootstrap.adapter()
   const recipe = await adapter.getBootstrap?.({})
   if (!recipe) return 'none'
   const files = [...recipe.files]
@@ -550,9 +544,6 @@ export async function bakedRecipe(harness: BakedHarness): Promise<string> {
     .digest('hex')
     .slice(0, 16)
 }
-
-/** The harness's name, as a bake's progress says it. */
-export const bakedHarnessName = (harness: BakedHarness) => HARNESS_PACKAGES[harness].bootstrap.name
 
 /** Runs the harness bootstrap in `session` and returns the CLI version it installed. */
 async function bake(session: DockerSession, bootstrap: HarnessBootstrap): Promise<string> {

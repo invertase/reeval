@@ -66,6 +66,9 @@
             "bootstrap": {
               "type": "number"
             },
+            "install": {
+              "type": "number"
+            },
             "place": {
               "type": "number"
             },

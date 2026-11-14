@@ -8,7 +8,7 @@ import type {
   HarnessV1StreamPart,
 } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { interactiveTools, reasoningTime } from '@reeval/agents'
+import { interactiveTools, reasoningTime, setupOf } from '@reeval/agents'
 import {
   ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_HOME_SKILLS_DIR,
@@ -57,7 +57,6 @@ import { PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR, piProvider } from '@reeval
 import {
   applyTransformations,
   BAKED_HARNESSES,
-  bakedAdapter,
   HARNESS_PACKAGES,
   hostAllowed,
   onEndpoint,
@@ -2913,7 +2912,7 @@ describe("each harness's image serves its attempts' bootstrap", () => {
 
   for (const harness of BAKED_HARNESSES) {
     test(`${harness}, at no effort, the default effort and its own`, async () => {
-      const baked = await ((await bakedAdapter(harness)) as HarnessV1).getBootstrap?.({})
+      const baked = await setupOf(harness).recipe()
       for (const unset of ATTEMPTS[harness]) {
         const efforts = [unset, withDefaultEffort(unset)]
         if (takesEffort(unset)) efforts.push({ ...unset, effort: 'high' })

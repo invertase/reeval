@@ -20,6 +20,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./docker": {
+      "types": "./dist/docker/index.d.ts",
+      "default": "./dist/docker/index.js"
+    },
     "./layouts": {
       "types": "./dist/catalog/skill-dirs.d.ts",
       "default": "./dist/catalog/skill-dirs.js"
@@ -40,11 +44,16 @@
   },
   "dependencies": {
     "@ai-sdk/harness": "1.0.172",
-    "@reeval/harness-codex": "workspace:*",
-    "@reeval/harness-goose": "workspace:*",
-    "@reeval/harness-grok-build": "workspace:*",
-    "@reeval/harness-opencode": "workspace:*",
-    "@reeval/harness-pi": "workspace:*"
+    "@ai-sdk/harness-claude-code": "1.0.176",
+    "@reeval/harness-antigravity": "workspace:0.1.17",
+    "@reeval/harness-codex": "workspace:0.1.14",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.9",
+    "@reeval/harness-fx": "workspace:0.1.14",
+    "@reeval/harness-goose": "workspace:0.1.17",
+    "@reeval/harness-grok-build": "workspace:0.1.13",
+    "@reeval/harness-opencode": "workspace:0.2.16",
+    "@reeval/harness-pi": "workspace:0.2.10",
+    "@reeval/sandbox-docker": "workspace:*"
   },
   "devDependencies": {
     "oxc-parser": "0.156.0"

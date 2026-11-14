@@ -1222,13 +1222,13 @@ describe('package boundary', () => {
       e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)],
     )
 
-  test('imports only Node built-ins, @ai-sdk harness packages, @balena/dockerignore and its own files', () => {
+  test('imports only Node built-ins, @ai-sdk/harness, @balena/dockerignore and its own files', () => {
     for (const file of files(join(root, 'src'))) {
       const source = readFileSync(file, 'utf8')
-      for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
+      for (const [, spec] of source.matchAll(/(?:from |import\()'([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$)|@balena\/dockerignore$)/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(\/|$)|@balena\/dockerignore$)/,
           `${file} imports ${spec}`,
         )
       }
@@ -1237,13 +1237,15 @@ describe('package boundary', () => {
     assert.equal(pkg.dependencies.reeval, undefined)
   })
 
-  test('ships the Docker build context and pins every harness adapter', () => {
+  test('ships the Docker build context, and @reeval/agents pins every harness adapter', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
+    const agents = JSON.parse(readFileSync(join(root, '../agents/package.json'), 'utf8'))
     for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
       const expected = name.startsWith('@reeval/') ? `workspace:${version}` : version
-      assert.equal(pkg.dependencies[name], expected, name)
+      assert.equal(agents.dependencies[name], expected, name)
+      assert.equal(pkg.dependencies[name], undefined, `${name} is @reeval/agents' to install`)
     }
   })
 

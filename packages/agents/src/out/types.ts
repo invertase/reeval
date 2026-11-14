@@ -19,7 +19,7 @@ export type OutSession = {
   /** Absent while the session is open. */
   endedAt?: string
   /** Milliseconds each start-up phase took, for the phases it reached. */
-  phases: { runner?: number; place?: number; bootstrap?: number }
+  phases: { runner?: number; place?: number; install?: number; bootstrap?: number }
   /** `running` while open, `closed` once closed, `failed` when it failed to start. */
   status: 'running' | 'closed' | 'failed'
   /** Why it failed to start. */

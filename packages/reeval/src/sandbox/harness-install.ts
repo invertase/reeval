@@ -1,9 +1,9 @@
 // A harness's CLI installed in a machine reeval doesn't build with Docker: Tart's preflight bakes
 // it into an image each attempt clones, and `boat()` installs it as each VM starts. Both run the
 // bootstrap Docker's images bake, so an attempt's harness finds its marker and skips the install.
+import { setupOf } from '@reeval/agents'
 import {
   adapterVersion,
-  bakedHarnessName,
   bakedRecipe,
   bakeHarness,
   type DockerSession,
@@ -57,13 +57,14 @@ export function harnessBake(harness: HarnessDescriptor): HarnessBake | null {
   }
   const kind = harness.kind
   if (!isBakedHarness(kind)) return null
+  const setup = setupOf(kind)
   return {
     label: `${kind}-${adapterVersion(kind)}`,
     kind,
-    name: bakedHarnessName(kind),
+    name: setup.name,
     pnpm: true,
-    recipe: () => bakedRecipe(kind),
-    install: (session) => bakeHarness(session, kind),
+    recipe: () => bakedRecipe(setup),
+    install: (session) => bakeHarness(session, setup),
   }
 }
 
