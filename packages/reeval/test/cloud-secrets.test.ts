@@ -1,7 +1,7 @@
 // `reeval cloud secrets` and `reeval cloud provider` against a fake platform that keeps eval
 // secrets and provider keys as the platform's routes do, and refuses as they do.
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -601,6 +601,45 @@ describe('reeval cloud provider', () => {
       const odd = await runCli(dir, ['cloud', 'provider', 'Open AI/x?y', 'delete'], { env })
       assert.equal(odd.code, 2, odd.stdout + odd.stderr)
       assert.equal(p.seen.at(-1)?.path, '/api/orgs/org_a/providers/Open%20AI%2Fx%3Fy')
+    } finally {
+      await p.close()
+    }
+  })
+
+  test("refuses a provider name that looks like a key, and doesn't repeat or send it", async () => {
+    const p = await platform()
+    try {
+      const { dir, env } = linked(p.base)
+      const keys = [
+        'sk-proj-Abc123def456',
+        'sk_live_9f8e7d6c',
+        'AIzaSyD3fG4hJ5kL6',
+        'gsk_0a1b2c3d',
+        'xai-QwErTy12',
+        'k3Jd9fQ2mZp7Lx4Rv8Wn',
+        'a8f3c91e7b2d4f60c5e9',
+        'p'.repeat(65),
+      ]
+      for (const key of keys) {
+        for (const action of ['set', 'delete']) {
+          const r = await runCli(dir, ['cloud', 'provider', key, action], { env, input: 'k\n' })
+          const said = r.stdout + r.stderr
+          assert.equal(r.code, 2, `${key} ${action}: ${said}`)
+          assert.match(r.stderr, /that looks like a key, not a provider name/, key)
+          assert.ok(!said.includes(key), `${key} is repeated: ${said}`)
+        }
+      }
+      const sent = JSON.stringify(p.seen)
+      for (const key of keys) assert.ok(!sent.includes(key), `${key} reached the platform`)
+      assert.equal(p.seen.filter((s) => s.method !== 'GET').length, 0)
+      const log = readFileSync(join(dir, '.reeval', 'cli.jsonl'), 'utf8')
+      for (const key of keys) assert.ok(!log.includes(key), `${key} is in the command log`)
+      // Twins: provider slugs, long or with digits, still go to the platform.
+      for (const name of ['google-vertex-anthropic', 'amazon-bedrock', 'xai', 'r1-provider-2']) {
+        const r = await runCli(dir, ['cloud', 'provider', name, 'delete'], { env })
+        assert.match(r.stderr, /No .* key for org_a/, name)
+        assert.equal(p.seen.at(-1)?.path, `/api/orgs/org_a/providers/${name}`)
+      }
     } finally {
       await p.close()
     }

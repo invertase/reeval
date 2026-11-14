@@ -20,6 +20,28 @@ import { plural } from './text.ts'
 export const SECRET_MODES = ['brokered', 'sandbox', 'readable'] as const
 export type SecretMode = (typeof SECRET_MODES)[number]
 
+const MAX_PROVIDER = 64
+const KEY_PREFIX = /^(sk|pk|rk|gsk|xai|ghp|gho|ghs|github_pat|glpat|hf|r8|pplx|fw)[-_]|^AIza/
+
+/** Bits per character, over the string's own characters. */
+function entropy(s: string): number {
+  const counts = new Map<string, number>()
+  for (const ch of s) counts.set(ch, (counts.get(ch) ?? 0) + 1)
+  let bits = 0
+  for (const n of counts.values()) bits -= (n / s.length) * Math.log2(n / s.length)
+  return bits
+}
+
+/**
+ * Which providers exist is the platform's answer, but a key pasted where the provider goes would
+ * land in a request path and in reeval's messages, so a name shaped like one never leaves here.
+ */
+function looksLikeKey(name: string): boolean {
+  if (name.length > MAX_PROVIDER || KEY_PREFIX.test(name)) return true
+  if (name.length < 16 || !/\d/.test(name)) return false
+  return (/[a-z]/.test(name) && /[A-Z]/.test(name)) || (name.length >= 20 && entropy(name) >= 3.5)
+}
+
 const NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/
 const MAX_HOSTS = 20
@@ -339,6 +361,11 @@ export async function providerCommand(
   if (!provider) {
     throw new UsageError(
       'reeval cloud provider needs a provider: reeval cloud provider <provider> set|delete, or list',
+    )
+  }
+  if (looksLikeKey(provider)) {
+    throw new UsageError(
+      "reeval cloud provider: that looks like a key, not a provider name, so reeval didn't send or repeat it. Give the provider (reeval cloud provider <provider> set) and the key on stdin or at the prompt",
     )
   }
   if (action !== 'set' && action !== 'delete') {
