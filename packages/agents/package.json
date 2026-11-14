@@ -1,0 +1,33 @@
+{
+  "name": "@reeval/agents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Run coding-agent harnesses on any runner and track what they did",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reeval-ai/reeval.git",
+    "directory": "packages/agents"
+  },
+  "homepage": "https://github.com/reeval-ai/reeval/tree/main/packages/agents#readme",
+  "bugs": {
+    "url": "https://github.com/reeval-ai/reeval/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  }
+}

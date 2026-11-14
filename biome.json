@@ -16,6 +16,29 @@
       "linter": { "domains": { "react": "none" } }
     },
     {
+      "includes": ["packages/agents/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "reeval": "@reeval/agents is under reeval: it imports nothing of reeval's"
+                },
+                "patterns": [
+                  {
+                    "group": ["reeval/**", "**/reeval/src/**"],
+                    "message": "@reeval/agents is under reeval: it imports nothing of reeval's"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "packages/harness-opencode/src/opencode-provider-table.ts",
         "packages/sandbox-docker/docker/seccomp-default.json"

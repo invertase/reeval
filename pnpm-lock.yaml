@@ -544,6 +544,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  packages/agents: {}
+
   packages/api:
     dependencies:
       zod:
