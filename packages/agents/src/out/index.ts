@@ -12,7 +12,9 @@ export type OutOptions = {
   /**
    * Also write every stream part to `raw/parts.jsonl`. A turn's parts are held in memory and
    * written when it ends, so a secret split across them can be masked: a process killed mid-turn
-   * leaves none of that turn's.
+   * leaves none of that turn's. That masking is best effort, and the file may hold pieces of a
+   * key: in Goose's replaced deltas, in a Cursor event with several text blocks, and wherever a
+   * native event's text differs from its deltas'.
    */
   raw?: boolean
   /** Also write the session's log lines to `debug.log`. */
@@ -69,38 +71,80 @@ function maskSpan(
   open: boolean,
 ) {
   let next = ''
+  let r = 0
   for (let i = 0; i < text.length; i++) {
     const at = start + i
-    const range = ranges.find(([s, e]) => at >= s && at < e)
-    if (!range) next += text[i]
+    let range = ranges[r]
+    while (range && range[1] <= at) range = ranges[++r]
+    if (!range || at < range[0]) next += text[i]
     else if (range[0] === at || (open && i === 0)) next += '[masked]'
   }
   return next
 }
 
-type DeltaText = { text: string; offset: number; stream: string; ranges: Array<[number, number]> }
+type DeltaText = {
+  text: string
+  offset: number
+  stream: string
+  ranges: Array<[number, number]>
+  /** The delta's place among the turn's parts. */
+  at: number
+}
+
+/** `text` laid over `d`'s stream with `d`'s own text at `at`, masked, if it reads as the stream there. */
+function aligned(text: string, d: DeltaText, at: number): string | undefined {
+  const start = d.offset - at
+  if (start < 0 || d.stream.slice(start, start + text.length) !== text) return undefined
+  return maskSpan(text, start, d.ranges, true)
+}
+
+/** Of `deltas`, sorted by `at`, the one nearest to the part at `at`. */
+function nearest(deltas: readonly [DeltaText, ...DeltaText[]], at: number): DeltaText {
+  let lo = 0
+  let hi = deltas.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if ((deltas[mid] as DeltaText).at < at) lo = mid + 1
+    else hi = mid
+  }
+  const after = deltas[lo] as DeltaText
+  const before = deltas[lo - 1]
+  return before && at - before.at < after.at - at ? before : after
+}
+
+type Leaves = {
+  /** Every delta of a stream that holds a secret, by its exact text. */
+  byText: Map<string, [DeltaText, ...DeltaText[]]>
+  /** The deltas since the previous `raw` part. */
+  since: readonly DeltaText[]
+  /** The `raw` part's place among the turn's parts. */
+  at: number
+}
 
 /**
- * `value` with each string that holds `delta`'s text masked, where the string, laid over the
- * stream so the delta's text is where the stream has it, reads as the stream: the copy of a
- * native event an adapter's `raw` part carries repeats its delta, or the text so far, verbatim.
- * Object keys, numbers and `type` discriminators are left alone.
+ * `value` with each string that repeats stream text masked, where the string, laid over the
+ * stream so a delta's text is where the stream has it, reads as the stream. A string that is a
+ * delta's text exactly is laid over the nearest such delta in the turn, before or after the
+ * `raw` part: an adapter may hold deltas back past the native event they came from. A string
+ * that holds a delta, such as the text so far, is matched against the deltas since the previous
+ * `raw` part. Object keys, numbers and `type` discriminators are left alone.
  */
-function maskLeaves(value: unknown, deltas: readonly DeltaText[], key?: string): unknown {
+function maskLeaves(value: unknown, leaves: Leaves, key?: string): unknown {
   if (typeof value === 'string') {
     if (key === 'type') return value
-    for (const d of deltas) {
+    const same = leaves.byText.get(value)
+    if (same) return aligned(value, nearest(same, leaves.at), 0) ?? value
+    for (const d of leaves.since) {
       for (let at = value.indexOf(d.text); at !== -1; at = value.indexOf(d.text, at + 1)) {
-        const start = d.offset - at
-        if (start < 0 || d.stream.slice(start, start + value.length) !== value) continue
-        return maskSpan(value, start, d.ranges, true)
+        const masked = aligned(value, d, at)
+        if (masked !== undefined) return masked
       }
     }
     return value
   }
-  if (Array.isArray(value)) return value.map((v) => maskLeaves(v, deltas))
+  if (Array.isArray(value)) return value.map((v) => maskLeaves(v, leaves))
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskLeaves(v, deltas, k)]))
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskLeaves(v, leaves, k)]))
   }
   return value
 }
@@ -108,24 +152,29 @@ function maskLeaves(value: unknown, deltas: readonly DeltaText[], key?: string):
 /**
  * The parts with each secret masked in the text their deltas make together: a model's text splits
  * a key over several deltas, none of which holds the whole of it. The first delta a match starts
- * in gets `[masked]`, and every delta loses the match's characters it held. A `raw` part, which
- * adapters push after the parts they made from the same native event, has its strings masked
- * against the deltas since the previous `raw` part (`maskLeaves`).
+ * in gets `[masked]`, and every delta loses the match's characters it held. Each `raw` part's
+ * strings are masked where they repeat that text (`maskLeaves`).
  */
 function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[]) {
   const out = parts.map((p) => ({ ...p, part: { ...p.part } as Record<string, unknown> }))
-  const streams = new Map<string, Array<{ part: Record<string, unknown>; field: string }>>()
-  for (const { part } of out) {
+  const streams = new Map<
+    string,
+    Array<{ part: Record<string, unknown>; field: string; at: number }>
+  >()
+  out.forEach(({ part }, at) => {
     const type = String(part.type)
-    if (!type.endsWith('-delta')) continue
+    if (!type.endsWith('-delta')) return
     const field =
       typeof part.text === 'string' ? 'text' : typeof part.delta === 'string' ? 'delta' : ''
-    if (!field) continue
+    if (!field) return
     const key = `${type}\0${String(part.id)}`
-    streams.set(key, [...(streams.get(key) ?? []), { part, field }])
-  }
+    const deltas = streams.get(key)
+    if (deltas) deltas.push({ part, field, at })
+    else streams.set(key, [{ part, field, at }])
+  })
   const ordered = longestFirst(secrets)
   const texts = new Map<Record<string, unknown>, DeltaText>()
+  const byText = new Map<string, [DeltaText, ...DeltaText[]]>()
   for (const deltas of streams.values()) {
     const stream = deltas.map((d) => d.part[d.field]).join('')
     const ranges = secretRanges(stream, ordered)
@@ -133,20 +182,25 @@ function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[])
     let offset = 0
     for (const d of deltas) {
       const text = d.part[d.field] as string
-      if (text) texts.set(d.part, { text, offset, stream, ranges })
+      if (text) texts.set(d.part, { text, offset, stream, ranges, at: d.at })
       d.part[d.field] = maskSpan(text, offset, ranges, false)
       offset += text.length
     }
   }
   if (!texts.size) return out
+  for (const d of [...texts.values()].sort((a, b) => a.at - b.at)) {
+    const same = byText.get(d.text)
+    if (same) same.push(d)
+    else byText.set(d.text, [d])
+  }
   let since: DeltaText[] = []
-  for (const { part } of out) {
+  out.forEach(({ part }, at) => {
     const text = texts.get(part)
     if (text) since.push(text)
-    if (part.type !== 'raw') continue
-    if (since.length) part.rawValue = maskLeaves(part.rawValue, since)
+    if (part.type !== 'raw') return
+    part.rawValue = maskLeaves(part.rawValue, { byText, since, at })
     since = []
-  }
+  })
   return out
 }
 
@@ -221,7 +275,9 @@ export class OutWriter {
   /** Holds a turn's stream part for {@link parts}, which masks a secret split across deltas. */
   part(turn: number, part: StampedPart): void {
     if (!this.#options.raw) return
-    this.#parts.set(turn, [...(this.#parts.get(turn) ?? []), part])
+    const parts = this.#parts.get(turn)
+    if (parts) parts.push(part)
+    else this.#parts.set(turn, [part])
   }
 
   /** Writes the turn's held parts to `raw/parts.jsonl`, once. */

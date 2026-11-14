@@ -409,3 +409,39 @@ test('a raw part that repeats the text so far, or covers two deltas, is masked t
   ])
   assertMasked(key, two.parts)
 })
+
+test("a key in deltas pi holds back past their native events is masked in those events' raw parts", async () => {
+  const key = 'sk-pro-beZYXW-9f3k2Lq8mN4tRvA1x'
+  const id = 'text-1'
+  const deltas = ['key ', ...chunks(key, [2, 3, 1]), '!']
+  const { parts } = await rawOf(key, [
+    {
+      type: 'raw',
+      rawValue: { type: 'message_update', assistantMessageEvent: { type: 'toolcall_end' } },
+    },
+    ...deltas.map((delta) => ({ type: 'raw', rawValue: piEvent('text_delta')(delta) })),
+    { type: 'text-start', id },
+    ...deltas.map((delta) => ({ type: 'text-delta', id, delta })),
+    { type: 'text-end', id },
+    {
+      type: 'raw',
+      rawValue: {
+        type: 'message_end',
+        message: { content: [{ type: 'text', text: deltas.join('') }] },
+      },
+    },
+  ])
+  assertMasked(key, parts)
+})
+
+test('a long turn of raw parts is held and masked in time linear in its parts', async () => {
+  const key = 'sk-pro-beZYXW-9f3k2Lq8mN4tRvA1x'
+  const words = Array.from({ length: 30_000 }, (_, i) => `w${i % 97} `)
+  const started = performance.now()
+  const { parts } = await rawOf(key, [
+    ...streamed('text-0', 'text', [...words, ...chunks(key, [3])], piEvent('text_delta')),
+  ])
+  assert.ok(performance.now() - started < 10_000, 'holding and masking 60,000 parts took over 10s')
+  assert.ok(parts.length > 60_000)
+  assert.ok(!parts.some((p) => strings(p.rawValue).includes(key.slice(0, 6))))
+})
