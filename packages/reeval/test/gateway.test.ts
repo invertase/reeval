@@ -1,10 +1,11 @@
 // The gateway resolver and Vercel's and OpenRouter's routes as data: fallback, pins, the plan's
 // hint, the models reeval calls itself, what a harness on each authenticates with and is brokered
-// on, the upstream OpenRouter names, and Vercel's credential's expiry.
+// on, and the upstream OpenRouter names.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, test } from 'node:test'
+import { apiHost } from '@reeval/agents'
 import { fxVertexBaseUrl } from '@reeval/harness-fx'
 import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
@@ -12,7 +13,7 @@ import { onEndpoint } from '@reeval/sandbox-docker'
 import { generateText } from 'ai'
 import { checkGateways } from '../src/config.ts'
 import { ROUTING_GATEWAY_NAMES } from '../src/contract/gateway.ts'
-import { anthropicPath, apiHost, openaiPath } from '../src/gateway/api.ts'
+import { brokerToken, cachedTokenSource, RETRY_MS } from '../src/environment/token.ts'
 import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
 import {
   anthropicOnOpenRouter,
@@ -22,17 +23,7 @@ import {
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import { onRoutingGateway, ROUTING_GATEWAYS } from '../src/gateway/routes.ts'
-import { brokerToken, cachedTokenSource, RETRY_MS } from '../src/gateway/token.ts'
-import {
-  jwtExpiry,
-  VERCEL_API,
-  VERCEL_GATEWAY,
-  vercelApi,
-  vercelBaseUrl,
-  vercelBaseUrlProblem,
-  vercelCredential,
-  vercelCredentialProblem,
-} from '../src/gateway/vercel.ts'
+import { VERCEL_GATEWAY, vercelApi, vercelCredential } from '../src/gateway/vercel.ts'
 import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
@@ -748,32 +739,6 @@ describe('Vercel AI Gateway routes', () => {
     assert.deepEqual(
       VERCEL_GATEWAY.routes['claude-code']?.(process.env).authAs,
       'AI_GATEWAY_API_KEY',
-    )
-  })
-
-  test("an expired project token is refused before the run; a live one, or a key, isn't", () => {
-    const noon = new Date('2026-01-01T12:00:00Z')
-    const at = (iso: string) => Date.parse(iso) / 1000
-    assert.equal(
-      jwtExpiry(jwt(at('2026-01-01T00:00:00Z')))?.toISOString(),
-      '2026-01-01T00:00:00.000Z',
-    )
-    assert.equal(jwtExpiry('opaque'), undefined)
-    assert.equal(jwtExpiry('a.!!!.c'), undefined)
-    assert.match(
-      vercelCredentialProblem({ VERCEL_OIDC_TOKEN: jwt(at('2026-01-01T00:00:00Z')) }, noon) ?? '',
-      /^VERCEL_OIDC_TOKEN expired at 2026-01-01T00:00:00\.000Z/,
-    )
-    assert.equal(
-      vercelCredentialProblem({ VERCEL_OIDC_TOKEN: jwt(at('2026-01-01T13:00:00Z')) }, noon),
-      undefined,
-    )
-    assert.equal(
-      vercelCredentialProblem(
-        { VERCEL_OIDC_TOKEN: jwt(at('2026-01-01T00:00:00Z')), AI_GATEWAY_API_KEY: 'k' },
-        noon,
-      ),
-      undefined,
     )
   })
 })
@@ -1574,17 +1539,6 @@ describe('routing gateways as data', () => {
     const { url, path } = fx.FX_PROVIDERS.openrouter
     assert.equal(`${url}${path}`, OPENROUTER_GATEWAY.api(process.env).openai)
   })
-
-  test('openaiPath and anthropicPath put an endpoint under the API base', () => {
-    const api = {
-      origin: 'https://gw.example',
-      openai: 'https://gw.example/api/v1/',
-      anthropic: 'https://gw.example',
-    }
-    assert.equal(apiHost(api), 'gw.example')
-    assert.equal(openaiPath(api, '/chat/completions'), '/api/v1/chat/completions')
-    assert.equal(anthropicPath(api, '/v1/messages'), '/v1/messages')
-  })
 })
 
 describe('AI_GATEWAY_BASE_URL', () => {
@@ -1599,55 +1553,6 @@ describe('AI_GATEWAY_BASE_URL', () => {
   }
   const paths = (agent: { endpoints: readonly { host: string; path: unknown }[] }) =>
     agent.endpoints.map((e) => [e.host, e.path])
-
-  test("vercel()'s API moves to it, path and all; unset, it's Vercel's own", () => {
-    assert.deepEqual(vercelApi({}), VERCEL_API)
-    assert.deepEqual(vercelApi({ AI_GATEWAY_BASE_URL: `${BASE}//` }), {
-      origin: BASE,
-      openai: `${BASE}/v1`,
-      anthropic: BASE,
-    })
-    assert.equal(vercelBaseUrl({}), undefined)
-    assert.equal(vercelBaseUrl({ AI_GATEWAY_BASE_URL: `${BASE}/` }), BASE)
-  })
-
-  test('only an https:// URL that reads as written, with nothing the agents would lose, is a gateway', () => {
-    const fix =
-      'Set AI_GATEWAY_BASE_URL to an https:// URL such as https://gateway.example.com, or unset it to call Vercel AI Gateway.'
-    const problem = (value: string) => vercelBaseUrlProblem({ AI_GATEWAY_BASE_URL: value })
-    assert.equal(problem(BASE), undefined)
-    assert.equal(problem(`${BASE}/`), undefined)
-    assert.equal(vercelBaseUrlProblem({}), undefined)
-    assert.equal(problem('gw.example'), `AI_GATEWAY_BASE_URL ("gw.example") isn't a URL. ${fix}`)
-    assert.equal(
-      problem('http://gw.example'),
-      `AI_GATEWAY_BASE_URL ("http://gw.example") isn't https://, and reeval sends the key only over HTTPS. ${fix}`,
-    )
-    for (const value of [
-      'https://gw.example/?k=1',
-      'https://gw.example/#a',
-      'https://u@gw.example',
-    ]) {
-      assert.match(problem(value) ?? '', /has a query, a fragment or a user/, value)
-    }
-    const rewritten = {
-      'https://gw.example/p?': 'https://gw.example/p',
-      'https://gw.example/p#': 'https://gw.example/p',
-      ' https://gw.example/p': 'https://gw.example/p',
-      'https://gw.exa\nmple/p': 'https://gw.example/p',
-      'https:gw.example/p': 'https://gw.example/p',
-    }
-    for (const [value, base] of Object.entries(rewritten)) {
-      assert.equal(
-        problem(value),
-        `AI_GATEWAY_BASE_URL (${JSON.stringify(value)}) reads as ${base}, and reeval sends the key only to a URL written as it reads. ${fix}`,
-      )
-    }
-    assert.deepEqual(
-      vercelApi({ AI_GATEWAY_BASE_URL: 'https:gw.example/p' }).origin,
-      BASE.replace('/proxy', '/p'),
-    )
-  })
 
   test('each route brokers the key on its host only, under its path', () => {
     const claude = at({ kind: 'claude-code', model: 'claude-sonnet-5-5' } as HarnessDescriptor)

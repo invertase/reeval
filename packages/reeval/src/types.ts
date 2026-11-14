@@ -8,6 +8,7 @@ import type {
   TokenUsage,
   TranscriptEvent,
   TurnStatus,
+  VertexPublisher,
   WebEventType,
 } from '@reeval/agents'
 import type {
@@ -28,6 +29,7 @@ export type {
   TokenUsage,
   TranscriptEvent,
   TurnStatus,
+  VertexPublisher,
   WebEventType,
 } from '@reeval/agents'
 
@@ -1053,9 +1055,6 @@ export type OpenRouterGatewayDescriptor = {
    */
   fallbacks?: boolean
 }
-
-/** A model publisher on Vertex AI, which may serve its models in a region of its own. */
-export type VertexPublisher = 'anthropic' | 'google' | 'xai'
 
 /**
  * Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in

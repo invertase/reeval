@@ -1,7 +1,7 @@
 import type { HarnessV1, HarnessV1Session, HarnessV1StreamPart } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
-import { brokerToken } from '../gateway/token.ts'
+import { brokerToken } from '../environment/token.ts'
 import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
 import { capabilitiesOf, runsAgent, sandboxKind, suggestedSandbox } from '../sandbox/kinds.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'

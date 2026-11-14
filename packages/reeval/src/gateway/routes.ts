@@ -1,8 +1,9 @@
 // The gateways that route a harness's model calls somewhere other than its provider's own API:
-// for each, the harnesses it serves and what each needs there, and why it can't serve the rest.
+// each one's @reeval/agents route (the harnesses it serves, what each authenticates with and the
+// model id it names, and why it can't serve the rest) with what the egress gateway needs for each.
+import type { Route, RouteConfig, RouteName } from '@reeval/agents'
 import type { ROUTING_GATEWAY_NAMES } from '../contract/gateway.ts'
 import type { Agent, AgentKind, ModelSpecific } from '../harness/agents.ts'
-import type { GatewayApi } from './api.ts'
 import { OPENROUTER_GATEWAY } from './openrouter.ts'
 import { VERCEL_GATEWAY } from './vercel.ts'
 
@@ -14,23 +15,12 @@ import { VERCEL_GATEWAY } from './vercel.ts'
 export type GatewayRoute = ModelSpecific &
   Pick<Agent, 'authEnv' | 'modelId' | 'expectedBlocked'> & { authAs: string }
 
+/** What the egress gateway adds to a harness's route: its {@link GatewayRoute} less the route's own. */
+export type RouteWire = Omit<GatewayRoute, keyof RouteConfig>
+
 /** A gateway that routes harnesses: its name for messages, its routes and its refusals. */
-export type RoutingGateway = {
-  /** For messages: `Vercel AI Gateway`. */
-  name: string
-  /** Where its APIs are, from the host environment. */
-  api: (env: NodeJS.ProcessEnv) => GatewayApi
+export type RoutingGateway = Omit<Route, 'routes'> & {
   routes: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => GatewayRoute>>
-  /** Why it can't serve an agent it has no route for, for the plan's messages. */
-  refusals: Partial<Record<AgentKind, string>>
-  /** Why it can't serve an agent it has a route for in this host environment, or undefined. */
-  refusedAt?: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => string | undefined>>
-  /**
-   * The harnesses whose `effort` reaches the model there by a path no real run has checked, each
-   * with the models (as the eval names them) that holds for: the plan refuses `effort` with them
-   * on this gateway.
-   */
-  unprovenEffort: Partial<Record<AgentKind, (model: string) => boolean>>
 }
 
 /** Vertex AI takes a minted token, not a brokered key, so it has a catalog of its own. */
@@ -40,7 +30,7 @@ export type RoutingGatewayName = (typeof ROUTING_GATEWAY_NAMES)[number]
 export const ROUTING_GATEWAYS: Readonly<Record<RoutingGatewayName, RoutingGateway>> = {
   vercel: VERCEL_GATEWAY,
   openrouter: OPENROUTER_GATEWAY,
-}
+} satisfies Record<RouteName, RoutingGateway>
 
 /** Whether a harness's `gateway` names one of {@link ROUTING_GATEWAYS}. */
 export const isRoutingGateway = (name: string | undefined): name is RoutingGatewayName =>

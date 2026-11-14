@@ -39,6 +39,46 @@ export {
 } from './catalog/skill-dirs.ts'
 export { AgentError } from './errors.ts'
 export { type LocalOptions, local } from './local.ts'
+export { anthropicPath, apiHost, openaiPath, type RouteApi } from './routes/api.ts'
+export { everyModel, notGemini } from './routes/effort.ts'
+export { openCodeModelOn, ROUTES, type RouteName } from './routes/index.ts'
+export {
+  anthropicOnOpenRouter,
+  OPENROUTER_API,
+  OPENROUTER_HOST,
+  OPENROUTER_KEY,
+  OPENROUTER_ROUTE,
+} from './routes/openrouter.ts'
+export type { Route, RouteConfig } from './routes/route.ts'
+export {
+  jwtExpiry,
+  VERCEL_API,
+  VERCEL_BASE_URL,
+  VERCEL_HOST,
+  VERCEL_KEY,
+  VERCEL_OIDC,
+  VERCEL_ROUTE,
+  vercelApi,
+  vercelBaseUrl,
+  vercelBaseUrlProblem,
+  vercelCredential,
+  vercelCredentialProblem,
+} from './routes/vercel.ts'
+export {
+  fxVertexId,
+  openCodeVertexId,
+  VERTEX_AGENT_PROVIDERS,
+  VERTEX_PROJECT_ENV,
+  VERTEX_REFUSALS,
+  VERTEX_ROUTES,
+  type VertexPublisher,
+  type VertexSettings,
+  vertexClaudeId,
+  vertexHarnessModel,
+  vertexHost,
+  vertexRegion,
+  vertexXaiId,
+} from './routes/vertex.ts'
 export type { Proc, ProcExit, Runner, RunnerInfo, SpawnOptions } from './runner.ts'
 export { withFallbacks } from './runner.ts'
 export { type RunnerSessionOptions, runnerSession } from './runner-session.ts'
