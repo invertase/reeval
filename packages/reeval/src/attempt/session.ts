@@ -20,7 +20,7 @@ import {
 } from '../environment/resolve.ts'
 import { agentOf, brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
-import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
+import type { AgentLog, Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
 import { redactSecrets } from '../redact.ts'
@@ -527,6 +527,9 @@ export async function startWithRetry<S extends { close(): Promise<void> }>(
   }
 }
 
+/** The harness's lines and payloads, into the running attempt's debug trace. */
+const attemptLog: AgentLog = { log: debugLog, trace: debugTrace }
+
 function startHarness(
   a: Attempt,
   harness: Harness,
@@ -534,7 +537,7 @@ function startHarness(
   options: Parameters<Harness['start']>[2],
 ): Promise<HarnessSession> {
   const { harness: descriptor } = a.spec
-  return startWithRetry((signal) => harness.start(box, signal, options), {
+  return startWithRetry((signal) => harness.start(box, signal, options, attemptLog), {
     kind: descriptor.kind,
     timeoutMs: startTimeoutMs(descriptor),
     signal: a.signal,

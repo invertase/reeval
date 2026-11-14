@@ -1,7 +1,6 @@
 import type { HarnessV1, HarnessV1Session, HarnessV1StreamPart } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
-import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { brokerToken } from '../gateway/token.ts'
 import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
 import { capabilitiesOf, runsAgent, sandboxKind, suggestedSandbox } from '../sandbox/kinds.ts'
@@ -34,16 +33,17 @@ import {
   type StampedPart,
   timesReasoning,
 } from './transcript.ts'
-import type { Harness, HarnessResult } from './types.ts'
+import type { AgentLog, Harness, HarnessResult } from './types.ts'
 
 /** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
 function traceStreamPart(
+  log: AgentLog,
   part: StampedPart['part'],
   ms: number,
   tools: Map<string, { name: string; at: number }>,
 ) {
   const p = part as { type: string; toolCallId?: string; toolName?: string; error?: unknown }
-  debugTrace(
+  log.trace(
     'harness',
     'stream',
     { ms, part },
@@ -52,17 +52,14 @@ function traceStreamPart(
   if (p.type === 'tool-call' && p.toolCallId) {
     const name = p.toolName ?? 'tool'
     tools.set(p.toolCallId, { name, at: ms })
-    debugLog('harness', `tool ${name} called (${p.toolCallId})`)
+    log.log('harness', `tool ${name} called (${p.toolCallId})`)
   } else if ((p.type === 'tool-result' || p.type === 'tool-error') && p.toolCallId) {
     const call = tools.get(p.toolCallId)
     const took = call ? ` in ${ms - call.at}ms` : ''
     const how = p.type === 'tool-error' ? `failed: ${errorText(p.error)}` : 'returned'
-    debugLog(
-      'harness',
-      `tool ${call?.name ?? p.toolName ?? 'tool'} ${how}${took} (${p.toolCallId})`,
-    )
+    log.log('harness', `tool ${call?.name ?? p.toolName ?? 'tool'} ${how}${took} (${p.toolCallId})`)
   } else if (p.type === 'error') {
-    debugLog('harness', `stream error: ${errorText(p.error)}`)
+    log.log('harness', `stream error: ${errorText(p.error)}`)
   }
 }
 
@@ -186,10 +183,10 @@ export function rejectedKey(turn: {
 }
 
 /** The route's service account, written beside the workspace, as the adapter takes it. */
-async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVertex> {
+async function writeAdc(sandbox: Sandbox, adc: SandboxAdc, log: AgentLog): Promise<AdapterVertex> {
   await sandbox.writeFile(`../${adc.file}`, adc.content)
   const credentialsFile = `${sandbox.workdir.replace(/[\\/][^\\/]*$/, '')}/${adc.file}`
-  debugLog('env', `Vertex AI service account → ${credentialsFile}`)
+  log.log('env', `Vertex AI service account → ${credentialsFile}`)
   return { project: adc.project, location: adc.location, credentialsFile }
 }
 
@@ -223,14 +220,14 @@ export function createAgentHarness(
   const problem = agentSandboxProblem(catalog, sandbox)
   if (problem) throw new InfraError(problem)
   return {
-    async start(sandbox, signal, { skills, mcp, plugins }) {
+    async start(sandbox, signal, { skills, mcp, plugins }, log) {
       const auth = agentAuth(catalog)
       let servedModel: string | null = null
       let finishMetadata: unknown
       const turnCost = turnCosts(catalog.reportedCost, descriptor.kind)
       const servers = agentMcp(catalog, mcp, plugins)
       const model = catalog.modelId?.(descriptor.model) ?? descriptor.model
-      const vertex = catalog.adc ? await writeAdc(sandbox, catalog.adc) : undefined
+      const vertex = catalog.adc ? await writeAdc(sandbox, catalog.adc, log) : undefined
       const adapter = await catalog.adapter({
         auth,
         ...(catalog.routeEnv ? { env: catalog.routeEnv } : {}),
@@ -242,7 +239,7 @@ export function createAgentHarness(
         ...(Object.keys(servers).length ? { mcpServers: catalog.mcpServers(servers) } : {}),
       })
       for (const path of await writePluginFiles(sandbox, catalog, plugins)) {
-        debugLog('env', `plugin settings → ${path}`)
+        log.log('env', `plugin settings → ${path}`)
       }
       const off = interactiveTools(adapter as HarnessV1)
       const agent = new HarnessAgent({
@@ -267,19 +264,19 @@ export function createAgentHarness(
         try {
           stopToken = await brokerToken(catalog.token, sandbox.network, {
             onRefresh: (t) =>
-              debugLog(
+              log.log(
                 'broker',
                 `access token refreshed, valid until ${new Date(t.expiresAt).toISOString()}`,
               ),
             onError: (error) =>
-              debugLog('broker', `access token refresh failed, retrying: ${errorText(error)}`),
+              log.log('broker', `access token refresh failed, retrying: ${errorText(error)}`),
           })
         } catch (error) {
           throw new InfraError(
             `Couldn't mint an access token from ${catalog.credential} for ${catalog.name}: ${errorText(error)}. Run gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS.`,
           )
         }
-        debugLog('broker', `gateway adds an access token from ${catalog.credential}`)
+        log.log('broker', `gateway adds an access token from ${catalog.credential}`)
       }
       let session: Awaited<ReturnType<typeof agent.createSession>>
       try {
@@ -311,19 +308,16 @@ export function createAgentHarness(
             return store.parse(stdout)
           })
           .catch((error: unknown) => {
-            debugLog(
-              'harness',
-              `reading ${catalog.name}'s stored usage failed: ${errorText(error)}`,
-            )
+            log.log('harness', `reading ${catalog.name}'s stored usage failed: ${errorText(error)}`)
             return undefined
           })
         if (!read) {
-          debugLog('harness', `no usage in ${catalog.name}'s store since the turn began`)
+          log.log('harness', `no usage in ${catalog.name}'s store since the turn began`)
           return null
         }
         if (read.mark) usageMark = read.mark
         const usage = harnessUsage(read.usage)
-        debugLog(
+        log.log(
           'harness',
           `usage read back from ${catalog.name}'s store: ${plural(read.calls, 'model call')}${usage ? ` · ${usage.input} in · ${usage.output} out` : ''}`,
         )
@@ -419,7 +413,7 @@ export function createAgentHarness(
             for await (const part of result.fullStream) {
               const ms = Date.now() - startedAt
               parts.push({ ms, part: part as StampedPart['part'] })
-              traceStreamPart(part as StampedPart['part'], ms, tools)
+              traceStreamPart(log, part as StampedPart['part'], ms, tools)
               if (part.type === 'finish-step') {
                 const step = tokenUsage(part.usage as Usage)
                 if (step) steps.push(step)

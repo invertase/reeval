@@ -88,6 +88,22 @@ export type Treatments = {
 /** A plugin the session copied into the sandbox. */
 export type PlacedPlugin = { name: string; dir: string; parts: PluginPart[]; servers: string[] }
 
+/** The phases a harness reports under. */
+export type AgentLogPhase = 'env' | 'broker' | 'harness'
+
+/** Where a harness reports what it does, for whoever runs it to keep or show. */
+export type AgentLog = {
+  /** One readable line. */
+  log(phase: AgentLogPhase, text: string): void
+  /** A raw payload, with `show` the line it reads as, or `false` to keep it out of sight. */
+  trace(phase: AgentLogPhase, kind: string, data: unknown, show?: string | false): void
+}
+
 export interface Harness {
-  start(sandbox: Sandbox, signal: AbortSignal, treatments: Treatments): Promise<HarnessSession>
+  start(
+    sandbox: Sandbox,
+    signal: AbortSignal,
+    treatments: Treatments,
+    log: AgentLog,
+  ): Promise<HarnessSession>
 }
