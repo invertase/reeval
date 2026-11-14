@@ -62,6 +62,15 @@ export function noDefaultEffort(
   }
 }
 
+const UNCHECKED = " not checked against Cursor's model catalog ("
+
+/** The harness ids whose {@link effortNotes} say Cursor's model catalog wasn't read for them. */
+export function uncheckedCursorIds(notes: readonly string[]): string[] {
+  return notes
+    .filter((n) => n.startsWith('effort: ') && n.includes(UNCHECKED))
+    .map((n) => n.slice('effort: '.length, n.indexOf(UNCHECKED)))
+}
+
 /**
  * The plan's notes on one eval's harnesses: each that runs with no effort and why, and the
  * efforts its cells run at when they differ and a cell id doesn't say so. `unchecked` says why a
@@ -85,7 +94,7 @@ export function effortNotes(
     const why = noDefaultEffort(h, cursor)
     if (why === 'unchecked') {
       efforts.set(id, 'not checked')
-      notes.push(`effort: ${id} not checked against Cursor's model catalog (${unchecked})`)
+      notes.push(`effort: ${id}${UNCHECKED}${unchecked})`)
     } else {
       efforts.set(id, 'none')
       notes.push(`effort: ${id} none (${why})`)
