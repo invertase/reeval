@@ -232,10 +232,11 @@ export async function startAgent(options: StartAgentOptions): Promise<HarnessSes
     ...(options.skills?.length ? { skills: options.skills } : {}),
   })
   const statuses = () => traffic?.statuses() ?? []
-  const network = await runnerSession(runner, options.session)
-  const release = () => Promise.resolve(network.destroy()).catch(() => {})
+  let network: Awaited<ReturnType<typeof runnerSession>> | undefined
+  const release = () => Promise.resolve(network?.destroy()).catch(() => {})
   let session: Awaited<ReturnType<typeof agent.createSession>>
   try {
+    network = await runnerSession(runner, options.session)
     session = await agent.createSession({ sandboxSession: network, abortSignal: signal })
   } catch (error) {
     close()
@@ -248,13 +249,14 @@ export async function startAgent(options: StartAgentOptions): Promise<HarnessSes
       { transient: !hint && (error as { transient?: unknown }).transient === true },
     )
   }
+  const started = network
   let usageMark: string | undefined
   const storedUsage = async (since: number): Promise<TokenUsage | null> => {
     const store = await entry.storedUsage?.()
     if (!store) return null
     const command = store.command({ since, ...(usageMark ? { mark: usageMark } : {}) })
     const read = await Promise.resolve(
-      network.run({ command, abortSignal: AbortSignal.timeout(STORED_USAGE_MS) }),
+      started.run({ command, abortSignal: AbortSignal.timeout(STORED_USAGE_MS) }),
     )
       .then(({ exitCode, stdout, stderr }) => {
         if (exitCode !== 0) throw new Error(`exit ${exitCode}: ${stderr.trim().slice(-300)}`)
