@@ -69,12 +69,10 @@ export {
   cursorHookMatcher,
   cursorMcpServers,
   gooseMcpServers,
-  type HarnessUsage,
   LAYOUTS,
   type Layout,
   piCost,
   piMcpServers,
-  type ReasoningDelivery,
 } from '@reeval/agents'
 export {
   directProviderRefusal,

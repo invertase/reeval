@@ -5,7 +5,14 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, test } from 'node:test'
-import { apiHost, VERCEL_ROUTE } from '@reeval/agents'
+import {
+  apiHost,
+  everyCallFailed,
+  type ProviderStop,
+  providerStop,
+  rejectedKey,
+  VERCEL_ROUTE,
+} from '@reeval/agents'
 import { fxVertexBaseUrl } from '@reeval/harness-fx'
 import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
@@ -25,7 +32,6 @@ import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import { onRoutingGateway, ROUTING_GATEWAYS, type RouteWire } from '../src/gateway/routes.ts'
 import { VERCEL_GATEWAY, vercelApi, vercelCredential } from '../src/gateway/vercel.ts'
 import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
-import { withWire } from '../src/gateway/with-wire.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
   vertexDecisionModel,
@@ -36,7 +42,7 @@ import {
   vertexRegion,
   vertexSettings,
 } from '../src/gateway/vertex.ts'
-import { everyCallFailed, rejectedKey } from '../src/harness/agent.ts'
+import { withWire } from '../src/gateway/with-wire.ts'
 import {
   agentAuth,
   agentFor,
@@ -44,7 +50,6 @@ import {
   brokeringFor,
   expectedBlockedFor,
 } from '../src/harness/agents.ts'
-import { type ProviderStop, providerStop } from '../src/harness/provider-stop.ts'
 import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
 import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'

@@ -1,7 +1,6 @@
 import type {
   CostUsd,
   EventTime,
-  FileEditEvent,
   ModelCallEvent,
   PluginPart,
   ProviderStopRecord,
@@ -22,7 +21,6 @@ import type {
 export type {
   CostUsd,
   EventTime,
-  FileEditEvent,
   ModelCallEvent,
   PluginPart,
   ProviderStopRecord,
