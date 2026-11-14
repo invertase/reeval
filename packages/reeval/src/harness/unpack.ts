@@ -1,43 +1,12 @@
 // Plugin parts a flat agent loads from its own directories, unpacked there from the plugin's
 // Claude Code layout. Its skills and MCP servers aren't here: they join the environment's
 // harness-placed skills and `mcp`, which the agent already takes.
+import type { PluginUnpack } from '@reeval/agents'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { PLUGIN_ROOT, type PluginFile } from '../environment/plugins.ts'
 import { InfraError } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
 import type { PluginPart } from '../types.ts'
-
-/**
- * Where a flat agent reads each part reeval unpacks, relative to the workspace. Unset parts stay
- * in the plugin's copy only; the agent's `pluginParts` decide which parts it may be given.
- */
-export type PluginUnpack = {
-  /**
-   * The rules directory. Each `rules/<file>.md` or `.mdc` lands as `<plugin>-<file>.mdc`, with
-   * `alwaysApply: true` frontmatter when it has none, so it applies as a plugin's rules do.
-   */
-  rules?: string
-  /** The subagents directory: `agents/<name>.md` lands as `<name>.md`. */
-  agents?: string
-  /** The commands directory: `commands/<name>.md` lands as `<name>.md`. */
-  commands?: string
-  /**
-   * A subagent's or command's YAML frontmatter (`{}` when it has none) as the agent takes it,
-   * for an agent whose schema refuses Claude Code's keys; unset, the file lands as it is.
-   */
-  frontmatter?: (part: 'agents' | 'commands', front: Record<string, unknown>) => object
-  /** The hooks file, in Cursor's `hooks.json` shape: `{ version: 1, hooks: { <event>: [...] } }`. */
-  hooks?: {
-    file: string
-    /** Each Claude Code hook event the agent runs, as the agent names it. */
-    events: Readonly<Record<string, string>>
-    /**
-     * A Claude Code group's `matcher` (a tool name pattern) for a Claude Code event, as the agent
-     * matches it: undefined for every tool, or null when it names no tool the agent has.
-     */
-    matcher: (event: string, matcher: string | undefined) => string | null | undefined
-  }
-}
 
 /** A plugin as the session copied it: its files and the directory `${CLAUDE_PLUGIN_ROOT}` names. */
 export type UnpackedPlugin = {

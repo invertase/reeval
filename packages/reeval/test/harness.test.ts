@@ -689,7 +689,7 @@ describe('the OpenCode harness', () => {
         AGENTS.opencode.mcpServers({
           old: { transport: 'sse', url: 'https://x.example/sse', headers: {} },
         }),
-      /^InfraError: OpenCode has no SSE MCP transport, so it can't use the old server \(mcp\.sse\)/,
+      /^AgentError: OpenCode has no SSE MCP transport, so it can't use the old server \(mcp\.sse\)/,
     )
   })
 
@@ -951,12 +951,12 @@ describe('mcp.sse', () => {
       },
       antigravity: { events: { serverUrl: 'http://events.example/sse', headers: { A: 'b' } } },
       opencode:
-        /^InfraError: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+        /^AgentError: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       goose:
-        /^InfraError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
-      pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+        /^AgentError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      pi: /^AgentError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
-        /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+        /^AgentError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       'grok-build': {
         events: {
           type: 'sse',
@@ -964,7 +964,7 @@ describe('mcp.sse', () => {
           headers: [{ name: 'A', value: 'b' }],
         },
       },
-      fx: /^InfraError: fx has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      fx: /^AgentError: fx has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
     }
     for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
       const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
@@ -1022,14 +1022,14 @@ describe('the pi harness', () => {
     )
     assert.throws(
       () => AGENTS.pi.mcpServers({ s: { transport: 'sse', url: 'https://x.test', headers: {} } }),
-      /^InfraError: pi has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
+      /^AgentError: pi has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
     )
     assert.throws(
       () =>
         AGENTS.pi.mcpServers({
           'my.docs': { transport: 'stdio', command: 'node', args: [], env: {} },
         }),
-      /^InfraError: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the my\.docs server: rename it$/,
+      /^AgentError: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the my\.docs server: rename it$/,
     )
   })
 
@@ -1166,7 +1166,7 @@ describe('the Codex harness', () => {
     assert.throws(
       () =>
         AGENTS.codex.mcpServers({ s: { transport: 'sse', url: 'https://x.test', headers: {} } }),
-      /^InfraError: Codex has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
+      /^AgentError: Codex has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
     )
   })
 

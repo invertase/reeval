@@ -1,5 +1,6 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { AgentError } from '@reeval/agents'
 import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts, isDirect } from '../egress.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
@@ -59,7 +60,7 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
       : { kind: 'aborted', message: 'The run was canceled' }
   }
   if (error instanceof RunStopped) return { kind: 'aborted', message }
-  if (error instanceof InfraError) return { kind: 'infra', message }
+  if (error instanceof AgentError) return { kind: 'infra', message }
   return { kind: 'assertion', message }
 }
 

@@ -20,6 +20,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./layouts": {
+      "types": "./dist/catalog/skill-dirs.d.ts",
+      "default": "./dist/catalog/skill-dirs.js"
+    },
     "./usage": {
       "types": "./dist/usage.d.ts",
       "default": "./dist/usage.js"
@@ -30,12 +34,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.172"
+    "@ai-sdk/harness": "1.0.172",
+    "@reeval/harness-codex": "workspace:*",
+    "@reeval/harness-goose": "workspace:*",
+    "@reeval/harness-grok-build": "workspace:*",
+    "@reeval/harness-opencode": "workspace:*",
+    "@reeval/harness-pi": "workspace:*"
   },
   "devDependencies": {
     "oxc-parser": "0.156.0"

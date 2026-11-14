@@ -2,7 +2,7 @@
 // transcript.jsonl alone. `reeval query` stores these facts and the run report shows them, in any
 // JavaScript runtime, so nothing this module reaches may use Node or the filesystem
 // (test/view-boundary.test.ts holds it).
-import { SKILL_DIRS } from '../harness/skill-dirs.ts'
+import { SKILL_DIRS } from '@reeval/agents/layouts'
 import {
   type ClassContext,
   classifyCall,

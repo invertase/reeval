@@ -7,7 +7,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
-import { SKILL_DIRS } from '../src/harness/skill-dirs.ts'
+import { SKILL_DIRS } from '@reeval/agents/layouts'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
 import {
   type ClassContext,
