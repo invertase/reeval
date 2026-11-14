@@ -1,0 +1,52 @@
+import type { TokenUsage } from './types.ts'
+
+/** The AI SDK's usage as reeval's, or null when the harness reported none (every field undefined). */
+export function tokenUsage(usage: {
+  inputTokens?: number | undefined
+  outputTokens?: number | undefined
+  inputTokenDetails?: {
+    noCacheTokens?: number | undefined
+    cacheReadTokens?: number | undefined
+    cacheWriteTokens?: number | undefined
+  }
+  outputTokenDetails?: { reasoningTokens?: number | undefined }
+}): TokenUsage | null {
+  if (usage.inputTokens === undefined && usage.outputTokens === undefined) return null
+  const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? 0
+  const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0
+  return {
+    input:
+      usage.inputTokenDetails?.noCacheTokens ??
+      Math.max((usage.inputTokens ?? 0) - cacheRead - cacheWrite, 0),
+    output: usage.outputTokens ?? 0,
+    cacheRead,
+    cacheWrite,
+    reasoning: usage.outputTokenDetails?.reasoningTokens ?? null,
+  }
+}
+
+/** Two counts as one; null only when neither reported any. */
+export function addUsage(a: TokenUsage | null, b: TokenUsage | null): TokenUsage | null {
+  if (!a || !b) return a ?? b
+  return {
+    input: a.input + b.input,
+    output: a.output + b.output,
+    cacheRead: a.cacheRead + b.cacheRead,
+    cacheWrite: a.cacheWrite + b.cacheWrite,
+    reasoning:
+      a.reasoning === null && b.reasoning === null ? null : (a.reasoning ?? 0) + (b.reasoning ?? 0),
+  }
+}
+
+/** The total of every count that was reported; null when none was. */
+export const sumUsage = (usages: Iterable<TokenUsage | null | undefined>): TokenUsage | null => {
+  let total: TokenUsage | null = null
+  for (const u of usages) total = addUsage(total, u ?? null)
+  return total
+}
+
+/** Every token the prompt side used: uncached input plus cache reads and writes. */
+export const promptTokens = (u: TokenUsage) => u.input + u.cacheRead + u.cacheWrite
+
+/** Prompt side and output. `output` already counts `reasoning`, its share of thinking. */
+export const totalTokens = (u: TokenUsage) => promptTokens(u) + u.output

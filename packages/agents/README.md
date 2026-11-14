@@ -9,6 +9,12 @@ It runs a harness on a `Runner`: `local()` runs it on this machine, and anything
 the sandbox session the AI SDK harness adapters drive, and `test/runner-conformance.ts` is the
 suite every runner passes.
 
+What a harness reports for each turn is typed here too: `TranscriptEvent`, `TokenUsage`,
+`TurnStatus` and `CostUsd`, with the usage arithmetic (`tokenUsage`, `addUsage`, `sumUsage`,
+`promptTokens`, `totalTokens`). The arithmetic is also `@reeval/agents/usage`, which loads
+nothing at run time, so it runs in any JavaScript runtime. `AgentError` is a failure of the
+harness or of where it runs, with `transient` for one another try may get past.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.

@@ -851,6 +851,9 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 2.4.0
         version: 2.4.0
+      '@reeval/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.17
         version: link:../harness-antigravity
