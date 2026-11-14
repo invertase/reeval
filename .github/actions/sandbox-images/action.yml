@@ -37,8 +37,10 @@ runs:
         set -euo pipefail
         if [ "$HIT" != true ]; then
           node --input-type=module -e "
+            import { setupOf } from './packages/agents/dist/index.js'
             import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
-            for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
+            for (const harness of BAKED_HARNESSES)
+              await buildImage(console.log, { harness, bootstrap: setupOf(harness) })"
           [ "$SAVE" = true ] || exit 0
         fi
         registry=localhost:5000

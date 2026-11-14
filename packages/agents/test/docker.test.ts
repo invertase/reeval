@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -37,7 +37,9 @@ describe('docker()', { skip: skip ?? false }, () => {
   test('docker() works in a host directory it mounts, as the user it names', async () => {
     const dir = await realpath(await mkdtemp(join(tmpdir(), 'reeval-agents-docker-')))
     dirs.push(dir)
-    await writeFile(join(dir, 'from-host'), 'hi')
+    // The container's user isn't this one, so the directory is open to it.
+    await chmod(dir, 0o777)
+    await writeFile(join(dir, 'from-host'), 'hi', { mode: 0o644 })
     const runner = await docker({ image: IMAGE, mount: dir, workdir: '/work', user: 'node' })
     try {
       const info = await runner.info()

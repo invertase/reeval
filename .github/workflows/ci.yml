@@ -504,8 +504,9 @@ jobs:
       - name: reeval's image, in Podman's store
         run: |
           node --input-type=module -e "
+            import { setupOf } from './packages/agents/dist/index.js'
             import { buildImage } from './packages/sandbox-docker/dist/index.js'
-            await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
+            await buildImage(console.log, { harness: 'cursor', bootstrap: setupOf('cursor'), engine: 'podman' })"
       # A test file whose process outlives its tests fails a minute later naming what holds it
       # (scripts/handle-dump.mjs); the step timeout catches any other hang. Normally under 2 min.
       - name: sandbox-docker on Podman
