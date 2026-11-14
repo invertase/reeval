@@ -3,10 +3,12 @@ import type {
   EventTime,
   FileEditEvent,
   ModelCallEvent,
+  PluginPart,
   ProviderStopRecord,
   TokenUsage,
   TranscriptEvent,
   TurnStatus,
+  VertexPublisher,
   WebEventType,
 } from '@reeval/agents'
 import type {
@@ -22,10 +24,12 @@ export type {
   EventTime,
   FileEditEvent,
   ModelCallEvent,
+  PluginPart,
   ProviderStopRecord,
   TokenUsage,
   TranscriptEvent,
   TurnStatus,
+  VertexPublisher,
   WebEventType,
 } from '@reeval/agents'
 
@@ -1052,9 +1056,6 @@ export type OpenRouterGatewayDescriptor = {
   fallbacks?: boolean
 }
 
-/** A model publisher on Vertex AI, which may serve its models in a region of its own. */
-export type VertexPublisher = 'anthropic' | 'google' | 'xai'
-
 /**
  * Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
  * `reeval/gateway`.
@@ -1597,12 +1598,6 @@ export type EnvironmentSpec = {
    */
   traits?: Traits
 }
-
-/**
- * A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`,
- * `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.
- */
-export type PluginPart = 'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'rules'
 
 /** A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper. */
 export type PluginSource = {

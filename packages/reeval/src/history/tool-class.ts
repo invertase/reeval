@@ -4,7 +4,7 @@
 // workspace. A heuristic over the call's tool name and target, documented as one. Shell
 // commands are split into words first, so an exclusion such as `-not -path '*/node_modules/*'`
 // isn't counted as a read of what it excludes.
-import { BUILTIN_SKILL_DIRS } from '../harness/skill-dirs.ts'
+import { BUILTIN_SKILL_DIRS } from '@reeval/agents/layouts'
 import { SKILL_LOAD_TOOLS } from './tool-target.ts'
 
 export type ToolClass = 'context' | 'dependency' | 'web' | 'verify' | 'workspace'

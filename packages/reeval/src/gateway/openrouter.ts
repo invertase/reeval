@@ -1,6 +1,14 @@
-// OpenRouter as a route for a harness's model calls: the key it takes, the requests the egress
-// gateway brokers it on, the model ids it names, and the upstream provider it says served each
-// call. One key serves every harness here.
+// OpenRouter's routes as the egress gateway sees them: the variable each adapter takes the key as,
+// the requests it brokers it on, and the upstream provider it says served each call. The key, the
+// model ids and the refusals are @reeval/agents' `OPENROUTER_ROUTE`.
+import {
+  anthropicPath,
+  OPENROUTER_API,
+  OPENROUTER_HOST,
+  OPENROUTER_KEY,
+  OPENROUTER_ROUTE,
+  openaiPath,
+} from '@reeval/agents'
 import {
   providerEndpoints,
   providerHosts,
@@ -9,21 +17,17 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
-import type { ServedModel, Upstream } from '../harness/agents.ts'
-import { anthropicPath, apiHost, type GatewayApi, openaiPath } from './api.ts'
-import { everyModel, notGemini } from './effort.ts'
-import type { GatewayRoute, RoutingGateway } from './routes.ts'
+import { servedOnOpenRouter, upstreamOnOpenRouter } from '../environment/harness-wire.ts'
+import type { RouteWire, RoutingGateway } from './routes.ts'
+import { withWire } from './with-wire.ts'
 
-export const OPENROUTER_API: GatewayApi = {
-  origin: 'https://openrouter.ai',
-  openai: 'https://openrouter.ai/api/v1',
-  anthropic: 'https://openrouter.ai/api',
-}
-
-export const OPENROUTER_HOST = apiHost(OPENROUTER_API)
+export {
+  anthropicOnOpenRouter,
+  OPENROUTER_KEY,
+} from '@reeval/agents'
+export { servedOnOpenRouter, upstreamOnOpenRouter }
 
 const openai = (endpoint: string) => openaiPath(OPENROUTER_API, endpoint)
-export const OPENROUTER_KEY = 'OPENROUTER_API_KEY'
 
 const onOpenRouter = (path: string, method: 'GET' | 'POST' = 'POST') =>
   ({
@@ -32,24 +36,8 @@ const onOpenRouter = (path: string, method: 'GET' | 'POST' = 'POST') =>
     method: [method],
   }) as const satisfies EndpointMatch
 
-/** The response names the model that served it on OpenRouter's host, in OpenRouter's form. */
-export const servedOnOpenRouter: ServedModel = ({ host, responseModel, responseEffort }) =>
-  host === OPENROUTER_HOST && responseModel
-    ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
-    : undefined
-
-/** The upstream provider OpenRouter's response says served the call, and what it charged. */
-export const upstreamOnOpenRouter: Upstream = ({ host, responseProvider, responseCost }) =>
-  host === OPENROUTER_HOST && responseProvider
-    ? {
-        provider: responseProvider,
-        ...(responseCost !== undefined ? { costUsd: responseCost } : {}),
-      }
-    : undefined
-
 /** What every OpenRouter route shares: the key under its own name, and what the responses say. */
 const route = (endpoints: readonly EndpointMatch[], calls: readonly EndpointMatch[]) => ({
-  credential: OPENROUTER_KEY,
   authAs: OPENROUTER_KEY,
   endpoints,
   modelResponses: calls,
@@ -58,23 +46,12 @@ const route = (endpoints: readonly EndpointMatch[], calls: readonly EndpointMatc
   hosts: [OPENROUTER_HOST],
 })
 
-/** An id as OpenRouter names it: as written when it names a provider, else under `provider`. */
-const under = (provider: string) => (model: string) =>
-  model.includes('/') ? model : `${provider}/${model}`
-
-/**
- * An Anthropic id as OpenRouter names it, with the version dotted (`anthropic/claude-haiku-4.5`
- * for `claude-haiku-4-5`), unless the id names a provider.
- */
-export const anthropicOnOpenRouter = (model: string) =>
-  model.includes('/') ? model : `anthropic/${model.replace(/-(\d{1,2})-(\d{1,2})$/, '-$1.$2')}`
-
 /**
  * Claude Code on OpenRouter's Anthropic Messages API: `ANTHROPIC_BASE_URL` at OpenRouter and the
  * key as `ANTHROPIC_AUTH_TOKEN`, which the CLI sends as a Bearer token. On another base URL it
  * makes none of its `/api/claude_code/*` calls.
  */
-function claudeCode(): GatewayRoute {
+function claudeCode(): RouteWire {
   const calls = [onOpenRouter(anthropicPath(OPENROUTER_API, '/v1/messages'))]
   return {
     ...route(
@@ -83,25 +60,21 @@ function claudeCode(): GatewayRoute {
     ),
     authAs: 'ANTHROPIC_AUTH_TOKEN',
     authEnv: { ANTHROPIC_BASE_URL: OPENROUTER_API.anthropic },
-    modelId: anthropicOnOpenRouter,
   }
 }
 
 /** Codex on a Responses API provider at OpenRouter, whose ids name the provider (`openai/…`). */
-function codex(): GatewayRoute {
+function codex(): RouteWire {
   const calls = [onOpenRouter(openai('/responses'))]
-  return { ...route(calls, calls), modelId: under('openai') }
+  return route(calls, calls)
 }
 
 /**
  * Goose on its `openrouter` provider: Chat Completions, and the model list it fetches each turn.
  */
-function goose(): GatewayRoute {
+function goose(): RouteWire {
   const calls = [onOpenRouter(openai('/chat/completions'))]
-  return {
-    ...route([...calls, onOpenRouter(openai('/models'), 'GET')], calls),
-    modelId: (model) => model,
-  }
+  return route([...calls, onOpenRouter(openai('/models'), 'GET')], calls)
 }
 
 /**
@@ -109,19 +82,17 @@ function goose(): GatewayRoute {
  * pinned CLI sends that provider's key on (harness-opencode's provider table), plus Exa's host for
  * web search.
  */
-function opencode(): GatewayRoute {
+function opencode(): RouteWire {
   const resolved = resolveOpenCodeProvider('openrouter/model')
   if ('error' in resolved) throw new Error(resolved.error)
   const { provider } = resolved
   return {
-    credential: OPENROUTER_KEY,
     authAs: OPENROUTER_KEY,
     endpoints: providerEndpoints(provider),
     modelResponses: providerModelResponses(provider),
     servedModel: (request) => providerServedModel(provider, request),
     upstream: upstreamOnOpenRouter,
     hosts: [...providerHosts(provider), 'mcp.exa.ai'],
-    modelId: (model) => `openrouter/${model}`,
   }
 }
 
@@ -131,58 +102,39 @@ function opencode(): GatewayRoute {
  * provider instead, whose thinking level goes as OpenRouter's `reasoning.effort`. `--offline`
  * skips the model list pi would fetch to fit its catalog to the key.
  */
-function pi(): GatewayRoute {
+function pi(): RouteWire {
   const calls = [
     onOpenRouter(openai('/chat/completions')),
     onOpenRouter(anthropicPath(OPENROUTER_API, '/v1/messages')),
   ]
-  return { ...route(calls, calls), modelId: (model) => model }
+  return route(calls, calls)
 }
 
 /**
  * Grok Build with the model as a `[model.<id>]` table on OpenRouter's Chat Completions API, keyed
  * by `env_key`; it then calls nothing on xAI's API.
  */
-function grokBuild(): GatewayRoute {
+function grokBuild(): RouteWire {
   const calls = [onOpenRouter(openai('/chat/completions'))]
-  return { ...route(calls, calls), modelId: under('x-ai') }
+  return route(calls, calls)
 }
 
 /**
  * fx with OpenRouter's Chat Completions API as its configured provider `openrouter`, through the
  * relay, and an OpenAI id as `openai/<id>`. fx sends no `reasoning_effort` to a configured provider.
  */
-function fx(): GatewayRoute {
+function fx(): RouteWire {
   const calls = [onOpenRouter(openai('/chat/completions'))]
-  return { ...route(calls, calls), modelId: under('openai') }
+  return route(calls, calls)
 }
 
 /** OpenRouter: the harnesses reeval runs there, and why it doesn't run the rest. */
-export const OPENROUTER_GATEWAY: RoutingGateway = {
-  name: 'OpenRouter',
-  api: () => OPENROUTER_API,
-  routes: {
-    'claude-code': claudeCode,
-    codex,
-    goose,
-    opencode,
-    fx,
-    'grok-build': grokBuild,
-    pi,
-  },
-  refusals: {
-    cursor: "Cursor's agent only calls Cursor's own API",
-    antigravity:
-      "Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API",
-  },
-  // Codex's response names the effort it ran at; Goose, OpenCode and pi send OpenRouter's
-  // reasoning.effort, which it sends a Gemini model as its thinking level, and Grok Build
-  // reasoning_effort (an xAI model's own). Claude Code sends Anthropic's adaptive thinking and effort, which
-  // OpenRouter turns into a thinking budget for a model that takes neither (Haiku 4.5).
-  unprovenEffort: {
-    'claude-code': everyModel,
-    goose: notGemini,
-    opencode: notGemini,
-    pi: notGemini,
-  },
-}
+export const OPENROUTER_GATEWAY: RoutingGateway = withWire(OPENROUTER_ROUTE, {
+  'claude-code': claudeCode,
+  codex,
+  goose,
+  opencode,
+  fx,
+  'grok-build': grokBuild,
+  pi,
+})

@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { AgentError } from '@reeval/agents'
 import { UsageError } from '../src/errors.ts'
 import { RUNNER_PROTOCOL } from '../src/language-runner/protocol.ts'
 import {
@@ -255,6 +256,15 @@ test('projectUsesUv is true when pyproject.toml or uv.lock exists', () => {
   assert.equal(projectUsesUv(root), false)
   writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "x"\n')
   assert.equal(projectUsesUv(root), true)
+})
+
+test('an AgentError the attempt host forwards comes back as one, so it records as infra', () => {
+  const { name, message } = new AgentError('opencode takes no SSE MCP server')
+  const back = errorFrom({ name, message })
+  assert.ok(back instanceof AgentError)
+  assert.ok(!(back instanceof InfraError))
+  assert.equal(back.name, 'AgentError')
+  assert.equal(back.message, 'opencode takes no SSE MCP server')
 })
 
 test("a runner's InfraError and UsageError come back as reeval's own classes", () => {

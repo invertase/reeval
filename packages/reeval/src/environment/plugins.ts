@@ -3,6 +3,7 @@
 // reads every plugin (git and npm ones once fetched) the same way.
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, isAbsolute, join, posix, relative, sep, win32 } from 'node:path'
+import { PLUGIN_DIR, PLUGIN_PARTS } from '@reeval/agents'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
 import { credentialsIn } from '../contract/plain.ts'
@@ -28,15 +29,6 @@ import type {
 
 /** The plan's reads of a plugin or skill, which are reeval's, not the eval file's load's. */
 const readText = (path: string) => asOwnReads(() => withoutBom(readFileSync(path, 'utf8')))
-
-export const PLUGIN_PARTS: readonly PluginPart[] = [
-  'skills',
-  'agents',
-  'commands',
-  'hooks',
-  'mcp',
-  'rules',
-]
 
 /** Where each part lives in a plugin, for messages. */
 export const PART_PATHS: Record<PluginPart, string> = {
@@ -75,8 +67,8 @@ const MARKETPLACE = '.claude-plugin/marketplace.json'
 export const PLUGIN_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']
-/** Where the session copies each plugin, under the sandbox's home. */
-export const PLUGIN_DIR = '~/.reeval/plugins'
+
+export { PLUGIN_DIR, PLUGIN_PARTS }
 /** Plugin MCP servers name their own directory with this; the session substitutes it. */
 export const PLUGIN_ROOT_VAR = 'CLAUDE_PLUGIN_ROOT'
 // biome-ignore lint/suspicious/noTemplateCurlyInString: how a plugin writes the variable

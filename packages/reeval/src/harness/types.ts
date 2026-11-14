@@ -1,13 +1,7 @@
+import type { PlacedPlugin } from '@reeval/agents'
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type {
-  CostUsd,
-  PluginPart,
-  TokenUsage,
-  TranscriptEvent,
-  TurnStatus,
-  WebEventType,
-} from '../types.ts'
+import type { CostUsd, TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
 import type { ProviderStop } from './provider-stop.ts'
 
 export type HarnessResult = {
@@ -85,8 +79,7 @@ export type Treatments = {
   plugins: PlacedPlugin[]
 }
 
-/** A plugin the session copied into the sandbox. */
-export type PlacedPlugin = { name: string; dir: string; parts: PluginPart[]; servers: string[] }
+export type { PlacedPlugin }
 
 /** The phases a harness reports under. */
 export type AgentLogPhase = 'env' | 'broker' | 'harness'

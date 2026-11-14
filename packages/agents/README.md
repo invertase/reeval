@@ -15,6 +15,16 @@ What a harness reports for each turn is typed here too: `TranscriptEvent`, `Toke
 nothing at run time, so it runs in any JavaScript runtime. `AgentError` is a failure of the
 harness or of where it runs, with `transient` for one another try may get past.
 
+The harness catalog's core is here as well: `HARNESSES` has each harness's credential, model
+id, what it reports and its plugin rules, `LAYOUTS` where each one reads its rules, skills, MCP
+config and plugins, and the `*McpServers` functions the config each CLI takes. The skill
+directories are also `@reeval/agents/layouts`, which loads nothing at run time.
+
+The routes that send a harness's model calls somewhere other than its provider's own API are
+here too: `ROUTES` has Vercel AI Gateway and OpenRouter, each with the credential and model id
+every harness it serves takes there and why it can't serve the rest, and `VERTEX_ROUTES` has
+Vertex AI's.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.

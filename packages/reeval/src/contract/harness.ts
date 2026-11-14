@@ -3,9 +3,11 @@
 // One schema per kind, joined on `kind`; the types in types.ts are held to them by
 // `_SameAsSchema`.
 
+import type { AgentKind } from '@reeval/agents'
 import { z } from 'zod'
 import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
+  AgentHarnessDescriptor,
   AntigravityHarnessDescriptor,
   ClaudeCodeHarnessDescriptor,
   CodexHarnessDescriptor,
@@ -225,6 +227,7 @@ export const harnessDescriptorSchema = z.discriminatedUnion('kind', [
 ])
 
 export type _SameAsSchema = [
+  Assert<Same<AgentHarnessDescriptor['kind'], AgentKind>>,
   Assert<Same<z.infer<typeof cursorHarnessSchema>, CursorHarnessDescriptor>>,
   Assert<Same<keyof z.infer<typeof cursorHarnessSchema>, keyof CursorHarnessDescriptor>>,
   Assert<Same<z.infer<typeof claudeCodeHarnessSchema>, ClaudeCodeHarnessDescriptor>>,

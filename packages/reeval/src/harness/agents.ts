@@ -1,46 +1,46 @@
-import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+import {
+  AgentError,
+  FAKE_LAYOUT,
+  HARNESSES,
+  type HarnessEntry,
+  LAYOUTS,
+  type Layout,
+  PLUGIN_PARTS,
+  type PlacedPlugin,
+  providerOf,
+  type ResolvedMcpServer,
+} from '@reeval/agents'
 import type { GooseProvider } from '@reeval/harness-goose'
 import type { OpenCodeMcpServer } from '@reeval/harness-opencode'
-import {
-  providerEndpoints,
-  providerHosts,
-  providerModelResponses,
-  providerServedModel,
-  resolveOpenCodeProvider,
-} from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
-import { type PiProvider, piProvider } from '@reeval/harness-pi/providers'
+import { piProvider } from '@reeval/harness-pi/providers'
 import {
-  type BakedHarness,
   type DerivedTokens,
   type EndpointMatch,
   hostAllowed,
   type LocalResponse,
 } from '@reeval/sandbox-docker'
 import {
+  type ExpectedBlocked,
+  type HarnessWire,
+  keyed,
+  type ModelSpecific,
+  opencodeVars,
+  type ServedModel,
+  type Upstream,
+  WIRE,
+} from '../environment/harness-wire.ts'
+import {
   PART_PATHS,
-  PLUGIN_DIR,
   PLUGIN_MANIFEST,
-  PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
 } from '../environment/plugins.ts'
-import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { isRoutingGateway, onRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
-import type { BrokeredToken } from '../gateway/token.ts'
-import {
-  fxAskedModel,
-  fxVercelCall,
-  fxVercelEndpoints,
-  servedOn,
-  VERCEL_HOST,
-  VERCEL_KEY,
-  vercelApi,
-} from '../gateway/vercel.ts'
+import { vercelApi } from '../gateway/vercel.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
-  type SandboxAdc,
   VERTEX_ROUTES,
   type VertexChat,
   type VertexSettings,
@@ -57,257 +57,58 @@ import type {
   PluginPart,
   Secret,
   SecretTemplate,
-  WebEventType,
 } from '../types.ts'
-import { SKILL_LAYOUTS, type SkillLayout } from './skill-dirs.ts'
-import type { PlacedPlugin } from './types.ts'
-import type { PluginUnpack } from './unpack.ts'
+
+export {
+  acpMcpServers,
+  agentMcp,
+  antigravityMcpServers,
+  claudeCodeCost,
+  claudeMcpServers,
+  claudePluginFiles,
+  cursorHookMatcher,
+  cursorMcpServers,
+  gooseMcpServers,
+  type HarnessUsage,
+  LAYOUTS,
+  type Layout,
+  piCost,
+  piMcpServers,
+  type ReasoningDelivery,
+} from '@reeval/agents'
+export {
+  directProviderRefusal,
+  type ModelSpecific,
+  opencodeVars,
+  type ServedModel,
+  type Upstream,
+} from '../environment/harness-wire.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
 
-/** Where an agent reads what the environment gives it. */
-export type Layout = SkillLayout & {
-  /** The workspace file environment `rules` are written to. */
-  rulesFile: string
-  /**
-   * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
-   * environment's skills and MCP servers (so names can clash), or `namespaced` under the
-   * plugin's name. A namespaced agent loads a plugin's MCP servers from the plugin itself.
-   */
-  pluginPlacement: 'flat' | 'namespaced'
-  /**
-   * Files under `~/` that make the agent load the session's plugins, written before it starts;
-   * unset for an agent pointed at them some other way (launch arguments, an install step). One
-   * marked `merge` is a JSON object whose keys are merged into the file an environment's `files`
-   * may already have put there, rather than replacing it.
-   */
-  pluginFiles?: (plugins: readonly PlacedPlugin[]) => PluginFile[]
-  /**
-   * Where a flat agent reads the plugin parts reeval unpacks into the workspace before the
-   * snapshot (rules, subagents, commands, hooks); unset for an agent that takes none.
-   */
-  pluginUnpack?: PluginUnpack
-  /** The Claude Code hook events the agent runs from a plugin; unset, every event. */
-  pluginHookEvents?: readonly string[]
-}
-
-/** A file a layout writes for the session's plugins. */
-export type PluginFile = { path: string; content: string; merge?: true }
-
 /** What reeval needs to know about a real agent; everything else is the same for all of them. */
-export type Agent = Layout & {
-  /** For messages. */
-  name: string
-  /** The `reeval/harness` factory, for messages. */
-  factory: string
-  /** The platforms its bootstrap installs the agent's CLI for: a sandbox on another can't run it. */
-  platforms: readonly NodeJS.Platform[]
-  /**
-   * Set when its CLI's macOS build verifies TLS with Security.framework (Go, `native-tls`,
-   * `rustls-platform-verifier`), which reads only the keychain's trust settings, not
-   * `SSL_CERT_FILE`: in `tart()` it reaches the gateway only once the gateway's CA is trusted there.
-   */
-  keychainTrust?: true
-  /**
-   * Set when its adapter's bridge is a server in the sandbox that the host connects to on the
-   * session's first exposed port (`resolveBridgePort`): a session exposing none can't start it.
-   */
-  bridgePort?: true
-  /**
-   * The host variable the harness authenticates with. It never enters the sandbox. With `token`,
-   * what the token is minted from, for messages.
-   */
-  credential: string
-  /**
-   * Host variables the harness authenticates with when `credential` isn't set, in the order it
-   * takes them (Claude Code's subscription token). The first one set is passed and brokered like
-   * `credential`, and the agent never gets another. A gateway's route takes none of them.
-   */
-  fallbackCredentials?: readonly string[]
-  /**
-   * A short-lived token reeval mints on the host (Vertex AI's Google Cloud access token), which
-   * the egress gateway adds to the agent's requests and replaces before it expires, in place of
-   * `credential` from the environment.
-   */
-  token?: BrokeredToken
-  /** Variables the adapter sets for the agent on its gateway's route (Vertex's project and region). */
-  routeEnv?: Record<string, string>
-  /** The service account the agent's CLI reads on Vertex, written beside the workspace. */
-  adc?: SandboxAdc
-  /** Requests the egress gateway answers itself on the agent's route (Vertex's token exchange). */
-  localResponses?: readonly LocalResponse[]
-  /** Where Vertex's Chat Completions API is, for an agent that calls it on Vertex (Grok Build). */
-  vertexChat?: VertexChat
-  /**
-   * The variable the adapter takes the credential as, when not its own name: a gateway's key, or
-   * the one the CLI reads (pi reads Google's key as `GEMINI_API_KEY`).
-   */
-  authAs?: string
-  /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
-  authEnv?: Readonly<Record<string, string>>
-  /** The model id the agent asks for, from the harness's own; unset when they're the same. */
-  modelId?: (model: string) => string
-  /**
-   * The only requests the egress gateway swaps the credential into, whatever rules the adapter
-   * asks for. Anything else carrying the placeholder gets a 403 from the gateway.
-   */
-  endpoints: readonly EndpointMatch[]
-  /**
-   * Session tokens the agent's CLI gets for its credential, which the gateway keeps out of the
-   * sandbox too: the exchange's response carries placeholders, swapped back on these hosts.
-   */
-  tokens?: Omit<DerivedTokens, 'name'>
-  /**
-   * Hosts the agent's CLI always tries and nothing needs, which no setting turns off. A
-   * restricted policy still refuses them, but reeval records them apart from the real blocks and
-   * `-v` summarizes them once instead of a line per request.
-   */
-  expectedBlocked?: ExpectedBlocked
-  /**
-   * Why it can't take a plugin that bundles ChatGPT apps, which it would otherwise load with the
-   * plugin; unset for an agent that ignores them.
-   */
-  pluginApps?: string
-  /**
-   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
-   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
-   */
-  pluginManifestsFirst?: readonly string[]
-  /** It reads a root `plugin.json` only when it names an Agent Plugins `$schema`. */
-  pluginRootManifestNeedsSchema?: true
-  /**
-   * Transcript events a turn may have had that its harness didn't report, from the turn's
-   * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
-   * refuse instead of passing silently.
-   */
-  unreported?: (harnessMetadata: unknown) => WebEventType[]
-  /**
-   * What the agent said its turn cost, in US dollars, from the turn's `finish` part's
-   * `harnessMetadata`. `session` names a running total over the session's turns (Claude Code's
-   * `total_cost_usd`), so the turn's cost is the rise since the session's last turn.
-   */
-  reportedCost?: (harnessMetadata: unknown) => { usd: number; session?: string } | undefined
-  /**
-   * How the agent's reasoning reaches reeval, which decides whether a turn's reasoning time is
-   * measured: `streamed`, as the model produces it, so each block is timed; `recovered`, read
-   * back from the agent's stored conversation after the turn, with the time the agent stored
-   * for each block (Antigravity's `thinking_duration`); `whole`, each block only once it's done
-   * (Codex's reasoning items), so its time is unknown; `none`, never (the model's thinking stays
-   * inside the CLI), so its time is unknown too. Reasoning tokens are apart from this: they come
-   * from the turn's usage.
-   */
-  reasoning: ReasoningDelivery
-  /**
-   * Whether the turn's usage counts reasoning tokens apart (`usage.reasoning`): `provider` when it
-   * depends on the model's provider (OpenCode, fx). For the docs; usage itself says per turn.
-   */
-  reasoningTokens: boolean | 'provider'
-  /**
-   * Reads back the usage the agent's CLI stored for each model call, for a turn whose stream
-   * reported none: an aborted turn's, whose stream ends before the turn's usage. Unset for a CLI
-   * that stores no usage per call (fx), stores none for a canceled run (Cursor) or whose stream
-   * always has it.
-   */
-  storedUsage?: () => Promise<StoredUsage>
-  /**
-   * Tools whose result the agent reports whole while its model gets a cut of it, so their
-   * transcript `output` is the `full` view; `'all'` for every tool. Unset, every tool's output is
-   * what the model saw, except one its adapter read from where the CLI saved it.
-   */
-  fullToolOutput?: 'all' | readonly string[]
-  /**
-   * Set when the transcript has a subagent's tool calls, so its edits count as file edits (Claude
-   * Code's bridge passes a subagent's messages on raw, and reeval reads them). Unset, only the
-   * workspace diff's `changedFiles` shows what a subagent changed.
-   */
-  subagentCalls?: true
-  /**
-   * The model a brokered request asks the agent's API for, e.g. from its URL; unset when the
-   * requests don't say (Cursor's are protobuf), so the record says it's unknown.
-   */
-  servedModel?: ServedModel
-  /**
-   * The model a successful request asked for, when neither it nor its response names the one that
-   * served it; recorded as `askedModels`, never as served.
-   */
-  askedModel?: ServedModel
-  /** Requests whose response body names the model that served them, for `servedModel`. */
-  modelResponses?: readonly EndpointMatch[]
-  /**
-   * The agent's model calls besides `modelResponses` (which are model calls too): the egress
-   * gateway times each one and reads its tokens, for the transcript's `model-call` events.
-   */
-  modelCalls?: readonly EndpointMatch[]
-  /** Set when one model call carries a whole turn, its tool calls inside it (Cursor's stream). */
-  modelStream?: true
-  /**
-   * Set for an agent on `@ai-sdk/harness-acp`, whose `stream-start` names the ACP session's model:
-   * the one the agent was configured with, not the one that served the turn. Its turns record
-   * what the gateway read from the model calls instead.
-   */
-  configuredModelOnStart?: true
-  /**
-   * The upstream provider a gateway's response says served a call (OpenRouter's), and what it
-   * charged; unset where the response names none.
-   */
-  upstream?: Upstream
-  /**
-   * Hosts a restricted egress policy allows for it, in place of its image's (`HARNESS_HOSTS`);
-   * set by `forModel` for an agent whose hosts depend on the model's provider.
-   */
-  hosts?: readonly string[]
-  /**
-   * What depends on the model, for an agent that runs on several providers (OpenCode): the
-   * model's provider's credential, endpoints, hosts and served-model reader, with hosts built from
-   * the host's variables (Bedrock's `AWS_REGION`). Throws an `InfraError` naming why a model can't
-   * run.
-   */
-  forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
-  /** The plugin parts reeval places for the agent; empty refuses every plugin. */
-  pluginParts: readonly PluginPart[]
-  /**
-   * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
-   * keys, in one list with the environment's (Grok Build, Codex): it keeps one of two servers of a name.
-   */
-  pluginServersByName?: true
-  /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
-  mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
-  /**
-   * The adapter, with `auth` always an explicit environment holding only the credential: left on
-   * `'auto'`, an adapter picks up the host's AI Gateway key, subscriptions or keychain.
-   */
-  adapter: (options: {
-    mcpServers?: Record<string, unknown>
-    auth: Record<string, string>
-    /** `routeEnv`, for the agent's environment. */
-    env?: Record<string, string>
-    /** On Vertex through `adc`: the project, region and where the service account was written. */
-    vertex?: AdapterVertex
-    /** `vertexChat`, for the agent's provider. */
-    vertexChat?: VertexChat
-    descriptor: AgentHarnessDescriptor
-    /** The model id the agent asks for: `modelId` of the harness's own. */
-    model: string
-    plugins: readonly PlacedPlugin[]
-  }) => Promise<HarnessAgentAdapter>
-}
-
-/** A harness adapter's usage, in the AI SDK's provider shape. */
-export type HarnessUsage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
-
-/** Reads a CLI's stored usage in the sandbox; see `Agent.storedUsage`. */
-export type StoredUsage = {
-  /**
-   * The command that prints the usage of the model calls since `since` (ms since the epoch), or
-   * after `mark` when an earlier read, or `mark` below, gave one.
-   */
-  command: (o: { since: number; mark?: string }) => string
-  /** What it printed; undefined when it read nothing. `mark` is where the next read starts. */
-  parse: (stdout: string) => { usage: HarnessUsage; calls: number; mark?: string } | undefined
-  /** Where the next read starts, from the `raw` of the usage a turn's stream reported. */
-  mark?: (raw: unknown) => string | undefined
-}
+export type Agent = HarnessEntry &
+  HarnessWire & {
+    /**
+     * The adapter, with `auth` always an explicit environment holding only the credential: left on
+     * `'auto'`, an adapter picks up the host's AI Gateway key, subscriptions or keychain.
+     */
+    adapter: (options: {
+      mcpServers?: Record<string, unknown>
+      auth: Record<string, string>
+      /** `routeEnv`, for the agent's environment. */
+      env?: Record<string, string>
+      /** On Vertex through `adc`: the project, region and where the service account was written. */
+      vertex?: AdapterVertex
+      /** `vertexChat`, for the agent's provider. */
+      vertexChat?: VertexChat
+      descriptor: AgentHarnessDescriptor
+      /** The model id the agent asks for: `modelId` of the harness's own. */
+      model: string
+      plugins: readonly PlacedPlugin[]
+    }) => Promise<HarnessAgentAdapter>
+  }
 
 /**
  * An agent's catalog entry: what `ModelSpecific` names comes only from `forModel` for an agent
@@ -322,741 +123,8 @@ export type CatalogEntry =
         forModel: NonNullable<Agent['forModel']>
       })
 
-/** How an agent's reasoning reaches reeval; see `Agent.reasoning`. */
-export type ReasoningDelivery = 'streamed' | 'recovered' | 'whole' | 'none'
-
 /** What a Gemini CLI's adapter takes to run on Vertex AI from Application Default Credentials. */
 export type AdapterVertex = { project: string; location: string; credentialsFile: string }
-
-/** The part of an agent's catalog entry its model's provider decides. */
-export type ModelSpecific = Pick<
-  Agent,
-  'credential' | 'authAs' | 'endpoints' | 'servedModel' | 'askedModel' | 'upstream'
-> & {
-  modelResponses?: readonly EndpointMatch[]
-  modelCalls?: readonly EndpointMatch[]
-  hosts: readonly string[]
-}
-
-/** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
-export type ExpectedBlocked = {
-  hosts: readonly string[]
-  why: string
-  /** Tried only in a session given plugins; another session's attempt on these hosts is a real block. */
-  withPlugins?: true
-}
-
-const WEB_EVENTS: Record<string, WebEventType> = { webSearch: 'web-search', webFetch: 'web-fetch' }
-
-/** `harnessMetadata.cursorSdk.unreportedTools` as transcript event types. */
-export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
-  const meta = harnessMetadata as { cursorSdk?: { unreportedTools?: unknown } } | undefined
-  const tools = meta?.cursorSdk?.unreportedTools
-  return Array.isArray(tools) ? tools.flatMap((t) => (WEB_EVENTS[t] ? [WEB_EVENTS[t]] : [])) : []
-}
-
-const usdIn = (v: unknown): number | undefined =>
-  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined
-
-/** Claude Code's `total_cost_usd`, its session's cost so far, as its bridge reports it. */
-export function claudeCodeCost(harnessMetadata: unknown) {
-  const meta = (
-    harnessMetadata as { 'claude-code'?: { costUsd?: unknown; sessionId?: unknown } }
-  )?.['claude-code']
-  const usd = usdIn(meta?.costUsd)
-  if (usd === undefined) return undefined
-  return { usd, session: typeof meta?.sessionId === 'string' ? meta.sessionId : '' }
-}
-
-/** The sum of the turn's model calls' `cost.total`, priced by pi or billed by OpenRouter. */
-export function piCost(harnessMetadata: unknown) {
-  const usd = usdIn((harnessMetadata as { pi?: { costUsd?: unknown } })?.pi?.costUsd)
-  return usd === undefined ? undefined : { usd }
-}
-
-/**
- * The model a successful brokered request names, from its method, host and path; undefined when
- * it names none.
- */
-export type ServedModel = (request: BrokeredRequest) => string | undefined
-
-/** A successful brokered request, as the egress gateway saw it. */
-export type BrokeredRequest = {
-  method: string
-  host: string
-  path: string
-  status?: number
-  /** What the response body said served it, on a `modelResponses` endpoint. */
-  responseModel?: string
-  /** The reasoning effort the response body said it ran at, on a `modelResponses` endpoint. */
-  responseEffort?: string
-  /** The upstream provider the response body said served it, on a `modelResponses` endpoint. */
-  responseProvider?: string
-  /** The last `"cost"` the response body named, on a `modelResponses` endpoint. */
-  responseCost?: number
-  /** The request's headers, as the agent sent them. */
-  headers?: Readonly<Record<string, string | readonly string[] | undefined>>
-}
-
-/**
- * The upstream provider a gateway says served a brokered request, with what it charged in US
- * dollars when it says; undefined when it names none.
- */
-export type Upstream = (
-  request: BrokeredRequest,
-) => { provider: string; costUsd?: number } | undefined
-
-/** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
-const GEMINI_ENDPOINTS = [
-  {
-    host: 'generativelanguage.googleapis.com',
-    path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
-    method: ['POST'],
-  },
-] as const satisfies readonly EndpointMatch[]
-
-/** Antigravity's: its model calls, and the `:generateContent` call its `search_web` tool makes. */
-const ANTIGRAVITY_ENDPOINTS = [
-  {
-    host: 'generativelanguage.googleapis.com',
-    path: { regex: '^/v1beta/models/[\\w.-]+:(?:streamGenerateContent|generateContent)$' },
-    method: ['POST'],
-  },
-] as const satisfies readonly EndpointMatch[]
-
-/** Goose's: the model call, and the model list it fetches with the key at the start of a turn. */
-const GOOSE_ENDPOINTS = [
-  ...GEMINI_ENDPOINTS,
-  {
-    host: 'generativelanguage.googleapis.com',
-    path: { regex: '^/v1beta/models$' },
-    method: ['GET'],
-  },
-] as const satisfies readonly EndpointMatch[]
-
-/**
- * What Grok Build sends the key on: the model list and the key's status as a session starts, and
- * its model calls (Chat Completions, and the Responses API for a model or tool that takes it).
- */
-const XAI_ENDPOINTS = [
-  { host: 'api.x.ai', path: { exact: '/v1/models' }, method: ['GET'] },
-  { host: 'api.x.ai', path: { exact: '/v1/api-key' }, method: ['GET'] },
-  { host: 'api.x.ai', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
-  { host: 'api.x.ai', path: { exact: '/v1/responses' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/** xAI's model calls, whose responses name the model that served them. */
-const XAI_MODEL_RESPONSES = XAI_ENDPOINTS.filter(
-  (e) => e.path.exact === '/v1/chat/completions' || e.path.exact === '/v1/responses',
-)
-
-/** The model an xAI response says served it. */
-const xaiServedModel: ServedModel = ({ host, responseModel }) =>
-  host === 'api.x.ai' ? responseModel : undefined
-
-/** The model a Gemini API request names in its URL. */
-const geminiServedModel: ServedModel = ({ host, path }) =>
-  host === 'generativelanguage.googleapis.com'
-    ? /^\/v1beta\/models\/([^/:]+):streamGenerateContent$/.exec(path)?.[1]
-    : undefined
-
-/** Cursor's agent stream: one call per turn, which carries the turn's model output and tool calls. */
-const CURSOR_RUN = {
-  host: 'api2.cursor.sh',
-  path: { exact: '/agent.v1.AgentService/RunSSE' },
-  method: ['POST'],
-} as const satisfies EndpointMatch
-
-/** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
-const CURSOR_EXCHANGE = {
-  host: 'api2.cursor.sh',
-  path: { exact: '/auth/exchange_user_api_key' },
-  method: ['POST'],
-} as const satisfies EndpointMatch
-
-/** Codex's model calls: the Responses API, whose response names the served model. */
-const OPENAI_MODEL_ENDPOINTS = [
-  { host: 'api.openai.com', path: { exact: '/v1/responses' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/** What Codex sends the key on: its model calls, and its web search tool's own endpoint. */
-const OPENAI_ENDPOINTS = [
-  ...OPENAI_MODEL_ENDPOINTS,
-  { host: 'api.openai.com', path: { exact: '/v1/alpha/search' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/**
- * The model the Responses API says served a request, from its response (a dated snapshot for some
- * models), and the reasoning effort Codex resolved for it, e.g. `gpt-5.6-luna[effort=medium]`.
- */
-const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEffort }) =>
-  host === 'api.openai.com' && path === '/v1/responses' && responseModel
-    ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
-    : undefined
-
-/**
- * OpenCode on the model's provider (`anthropic/claude-haiku-4-5` is Anthropic's): its key, the
- * requests OpenCode sends it on, its hosts plus Exa's for web search, and the served model from
- * the URL (Gemini's API, Bedrock's) or the response body. Bedrock's hosts are its `AWS_REGION`'s.
- */
-export function opencodeForModel(
-  model: string,
-  env: NodeJS.ProcessEnv = process.env,
-): ModelSpecific {
-  const resolved = resolveOpenCodeProvider(model, env)
-  if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
-  const { provider } = resolved
-  const modelResponses = providerModelResponses(provider)
-  return {
-    credential: provider.env,
-    endpoints: providerEndpoints(provider),
-    ...(modelResponses.length ? { modelResponses } : {}),
-    modelCalls: providerEndpoints(provider).filter((e) => e.method.includes('POST')),
-    servedModel: (request) => providerServedModel(provider, request),
-    hosts: [...providerHosts(provider), 'mcp.exa.ai'],
-  }
-}
-
-/**
- * The variables besides its key that OpenCode's provider takes from the host, as they are:
- * Bedrock's `AWS_REGION` (default `us-east-1`); none for most providers.
- */
-export function opencodeVars(model: string, env: NodeJS.ProcessEnv = process.env) {
-  const resolved = resolveOpenCodeProvider(model, env)
-  if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
-  return resolved.vars
-}
-
-/** The `<provider>` a pi or Goose model id, `<provider>/<model>`, names. */
-const providerOf = (model: string) => model.slice(0, Math.max(model.indexOf('/'), 0))
-
-/** The model id pi or Goose asks its provider for: the id without its `<provider>/`. */
-const withoutProvider = (model: string) => model.slice(model.indexOf('/') + 1)
-
-/** reeval's name for a provider's key where it isn't the agent's: Google's, which the judge reads too. */
-const HOST_CREDENTIAL: Record<string, string> = { google: 'GOOGLE_GENERATIVE_AI_API_KEY' }
-
-/** A provider's model calls: the POST requests among those its key is sent on. */
-const modelCallsOf = (endpoints: readonly EndpointMatch[]) =>
-  endpoints.filter((e) => e.method?.includes('POST'))
-
-/** The model a response from `hosts`' model calls names. */
-const respondedOn =
-  (...hosts: string[]): ServedModel =>
-  (request) =>
-    hosts.includes(request.host) && request.method === 'POST' ? request.responseModel : undefined
-
-/**
- * pi on the model's provider (`xai/grok-4.5` is xAI's), from the table probed on the pinned pi
- * (harness-pi's pi-provider-table.ts): its key, the requests pi sends it on, their hosts, and the
- * served model from a Gemini API's URL or the response body. Throws naming why reeval can't run a
- * provider pi has, or that pi has none of that name.
- */
-export function piForModel(model: string): ModelSpecific {
-  const id = providerOf(model)
-  const provider = piProvider(id)
-  if ('refused' in provider) throw new InfraError(`pi(): ${directProviderRefusal('pi', model)}`)
-  const endpoints = provider.endpoints.map(({ host, method, path }) => ({ host, method, path }))
-  const hosts = [...new Set(endpoints.map((e) => e.host))]
-  const inUrl = provider.endpoints.some((e) => e.api === 'google-generative-ai')
-  const modelResponses = provider.endpoints
-    .filter((e) => e.api !== 'google-generative-ai')
-    .map(({ host, method, path }) => ({ host, method, path }))
-  return {
-    credential: HOST_CREDENTIAL[id] ?? provider.credentialEnv,
-    authAs: provider.credentialEnv,
-    endpoints,
-    modelCalls: modelCallsOf(endpoints),
-    ...(modelResponses.length ? { modelResponses } : {}),
-    // The Responses API's on OpenAI's own host also names the effort that served it.
-    servedModel: (request) =>
-      openaiServedModel(request) ??
-      (inUrl && hosts.includes(request.host)
-        ? /\/models\/([^/:]+):streamGenerateContent$/.exec(request.path)?.[1]
-        : undefined) ??
-      respondedOn(...hosts)(request),
-    hosts,
-  }
-}
-
-/** A provider pi runs on its own key; throws naming why reeval can't run one. */
-function keyed(provider: PiProvider | { refused: string }): PiProvider {
-  if ('refused' in provider) throw new InfraError(`pi(): ${provider.refused}`)
-  return provider
-}
-
-/** Anthropic's Messages API, whose response names the model that served it. */
-const ANTHROPIC_MESSAGES = [
-  { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/** OpenAI's Chat Completions API, whose response names the model that served it. */
-const OPENAI_CHAT = [
-  { host: 'api.openai.com', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/** xAI's Chat Completions API, which Goose's OpenAI-compatible `xai` provider calls. */
-const XAI_CHAT = [
-  { host: 'api.x.ai', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
-] as const satisfies readonly EndpointMatch[]
-
-/**
- * Goose on each provider reeval brokers its key for (Goose's `google`, `anthropic`, `openai` and
- * `xai`): its model calls and the model list it fetches.
- */
-const GOOSE_DIRECT: Record<string, ModelSpecific> = {
-  google: {
-    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    authAs: 'GOOGLE_API_KEY',
-    endpoints: GOOSE_ENDPOINTS,
-    servedModel: geminiServedModel,
-    hosts: ['generativelanguage.googleapis.com'],
-  },
-  anthropic: {
-    credential: 'ANTHROPIC_API_KEY',
-    authAs: 'ANTHROPIC_API_KEY',
-    endpoints: [
-      ...ANTHROPIC_MESSAGES,
-      { host: 'api.anthropic.com', path: { exact: '/v1/models' }, method: ['GET'] },
-    ],
-    modelResponses: ANTHROPIC_MESSAGES,
-    servedModel: respondedOn('api.anthropic.com'),
-    hosts: ['api.anthropic.com'],
-  },
-  // Chat Completions, and the Responses API for OpenAI's reasoning models.
-  openai: {
-    credential: 'OPENAI_API_KEY',
-    authAs: 'OPENAI_API_KEY',
-    endpoints: [
-      ...OPENAI_CHAT,
-      ...OPENAI_MODEL_ENDPOINTS,
-      { host: 'api.openai.com', path: { exact: '/v1/models' }, method: ['GET'] },
-    ],
-    modelResponses: [...OPENAI_CHAT, ...OPENAI_MODEL_ENDPOINTS],
-    servedModel: (request) => openaiServedModel(request) ?? respondedOn('api.openai.com')(request),
-    hosts: ['api.openai.com'],
-  },
-  xai: {
-    credential: 'XAI_API_KEY',
-    authAs: 'XAI_API_KEY',
-    endpoints: [...XAI_CHAT, { host: 'api.x.ai', path: { exact: '/v1/models' }, method: ['GET'] }],
-    modelResponses: XAI_CHAT,
-    servedModel: xaiServedModel,
-    hosts: ['api.x.ai'],
-  },
-}
-
-/** The Goose providers reeval runs on their own keys, for messages. */
-export const GOOSE_PROVIDERS = Object.keys(GOOSE_DIRECT)
-
-/** Goose on the model's provider; throws naming the providers reeval brokers a key for. */
-export function gooseForModel(model: string): ModelSpecific {
-  const direct = GOOSE_DIRECT[providerOf(model)]
-  if (!direct) throw new InfraError(`goose(): ${directProviderRefusal('goose', model)}`)
-  return { ...direct, modelCalls: modelCallsOf(direct.endpoints) }
-}
-
-/** Why pi or Goose can't run `model` on its provider's own key, or undefined when it can. */
-export function directProviderRefusal(kind: 'pi' | 'goose', model: string): string | undefined {
-  if (kind === 'goose') {
-    return GOOSE_DIRECT[providerOf(model)]
-      ? undefined
-      : `reeval runs Goose on its own key for its ${GOOSE_PROVIDERS.join(', ')} providers, so not ${model}: where Goose's other providers send their keys isn't probed yet. Run it through a gateway`
-  }
-  const provider = piProvider(providerOf(model))
-  return 'refused' in provider ? `${provider.refused}, so not ${model}` : undefined
-}
-
-/** Codex's `config.toml` `[mcp_servers]` shape. */
-export function codexMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) => {
-      if (s.transport === 'sse') {
-        throw new InfraError(
-          `Codex has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
-        )
-      }
-      return s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: s.env ?? {} }]
-        : [name, { url: s.url, http_headers: s.headers ?? {} }]
-    }),
-  )
-}
-
-/** The `.mcp.json` shape. */
-export function claudeMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { type: 'stdio', command: s.command, args: s.args, env: s.env }]
-        : [name, { type: s.transport, url: s.url, headers: s.headers }],
-    ),
-  )
-}
-
-/** The Antigravity CLI's `mcp_config.json` shape: remote servers take `serverUrl`, not `url`. */
-export function antigravityMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: s.env }]
-        : [name, { serverUrl: s.url, headers: s.headers }],
-    ),
-  )
-}
-
-/**
- * A `{env:…}` or `{file:…}` OpenCode would substitute. It runs `\{env:[^}]+\}`, then
- * `\{file:[^}]+\}`, over its whole config text with no escape, so a reference left open at the end
- * of a value runs on into the JSON after it, and only `{env:}` and `{file:}` are left alone.
- */
-const OPENCODE_REFERENCE = /\{(?:env|file):(?!\})/
-
-const fieldKey = (key: string) =>
-  /^[A-Za-z_$][\w$]*$/.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
-
-/**
- * The first part of a server OpenCode would substitute, as what the server wouldn't get: its name,
- * a value as `mcp.<name>.<field>`, or an env or header name. Names are in the same config text as
- * values, so they're substituted too; a secret's value is never named.
- */
-function openCodeReference(name: string, s: ResolvedMcpServer): string | undefined {
-  if (OPENCODE_REFERENCE.test(name)) return 'its name'
-  const server = `mcp${fieldKey(name)}`
-  const [map, kind, values]: [string, string, Record<string, string>] =
-    s.transport === 'stdio' ? ['env', 'env', s.env ?? {}] : ['headers', 'header', s.headers ?? {}]
-  const fields: [string, string][] = [
-    ...(s.transport === 'stdio'
-      ? [
-          [`${server}.command`, s.command] as [string, string],
-          ...s.args.map((a, i): [string, string] => [`${server}.args[${i}]`, a]),
-        ]
-      : [[`${server}.url`, s.url] as [string, string]]),
-    ...Object.entries(values).flatMap(([k, v]): [string, string][] => [
-      [`the ${kind} name ${k} in ${server}.${map}`, k],
-      [`${server}.${map}${fieldKey(k)}`, v],
-    ]),
-  ]
-  return fields.find(([, text]) => OPENCODE_REFERENCE.test(text))?.[0]
-}
-
-/**
- * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on.
- * OpenCode has no SSE transport, and refuses a value it would substitute.
- */
-export function opencodeMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, OpenCodeMcpServer> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]): [string, OpenCodeMcpServer] => {
-      if (s.transport === 'sse') {
-        throw new InfraError(
-          `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
-        )
-      }
-      const field = openCodeReference(name, s)
-      if (field) {
-        throw new InfraError(
-          `OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the ${name} server wouldn't get ${field} as written: take the reference out, or leave OpenCode out of this cell`,
-        )
-      }
-      return s.transport === 'stdio'
-        ? [name, { type: 'local', command: [s.command, ...s.args], environment: s.env ?? {} }]
-        : [name, { type: 'remote', url: s.url, headers: s.headers ?? {}, oauth: false }]
-    }),
-  )
-}
-
-/**
- * The key Goose keeps an extension by (its `name_to_key`): whitespace dropped, anything but ASCII
- * letters, digits, `_` and `-` made `_`, lower-cased. Of two extensions with one key it keeps one.
- */
-const gooseKey = (name: string) =>
-  name
-    .replace(/\s/g, '')
-    .replace(/[^A-Za-z0-9_-]/g, '_')
-    .toLowerCase()
-
-/** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
-export function gooseMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, Record<string, unknown>> {
-  const byKey = new Map<string, string>()
-  for (const name of Object.keys(servers)) {
-    const key = gooseKey(name)
-    const other = byKey.get(key)
-    if (other !== undefined) {
-      throw new InfraError(
-        `Goose keys the ${other} and ${name} MCP servers both as ${key}, and keeps only one: rename one`,
-      )
-    }
-    byKey.set(key, name)
-  }
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) => {
-      if (s.transport === 'sse') {
-        throw new InfraError(
-          `Goose has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
-        )
-      }
-      return s.transport === 'stdio'
-        ? [name, { type: 'stdio', cmd: s.command, args: s.args, envs: s.env ?? {} }]
-        : [name, { type: 'streamable_http', uri: s.url, headers: s.headers ?? {} }]
-    }),
-  )
-}
-
-/**
- * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. pi
- * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
- * A plugin's server, `<plugin>:<server>`, is named `<plugin>_<server>`, so its tools are
- * `mcp__<plugin>_<server>__<tool>`.
- */
-export function piMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, PiMcpServer> {
-  const named = new Map<string, string>()
-  return Object.fromEntries(
-    Object.entries(servers).map(([key, s]): [string, PiMcpServer] => {
-      const name = /^[a-z0-9-]+:[^:]+$/.test(key) ? key.replace(':', '_') : key
-      if (!/^[A-Za-z0-9_-]+$/.test(name)) {
-        throw new InfraError(
-          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${key} server: rename it`,
-        )
-      }
-      const other = named.get(name)
-      if (other) {
-        throw new InfraError(
-          `pi names the ${key} MCP server ${name}, as it does the ${other} server, and keeps only one: rename one`,
-        )
-      }
-      named.set(name, key)
-      if (s.transport === 'sse') {
-        throw new InfraError(
-          `pi has no SSE MCP transport, so it can't use the ${key} server (mcp.sse): use mcp.http or mcp.stdio`,
-        )
-      }
-      return s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: s.env ?? {} }]
-        : [name, { url: s.url, headers: s.headers ?? {} }]
-    }),
-  )
-}
-
-/**
- * ACP's `McpServer` shape, which fx and Grok Build take on `session/new`: `env` and `headers` as
- * name-value lists.
- */
-export function acpMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, Record<string, unknown>> {
-  const pairs = (values: Record<string, string> = {}) =>
-    Object.entries(values).map(([name, value]) => ({ name, value }))
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? // `harness-acp` takes only an absolute command, so a bare one goes through `env`'s PATH lookup.
-          [
-            name,
-            s.command.startsWith('/')
-              ? { command: s.command, args: s.args, env: pairs(s.env) }
-              : { command: '/usr/bin/env', args: [s.command, ...s.args], env: pairs(s.env) },
-          ]
-        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
-    ),
-  )
-}
-
-/** fx's ACP `session/new` servers: its `initialize` reports `mcpCapabilities.sse: false`. */
-function fxMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, Record<string, unknown>> {
-  for (const [name, s] of Object.entries(servers)) {
-    if (s.transport === 'sse') {
-      throw new InfraError(
-        `fx has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
-      )
-    }
-  }
-  return acpMcpServers(servers)
-}
-
-/**
- * fx on the model's provider: OpenAI's Chat Completions API for a bare OpenAI id, and Vercel AI
- * Gateway for a gateway id, which only `vercel()` in the gateway list serves. Each response's
- * first `model` names the model that served it.
- */
-export function fxForModel(model: string): ModelSpecific {
-  if (!model.includes('/')) {
-    const endpoints = [
-      { host: 'api.openai.com', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
-    ] as const satisfies readonly EndpointMatch[]
-    return {
-      credential: 'OPENAI_API_KEY',
-      endpoints,
-      modelResponses: endpoints,
-      servedModel: ({ host, responseModel }) =>
-        host === 'api.openai.com' ? responseModel : undefined,
-      hosts: ['api.openai.com'],
-    }
-  }
-  return {
-    credential: VERCEL_KEY,
-    endpoints: fxVercelEndpoints(),
-    modelResponses: [fxVercelCall()],
-    servedModel: servedOn(),
-    askedModel: fxAskedModel(),
-    hosts: [VERCEL_HOST],
-  }
-}
-
-/** The Cursor SDK's `McpServerConfig` shape. */
-export function cursorMcpServers(
-  servers: Record<string, ResolvedMcpServer>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { type: 'stdio', command: s.command, args: s.args, env: s.env }]
-        : [name, { type: s.transport, url: s.url, headers: s.headers }],
-    ),
-  )
-}
-
-/** Claude Code's hook events as Cursor names them, as the Cursor SDK converts Claude Code's own. */
-const CURSOR_HOOK_EVENTS: Readonly<Record<string, string>> = {
-  SessionStart: 'sessionStart',
-  SessionEnd: 'sessionEnd',
-  UserPromptSubmit: 'beforeSubmitPrompt',
-  PreToolUse: 'preToolUse',
-  PostToolUse: 'postToolUse',
-  SubagentStop: 'subagentStop',
-  PreCompact: 'preCompact',
-  Stop: 'stop',
-}
-
-/** Claude Code's tool names as Cursor's hooks match them; null for one Cursor has no tool for. */
-const CURSOR_HOOK_TOOLS: Readonly<Record<string, string | null>> = {
-  Bash: 'Shell',
-  Read: 'Read',
-  Write: 'Write',
-  Edit: 'Write',
-  Glob: null,
-  Grep: 'Grep',
-  WebFetch: 'WebFetch',
-  WebSearch: 'WebSearch',
-  Task: 'Task',
-}
-
-/**
- * A Claude Code hook group's tool matcher as Cursor's, on the tool events only: each name mapped,
- * `mcp__<server>__<tool>` as `MCP:<tool>`; null when it names only tools Cursor lacks.
- */
-export function cursorHookMatcher(
-  event: string,
-  matcher: string | undefined,
-): string | null | undefined {
-  if (event !== 'PreToolUse' && event !== 'PostToolUse') return undefined
-  if (!matcher || matcher === '*') return undefined
-  const out: string[] = []
-  for (const raw of matcher.split('|')) {
-    const name = raw.trim()
-    const parts = name.split('__')
-    const tool =
-      name.startsWith('mcp__') && parts.length >= 3
-        ? `MCP:${parts.slice(2).join('__')}`
-        : CURSOR_HOOK_TOOLS[name] === undefined
-          ? name
-          : CURSOR_HOOK_TOOLS[name]
-    if (tool && !out.includes(tool)) out.push(tool)
-  }
-  return out.length ? out.join('|') : null
-}
-
-/** Where Cursor reads what reeval unpacks from a plugin, in the workspace (settingSources `project`). */
-const CURSOR_PLUGIN_UNPACK: PluginUnpack = {
-  rules: '.cursor/rules',
-  agents: '.cursor/agents',
-  commands: '.cursor/commands',
-  hooks: { file: '.cursor/hooks.json', events: CURSOR_HOOK_EVENTS, matcher: cursorHookMatcher },
-}
-
-/**
- * A plugin subagent's or command's frontmatter as OpenCode 2 takes it: the description, and a
- * subagent's `mode`. OpenCode skips a file whose frontmatter its schema refuses, without saying,
- * and Claude Code's `tools: Read, Grep`, `model: sonnet` and `allowed-tools` are such keys.
- */
-export function opencodeFrontmatter(
-  part: 'agents' | 'commands',
-  front: Record<string, unknown>,
-): Record<string, string> {
-  const d = front.description
-  const description =
-    typeof d === 'string' || typeof d === 'number' || typeof d === 'boolean' ? String(d) : undefined
-  return {
-    ...(description ? { description } : {}),
-    ...(part === 'agents' ? { mode: 'subagent' } : {}),
-  }
-}
-
-/** Where OpenCode reads plugin subagents and commands, in the workspace's config directory. */
-const OPENCODE_PLUGIN_UNPACK: PluginUnpack = {
-  agents: '.opencode/agents',
-  commands: '.opencode/commands',
-  frontmatter: opencodeFrontmatter,
-}
-
-/**
- * Where pi reads plugin commands, as prompt templates (`/<name>`), in the workspace, which its
- * `--approve` trusts. Its frontmatter takes `description` and `argument-hint`, and ignores the
- * rest of Claude Code's.
- */
-const PI_PLUGIN_UNPACK: PluginUnpack = { commands: '.pi/prompts' }
-
-/**
- * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
- * which neither loads from a plugin.
- */
-const CLAUDE_FORMAT_PARTS: readonly PluginPart[] = PLUGIN_PARTS.filter((p) => p !== 'rules')
-
-/** The marketplace Claude Code's settings name for the session's plugins. */
-export const CLAUDE_PLUGIN_MARKETPLACE = 'reeval'
-
-/**
- * Claude Code's settings for the session's plugins: a `directory` marketplace at the directory
- * they were copied to, listing each, and each enabled as `<plugin>@reeval`. Claude Code installs
- * and loads them as it starts, since the bridge leaves every settings source on.
- */
-export function claudePluginFiles(plugins: readonly PlacedPlugin[]): PluginFile[] {
-  const [first] = plugins
-  if (!first) return []
-  const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
-  const marketplace = {
-    name: CLAUDE_PLUGIN_MARKETPLACE,
-    owner: { name: 'reeval' },
-    plugins: plugins.map((p) => ({ name: p.name, source: `./${p.name}` })),
-  }
-  const settings = {
-    extraKnownMarketplaces: {
-      [CLAUDE_PLUGIN_MARKETPLACE]: {
-        source: { source: 'directory', path: first.dir.slice(0, first.dir.lastIndexOf('/')) },
-      },
-    },
-    enabledPlugins: Object.fromEntries(
-      plugins.map((p) => [`${p.name}@${CLAUDE_PLUGIN_MARKETPLACE}`, true]),
-    ),
-  }
-  return [
-    { path: `${PLUGIN_DIR}/.claude-plugin/marketplace.json`, content: json(marketplace) },
-    { path: '~/.claude/settings.json', content: json(settings), merge: true },
-  ]
-}
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -1100,123 +168,13 @@ export async function writePluginFiles(
 }
 
 /**
- * The MCP servers the agent is given: all of them, less the plugins' own where it takes plugin
- * items namespaced, since it loads those from the plugin and would otherwise start each twice.
+ * Every real agent reeval can drive, by harness kind: its catalog entry, what the egress gateway
+ * needs to know about it, and its adapter.
  */
-export function agentMcp(
-  layout: Layout,
-  mcp: Record<string, ResolvedMcpServer>,
-  plugins: readonly PlacedPlugin[],
-): Record<string, ResolvedMcpServer> {
-  if (layout.pluginPlacement !== 'namespaced') return mcp
-  const own = new Set(plugins.flatMap((p) => p.servers))
-  return Object.fromEntries(Object.entries(mcp).filter(([name]) => !own.has(name)))
-}
-
-/** Where each agent with an image reads rules and skills. */
-export const LAYOUTS: Record<BakedHarness, Layout> = {
-  // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
-  // ~/.agents/skills from home (`user`). Plugin skills join the home ones; the rest of a plugin is
-  // unpacked into the workspace's .cursor/, never loaded with settingSources `plugins`, which also
-  // fetches the key owner's account plugins.
-  cursor: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.cursor,
-    pluginPlacement: 'flat',
-    pluginUnpack: CURSOR_PLUGIN_UNPACK,
-    pluginHookEvents: Object.keys(CURSOR_HOOK_EVENTS),
-  },
-  'claude-code': {
-    rulesFile: 'CLAUDE.md',
-    ...SKILL_LAYOUTS['claude-code'],
-    pluginPlacement: 'namespaced',
-    pluginFiles: claudePluginFiles,
-  },
-  // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
-  // Plugins are installed whole with `agy plugin install`, which the adapter runs as it starts.
-  antigravity: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.antigravity,
-    pluginPlacement: 'namespaced',
-    // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
-    pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
-  },
-  // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
-  // the workspace and the home directory; nothing turns that off. Plugin skills join the home ones;
-  // plugin subagents and commands are unpacked into the workspace's .opencode/. Its own plugins
-  // are code modules, never loaded from an environment's plugins.
-  opencode: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.opencode,
-    pluginPlacement: 'flat',
-    pluginUnpack: OPENCODE_PLUGIN_UNPACK,
-  },
-  // Goose's bootstrap gives it a private home, so its home skills are under that. It also
-  // reads .agents/skills and .claude/skills; nothing turns that off.
-  goose: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.goose,
-    pluginPlacement: 'flat',
-  },
-  // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
-  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md). Plugin skills join the home
-  // ones and plugin commands are unpacked as the workspace's prompt templates; pi packages (its own
-  // plugins, with extension code) are never loaded from an environment's plugins.
-  pi: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.pi,
-    pluginPlacement: 'flat',
-    pluginUnpack: PI_PLUGIN_UNPACK,
-  },
-  // Codex reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
-  // ~/.codex and the workspace.
-  codex: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.codex,
-    pluginPlacement: 'namespaced',
-  },
-  // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
-  // the ACP bootstrap gives it. It has no plugins of its own: plugin skills join its home skills.
-  fx: {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS.fx,
-    pluginPlacement: 'flat',
-  },
-  // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
-  // workspace's AGENTS.md and skills only in a trusted folder, which the adapter's
-  // GROK_FOLDER_TRUST=false makes it; it also reads .agents/skills and .claude/skills.
-  'grok-build': {
-    rulesFile: 'AGENTS.md',
-    ...SKILL_LAYOUTS['grok-build'],
-    pluginPlacement: 'namespaced',
-  },
-}
-
-/** Every real agent reeval can drive, by harness kind. */
 export const AGENTS: Record<AgentKind, CatalogEntry> = {
   cursor: {
-    ...LAYOUTS.cursor,
-    pluginParts: PLUGIN_PARTS,
-    name: 'Cursor',
-    factory: 'cursor',
-    // The bootstrap installs `@cursor/sdk` with npm, which picks its build for the platform.
-    platforms: ['linux', 'darwin'],
-    reasoning: 'streamed',
-    reasoningTokens: false,
-    credential: 'CURSOR_API_KEY',
-    // The SDK trades the key for session tokens at the same endpoint as the CLI, and sends the
-    // tokens to api2.cursor.sh only (its agent stream included, over HTTP/1.1 through the proxy).
-    endpoints: [CURSOR_EXCHANGE],
-    modelCalls: [CURSOR_RUN],
-    modelStream: true,
-    tokens: {
-      endpoint: CURSOR_EXCHANGE,
-      fields: ['accessToken', 'refreshToken'],
-      hosts: ['cursor.sh', '*.cursor.sh'],
-    },
-    // Web search and fetch: CURSOR_SDK_RECOVERED_TOOLS.
-    unreported: cursorUnreported,
-    mcpServers: cursorMcpServers,
+    ...HARNESSES.cursor,
+    ...WIRE.cursor,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-cursor-sdk')).createCursorSdk({
         auth,
@@ -1229,35 +187,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
       }),
   },
   'claude-code': {
-    ...LAYOUTS['claude-code'],
-    pluginParts: CLAUDE_FORMAT_PARTS,
-    name: 'Claude Code',
-    factory: 'claudeCode',
-    bridgePort: true,
-    platforms: ['linux', 'darwin'],
-    reasoning: 'streamed',
-    reasoningTokens: true,
-    subagentCalls: true,
-    reportedCost: claudeCodeCost,
-    credential: 'ANTHROPIC_API_KEY',
-    // A Claude subscription's token from `claude setup-token`, which the CLI sends as a Bearer
-    // token on the same endpoints. ANTHROPIC_AUTH_TOKEN isn't one: it's a gateway's key, which
-    // api.anthropic.com doesn't take.
-    fallbackCredentials: ['CLAUDE_CODE_OAUTH_TOKEN'],
-    // What the CLI sends the key on, with non-essential traffic off.
-    // Anything else gets a 403 from the gateway and a warning that names the request.
-    modelCalls: [{ host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] }],
-    endpoints: [
-      { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
-      { host: 'api.anthropic.com', path: { exact: '/v1/messages/count_tokens' }, method: ['POST'] },
-      { host: 'api.anthropic.com', path: { exact: '/api/claude_code/settings' }, method: ['GET'] },
-      {
-        host: 'api.anthropic.com',
-        path: { exact: '/api/claude_code/policy_limits' },
-        method: ['GET'],
-      },
-    ],
-    mcpServers: claudeMcpServers,
+    ...HARNESSES['claude-code'],
+    ...WIRE['claude-code'],
     adapter: async ({ auth, env, mcpServers, descriptor }) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
         auth,
@@ -1277,39 +208,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
       }),
   },
   antigravity: {
-    ...LAYOUTS.antigravity,
-    pluginParts: PLUGIN_PARTS,
-    // agy 1.4.2 installs a plugin as a native one when it has any of these, under that manifest's
-    // name and paths.
-    pluginManifestsFirst: [
-      'plugin.json',
-      '.antigravity-plugin/plugin.json',
-      '.gemini-plugin/plugin.json',
-      'gemini-extension.json',
-    ],
-    name: 'Antigravity',
-    factory: 'antigravity',
-    keychainTrust: true,
-    platforms: ['linux', 'darwin'],
-    // agy's stream-json has only each step's `thinking_tokens`; the adapter reads the thought
-    // summaries and their `thinking_duration` from agy's stored conversation after each turn.
-    reasoning: 'recovered',
-    reasoningTokens: true,
-    // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
-    credential: 'GEMINI_API_KEY',
-    // Its model calls (the main model, and a lite one for titles) and its web searches, which a
-    // lite model answers from Google Search.
-    endpoints: ANTIGRAVITY_ENDPOINTS,
-    modelCalls: ANTIGRAVITY_ENDPOINTS,
-    // The CLI opens both in every session. Neither `enableTelemetry: false` nor any other
-    // setting or variable in the binary stops them.
-    expectedBlocked: {
-      hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
-      why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
-    },
-    // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
-    servedModel: geminiServedModel,
-    mcpServers: antigravityMcpServers,
+    ...HARNESSES.antigravity,
+    ...WIRE.antigravity,
     adapter: async ({ auth, mcpServers, descriptor, plugins, vertex }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
@@ -1324,24 +224,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
       }),
   },
   opencode: {
-    ...LAYOUTS.opencode,
-    // Plugin MCP servers go in its config with the environment's.
-    pluginParts: ['skills', 'agents', 'commands', 'mcp'],
-    name: 'OpenCode',
-    factory: 'opencode',
-    bridgePort: true,
-    platforms: ['linux', 'darwin'],
-    configuredModelOnStart: true,
-    reasoning: 'streamed',
-    reasoningTokens: 'provider',
-    storedUsage: async () => {
-      const m = await import('@reeval/harness-opencode')
-      return { command: m.openCodeStoredUsageCommand, parse: m.parseOpenCodeStoredUsage }
-    },
-    // The requests the pinned CLI sends each provider's key on (its model, and the same model for
-    // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
-    forModel: opencodeForModel,
-    mcpServers: opencodeMcpServers,
+    ...HARNESSES.opencode,
+    ...WIRE.opencode,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth,
@@ -1355,37 +239,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
       }),
   },
   goose: {
-    ...LAYOUTS.goose,
-    // Plugin skills join its home skills; plugin MCP servers are extensions in its config.yaml.
-    pluginParts: ['skills', 'mcp'],
-    name: 'Goose',
-    factory: 'goose',
-    keychainTrust: true,
-    bridgePort: true,
-    platforms: ['linux', 'darwin'],
-    configuredModelOnStart: true,
-    reasoning: 'streamed',
-    // The adapter reads each turn's usage from Goose's usage_ledger, which counts thinking tokens
-    // in the output without splitting them out.
-    reasoningTokens: false,
-    storedUsage: async () => {
-      const m = await import('@reeval/harness-goose')
-      return {
-        command: m.gooseStoredUsageCommand,
-        parse: m.parseGooseStoredUsage,
-        mark: m.gooseUsageMark,
-      }
-    },
-    // The model's provider's: the requests Goose sends its key on, with session naming off.
-    forModel: gooseForModel,
-    modelId: withoutProvider,
-    // Goose 1.59.0 refreshes its model catalog from models.dev/api.json in every session, and
-    // falls back to the one it bundles when that's refused.
-    expectedBlocked: {
-      hosts: ['models.dev'],
-      why: "Goose's model catalog refresh, which no setting turns off",
-    },
-    mcpServers: gooseMcpServers,
+    ...HARNESSES.goose,
+    ...WIRE.goose,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const goose = await import('@reeval/harness-goose')
       const direct: Record<string, GooseProvider> = {
@@ -1412,20 +267,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     },
   },
   pi: {
-    ...LAYOUTS.pi,
-    // Plugin MCP servers go in its mcp.json with the environment's. It has no subagents.
-    pluginParts: ['skills', 'commands', 'mcp'],
-    name: 'pi',
-    factory: 'pi',
-    platforms: ['linux', 'darwin'],
-    reasoning: 'streamed',
-    reasoningTokens: true,
-    reportedCost: piCost,
-    // The model's provider's: the only requests pi sends its key on, since --offline stops its
-    // startup network operations.
-    forModel: piForModel,
-    modelId: withoutProvider,
-    mcpServers: piMcpServers,
+    ...HARNESSES.pi,
+    ...WIRE.pi,
     adapter: async ({ auth, mcpServers, descriptor, model, vertex }) => {
       const pi = await import('@reeval/harness-pi')
       const api = vercelApi()
@@ -1451,42 +294,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     },
   },
   codex: {
-    ...LAYOUTS.codex,
-    // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
-    pluginParts: ['skills', 'mcp'],
-    pluginApps: 'they need a ChatGPT login',
-    // Codex 0.164.0 reads a root plugin.json (with an Agent Plugins $schema), then
-    // .codex-plugin/plugin.json, then .claude-plugin/plugin.json.
-    pluginManifestsFirst: ['plugin.json', '.codex-plugin/plugin.json'],
-    pluginRootManifestNeedsSchema: true,
-    pluginServersByName: true,
-    name: 'Codex',
-    factory: 'codex',
-    keychainTrust: true,
-    platforms: ['linux', 'darwin'],
-    // codex exec sends a reasoning item only once it's complete, when it sends one at all.
-    reasoning: 'whole',
-    reasoningTokens: true,
-    storedUsage: async () => {
-      const m = await import('@reeval/harness-codex')
-      return { command: m.codexStoredUsageCommand, parse: m.parseCodexStoredUsage }
-    },
-    // Its JSON events carry a command's and an MCP call's whole result; the model gets its start and end.
-    fullToolOutput: 'all',
-    credential: 'OPENAI_API_KEY',
-    // On the adapter's provider (HTTP, not WebSockets): the model calls, whose responses name the
-    // dated model and the effort that served them, and the web search tool's searches.
-    endpoints: OPENAI_ENDPOINTS,
-    modelResponses: OPENAI_MODEL_ENDPOINTS,
-    // Only with plugins on, which a session with plugins needs; it loads them all the same. In a
-    // session without plugins these hosts are a real block.
-    expectedBlocked: {
-      hosts: ['github.com', 'api.github.com', 'chatgpt.com'],
-      why: "Codex's plugin sync, which it runs on every turn once plugins are on",
-      withPlugins: true,
-    },
-    servedModel: openaiServedModel,
-    mcpServers: codexMcpServers,
+    ...HARNESSES.codex,
+    ...WIRE.codex,
     adapter: async ({ auth, mcpServers, descriptor, plugins }) => {
       const codex = await import('@reeval/harness-codex')
       const provider = onRoutingGateway(descriptor, {
@@ -1506,23 +315,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
     },
   },
   fx: {
-    ...LAYOUTS.fx,
-    // Plugin MCP servers go over ACP with the environment's. It reads no subagents or commands
-    // from files.
-    pluginParts: ['skills', 'mcp'],
-    name: 'fx',
-    factory: 'fx',
-    bridgePort: true,
-    platforms: ['linux', 'darwin'],
-    configuredModelOnStart: true,
-    reasoning: 'streamed',
-    reasoningTokens: 'provider',
-    // A command's output is rebuilt from its streamed updates; the model gets a clipped summary.
-    fullToolOutput: ['bash'],
-    // AI Gateway's, for what names no model; forModel gives the model's provider's.
-    ...fxForModel('provider/model'),
-    forModel: fxForModel,
-    mcpServers: fxMcpServers,
+    ...HARNESSES.fx,
+    ...WIRE.fx,
     adapter: async ({ auth, env, mcpServers, model, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
@@ -1544,27 +338,8 @@ export const AGENTS: Record<AgentKind, CatalogEntry> = {
       }),
   },
   'grok-build': {
-    ...LAYOUTS['grok-build'],
-    pluginParts: CLAUDE_FORMAT_PARTS,
-    pluginServersByName: true,
-    name: 'Grok Build',
-    factory: 'grokBuild',
-    keychainTrust: true,
-    bridgePort: true,
-    platforms: ['linux', 'darwin'],
-    configuredModelOnStart: true,
-    reasoning: 'streamed',
-    reasoningTokens: true,
-    storedUsage: async () => {
-      const m = await import('@reeval/harness-grok-build')
-      return { command: m.grokStoredUsageCommand, parse: m.parseGrokStoredUsage }
-    },
-    credential: 'XAI_API_KEY',
-    // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
-    endpoints: XAI_ENDPOINTS,
-    modelResponses: XAI_MODEL_RESPONSES,
-    servedModel: xaiServedModel,
-    mcpServers: acpMcpServers,
+    ...HARNESSES['grok-build'],
+    ...WIRE['grok-build'],
     adapter: async ({ auth, mcpServers, descriptor, plugins, model, vertexChat }) => {
       const grok = await import('@reeval/harness-grok-build')
       return grok.createGrokBuild({
@@ -1650,7 +425,7 @@ export function refusedMcp(
     AGENTS[harness.kind].mcpServers(Object.fromEntries(servers))
     return undefined
   } catch (error) {
-    if (error instanceof InfraError) return error.message
+    if (error instanceof AgentError) return error.message
     throw error
   }
 }
@@ -1772,7 +547,7 @@ export function refusedPlugins(
     try {
       agent.mcpServers({ ...alongside, ...servers })
     } catch (error) {
-      if (error instanceof InfraError) return error.message
+      if (error instanceof AgentError) return error.message
       throw error
     }
   }
@@ -1901,13 +676,6 @@ export const credentialIn = (agent: Agent, env: NodeJS.ProcessEnv = process.env)
  */
 export const harnessCredentials = (h: HarnessDescriptor): string[] =>
   h.kind === 'fake' || h.gateway === 'vertex' ? [] : credentialsOf(agentFor(h))
-
-/** The fake agent's own layout. */
-const FAKE_LAYOUT: Layout = {
-  rulesFile: 'AGENTS.md',
-  ...SKILL_LAYOUTS.fake,
-  pluginPlacement: 'flat',
-}
 
 /** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */
 export function layoutOf(descriptor: HarnessDescriptor): Layout {
