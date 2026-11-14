@@ -58,18 +58,61 @@ function secretRanges(text: string, secrets: readonly string[]): Array<[number, 
   return ranges.sort((a, b) => a[0] - b[0])
 }
 
-/** The shortest piece of a split secret masked in a turn's other parts: shorter ones read as noise. */
-const MIN_FRAGMENT = 4
+/**
+ * `text`, the stream's characters from `start`, without those in a secret's range: `[masked]`
+ * stands where a range starts, and where `text` starts inside one when `open`.
+ */
+function maskSpan(
+  text: string,
+  start: number,
+  ranges: ReadonlyArray<[number, number]>,
+  open: boolean,
+) {
+  let next = ''
+  for (let i = 0; i < text.length; i++) {
+    const at = start + i
+    const range = ranges.find(([s, e]) => at >= s && at < e)
+    if (!range) next += text[i]
+    else if (range[0] === at || (open && i === 0)) next += '[masked]'
+  }
+  return next
+}
+
+type DeltaText = { text: string; offset: number; stream: string; ranges: Array<[number, number]> }
+
+/**
+ * `value` with each string that holds `delta`'s text masked, where the string, laid over the
+ * stream so the delta's text is where the stream has it, reads as the stream: the copy of a
+ * native event an adapter's `raw` part carries repeats its delta, or the text so far, verbatim.
+ * Object keys, numbers and `type` discriminators are left alone.
+ */
+function maskLeaves(value: unknown, deltas: readonly DeltaText[], key?: string): unknown {
+  if (typeof value === 'string') {
+    if (key === 'type') return value
+    for (const d of deltas) {
+      for (let at = value.indexOf(d.text); at !== -1; at = value.indexOf(d.text, at + 1)) {
+        const start = d.offset - at
+        if (start < 0 || d.stream.slice(start, start + value.length) !== value) continue
+        return maskSpan(value, start, d.ranges, true)
+      }
+    }
+    return value
+  }
+  if (Array.isArray(value)) return value.map((v) => maskLeaves(v, deltas))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskLeaves(v, deltas, k)]))
+  }
+  return value
+}
 
 /**
  * The parts with each secret masked in the text their deltas make together: a model's text splits
  * a key over several deltas, none of which holds the whole of it. The first delta a match starts
- * in gets `[masked]`, and every delta loses the match's characters it held. `fragments` are those
- * characters, each delta's piece of a secret, which an adapter's `raw` part for the same native
- * event repeats, for masking in the turn's other parts.
+ * in gets `[masked]`, and every delta loses the match's characters it held. A `raw` part, which
+ * adapters push after the parts they made from the same native event, has its strings masked
+ * against the deltas since the previous `raw` part (`maskLeaves`).
  */
 function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[]) {
-  const fragments = new Set<string>()
   const out = parts.map((p) => ({ ...p, part: { ...p.part } as Record<string, unknown> }))
   const streams = new Map<string, Array<{ part: Record<string, unknown>; field: string }>>()
   for (const { part } of out) {
@@ -82,37 +125,29 @@ function maskedDeltas(parts: readonly StampedPart[], secrets: readonly string[])
     streams.set(key, [...(streams.get(key) ?? []), { part, field }])
   }
   const ordered = longestFirst(secrets)
+  const texts = new Map<Record<string, unknown>, DeltaText>()
   for (const deltas of streams.values()) {
-    const ranges = secretRanges(deltas.map((d) => d.part[d.field]).join(''), ordered)
+    const stream = deltas.map((d) => d.part[d.field]).join('')
+    const ranges = secretRanges(stream, ordered)
     if (!ranges.length) continue
     let offset = 0
     for (const d of deltas) {
       const text = d.part[d.field] as string
-      let next = ''
-      let piece = ''
-      const keep = () => {
-        if (piece.length >= MIN_FRAGMENT) fragments.add(piece)
-        piece = ''
-      }
-      for (let i = 0; i < text.length; i++) {
-        const at = offset + i
-        const range = ranges.find(([s, e]) => at >= s && at < e)
-        if (range?.[0] === at) {
-          keep()
-          next += '[masked]'
-        }
-        if (range) piece += text[i]
-        else {
-          keep()
-          next += text[i]
-        }
-      }
-      keep()
-      d.part[d.field] = next
+      if (text) texts.set(d.part, { text, offset, stream, ranges })
+      d.part[d.field] = maskSpan(text, offset, ranges, false)
       offset += text.length
     }
   }
-  return { parts: out, fragments: [...fragments] }
+  if (!texts.size) return out
+  let since: DeltaText[] = []
+  for (const { part } of out) {
+    const text = texts.get(part)
+    if (text) since.push(text)
+    if (part.type !== 'raw') continue
+    if (since.length) part.rawValue = maskLeaves(part.rawValue, since)
+    since = []
+  }
+  return out
 }
 
 /** The transcript event as `transcript.jsonl` has it: a tool's long output cut to its ends. */
@@ -159,10 +194,9 @@ export class OutWriter {
     return next
   }
 
-  #append(file: string, lines: readonly unknown[], also: readonly string[] = []): Promise<void> {
+  #append(file: string, lines: readonly unknown[]): Promise<void> {
     const text = lines.map((l) => `${JSON.stringify(l)}\n`).join('')
-    const secrets = [...this.#secrets, ...also]
-    return this.#then(() => appendFile(join(this.dir, file), masked(text, secrets)))
+    return this.#then(() => appendFile(join(this.dir, file), masked(text, this.#secrets)))
   }
 
   session(doc: OutSession): Promise<void> {
@@ -195,9 +229,8 @@ export class OutWriter {
     const parts = this.#parts.get(turn)
     if (!parts) return Promise.resolve()
     this.#parts.delete(turn)
-    const { parts: deltas, fragments } = maskedDeltas(parts, this.#secrets)
-    const lines = deltas.map((p) => ({ turn, ...p }))
-    return this.#append('raw/parts.jsonl', lines, fragments)
+    const lines = maskedDeltas(parts, this.#secrets).map((p) => ({ turn, ...p }))
+    return this.#append('raw/parts.jsonl', lines)
   }
 
   log(text: string): Promise<void> {

@@ -255,67 +255,157 @@ test('a secret that starts another leaves none of the longer one', async () => {
   }
 })
 
-/** The key in three pieces of at least four characters, each a delta followed by `raw(piece)`. */
-function splitWithRaw(id: string, type: 'text' | 'reasoning', raw: (piece: string) => unknown) {
-  const pieces = [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]
+/** `key` streamed in `pieces` after "key ", each delta followed by its native event as `raw(delta)`. */
+function streamed(
+  id: string,
+  type: 'text' | 'reasoning',
+  pieces: readonly string[],
+  raw: (delta: string, soFar: string) => unknown,
+) {
+  const deltas = ['key ', ...pieces, '!']
+  let soFar = ''
   return [
     { type: `${type}-start`, id },
-    ...pieces.flatMap((piece, i) => {
-      const delta = i === 0 ? `key ${piece}` : i === 2 ? `${piece}!` : piece
+    ...deltas.flatMap((delta) => {
+      soFar += delta
       return [
         { type: `${type}-delta`, id, delta },
-        { type: 'raw', rawValue: raw(delta) },
+        { type: 'raw', rawValue: raw(delta, soFar) },
       ]
     }),
     { type: `${type}-end`, id },
   ]
 }
 
-async function rawOf(turn: HarnessV1StreamPart[]) {
+const chunks = (key: string, sizes: readonly number[]) => {
+  const out: string[] = []
+  for (let at = 0, i = 0; at < key.length; at += sizes[i++ % sizes.length]) {
+    out.push(key.slice(at, at + sizes[i % sizes.length]))
+  }
+  return out
+}
+
+/** The turn's raw parts, each line parsed, with `key` as the session's credential. */
+async function rawOf(key: string, turn: unknown[]) {
   const session = await agent({
-    harness: scripted([turn]).harness,
+    harness: scripted([
+      [{ type: 'stream-start' }, ...turn, ...reply('').slice(-2)] as HarnessV1StreamPart[],
+    ]).harness,
     runner: local({ cwd: dir }),
-    credentials: { CURSOR_API_KEY: KEY },
+    credentials: { CURSOR_API_KEY: key },
     out: { dir: out, raw: true },
   }).start()
   await session.send('go').result
   await session.close()
-  return text('raw/parts.jsonl')
+  const body = await text('raw/parts.jsonl')
+  const parsed = body
+    .trim()
+    .split('\n')
+    .map(
+      (l) =>
+        JSON.parse(l) as {
+          part: { type: string; delta?: string; text?: string; rawValue?: unknown }
+        },
+    )
+  return { body, parts: parsed.map((l) => l.part) }
 }
 
-const finish = reply('').slice(-2)
+/** Every string in `value` that isn't under a `type` key, joined. */
+const strings = (value: unknown, key?: string): string =>
+  typeof value === 'string'
+    ? key === 'type'
+      ? ''
+      : value
+    : Array.isArray(value)
+      ? value.map((v) => strings(v)).join('')
+      : value && typeof value === 'object'
+        ? Object.entries(value)
+            .map(([k, v]) => strings(v, k))
+            .join('')
+        : ''
 
-test("a split key is masked in the raw part Cursor's adapter sends with each delta", async () => {
-  const body = await rawOf([
-    { type: 'stream-start' },
-    ...splitWithRaw('text-1', 'text', (piece) => ({
-      type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: piece }] },
-    })),
-    ...finish,
-  ] as HarnessV1StreamPart[])
-  for (const piece of [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]) {
-    assert.ok(!body.includes(piece), `raw/parts.jsonl has ${piece.length} characters of the key`)
+/** No piece of `key` is in a raw part's strings, joined in order, and the deltas read masked. */
+function assertMasked(
+  key: string,
+  parts: Array<{ type: string; delta?: string; text?: string; rawValue?: unknown }>,
+) {
+  const raw = parts.filter((p) => p.type === 'raw').map((p) => strings(p.rawValue))
+  for (const leak of [key, key.slice(0, 8), key.slice(-8)]) {
+    assert.ok(!raw.join('').includes(leak), 'the raw parts rebuild part of the key')
   }
-  assert.match(body, /"text":"key \[masked\]"/)
+  for (const type of ['text-delta', 'reasoning-delta']) {
+    const deltas = parts.filter((p) => p.type === type)
+    if (deltas.length) assert.equal(deltas.map((p) => p.text ?? p.delta).join(''), 'key [masked]!')
+  }
+}
+
+const piEvent = (kind: string) => (delta: string) => ({
+  type: 'message_update',
+  usage: { input: 1640, output: 98, totalTokens: 1738, cost: { total: 0.0015975 } },
+  assistantMessageEvent: { type: kind, contentIndex: 0, delta },
 })
 
-test("a split key is masked in the raw part pi's adapter sends with each text and thinking delta", async () => {
-  const event = (kind: string) => (piece: string) => ({
-    type: 'message_update',
-    assistantMessageEvent: { type: kind, contentIndex: 0, delta: piece },
-  })
-  const body = await rawOf([
-    { type: 'stream-start' },
-    ...splitWithRaw('reasoning-0', 'reasoning', event('thinking_delta')),
-    ...splitWithRaw('text-0', 'text', event('text_delta')),
-    ...finish,
-  ] as HarnessV1StreamPart[])
-  for (const piece of [KEY.slice(0, 9), KEY.slice(9, 18), KEY.slice(18)]) {
-    assert.ok(!body.includes(piece), `raw/parts.jsonl has ${piece.length} characters of the key`)
+test("a key pi streams a token or three at a time is masked in each token's raw part", async () => {
+  const key = 'sk-pro-beZYXW-9f3k2Lq8mN4tRvA1x'
+  for (const sizes of [[1], [2], [3], [2, 4, 2, 3, 1]]) {
+    const { parts } = await rawOf(key, [
+      ...streamed('reasoning-0', 'reasoning', chunks(key, sizes), piEvent('thinking_delta')),
+      ...streamed('text-0', 'text', chunks(key, sizes), piEvent('text_delta')),
+    ])
+    assertMasked(key, parts)
+    const raw = parts.filter((p) => p.type === 'raw') as Array<{ rawValue: { usage: unknown } }>
+    for (const r of raw) assert.deepEqual(r.rawValue.usage, piEvent('')('').usage)
   }
-  const deltas = (await lines('raw/parts.jsonl'))
-    .map((l) => l.part as { type: string; delta?: string; text?: string })
-    .filter((p) => p.type === 'text-delta')
-  assert.equal(deltas.map((p) => p.text ?? p.delta).join(''), 'key [masked]!')
+})
+
+test('a digit piece of a key leaves numbers alone and every raw line valid JSON', async () => {
+  const key = 'sk-abc-1738-xyz-0015975'
+  const { body, parts } = await rawOf(key, [
+    ...streamed('text-0', 'text', ['sk-abc-', '1738', '-xyz-', '0015975'], piEvent('text_delta')),
+  ])
+  assertMasked(key, parts)
+  assert.match(body, /"totalTokens":1738/)
+  assert.match(body, /"total":0\.0015975/)
+})
+
+test("a common-word piece of a key leaves the native event's type and other text alone", async () => {
+  const key = 'sk-text-Q9w8E7r6'
+  const cursor = (delta: string) => ({
+    type: 'assistant',
+    message: { role: 'assistant', content: [{ type: 'text', text: delta }] },
+  })
+  const { parts } = await rawOf(key, [
+    ...streamed('text-1', 'text', ['sk-', 'text', '-Q9w8', 'E7r6'], cursor),
+    { type: 'raw', rawValue: { type: 'system', note: 'plain text here' } },
+  ])
+  assertMasked(key, parts)
+  const raw = parts.filter((p) => p.type === 'raw') as Array<{
+    rawValue: { message: { content: Array<{ type: string }> }; note?: string }
+  }>
+  for (const r of raw.slice(0, -1)) assert.equal(r.rawValue.message.content[0].type, 'text')
+  assert.equal(raw.at(-1)?.rawValue.note, 'plain text here')
+})
+
+test('a raw part that repeats the text so far, or covers two deltas, is masked too', async () => {
+  const key = 'sk-cursor-0123456789abcdef'
+  const pieces = chunks(key, [5, 3])
+  const codex = await rawOf(key, [
+    ...streamed('text-0', 'text', pieces, (_, soFar) => ({
+      type: 'item.updated',
+      item: { id: 'item_0', type: 'agent_message', text: soFar },
+    })),
+  ])
+  assertMasked(key, codex.parts)
+  assert.ok(codex.parts.some((p) => strings(p.rawValue) === 'item_0key [masked]!'))
+  const id = 'text-0'
+  const two = await rawOf(key, [
+    { type: 'text-start', id },
+    { type: 'text-delta', id, delta: 'key sk-cur' },
+    { type: 'text-delta', id, delta: 'sor-0123' },
+    { type: 'raw', rawValue: { event: 'step_update', text: 'key sk-cursor-0123' } },
+    { type: 'text-delta', id, delta: '456789abcdef!' },
+    { type: 'raw', rawValue: { event: 'step_update', text: '456789abcdef!' } },
+    { type: 'text-end', id },
+  ])
+  assertMasked(key, two.parts)
 })
