@@ -1,6 +1,7 @@
 // Starts a language SDK runner and talks to it over its stdin and stdout, one JSON message a line.
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
+import { AgentError } from '@reeval/agents'
 import { UsageError } from '../errors.ts'
 import { InfraError } from '../sandbox/types.ts'
 import {
@@ -173,7 +174,13 @@ export async function startLanguageRunner(
 /** The runner's error as reeval's own class where it has one, so an infra failure records as one. */
 export function errorFrom(wire: WireError): Error {
   const Class =
-    wire.name === 'InfraError' ? InfraError : wire.name === 'UsageError' ? UsageError : Error
+    wire.name === 'InfraError'
+      ? InfraError
+      : wire.name === 'AgentError'
+        ? AgentError
+        : wire.name === 'UsageError'
+          ? UsageError
+          : Error
   const error = new Class(wire.message) as Error & { expected?: unknown; actual?: unknown }
   error.name = wire.name
   error.stack = wire.stack ?? `${wire.name}: ${wire.message}`

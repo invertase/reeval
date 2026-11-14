@@ -152,6 +152,7 @@ jobs:
                 packages/reeval/src/capture/* | \
                 packages/reeval/src/sandbox/* | \
                 packages/reeval/src/harness/* | \
+                packages/agents/* | \
                 packages/reeval/src/ui/* | \
                 packages/vm-api/* | \
                 packages/reeval/src/evaluate.ts | \
@@ -166,6 +167,7 @@ jobs:
                 packages/harness-* | \
                 packages/reeval/src/sandbox/* | \
                 packages/reeval/src/harness/* | \
+                packages/agents/* | \
                 packages/reeval/src/attempt/* | \
                 packages/reeval/src/capture/* | \
                 packages/reeval/src/egress.ts | \
