@@ -23,7 +23,7 @@
       "type": "object",
       "properties": {
         "adapter": {
-          "description": "The AI SDK adapter that drove the harness: its `harnessId`.",
+          "description": "The AI SDK adapter that drove the harness: its `harnessId`; absent when none was built.",
           "type": "object",
           "properties": {
             "name": {
@@ -90,15 +90,7 @@
           "enum": ["closed", "failed", "running"]
         }
       },
-      "required": [
-        "adapter",
-        "agentsVersion",
-        "harness",
-        "phases",
-        "schemaVersion",
-        "startedAt",
-        "status"
-      ]
+      "required": ["agentsVersion", "harness", "phases", "schemaVersion", "startedAt", "status"]
     },
     "RunnerInfo": {
       "description": "Where a runner runs commands: what a harness's setup picks its build by, and its paths.",

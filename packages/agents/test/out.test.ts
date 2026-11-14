@@ -208,3 +208,49 @@ test("AGENTS_VERSION is the package's version", async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   assert.equal(AGENTS_VERSION, pkg.version)
 })
+
+test('a key split across deltas is masked in raw/parts.jsonl', async () => {
+  const half = KEY.length / 2
+  const split = [
+    { type: 'stream-start' },
+    { type: 'text-start', id: 't' },
+    { type: 'text-delta', id: 't', delta: `the key is ${KEY.slice(0, half)}` },
+    { type: 'text-delta', id: 't', delta: KEY.slice(half, half + 3) },
+    { type: 'text-delta', id: 't', delta: `${KEY.slice(half + 3)}!` },
+    { type: 'text-end', id: 't' },
+    ...reply('').slice(-2),
+  ] as HarnessV1StreamPart[]
+  const session = await agent({
+    harness: scripted([split]).harness,
+    runner: local({ cwd: dir }),
+    credentials: { CURSOR_API_KEY: KEY },
+    out: { dir: out, raw: true },
+  }).start()
+  await session.send('go').result
+  await session.close()
+  const body = await text('raw/parts.jsonl')
+  for (const piece of [KEY.slice(0, half), KEY.slice(half + 3)]) {
+    assert.ok(!body.includes(piece), 'a piece of the key is left')
+  }
+  const deltas = (await lines('raw/parts.jsonl'))
+    .map((l) => l.part as { type: string; text?: string; delta?: string })
+    .filter((p) => p.type === 'text-delta')
+  assert.equal(deltas.map((p) => p.text ?? p.delta).join(''), 'the key is [masked]!')
+})
+
+test('a secret that starts another leaves none of the longer one', async () => {
+  const prefix = KEY.slice(0, 10)
+  const session = await agent({
+    harness: scripted([reply(`key ${KEY} and ${prefix}`)]).harness,
+    runner: local({ cwd: dir }),
+    credentials: { SHORT: prefix, CURSOR_API_KEY: KEY },
+    out,
+  }).start()
+  await session.send('go').result
+  await session.close()
+  for (const file of ['turns.jsonl', 'transcript.jsonl']) {
+    const body = await text(file)
+    assert.ok(!body.includes(KEY.slice(10)), `${file} has the rest of the key`)
+    assert.match(body, /key \[masked\] and \[masked\]/)
+  }
+})

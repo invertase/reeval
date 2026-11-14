@@ -89,10 +89,16 @@ export type AgentOptions = {
   log?: AgentLog
   /** Aborting it stops the session starting, and any turn. */
   signal?: AbortSignal
+  /**
+   * How long `close()` waits for a turn that ignores its abort, and then for the harness session
+   * to close, before it ends the turn `aborted` and closes the runner anyway; 10 seconds by default.
+   */
+  closeTimeoutMs?: number
 }
 
 /** A turn in flight: its events as they happen, and its result. */
 export type AgentTurn = {
+  /** For one reader: a second `for await` takes events from the first. */
   events: AsyncIterable<AgentEvent>
   result: Promise<HarnessResult>
 }
@@ -103,7 +109,7 @@ export type AgentSession = {
   send(prompt: string, options?: { signal?: AbortSignal }): AgentTurn
   /**
    * Aborts a running turn, closes the harness session, then the runner when the session owns it.
-   * Idempotent.
+   * A turn or session that doesn't stop within `closeTimeoutMs` is left behind. Idempotent.
    */
   close(): Promise<void>
 }
@@ -147,7 +153,45 @@ function channel<T>() {
 }
 
 const skillMd = (skill: AgentSkill) =>
-  `---\nname: ${skill.name}\ndescription: ${JSON.stringify(skill.description)}\n---\n${skill.content}`
+  `---\nname: ${JSON.stringify(skill.name)}\ndescription: ${JSON.stringify(skill.description)}\n---\n${skill.content}`
+
+/** One path segment: a skill's directory name. */
+const SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+/** Refuses a skill whose name or files would land outside its own directory. */
+function checkSkills(skills: readonly AgentSkill[]) {
+  for (const skill of skills) {
+    if (!SKILL_NAME.test(skill.name)) {
+      throw new AgentError(
+        `The skill name ${JSON.stringify(skill.name)} isn't one path segment of letters, digits, '.', '_' or '-'`,
+      )
+    }
+    for (const f of skill.files ?? []) {
+      if (!f.path || f.path.startsWith('/') || f.path.split('/').some((s) => s === '..')) {
+        throw new AgentError(
+          `The skill ${skill.name}'s file ${JSON.stringify(f.path)} isn't a relative path inside it`,
+        )
+      }
+    }
+  }
+}
+
+/** How long `close()` waits on each step of a turn or session that doesn't stop, by default. */
+const CLOSE_TIMEOUT_MS = 10_000
+
+/** `promise`'s value, or undefined once `ms` have passed without it settling. */
+async function within<T>(promise: PromiseLike<T>, ms: number): Promise<{ value: T } | undefined> {
+  let late: (value: undefined) => void = () => {}
+  const lateness = new Promise<undefined>((resolve) => {
+    late = resolve
+  })
+  const timer = setTimeout(() => late(undefined), ms)
+  try {
+    return await Promise.race([Promise.resolve(promise).then((value) => ({ value })), lateness])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 /**
  * A coding agent on a runner. `start()` asks the runner where it is, places the rules and skills,
@@ -159,6 +203,7 @@ export function agent(options: AgentOptions): Agent {
   const layout = LAYOUTS[harness.kind]
   const workDir = options.workDir ?? '.'
   const outOptions = typeof options.out === 'string' ? { dir: options.out } : options.out
+  const closeTimeout = options.closeTimeoutMs ?? CLOSE_TIMEOUT_MS
   const emit = (event: AgentEvent) => {
     try {
       options.onEvent?.(event)
@@ -167,11 +212,6 @@ export function agent(options: AgentOptions): Agent {
 
   async function start(): Promise<AgentSession> {
     const owned = typeof options.runner === 'function'
-    const runner = typeof options.runner === 'function' ? await options.runner() : options.runner
-    const credentials =
-      typeof options.credentials === 'function'
-        ? await options.credentials()
-        : (options.credentials ?? {})
     const signal = options.signal ?? new AbortController().signal
     let out: OutWriter | undefined
     const warn = (message: string) => emit({ type: 'warning', message })
@@ -192,7 +232,6 @@ export function agent(options: AgentOptions): Agent {
         model: harness.model,
         ...(harness.effort ? { effort: harness.effort } : {}),
       },
-      adapter: { name: '' },
       startedAt: new Date().toISOString(),
       phases: {},
       status: 'running',
@@ -202,26 +241,35 @@ export function agent(options: AgentOptions): Agent {
       if (name === 'runner' || name === 'place' || name === 'bootstrap') doc.phases[name] = ms
       emit({ type: 'phase', phase: name, ms })
     }
+    let credentials: Record<string, string> = {}
+    let runner: Runner | undefined
     let session: HarnessSession
     let onPart: ((part: StampedPart) => void) | undefined
     const begun = Date.now()
     try {
+      const skills = options.skills ?? []
+      checkSkills(skills)
+      credentials =
+        typeof options.credentials === 'function'
+          ? await options.credentials()
+          : (options.credentials ?? {})
       if (outOptions) out = await OutWriter.open(outOptions, Object.values(credentials))
+      runner = typeof options.runner === 'function' ? await options.runner() : options.runner
+      const box = runner
       let since = Date.now()
-      const info: RunnerInfo = await runner.info()
+      const info: RunnerInfo = await box.info()
       doc.runner = info
       phase('runner', since)
       await writing(out?.session(doc))
 
       since = Date.now()
       if (options.rules !== undefined) {
-        await runner.writeFile(posix.join(workDir, layout.rulesFile), options.rules)
+        await box.writeFile(posix.join(workDir, layout.rulesFile), options.rules)
       }
-      const skills = options.skills ?? []
       for (const skill of skills.filter((s) => s.placement === 'workspace')) {
         const dir = posix.join(workDir, layout.workspaceSkillDir, skill.name)
-        await runner.writeFile(`${dir}/SKILL.md`, skillMd(skill))
-        for (const f of skill.files ?? []) await runner.writeFile(`${dir}/${f.path}`, f.content)
+        await box.writeFile(`${dir}/SKILL.md`, skillMd(skill))
+        for (const f of skill.files ?? []) await box.writeFile(`${dir}/${f.path}`, f.content)
       }
       phase('place', since)
 
@@ -242,7 +290,7 @@ export function agent(options: AgentOptions): Agent {
         entry,
         adapter,
         model,
-        runner,
+        runner: box,
         workDir,
         skills: skills
           .filter((s) => s.placement !== 'workspace')
@@ -263,20 +311,26 @@ export function agent(options: AgentOptions): Agent {
       })
       phase('bootstrap', since)
     } catch (error) {
+      if (outOptions && !out) {
+        out = await OutWriter.open(outOptions, Object.values(credentials)).catch(() => undefined)
+      }
       doc.status = 'failed'
       doc.error = errorText(error)
       doc.endedAt = new Date().toISOString()
       await writing(out?.session(doc))
       await writing(out?.flush())
-      if (owned) await runner.close().catch(() => {})
+      if (owned) await runner?.close().catch(() => {})
       throw error
     }
+    const box = runner as Runner
     await writing(out?.session(doc))
     emit({ type: 'phase', phase: 'ready', ms: Date.now() - begun })
 
     const closed = new AbortController()
     let turns = 0
-    let running: Promise<unknown> | undefined
+    let running:
+      | { done: Promise<unknown>; force: (result: HarnessResult) => void; startedAt: number }
+      | undefined
     let closing: Promise<void> | undefined
 
     return {
@@ -295,33 +349,57 @@ export function agent(options: AgentOptions): Agent {
           ),
         )
         onPart = (part) => {
-          void writing(out?.part(turn, part))
+          out?.part(turn, part)
           if (options.parts) report({ type: 'part', turn, part })
         }
+        let force: (result: HarnessResult) => void = () => {}
+        const forced = new Promise<HarnessResult>((resolve) => {
+          force = resolve
+        })
         report({ type: 'turn-start', turn, prompt })
         const result = (async () => {
           try {
-            const result = await session.send(prompt, turnSignal)
+            const result = await Promise.race([session.send(prompt, turnSignal), forced])
             for (const event of result.transcript) report({ type: 'transcript', turn, event })
+            await writing(out?.parts(turn))
             await writing(out?.turn(turn, prompt, result))
             report({ type: 'turn-end', turn, result })
             return result
           } finally {
+            await writing(out?.parts(turn))
             onPart = undefined
             running = undefined
             events.end()
           }
         })()
-        running = result.catch(() => {})
+        running = { done: result.catch(() => {}), force, startedAt: Date.now() }
         return { events: events.iterable, result }
       },
       close() {
         closing ??= (async () => {
           const since = Date.now()
           closed.abort()
-          await running
-          await session.close()
-          if (owned) await runner.close().catch(() => {})
+          const turn = running
+          if (turn && !(await within(turn.done, closeTimeout))) {
+            const atMs = Date.now() - turn.startedAt
+            const message = `The turn didn't stop within ${closeTimeout}ms of the session closing`
+            warn(message)
+            turn.force({
+              text: '',
+              status: 'aborted',
+              startedAt: new Date(turn.startedAt).toISOString(),
+              durationMs: atMs,
+              transcript: [{ type: 'error', message, ts: new Date().toISOString(), atMs }],
+              usage: null,
+              model: null,
+              unreported: [],
+            })
+            await turn.done
+          }
+          if (!(await within(session.close(), closeTimeout))) {
+            warn(`The ${entry.name} session didn't close within ${closeTimeout}ms`)
+          }
+          if (owned) await box.close().catch(() => {})
           doc.status = 'closed'
           doc.endedAt = new Date().toISOString()
           await writing(out?.session(doc))

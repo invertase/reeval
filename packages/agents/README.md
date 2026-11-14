@@ -54,7 +54,7 @@ harness reads them, builds the adapter from the credentials, model and MCP serve
 session; `exec(prompt)` does all of that for one turn. A runner from a function is the session's
 own, closed with it. With `out`, the session writes `session.json`, a line of `turns.jsonl` and
 the turn's lines of `transcript.jsonl` as each turn ends (`raw/parts.jsonl` and `debug.log` on
-request), every one with the credentials masked; `schema/` has their JSON Schemas, which
+request), every one with the credentials' exact values masked (not encoded forms, such as base64); `schema/` has their JSON Schemas, which
 `pnpm --filter reeval schema:check` holds to the types and lets change additively only.
 
 It sits under reeval and knows nothing of evals or of where a harness runs:

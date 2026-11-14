@@ -11,8 +11,8 @@ export type OutSession = {
   /** The `@reeval/agents` version that wrote it. */
   agentsVersion: string
   harness: { kind: AgentKind; model: string; effort?: string }
-  /** The AI SDK adapter that drove the harness: its `harnessId`. */
-  adapter: { name: string }
+  /** The AI SDK adapter that drove the harness: its `harnessId`; absent when none was built. */
+  adapter?: { name: string }
   /** Where the agent's CLI ran; absent when the session failed before the runner answered. */
   runner?: RunnerInfo
   startedAt: string

@@ -1,7 +1,7 @@
 // agent(): a session's start, turns and close on local(), through a real HarnessAgent with a
 // scripted adapter, so key-free and with no Docker.
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, test } from 'node:test'
@@ -63,7 +63,7 @@ test('start, two turns and close run in order, placing rules and skills first', 
   assert.equal(await readFile(join(dir, 'AGENTS.md'), 'utf8'), 'Be brief.\n')
   assert.equal(
     await readFile(join(dir, '.cursor/skills/repo/SKILL.md'), 'utf8'),
-    '---\nname: repo\ndescription: "A repo skill"\n---\nDo it here.',
+    '---\nname: "repo"\ndescription: "A repo skill"\n---\nDo it here.',
   )
   assert.equal(await readFile(join(dir, '.cursor/skills/repo/notes.md'), 'utf8'), 'notes')
   const [input] = script.inputs
@@ -206,4 +206,88 @@ test('a harness that fails to start is an AgentError, and the owned runner is cl
     return true
   })
   assert.equal(runner.closes, 1)
+})
+
+test('credentials that fail to read close the owned runner, and the session is recorded failed', async () => {
+  const runner = counted()
+  const out = join(dir, 'out')
+  const a = agent({
+    harness: scripted([]).harness,
+    runner: () => runner,
+    credentials: () => Promise.reject(new Error('vault unreachable')),
+    out,
+  })
+  await assert.rejects(a.start(), /vault unreachable/)
+  assert.equal(runner.closes, 0, 'the runner is never made when its credentials fail')
+  const doc = JSON.parse(await readFile(join(out, 'session.json'), 'utf8'))
+  assert.equal(doc.status, 'failed')
+  assert.equal(doc.error, 'vault unreachable')
+  assert.equal(doc.adapter, undefined)
+})
+
+test('a runner made before a later step fails is closed', async () => {
+  const runner = counted()
+  runner.info = () => Promise.reject(new Error('no uname'))
+  await assert.rejects(agent({ harness: scripted([]).harness, runner: () => runner }).start())
+  assert.equal(runner.closes, 1)
+})
+
+test('close() ends a turn that ignores its abort, closes the owned runner and the session', async () => {
+  const runner = counted()
+  const out = join(dir, 'out')
+  const warnings: string[] = []
+  const ignoring = (emit: (part: never) => void) => {
+    emit({ type: 'stream-start' } as never)
+    return new Promise<void>(() => {})
+  }
+  const session = await agent({
+    harness: scripted([ignoring]).harness,
+    runner: () => runner,
+    out,
+    closeTimeoutMs: 50,
+    onEvent: (e) => e.type === 'warning' && warnings.push(e.message),
+  }).start()
+  const turn = session.send('stall')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await session.close()
+  const r = await turn.result
+  assert.equal(r.status, 'aborted')
+  assert.deepEqual(
+    r.transcript.map((e) => e.type === 'error' && e.message),
+    ["The turn didn't stop within 50ms of the session closing"],
+  )
+  assert.equal(runner.closes, 1)
+  assert.ok(warnings.includes("The turn didn't stop within 50ms of the session closing"))
+  assert.equal(JSON.parse(await readFile(join(out, 'session.json'), 'utf8')).status, 'closed')
+  const [line] = (await readFile(join(out, 'turns.jsonl'), 'utf8')).split('\n')
+  assert.equal(JSON.parse(line as string).status, 'aborted')
+})
+
+test('a skill name or file that would leave its directory is refused before anything is written', async () => {
+  for (const skill of [
+    { name: '../../../escaped', description: 'd', content: 'c', placement: 'workspace' as const },
+    { name: 'a/b', description: 'd', content: 'c' },
+    { name: 'name\ndescription: x', description: 'd', content: 'c' },
+    {
+      name: 'ok',
+      description: 'd',
+      content: 'c',
+      files: [{ path: '../../outside.md', content: 'x' }],
+      placement: 'workspace' as const,
+    },
+    { name: 'ok', description: 'd', content: 'c', files: [{ path: '/etc/x', content: 'x' }] },
+  ]) {
+    const script = scripted([])
+    await assert.rejects(
+      agent({
+        harness: script.harness,
+        runner: local({ cwd: dir }),
+        workDir: 'a/b/c',
+        skills: [skill],
+      }).start(),
+      (error) => error instanceof AgentError && /skill/.test(error.message),
+    )
+    assert.deepEqual(script.inputs, [], 'refused before the adapter is built')
+  }
+  assert.deepEqual(await readdir(dir), [])
 })
