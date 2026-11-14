@@ -1,7 +1,7 @@
 // The behaviors every Runner has, wherever it runs commands. A runner's own test file calls
 // runnerConformance() with a way to make a fresh one; reeval runs it on its runners too.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -43,6 +43,34 @@ async function firstLine(proc: Proc): Promise<string> {
 
 const alive = async (runner: Runner, pid: string) =>
   (await run(runner, ['sh', '-c', 'kill -0 "$1" 2>/dev/null', 'sh', pid])).code === 0
+
+/**
+ * Runs `fn`, failing on an uncaught exception or unhandled rejection it caused, which would
+ * otherwise crash the process that drives the runner.
+ */
+async function noStrayErrors(fn: () => Promise<void>) {
+  const stray: unknown[] = []
+  const record = (error: unknown) => void stray.push(error)
+  process.on('uncaughtException', record)
+  process.on('unhandledRejection', record)
+  try {
+    await fn()
+    await new Promise((r) => setTimeout(r, 100))
+  } finally {
+    process.off('uncaughtException', record)
+    process.off('unhandledRejection', record)
+  }
+  assert.deepEqual(stray, [])
+}
+
+/** The runner without copies of its own, so `withFallbacks` gives the tar ones. */
+const tarOnly = (base: Runner): Runner => ({
+  info: () => base.info(),
+  spawn: (cmd, options) => base.spawn(cmd, options),
+  readFile: (path) => base.readFile(path),
+  writeFile: (path, data, options) => base.writeFile(path, data, options),
+  close: () => base.close(),
+})
 
 /** Polls until `check` holds, failing with `what` after the deadline. */
 async function eventually(what: string, check: () => Promise<boolean>, deadlineMs = 5000) {
@@ -178,16 +206,7 @@ export function runnerConformance(name: string, make: MakeRunner) {
     for (const via of ['its own', 'the tar fallback'] as const) {
       test(`upload and download round-trip a directory, through ${via}`, async () => {
         const base = await fresh()
-        const runner =
-          via === 'its own'
-            ? withFallbacks(base)
-            : withFallbacks({
-                info: () => base.info(),
-                spawn: (cmd, options) => base.spawn(cmd, options),
-                readFile: (path) => base.readFile(path),
-                writeFile: (path, data, options) => base.writeFile(path, data, options),
-                close: () => base.close(),
-              })
+        const runner = withFallbacks(via === 'its own' ? base : tarOnly(base))
         const from = await hostDir()
         await mkdir(join(from, 'deep', 'er'), { recursive: true })
         await writeFile(join(from, 'top.txt'), 'top')
@@ -195,6 +214,7 @@ export function runnerConformance(name: string, make: MakeRunner) {
           join(from, 'deep', 'er', 'bytes'),
           Uint8Array.from({ length: 256 }, (_, i) => i),
         )
+        await symlink('../top.txt', join(from, 'deep', 'link'))
         await runner.upload(from, 'uploaded')
         assert.equal(
           new TextDecoder().decode((await runner.readFile('uploaded/top.txt')) ?? undefined),
@@ -208,8 +228,49 @@ export function runnerConformance(name: string, make: MakeRunner) {
           new Uint8Array(await readFile(join(to, 'deep', 'er', 'bytes'))),
           Uint8Array.from({ length: 256 }, (_, i) => i),
         )
+        assert.equal((await run(runner, ['readlink', 'uploaded/deep/link'])).stdout, '../top.txt\n')
+        assert.equal(await readlink(join(to, 'deep', 'link')), '../top.txt')
+      })
+
+      test(`an upload that can't land rejects with its reason, through ${via}`, async () => {
+        const base = await fresh()
+        const runner = withFallbacks(via === 'its own' ? base : tarOnly(base))
+        const from = await hostDir()
+        await writeFile(
+          join(from, 'file'),
+          Uint8Array.from({ length: 1 << 20 }, (_, i) => i % 251),
+        )
+        await runner.writeFile('blocker', 'a file, not a directory')
+        await noStrayErrors(async () => {
+          await assert.rejects(runner.upload(from, 'blocker/sub'), (error: Error) => {
+            assert.match(error.message, /blocker/)
+            assert.doesNotMatch(error.message, /EPIPE|reset by peer/)
+            return true
+          })
+          await assert.rejects(runner.download('missing', join(from, 'back')), /missing/)
+        })
       })
     }
+
+    test('writing to a process that exits rejects, and nothing else fails', async () => {
+      const runner = await fresh()
+      const proc = runner.spawn('sleep 0.1; exit 1', { stdin: 'pipe' })
+      await noStrayErrors(async () => {
+        await assert.rejects(async () => {
+          for (let i = 0; i < 50; i++) await proc.write(new Uint8Array(1 << 20))
+        })
+        assert.equal((await proc.exited).code, 1)
+      })
+    })
+
+    test('a kill after the process exited and left nothing behind is a no-op', async () => {
+      const runner = await fresh()
+      const proc = runner.spawn(['true'])
+      assert.equal((await proc.exited).code, 0)
+      await proc.kill()
+      await proc.kill('SIGKILL')
+      assert.equal((await run(runner, ['true'])).code, 0)
+    })
 
     test('close kills what it started and can be called again', async () => {
       const runner = await make()

@@ -64,6 +64,24 @@ test('local() close kills a process its command left in the background', async (
   assert.fail(`sleep ${pid} outlived close()`)
 })
 
+test('local() never signals a group once it is empty, since its id can be reused', async (t) => {
+  const runner = local({ cwd: await workspace() })
+  const done = runner.spawn(['true'])
+  await done.exited
+  const lingering = runner.spawn('sleep 300 > /dev/null 2>&1 &')
+  await lingering.exited
+  const signaled: number[] = []
+  const kill = process.kill.bind(process)
+  t.mock.method(process, 'kill', (pid: number, signal?: string | number) => {
+    if (signal !== 0) signaled.push(pid)
+    return kill(pid, signal)
+  })
+  await done.kill('SIGKILL')
+  await runner.close()
+  assert.equal(signaled.length, 1, 'only the group with a sleep still in it')
+  assert.ok((signaled[0] ?? 0) < 0)
+})
+
 test('local() refuses writing to stdin it did not pipe', async () => {
   const runner = local({ cwd: await workspace() })
   const proc = runner.spawn(['true'])

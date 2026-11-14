@@ -93,7 +93,8 @@ function sandboxProcess(proc: Proc, stdin: boolean, abortSignal?: AbortSignal): 
  * its `readFile` and `writeFile`, commands through `spawn` (`stat`, `listDirectory` and
  * `deleteFile` as POSIX `sh` scripts), ports through `forwardPort`, and its `network` passes
  * through untouched. The session doesn't own the runner: `stop` and `destroy` close only the
- * ports it forwarded, and whoever made the runner closes it.
+ * ports it forwarded, and whoever made the runner closes it. It reads the runner's `cwd` once, when
+ * it starts.
  */
 export async function runnerSession(
   runner: Runner,

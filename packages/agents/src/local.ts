@@ -41,6 +41,15 @@ function signalGroup(pid: number, signal: NodeJS.Signals) {
   }
 }
 
+function groupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 /**
  * Runs commands on this machine, as this user, with this user's permissions: an agent run on it
  * can read and change anything you can. Each command leads its own process group, so a kill
@@ -77,14 +86,20 @@ export function local(options: LocalOptions): Runner {
         stdio: [spawnOptions.stdin === 'pipe' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         detached: true,
       })
+      child.stdin?.on('error', () => {})
       const pid = child.pid
       if (pid !== undefined) groups.add(pid)
       const kill = async (signal: 'SIGTERM' | 'SIGKILL' = 'SIGTERM') => {
-        if (pid !== undefined) signalGroup(pid, signal)
+        if (pid !== undefined && groups.has(pid)) signalGroup(pid, signal)
       }
       const exited = new Promise<ProcExit>((done) => {
         child.on('error', () => done({ code: 127, signal: null }))
-        child.on('exit', (code, signal) => done({ code, signal }))
+        child.on('exit', (code, signal) => {
+          // An empty group's id can be reused by another process group, which a later kill or
+          // close() would signal. One with a process still in it keeps its id until that exits.
+          if (pid !== undefined && !groupAlive(pid)) groups.delete(pid)
+          done({ code, signal })
+        })
       })
       running.add(exited)
       void exited.then(() => running.delete(exited))
@@ -137,11 +152,11 @@ export function local(options: LocalOptions): Runner {
     },
 
     async upload(hostDir, boxDir) {
-      await cp(resolve(hostDir), at(boxDir), { recursive: true })
+      await cp(resolve(hostDir), at(boxDir), { recursive: true, verbatimSymlinks: true })
     },
 
     async download(boxDir, hostDir) {
-      await cp(at(boxDir), resolve(hostDir), { recursive: true })
+      await cp(at(boxDir), resolve(hostDir), { recursive: true, verbatimSymlinks: true })
     },
 
     async forwardPort(port) {

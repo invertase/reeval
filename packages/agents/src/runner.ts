@@ -70,9 +70,10 @@ export interface Runner {
   >
 }
 
-/** Runs `tar` on the host, returning it with its stdin and stdout piped. */
+/** Runs `tar` on the host, with its stdin and stdout piped. */
 function hostTar(args: string[]) {
   const child = spawnHost('tar', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+  child.stdin.on('error', () => {})
   let stderr = ''
   child.stderr.setEncoding('utf8').on('data', (d: string) => {
     stderr += d
@@ -101,45 +102,70 @@ async function succeeded(proc: Proc, what: string) {
   }
 }
 
+/**
+ * Pumps one tar into the other and waits for both ends. On a failure it stops both and throws
+ * the first end's own error, in `ends` order, rather than the broken pipe that followed it.
+ */
+async function tarPipe(
+  pump: () => Promise<void>,
+  ends: Promise<void>[],
+  stop: () => Promise<void>,
+): Promise<void> {
+  for (const end of ends) end.catch(() => {})
+  try {
+    await pump()
+    await Promise.all(ends)
+  } catch (error) {
+    await stop()
+    const failed = (await Promise.allSettled(ends)).find((r) => r.status === 'rejected')
+    throw failed ? failed.reason : error
+  }
+}
+
 /** Copies a host directory into the runner with `tar` on both ends, over `spawn`'s stdin. */
 async function tarUpload(runner: Runner, hostDir: string, boxDir: string) {
   const proc = runner.spawn(['sh', '-c', 'mkdir -p "$1" && tar -x -C "$1"', 'sh', boxDir], {
     stdin: 'pipe',
   })
+  const untar = succeeded(proc, `untar into ${boxDir}`)
   const drained = proc.stdout.cancel()
-  const ok = succeeded(proc, `untar into ${boxDir}`)
   const tar = hostTar(['-c', '-C', hostDir, '.'])
-  try {
-    for await (const chunk of tar.child.stdout) await proc.write(chunk as Uint8Array)
-    await proc.end()
-    await Promise.all([tar.done, ok, drained])
-  } catch (error) {
-    await proc.kill('SIGKILL')
-    tar.child.kill()
-    throw error
-  }
+  await tarPipe(
+    async () => {
+      for await (const chunk of tar.child.stdout) await proc.write(chunk as Uint8Array)
+      await proc.end()
+    },
+    [untar, tar.done, drained],
+    async () => {
+      tar.child.kill()
+      await proc.kill('SIGKILL')
+    },
+  )
 }
 
 /** Copies a runner directory to the host with `tar` on both ends, over `spawn`'s stdout. */
 async function tarDownload(runner: Runner, boxDir: string, hostDir: string) {
   await mkdir(hostDir, { recursive: true })
   const proc = runner.spawn(['tar', '-c', '-C', boxDir, '.'])
-  const ok = succeeded(proc, `tar ${boxDir}`)
+  const archive = succeeded(proc, `tar ${boxDir}`)
   const tar = hostTar(['-x', '-C', hostDir])
   tar.child.stdout.resume()
-  try {
-    for await (const chunk of proc.stdout) {
-      if (!tar.child.stdin.write(chunk)) {
-        await new Promise((resolve) => tar.child.stdin.once('drain', resolve))
+  const { stdin } = tar.child
+  await tarPipe(
+    async () => {
+      for await (const chunk of proc.stdout) {
+        if (!stdin.write(chunk)) {
+          await Promise.race([new Promise((resolve) => stdin.once('drain', resolve)), tar.done])
+        }
       }
-    }
-    tar.child.stdin.end()
-    await Promise.all([ok, tar.done])
-  } catch (error) {
-    await proc.kill('SIGKILL')
-    tar.child.kill()
-    throw error
-  }
+      stdin.end()
+    },
+    [archive, tar.done],
+    async () => {
+      tar.child.kill()
+      await proc.kill('SIGKILL')
+    },
+  )
 }
 
 /**
