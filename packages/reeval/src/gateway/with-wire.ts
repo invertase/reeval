@@ -8,6 +8,11 @@ export function withWire(
   route: Route,
   wire: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => RouteWire>>,
 ): RoutingGateway {
+  const extra = Object.keys(wire).filter((kind) => !Object.hasOwn(route.routes, kind))
+  if (extra.length)
+    throw new Error(
+      `${route.name} has wire entries for ${extra.join(', ')}, which it doesn't serve`,
+    )
   const routes: RoutingGateway['routes'] = {}
   for (const [kind, config] of Object.entries(route.routes) as [
     AgentKind,

@@ -8,6 +8,7 @@ import type {
   HarnessV1StreamPart,
 } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
+import { interactiveTools, reasoningTime } from '@reeval/agents'
 import {
   ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_HOME_SKILLS_DIR,
@@ -67,7 +68,6 @@ import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
 import { resolveGateway } from '../src/gateway/resolve.ts'
-import { interactiveTools } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
@@ -90,7 +90,7 @@ import {
 import { noDefaultEffort, withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { normalizeStream, reasoningTime } from '../src/harness/transcript.ts'
+import { normalizeStream } from '../src/harness/transcript.ts'
 import {
   antigravity,
   claudeCode,

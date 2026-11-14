@@ -300,9 +300,15 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'cloud') {
     const [area, ...args] = filters
-    if (area !== 'secrets' && area !== 'provider' && area !== 'push' && area !== 'run') {
+    if (
+      area !== 'secrets' &&
+      area !== 'provider' &&
+      area !== 'gateway' &&
+      area !== 'push' &&
+      area !== 'run'
+    ) {
       throw new UsageError(
-        `Unknown command "${['cloud', area].filter(Boolean).join(' ')}". Did you mean reeval cloud secrets, provider, push or run?`,
+        `Unknown command "${['cloud', area].filter(Boolean).join(' ')}". Did you mean reeval cloud secrets, provider, gateway, push or run?`,
       )
     }
     if (area === 'push') {
@@ -330,8 +336,9 @@ async function run(argv: string[]): Promise<number> {
       readValue: cloud.readSecretValue,
       projectDir: projectDirFor(configPath),
     }
-    return area === 'secrets'
-      ? cloud.secretsCommand(values, args, io)
+    if (area === 'secrets') return cloud.secretsCommand(values, args, io)
+    return area === 'gateway'
+      ? cloud.gatewayCommand(values, args, io)
       : cloud.providerCommand(values, args, io)
   }
   if (command === 'image') {

@@ -130,6 +130,10 @@ describe('routes', () => {
       jwtExpiry(jwt(at('2026-01-01T00:00:00Z')))?.toISOString(),
       '2026-01-01T00:00:00.000Z',
     )
+    const claims = Buffer.from(JSON.stringify({ sub: 'ü>>?~', exp: at('2026-01-01T00:00:00Z') }))
+    const urlSafe = claims.toString('base64url')
+    assert.match(urlSafe, /-/)
+    assert.equal(jwtExpiry(`e30.${urlSafe}.s`)?.toISOString(), '2026-01-01T00:00:00.000Z')
     assert.equal(jwtExpiry('opaque'), undefined)
     assert.equal(jwtExpiry('a.!!!.c'), undefined)
     assert.match(

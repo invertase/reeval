@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import type { PluginUnpack } from '@reeval/agents'
+import { AgentError, type AgentLog, type HarnessSession, type PluginUnpack } from '@reeval/agents'
 import { writeTar } from '@reeval/sandbox-docker'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
@@ -21,7 +21,7 @@ import {
 } from '../environment/resolve.ts'
 import { agentOf, brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
-import type { AgentLog, Harness, HarnessSession, Treatments } from '../harness/types.ts'
+import type { Harness, Treatments } from '../harness/types.ts'
 import { unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
 import { redactSecrets } from '../redact.ts'
@@ -471,7 +471,7 @@ const TRANSIENT_START_DELAY_MS = 2_000
 /**
  * Starts a harness session within `timeoutMs`, at most twice. A start that doesn't become ready in
  * time is aborted (and closed, should it finish later) and started once more, and so is one that
- * fails on a transient {@link InfraError} (a 5xx or a network error): nothing has run yet, so the
+ * fails on a transient {@link AgentError} (a 5xx or a network error): nothing has run yet, so the
  * retry can't change what the attempt measures. Each retry is passed to `onRetry` to record. A
  * second timeout or transient failure, or any other failure, is the attempt's infra error.
  */
@@ -505,7 +505,7 @@ export async function startWithRetry<S extends { close(): Promise<void> }>(
       session = await Promise.race([starting, timedOut])
     } catch (error) {
       signal.throwIfAborted()
-      if (!(error instanceof InfraError) || !error.transient) throw error
+      if (!(error instanceof AgentError) || !error.transient) throw error
       if (tries === 2) throw new InfraError(`${error.message} (tried twice)`)
       onRetry({ error: error.message, waitedMs: Date.now() - startedAt })
       debugLog('harness', `${error.message}; starting it once more`)

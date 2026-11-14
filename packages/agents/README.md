@@ -25,6 +25,13 @@ here too: `ROUTES` has Vercel AI Gateway and OpenRouter, each with the credentia
 every harness it serves takes there and why it can't serve the rest, and `VERTEX_ROUTES` has
 Vertex AI's.
 
+`startAgent()` drives a harness: given its catalog entry, its AI SDK adapter, a model and a
+runner, it starts a session over `runnerSession()` and returns one whose `send` runs a turn. Each
+turn's result has its transcript (`normalizeStream`), usage, served model and cost, and says when
+the API refused the key or the model provider stopped the turn (`providerStop`). A runner whose
+network sees the model calls passes their statuses and served models as `traffic`; a failure to
+start is an `AgentError`.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.
