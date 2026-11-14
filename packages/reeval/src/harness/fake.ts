@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { resolveBridgePort } from '@ai-sdk/harness/utils'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
-import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { redactSecrets } from '../redact.ts'
 import { hasNetworkSession, InfraError, type Sandbox } from '../sandbox/types.ts'
@@ -18,7 +17,7 @@ import {
 } from './agents.ts'
 import { fakeBootstrapScript } from './fake-bootstrap.ts'
 import { providerStop } from './provider-stop.ts'
-import type { Harness, HarnessResult } from './types.ts'
+import type { AgentLog, Harness, HarnessResult } from './types.ts'
 
 const lineCount = (text: string) =>
   text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0
@@ -34,7 +33,7 @@ const lineCount = (text: string) =>
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => {
   let starts = 0
   return {
-    async start(sandbox, signal, { skills, workspaceSkills, mcp: all, plugins }) {
+    async start(sandbox, signal, { skills, workspaceSkills, mcp: all, plugins }, log) {
       if (descriptor.failWith) throw new InfraError(descriptor.failWith)
       const hangs = descriptor.startHangs
       // A start that never settles, abort or not, like an agent stuck in its bootstrap.
@@ -50,20 +49,20 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
         }
       }
       const layout = layoutOf(descriptor)
-      const brokered = descriptor.brokers ? await brokerKey(descriptor, sandbox) : undefined
+      const brokered = descriptor.brokers ? await brokerKey(descriptor, sandbox, log) : undefined
       if (descriptor.brokers && AGENTS[descriptor.layout ?? 'cursor'].bridgePort) {
-        await reachBridge(sandbox, signal)
+        await reachBridge(sandbox, signal, log)
       }
       const mcp = agentMcp(layout, all, plugins)
       for (const path of await writePluginFiles(sandbox, layout, plugins)) {
-        debugLog('env', `plugin settings → ${path} by the fake agent`)
+        log.log('env', `plugin settings → ${path} by the fake agent`)
       }
       const dir = `~/${layout.harnessSkillDir}`
       for (const skill of skills) {
         for (const f of skillFiles(skill)) {
           await sandbox.writeFile(`${dir}/${skill.name}/${f.path}`, f.content)
         }
-        debugLog('env', `skill ${skill.name} placed at ${dir}/${skill.name}/ by the fake agent`)
+        log.log('env', `skill ${skill.name} placed at ${dir}/${skill.name}/ by the fake agent`)
       }
       const names = [...skills.map((s) => s.name), ...workspaceSkills]
       const loaded = [
@@ -126,7 +125,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             const time = at()
             const before = await sandbox.readFile(path)
             await sandbox.writeFile(path, content)
-            debugLog('harness', `tool write ${path} (${before === null ? 'create' : 'modify'})`)
+            log.log('harness', `tool write ${path} (${before === null ? 'create' : 'modify'})`)
             transcript.push({
               ...time,
               type: 'file-edit',
@@ -168,12 +167,12 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           for (const step of steps) {
             if ('exec' in step) {
               const time = at()
-              debugLog('harness', `tool shell called: $ ${step.exec}`)
+              log.log('harness', `tool shell called: $ ${step.exec}`)
               const r = await sandbox.exec(step.exec, {
                 signal,
                 ...(brokered && { env: brokered }),
               })
-              debugLog(
+              log.log(
                 'harness',
                 `tool shell returned exit ${r.exitCode} in ${Date.now() - startedAt - time.atMs}ms`,
               )
@@ -193,9 +192,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             } else if ('mcp' in step) {
               const time = at()
               const [server = '', tool = ''] = step.mcp.split('/')
-              debugLog('harness', `tool mcp__${server}__${tool} called`)
+              log.log('harness', `tool mcp__${server}__${tool} called`)
               const r = await callMcpTool(sandbox, mcp, server, tool, signal)
-              debugLog('harness', `tool mcp__${server}__${tool} ${r.ok ? 'returned' : 'failed'}`)
+              log.log('harness', `tool mcp__${server}__${tool} ${r.ok ? 'returned' : 'failed'}`)
               transcript.push({
                 ...time,
                 type: 'tool',
@@ -208,14 +207,14 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
                 durationMs: Date.now() - startedAt - time.atMs,
               })
             } else if ('error' in step) {
-              debugLog('harness', `turn failed: ${step.error}`)
+              log.log('harness', `turn failed: ${step.error}`)
               transcript.push({ ...at(), type: 'error', message: step.error })
               const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
               const stopped = providerStop({ errors: [step.error], status: 'error', statuses })
               return { ...done('', 'error'), ...(stopped && { providerStop: stopped }) }
             } else if ('refuseKey' in step) {
               const message = `${keyRejected(step.refuseKey)}. 401 Unauthorized (the fake agent's)`
-              debugLog('harness', `turn failed: ${message}`)
+              log.log('harness', `turn failed: ${message}`)
               transcript.push({ ...at(), type: 'error', message })
               return { ...done('', 'error'), rejectedKey: message }
             } else scripted = step.reply
@@ -249,6 +248,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
 async function brokerKey(
   descriptor: FakeHarnessDescriptor,
   sandbox: Sandbox,
+  log: AgentLog,
 ): Promise<Record<string, string>> {
   const { credential, endpoints } = fakeBrokering(descriptor.layout)
   const key = hostEnv()[credential]
@@ -271,10 +271,7 @@ async function brokerKey(
       transform: { headers: { authorization: `Bearer ${key}` } },
     })),
   )
-  debugLog(
-    'harness',
-    `${credential} is a placeholder for the fake agent, brokered on its endpoints`,
-  )
+  log.log('harness', `${credential} is a placeholder for the fake agent, brokered on its endpoints`)
   return { [credential]: placeholder }
 }
 
@@ -282,7 +279,7 @@ async function brokerKey(
  * Serves on the port the layout's adapter would put its bridge on, in the sandbox, and reaches it
  * from the host through the session's endpoint, as that adapter's start does.
  */
-async function reachBridge(sandbox: Sandbox, signal: AbortSignal): Promise<void> {
+async function reachBridge(sandbox: Sandbox, signal: AbortSignal, log: AgentLog): Promise<void> {
   const network = hasNetworkSession(sandbox) ? sandbox.network : undefined
   if (!network) throw new InfraError("The fake agent's bridge needs a sandbox session")
   let port: number
@@ -303,7 +300,7 @@ async function reachBridge(sandbox: Sandbox, signal: AbortSignal): Promise<void>
     const { url } = await network.getPortEndpoint({ port, protocol: 'http' })
     const reply = await (await fetch(url, { signal })).text()
     if (reply !== 'bridge') throw new InfraError(`${url} answered ${JSON.stringify(reply)}`)
-    debugLog('harness', `bridge port ${port} reached through ${url}`)
+    log.log('harness', `bridge port ${port} reached through ${url}`)
   } finally {
     await server.kill()
   }

@@ -72,6 +72,7 @@ import {
   brokeringFor,
 } from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
+import type { AgentLog } from '../src/harness/types.ts'
 import { capText, OUTPUT_CAP, transcriptLines } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
@@ -614,6 +615,36 @@ test('destroying an already-removed fake sandbox is a no-op', async () => {
   assert.equal(existsSync(box.home), false)
 })
 
+const silentLog: AgentLog = { log() {}, trace() {} }
+
+test('a harness reports into the log it is given, not a global one', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    const harness = createFakeHarness({
+      kind: 'fake',
+      script: [[{ exec: 'echo hi' }, { write: { 'out.txt': 'x' } }, { reply: 'done' }]],
+    })
+    const lines: string[] = []
+    const log: AgentLog = {
+      log: (phase, text) => void lines.push(`${phase}: ${text}`),
+      trace() {},
+    }
+    const treatments = { skills: [], workspaceSkills: [], plugins: [], mcp: {} }
+    const session = await harness.start(box, AbortSignal.timeout(60_000), treatments, log)
+    await session.send('go', AbortSignal.timeout(60_000))
+    assert.deepEqual(
+      lines.map((l) => l.replace(/ in \d+ms$/, '')),
+      [
+        'harness: tool shell called: $ echo hi',
+        'harness: tool shell returned exit 0',
+        'harness: tool write out.txt (create)',
+      ],
+    )
+  } finally {
+    await box.destroy()
+  }
+})
+
 test("the fake agent's MCP step waits for a slow server's reply, and reports a crash", async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   // Event-driven, not timed: the server marks that the call arrived, then answers only once the
@@ -645,12 +676,17 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       kind: 'fake',
       script: [[{ mcp: 'stamp/house_stamp' }, { reply: 'done' }]],
     })
-    const session = await harness.start(box, AbortSignal.timeout(60_000), {
-      skills: [],
-      workspaceSkills: [],
-      plugins: [],
-      mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
-    })
+    const session = await harness.start(
+      box,
+      AbortSignal.timeout(60_000),
+      {
+        skills: [],
+        workspaceSkills: [],
+        plugins: [],
+        mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
+      },
+      silentLog,
+    )
     const turn = await session.send('stamp', AbortSignal.timeout(60_000))
     return turn.transcript.find((e) => e.type === 'tool')
   }
