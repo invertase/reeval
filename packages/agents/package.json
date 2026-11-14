@@ -29,5 +29,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "devDependencies": {
+    "oxc-parser": "0.156.0"
   }
 }

@@ -544,7 +544,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
-  packages/agents: {}
+  packages/agents:
+    devDependencies:
+      oxc-parser:
+        specifier: 0.156.0
+        version: 0.156.0
 
   packages/api:
     dependencies:
