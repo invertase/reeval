@@ -1,15 +1,18 @@
-import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
+import { hostAllowed } from '@reeval/sandbox-docker'
+import { apiHost } from '../gateway/api.ts'
+import { OPENROUTER_HOST, OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from '../gateway/routes.ts'
 import {
   VERCEL_KEY,
   VERCEL_OIDC,
+  vercelApi,
   vercelBaseUrlProblem,
   vercelCredentialProblem,
 } from '../gateway/vercel.ts'
 import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt, isPlaceholder, redactSecrets } from '../redact.ts'
-import { heldSecret } from '../secrets-file.ts'
+import { heldSecret, hostEnv } from '../secrets-file.ts'
 import type {
   FakeJudgeModel,
   GatewayName,
@@ -38,15 +41,54 @@ const ROUTED_KEYS: Readonly<Record<RoutingGatewayName, readonly string[]>> = {
 }
 
 /**
- * Providers `direct()` calls, each through its own AI SDK package and key. Any other prefix needs
- * `vercel()` in the config's gateway list.
+ * Providers `direct()` calls, each through its own AI SDK package and key, at its API's origin or
+ * the package's base-URL variable's. Any other prefix needs `vercel()` in the config's gateway list.
  */
-export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: string }> = {
-  anthropic: { key: 'ANTHROPIC_API_KEY', pkg: '@ai-sdk/anthropic', name: 'Anthropic' },
-  google: { key: 'GOOGLE_GENERATIVE_AI_API_KEY', pkg: '@ai-sdk/google', name: 'Google' },
-  openai: { key: 'OPENAI_API_KEY', pkg: '@ai-sdk/openai', name: 'OpenAI' },
-  'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai', name: 'TypeSafe AI' },
+export const DIRECT_PROVIDERS: Record<
+  string,
+  { key: string; pkg: string; name: string; origin: string; baseUrl?: string }
+> = {
+  anthropic: {
+    key: 'ANTHROPIC_API_KEY',
+    pkg: '@ai-sdk/anthropic',
+    name: 'Anthropic',
+    origin: 'https://api.anthropic.com',
+    baseUrl: 'ANTHROPIC_BASE_URL',
+  },
+  google: {
+    key: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    pkg: '@ai-sdk/google',
+    name: 'Google',
+    origin: 'https://generativelanguage.googleapis.com',
+  },
+  openai: {
+    key: 'OPENAI_API_KEY',
+    pkg: '@ai-sdk/openai',
+    name: 'OpenAI',
+    origin: 'https://api.openai.com',
+    baseUrl: 'OPENAI_BASE_URL',
+  },
+  'typesafe-ai': {
+    key: 'TYPESAFE_AI_API_KEY',
+    pkg: '@ai-sdk/typesafe-ai',
+    name: 'TypeSafe AI',
+    origin: 'https://api.typesafe.ai',
+    baseUrl: 'TYPESAFE_AI_BASE_URL',
+  },
 }
+
+/** The host a direct provider's package calls: its base-URL variable's, else its API's. */
+function directHost(provider: (typeof DIRECT_PROVIDERS)[string], env: NodeJS.ProcessEnv): string {
+  const base = provider.baseUrl && env[provider.baseUrl]
+  return URL.parse(base || provider.origin)?.hostname ?? new URL(provider.origin).hostname
+}
+
+/**
+ * The value reeval's own model calls send for the credential `key`: a held brokered secret's in
+ * place of its placeholder, which `judgeRoute` allows only on the secret's hosts.
+ */
+export const hostKey = (key: string, env: NodeJS.ProcessEnv = process.env): string | undefined =>
+  hostEnv(env)[key]
 
 /**
  * A host call's route: its provider's own package, Vercel AI Gateway by name, OpenRouter's
@@ -167,27 +209,53 @@ export function judgeRoute(
       `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model, gateway)}, in the environment or .env.local.${unusedGatewayKey(env, gateway)}`,
     )
   }
+  const route: JudgeRoute =
+    gateway === 'openrouter'
+      ? { kind: 'openrouter' }
+      : direct && key === direct.key
+        ? { kind: 'direct', provider, pkg: direct.pkg }
+        : { kind: 'gateway' }
   const held = heldSecret(key)
   if (held && isPlaceholder(env[key])) {
-    throw new Error(
-      `${key} for ${what} "${model}" is a ${held.mode} secret, and the ${what} calls its provider from reeval's own process, which only gets its placeholder: give ${key} the readable mode.`,
-    )
+    // reeval's own process calls the host, so a brokered key may go where it's brokered to, and
+    // the eval code still reads only its placeholder.
+    const host =
+      route.kind === 'openrouter'
+        ? OPENROUTER_HOST
+        : route.kind === 'direct' && direct
+          ? directHost(direct, env)
+          : apiHost(vercelApi(env))
+    if (key === VERCEL_OIDC) {
+      throw new Error(
+        `${key} for ${what} "${model}" is a ${held.mode} secret, and the ${what} calls ${host} from reeval's own process, which reads Vercel's project token only from the environment: give ${key} the readable mode, or use AI_GATEWAY_API_KEY.`,
+      )
+    }
+    if (held.mode !== 'brokered') {
+      throw new Error(
+        `${key} for ${what} "${model}" is a ${held.mode} secret, which only the agent's sandbox gets, and the ${what} calls ${host} from reeval's own process: give ${key} the brokered mode with ${host} among its hosts, or the readable mode.`,
+      )
+    }
+    if (!hostAllowed(held.hosts, host)) {
+      throw new Error(
+        `${key} for ${what} "${model}" is brokered to ${held.hosts.join(', ')}, and the ${what} calls ${host}, which it isn't brokered to.`,
+      )
+    }
   }
+  const real = hostEnv(env)
   if (key === VERCEL_OIDC) {
-    const expired = vercelCredentialProblem(env)
+    const expired = vercelCredentialProblem(real)
     if (expired) throw new Error(`${what} "${model}": ${expired}`)
   }
-  const at = badCharacterAt(env[key] as string)
+  const at = badCharacterAt(real[key] as string)
   if (at) {
     throw new Error(
       `${key} for ${what} "${model}" has whitespace or a line break in it at character ${at}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
     )
   }
-  if (gateway === 'openrouter') return { kind: 'openrouter' }
-  if (direct && key === direct.key) return { kind: 'direct', provider, pkg: direct.pkg }
+  if (route.kind !== 'gateway') return route
   const base = vercelBaseUrlProblem(env)
   if (base) throw new Error(`${what} "${model}": ${base}`)
-  return { kind: 'gateway' }
+  return route
 }
 
 /** A verdict plus the transient failures retried on the way to it. */

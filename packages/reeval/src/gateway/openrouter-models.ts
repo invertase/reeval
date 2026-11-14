@@ -1,7 +1,9 @@
 // The models reeval calls itself on OpenRouter (the judge, analysis, compare questions and
-// captures), through OpenRouter's own AI SDK package with `OPENROUTER_API_KEY`. `fallbacks` on
+// captures), through OpenRouter's own AI SDK package with `OPENROUTER_API_KEY` (a held brokered
+// one's value). `fallbacks` on
 // `openrouter()` decides whether OpenRouter may fail a call over to another upstream provider.
 import type { experimental_decide, LanguageModel } from 'ai'
+import { hostEnv } from '../secrets-file.ts'
 import type { GatewayDescriptor } from '../types.ts'
 import { OPENROUTER_KEY } from './openrouter.ts'
 
@@ -11,7 +13,7 @@ export const openRouterFallbacks = (gateways: readonly GatewayDescriptor[]): boo
 
 async function provider() {
   const { createOpenRouter } = await import('@openrouter/ai-sdk-provider')
-  return createOpenRouter({ apiKey: process.env[OPENROUTER_KEY] })
+  return createOpenRouter({ apiKey: hostEnv()[OPENROUTER_KEY] })
 }
 
 /** A language model on OpenRouter's Chat Completions API. */

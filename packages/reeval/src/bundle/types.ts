@@ -96,7 +96,9 @@ export type BundleManifest = {
   /**
    * What the reeval that wrote it supports that a runner must know of before it starts the run:
    * `secrets-file`, reading `REEVAL_SECRETS_FILE` and keeping its brokered and sandbox values from
-   * the eval code; `vm-waits`, its `cloud()` waiting on a refused machine start for as long as the
+   * the eval code; `brokered-model-calls`, its own model calls (the judge, analysis, questions and
+   * captures) authenticating with a held brokered secret's value when the call goes to one of the
+   * secret's hosts; `vm-waits`, its `cloud()` waiting on a refused machine start for as long as the
    * service asks and stopping its attempts only when the service ends the run; `vm-layout`, its
    * `cloud()` starting the machine type and attempts per machine the service gives, giving back a
    * machine the service reclaims, and ending its attempts when the service ends the run;
@@ -109,4 +111,11 @@ export type BundleManifest = {
 }
 
 /** The features this reeval writes in every bundle's manifest. */
-export const BUNDLE_FEATURES = ['heartbeat', 'resume', 'secrets-file', 'vm-layout', 'vm-waits']
+export const BUNDLE_FEATURES = [
+  'brokered-model-calls',
+  'heartbeat',
+  'resume',
+  'secrets-file',
+  'vm-layout',
+  'vm-waits',
+]

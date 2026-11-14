@@ -113,6 +113,7 @@ describe('reeval bundle', () => {
     const manifest = manifestOf(entries)
     assert.equal(manifest.schemaVersion, 1)
     assert.deepEqual(manifest.features, [
+      'brokered-model-calls',
       'heartbeat',
       'resume',
       'secrets-file',

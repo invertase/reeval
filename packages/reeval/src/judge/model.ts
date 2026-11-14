@@ -7,6 +7,7 @@ import type { GatewayName, JudgeModel, JudgeOptions, TokenUsage } from '../types
 import { tokenUsage } from '../usage.ts'
 import {
   DIRECT_PROVIDERS,
+  hostKey,
   type JudgeState,
   judgeRoute,
   OPENROUTER_JUDGE_MODEL,
@@ -31,15 +32,17 @@ async function resolveModel(
   if (route.kind === 'openrouter') return openRouterDecisionModel(model, fallbacks)
   if (route.kind === 'vertex') return vertexDecisionModel(model, vertex ?? vertexSettings())
   const id = model.slice(route.provider.length + 1)
+  const direct = DIRECT_PROVIDERS[route.provider]
+  const apiKey = direct && hostKey(direct.key)
   switch (route.provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).anthropic.decisionModel(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic({ apiKey }).decisionModel(id)
     case 'google':
-      return (await import('@ai-sdk/google')).google.decisionModel(id)
+      return (await import('@ai-sdk/google')).createGoogle({ apiKey }).decisionModel(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).openai.decisionModel(id)
+      return (await import('@ai-sdk/openai')).createOpenAI({ apiKey }).decisionModel(id)
     default:
-      return (await import('@ai-sdk/typesafe-ai')).typeSafeAi.decisionModel(id)
+      return (await import('@ai-sdk/typesafe-ai')).createTypeSafeAi({ apiKey }).decisionModel(id)
   }
 }
 

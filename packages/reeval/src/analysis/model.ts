@@ -20,7 +20,7 @@ import {
   vertexSettings,
   vertexSettingsIn,
 } from '../gateway/vertex.ts'
-import { isFakeJudge, judgeRoute } from '../judge/index.ts'
+import { DIRECT_PROVIDERS, hostKey, isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -206,13 +206,14 @@ export async function providerModel(model: ResolvedAnalysisModel): Promise<Langu
   }
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)
+  const apiKey = DIRECT_PROVIDERS[provider] && hostKey(DIRECT_PROVIDERS[provider].key)
   switch (provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).anthropic(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic({ apiKey })(id)
     case 'google':
-      return (await import('@ai-sdk/google')).google(id)
+      return (await import('@ai-sdk/google')).createGoogle({ apiKey })(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).openai(id)
+      return (await import('@ai-sdk/openai')).createOpenAI({ apiKey })(id)
     default:
       return model.name
   }
