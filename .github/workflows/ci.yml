@@ -53,10 +53,9 @@ jobs:
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
   # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
-  # `checks`, which always runs. Any other change needs `unit`, except one only to a package reeval
-  # doesn't run on (`api`, the harness adapters), which needs that package's own tests (`packages`)
-  # and, for an adapter, reeval's tests that drive the adapters (`adapters`). `packages` also runs
-  # every workspace package that depends on a changed one. On the light tier, the rest follow their
+  # `checks`, which always runs. Any other change needs `unit`, except one only to `packages/api`,
+  # which reeval doesn't run on. A change to a workspace package needs its own tests (`packages`),
+  # and those of every package that depends on it. On the light tier, the rest follow their
   # own paths, and a change to CI, the lockfile or the workspace needs every job; on the full tier,
   # every code change needs every job.
   changes:
@@ -75,7 +74,6 @@ jobs:
       pack: ${{ steps.scope.outputs.pack }}
       engine: ${{ steps.scope.outputs.engine }}
       launchers: ${{ steps.scope.outputs.launchers }}
-      adapters: ${{ steps.scope.outputs.adapters }}
       packages: ${{ steps.scope.outputs.packages }}
     steps:
       # A PR's merge commit has the base it would merge into as its first parent; a merge group's
@@ -98,7 +96,7 @@ jobs:
             n=$(jq -r 'select(.scripts.test) | .name' "$m")
             [ -n "$n" ] && name_of[$d]=$n
           done
-          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL launchers=$ALL adapters=false
+          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL launchers=$ALL
           every() {
             unit=true features=true docker=true studio=true pack=true engine=true launchers=true
             for d in "${!name_of[@]}"; do pkgs[$d]=1; done
@@ -117,11 +115,8 @@ jobs:
                   [ -n "${name_of[$d]:-}" ] && pkgs[$d]=1 ;;
               esac
               case $f in
-                packages/api/* | packages/harness-*) ;;
+                packages/api/*) ;;
                 *) unit=true ;;
-              esac
-              case $f in
-                packages/harness-*) adapters=true ;;
               esac
               if [ "$PR_TIER" != light ]; then every; continue; fi
               case $f in
@@ -168,6 +163,7 @@ jobs:
               case $f in
                 packages/sandbox-docker/* | \
                 packages/vm-api/* | \
+                packages/harness-* | \
                 packages/reeval/src/sandbox/* | \
                 packages/reeval/src/harness/* | \
                 packages/reeval/src/attempt/* | \
@@ -212,7 +208,7 @@ jobs:
                 scripts/ctrl-c.py)
                   launchers=true ;;
               esac
-            done < <(git diff --name-only "$BASE" HEAD)
+            done < <(git diff --no-renames --name-only "$BASE" HEAD)
           fi
           # A package's dependents run too (sandbox-docker lists every adapter), until none is added.
           added=true
@@ -229,11 +225,8 @@ jobs:
               done
             done
           done
-          # The unit shards already run the adapter-facing files.
-          [ "$unit" = true ] && adapters=false
           {
             echo "packages=$(printf '%s\n' "${!pkgs[@]}" | sort | xargs)"
-            echo "adapters=$adapters"
             echo "unit=$unit"
             echo "features=$features"
             echo "docker=$docker"
@@ -372,27 +365,6 @@ jobs:
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: packages }
-
-  # reeval's test files that drive the harness adapters (their stream translators, tool catalogs
-  # and bootstraps), for a change only to an adapter; any other change runs them in the unit shards.
-  adapters:
-    name: reeval (adapter-facing)
-    needs: changes
-    if: needs.changes.outputs.adapters == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref }}
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: pnpm build
-      - working-directory: packages/reeval
-        run: |
-          node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
-            test/replay.test.ts test/replay-telemetry.test.ts test/replay-model-calls.test.ts \
-            test/harness.test.ts test/gateway.test.ts test/plugins.test.ts test/default-effort.test.ts
 
   features:
     name: features (fake)
@@ -728,7 +700,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, packages, adapters, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
+    needs: [changes, checks, unit, packages, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
