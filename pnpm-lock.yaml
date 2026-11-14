@@ -549,21 +549,36 @@ importers:
       '@ai-sdk/harness':
         specifier: 1.0.172
         version: 1.0.172(ws@8.22.1)(zod@4.6.7)
+      '@ai-sdk/harness-claude-code':
+        specifier: 1.0.176
+        version: 1.0.176(patch_hash=a9d56a8ceef2bd1f5d5788cc61b323a7b5d210f1137723b1bdd50fd416eff95a)(zod@4.6.7)
+      '@reeval/harness-antigravity':
+        specifier: workspace:0.1.17
+        version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:*
+        specifier: workspace:0.1.14
         version: link:../harness-codex
+      '@reeval/harness-cursor-sdk':
+        specifier: workspace:0.1.9
+        version: link:../harness-cursor-sdk
+      '@reeval/harness-fx':
+        specifier: workspace:0.1.14
+        version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:*
+        specifier: workspace:0.1.17
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:*
+        specifier: workspace:0.1.13
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:*
+        specifier: workspace:0.2.16
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:*
+        specifier: workspace:0.2.10
         version: link:../harness-pi
+      '@reeval/sandbox-docker':
+        specifier: workspace:*
+        version: link:../sandbox-docker
     devDependencies:
       oxc-parser:
         specifier: 0.156.0
@@ -919,36 +934,9 @@ importers:
       '@ai-sdk/harness':
         specifier: 1.0.172
         version: 1.0.172(ws@8.22.1)(zod@4.6.7)
-      '@ai-sdk/harness-claude-code':
-        specifier: 1.0.176
-        version: 1.0.176(patch_hash=a9d56a8ceef2bd1f5d5788cc61b323a7b5d210f1137723b1bdd50fd416eff95a)(zod@4.6.7)
       '@balena/dockerignore':
         specifier: 1.0.2
         version: 1.0.2
-      '@reeval/harness-antigravity':
-        specifier: workspace:0.1.17
-        version: link:../harness-antigravity
-      '@reeval/harness-codex':
-        specifier: workspace:0.1.14
-        version: link:../harness-codex
-      '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.9
-        version: link:../harness-cursor-sdk
-      '@reeval/harness-fx':
-        specifier: workspace:0.1.14
-        version: link:../harness-fx
-      '@reeval/harness-goose':
-        specifier: workspace:0.1.17
-        version: link:../harness-goose
-      '@reeval/harness-grok-build':
-        specifier: workspace:0.1.13
-        version: link:../harness-grok-build
-      '@reeval/harness-opencode':
-        specifier: workspace:0.2.16
-        version: link:../harness-opencode
-      '@reeval/harness-pi':
-        specifier: workspace:0.2.10
-        version: link:../harness-pi
       ws:
         specifier: 8.22.1
         version: 8.22.1

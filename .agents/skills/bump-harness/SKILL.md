@@ -45,8 +45,9 @@ then names one cause.
    (titles, search) and on-disk stores.
 2. **Move the pin**: the version and its checksum (download the release and hash it; never copy a
    hash from a release page you didn't check). For an `@reeval/harness-*` package, bump its
-   `package.json`, `src/version.ts`, the `workspace:` entry in `packages/reeval/package.json` and
-   `HARNESS_PACKAGES` in `packages/sandbox-docker/src/image.ts` together, so the image tag changes
+   `package.json`, `src/version.ts`, the `workspace:` entries in `packages/reeval/package.json`
+   and `packages/agents/package.json` and `HARNESS_PACKAGES` in
+   `packages/sandbox-docker/src/image.ts` together, so the image tag changes
    (OpenCode 2.2.5, [#779](https://github.com/reeval-ai/reeval/pull/779), is a complete example). Refresh plan snapshots that
    print the tag: `REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan`.
 3. **Claude Code's patch.** Bumping `@ai-sdk/harness-claude-code` fails `pnpm install`

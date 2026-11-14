@@ -10,6 +10,7 @@ import { AgentError } from './errors.ts'
 import { type OutOptions, OutWriter } from './out/index.ts'
 import type { OutSession } from './out/types.ts'
 import type { Runner, RunnerInfo } from './runner.ts'
+import { type InstallMode, installHarness } from './setup.ts'
 import type { ResolvedMcpServer } from './spec.ts'
 import type { TranscriptEvent } from './types.ts'
 import { AGENTS_VERSION } from './version.ts'
@@ -48,7 +49,7 @@ export type AgentSkill = {
 }
 
 /** A start-up phase, or the session closing, with the milliseconds it took. */
-export type AgentPhase = 'runner' | 'place' | 'bootstrap' | 'ready' | 'closed'
+export type AgentPhase = 'runner' | 'place' | 'install' | 'bootstrap' | 'ready' | 'closed'
 
 /**
  * What a session reports as it goes. A turn's `part` events arrive as the harness streams them
@@ -73,6 +74,11 @@ export type AgentOptions = {
   credentials?:
     | Record<string, string>
     | (() => Record<string, string> | Promise<Record<string, string>>)
+  /**
+   * Whether `start()` installs the harness's CLI on the runner, as its own `install` phase:
+   * `auto` (the default) when the runner doesn't have this build of it yet.
+   */
+  install?: InstallMode
   /** The agent's workspace, relative to the runner's `cwd`; the `cwd` itself by default. */
   workDir?: string
   /** Written to the workspace file the harness reads rules from (`AGENTS.md`, `CLAUDE.md`). */
@@ -269,7 +275,7 @@ export function agent(options: AgentOptions): Agent {
     }
     const phase = (name: AgentPhase, since: number) => {
       const ms = Date.now() - since
-      if (name === 'runner' || name === 'place' || name === 'bootstrap') doc.phases[name] = ms
+      if (name !== 'ready' && name !== 'closed') doc.phases[name] = ms
       emit({ type: 'phase', phase: name, ms })
     }
     let credentials: Record<string, string> = {}
@@ -316,6 +322,19 @@ export function agent(options: AgentOptions): Agent {
         ...(Object.keys(mcp).length ? { mcpServers: entry.mcpServers(mcp) } : {}),
       })
       doc.adapter = { name: adapter.harnessId }
+      const installed = await installHarness({
+        runner: box,
+        home: info.home,
+        adapter,
+        name: entry.name,
+        mode: options.install ?? 'auto',
+        workDir,
+        signal,
+      })
+      if (installed) {
+        phase('install', since)
+        since = Date.now()
+      }
       const names = Object.keys(credentials)
       const variable = names.length ? names.join(' or ') : (entry.credential ?? 'its credential')
       session = await startAgent({

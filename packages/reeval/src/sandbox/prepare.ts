@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { setupOf } from '@reeval/agents'
 import {
   type BakedHarness,
   buildDockerfile,
@@ -174,7 +175,9 @@ export const reevalImage = (
     )
     const output = buildLogger(root, ref)
     const pull = b.refresh === 'force'
-    await b.retry(() => buildImage(b.log, { harness, signal, output, pull, engine }))
+    await b.retry(() =>
+      buildImage(b.log, { harness, bootstrap: setupOf(harness), signal, output, pull, engine }),
+    )
     return built(ref, engine)
   })
 }
@@ -219,7 +222,16 @@ async function harnessBase(
       const output = buildLogger(root, ref)
       const pull = b.refresh === 'force'
       await b.retry(() =>
-        buildImage(b.log, { harness, from, signal, output, pull, engine, ...(key ? { key } : {}) }),
+        buildImage(b.log, {
+          harness,
+          bootstrap: setupOf(harness),
+          from,
+          signal,
+          output,
+          pull,
+          engine,
+          ...(key ? { key } : {}),
+        }),
       )
       return built(ref, engine)
     })

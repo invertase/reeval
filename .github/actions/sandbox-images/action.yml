@@ -15,13 +15,14 @@ runs:
         echo "Sandbox images: $images"
     # The tag pins each adapter, whose bootstrap pins the CLI, but @ai-sdk/harness does the
     # baking, so the key is the adapters, the files that pin and install each CLI, the pnpm
-    # patches to them, sandbox-docker's pin of @ai-sdk/harness and the build context. Only main
-    # saves it (below): a PR that changes the key rebuilds instead of saving its own ~900 MB copy.
+    # patches to them, @reeval/agents' pins of the adapters and their placeholder setup,
+    # sandbox-docker's pin of @ai-sdk/harness and the build context. Only main saves it (below):
+    # a PR that changes the key rebuilds instead of saving its own ~900 MB copy.
     - id: cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/reeval-sandbox-registry
-        key: reeval-sandbox-registry-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-grok-build/package.json', 'packages/harness-grok-build/src/grok-build-harness.ts', 'packages/harness-fx/package.json', 'packages/harness-fx/src/fx-harness.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+        key: reeval-sandbox-registry-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-grok-build/package.json', 'packages/harness-grok-build/src/grok-build-harness.ts', 'packages/harness-fx/package.json', 'packages/harness-fx/src/fx-harness.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/agents/package.json', 'packages/agents/src/setup.ts', 'packages/sandbox-docker/docker/**') }}
     # The cache holds a registry's storage, served from the runner for the length of this step:
     # `docker pull` unpacks layers in parallel where `docker load` unpacks one at a time, so the
     # nine images take about 22 s against about 40 s from a `docker save` tarball. Only the
@@ -36,8 +37,10 @@ runs:
         set -euo pipefail
         if [ "$HIT" != true ]; then
           node --input-type=module -e "
+            import { setupOf } from './packages/agents/dist/index.js'
             import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
-            for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
+            for (const harness of BAKED_HARNESSES)
+              await buildImage(console.log, { harness, bootstrap: setupOf(harness) })"
           [ "$SAVE" = true ] || exit 0
         fi
         registry=localhost:5000

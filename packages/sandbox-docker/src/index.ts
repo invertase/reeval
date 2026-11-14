@@ -14,8 +14,6 @@ export {
 } from './build-failure.ts'
 export {
   type BuildOutput,
-  bakedAdapter,
-  bakedHarnessName,
   bakedRecipe,
   bakeHarness,
   bakeKey,

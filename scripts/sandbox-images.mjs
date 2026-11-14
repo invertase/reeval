@@ -3,6 +3,7 @@
 //
 //   pnpm images                     every harness: cursor, claude-code, antigravity, …
 //   pnpm images claude-code codex   only those
+import { setupOf } from '../packages/agents/dist/index.js'
 import { BAKED_HARNESSES, buildImage, imageFor } from '../packages/sandbox-docker/dist/index.js'
 
 const asked = process.argv.slice(2)
@@ -14,7 +15,7 @@ if (unknown.length) {
 for (const harness of asked.length ? asked : BAKED_HARNESSES) {
   console.log(`Building ${imageFor(harness)}`)
   try {
-    await buildImage(console.log, { harness })
+    await buildImage(console.log, { harness, bootstrap: setupOf(harness) })
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e))
     process.exit(1)

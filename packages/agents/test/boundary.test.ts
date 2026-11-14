@@ -139,6 +139,9 @@ const packageOf = (specifier: string) =>
     .slice(0, specifier.startsWith('@') ? 2 : 1)
     .join('/')
 
+/** The Docker sandbox's own package, which only the `docker()` runner may load. */
+const DOCKER_ONLY = '@reeval/sandbox-docker'
+
 /** Why loading `specifier` from `file` is refused, or undefined when it's allowed. */
 function refusal(file: string, specifier: string | null): string | undefined {
   if (specifier === null) return "a specifier computed at run time can't be checked"
@@ -149,7 +152,11 @@ function refusal(file: string, specifier: string | null): string | undefined {
       : undefined
   }
   const name = packageOf(specifier)
-  return DEPENDENCIES.has(name) ? undefined : `${name} isn't one of the package's dependencies`
+  if (!DEPENDENCIES.has(name)) return `${name} isn't one of the package's dependencies`
+  if (name === DOCKER_ONLY && relative(join(src, 'docker'), file).startsWith('..')) {
+    return `${DOCKER_ONLY} is docker()'s alone: only src/docker/ imports it`
+  }
+  return undefined
 }
 
 /** Every name a module exports, however it declares, destructures, lists or re-exports it. */
@@ -233,10 +240,13 @@ test('the checks refuse what they are meant to', () => {
       ['reeval/view', notDependency('reeval')],
       ['reeval/judge', notDependency('reeval')],
       ['node:fs', undefined],
-      ['@reeval/sandbox-docker', notDependency('@reeval/sandbox-docker')],
+      [
+        '@reeval/sandbox-docker',
+        "@reeval/sandbox-docker is docker()'s alone: only src/docker/ imports it",
+      ],
       ['after-a-regex-quote', notDependency('after-a-regex-quote')],
       ['reeval/harness', notDependency('reeval')],
-      ['@ai-sdk/harness-claude-code', notDependency('@ai-sdk/harness-claude-code')],
+      ['@ai-sdk/harness-claude-code', undefined],
       ['reeval/sandbox', notDependency('reeval')],
       [null, "a specifier computed at run time can't be checked"],
       ['reeval/store/s3', notDependency('reeval')],
@@ -260,4 +270,6 @@ test('the checks refuse what they are meant to', () => {
     'brokerToken',
     'JudgeModel',
   ])
+  const runner = join(src, 'docker', 'index.ts')
+  assert.equal(refusal(runner, '@reeval/sandbox-docker/process'), undefined)
 })
