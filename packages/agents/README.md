@@ -4,6 +4,11 @@ Runs coding-agent harnesses and records what they did: the transcript, tool call
 served model. It's private to this monorepo, and reeval's build inlines it the way it inlines the
 other `@reeval/*` packages.
 
+It runs a harness on a `Runner`: `local()` runs it on this machine, and anything with `info`,
+`spawn`, `readFile`, `writeFile` and `close` can be one. `runnerSession()` turns a runner into
+the sandbox session the AI SDK harness adapters drive, and `test/runner-conformance.ts` is the
+suite every runner passes.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.
