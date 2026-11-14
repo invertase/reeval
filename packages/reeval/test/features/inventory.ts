@@ -331,6 +331,7 @@ export const inventory: InventoryFeature[] = [
     unit: [
       'reeval/test/plan.test.ts',
       'reeval/test/gateway.test.ts',
+      'agents/test/routes.test.ts',
       'harness-grok-build/test/unit.test.ts',
       'harness-goose/test/unit.test.ts',
       'reeval/test/doctor.test.ts',
@@ -341,7 +342,12 @@ export const inventory: InventoryFeature[] = [
     area: 'Config and selection',
     name: "`AI_GATEWAY_BASE_URL`: `vercel()`'s calls sent to another gateway with Vercel's API, path and all, for Claude Code, Codex, pi, fx and Grok Build and the judge, analysis and captures, the key brokered on its host only, which joins the automatic egress hosts, Goose and OpenCode falling past it, and a URL that isn't `https://` refused at plan time",
     plan: ['gateway/vercel-base-url'],
-    unit: ['reeval/test/gateway.test.ts', 'reeval/test/plan.test.ts', 'reeval/test/docker.test.ts'],
+    unit: [
+      'reeval/test/gateway.test.ts',
+      'agents/test/routes.test.ts',
+      'reeval/test/plan.test.ts',
+      'reeval/test/docker.test.ts',
+    ],
   },
   {
     id: 'gateway.openrouter',
