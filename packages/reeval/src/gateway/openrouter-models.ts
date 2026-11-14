@@ -1,25 +1,27 @@
 // The models reeval calls itself on OpenRouter (the judge, analysis, compare questions and
-// captures), through OpenRouter's own AI SDK package with `OPENROUTER_API_KEY`. `fallbacks` on
-// `openrouter()` decides whether OpenRouter may fail a call over to another upstream provider.
+// captures), through OpenRouter's own AI SDK package with `OPENROUTER_API_KEY`, as `judgeRoute`
+// settled it. `fallbacks` on `openrouter()` decides whether OpenRouter may fail a call over to
+// another upstream provider.
 import type { experimental_decide, LanguageModel } from 'ai'
+import type { HostCall } from '../judge/index.ts'
 import type { GatewayDescriptor } from '../types.ts'
-import { OPENROUTER_KEY } from './openrouter.ts'
 
 /** Whether OpenRouter may fail over, from the run's gateway list: off unless `fallbacks: true`. */
 export const openRouterFallbacks = (gateways: readonly GatewayDescriptor[]): boolean =>
   gateways.some((g) => g.kind === 'openrouter' && g.fallbacks === true)
 
-async function provider() {
+async function provider(call: HostCall) {
   const { createOpenRouter } = await import('@openrouter/ai-sdk-provider')
-  return createOpenRouter({ apiKey: process.env[OPENROUTER_KEY] })
+  return createOpenRouter(call)
 }
 
 /** A language model on OpenRouter's Chat Completions API. */
 export async function openRouterLanguageModel(
   id: string,
   fallbacks: boolean,
+  call: HostCall,
 ): Promise<LanguageModel> {
-  return (await provider()).chat(id, { provider: { allow_fallbacks: fallbacks } })
+  return (await provider(call)).chat(id, { provider: { allow_fallbacks: fallbacks } })
 }
 
 type DecisionModel = Parameters<typeof experimental_decide>[0]['model']
@@ -32,8 +34,11 @@ type DecisionModel = Parameters<typeof experimental_decide>[0]['model']
 export async function openRouterDecisionModel(
   id: string,
   fallbacks: boolean,
+  call: HostCall,
 ): Promise<DecisionModel> {
-  const model = (await provider()).evaluationModel(id, { provider: { allow_fallbacks: fallbacks } })
+  const model = (await provider(call)).evaluationModel(id, {
+    provider: { allow_fallbacks: fallbacks },
+  })
   return model as unknown as DecisionModel
 }
 

@@ -7,8 +7,8 @@ import type { GatewayName, JudgeModel, JudgeOptions, TokenUsage } from '../types
 import { tokenUsage } from '../usage.ts'
 import {
   DIRECT_PROVIDERS,
+  hostCall,
   type JudgeState,
-  judgeRoute,
   OPENROUTER_JUDGE_MODEL,
   RECOMMENDED_JUDGE_MODEL,
 } from './index.ts'
@@ -26,20 +26,20 @@ async function resolveModel(
   vertex: VertexSettings | undefined,
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
-  const route = judgeRoute(model, process.env, 'judge model', gateway)
-  if (route.kind === 'gateway') return vercelDecisionModel(model)
-  if (route.kind === 'openrouter') return openRouterDecisionModel(model, fallbacks)
+  const { route, call } = hostCall(model, process.env, 'judge model', gateway)
+  if (route.kind === 'gateway') return vercelDecisionModel(model, call)
+  if (route.kind === 'openrouter') return openRouterDecisionModel(model, fallbacks, call)
   if (route.kind === 'vertex') return vertexDecisionModel(model, vertex ?? vertexSettings())
   const id = model.slice(route.provider.length + 1)
   switch (route.provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).anthropic.decisionModel(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic(call).decisionModel(id)
     case 'google':
-      return (await import('@ai-sdk/google')).google.decisionModel(id)
+      return (await import('@ai-sdk/google')).createGoogle(call).decisionModel(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).openai.decisionModel(id)
+      return (await import('@ai-sdk/openai')).createOpenAI(call).decisionModel(id)
     default:
-      return (await import('@ai-sdk/typesafe-ai')).typeSafeAi.decisionModel(id)
+      return (await import('@ai-sdk/typesafe-ai')).createTypeSafeAi(call).decisionModel(id)
   }
 }
 

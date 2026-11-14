@@ -20,7 +20,7 @@ import {
   vertexSettings,
   vertexSettingsIn,
 } from '../gateway/vertex.ts'
-import { isFakeJudge, judgeRoute } from '../judge/index.ts'
+import { hostCall, isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -198,21 +198,31 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
  * The provider's own model for a direct route, the AI Gateway's by name on vercel, OpenRouter's
  * on openrouter, or Vertex AI's on vertex.
  */
-export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
-  if (model.route === 'gateway') return vercelLanguageModel(model.name)
-  if (model.route === 'openrouter') return openRouterLanguageModel(model.name, !!model.fallbacks)
+/** The gateway each resolved route calls through. */
+const ON = { direct: 'direct', gateway: 'vercel', openrouter: 'openrouter' } as const
+
+export async function providerModel(
+  model: ResolvedAnalysisModel,
+  what = 'analysis model',
+): Promise<LanguageModel> {
   if (model.route === 'vertex') {
     return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())
   }
-  const provider = model.name.slice(0, model.name.indexOf('/'))
-  const id = model.name.slice(provider.length + 1)
-  switch (provider) {
+  if (model.route === 'fake') return model.name
+  const { route, call } = hostCall(model.name, process.env, what, ON[model.route])
+  if (route.kind === 'gateway') return vercelLanguageModel(model.name, call)
+  if (route.kind === 'openrouter') {
+    return openRouterLanguageModel(model.name, !!model.fallbacks, call)
+  }
+  if (route.kind !== 'direct') return model.name
+  const id = model.name.slice(route.provider.length + 1)
+  switch (route.provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).anthropic(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic(call)(id)
     case 'google':
-      return (await import('@ai-sdk/google')).google(id)
+      return (await import('@ai-sdk/google')).createGoogle(call)(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).openai(id)
+      return (await import('@ai-sdk/openai')).createOpenAI(call)(id)
     default:
       return model.name
   }
@@ -229,12 +239,15 @@ export function hostModel(
   { fallbacks = false, vertex }: HostModelSettings = {},
 ): Promise<LanguageModel> {
   const route = judgeRoute(name, process.env, what, gateway).kind
-  return providerModel({
-    name,
-    route,
-    ...(route === 'openrouter' ? { fallbacks } : {}),
-    ...(route === 'vertex' && vertex ? { vertex } : {}),
-  })
+  return providerModel(
+    {
+      name,
+      route,
+      ...(route === 'openrouter' ? { fallbacks } : {}),
+      ...(route === 'vertex' && vertex ? { vertex } : {}),
+    },
+    what,
+  )
 }
 
 export type ModelAnswer = {
