@@ -1,13 +1,14 @@
 // The effort a harness runs at when its factory sets none: reeval's shared default, sent as each
 // CLI's own setting so no CLI's default (Codex's `low` on gpt-5.6-sol, Grok Build's `high`)
 // decides it, and left off where the harness, its gateway or its model takes no effort.
+import { openCodeModelOn } from '@reeval/agents'
 import { openCodeEffortBody, openCodeEffortRefusal } from '@reeval/harness-opencode/providers'
 import {
   antigravityIdEffort,
   claudeCodeModelName,
   claudeCodeTakesEffort,
 } from '../contract/harness.ts'
-import { effortRefusedOn, openCodeModelOn } from '../gateway/resolve.ts'
+import { effortRefusedOn } from '../gateway/resolve.ts'
 import { harnessId } from '../options.ts'
 import type { CursorEfforts, HarnessDescriptor } from '../types.ts'
 import { harnessEffort } from './effort.ts'

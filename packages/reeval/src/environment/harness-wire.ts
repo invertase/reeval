@@ -2,7 +2,15 @@
 // the credential on, the model calls it times, the hosts the agent tries, and the model a
 // response names. The agent's own catalog entry, in @reeval/agents, knows none of it.
 import type { AgentKind } from '@reeval/agents'
-import { providerOf } from '@reeval/agents'
+import {
+  apiHost,
+  OPENROUTER_HOST,
+  providerOf,
+  type RouteApi,
+  VERCEL_API,
+  VERCEL_HOST,
+  VERCEL_KEY,
+} from '@reeval/agents'
 import {
   providerEndpoints,
   providerHosts,
@@ -12,18 +20,10 @@ import {
 } from '@reeval/harness-opencode/providers'
 import { type PiProvider, piProvider } from '@reeval/harness-pi/providers'
 import type { DerivedTokens, EndpointMatch, LocalResponse } from '@reeval/sandbox-docker'
-import type { BrokeredToken } from '../gateway/token.ts'
-import {
-  fxAskedModel,
-  fxVercelCall,
-  fxVercelEndpoints,
-  servedOn,
-  VERCEL_HOST,
-  VERCEL_KEY,
-} from '../gateway/vercel.ts'
 import type { SandboxAdc, VertexChat } from '../gateway/vertex.ts'
 import type { Agent } from '../harness/agents.ts'
 import { InfraError } from '../sandbox/types.ts'
+import type { BrokeredToken } from './token.ts'
 
 /** What the egress gateway and an agent's route add to its catalog entry. */
 export type HarnessWire = {
@@ -151,6 +151,69 @@ export type BrokeredRequest = {
 export type Upstream = (
   request: BrokeredRequest,
 ) => { provider: string; costUsd?: number } | undefined
+
+/**
+ * The response names the model that served it on the gateway's host, in Vercel's form
+ * (`openai/gpt-5.6-luna`), with the reasoning effort when it says one.
+ */
+export const servedOn =
+  (api: RouteApi = VERCEL_API): ServedModel =>
+  ({ host, responseModel, responseEffort }) =>
+    host === apiHost(api) && responseModel
+      ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
+      : undefined
+
+/** fx's language-model calls on the gateway, whose responses name the model that served them. */
+export const fxVercelCall = (api: RouteApi = VERCEL_API) =>
+  ({
+    host: apiHost(api),
+    path: { regex: `^${escaped(new URL(api.origin).pathname)}/v\\d+/ai/language-model$` },
+    method: ['POST'],
+  }) as const satisfies EndpointMatch
+
+const escaped = (path: string) => path.replace(/\/+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * The model an fx call asked the gateway for, in `ai-language-model-id`: what reeval records when
+ * a provider's stream (Gemini's) names no served model. Only a call that succeeded asked anything.
+ */
+export const fxAskedModel =
+  (api: RouteApi = VERCEL_API): ServedModel =>
+  (request) => {
+    const call = fxVercelCall(api)
+    if (request.host !== call.host || !new RegExp(call.path.regex).test(request.path))
+      return undefined
+    if (request.status === undefined || request.status < 200 || request.status > 299)
+      return undefined
+    const asked = request.headers?.['ai-language-model-id']
+    return (typeof asked === 'string' ? asked : asked?.[0]) || undefined
+  }
+
+/** The model list fx fetches before a turn, and its language-model calls. */
+export const fxVercelEndpoints = (api: RouteApi = VERCEL_API) =>
+  [
+    {
+      host: apiHost(api),
+      path: { regex: `^${escaped(new URL(api.origin).pathname)}/coding-agent/v1/` },
+      method: ['GET'],
+    },
+    fxVercelCall(api),
+  ] as const satisfies readonly EndpointMatch[]
+
+/** The response names the model that served it on OpenRouter's host, in OpenRouter's form. */
+export const servedOnOpenRouter: ServedModel = ({ host, responseModel, responseEffort }) =>
+  host === OPENROUTER_HOST && responseModel
+    ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
+    : undefined
+
+/** The upstream provider OpenRouter's response says served the call, and what it charged. */
+export const upstreamOnOpenRouter: Upstream = ({ host, responseProvider, responseCost }) =>
+  host === OPENROUTER_HOST && responseProvider
+    ? {
+        provider: responseProvider,
+        ...(responseCost !== undefined ? { costUsd: responseCost } : {}),
+      }
+    : undefined
 
 /** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
 const GEMINI_ENDPOINTS = [

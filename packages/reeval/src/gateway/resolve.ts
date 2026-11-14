@@ -1,5 +1,6 @@
 // Which gateway in the config's `gateway` list each harness's model calls go through: the first
 // entry that can serve it, or the one it pins. Pure, so the plan refuses before anything starts.
+import { openCodeModelOn } from '@reeval/agents'
 import {
   openCodeEffortBody,
   openCodeEffortRefusal,
@@ -17,12 +18,8 @@ import type {
   ResolvedGateway,
 } from '../types.ts'
 import { isRoutingGateway, ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
-import {
-  openCodeVertexId,
-  VERTEX_REFUSALS,
-  VERTEX_ROUTES,
-  vertexModelRefusalFor,
-} from './vertex.ts'
+
+import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -74,12 +71,6 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       return h.kind === 'opencode' ? openCodeEffortOn(h.model, 'vertex', effort) : undefined
     },
   },
-}
-
-/** OpenCode's id for `model` on `gateway`, as that gateway's route writes it. */
-export function openCodeModelOn(model: string, gateway: string): string {
-  if (gateway === 'vertex') return openCodeVertexId(model)
-  return isRoutingGateway(gateway) ? `${gateway}/${model}` : model
 }
 
 /** Why the API behind `gateway` answers OpenCode's `effort` on `model` with a 400, or undefined. */

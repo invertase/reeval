@@ -1,28 +1,38 @@
 // Vertex AI as a route for a harness's model calls: the project and region from the vertex()
 // entry, a host-minted Google Cloud access token the egress gateway adds to the agent's model
-// calls, and what Vertex can't serve.
+// calls, and what Vertex can't serve. Each harness's credential and model id there, and the
+// refusals, are @reeval/agents' `VERTEX_ROUTES`.
 import { generateKeyPairSync } from 'node:crypto'
+import {
+  type AgentKind,
+  VERTEX_AGENT_PROVIDERS,
+  VERTEX_ROUTES as VERTEX_CONFIGS,
+  VERTEX_PROJECT_ENV,
+  type VertexPublisher,
+  type VertexSettings,
+  vertexClaudeId,
+  vertexHost,
+  vertexRegion,
+} from '@reeval/agents'
 import type { EndpointMatch, LocalResponse, RequestTransformation } from '@reeval/sandbox-docker'
 import { claudeCodeVertexAliasRefusal } from '../contract/harness.ts'
+import { type BrokeredToken, cachedTokenSource, type TokenSource } from '../environment/token.ts'
 import { UsageError } from '../errors.ts'
-import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
+import type { ModelSpecific } from '../harness/agents.ts'
 import type {
   AgentHarnessDescriptor,
   GatewayDescriptor,
   VertexGatewayDescriptor,
-  VertexPublisher,
 } from '../types.ts'
-import { type BrokeredToken, cachedTokenSource, type TokenSource } from './token.ts'
 
-/** The host variable `vertex()` takes its project from when it names none. */
-export const VERTEX_PROJECT_ENV = 'GOOGLE_CLOUD_PROJECT'
-
-/** What the attempt's harness runs on: the `vertex()` entry, with its defaults filled in. */
-export type VertexSettings = {
-  project: string
-  location: string
-  regions: Partial<Record<VertexPublisher, string>>
-}
+export {
+  VERTEX_PROJECT_ENV,
+  VERTEX_REFUSALS,
+  type VertexSettings,
+  vertexHarnessModel,
+  vertexHost,
+  vertexRegion,
+} from '@reeval/agents'
 
 /** The entry's settings; a UsageError when neither it nor `GOOGLE_CLOUD_PROJECT` names a project. */
 export function vertexSettings(
@@ -46,14 +56,6 @@ export function vertexSettingsIn(
   const entry = gateways.find((g) => g.kind === 'vertex')
   return vertexSettings(entry?.kind === 'vertex' ? entry : {}, env)
 }
-
-/** The region a publisher's models are called in: its own, else the entry's location. */
-export const vertexRegion = (settings: VertexSettings, publisher: VertexPublisher) =>
-  settings.regions[publisher] ?? settings.location
-
-/** Vertex AI's API host for a region: `global` has no prefix. */
-export const vertexHost = (region: string) =>
-  region === 'global' ? 'aiplatform.googleapis.com' : `${region}-aiplatform.googleapis.com`
 
 const CLOUD_PLATFORM = 'https://www.googleapis.com/auth/cloud-platform'
 /** How long a token is taken to last when its client doesn't say. */
@@ -81,6 +83,9 @@ export const vertexTokens = (): TokenSource => {
   shared ??= cachedTokenSource(adcTokenSource())
   return shared
 }
+
+/** What the egress gateway adds to a harness's Vertex configuration. */
+type VertexWire = Omit<VertexRoute, 'credential' | 'modelId'>
 
 /** What a harness on Vertex needs besides its usual catalog entry. */
 export type VertexRoute = ModelSpecific & {
@@ -112,14 +117,6 @@ export type SandboxAdc = {
   file: string
   content: string
 }
-
-/**
- * Vertex's id for a Claude model: an `anthropic/` prefix dropped, and the Anthropic API's dated
- * id (`claude-haiku-4-5-20251001`) written as Vertex's (`claude-haiku-4-5@20251001`), so one
- * model string works on both `vertex()` and `direct()`.
- */
-export const vertexClaudeId = (model: string) =>
-  model.replace(/^anthropic\//, '').replace(/-(\d{8})$/, '@$1')
 
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -154,11 +151,10 @@ const bearerOn =
  * `…/publishers/anthropic/models/<model>:streamRawPredict` with no credential, and nothing else,
  * so the gateway adds the bearer there.
  */
-function claudeCode(settings: VertexSettings, source = vertexTokens()): VertexRoute {
+function claudeCode(settings: VertexSettings, source = vertexTokens()): VertexWire {
   const region = vertexRegion(settings, 'anthropic')
   const endpoints = [publisherEndpoint(settings, 'anthropic', ['streamRawPredict', 'rawPredict'])]
   return {
-    credential: 'Google Cloud credentials',
     endpoints,
     hosts: [vertexHost(region)],
     servedModel: ({ host, path }) => {
@@ -166,7 +162,6 @@ function claudeCode(settings: VertexSettings, source = vertexTokens()): VertexRo
       const model = /\/publishers\/anthropic\/models\/([^/:]+):/.exec(path)?.[1]
       return model && model !== 'count-tokens' ? model : undefined
     },
-    modelId: vertexClaudeId,
     routeEnv: {
       CLAUDE_CODE_USE_VERTEX: '1',
       CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',
@@ -236,9 +231,8 @@ const tokenResponse: LocalResponse = {
 function gemini(
   extraHosts: readonly string[] = [],
   extraResponses: (settings: VertexSettings) => readonly LocalResponse[] = () => [],
-  modelId: (model: string) => string = (model) => model.replace(/^google\//, ''),
 ) {
-  return (settings: VertexSettings, source = vertexTokens()): VertexRoute => {
+  return (settings: VertexSettings, source = vertexTokens()): VertexWire => {
     const region = vertexRegion(settings, 'google')
     const endpoints = [
       publisherEndpoint(
@@ -249,14 +243,12 @@ function gemini(
       ),
     ]
     return {
-      credential: 'Google Cloud credentials',
       endpoints,
       hosts: [vertexHost(region), TOKEN_ENDPOINT.host, ...extraHosts],
       servedModel: ({ host, path }) =>
         host === vertexHost(region)
           ? /\/publishers\/google\/models\/([^/:]+):/.exec(path)?.[1]
           : undefined,
-      modelId,
       token: { source, transformations: bearerOn(endpoints) },
       adc: sandboxAdc(settings),
       localResponses: [tokenResponse, ...extraResponses(settings)],
@@ -273,15 +265,12 @@ const antigravityUserinfo = (settings: VertexSettings): LocalResponse[] => [
   },
 ]
 
-/** Vertex's id for an xAI model on its Chat Completions API: `xai/<model>`, unless it names a publisher. */
-export const vertexXaiId = (model: string) => (model.includes('/') ? model : `xai/${model}`)
-
 /**
  * Grok Build with the model as a `[model.<id>]` table on Vertex's OpenAI-compatible Chat
  * Completions API (`…/endpoints/openapi/chat/completions`) in the `xai` region, its `env_key` a
  * placeholder the gateway replaces with the token; it then calls nothing on xAI's API.
  */
-function grokBuild(settings: VertexSettings, source = vertexTokens()): VertexRoute {
+function grokBuild(settings: VertexSettings, source = vertexTokens()): VertexWire {
   const region = vertexRegion(settings, 'xai')
   const endpoints: EndpointMatch[] = [
     {
@@ -294,24 +283,15 @@ function grokBuild(settings: VertexSettings, source = vertexTokens()): VertexRou
     },
   ]
   return {
-    credential: 'Google Cloud credentials',
     endpoints,
     modelResponses: endpoints,
     hosts: [vertexHost(region)],
     servedModel: ({ host, responseModel }) =>
       host === vertexHost(region) ? responseModel : undefined,
-    modelId: vertexXaiId,
     vertexChat: { project: settings.project, region },
     token: { source, transformations: bearerOn(endpoints) },
   }
 }
-
-/** OpenCode's id for a Gemini model on Vertex: `google-vertex/<model>`. */
-export const openCodeVertexId = (model: string) =>
-  `google-vertex/${model.replace(/^(?:google|google-vertex)\//, '')}`
-
-/** fx's id for a Gemini model on Vertex AI's Chat Completions endpoint: `google/<model>`. */
-export const fxVertexId = (model: string) => `google/${model.replace(/^google\//, '')}`
 
 /**
  * fx's configured provider on Vertex AI's OpenAI-compatible Chat Completions endpoint
@@ -319,7 +299,7 @@ export const fxVertexId = (model: string) => `google/${model.replace(/^google\//
  * credential of its own: the gateway adds the bearer there, and reads the served model from each
  * response, which names it as `google/<id>`.
  */
-function fx(settings: VertexSettings, source = vertexTokens()): VertexRoute {
+function fx(settings: VertexSettings, source = vertexTokens()): VertexWire {
   const region = vertexRegion(settings, 'google')
   const host = vertexHost(region)
   const endpoints: EndpointMatch[] = [
@@ -332,60 +312,50 @@ function fx(settings: VertexSettings, source = vertexTokens()): VertexRoute {
     },
   ]
   return {
-    credential: 'Google Cloud credentials',
     endpoints,
     modelResponses: endpoints,
     hosts: [host],
     servedModel: (request) =>
       request.host === host ? request.responseModel?.replace(/^google\//, '') : undefined,
-    modelId: fxVertexId,
     routeEnv: { FX_VERTEX_PROJECT: settings.project, FX_VERTEX_LOCATION: region },
     token: { source, transformations: bearerOn(endpoints) },
   }
 }
 
-/** The harnesses reeval runs on Vertex, and what each needs there. */
-export const VERTEX_ROUTES: Partial<
-  Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexRoute>
+/** What the egress gateway needs for each harness on Vertex, beside its configuration. */
+const VERTEX_WIRE: Partial<
+  Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexWire>
 > = {
   'claude-code': claudeCode,
   // AGY_ADC_AUTH: the CLI calls `/v1/…:streamGenerateContent`, titles on gemini-3.1-flash-lite.
-  antigravity: gemini(['www.googleapis.com'], antigravityUserinfo, (model) => model),
+  antigravity: gemini(['www.googleapis.com'], antigravityUserinfo),
   // gcp_vertex_ai: `/v1beta1/…:streamGenerateContent`.
   goose: gemini(),
   // google-vertex: `/v1/…:streamGenerateContent`.
   pi: gemini(),
   // google-vertex: `/v1beta1/…:streamGenerateContent`, the session's title on the same model, and
   // web search on Exa's keyless MCP server.
-  opencode: gemini(['mcp.exa.ai'], () => [], openCodeVertexId),
+  opencode: gemini(['mcp.exa.ai']),
   'grok-build': grokBuild,
   fx,
 }
 
-/**
- * The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. Grok
- * Build's xAI models have no free token count to probe with, so it isn't here.
- */
-const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
-  'claude-code': 'anthropic',
-  antigravity: 'google',
-  goose: 'google',
-  pi: 'google',
-  opencode: 'google',
-  fx: 'google',
-}
-
-/**
- * The model a harness on Vertex calls, as `publisher/id`, or undefined for one `reeval doctor`
- * doesn't probe there. Antigravity's `-low`/`-medium`/`-high` ids name an effort the CLI sends beside the
- * model, so the id it calls has none.
- */
-export function vertexHarnessModel(kind: AgentKind, model: string): string | undefined {
-  const publisher = VERTEX_HARNESS_PUBLISHERS[kind]
-  if (!publisher) return undefined
-  const id = model.replace(/^(?:google|google-vertex|anthropic)\//, '')
-  return `${publisher}/${kind === 'antigravity' ? id.replace(/-(?:low|medium|high)$/, '') : id}`
-}
+/** The harnesses reeval runs on Vertex, and what each needs there. */
+export const VERTEX_ROUTES: Partial<
+  Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexRoute>
+> = Object.fromEntries(
+  Object.entries(VERTEX_CONFIGS).map(([kind, config]) => {
+    const wire = VERTEX_WIRE[kind as AgentKind]
+    if (!wire) throw new Error(`Vertex AI has no wire entry for ${kind}`)
+    return [
+      kind,
+      (settings: VertexSettings, source?: TokenSource) => ({
+        ...config,
+        ...wire(settings, source),
+      }),
+    ]
+  }),
+)
 
 /**
  * A free request that answers whether the project can call `model` (`anthropic/<id>` or
@@ -436,30 +406,6 @@ export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undef
   if (h.kind !== 'fx') return undefined
   if (provider === 'google' || (!provider && /^gemini-/.test(h.model))) return undefined
   return `fx reaches Vertex AI only on its Chat Completions endpoint, which serves Google's models, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
-}
-
-/** The model providers (`google` in `google/gemini-3.8-flash`) a harness runs on Vertex AI, and why no other. */
-const VERTEX_AGENT_PROVIDERS: Partial<
-  Record<AgentKind, { providers: readonly string[]; only: string }>
-> = {
-  opencode: {
-    providers: ['google', 'google-vertex'],
-    only: "OpenCode reaches Vertex AI only on its google-vertex provider, which serves Google's models",
-  },
-  pi: {
-    providers: ['google'],
-    only: "pi reaches Vertex AI only on its google-vertex provider, whose catalog has Google's models only",
-  },
-  goose: {
-    providers: ['google'],
-    only: "Goose's gcp_vertex_ai provider calls a claude-* model on Anthropic's API on Vertex AI, which reeval doesn't route for Goose yet, so it runs Google's models only there",
-  },
-}
-
-/** Why Vertex AI can't serve an agent, beyond the ones reeval doesn't route there yet. */
-export const VERTEX_REFUSALS: Partial<Record<AgentKind, string>> = {
-  cursor: "Cursor's agent only calls Cursor's own API",
-  codex: "Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve",
 }
 
 /** The model prefixes reeval calls on Vertex AI itself (the judge, analysis, captures, questions). */

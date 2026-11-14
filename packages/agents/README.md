@@ -20,6 +20,11 @@ id, what it reports and its plugin rules, `LAYOUTS` where each one reads its rul
 config and plugins, and the `*McpServers` functions the config each CLI takes. The skill
 directories are also `@reeval/agents/layouts`, which loads nothing at run time.
 
+The routes that send a harness's model calls somewhere other than its provider's own API are
+here too: `ROUTES` has Vercel AI Gateway and OpenRouter, each with the credential and model id
+every harness it serves takes there and why it can't serve the rest, and `VERTEX_ROUTES` has
+Vertex AI's.
+
 It sits under reeval and knows nothing of evals or of where a harness runs:
 
 - It imports only its own modules, `node:` builtins and the packages in its `dependencies`.
